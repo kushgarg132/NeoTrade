@@ -37,12 +37,16 @@ than their wording suggests:
   current scale (a personal deployment, not a scan of hundreds of concurrent users), not a
   defect this phase fixes. A future fix would need a cross-worker "who's watching what"
   registry; explicitly deferred.
-- **No auth added to `/chat/message` or `/analyze/{symbol}`.** Both are pre-existing
-  unauthenticated HTTP routes with no `Depends(get_current_user)` — the real per-user
-  interactive paths are the WS-routed `_stream_chat`/`_stream_analysis` handlers
-  (`backend/ws/routes.py`), which already carry `connection.user_id`. The two legacy HTTP
-  routes stay on the deployment-wide default model; adding auth to them is a separate,
-  security-relevant change out of scope here.
+- **No per-user model for `/chat/message` or `/analyze/{symbol}`.** Correction from an
+  earlier read: both routers ARE already authenticated — `server.py` applies
+  `dependencies=[Depends(get_current_user)]` at `include_router` for `chat.router` and
+  `agents.router` — the route functions just don't declare `user: User =
+  Depends(get_current_user)` as a parameter to capture the result. The real reason these
+  stay out of scope is simpler: grep confirms zero frontend callers for either endpoint
+  (`frontend/src` has no reference to `/chat/message` or `/analyze/`) — both are superseded
+  by the WS-routed `_stream_chat`/`_stream_analysis` actions (`backend/ws/routes.py`), which
+  already carry `connection.user_id` and are what the frontend actually calls. Wiring
+  per-user model into dead code is not worth doing; they stay on the deployment default.
 - **No per-user model for the scheduler's shared analyst-verdict/sentiment refresh.**
   `refresh_analyst_verdict`/`refresh_sentiment` compute one cached value per symbol, shared
   across every user's scan (`backend/ai/analyst_verdict.py`'s own docstring: "shared across
