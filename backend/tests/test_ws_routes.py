@@ -8,6 +8,7 @@ middleware does not cover WebSocket handshakes either, hence the explicit
 origin check.
 """
 
+import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
@@ -37,6 +38,11 @@ def hub(monkeypatch):
 
 @pytest.fixture
 def client(monkeypatch, hub):
+    from mongomock_motor import AsyncMongoMockClient
+
+    mongo = AsyncMongoMockClient()["test_db"]
+    monkeypatch.setattr(ws_routes.db, "db", mongo)
+
     async def fake_authenticate(token):
         return _USER if token == "good-token" else None
 
@@ -236,3 +242,59 @@ def test_an_analysis_failure_is_reported_on_the_topic(client, monkeypatch):
         failure = socket.receive_json()
         assert failure["event"] == "error"
         assert "provider down" in failure["data"]["detail"]
+
+
+def test_analysis_uses_the_users_saved_model_preference(client, monkeypatch):
+    from backend.prefs import PrefsStore
+
+    asyncio.run(PrefsStore(ws_routes.db.db).update("alice", {"omniroute_model": "user/preferred"}))
+
+    seen_model = {}
+
+    class _Report:
+        def model_dump(self):
+            return {"symbol": "RELIANCE"}
+
+    class _Agent:
+        async def run(self, symbol):
+            from backend.llm import _model_override
+            seen_model["model"] = _model_override.get()
+            return _Report()
+
+    monkeypatch.setattr("backend.research.graph.ResearchAgent", lambda: _Agent())
+
+    with client.websocket_connect(
+        "/api/v1/ws?token=good-token", headers={"origin": ALLOWED_ORIGIN}
+    ) as socket:
+        socket.receive_json()
+        socket.send_json({"action": "analyze", "symbol": "RELIANCE", "req_id": "r3"})
+        socket.receive_json()  # started
+        socket.receive_json()  # report
+
+    assert seen_model["model"] == "user/preferred"
+
+
+def test_chat_uses_the_users_saved_model_preference(client, monkeypatch):
+    from backend.prefs import PrefsStore
+
+    asyncio.run(PrefsStore(ws_routes.db.db).update("alice", {"omniroute_model": "user/preferred"}))
+
+    seen_model = {}
+
+    class _ChatAgent:
+        async def stream_message(self, message, history):
+            from backend.llm import _model_override
+            seen_model["model"] = _model_override.get()
+            yield {"type": "content", "data": "hi"}
+
+    monkeypatch.setattr("backend.components.chat.agent.chat_agent", _ChatAgent())
+
+    with client.websocket_connect(
+        "/api/v1/ws?token=good-token", headers={"origin": ALLOWED_ORIGIN}
+    ) as socket:
+        socket.receive_json()
+        socket.send_json({"action": "chat", "message": "hi", "req_id": "c2"})
+        socket.receive_json()  # content
+        socket.receive_json()  # done
+
+    assert seen_model["model"] == "user/preferred"

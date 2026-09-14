@@ -144,11 +144,15 @@ async def _stream_analysis(connection, symbol: str, req_id: str) -> None:
         connection.offer(_frame(topic, "error", {"detail": "symbol is required"}))
         return
 
+    from backend.llm import use_model
+    from backend.prefs import PrefsStore
     from backend.research.graph import ResearchAgent
 
     connection.offer(_frame(topic, "started", {"symbol": symbol}))
     try:
-        report = await ResearchAgent().run(symbol)
+        prefs = await PrefsStore(db.db).get(connection.user_id)
+        with use_model(prefs.get("omniroute_model")):
+            report = await ResearchAgent().run(symbol)
         connection.offer(_frame(topic, "report", report.model_dump()))
     except Exception as exc:
         logger.warning("analysis of %s failed: %s", symbol, exc)
@@ -181,11 +185,15 @@ async def _stream_chat(connection, message: str, history: list, req_id: str) -> 
         return
 
     from backend.components.chat.agent import chat_agent
+    from backend.llm import use_model
+    from backend.prefs import PrefsStore
 
     try:
-        async for event in chat_agent.stream_message(message, history):
-            connection.offer(_frame(topic, event["type"], {"text": event["data"]}))
-        connection.offer(_frame(topic, "done", {}))
+        prefs = await PrefsStore(db.db).get(connection.user_id)
+        with use_model(prefs.get("omniroute_model")):
+            async for event in chat_agent.stream_message(message, history):
+                connection.offer(_frame(topic, event["type"], {"text": event["data"]}))
+            connection.offer(_frame(topic, "done", {}))
     except Exception as exc:
         logger.warning("chat stream failed: %s", exc)
         connection.offer(_frame(topic, "error", {"detail": str(exc)}))

@@ -30,13 +30,18 @@ async def attach_theses(db, user_id: str, suggestions: list[dict], agent=None, l
         from backend.research.graph import ResearchAgent
         agent = ResearchAgent()
 
+    from backend.llm import use_model
+    from backend.prefs import PrefsStore
+    prefs = await PrefsStore(db).get(user_id)
+
     store = SuggestionStore(db)
     attached = 0
-    for suggestion in suggestions[:limit]:
-        thesis = await _thesis_for(agent, suggestion["symbol"])
-        if thesis:
-            await store.attach_thesis(user_id, suggestion["id"], thesis)
-            attached += 1
+    with use_model(prefs.get("omniroute_model")):
+        for suggestion in suggestions[:limit]:
+            thesis = await _thesis_for(agent, suggestion["symbol"])
+            if thesis:
+                await store.attach_thesis(user_id, suggestion["id"], thesis)
+                attached += 1
     return attached
 
 

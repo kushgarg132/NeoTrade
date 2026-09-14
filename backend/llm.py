@@ -2,12 +2,36 @@
 from backend.app_settings import current_llm_model
 from backend.configs.settings import settings
 from typing import Optional, List, Any, AsyncIterator, Dict, Union
+import contextlib
+import contextvars
 import logging
 import asyncio
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable, RunnableConfig
 
 logger = logging.getLogger(__name__)
+
+_model_override: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+    "model_override", default=None
+)
+
+
+@contextlib.contextmanager
+def use_model(model: Optional[str]):
+    """Ambient per-user model override for the duration of a `with` block.
+    A no-op when `model` is None, so callers with no saved preference don't
+    need to branch. Every nested LLMService.get_completion call anywhere in
+    the tree (ResearchAgent, AnalystAgent, sentiment/events classifiers,
+    resolve_symbol, ...) picks this up transparently through get_llm() --
+    no signature changes needed in any of those modules. Propagates
+    correctly into a child asyncio.Task created via create_task/gather from
+    inside the `with` block, since each new Task captures a copy of the
+    current context at creation time."""
+    token = _model_override.set(model)
+    try:
+        yield
+    finally:
+        _model_override.reset(token)
 
 class MultiKeyChain(Runnable):
     def __init__(self, llms: List[Any]):
@@ -102,7 +126,7 @@ class LLMService:
         if not keys:
             return None
 
-        model = await current_llm_model()
+        model = _model_override.get() or await current_llm_model()
         llms = []
         for key in keys:
             llms.append(ChatOpenAI(
