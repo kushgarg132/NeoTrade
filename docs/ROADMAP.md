@@ -16,7 +16,7 @@ where to start — nothing else in this repo tracks it.
 | 4 | Wire the three intraday strategies | 3 | **done 2026-09-10** |
 | 5 | Live execution + F&O | 1, 2, 3 | **5a (equity) done 2026-09-10**, **5b (CSP plumbing) done 2026-09-11** |
 | 6 | Revive the long-term agent engine | — | **done 2026-09-11** |
-| 7 | Multi-worker readiness | — | not started |
+| 7 | Multi-worker readiness | — | **done 2026-09-14** |
 
 Two orderings are not negotiable: **Phase 3 before Phase 5** (no real order may be
 placeable before the kill-switch and the gate exist), and **Phase 1 before anything that
@@ -425,7 +425,7 @@ codebase.
 
 ---
 
-## Phase 7 — Multi-worker readiness
+## Phase 7 — Multi-worker readiness — **done 2026-09-14**
 
 **Goal.** Survive more than one backend worker.
 
@@ -437,3 +437,58 @@ loops out of the process-local `_RUNS` dict (`backend/routers/trading.py:53`); m
 
 **Done when:** the backend runs with two workers and a user connected to one sees live
 updates produced by the other.
+
+### What landed
+
+- **`backend/broadcast.py`** — a new thin wrapper over Redis pub/sub (`publish`/`listen`),
+  the one cross-worker primitive everything else in this phase is built on. Degrades to a
+  no-op when `redis` is `None` (tests, local dev), same posture
+  `backend/ai/analyst_verdict.py`'s `get_cached_verdict` already established for a missing
+  cache.
+- **`backend/ws/hub.py` fan-out** — `Hub.publish()` always broadcasts through
+  `backend.broadcast`; actual per-connection delivery (`Hub.deliver`) happens only in the
+  subscriber loop (wired up in `server.py`'s startup), whether that loop lives in this
+  process or another one. Falls back to direct local delivery when no Redis is attached.
+- **`backend/scheduler.py` distributed lock** — `SET scheduler:daily_lock <token> NX PX
+  <2h>` before the daily pass; a worker that loses the race skips the pass rather than
+  running it twice. Release is a guarded compare-then-delete so a worker never clears a
+  lock some other worker has since acquired after this one's TTL expired.
+- **`backend/routers/trading.py` cross-worker cancel** — `stop_background_run` falls back
+  to `broadcast.publish("runs:cancel", ...)` when a run isn't in this worker's local
+  `_RUNS`; every worker's `handle_cancel_broadcast` cancels a matching local task.
+  Fire-and-forget, matching the app's existing best-effort delivery style.
+- **Deployment-wide LLM model — short-TTL cache** (`backend/app_settings.py`) —
+  `current_llm_model()` is now async and re-reads Mongo at most once every 30 seconds
+  instead of relying purely on a local `set_llm_model` write to invalidate it, so a second
+  worker sees an admin's change within the TTL window without a restart.
+- **Per-user LLM model preference, finally wired up** — `backend/llm.py` gained a
+  `contextvars`-based `use_model(...)` context manager; `get_llm()` checks the ambient
+  override before falling back to the deployment default. Wrapped around the three real
+  per-user call sites (`ws/routes.py`'s `_stream_chat`/`_stream_analysis`,
+  `suggestions/thesis.py`'s `attach_theses`) — zero signature changes anywhere in
+  `ResearchAgent`, `AnalystAgent`, `analyst/sentiment.py`, `analyst/events.py`,
+  `master/search.py`, or `instruments/resolve.py`, confirmed by a clean `git diff` on those
+  files.
+- Full backend suite: 612 tests passing (up from 600 pre-Phase-7).
+
+### Explicitly not done here (deferred, not silently dropped)
+
+- **No sticky request routing / per-worker port mapping** — cross-worker correctness is
+  solved with Redis, not by making requests sticky.
+- **No leader-elected price pump.** Each worker keeps polling its own locally-watched
+  symbols independently; two workers watching the same symbol poll it twice, an accepted
+  cost at this app's current scale, not a defect this phase fixes.
+- **No per-user model for `/chat/message` or `/analyze/{symbol}`** (the legacy
+  unauthenticated-in-name-only HTTP routes) — both are superseded by the WS-routed
+  `_stream_chat`/`_stream_analysis` and have zero frontend callers; stay on the deployment
+  default.
+- **No per-user model for the scheduler's shared analyst-verdict/sentiment refresh** — that
+  value is shared across every user's scan by design, so there is no single user's
+  preference that would apply.
+- **No confirmation round-trip for cross-worker run cancellation** — the stop broadcast is
+  fire-and-forget; a stop that silently misses its target self-heals (the run shows up as
+  still RUNNING on next check, or the daily restart clears it).
+- **Not yet verified with two real Uvicorn workers + live Redis on the VM.** Everything
+  above is unit-tested against mocked Redis; actually flipping `--workers` to more than 1 in
+  production and confirming the "Done when" behavior end-to-end is a follow-up smoke test,
+  not something this phase's unit tests can prove.
