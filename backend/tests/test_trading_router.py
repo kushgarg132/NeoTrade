@@ -68,6 +68,47 @@ async def test_stop_unknown_run_id_returns_false():
     assert await trading.stop_background_run("no-such-run") is False
 
 
+import json
+
+
+@pytest.mark.asyncio
+async def test_stop_broadcasts_when_the_run_is_not_local_and_redis_is_configured(monkeypatch):
+    from backend.database import db as real_db
+
+    class _FakeRedis:
+        def __init__(self):
+            self.published = []
+
+        async def publish(self, channel, data):
+            self.published.append((channel, data))
+
+    fake_redis = _FakeRedis()
+    monkeypatch.setattr(real_db, "redis", fake_redis)
+
+    stopped = await trading.stop_background_run("elsewhere-run")
+
+    assert stopped is True
+    assert len(fake_redis.published) == 1
+    channel, payload = fake_redis.published[0]
+    assert channel == "runs:cancel"
+    assert json.loads(payload) == {"run_id": "elsewhere-run"}
+
+
+@pytest.mark.asyncio
+async def test_cancel_broadcast_handler_cancels_a_matching_local_task():
+    run_id = trading.start_background_run(_forever())
+    try:
+        await asyncio.wait_for(trading.handle_cancel_broadcast({"run_id": run_id}), timeout=2.0)
+        assert run_id not in trading._RUNS
+    finally:
+        trading._RUNS.pop(run_id, None)
+
+
+@pytest.mark.asyncio
+async def test_cancel_broadcast_handler_ignores_a_run_id_it_does_not_own():
+    await trading.handle_cancel_broadcast({"run_id": "no-such-run"})  # must not raise
+
+
 # ---------------------------------------------------------------------------
 # GET routes against a seeded LedgerStore
 # ---------------------------------------------------------------------------

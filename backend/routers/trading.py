@@ -21,6 +21,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from backend import broadcast
 from backend.auth.broker_credentials import get_credential_store
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
@@ -157,7 +158,7 @@ async def get_active_broker_adapter(user_id: str, credentials):
     return None
 
 
-async def stop_background_run(run_id: str) -> bool:
+async def _cancel_local(run_id: str) -> bool:
     task = _RUNS.get(run_id)
     if task is None:
         return False
@@ -168,6 +169,26 @@ async def stop_background_run(run_id: str) -> bool:
         pass
     _RUNS.pop(run_id, None)
     return True
+
+
+async def stop_background_run(run_id: str) -> bool:
+    if await _cancel_local(run_id):
+        return True
+
+    from backend.database import db as _db
+    if _db.redis is None:
+        return False
+    await broadcast.publish(_db.redis, "runs:cancel", {"run_id": run_id})
+    return True
+
+
+async def handle_cancel_broadcast(payload: dict) -> None:
+    """The "runs:cancel" handler registered with backend.broadcast.listen
+    (wired up in server.py's startup). Fire-and-forget: the caller that
+    published this already confirmed via RunStore that the run is genuinely
+    ACTIVE, so "no local task with this id" here just means it belongs to a
+    different worker (or already finished -- an existing, harmless race)."""
+    await _cancel_local(payload.get("run_id", ""))
 
 
 # ---------------------------------------------------------------------------
