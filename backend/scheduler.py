@@ -4,10 +4,6 @@ stale advice.
 A single asyncio task rather than a scheduler dependency -- there are three
 jobs, all on the same daily tick. The work itself lives in `run_daily_jobs`,
 which takes `now` explicitly so it can be tested without waiting for 16:00.
-
-ponytail: one process owns this loop. If the backend is ever run with more
-than one worker, they will all fire it -- take a Redis lock before the pass
-at that point.
 """
 
 import asyncio
@@ -40,6 +36,14 @@ RUN_MINUTE = 0
 # Sentiment is cached per symbol and read by the engine's scoring path; only
 # the symbols we just formed an opinion on are worth an LLM round trip.
 MAX_SENTIMENT_REFRESH = 20
+
+# Distributed lock so two workers running scheduler_loop concurrently
+# produce exactly one daily pass, not two.
+LOCK_KEY = "scheduler:daily_lock"
+LOCK_TTL_MS = 2 * 60 * 60 * 1000  # 2 hours: covers a full pass, including
+# per-user LLM calls, rather than a heartbeat/renewal loop -- a crashed
+# holder self-heals at TTL expiry instead of leaving the pass permanently
+# blocked.
 
 
 def seconds_until_next_run(now: datetime) -> float:
@@ -89,6 +93,30 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         "verdicts_refreshed": verdicts_refreshed,
         "users": scanned_users, "created": created_total,
     }
+
+
+async def _run_locked(db, redis) -> Optional[dict]:
+    """Acquires a Redis lock before running the daily pass. Returns None
+    (pass skipped) if another worker already holds it. When `redis` is None
+    the lock is skipped and the pass always runs -- matches every existing
+    test's redis=None/mocked-redis calling convention for run_daily_jobs."""
+    if redis is None:
+        return await run_daily_jobs(db, redis=redis)
+
+    token = str(uuid.uuid4())
+    acquired = await redis.set(LOCK_KEY, token, nx=True, px=LOCK_TTL_MS)
+    if not acquired:
+        logger.info("daily pass already running on another worker, skipping")
+        return None
+
+    try:
+        return await run_daily_jobs(db, redis=redis)
+    finally:
+        # Only release if we still hold it -- never delete a lock some other
+        # worker has since acquired after this one's TTL expired.
+        current = await redis.get(LOCK_KEY)
+        if current == token:
+            await redis.delete(LOCK_KEY)
 
 
 async def _default_spot_lookup(symbol: str) -> Optional[float]:
@@ -196,7 +224,7 @@ async def scheduler_loop(db, redis=None) -> None:
     while True:
         await asyncio.sleep(seconds_until_next_run(datetime.now(timezone.utc)))
         try:
-            await run_daily_jobs(db, redis=redis)
+            await _run_locked(db, redis)
         except Exception as exc:
             # Never let one bad day kill the loop for every day after it.
             logger.exception("daily pass failed: %s", exc)

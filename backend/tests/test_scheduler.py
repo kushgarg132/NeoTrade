@@ -272,3 +272,72 @@ async def test_one_symbols_verdict_refresh_failure_does_not_stop_the_others(mong
     result = await scheduler.run_daily_jobs(mongo, redis=redis, now=datetime(2024, 1, 15, tzinfo=timezone.utc))
 
     assert result["verdicts_refreshed"] == len(STRIKE_INTERVALS) - 1
+
+
+# ---------------------------------------------------------------------------
+# Distributed lock (Phase 7)
+# ---------------------------------------------------------------------------
+
+from unittest.mock import ANY
+
+
+@pytest.mark.asyncio
+async def test_redis_none_always_runs_the_pass_with_no_lock(mongo, monkeypatch):
+    async def fake_scan(db, user_id, universe, **kwargs):
+        return []
+    monkeypatch.setattr(scheduler, "scan_universe", fake_scan)
+
+    result = await scheduler._run_locked(mongo, None)
+
+    assert result is not None
+    assert result["users"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_second_worker_skips_the_pass_while_the_lock_is_held(mongo, monkeypatch):
+    async def fake_scan(db, user_id, universe, **kwargs):
+        return []
+    monkeypatch.setattr(scheduler, "scan_universe", fake_scan)
+
+    redis = AsyncMock()
+    redis.set = AsyncMock(return_value=None)  # NX failed: someone else holds it
+
+    result = await scheduler._run_locked(mongo, redis)
+
+    assert result is None
+    redis.set.assert_awaited_once_with(scheduler.LOCK_KEY, ANY, nx=True, px=scheduler.LOCK_TTL_MS)
+
+
+@pytest.mark.asyncio
+async def test_the_lock_is_released_after_the_pass_completes(mongo, monkeypatch):
+    async def fake_scan(db, user_id, universe, **kwargs):
+        return []
+    monkeypatch.setattr(scheduler, "scan_universe", fake_scan)
+    monkeypatch.setattr(scheduler.uuid, "uuid4", lambda: "fixed-token")
+
+    redis = AsyncMock()
+    redis.set = AsyncMock(return_value=True)
+    redis.get = AsyncMock(return_value="fixed-token")
+
+    result = await scheduler._run_locked(mongo, redis)
+
+    assert result is not None
+    redis.delete.assert_awaited_once_with(scheduler.LOCK_KEY)
+
+
+@pytest.mark.asyncio
+async def test_a_worker_never_releases_a_lock_it_no_longer_owns(mongo, monkeypatch):
+    """The TTL can expire and another worker can acquire the lock before this
+    worker's release runs; the release must check ownership first."""
+    async def fake_scan(db, user_id, universe, **kwargs):
+        return []
+    monkeypatch.setattr(scheduler, "scan_universe", fake_scan)
+    monkeypatch.setattr(scheduler.uuid, "uuid4", lambda: "fixed-token")
+
+    redis = AsyncMock()
+    redis.set = AsyncMock(return_value=True)
+    redis.get = AsyncMock(return_value="someone-elses-token")
+
+    await scheduler._run_locked(mongo, redis)
+
+    redis.delete.assert_not_awaited()
