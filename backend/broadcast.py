@@ -17,13 +17,19 @@ from typing import Awaitable, Callable
 logger = logging.getLogger(__name__)
 
 
-async def publish(redis, channel: str, payload: dict) -> None:
+async def publish(redis, channel: str, payload: dict) -> bool:
+    """Returns True only if the message actually reached Redis. Callers that
+    have a local fallback (backend/ws/hub.py's Hub.publish) must use this to
+    decide whether to fall back -- `redis` being non-None only means a
+    client object exists, not that it's actually reachable right now."""
     if redis is None:
-        return
+        return False
     try:
         await redis.publish(channel, json.dumps(payload))
+        return True
     except Exception as exc:
         logger.warning("broadcast publish to %s failed: %s", channel, exc)
+        return False
 
 
 async def listen(redis, handlers: dict[str, Callable[[dict], Awaitable[None]]]) -> None:

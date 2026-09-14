@@ -148,6 +148,25 @@ async def test_publish_broadcasts_instead_of_delivering_locally_when_redis_is_at
 
 
 @pytest.mark.asyncio
+async def test_publish_falls_back_to_local_delivery_when_redis_is_attached_but_unreachable():
+    """A redis client object existing (attach_redis was called) does not
+    mean it's actually reachable -- a DNS/network failure must not silently
+    drop the message for this worker's own connections too."""
+    class _BrokenRedis:
+        async def publish(self, channel, data):
+            raise ConnectionError("DNS lookup failed")
+
+    hub = Hub()
+    hub.attach_redis(_BrokenRedis())
+    connection = hub.connect("alice")
+    connection.subscribe(["trades"])
+
+    await hub.publish("alice", "trades", "opened", {"symbol": "TCS"})
+
+    assert not connection.queue.empty(), "publish() must fall back to local delivery on failure"
+
+
+@pytest.mark.asyncio
 async def test_deliver_pushes_to_every_matching_connection():
     hub = Hub()
     alice = hub.connect("alice")

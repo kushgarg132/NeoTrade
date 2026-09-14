@@ -86,8 +86,12 @@ class Hub:
             "data": data,
             "ts": datetime.now(timezone.utc).isoformat(),
         }
-        await broadcast.publish(self._redis, EVENTS_CHANNEL, message)
-        if self._redis is None:
+        delivered_remotely = await broadcast.publish(self._redis, EVENTS_CHANNEL, message)
+        if not delivered_remotely:
+            # No redis attached, or it's attached but unreachable right now
+            # (DNS/network failure) -- either way, this worker's own
+            # connections must still get the message rather than silently
+            # losing it.
             await self.deliver(message)
 
     async def deliver(self, message: dict) -> None:
