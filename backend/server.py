@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import os
 import uvicorn
@@ -15,7 +16,9 @@ from backend.configs.settings import settings
 from backend.runs import RunStore
 from backend.suggestions.store import SuggestionStore
 from backend.prefs import PrefsStore
+from backend import broadcast
 from backend import scheduler
+from backend.ws.hub import hub, handle_broadcast_event
 from backend.ws import pump as ws_pump
 from backend.ws import routes as ws_routes
 from backend.configs.logging_config import setup_logging
@@ -65,6 +68,14 @@ async def startup_db_client():
     logger.info("Starting up NeoTrade API...")
     await db.connect_to_database()
     logger.info("Database connected.")
+
+    hub.attach_redis(db.redis)
+    from backend.routers.trading import handle_cancel_broadcast
+    asyncio.create_task(broadcast.listen(db.redis, {
+        "ws:events": handle_broadcast_event,
+        "runs:cancel": handle_cancel_broadcast,
+    }))
+
     master = InstrumentMaster(db.db)
     await master.ensure_indexes()
     await UserStore(db.db).ensure_indexes()
