@@ -120,3 +120,58 @@ async def test_price_topics_report_the_symbols_worth_polling(hub):
 @pytest.mark.asyncio
 async def test_publishing_to_nobody_is_harmless(hub):
     await hub.publish("nobody", "trades", "opened", {})
+
+
+from backend.ws.hub import Hub, handle_broadcast_event
+
+
+class _FakeRedis:
+    def __init__(self):
+        self.published = []
+
+    async def publish(self, channel, data):
+        self.published.append((channel, data))
+
+
+@pytest.mark.asyncio
+async def test_publish_broadcasts_instead_of_delivering_locally_when_redis_is_attached():
+    hub = Hub()
+    fake_redis = _FakeRedis()
+    hub.attach_redis(fake_redis)
+    connection = hub.connect("alice")
+    connection.subscribe(["trades"])
+
+    await hub.publish("alice", "trades", "opened", {"symbol": "TCS"})
+
+    assert fake_redis.published, "publish() must call broadcast.publish when a redis is attached"
+    assert connection.queue.empty(), "no direct local delivery -- that happens via the subscriber loop"
+
+
+@pytest.mark.asyncio
+async def test_deliver_pushes_to_every_matching_connection():
+    hub = Hub()
+    alice = hub.connect("alice")
+    alice.subscribe(["trades"])
+    bob = hub.connect("bob")
+    bob.subscribe(["trades"])
+
+    message = {"user_id": "alice", "topic": "trades", "event": "opened", "data": {}, "ts": "x"}
+    await hub.deliver(message)
+
+    assert not alice.queue.empty()
+    assert bob.queue.empty()
+
+
+@pytest.mark.asyncio
+async def test_handle_broadcast_event_delivers_via_the_module_level_hub():
+    from backend.ws.hub import hub as real_hub
+
+    connection = real_hub.connect("alice")
+    connection.subscribe(["trades"])
+    try:
+        message = {"user_id": "alice", "topic": "trades", "event": "opened", "data": {}, "ts": "x"}
+        await handle_broadcast_event(message)
+
+        assert not connection.queue.empty()
+    finally:
+        real_hub.disconnect(connection)
