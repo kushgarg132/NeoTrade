@@ -75,7 +75,7 @@ class LLMService:
             logger.warning("OMNIROUTE_API_KEY(S) not set. LLM features will be disabled.")
 
     async def get_completion(self, prompt: str, system_prompt: str = "You are a helpful assistant.") -> str:
-        llm = self.get_llm()
+        llm = await self.get_llm()
         if not llm:
             return "LLM_DISABLED"
         
@@ -94,7 +94,7 @@ class LLMService:
             logger.error(f"LLM Error: {e}")
             return f"Error generating response: {str(e)}"
 
-    def get_llm(self):
+    async def get_llm(self):
         """Returns a MultiKeyChain wrapping ChatOpenAI instances pointed at the OmniRoute gateway"""
         from langchain_openai import ChatOpenAI
 
@@ -102,10 +102,11 @@ class LLMService:
         if not keys:
             return None
 
+        model = await current_llm_model()
         llms = []
         for key in keys:
             llms.append(ChatOpenAI(
-                model=current_llm_model(),
+                model=model,
                 api_key=key,
                 base_url=settings.OMNIROUTE_BASE_URL,
                 temperature=0.0,

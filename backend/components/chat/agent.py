@@ -12,18 +12,19 @@ class ChatAgent:
     def __init__(self):
         self.tools = [fetch_news_tool, fetch_stock_info_tool, fetch_price_history_tool, resolve_symbol_tool]
 
-    def _build_agent(self):
+    async def _build_agent(self):
         """Built fresh per call, not cached on self: llm_service.get_llm()
-        reads settings.OMNIROUTE_MODEL live, so a model change in Settings
-        takes effect on the next message instead of needing a restart."""
-        llm = llm_service.get_llm()
+        reads the deployment-wide model (or a per-user override, see
+        backend/llm.py's use_model) on every call, so a change takes effect
+        on the next message instead of needing a restart."""
+        llm = await llm_service.get_llm()
         if not llm:
             logger.warning("ChatAgent: No LLM available (API Key missing?)")
             return None
         return create_react_agent(llm, self.tools)
 
     async def stream_message(self, message: str, history: List[Dict[str, str]] = []):
-        agent = self._build_agent()
+        agent = await self._build_agent()
         if not agent:
             yield {"type": "content", "data": "I am unable to function because the LLM service is not available. Please check API keys."}
             return
@@ -70,7 +71,7 @@ class ChatAgent:
             yield {"type": "content", "data": f"I encountered an error processing your request: {str(e)}"}
 
     async def processed_message(self, message: str, history: List[Dict[str, str]] = []) -> str:
-        agent = self._build_agent()
+        agent = await self._build_agent()
         if not agent:
             return "I am unable to function because the LLM service is not available. Please check API keys."
 
