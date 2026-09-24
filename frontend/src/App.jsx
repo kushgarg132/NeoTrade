@@ -1,14 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Link } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import Suggestions from './pages/Suggestions';
-import ScannerPage from './pages/ScannerPage';
-import Watchlist from './pages/Watchlist';
-import Portfolio from './pages/Portfolio';
-import Trading from './pages/Trading';
-import Settings from './pages/Settings';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Suggestions = lazy(() => import('./pages/Suggestions'));
+const ScannerPage = lazy(() => import('./pages/ScannerPage'));
+const Watchlist = lazy(() => import('./pages/Watchlist'));
+const Portfolio = lazy(() => import('./pages/Portfolio'));
+const Trading = lazy(() => import('./pages/Trading'));
+const Settings = lazy(() => import('./pages/Settings'));
 import Login from './pages/Login';
-import SystemArchitecturePage from './pages/SystemArchitecturePage';
+const SystemArchitecturePage = lazy(() => import('./pages/SystemArchitecturePage'));
 import RequireAuth from './components/RequireAuth';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -52,7 +52,9 @@ const App = () => {
   // Layout never mounts in that case, so the inner boundary can't help.
   const gated = (element) => (
     <RequireAuth>
-      <ErrorBoundary>{element}</ErrorBoundary>
+      <ErrorBoundary>
+        <Suspense fallback={null}>{element}</Suspense>
+      </ErrorBoundary>
     </RequireAuth>
   );
 
