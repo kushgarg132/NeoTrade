@@ -20,7 +20,7 @@ where to start — nothing else in this repo tracks it.
 | 8 | Reposition as the discipline layer (docs) | — | **done 2026-09-26** |
 | 9 | Trade journal MVP | 8 | **done 2026-09-26** (live broker sync unverified, see phase notes) |
 | 10 | Behaviour insights | 9 | **done 2026-09-26** |
-| 11 | Guardrails (loss cap, trade count, cooldown) | 9 | **done 2026-09-26** (alerts only; auto square-off deferred) |
+| 11 | Guardrails (loss cap, trade count, cooldown) | 9 | **done 2026-09-26** (square-off: preview + opt-in live, never run live) |
 | 12 | Free beta, 20–50 real traders | 9, 10, 11 | **in progress** — tooling done 2026-09-26, recruiting not started |
 | 13 | Billing + real domain | 12 | not started |
 
@@ -586,7 +586,7 @@ a Console CSV import is idempotent (importing twice adds nothing), and `pytest` 
   positions count on the day they opened.
 - The thresholds (5 trades, 1.25×, 1.5×) are judgement calls, not tuned on real users.
 
-## Phase 11 — Guardrails — **done 2026-09-26** (alerts only)
+## Phase 11 — Guardrails — **done 2026-09-26**
 
 **Goal:** enforce the limits the user set for themselves.
 
@@ -618,10 +618,19 @@ works on paper before it is ever enabled live.
 
 ### Not done, deliberately
 
-- **Auto square-off.** It would be the first code path that places real orders without the
-  user approving them, and the adapters' position books don't carry each position's product
-  (MIS/CNC/NRML), so an exit order could go in with the wrong product. It needs `product` on
-  `Position` from all three adapters, and a paper-mode test, before it is built.
+- **Auto square-off, added 2026-09-26 on the user's explicit choice.** Pref
+  `auto_square_off`: `off` (default), `preview` (alert with the exact exit orders, send
+  nothing), `live` (send them; Settings asks for confirmation first and the Guardrails
+  header says "square-off live"). On a daily-loss breach, `backend/guardrails/square_off.py`
+  turns each ACTIVE broker's position book into MARKET exits. Limits: only NSE + MIS, since
+  every adapter's `place_order` is NSE-cash-only and delivery/F&O exits are not a
+  same-session decision; anything else is named as "Not touched". At most once per day: it
+  hangs off the `daily_loss` breach record, which is written before any order goes out.
+  Failed orders are reported as "close these yourself". `Position` gained `exchange` and
+  `product`, filled by all three adapters' `get_positions`. Covered by
+  `backend/tests/test_square_off.py`. **This is the one path that places a real order
+  without a per-trade approval, and it has never run against a live account.** Use
+  `preview` on a real account first and check the orders it reports are right.
 - **Telegram needs a human step.** Create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`
   in the deploy clone's `.env`. Until then Settings says Telegram is not set up and alerts
   stay in the app.
