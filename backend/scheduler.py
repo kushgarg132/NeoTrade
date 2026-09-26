@@ -1,5 +1,5 @@
-"""The daily post-close pass: scan for suggestions, refresh sentiment, expire
-stale advice.
+"""The daily post-close pass: scan for suggestions (whose theses also set
+their news sentiment), refresh analyst verdicts, expire stale advice.
 
 A single asyncio task rather than a scheduler dependency -- there are three
 jobs, all on the same daily tick. The work itself lives in `run_daily_jobs`,
@@ -13,7 +13,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable, Optional
 
 from backend.ai.analyst_verdict import refresh_analyst_verdict
-from backend.ai.sentiment import refresh_sentiment
 from backend.core.models import Fill, Side
 from backend.engine.execution.options_costs import calculate_options_costs
 from backend.engine.persistence import LedgerStore
@@ -34,10 +33,6 @@ logger = logging.getLogger(__name__)
 # candle is settled before the strategies read it.
 RUN_HOUR = 16
 RUN_MINUTE = 0
-
-# Sentiment is cached per symbol and read by the engine's scoring path; only
-# the symbols we just formed an opinion on are worth an LLM round trip.
-MAX_SENTIMENT_REFRESH = 20
 
 # Distributed lock so two workers running scheduler_loop concurrently
 # produce exactly one daily pass, not two.
@@ -83,7 +78,6 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         created_total += len(created)
         if created:
             await attach_theses(db, user_id, created)
-            await _refresh_sentiment_for(created, redis)
 
     journal_imported = await _sync_journals(db, redis)
 
@@ -215,20 +209,10 @@ async def close_expired_option_positions(
     return closed
 
 
-async def _refresh_sentiment_for(suggestions: list[dict], redis) -> None:
-    if redis is None:
-        return
-    for symbol in list(dict.fromkeys(s["symbol"] for s in suggestions))[:MAX_SENTIMENT_REFRESH]:
-        try:
-            await refresh_sentiment(symbol, redis)
-        except Exception as exc:
-            logger.warning("sentiment refresh failed for %s: %s", symbol, exc)
-
-
 async def _refresh_analyst_verdicts(redis) -> int:
     """Shared across every user's scan -- one refresh per curated symbol per day, not one
-    per user. Same per-symbol failure isolation _refresh_sentiment_for already uses: one bad
-    symbol must not cost every other symbol its refresh."""
+    per user. One symbol's failure must not cost every other symbol
+    its refresh."""
     if redis is None:
         return 0
     count = 0

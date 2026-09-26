@@ -1,5 +1,5 @@
 """Analyst-verdict cache for AnalystVerdictStrategy -- mirrors backend/ai/sentiment.py's
-get_cached_sentiment/refresh_sentiment shape exactly: the engine loop (and, here, the daily
+get_cached_sentiment's read-only-cache shape: the engine loop (and, here, the daily
 scan) must never await an LLM round-trip synchronously, so the real AnalystAgent call happens
 out-of-band (refresh_analyst_verdict, called by the scheduler -- see backend/scheduler.py)
 and is cached in Redis; callers only ever read the cache (get_cached_verdict), which returns

@@ -3,9 +3,9 @@
 The engine loop (backend/engine/runner.py, Task 6) must never await an LLM
 round-trip synchronously -- a per-bar decision blocking on an LLM call is a
 latency and reliability risk no trading loop should carry. So sentiment is
-computed out-of-band (`refresh_sentiment`, called by a background job/cron --
-not wired in this task) and cached in Redis; the engine only ever reads the
-cache (`get_cached_sentiment`), which returns None on a miss rather than
+computed out-of-band -- by AnalystAgent (backend/components/analyst/agent.py),
+which writes `sentiment:{symbol}` whenever it analyses a stock -- and the
+engine only ever reads the cache (`get_cached_sentiment`), which returns None on a miss rather than
 blocking or raising. backend.scoring.composite.score_intent already treats
 None as neutral (0.0).
 """
@@ -29,23 +29,3 @@ async def get_cached_sentiment(symbol: str, redis) -> Optional[float]:
         logger.warning("sentiment cache unavailable for %s: %s", symbol, exc)
         return None
     return float(val) if val is not None else None
-
-
-async def refresh_sentiment(symbol: str, redis, ttl_seconds: int = 900) -> float:
-    """Computes a fresh sentiment score (reuse analyze_sentiment_logic /
-    fetch_news_logic) and writes it to Redis with the given TTL. Called by a
-    background task/job, never by the engine loop directly."""
-    from backend.components.analyst.news import fetch_news_logic
-    from backend.components.analyst.sentiment import analyze_sentiment_logic
-
-    articles = await fetch_news_logic(symbols=[symbol], limit=5)
-    score = 0.0
-    if articles:
-        analyzed = await analyze_sentiment_logic(articles, target_symbol=symbol)
-        if analyzed:
-            score = sum(a.sentiment_score for a in analyzed) / len(analyzed)
-
-    key = f"sentiment:{symbol}"
-    await redis.set(key, score, ex=ttl_seconds)
-    logger.info(f"Refreshed sentiment for {symbol}: {score:.3f} (ttl={ttl_seconds}s)")
-    return score
