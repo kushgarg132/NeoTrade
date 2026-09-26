@@ -210,3 +210,19 @@ async def get_index_detail(ticker: str):
     if detail is None:
         raise HTTPException(status_code=502, detail=f"No price data for {name} right now")
     return detail
+
+
+@router.get("/market/index/{ticker}/analysis")
+async def get_index_analysis(ticker: str):
+    """AI-written explanation of why this index moved in its latest session,
+    with the session figures and headlines it was written from. Explains the
+    past only -- no forecasts, no calls."""
+    from backend.research.index_move import ExplanationUnavailable, explain_index_move
+
+    name = _known_index_names().get(ticker)
+    if name is None:
+        raise HTTPException(status_code=404, detail=f"{ticker} is not a tracked index")
+    try:
+        return await explain_index_move(ticker, name)
+    except ExplanationUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))

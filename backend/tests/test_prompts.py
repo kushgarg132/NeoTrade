@@ -14,6 +14,9 @@ PROMPTS = {
     "article_sentiment": {"target": "SBIN", "relevance_target": "SBIN", "headline": "h", "content": "c"},
     "score_news": {"symbol": "SBIN", "articles": "[0] headline"},
     "research_report": {"symbol": "SBIN", "sentiment_score": "-0.20", "relevant_count": 3, "news": "n", "events": "[]"},
+    "index_move": {"name": "NIFTY 50", "session_date": "2026-09-26", "session": "- Close 25,123.45",
+                   "trend": "- Month +1.2%", "peers": "- SENSEX: -0.40%", "movers": "- HDFCBANK: -1.90%",
+                   "headlines": "- RBI holds rates (ET)"},
 }
 
 

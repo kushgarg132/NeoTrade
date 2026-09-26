@@ -169,6 +169,14 @@ survives is `ResearchAgent` (`backend/research/graph.py:58-159`), whose graph is
 2026-09-26 the analyst makes two LLM calls per stock (`prompts/score_news.md`, then
 `prompts/research_report.md`, which also writes the thesis), so `synthesize` makes none.
 
+A tapped index gets its own single LLM call: `explain_index_move`
+(`backend/research/index_move.py`, served at `GET /market/index/{ticker}/analysis`) gathers
+the latest session's OHLC and trend from yfinance, the other tracked indices, the day's
+NIFTY 50 movers (Indian indices only) and up to 12 de-duplicated headlines from the last 48h,
+then renders `prompts/index_move.md`, which explains the past session only (no forecasts or
+calls). Results are cached in-process per ticker for 15 minutes; a failed call is a 503 and is
+never cached. It never touches `Intent` or `composite.py` -- it is commentary, not a trade idea.
+
 `RiskAgent` carries its own inert `confidence*0.6 + alignment*0.4` blend with a `0.25`
 threshold (`components/risk/agent.py:95-99`) — a *different* formula from the enforced
 30% cap. If the agents are revived (Phase 6), this formula must not come back with them;
