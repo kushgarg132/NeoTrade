@@ -9,6 +9,7 @@ import {
   formatCompactNumber,
   formatQuantity,
   formatPercent,
+  formatSigned,
   formatDateTime,
 } from '../utils/formatters';
 
@@ -92,6 +93,21 @@ const MonthGrid = ({ month, byDay, selected, onSelect }) => {
     </div>
   );
 };
+
+const Finding = ({ finding }) => (
+  <li className="py-3 border-b border-[var(--rule)] last:border-b-0">
+    <div className="flex items-baseline justify-between gap-3">
+      <p className="text-sm text-[var(--ink)]">{finding.title}</p>
+      <Money value={finding.pnl} />
+    </div>
+    <p className="doc-meta normal-case mt-1">
+      {finding.trips} trades · win rate {formatPercent(finding.win_rate * 100)} against{' '}
+      {formatPercent(finding.baseline_win_rate * 100)} on the rest · {formatSigned(finding.avg_pnl)} a trade
+      against {formatSigned(finding.baseline_avg_pnl)}
+    </p>
+    {finding.note && <p className="doc-meta normal-case mt-1 text-[var(--ink-soft)]">{finding.note}</p>}
+  </li>
+);
 
 const NoteEditor = ({ trip, onSaved }) => {
   const [note, setNote] = useState(trip.note || '');
@@ -323,6 +339,23 @@ const Journal = () => {
             </>
           )}
         </Sheet>
+
+        {!empty && (
+          <Sheet title="Your patterns" meta="Your own trades, gross">
+            {data.insights.length === 0 ? (
+              <Empty
+                title="Not enough trades to see a pattern"
+                detail="A pattern is only shown once it covers at least 5 closed trades. Tags you add to trades are counted too."
+              />
+            ) : (
+              <ul>
+                {data.insights.map((finding) => (
+                  <Finding key={`${finding.kind}:${finding.title}`} finding={finding} />
+                ))}
+              </ul>
+            )}
+          </Sheet>
+        )}
 
         {!empty && (
           <Sheet
