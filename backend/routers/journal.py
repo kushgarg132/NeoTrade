@@ -11,6 +11,7 @@ from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.database import db
 from backend.journal.console_csv import parse_console_tradebook
+from backend.journal.insights import build_insights
 from backend.journal.roundtrips import build_round_trips, daily_pnl
 from backend.journal.store import JournalStore
 from backend.journal.sync import sync_user_trades
@@ -46,6 +47,7 @@ async def get_journal(
     return {
         "round_trips": trips,
         "calendar": daily_pnl(trips),
+        "insights": build_insights(trips),
         "summary": {
             "trips": len(closed),
             "pnl": round(sum(t["pnl"] for t in closed), 2),
