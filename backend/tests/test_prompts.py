@@ -12,8 +12,8 @@ PROMPTS = {
     "peers": {"name": "Reliance Industries", "symbol": "RELIANCE"},
     "classify_events": {"text": "Q1 profit fell 23%"},
     "article_sentiment": {"target": "SBIN", "relevance_target": "SBIN", "headline": "h", "content": "c"},
-    "analyst_summary": {"symbol": "SBIN", "news": "n", "events": "[]"},
-    "research_thesis": {"symbol": "SBIN", "sentiment_score": -0.2, "summary": "s"},
+    "score_news": {"symbol": "SBIN", "articles": "[0] headline"},
+    "research_report": {"symbol": "SBIN", "sentiment_score": "-0.20", "relevant_count": 3, "news": "n", "events": "[]"},
 }
 
 

@@ -1,13 +1,43 @@
-# import httpx - removed
-from typing import List, Dict, Any
-from pydantic import BaseModel, ConfigDict
-from backend.components.shared.models import NewsArticle, FinancialEvent
+"""News analysis for one stock: fetch recent news, score it, write the note.
+
+Two LLM calls per stock, down from up to eight:
+1. `score_news` -- every article's relevance, sentiment and impact, plus the
+   events they report, in one JSON response (was one call per article plus
+   a separate events call over the same headlines).
+2. `research_report` -- the sentiment report and the investment thesis in
+   one Markdown response (the thesis used to be a second call rewriting the
+   first).
+
+The result is cached per symbol for CACHE_TTL_SECONDS and shared by every
+caller (the AI analysis tab, suggestion theses, the analyst-verdict refresh)
+and every user. The same run also fills `sentiment:{symbol}`, the cache the
+engine and scan read for the AI half of conviction.
+
+Sentiment is an impact- and recency-weighted average over *relevant* articles
+only. Irrelevant articles, and any the classifier did not return a valid
+score for, are left out rather than counted as 0 -- counting them dragged
+every stock's sentiment toward neutral.
+"""
+
+import json
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from backend.components.analyst.news import fetch_news_logic
+from backend.components.shared.models import FinancialEvent, NewsArticle
 from backend.llm import llm_service
 from backend.prompts import render
-from backend.configs.settings import settings
-import logging
 
 logger = logging.getLogger(__name__)
+
+NEWS_LIMIT = 5
+CACHE_TTL_SECONDS = 4 * 60 * 60
+RECENCY_HALF_LIFE_DAYS = 3.0
+THESIS_MARKER = "===THESIS==="
+
 
 class AnalystOutput(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
@@ -16,102 +46,185 @@ class AnalystOutput(BaseModel):
     sentiment_score: float
     impact_score: int
     summary: str
+    thesis: str = ""
     events: List[FinancialEvent]
     news_articles: List[Dict[str, Any]] = []  # Raw articles for UI display
-    sentiment_analysis: Dict[str, Any] = {} # Detailed breakdown
+    sentiment_analysis: Dict[str, Any] = {}  # Detailed breakdown
 
-from backend.components.analyst.news import fetch_news_logic
-from backend.components.analyst.sentiment import analyze_sentiment_logic
-from backend.components.analyst.events import classify_events_logic
+
+class _ArticleScore(BaseModel):
+    index: int
+    is_relevant: bool
+    sentiment: Literal["POSITIVE", "NEGATIVE", "NEUTRAL"] = "NEUTRAL"
+    score: float = Field(default=0.0, ge=-1.0, le=1.0)
+    impact: int = Field(default=1, ge=0, le=10)
+
+
+class _Event(BaseModel):
+    event_type: str
+    description: str
+    impact_rating: int = Field(default=5, ge=0, le=10)
+
+
+class _NewsScores(BaseModel):
+    articles: List[_ArticleScore] = []
+    events: List[_Event] = []
+
+
+def _extract_json(text: str) -> str:
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("no JSON object in response")
+    return text[start:end + 1]
+
+
+async def _score_news(symbol: str, articles: List[NewsArticle]) -> Optional[_NewsScores]:
+    """One call for every article and the events. Retried once; None if the
+    model still does not return valid JSON in the expected shape."""
+    listing = "\n\n".join(
+        f"[{i}] {a.title}\n{(a.content or '')[:400]}" for i, a in enumerate(articles)
+    )
+    system, prompt = render("score_news", symbol=symbol, articles=listing)
+    for attempt in (1, 2):
+        response = await llm_service.get_completion(prompt, system_prompt=system)
+        try:
+            return _NewsScores.model_validate_json(_extract_json(response))
+        except (ValueError, ValidationError) as exc:
+            logger.warning("news scoring for %s: invalid response (attempt %d): %s", symbol, attempt, exc)
+    return None
+
+
+def _weighted_sentiment(scored: List[tuple[NewsArticle, _ArticleScore]], now: datetime) -> float:
+    total = weight_sum = 0.0
+    for article, score in scored:
+        published = article.published_at
+        if published.tzinfo is None:
+            published = published.replace(tzinfo=timezone.utc)
+        age_days = max(0.0, (now - published).total_seconds() / 86400)
+        weight = max(score.impact, 1) * 0.5 ** (age_days / RECENCY_HALF_LIFE_DAYS)
+        total += weight * score.score
+        weight_sum += weight
+    return total / weight_sum if weight_sum else 0.0
+
+
+def _split_report(text: str) -> tuple[str, str]:
+    if not text or text == "LLM_DISABLED" or text.startswith("Error generating response"):
+        return "Unable to generate summary.", ""
+    summary, _, thesis = text.partition(THESIS_MARKER)
+    return summary.strip(), thesis.strip()
+
+
+def _redis():
+    from backend.database import db
+
+    return db.redis
+
 
 class AnalystAgent:
-    def __init__(self):
-        pass
-        # self.base_url was removed as we use direct tool calls now
-        
     async def analyze(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        symbol = state['symbol']
-        logger.info(f"AnalystAgent: Starting analysis for {symbol}")
-        """
-        Orchestrates the news analysis workflow:
-        1. Fetch News
-        2. Analyze Sentiment
-        3. Detect Events
-        4. Synthesize Summary
-        """
-        # 1. Fetch News
+        symbol = state["symbol"]
+        cached = await self._cached(symbol)
+        if cached is not None:
+            logger.info("AnalystAgent: cache hit for %s", symbol)
+            return cached
+
+        output = await self._analyze(symbol)
+        # No news (or a failed fetch) cost no LLM calls; caching it would
+        # only hide news that arrives later.
+        if output["news_articles"]:
+            await self._store(symbol, output)
+        return output
+
+    async def _analyze(self, symbol: str) -> Dict[str, Any]:
+        logger.info("AnalystAgent: analysing %s", symbol)
         try:
-            # Use tool logic directly (Pythonic tool usage)
-            articles = await fetch_news_logic(symbols=[symbol], limit=5)
-            # articles is List[NewsArticle]
+            articles = await fetch_news_logic(symbols=[symbol], limit=NEWS_LIMIT)
         except Exception as e:
             logger.error(f"AnalystAgent Error fetching news: {e}")
-            return self._empty_output(symbol).model_dump(mode='json')
-
+            return self._empty_output(symbol).model_dump(mode="json")
+        articles = articles[:NEWS_LIMIT]
         if not articles:
-            return self._empty_output(symbol).model_dump(mode='json')
+            return self._empty_output(symbol).model_dump(mode="json")
 
-        # 2. Analyze Sentiment
-        try:
-            # Logic function takes List[NewsArticle] and returns List[NewsArticle]
-            analyzed_articles_objs = await analyze_sentiment_logic(articles, target_symbol=symbol)
-            # Convert to list of dicts for state/UI
-            analyzed_articles = [a.model_dump(mode='json') for a in analyzed_articles_objs]
-        except Exception as e:
-                logger.error(f"AnalystAgent Error analyzing sentiment: {e}")
-                analyzed_articles = [a.model_dump(mode='json') for a in articles] # Fallback to raw articles
+        scores = await _score_news(symbol, articles)
+        by_index = {s.index: s for s in (scores.articles if scores else [])}
+        relevant = []
+        for i, article in enumerate(articles):
+            score = by_index.get(i)
+            if score is None or not score.is_relevant:
+                article.sentiment, article.sentiment_score, article.impact_score = None, 0.0, 0
+                continue
+            article.sentiment = score.sentiment.lower()
+            article.sentiment_score = score.score
+            article.impact_score = score.impact
+            relevant.append((article, score))
 
-        # 3. Detect Events (from concatenated text or titles)
-        combined_text = "\n".join([f"{a['title']}: {(a.get('content') or '')[:100]}" for a in analyzed_articles])
-        events = []
-        try:
-            # Logic function takes text and date, returns List[FinancialEvent]
-            from datetime import datetime
-            events_objs = await classify_events_logic(combined_text, datetime.now())
-            events = [e.model_dump(mode='json') for e in events_objs]
-        except Exception as e:
-            logger.error(f"AnalystAgent Error classifying events: {e}")
+        now = datetime.now(timezone.utc)
+        sentiment = _weighted_sentiment(relevant, now)
+        max_impact = max((s.impact for _, s in relevant), default=0)
+        raw_events = scores.events if scores else []
+        events = [
+            FinancialEvent(event_type=e.event_type, description=e.description, date=now,
+                           symbols=[symbol], impact_rating=e.impact_rating)
+            for e in raw_events
+        ]
 
-        # 4. Synthesize Summary using LLM with Chain of Thought
-        system, summary_prompt = render(
-            "analyst_summary", symbol=symbol, news=combined_text[:3000], events=events,
+        news = "\n".join(
+            f"- {a.title} ({s.sentiment.lower()}, impact {s.impact}): {(a.content or '')[:300]}"
+            for a, s in relevant
+        ) or "No relevant news found."
+        system, prompt = render(
+            "research_report", symbol=symbol, sentiment_score=f"{sentiment:.2f}",
+            relevant_count=len(relevant), news=news,
+            events=json.dumps([e.model_dump() for e in raw_events]),
         )
-
         try:
-            summary = await llm_service.get_completion(summary_prompt, system_prompt=system)
+            summary, thesis = _split_report(await llm_service.get_completion(prompt, system_prompt=system))
         except Exception as e:
             logger.error(f"AnalystAgent LLM Error: {e}")
-            summary = "Unable to generate summary due to LLM error."
+            summary, thesis = "Unable to generate summary.", ""
 
-        # Calculate aggregate scores
-        avg_sentiment = sum(a.get('sentiment_score', 0) for a in analyzed_articles) / len(analyzed_articles) if analyzed_articles else 0
-        max_impact = max([a.get('impact_score', 0) for a in analyzed_articles] + [0])
-        
-        # Determine Label
-        if avg_sentiment > 0.15:
-            label = "bullish"
-        elif avg_sentiment < -0.15:
-            label = "bearish"
-        else:
-            label = "neutral"
-            
-        sentiment_analysis = {
-            "score": float(f"{avg_sentiment:.2f}"),
-            "label": label,
-            "risk_score": max_impact, # Proxy for risk from news
-            "article_count": len(analyzed_articles)
-        }
-        
-        logger.info(f"AnalystAgent: Analysis complete for {symbol}. Sentiment: {avg_sentiment:.2f}")
+        label = "bullish" if sentiment > 0.15 else "bearish" if sentiment < -0.15 else "neutral"
+        logger.info("AnalystAgent: %s sentiment %.2f from %d/%d relevant article(s)",
+                    symbol, sentiment, len(relevant), len(articles))
         return AnalystOutput(
             symbol=symbol,
-            sentiment_score=avg_sentiment,
+            sentiment_score=sentiment,
             impact_score=max_impact,
             summary=summary,
-            events=[FinancialEvent(**e) for e in events],
-            news_articles=analyzed_articles,
-            sentiment_analysis=sentiment_analysis
-        ).model_dump(mode='json')
+            thesis=thesis,
+            events=events,
+            news_articles=[a.model_dump(mode="json") for a in articles],
+            sentiment_analysis={
+                "score": round(sentiment, 2),
+                "label": label,
+                "risk_score": max_impact,  # Proxy for risk from news
+                "article_count": len(articles),
+                "relevant_count": len(relevant),
+            },
+        ).model_dump(mode="json")
+
+    async def _cached(self, symbol: str) -> Optional[Dict[str, Any]]:
+        redis = _redis()
+        if redis is None:
+            return None
+        try:
+            raw = await redis.get(f"analyst:{symbol}")
+            return json.loads(raw) if raw else None
+        except Exception as exc:
+            logger.warning("analyst cache read failed for %s: %s", symbol, exc)
+            return None
+
+    async def _store(self, symbol: str, output: Dict[str, Any]) -> None:
+        redis = _redis()
+        if redis is None:
+            return
+        try:
+            await redis.set(f"analyst:{symbol}", json.dumps(output), ex=CACHE_TTL_SECONDS)
+            # The engine and scan read this for the AI half of conviction.
+            await redis.set(f"sentiment:{symbol}", output["sentiment_score"], ex=CACHE_TTL_SECONDS)
+        except Exception as exc:
+            logger.warning("analyst cache write failed for %s: %s", symbol, exc)
 
     def _empty_output(self, symbol: str) -> AnalystOutput:
         return AnalystOutput(
@@ -120,5 +233,5 @@ class AnalystAgent:
             impact_score=0,
             summary="No news found or error in analysis.",
             events=[],
-            news_articles=[]
+            news_articles=[],
         )

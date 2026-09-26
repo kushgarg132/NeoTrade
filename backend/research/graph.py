@@ -6,7 +6,7 @@ decision_node that emitted a BUY/SELL/HOLD signal. That made this pipeline a
 second, ad hoc decision-maker sitting next to the real one (backend/strategies
 + backend/scoring, Task 3/4). This module is demoted: it resolves a query,
 gathers company info + news/sentiment, and asks the LLM for a narrative
-thesis. It emits no signal and makes no trade decision -- scoring
+thesis (written alongside the analyst summary, one LLM call). It emits no signal and makes no trade decision -- scoring
 (backend.scoring.composite) and strategies (backend.strategies) are the only
 things allowed to do that now.
 """
@@ -19,8 +19,6 @@ from langgraph.graph import StateGraph, END
 
 from backend.components.analyst.agent import AnalystAgent
 from backend.components.master.search import resolve_company_query
-from backend.llm import llm_service
-from backend.prompts import render
 
 logger = logging.getLogger(__name__)
 
@@ -107,23 +105,9 @@ class ResearchAgent:
         return {"analyst_output": result}
 
     async def synthesize_node(self, state: AgentState):
-        """LLM investment thesis from the analyst's news/sentiment report."""
-        logger.info("Synthesizing research thesis...")
-        analyst_out = state.get("analyst_output", {})
-
-        system, summary_prompt = render(
-            "research_thesis",
-            symbol=state["symbol"],
-            sentiment_score=analyst_out.get("sentiment_score", 0),
-            summary=analyst_out.get("summary", "N/A"),
-        )
-
-        try:
-            thesis = await llm_service.get_completion(summary_prompt, system_prompt=system)
-        except Exception:
-            thesis = "Synthesis failed."
-
-        return {"thesis": thesis}
+        """The thesis is written in the same LLM call as the analyst's
+        summary (backend/components/analyst/agent.py) -- no second call."""
+        return {"thesis": (state.get("analyst_output") or {}).get("thesis", "")}
 
     async def run(self, symbol: str) -> ResearchReport:
         inputs = {
