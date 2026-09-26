@@ -79,7 +79,7 @@ class BrokerExecutionClient:
                     self._pending_fills.append(Fill(
                         order_id=row["_id"], symbol=row["symbol"], side=Side(row["side"]),
                         quantity=newly_filled, price=status.average_price,
-                        timestamp=_now(), costs=0.0,
+                        timestamp=_now(), costs=0.0, venue="live",
                     ))
             except Exception:
                 # One broker hiccup on one order must not stall status

@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from backend.core.models import Fill, Order, Position
+from backend.core.models import Fill, Order, Position, Venue
 
 
 class LedgerStore:
@@ -67,8 +67,10 @@ class LedgerStore:
             {symbol: position.model_dump() for symbol, position in positions.items()},
         )
 
-    async def get_open_positions(self) -> dict[str, Position]:
-        cursor = self.positions.find({"user_id": self.user_id, "quantity": {"$ne": 0}})
+    async def get_open_positions(self, venue: Optional[Venue] = None) -> dict[str, Position]:
+        cursor = self.positions.find(
+            {"user_id": self.user_id, "quantity": {"$ne": 0}, **venue_filter(venue)}
+        )
         docs = await cursor.to_list(length=None)
         result = {}
         for doc in docs:
@@ -77,9 +79,10 @@ class LedgerStore:
         return result
 
     async def get_fills(
-        self, symbol: Optional[str] = None, since: Optional[datetime] = None
+        self, symbol: Optional[str] = None, since: Optional[datetime] = None,
+        venue: Optional[Venue] = None,
     ) -> list[Fill]:
-        query: dict = {"user_id": self.user_id}
+        query: dict = {"user_id": self.user_id, **venue_filter(venue)}
         if symbol is not None:
             query["symbol"] = symbol
         if since is not None:
@@ -163,12 +166,16 @@ class LedgerStore:
             "realized_pnl": 0.0,
             "costs": fill.costs,
             "suggestion_id": (order or {}).get("suggestion_id"),
+            # A trade is paper or live for its whole life: the fill that
+            # opened it decides, and closing fills never change it.
+            "venue": fill.venue,
         }))
 
     async def get_trades(
-        self, status: Optional[str] = None, limit: int = 200
+        self, status: Optional[str] = None, limit: int = 200,
+        venue: Optional[Venue] = None,
     ) -> list[dict]:
-        query: dict = {"user_id": self.user_id}
+        query: dict = {"user_id": self.user_id, **venue_filter(venue)}
         if status is not None:
             query["status"] = status
         cursor = self.trades.find(query).sort("entry_at", -1).limit(limit)
@@ -184,6 +191,17 @@ class LedgerStore:
         cursor = self.orders.find(query)
         docs = await cursor.to_list(length=None)
         return [Order(**_clean(doc)) for doc in docs]
+
+
+def venue_filter(venue: Optional[Venue]) -> dict:
+    """Mongo clause for one book. Rows written before venues existed carry no
+    `venue` and were all paper, so "paper" means "not live" rather than an
+    exact match -- a missing tag must never leak an old row into the live book."""
+    if venue is None:
+        return {}
+    if venue == "live":
+        return {"venue": "live"}
+    return {"venue": {"$ne": "live"}}
 
 
 def _clean_id(doc: dict) -> dict:

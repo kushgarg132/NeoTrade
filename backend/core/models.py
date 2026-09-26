@@ -109,6 +109,9 @@ class Order(BaseModel):
         return int(self.quantity)
 
 
+Venue = Literal["paper", "live"]
+
+
 class Fill(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -121,6 +124,11 @@ class Fill(BaseModel):
     # brokerage + taxes + slippage; Task 6 owns the real cost model, this
     # task just carries the field.
     costs: float = 0.0
+    # Where the fill happened: "live" only when a real broker reported it
+    # (BrokerExecutionClient). Everything the simulator, an approved
+    # suggestion or an expiry settlement produces is paper. The app keeps the
+    # two books apart on this field, so real money never reads as practice.
+    venue: Venue = "paper"
 
 
 class Position(BaseModel):
@@ -137,6 +145,10 @@ class Position(BaseModel):
     # where either is unknown rather than guess.
     exchange: Optional[str] = None
     product: Optional[str] = None
+    # Set by Portfolio.apply from the fill that opened the position. None on
+    # broker-book positions and on ledger rows written before venues existed
+    # -- the ledger reads those as paper, which is what they all were.
+    venue: Optional[Venue] = None
 
 
 LiveOrderState = Literal[

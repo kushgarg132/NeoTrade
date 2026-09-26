@@ -39,7 +39,15 @@ async def push_once(db) -> dict:
         # symbols this user holds that nobody was watching.
         missing = [s for s in positions if s not in marks]
         user_marks = {**marks, **(await mark_prices(db, missing) if missing else {})}
-        await hub.publish(user_id, PNL_TOPIC, "updated", await compute_pnl(ledger, user_marks))
+        # Both books in one message, keyed by venue: the Paper tab reads
+        # `paper`, the real-money statement reads `live`, and neither ever
+        # shows the other's figures. The combined figures stay at the top
+        # level for a browser still running the build from before venues,
+        # which reads `today`/`month`/`open` there and would crash without.
+        await hub.publish(user_id, PNL_TOPIC, "updated", {
+            **await compute_pnl(ledger, user_marks),
+            **{venue: await compute_pnl(ledger, user_marks, venue=venue) for venue in ("paper", "live")},
+        })
 
     return {"symbols": len(marks), "pnl_users": len(pnl_users)}
 

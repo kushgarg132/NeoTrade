@@ -25,6 +25,7 @@ from backend import broadcast
 from backend.auth.broker_credentials import get_credential_store
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
+from backend.core.models import Venue
 from backend.brokers.protocol import BrokerSessionState
 from backend.brokers.registry import BROKERS, get_broker_adapter
 from backend.configs.settings import settings
@@ -346,11 +347,11 @@ async def list_runs(
 
 
 @router.get("/positions")
-async def get_positions(ledger: LedgerStore = Depends(get_ledger_store)):
+async def get_positions(venue: Optional[Venue] = None, ledger: LedgerStore = Depends(get_ledger_store)):
     """The stored unrealized_pnl is always 0 -- the engine loop never marks a
     position to market -- so this route marks it here, at read time, with a
     best-effort live quote per symbol."""
-    positions = await ledger.get_open_positions()
+    positions = await ledger.get_open_positions(venue=venue)
     quotes = await mark_prices(db.db, positions.keys())
     portfolio = Portfolio()
     portfolio.positions = positions
@@ -379,9 +380,10 @@ async def get_kill_switch(user: User = Depends(get_current_user)):
 async def get_fills(
     symbol: Optional[str] = None,
     since: Optional[datetime] = None,
+    venue: Optional[Venue] = None,
     ledger: LedgerStore = Depends(get_ledger_store),
 ):
-    fills = await ledger.get_fills(symbol=symbol, since=since)
+    fills = await ledger.get_fills(symbol=symbol, since=since, venue=venue)
     return [fill.model_dump(mode="json") for fill in fills]
 
 
@@ -389,16 +391,18 @@ async def get_fills(
 async def get_trades(
     status: Optional[Literal["OPEN", "CLOSED"]] = None,
     limit: int = 200,
+    venue: Optional[Venue] = None,
     ledger: LedgerStore = Depends(get_ledger_store),
 ):
-    """Round trips, not executions: `status=OPEN` is what the dashboard's
-    Active tab shows, `CLOSED` the Completed one."""
-    return await ledger.get_trades(status=status, limit=limit)
+    """Round trips, not executions: `status=OPEN` is what the Active tab
+    shows, `CLOSED` the Completed one. `venue` picks the paper or live book;
+    omitted, both."""
+    return await ledger.get_trades(status=status, limit=limit, venue=venue)
 
 
 @router.get("/equity")
-async def get_equity(ledger: LedgerStore = Depends(get_ledger_store)):
-    positions = await ledger.get_open_positions()
+async def get_equity(venue: Optional[Venue] = None, ledger: LedgerStore = Depends(get_ledger_store)):
+    positions = await ledger.get_open_positions(venue=venue)
     portfolio = Portfolio()
     portfolio.positions = positions
     # No live mark-price source wired into this read-only endpoint --

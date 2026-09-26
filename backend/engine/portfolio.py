@@ -17,7 +17,7 @@ class Portfolio:
 
         if pos is None or pos.quantity == 0:
             self.positions[fill.symbol] = Position(
-                symbol=fill.symbol, quantity=delta, avg_price=fill.price,
+                symbol=fill.symbol, quantity=delta, avg_price=fill.price, venue=fill.venue,
             )
             return
 

@@ -86,6 +86,8 @@ async def test_poll_once_turns_a_new_fill_into_a_pending_fill():
     assert fills[0].symbol == "RELIANCE"
     assert fills[0].quantity == 10.0
     assert fills[0].price == 2500.0
+    # A real broker's fill is the live book's, never paper's.
+    assert fills[0].venue == "live"
 
 
 async def test_poll_once_does_not_refire_the_same_fill_twice():

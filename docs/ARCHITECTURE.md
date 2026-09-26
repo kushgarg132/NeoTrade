@@ -90,6 +90,15 @@ User-scoped collections: `paper_orders`, `paper_fills`, `paper_positions`, `pape
 read), `suggestions` (`backend/suggestions/store.py`), `user_prefs` (`backend/prefs.py`),
 `trading_runs` (`backend/runs.py`), `watchlist` (`backend/routers/watchlist.py`).
 
+The engine ledger holds two books. Every `Fill` carries `venue` (`"paper"` by default,
+`"live"` only when `BrokerExecutionClient` reports a real broker fill); `Portfolio.apply`
+stamps it on the position that fill opens, and `LedgerStore._open_trade` on the round trip,
+which keeps it through its close. `LedgerStore.get_trades/get_fills/get_open_positions` and
+the `/trading/{trades,fills,positions,equity}` and `/analytics/pnl` routes take `?venue=`;
+`venue_filter` (`backend/engine/persistence.py`) reads "paper" as "not live", so rows written
+before the tag existed stay in the paper book and can never leak into the live one. The
+frontend's Paper tab asks for `venue=paper`, the statement for `venue=live`.
+
 Correctly global (shared reference data, not personal): `instruments`, `instrument_meta`,
 and the `analyst:{symbol}` / `sentiment:{symbol}` Redis caches (4 hours, written by
 `AnalystAgent`, `backend/components/analyst/agent.py`).
@@ -146,7 +155,7 @@ hardcoded `0.0` (`backtest.py:94-95`) — they are not computed.
   `PollingLiveFeed`, `KiteTickerFeed`.
 - One WebSocket, `GET /api/v1/ws` (`backend/ws/routes.py:60-86`), topic pub/sub through an
   in-process `Hub` (`backend/ws/hub.py:24-95`). A 15-second pump
-  (`backend/ws/pump.py:22,26-53`) publishes marks and recomputed PnL; suggestion and run
+  (`backend/ws/pump.py:23,26-62`) publishes marks and recomputed PnL: per venue under `paper`/`live`, plus the combined figures at the top level for pre-venue clients; suggestion and run
   events are published reactively by their own stores.
 
 ### 1.8 Dead code (scheduled for revival, not deletion)
@@ -170,9 +179,9 @@ the revived chain emits `Intent` and is scored by `composite.py` like everything
 | Limit | Where | Consequence |
 |---|---|---|
 | No backtest gate | nothing marks a strategy live-eligible; `backend/strategies/registry.py:16-59` is the only filter | A registered strategy trades immediately |
-| Single-process state | `_RUNS` (`routers/trading.py:53`), `ws/hub.py:9-10`, `scheduler.py:8-10` | Breaks with more than one worker |
+| Single-process state | `_RUNS` (`routers/trading.py:62`), `ws/hub.py:9-10`, `scheduler.py:8-10` | Breaks with more than one worker |
 | `llm_service` module singleton | `backend/llm.py:125` | Per-user model choice (`omniroute_model` in `user_prefs`) is stored but never read |
-| `/trading/start` trusts request-body risk caps | `routers/trading.py:158-215` vs `scheduler.py:52-59` which reads `PrefsStore` | The manual path can bypass a user's stored limits |
+| `/trading/start` trusts request-body risk caps | `routers/trading.py:216-318` vs `scheduler.py:52-59` which reads `PrefsStore` | The manual path can bypass a user's stored limits |
 
 ---
 

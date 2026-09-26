@@ -9,6 +9,7 @@ means three round trips rather than however many executions they took.
 from datetime import datetime, timezone
 from typing import Optional
 
+from backend.core.models import Venue
 from backend.engine.persistence import LedgerStore
 from backend.engine.session import IST
 
@@ -22,17 +23,22 @@ def _ist(value: datetime) -> datetime:
 
 
 async def compute_pnl(
-    ledger: LedgerStore, mark_prices: dict[str, float], now: Optional[datetime] = None
+    ledger: LedgerStore, mark_prices: dict[str, float], now: Optional[datetime] = None,
+    venue: Optional[Venue] = None,
 ) -> dict:
+    """`venue` narrows every figure to one book (paper or live); None keeps
+    the combined view."""
     now = _ist(now or datetime.now(timezone.utc))
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = day_start.replace(day=1)
 
-    closed = [t for t in await ledger.get_trades(status="CLOSED", limit=2000) if t.get("exit_at")]
+    closed = [
+        t for t in await ledger.get_trades(status="CLOSED", limit=2000, venue=venue) if t.get("exit_at")
+    ]
     today = [t for t in closed if _ist(t["exit_at"]) >= day_start]
     month = [t for t in closed if _ist(t["exit_at"]) >= month_start]
 
-    positions = await ledger.get_open_positions()
+    positions = await ledger.get_open_positions(venue=venue)
     unrealized = 0.0
     exposure = 0.0
     for symbol, position in positions.items():
@@ -46,7 +52,7 @@ async def compute_pnl(
     month_wins = [t for t in month if t["realized_pnl"] > 0]
 
     entered_today = [
-        t for t in await ledger.get_trades(limit=2000)
+        t for t in await ledger.get_trades(limit=2000, venue=venue)
         if t.get("entry_at") and _ist(t["entry_at"]) >= day_start
     ]
 

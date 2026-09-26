@@ -86,8 +86,31 @@ async def test_pnl_subscribers_get_a_recomputed_snapshot(mongo, hub, quotes):
     message = connection.queue.get_nowait()
     assert message["topic"] == "pnl"
     # Marked at 111 against a 100 average: 10 shares, 110 rupees unrealized.
-    assert message["data"]["today"]["unrealized"] == pytest.approx(110.0)
+    # An untagged position is paper, so it lands in that book only.
+    assert message["data"]["paper"]["today"]["unrealized"] == pytest.approx(110.0)
+    assert message["data"]["paper"]["open"]["positions"] == 1
+    assert message["data"]["live"]["open"]["positions"] == 0
+    # A pre-venue browser still finds the combined figures where it looks.
     assert message["data"]["open"]["positions"] == 1
+
+
+@pytest.mark.asyncio
+async def test_pnl_keeps_live_and_paper_books_apart(mongo, hub, quotes):
+    ledger = LedgerStore(mongo, user_id="alice")
+    await ledger.snapshot_positions({
+        "RELIANCE": Position(symbol="RELIANCE", quantity=10.0, avg_price=100.0, venue="live"),
+        "TCS": Position(symbol="TCS", quantity=5.0, avg_price=100.0, venue="paper"),
+    })
+    connection = hub.connect("alice")
+    connection.subscribe(["pnl"])
+
+    await pump_module.push_once(mongo)
+
+    data = connection.queue.get_nowait()["data"]
+    assert data["live"]["open"]["positions"] == 1
+    assert data["live"]["today"]["unrealized"] == pytest.approx(110.0)
+    assert data["paper"]["open"]["positions"] == 1
+    assert data["paper"]["today"]["unrealized"] == pytest.approx(55.0)
 
 
 @pytest.mark.asyncio
@@ -99,4 +122,6 @@ async def test_pnl_does_not_leak_between_users(mongo, hub, quotes):
 
     await pump_module.push_once(mongo)
 
-    assert bob.queue.get_nowait()["data"]["open"]["positions"] == 0
+    data = bob.queue.get_nowait()["data"]
+    assert data["paper"]["open"]["positions"] == 0
+    assert data["live"]["open"]["positions"] == 0

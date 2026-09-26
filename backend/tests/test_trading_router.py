@@ -145,6 +145,27 @@ def test_get_positions_returns_open_positions(client, ledger):
     assert body["RELIANCE"]["quantity"] == 10.0
 
 
+def test_ledger_routes_split_paper_from_live(client, ledger):
+    """The Paper tab asks for venue=paper and the real-money statement for
+    venue=live; neither may see the other's positions, fills or trades."""
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    asyncio.run(ledger.snapshot_positions({
+        "RELIANCE": Position(symbol="RELIANCE", quantity=10.0, avg_price=2500.0, venue="live"),
+        "TCS": Position(symbol="TCS", quantity=5.0, avg_price=3500.0, venue="paper"),
+    }))
+    for order_id, symbol, venue in (("o1", "RELIANCE", "live"), ("o2", "TCS", "paper")):
+        fill = Fill(order_id=order_id, symbol=symbol, side=Side.BUY, quantity=1.0, price=1.0,
+                    timestamp=ts, venue=venue)
+        asyncio.run(ledger.on_fill(fill, 0.0, Position(symbol=symbol, quantity=1.0, avg_price=1.0)))
+
+    for venue, symbol in (("live", "RELIANCE"), ("paper", "TCS")):
+        assert set(client.get("/api/v1/trading/positions", params={"venue": venue}).json()) == {symbol}
+        assert [f["symbol"] for f in client.get("/api/v1/trading/fills", params={"venue": venue}).json()] == [symbol]
+        assert [t["symbol"] for t in client.get("/api/v1/trading/trades", params={"venue": venue}).json()] == [symbol]
+    assert len(client.get("/api/v1/trading/trades").json()) == 2
+    assert client.get("/api/v1/trading/trades", params={"venue": "demo"}).status_code == 422
+
+
 def test_get_fills_optionally_filters_by_symbol(client, ledger):
     asyncio.run(ledger.record_fill(Fill(
         order_id="o1", symbol="RELIANCE", side=Side.BUY, quantity=10.0,
