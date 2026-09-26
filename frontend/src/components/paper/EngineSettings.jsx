@@ -68,6 +68,32 @@ const EngineSettings = () => {
 
   return (
     <div className="space-y-4">
+      <Sheet title="Daily auto-run" meta={prefs.auto_paper_intraday ? 'On' : 'Off'}>
+        <Row
+          label="Paper-trade intraday every session"
+          hint="Starts an intraday paper run at 09:15 IST each weekday and stops it at 15:30, with positions squared off at 15:15. It restarts itself after an interruption; stop it on the Engine tab and it stays off for the rest of that day."
+        >
+          <button
+            type="button"
+            role="switch"
+            aria-checked={prefs.auto_paper_intraday}
+            onClick={() => save({ auto_paper_intraday: !prefs.auto_paper_intraday })}
+            className={cn(
+              SWITCH,
+              prefs.auto_paper_intraday
+                ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
+                : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
+            )}
+          >
+            {prefs.auto_paper_intraday ? 'On' : 'Off'}
+          </button>
+        </Row>
+        <p className="pt-3 doc-meta normal-case">
+          Paper only: a strategy you switched live still trades real money only if it has passed the
+          backtest gate.
+        </p>
+      </Sheet>
+
       <Sheet title="Engine mandate" meta={saving ? 'Saving…' : undefined}>
         {sizingRow('account_size', 'Account size', 'What position sizing risks a percentage of.')}
         {sizingRow('max_exposure', 'Maximum exposure', 'The engine will not open past this notional.')}

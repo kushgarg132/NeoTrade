@@ -162,6 +162,7 @@ const Trading = () => {
             <div className="flex flex-wrap items-center gap-3">
               <Badge variant="success">Running</Badge>
               <Badge variant="secondary">{active.mode === 'INTRADAY' ? 'Intraday' : 'Long term'}</Badge>
+              {active.params?.origin === 'auto' && <Badge variant="outline">Auto-run</Badge>}
               <span className="doc-meta normal-case">
                 {active.universe.length} scrip · run {active.run_id.slice(0, 8)}
               </span>

@@ -58,11 +58,11 @@ stop?"*
 | Surface | Mode | The visitor's success |
 |---|---|---|
 | Statement `/` | Operate | Real money only: search any stock and get full analysis + AI; today/month P&L from the broker's own trades (via the journal); guardrail alerts; real orders a live strategy placed, when there are any; tap any index for its level, chart, 52-week range and moving averages, plus an AI explanation of why it moved in its latest session (drivers, stocks behind it, global backdrop) and the headlines it was written from |
-| Paper trading `/paper` | Operate | The engine's practice-money book, kept apart from real money: paper P&L, paper trades, and the pending-decision banner |
+| Paper trading `/paper` | Operate | The engine's practice-money book, kept apart from real money: the track record first (net of charges, day by day and per strategy, win rate, profit factor, worst drawdown, against holding NIFTY), then today's paper P&L, paper trades and the pending-decision banner |
 | Decisions `/paper/decisions` | Operate | Triage pending AI proposals — approve or reject — split Intraday / Long-term. Approvals fill on paper |
 | Holdings `/paper/holdings` | Operate | Paper equity curve, open paper positions marked live, closed paper trades |
 | Engine `/paper/engine` | Operate | Start/stop an engine run, watch paper positions and fills; a "live mode armed" band names any strategy that will trade real money |
-| Engine settings `/paper/settings` | Operate | The engine's sizing (account size, max exposure, per-trade cap), the daily scan and its universe, and each strategy's paper/live switch. Shows the daily loss limit read-only |
+| Engine settings `/paper/settings` | Operate | The daily auto-run switch (paper-trade intraday every session, 09:15–15:30 IST, no Start button), the engine's sizing (account size, max exposure, per-trade cap), the daily scan and its universe, and each strategy's paper/live switch. Shows the daily loss limit read-only |
 | Watchlist `/watchlist` | Operate | Tracked symbols at a glance |
 | Scanner `/scanner` | Operate | On-demand bullish scan results |
 | Journal `/journal` *(planned)* | Review | P&L calendar, every broker trade auto-imported, notes and setup tags |
