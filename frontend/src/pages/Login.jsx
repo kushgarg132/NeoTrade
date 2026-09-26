@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/useTheme';
 import { formatNoteDate } from '../utils/formatters';
@@ -10,12 +10,19 @@ const Login = () => {
   const { login } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const [error, setError] = useState('');
+
+  // Where RequireAuth sent us from, query string included.
+  const from = location.state?.from;
+  const returnTo = from ? `${from.pathname}${from.search || ''}` : '/';
+  const params = new URLSearchParams(from?.search || '');
+  const brokerCode = params.get('code') || params.get('request_token');
 
   const onSuccess = async (credentialResponse) => {
     try {
       await login(credentialResponse.credential);
-      navigate('/');
+      navigate(returnTo, { replace: true });
     } catch {
       setError('Sign-in failed. Try again.');
     }
@@ -57,6 +64,13 @@ const Login = () => {
               width="280"
             />
           </div>
+
+          {brokerCode && (
+            <p className="mt-5 doc-meta normal-case text-center">
+              Sign in to finish connecting your broker. Your login code:{' '}
+              <span className="select-all break-all text-[var(--ink)]">{brokerCode}</span>
+            </p>
+          )}
 
           {error && (
             <p

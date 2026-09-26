@@ -1,9 +1,10 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const RequireAuth = ({ children }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -15,7 +16,9 @@ const RequireAuth = ({ children }) => {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  // Carry the full location through sign-in: a broker redirect lands on
+  // /settings?code=... and the code must survive the detour to /login.
+  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
 
   return children;
 };
