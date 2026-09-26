@@ -55,9 +55,10 @@ class BrokerAdapter(Protocol):
         ...
 
     async def ticker_feed(
-        self, instrument_tokens: list[int], timeframe: str, timeframe_seconds: float
+        self, instruments: list[Instrument], timeframe: str, timeframe_seconds: float
     ) -> Optional[DataFeed]:
-        """None means this adapter has no live streaming support (or isn't
+        """Bars from the feed carry each instrument's `instrument_token`.
+        None means this adapter has no live streaming support (or isn't
         ACTIVE), and the caller falls back to polling -- same as when no
         broker is connected at all."""
         ...

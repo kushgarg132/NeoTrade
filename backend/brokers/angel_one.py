@@ -357,7 +357,7 @@ class AngelOneAdapter:
             ))
         return result
 
-    async def ticker_feed(self, instrument_tokens, timeframe, timeframe_seconds):
+    async def ticker_feed(self, instruments, timeframe, timeframe_seconds):
         # Angel One's WebSocket feed exists but isn't wired in this pass --
         # callers fall back to polling, same as no broker connected at all.
         return None

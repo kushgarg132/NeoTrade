@@ -91,13 +91,13 @@ async def test_instruments_delegates_to_kite_instrument_source():
 
 async def test_ticker_feed_is_none_when_not_active():
     adapter = _adapter(_redis())
-    assert await adapter.ticker_feed([101], timeframe="5m", timeframe_seconds=300.0) is None
+    assert await adapter.ticker_feed([_instrument()], timeframe="5m", timeframe_seconds=300.0) is None
 
 
 async def test_ticker_feed_is_returned_when_active():
     adapter = _adapter(_redis(cached_token="tok"))
     with patch("backend.auth.kite_session.KiteConnect") as mock_cls:
         mock_cls.return_value.profile.return_value = {"user_id": "AB1234"}
-        feed = await adapter.ticker_feed([101], timeframe="5m", timeframe_seconds=300.0)
+        feed = await adapter.ticker_feed([_instrument()], timeframe="5m", timeframe_seconds=300.0)
 
     assert isinstance(feed, KiteTickerFeed)

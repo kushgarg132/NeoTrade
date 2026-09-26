@@ -149,10 +149,14 @@ hardcoded `0.0` (`backtest.py:94-95`) — they are not computed.
   the `kiteconnect` SDK directly — reachable only from `backend/brokers/kite.py`); and
   `KiteTickerFeed` (`backend/data/feeds/live_kite.py`), which now **is** wired into the live
   intraday path via `BrokerAdapter.ticker_feed()`.
-- `UpstoxAdapter`/`AngelOneAdapter` don't implement streaming yet — `ticker_feed()` returns
-  `None` and the caller falls back to polling, same as no broker connected.
+- `UpstoxAdapter.ticker_feed()` returns `UpstoxMarketFeed` (`backend/data/feeds/live_upstox.py`):
+  Upstox's v3 market-data WebSocket, protobuf frames decoded by hand for the few fields
+  used. `ticker_feed()` takes `Instrument`s, not tokens, because Upstox subscribes by
+  `instrument_key`. Both feeds share `TickBarAggregator` (`backend/data/feeds/tick_bars.py`).
+  `AngelOneAdapter` doesn't stream yet — `ticker_feed()` returns `None` and the caller falls
+  back to polling, same as no broker connected.
 - Feeds behind `DataFeed` (`backend/engine/protocols.py:45-46`): `HistoricalFeed`,
-  `PollingLiveFeed`, `KiteTickerFeed`.
+  `PollingLiveFeed`, `KiteTickerFeed`, `UpstoxMarketFeed`.
 - One WebSocket, `GET /api/v1/ws` (`backend/ws/routes.py:60-86`), topic pub/sub through an
   in-process `Hub` (`backend/ws/hub.py:24-95`). A 15-second pump
   (`backend/ws/pump.py:23,26-65`) publishes marks and recomputed PnL: per venue under `paper`/`live`, plus the combined figures at the top level for pre-venue clients; suggestion and run

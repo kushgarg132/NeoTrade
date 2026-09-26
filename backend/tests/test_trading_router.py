@@ -360,7 +360,7 @@ class _FakeAdapter:
     async def state(self):
         return self._state
 
-    async def ticker_feed(self, instrument_tokens, timeframe, timeframe_seconds):
+    async def ticker_feed(self, instruments, timeframe, timeframe_seconds):
         return self._feed
 
 
