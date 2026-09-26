@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Children, cloneElement, createContext, isValidElement, useContext } from 'react';
 import { cn } from '../../utils/cn';
 import { formatSigned, formatSignedPercent } from '../../utils/formatters';
 
@@ -9,14 +9,14 @@ import { formatSigned, formatSignedPercent } from '../../utils/formatters';
 
 /** A titled sheet: ruled band, printed title, optional right-hand furniture. */
 export const Sheet = ({ title, meta, actions, children, className, bodyClassName }) => (
-  <section className={cn('sheet', className)}>
+  <section className={cn('sheet min-w-0', className)}>
     {(title || actions || meta) && (
-      <header className="flex items-baseline justify-between gap-3 px-4 py-2.5 border-b border-[var(--rule)] bg-[var(--paper-sunk)]">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 px-4 py-2.5 border-b border-[var(--rule)] bg-[var(--paper-sunk)]">
         <div className="flex items-baseline gap-3 min-w-0">
           {title && <h2 className="field-label text-[var(--ink)] truncate">{title}</h2>}
           {meta && <span className="doc-meta shrink-0">{meta}</span>}
         </div>
-        {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2 max-w-full">{actions}</div>}
       </header>
     )}
     <div className={cn('p-4', bodyClassName)}>{children}</div>
@@ -52,6 +52,7 @@ export const Money = ({ value, className, percent = false, size = 'md' }) => {
   return (
     <span
       className={cn(
+        'whitespace-nowrap',
         size === 'lg' ? 'figure-lg' : 'figure-md',
         size === 'md' && 'text-base',
         tone,
@@ -63,10 +64,18 @@ export const Money = ({ value, className, percent = false, size = 'md' }) => {
   );
 };
 
-/** A ruled table. Columns are declared once so every table aligns identically. */
+/**
+ * A ruled table. Columns are declared once so every table aligns identically.
+ *
+ * On a phone the same markup reflows into stacked records (see `.statement` in
+ * index.css): the first cell heads the record and every other cell prints under
+ * its column's label, so no figure sits behind a sideways swipe.
+ */
+const ColumnsContext = createContext(null);
+
 export const Statement = ({ columns, children, className }) => (
-  <div className={cn('overflow-x-auto -mx-4 px-4', className)}>
-    <table className="w-full border-collapse text-sm">
+  <div className={cn('sm:overflow-x-auto sm:-mx-4 sm:px-4', className)}>
+    <table className="statement w-full border-collapse text-sm">
       <thead>
         <tr className="border-b border-[var(--rule-strong)]">
           {columns.map((column) => (
@@ -83,26 +92,37 @@ export const Statement = ({ columns, children, className }) => (
           ))}
         </tr>
       </thead>
-      <tbody>{children}</tbody>
+      <ColumnsContext.Provider value={columns}>
+        <tbody>{children}</tbody>
+      </ColumnsContext.Provider>
     </table>
   </div>
 );
 
-export const Row = ({ children, className, ...props }) => (
-  <tr
-    className={cn('border-b border-[var(--rule)] last:border-b-0', className)}
-    {...props}
-  >
-    {children}
-  </tr>
-);
+/** Each cell learns its column's label, which the phone layout prints above it. */
+export const Row = ({ children, className, ...props }) => {
+  const columns = useContext(ColumnsContext);
+  const cells = Children.toArray(children).map((child, index) =>
+    isValidElement(child) && columns?.[index]
+      ? cloneElement(child, { 'data-label': columns[index].label })
+      : child
+  );
+  return (
+    <tr
+      className={cn('border-b border-[var(--rule)] last:border-b-0', className)}
+      {...props}
+    >
+      {cells}
+    </tr>
+  );
+};
 
 export const Cell = ({ align, mono, className, children, ...props }) => (
   <td
     className={cn(
       'py-2.5 align-middle',
-      align === 'right' ? 'text-right' : 'text-left',
-      mono && 'figure-md',
+      align === 'right' ? 'sm:text-right' : 'text-left',
+      mono && 'figure-md whitespace-nowrap',
       className
     )}
     {...props}
@@ -115,12 +135,12 @@ export const Cell = ({ align, mono, className, children, ...props }) => (
 export const NetLine = ({ label, children, className }) => (
   <div
     className={cn(
-      'rule-net mt-3 pt-3 flex items-baseline justify-between gap-4',
+      'rule-net mt-3 pt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1',
       className
     )}
   >
     <span className="field-label">{label}</span>
-    <span>{children}</span>
+    <span className="ml-auto">{children}</span>
   </div>
 );
 

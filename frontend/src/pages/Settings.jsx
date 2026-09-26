@@ -210,7 +210,7 @@ const BrokerSheet = () => {
     <Sheet
       title="Broker"
       actions={
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {brokerPicker}
           <Badge variant={BROKER_TONE[state.state]}>{state.state.replace('_', ' ')}</Badge>
         </div>

@@ -220,8 +220,8 @@ const Trading = () => {
           ) : (
             <Statement
               columns={[
-                { key: 'time', label: 'Time' },
                 { key: 'scrip', label: 'Scrip' },
+                { key: 'time', label: 'Time' },
                 { key: 'side', label: 'Side' },
                 { key: 'qty', label: 'Qty', align: 'right' },
                 { key: 'price', label: 'Price', align: 'right' },
@@ -230,10 +230,10 @@ const Trading = () => {
             >
               {recentFills.map((fill) => (
                 <Row key={`${fill.order_id}-${fill.timestamp}`}>
-                  <Cell className="doc-meta normal-case">{formatClock(fill.timestamp)}</Cell>
                   <Cell>
                     <span className="figure-md">{fill.symbol}</span>
                   </Cell>
+                  <Cell className="doc-meta normal-case">{formatClock(fill.timestamp)}</Cell>
                   <Cell>
                     <Badge variant={fill.side === 'BUY' ? 'success' : 'destructive'}>
                       {fill.side}

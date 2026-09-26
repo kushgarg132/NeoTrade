@@ -210,7 +210,7 @@
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   letter-spacing: -0.02em;
-  font-size: clamp(2rem, 11vw, 3.25rem);
+  font-size: clamp(1.75rem, 8.5vw, 3.25rem);
   line-height: 1;
 }
 
@@ -218,6 +218,58 @@
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: -0.01em;
+}
+
+/* A statement on a phone: each row becomes a record. The first cell heads it
+   across the full width; the rest print as label-over-value fields, the way a
+   contract note's per-trade block reads when there is no room for columns. */
+@media (max-width: 639.98px) {
+  .statement thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .statement,
+  .statement tbody {
+    display: block;
+  }
+  .statement tr {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+    gap: 0.5rem 0.75rem;
+    padding: 0.75rem 0;
+  }
+  .statement td {
+    display: block;
+    padding: 0;
+    min-width: 0;
+    text-align: left;
+  }
+  .statement td:first-child,
+  .statement td[colspan] {
+    grid-column: 1 / -1;
+  }
+  .statement td:not(:first-child)[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-family: var(--font-narrow);
+    font-weight: 600;
+    font-size: 0.625rem;
+    line-height: 1.2;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  /* A label-less cell holds row actions; it sits at the record's far edge. */
+  .statement td[data-label=""] {
+    grid-column: -2 / -1;
+    justify-self: end;
+    align-self: end;
+  }
 }
 
 /* The net rule: a contract note closes its totals with a double rule. */
@@ -288,4 +340,23 @@
   .restrike {
     animation: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Installed-app behaviour on phones
+   --------------------------------------------------------------------------- */
+
+/* iOS zooms the page into any field set below 16px and never zooms back out.
+   Unlayered on purpose, so it outranks the text-sm utilities on each field. */
+@media (max-width: 1023.98px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* A tap is acknowledged by the control's own state, not a grey flash. */
+html {
+  -webkit-tap-highlight-color: transparent;
 }

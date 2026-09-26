@@ -72,7 +72,7 @@ const Market = () => {
             ]}
           >
             {quotes.map((item) => (
-              <Quote key={item.symbol} item={item} />
+              <Quote key={item.symbol || item.name} item={item} />
             ))}
           </Statement>
         </Sheet>

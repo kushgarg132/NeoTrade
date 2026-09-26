@@ -7,7 +7,6 @@ import { useTopic } from '../hooks/useStream';
 import { cn } from '../utils/cn';
 import {
   formatCurrency,
-  formatCompactNumber,
   formatQuantity,
   formatPercent,
   formatSigned,
@@ -24,6 +23,10 @@ const BUTTON =
   'px-3 py-1.5 min-h-9 border border-[var(--rule-strong)] font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] text-[var(--ink-soft)] hover:text-[var(--ink)] hover:border-[var(--ink)] transition-colors disabled:opacity-50';
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+// Two significant figures: a day cell is ~45px wide on a phone, so "+18T"
+// fits where "+18.42T" spills into the next day.
+const cellFigure = new Intl.NumberFormat('en-IN', { notation: 'compact', maximumSignificantDigits: 2 });
 
 const monthKey = (day) => day.slice(0, 7);
 
@@ -75,16 +78,16 @@ const MonthGrid = ({ month, byDay, selected, onSelect }) => {
               aria-label={row ? `${day}: ${formatCurrency(row.pnl)}, ${row.trips} trades` : day}
               aria-pressed={selected === day}
               className={cn(
-                'min-h-12 px-1 py-1 border text-left flex flex-col justify-between',
+                'min-h-12 min-w-0 px-1 py-1 border text-left flex flex-col justify-between overflow-hidden',
                 row ? 'border-[var(--rule-strong)]' : 'border-[var(--rule)] opacity-60',
                 selected === day && 'border-[var(--stamp)] bg-[var(--paper-sunk)]'
               )}
             >
               <span className="doc-meta">{Number(day.slice(8))}</span>
               {row && (
-                <span className={cn('figure-md text-[0.6875rem] leading-tight', tone)}>
+                <span className={cn('figure-md text-[0.625rem] sm:text-[0.6875rem] leading-tight whitespace-nowrap', tone)}>
                   {row.pnl > 0 ? '+' : row.pnl < 0 ? '−' : ''}
-                  {formatCompactNumber(Math.abs(row.pnl))}
+                  {cellFigure.format(Math.abs(row.pnl))}
                 </span>
               )}
             </button>

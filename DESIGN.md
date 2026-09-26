@@ -198,6 +198,12 @@ cards under `sm` rather than scrolling horizontally — a statement column you h
 reach is a column nobody reads. Spacing rhythm is `space-y-4` between sheets, `p-4` sheet body
 padding, `py-1.5`–`py-3` row rhythm inside a sheet.
 
+The app installs to a phone's home screen (`public/manifest.webmanifest`, `public/sw.js`). The
+icon (`public/icon.svg`, rasterised to `icon-192/512.png` and `apple-touch-icon.png`) is the
+stamp on office bond: a stamp-violet double-bordered box around an "N", over a double net rule,
+drawn from shapes only so every raster matches. Installed, the masthead pads for
+`safe-area-inset-top`, and form fields render at 16px under `lg` so iOS never zooms into them.
+
 ## Elevation & Depth
 
 Flat by default — sheets are drawn with a 1px border, not a shadow, matching a printed page lying
@@ -244,6 +250,12 @@ the page, and precisely because it is singular, it reads as a stamp rather than 
 - Column headers are Field Label style with a `border-b-2 rule-strong` rule beneath them; rows
   separated by 1px `rule`, no zebra striping. A closing total uses `NetLine` — a 3px double rule
   (`border-top: 3px double`) above the figure, the literal "net" line of a real contract note.
+- Below `sm` every `Statement` reflows into stacked records by itself (`.statement` in
+  `index.css`): the first cell heads the record full-width, every other cell prints under its
+  column's label (passed down by `Row` as `data-label`), and a label-less column holds row
+  actions at the record's far edge. So put the identifying column (the scrip) first.
+- Money never breaks between its sign and its figure (`Money` is `whitespace-nowrap`); a
+  `NetLine` drops its figure under the label rather than overflowing.
 
 ### The Stamp (`doc/Doc.jsx` `Stamp`, `.stamp-land` keyframes)
 A boxed, rotated (-4deg), coloured-border mark used exclusively to represent a *decided* state
