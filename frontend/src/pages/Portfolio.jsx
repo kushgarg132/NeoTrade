@@ -10,6 +10,8 @@ import {
   ReferenceLine,
 } from 'recharts';
 import Layout from '../components/Layout';
+import PaperShell from '../components/paper/PaperShell';
+import { paperPositions } from '../utils/books';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { useTopic } from '../hooks/useStream';
@@ -50,9 +52,9 @@ const Portfolio = () => {
 
   const load = () => {
     Promise.all([
-      api.get(endpoints.trading.positions),
-      api.get(endpoints.trading.trades('CLOSED')),
-      api.get(endpoints.analytics.pnl),
+      api.get(endpoints.trading.positions('paper')),
+      api.get(endpoints.trading.trades('CLOSED', 'paper')),
+      api.get(endpoints.analytics.pnl('paper')),
     ])
       .then(([positionsRes, tradesRes, pnlRes]) => {
         setPositions(positionsRes.data);
@@ -65,8 +67,8 @@ const Portfolio = () => {
   };
 
   useEffect(load, []);
-  useTopic('positions', (message) => setPositions(message.data));
-  useTopic('pnl', (message) => setPnl(message.data));
+  useTopic('positions', (message) => setPositions(paperPositions(message.data)));
+  useTopic('pnl', (message) => message.data?.paper && setPnl(message.data.paper));
   useTopic('trades', load);
 
   const curve = useMemo(() => {
@@ -89,16 +91,18 @@ const Portfolio = () => {
   if (loading) {
     return (
       <Layout>
-        <Sheet title="Holdings">
-          <Ruling rows={6} />
-        </Sheet>
+        <PaperShell>
+          <Sheet title="Holdings">
+            <Ruling rows={6} />
+          </Sheet>
+        </PaperShell>
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="space-y-4">
+      <PaperShell>
         {error && (
           <Sheet title="Holdings">
             <Empty title="Could not load the book" detail={error} />
@@ -225,7 +229,7 @@ const Portfolio = () => {
             </div>
           </Sheet>
         )}
-      </div>
+      </PaperShell>
     </Layout>
   );
 };

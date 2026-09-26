@@ -6,6 +6,7 @@ import ChatWidget from './ChatWidget';
 import ErrorBoundary from './ErrorBoundary';
 import api, { endpoints } from '../utils/api';
 import { useTopic } from '../hooks/useStream';
+import { PendingContext } from '../context/pendingContext';
 
 /** The note's running number: stable per day, the way an issued note is. */
 const noteNumber = () => {
@@ -36,6 +37,7 @@ const Layout = ({ children }) => {
   });
 
   return (
+    <PendingContext.Provider value={pending}>
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
       <Sidebar pendingCount={pending} />
 
@@ -49,6 +51,7 @@ const Layout = ({ children }) => {
       <BottomNav pendingCount={pending} />
       <ChatWidget />
     </div>
+    </PendingContext.Provider>
   );
 };
 

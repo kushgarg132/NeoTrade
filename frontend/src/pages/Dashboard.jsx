@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { ArrowRight, Loader2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import SmartSearch from '../components/dashboard/SmartSearch';
-import PnlStatement from '../components/dashboard/PnlStatement';
+import BrokerPnl from '../components/dashboard/BrokerPnl';
 import TradeLedger from '../components/dashboard/TradeLedger';
+import GuardrailAlerts from '../components/journal/GuardrailAlerts';
 import Market from '../components/dashboard/Market';
 import AnalysisCard from '../components/AnalysisCard';
 import { Sheet, Empty } from '../components/doc/Doc';
@@ -14,9 +15,11 @@ import { stream } from '../lib/ws';
 import { useTopic } from '../hooks/useStream';
 
 /**
- * The statement. Everything the operator checks in a mid-session glance, in
- * the order they check it: what is my net, is anything waiting for me, what
- * am I holding.
+ * The statement: real money only. What the user's own broker account did
+ * today and this month, whether a guardrail they set has fired, and -- only
+ * when a strategy is switched to live -- the real orders the engine placed.
+ * Everything the engine does with practice money lives under /paper, so no
+ * paper figure is ever read as the broker account's.
  *
  * Analysis streams over the socket and replaces the sheet stack when a scrip
  * is enquired on, then returns to it.
@@ -25,12 +28,10 @@ const Dashboard = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [pnl, setPnl] = useState(null);
-  const [pnlLoading, setPnlLoading] = useState(true);
-  const [trades, setTrades] = useState([]);
-  const [tradesLoading, setTradesLoading] = useState(true);
-  const [tradesError, setTradesError] = useState(null);
-  const [pending, setPending] = useState([]);
+  const [journal, setJournal] = useState(null);
+  const [journalLoading, setJournalLoading] = useState(true);
+  const [journalError, setJournalError] = useState(null);
+  const [liveTrades, setLiveTrades] = useState([]);
 
   const [enquirySymbol, setEnquirySymbol] = useState(null);
 
@@ -43,39 +44,23 @@ const Dashboard = () => {
   const [aiError, setAiError] = useState(null);
   const [aiRequested, setAiRequested] = useState(false);
 
+  const loadLiveTrades = () =>
+    api
+      .get(endpoints.trading.trades(null, 'live'))
+      .then((res) => setLiveTrades(res.data))
+      .catch(() => setLiveTrades([]));
+
   useEffect(() => {
     api
-      .get(endpoints.analytics.pnl)
-      .then((res) => setPnl(res.data))
-      .catch(() => setPnl(null))
-      .finally(() => setPnlLoading(false));
+      .get(endpoints.journal.get)
+      .then((res) => setJournal(res.data))
+      .catch((err) => setJournalError(err?.response?.data?.detail || 'The journal did not respond'))
+      .finally(() => setJournalLoading(false));
 
-    api
-      .get(endpoints.trading.trades())
-      .then((res) => setTrades(res.data))
-      .catch((err) => setTradesError(err?.response?.data?.detail || 'Could not reach the ledger'))
-      .finally(() => setTradesLoading(false));
-
-    api
-      .get(endpoints.suggestions.list({ status: 'PENDING' }))
-      .then((res) => setPending(res.data))
-      .catch(() => setPending([]));
+    loadLiveTrades();
   }, []);
 
-  // Live: the whole point is that none of this needs a refresh.
-  useTopic('pnl', (message) => setPnl(message.data));
-  useTopic('trades', () => {
-    api
-      .get(endpoints.trading.trades())
-      .then((res) => setTrades(res.data))
-      .catch(() => {});
-  });
-  useTopic('suggestions', (message) => {
-    if (message.event === 'created') setPending((list) => [message.data, ...list]);
-    if (message.event === 'decided') {
-      setPending((list) => list.filter((item) => item.id !== message.data.id));
-    }
-  });
+  useTopic('trades', loadLiveTrades);
 
   // Overview (quote, fundamentals, technicals) has no LLM call and is what a
   // click should show immediately. AI Analysis (news/sentiment/thesis) makes
@@ -193,31 +178,15 @@ const Dashboard = () => {
 
         {!quick && !quickLoading && (
           <>
-            {pending.length > 0 && (
-              <Link
-                to="/suggestions"
-                className="block sheet px-4 py-3.5 border-[var(--stamp)] hover:bg-[var(--stamp-soft)] transition-colors"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="field-label text-[var(--stamp)]">Awaiting your decision</p>
-                    <p className="mt-1 text-sm text-[var(--ink)] truncate">
-                      {pending.length} {pending.length === 1 ? 'proposal' : 'proposals'} ·{' '}
-                      {pending
-                        .slice(0, 3)
-                        .map((item) => item.symbol)
-                        .join(', ')}
-                      {pending.length > 3 && ` +${pending.length - 3}`}
-                    </p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 shrink-0 text-[var(--stamp)]" />
-                </div>
-              </Link>
+            <GuardrailAlerts />
+
+            <BrokerPnl journal={journal} loading={journalLoading} error={journalError} />
+
+            {/* Real orders a live strategy placed. Absent unless one exists,
+                because most accounts never switch a strategy live. */}
+            {liveTrades.length > 0 && (
+              <TradeLedger title="Live engine orders" trades={liveTrades} loading={false} error={null} />
             )}
-
-            <PnlStatement pnl={pnl} loading={pnlLoading} />
-
-            <TradeLedger trades={trades} loading={tradesLoading} error={tradesError} />
 
             <Market />
           </>

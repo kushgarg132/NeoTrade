@@ -176,7 +176,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
             variant="approve"
             onClick={() => act('approve')}
             disabled={busy !== null}
-            aria-label={`Approve ${suggestion.symbol} and place the order`}
+            aria-label={`Approve ${suggestion.symbol} and place the paper order`}
           >
             {busy === 'approve' ? (
               <Loader2 className="w-4 h-4 animate-spin" />

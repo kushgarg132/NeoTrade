@@ -40,13 +40,13 @@ const OpenRecord = ({ trade }) => (
   </li>
 );
 
-const TradeLedger = ({ trades, loading, error }) => {
+const TradeLedger = ({ trades, loading, error, title = 'Trades', emptyOpen, emptyClosed }) => {
   const [tab, setTab] = useState('OPEN');
   const rows = (trades || []).filter((trade) => trade.status === tab);
 
   return (
     <Sheet
-      title="Trades"
+      title={title}
       actions={
         <div className="flex border border-[var(--rule-strong)]" role="tablist" aria-label="Trade status">
           {TABS.map((item) => {
@@ -85,8 +85,8 @@ const TradeLedger = ({ trades, loading, error }) => {
           title={tab === 'OPEN' ? 'No open positions' : 'Nothing closed yet'}
           detail={
             tab === 'OPEN'
-              ? 'Approved suggestions and intraday signals will appear here as they fill.'
-              : 'Round trips show here once a position returns to flat.'
+              ? emptyOpen || 'Approved suggestions and intraday signals will appear here as they fill.'
+              : emptyClosed || 'Round trips show here once a position returns to flat.'
           }
         />
       ) : (

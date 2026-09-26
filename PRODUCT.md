@@ -57,10 +57,11 @@ stop?"*
 
 | Surface | Mode | The visitor's success |
 |---|---|---|
-| Dashboard `/` | Operate | Search any stock and get full analysis + AI; see today/month P&L; see active and completed trades |
-| Suggestions `/suggestions` | Operate | Triage pending AI proposals — approve or reject — split Intraday / Long-term |
-| Portfolio `/portfolio` | Operate | Equity curve, open positions marked live, closed-trade history |
-| Trading `/trading` | Operate | Start/stop an engine run, watch positions and fills, see whether the run is paper or live |
+| Statement `/` | Operate | Real money only: search any stock and get full analysis + AI; today/month P&L from the broker's own trades (via the journal); guardrail alerts; real orders a live strategy placed, when there are any |
+| Paper trading `/paper` | Operate | The engine's practice-money book, kept apart from real money: paper P&L, paper trades, and the pending-decision banner |
+| Decisions `/paper/decisions` | Operate | Triage pending AI proposals — approve or reject — split Intraday / Long-term. Approvals fill on paper |
+| Holdings `/paper/holdings` | Operate | Paper equity curve, open paper positions marked live, closed paper trades |
+| Engine `/paper/engine` | Operate | Start/stop an engine run, watch paper positions and fills; a "live mode armed" band names any strategy that will trade real money |
 | Watchlist `/watchlist` | Operate | Tracked symbols at a glance |
 | Scanner `/scanner` | Operate | On-demand bullish scan results |
 | Journal `/journal` *(planned)* | Review | P&L calendar, every broker trade auto-imported, notes and setup tags |

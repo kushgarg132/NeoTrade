@@ -19,8 +19,10 @@ const Sidebar = ({ pendingCount = 0 }) => {
 
       <nav className="flex-1 py-2 overflow-y-auto" aria-label="Sections">
         {SECTIONS.map((item) => (
+          <React.Fragment key={item.path}>
+          {/* The tear between the real-money pages and the practice book. */}
+          {item.divider && <div className="perforated mx-5 my-2" aria-hidden="true" />}
           <NavLink
-            key={item.path}
             to={item.path}
             end={item.path === '/'}
             className={({ isActive }) =>
@@ -41,6 +43,7 @@ const Sidebar = ({ pendingCount = 0 }) => {
               </span>
             )}
           </NavLink>
+          </React.Fragment>
         ))}
       </nav>
 

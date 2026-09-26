@@ -1,0 +1,72 @@
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+import { cn } from '../../utils/cn';
+import { usePendingCount } from '../../context/pendingContext';
+
+/**
+ * The paper book's own section. Everything under /paper is the strategy
+ * engine trading practice money, and it is printed as a specimen copy:
+ * a dashed stamp band that says so on every page, so a paper figure can
+ * never be read as the broker account's.
+ *
+ * Engine orders from a strategy switched to live are real money; they are
+ * kept out of this section and shown on the statement instead.
+ */
+
+const PAPER_TABS = [
+  { path: '/paper', label: 'Overview', end: true },
+  { path: '/paper/decisions', label: 'Decisions', short: 'Decide', counter: true },
+  { path: '/paper/holdings', label: 'Holdings', short: 'Book' },
+  { path: '/paper/engine', label: 'Engine' },
+];
+
+const PaperShell = ({ children }) => {
+  const pending = usePendingCount();
+
+  return (
+    <div className="space-y-4">
+      <div className="border-2 border-dashed border-[var(--stamp)] bg-[var(--stamp-soft)]">
+        <div className="flex items-baseline justify-between gap-3 px-4 pt-2.5 pb-2">
+          <p className="font-[family-name:var(--font-narrow)] text-xs font-bold uppercase tracking-[0.16em] text-[var(--stamp)]">
+            Paper trading
+          </p>
+          <p className="doc-meta normal-case text-right">Practice money · not your broker account</p>
+        </div>
+        <nav
+          className="grid grid-cols-4 border-t border-dashed border-[var(--stamp)]"
+          aria-label="Paper trading"
+        >
+          {PAPER_TABS.map((tab) => (
+            <NavLink
+              key={tab.path}
+              to={tab.path}
+              end={tab.end}
+              className={({ isActive }) =>
+                cn(
+                  'min-w-0 min-h-11 px-1 sm:px-3 inline-flex items-center justify-center gap-1 sm:gap-1.5 whitespace-nowrap border-b-2 -mb-px transition-colors',
+                  'font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em]',
+                  isActive
+                    ? 'border-[var(--stamp)] text-[var(--ink)] bg-[var(--paper)]'
+                    : 'border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]'
+                )
+              }
+            >
+              {/* A phone fits four tabs only on the short names. */}
+              <span className="sm:hidden">{tab.short || tab.label}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
+              {tab.counter && pending > 0 && (
+                <span className="figure-md px-1 text-[0.5625rem] leading-4 bg-[var(--stamp)] text-[var(--paper)]">
+                  {pending}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
+
+      {children}
+    </div>
+  );
+};
+
+export default PaperShell;

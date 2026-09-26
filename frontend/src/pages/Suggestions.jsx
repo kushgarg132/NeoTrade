@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import Layout from '../components/Layout';
+import PaperShell from '../components/paper/PaperShell';
 import SuggestionRecord from '../components/suggestions/SuggestionRecord';
 import { Sheet, Empty, Ruling } from '../components/doc/Doc';
 import { Button } from '../components/common/Button';
@@ -86,7 +87,7 @@ const Suggestions = () => {
 
   return (
     <Layout>
-      <div className="space-y-4">
+      <PaperShell>
         <Sheet
           title="Decisions"
           meta={`${items.filter((i) => i.status === 'PENDING').length} awaiting`}
@@ -206,7 +207,7 @@ const Suggestions = () => {
             ))}
           </div>
         )}
-      </div>
+      </PaperShell>
     </Layout>
   );
 };

@@ -1,8 +1,6 @@
 import {
   FileText,
   Stamp,
-  Wallet,
-  Activity,
   ScanLine,
   BookMarked,
   NotebookPen,
@@ -16,12 +14,12 @@ import {
  */
 export const SECTIONS = [
   { icon: FileText, label: 'Statement', short: 'Note', path: '/', primary: true },
-  { icon: Stamp, label: 'Decisions', short: 'Decide', path: '/suggestions', primary: true, counter: true },
-  { icon: Wallet, label: 'Holdings', short: 'Book', path: '/portfolio', primary: true },
-  { icon: Activity, label: 'Engine', short: 'Engine', path: '/trading', primary: true },
-  { icon: NotebookPen, label: 'Journal', path: '/journal' },
+  { icon: NotebookPen, label: 'Journal', path: '/journal', primary: true },
+  { icon: BookMarked, label: 'Watchlist', short: 'Watch', path: '/watchlist', primary: true },
   { icon: ScanLine, label: 'Scanner', path: '/scanner' },
-  { icon: BookMarked, label: 'Watchlist', path: '/watchlist' },
+  // Everything the engine does with practice money lives under one section,
+  // apart from the real-money pages above it.
+  { icon: Stamp, label: 'Paper trading', short: 'Paper', path: '/paper', primary: true, counter: true, divider: true },
   { icon: Network, label: 'Architecture', path: '/system' },
   { icon: Settings, label: 'Settings', short: 'More', path: '/settings', primary: true },
 ];

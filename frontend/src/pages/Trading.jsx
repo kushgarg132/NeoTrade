@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Play, Square, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
+import PaperShell from '../components/paper/PaperShell';
+import { paperPositions } from '../utils/books';
 import TradingControlBar from '../components/trading/TradingControlBar';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
 import { Button } from '../components/common/Button';
@@ -34,6 +37,7 @@ const Trading = () => {
   const [startError, setStartError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [killSwitch, setKillSwitch] = useState(null);
+  const [liveStrategies, setLiveStrategies] = useState([]);
 
   const loadKillSwitch = () =>
     api
@@ -48,7 +52,7 @@ const Trading = () => {
       .catch(() => setRuns([]));
 
   const loadLedger = () =>
-    Promise.all([api.get(endpoints.trading.positions), api.get(endpoints.trading.fills)])
+    Promise.all([api.get(endpoints.trading.positions('paper')), api.get(endpoints.trading.fills('paper'))])
       .then(([positionsRes, fillsRes]) => {
         setPositions(positionsRes.data);
         setFills(fillsRes.data);
@@ -57,10 +61,15 @@ const Trading = () => {
 
   useEffect(() => {
     Promise.all([loadRuns(), loadLedger(), loadKillSwitch()]).finally(() => setLoading(false));
+    // Which strategies trade real money when a run starts here.
+    api
+      .get(endpoints.settings.preferences)
+      .then((res) => setLiveStrategies(res.data.live_strategies || []))
+      .catch(() => setLiveStrategies([]));
   }, []);
 
   useTopic('runs', loadRuns);
-  useTopic('positions', (message) => setPositions(message.data));
+  useTopic('positions', (message) => setPositions(paperPositions(message.data)));
   useTopic('trades', () => {
     loadLedger();
     loadKillSwitch();
@@ -110,7 +119,20 @@ const Trading = () => {
 
   return (
     <Layout>
-      <div className="space-y-4">
+      <PaperShell>
+        {liveStrategies.length > 0 && (
+          <div className="sheet px-4 py-3 border-[var(--loss)] bg-[var(--loss-wash)]" role="status">
+            <p className="field-label text-[var(--loss)]">Live mode armed</p>
+            <p className="mt-1 text-sm text-[var(--ink)]">
+              {liveStrategies.join(', ')} {liveStrategies.length === 1 ? 'trades' : 'trade'} real
+              money when a run starts. Those orders go to your broker and print on the{' '}
+              <Link to="/" className="underline decoration-[var(--loss)] underline-offset-2">
+                statement
+              </Link>
+              , not in this paper book.
+            </p>
+          </div>
+        )}
         <Sheet
           title="Engine"
           meta={active ? `Running since ${formatTimeAgo(active.started_at)}` : 'Idle'}
@@ -253,7 +275,7 @@ const Trading = () => {
             </Statement>
           )}
         </Sheet>
-      </div>
+      </PaperShell>
     </Layout>
   );
 };

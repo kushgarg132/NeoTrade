@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useEffect } from 'react';
-import { Routes, Route, Link } from 'react-router-dom';
+import { Routes, Route, Link, Navigate } from 'react-router-dom';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const PaperOverview = lazy(() => import('./pages/PaperOverview'));
 const Suggestions = lazy(() => import('./pages/Suggestions'));
 const ScannerPage = lazy(() => import('./pages/ScannerPage'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
@@ -63,11 +64,16 @@ const App = () => {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={gated(<Dashboard />)} />
-      <Route path="/suggestions" element={gated(<Suggestions />)} />
+      <Route path="/paper" element={gated(<PaperOverview />)} />
+      <Route path="/paper/decisions" element={gated(<Suggestions />)} />
+      <Route path="/paper/holdings" element={gated(<Portfolio />)} />
+      <Route path="/paper/engine" element={gated(<Trading />)} />
+      {/* The engine's pages moved under /paper; old links and bookmarks follow. */}
+      <Route path="/suggestions" element={<Navigate to="/paper/decisions" replace />} />
+      <Route path="/portfolio" element={<Navigate to="/paper/holdings" replace />} />
+      <Route path="/trading" element={<Navigate to="/paper/engine" replace />} />
       <Route path="/scanner" element={gated(<ScannerPage />)} />
-      <Route path="/trading" element={gated(<Trading />)} />
       <Route path="/watchlist" element={gated(<Watchlist />)} />
-      <Route path="/portfolio" element={gated(<Portfolio />)} />
       <Route path="/journal" element={gated(<Journal />)} />
       <Route path="/settings" element={gated(<Settings />)} />
       <Route path="/system" element={gated(<SystemArchitecturePage />)} />

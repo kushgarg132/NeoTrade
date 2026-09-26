@@ -270,9 +270,18 @@ system is static or a plain colour/opacity transition.
 ### Navigation
 - **Desktop sidebar:** `w-56`, `paper-sunk` ground, active item marked by a 2px stamp-violet left
   border plus a `paper` background — never a filled pill.
-- **Mobile bottom nav:** 5 items, active item marked by a 2px stamp-violet top border; pending
-  count renders as a small solid-stamp badge on the Decisions icon.
+- **Mobile bottom nav:** 5 items (Note, Journal, Watch, Paper, More), active item marked by a
+  2px stamp-violet top border; pending count renders as a small solid-stamp badge on the Paper
+  icon.
 - Both share one label voice: Field Label style, never body text.
+- **Real money and paper never share a page.** The sidebar tears (a `perforated` rule) between
+  the real-money sections and **Paper trading**. Everything under `/paper` prints inside
+  `PaperShell` (`components/paper/PaperShell.jsx`): a dashed stamp-violet band on `stamp-soft`
+  that reads "Paper trading · practice money, not your broker account", carrying the section's
+  own four tabs (Overview, Decisions, Holdings, Engine; Decide/Book on a phone). The dashed
+  border is the specimen copy's mark — solid rules belong to the real statement.
+- **Live mode armed** prints as a `loss`-ruled band on `loss-wash` at the top of the Engine
+  tab, naming the live strategies and saying their orders are real and print on the statement.
 
 ## Do's and Don'ts
 

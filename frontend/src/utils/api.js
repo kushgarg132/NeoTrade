@@ -107,6 +107,14 @@ api.interceptors.response.use(
 
 export const AUTH_TOKEN_STORAGE_KEY = TOKEN_STORAGE_KEY;
 
+/**
+ * The engine keeps two books: `paper` (practice money, the Paper tab) and
+ * `live` (real orders a live strategy sent to the broker). Every ledger read
+ * names one, so the two never print on the same page by accident.
+ */
+const inBook = (path, venue) =>
+  venue ? `${path}${path.includes('?') ? '&' : '?'}venue=${venue}` : path;
+
 export const endpoints = {
   analyze: (symbol) => `/agents/analyze/${symbol}`,
   quickAnalyze: (symbol) => `/agents/quick-analyze/${symbol}`,
@@ -128,11 +136,12 @@ export const endpoints = {
     start: '/trading/start',
     stop: '/trading/stop',
     runs: '/trading/runs',
-    positions: '/trading/positions',
-    fills: '/trading/fills',
-    equity: '/trading/equity',
+    positions: (venue) => inBook('/trading/positions', venue),
+    fills: (venue) => inBook('/trading/fills', venue),
+    equity: (venue) => inBook('/trading/equity', venue),
     killSwitch: '/trading/kill-switch',
-    trades: (status) => (status ? `/trading/trades?status=${status}` : '/trading/trades'),
+    trades: (status, venue) =>
+      inBook(status ? `/trading/trades?status=${status}` : '/trading/trades', venue),
     instruments: (q) => `/trading/instruments?q=${encodeURIComponent(q)}`,
   },
   suggestions: {
@@ -147,7 +156,7 @@ export const endpoints = {
     scan: '/suggestions/scan',
   },
   analytics: {
-    pnl: '/analytics/pnl',
+    pnl: (venue) => inBook('/analytics/pnl', venue),
   },
   guardrails: {
     status: '/guardrails',
