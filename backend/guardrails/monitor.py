@@ -7,10 +7,15 @@ Telegram if linked. A daily-loss breach also trips the engine's kill-switch
 for the day, so NeoTrade itself stops adding risk.
 
 What this cannot do, and the UI says so: stop an order the user places in
-their broker's own app. It alerts; it does not block. Automatic square-off
-is deliberately not here yet -- it would be the first code path that places
-real orders without an approval, and it needs each position's product
-(MIS/CNC), which the adapters' position books don't carry today.
+their broker's own app. It alerts; it does not block.
+
+On a daily-loss breach, if the user chose it, open NSE intraday positions
+are squared off (square_off.py). "preview" only alerts with the orders it
+would place; "live" places them. This is the one path in the app that
+places a real order without a per-trade approval, so: it only reduces
+exposure, only MIS on NSE, at most once per day (the breach record is
+written before any order goes out, so a retry or second worker cannot
+repeat it), and only after the user switched it to "live" themselves.
 """
 
 import asyncio
@@ -18,9 +23,12 @@ import logging
 from datetime import datetime, time, timezone
 
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
+from backend.brokers.protocol import BrokerSessionState
+from backend.brokers.registry import BROKERS, get_broker_adapter
 from backend.engine.session import IST
 from backend.guardrails import telegram
 from backend.guardrails.rules import evaluate
+from backend.guardrails.square_off import describe, exit_orders
 from backend.guardrails.store import GuardrailStore
 from backend.journal.roundtrips import build_round_trips
 from backend.journal.store import JournalStore
@@ -63,10 +71,63 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
         if breach["rule"] == "daily_loss":
             await KillSwitchStore(db).trip(user_id, day, reason="guardrail: daily loss limit",
                                            equity=synced["day_pnl"])
-        await hub.publish(user_id, "guardrails", "breach", breach)
-        if chat_id:
-            await telegram.send(chat_id, f"NeoTrade: {breach['title']}\n{breach['detail']}")
+        await _alert(user_id, chat_id, breach)
+        if breach["rule"] == "daily_loss" and prefs.get("auto_square_off", "off") in ("preview", "live"):
+            for i, alert in enumerate(await square_off(redis, credentials, prefs)):
+                event = {"key": f"square_off:{i}", "rule": "square_off", **alert}
+                await store.record(user_id, day, event)
+                await _alert(user_id, chat_id, event)
     return fresh
+
+
+async def _alert(user_id: str, chat_id, event: dict) -> None:
+    await hub.publish(user_id, "guardrails", "breach", event)
+    if chat_id:
+        await telegram.send(chat_id, f"NeoTrade: {event['title']}\n{event['detail']}")
+
+
+async def square_off(redis, credentials, prefs: dict) -> list[dict]:
+    """One alert per broker that had anything to close or anything it
+    refused to touch. Only called once per user per day: the daily_loss
+    breach it hangs off is recorded before this runs."""
+    live = prefs.get("auto_square_off") == "live"
+    user_id = prefs["user_id"]
+    alerts = []
+    for broker in BROKERS:
+        adapter = await get_broker_adapter(broker, user_id, credentials, redis)
+        if await adapter.state() != BrokerSessionState.ACTIVE:
+            continue
+        try:
+            orders, left = exit_orders(await adapter.get_positions())
+        except Exception as exc:
+            logger.warning("square-off: %s positions failed for %s: %s", broker, user_id, exc)
+            alerts.append({"title": f"{broker}: could not read positions to square off",
+                           "detail": "Close your intraday positions yourself."})
+            continue
+        if not orders and not left:
+            continue
+
+        lines = []
+        if orders and not live:
+            lines.append(f"Would place: {describe(orders)}. Preview only, nothing was sent.")
+        elif orders:
+            placed, failed = [], []
+            for order in orders:
+                try:
+                    await adapter.place_order(order)
+                    placed.append(order)
+                except Exception as exc:
+                    logger.warning("square-off order failed for %s %s: %s", user_id, order.symbol, exc)
+                    failed.append(order)
+            if placed:
+                lines.append(f"Sent: {describe(placed)}.")
+            if failed:
+                lines.append(f"Failed, close these yourself: {describe(failed)}.")
+        if left:
+            lines.append(f"Not touched: {', '.join(left)}.")
+        alerts.append({"title": f"{broker}: square-off {'sent' if live else 'preview'}",
+                       "detail": " ".join(lines)})
+    return alerts
 
 
 async def run_tick(db, redis, now: datetime | None = None) -> int:

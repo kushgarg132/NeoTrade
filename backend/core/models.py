@@ -131,6 +131,12 @@ class Position(BaseModel):
     avg_price: float = 0.0
     realized_pnl: float = 0.0
     unrealized_pnl: float = 0.0
+    # Only set on positions read from a broker's own book (the adapters'
+    # get_positions), normalized to NSE/NFO/... and MIS/CNC/NRML. Guardrail
+    # square-off (backend/guardrails/square_off.py) refuses any position
+    # where either is unknown rather than guess.
+    exchange: Optional[str] = None
+    product: Optional[str] = None
 
 
 LiveOrderState = Literal[

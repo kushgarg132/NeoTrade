@@ -85,6 +85,8 @@ class KiteOrderClient:
                 avg_price=float(row["average_price"]),
                 realized_pnl=float(row.get("realised", 0.0)),
                 unrealized_pnl=float(row.get("unrealised", 0.0)),
+                exchange=row.get("exchange"),
+                product=row.get("product"),
             )
             for row in data["net"]
         }

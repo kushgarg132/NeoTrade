@@ -81,6 +81,7 @@ _TRADES_URL = "https://api.upstox.com/v2/order/trades/get-trades-for-day"
 _INTERVAL_MAP = {"1m": "1minute", "30m": "30minute", "1d": "day"}
 _PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825}
 _PRODUCT_MAP = {"MIS": "I", "CNC": "D"}
+_PRODUCT_FROM_UPSTOX = {v: k for k, v in _PRODUCT_MAP.items()}
 
 
 class UpstoxAdapter:
@@ -304,6 +305,10 @@ class UpstoxAdapter:
                 avg_price=float(row.get("average_price", 0) or 0),
                 realized_pnl=float(row.get("realised", 0.0) or 0),
                 unrealized_pnl=float(row.get("unrealised", 0.0) or 0),
+                # Upstox segments carry a suffix ("NSE_EQ", "NSE_FO"); "NSE" alone is the
+                # cash market only, so an F&O row never looks like one.
+                exchange="NSE" if row.get("exchange") in ("NSE", "NSE_EQ") else row.get("exchange"),
+                product=_PRODUCT_FROM_UPSTOX.get(row.get("product")),
             )
             for row in resp.json()["data"]
         }

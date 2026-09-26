@@ -9,7 +9,7 @@ and the deployment model lives in Mongo behind an admin check.
 """
 
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -53,6 +53,7 @@ class PreferencesPatch(BaseModel):
     max_trades_per_day: Optional[int] = Field(default=None, ge=0, le=500)
     cooldown_after_losses: Optional[int] = Field(default=None, ge=0, le=20)
     cooldown_minutes: Optional[int] = Field(default=None, ge=0, le=390)
+    auto_square_off: Optional[Literal["off", "preview", "live"]] = None
 
 
 @router.get("/settings/preferences")

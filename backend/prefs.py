@@ -26,6 +26,10 @@ DEFAULTS = {
     "max_trades_per_day": 0,
     "cooldown_after_losses": 0,
     "cooldown_minutes": 30,
+    # What happens to open NSE intraday positions when the daily loss limit
+    # is hit: "off", "preview" (alert with the orders it would place), or
+    # "live" (place them). Never defaults to live.
+    "auto_square_off": "off",
 }
 
 EDITABLE = tuple(DEFAULTS)

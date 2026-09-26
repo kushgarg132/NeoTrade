@@ -89,6 +89,7 @@ _TRADE_BOOK_URL = f"{_ROOT}/rest/secure/angelbroking/order/v1/getTradeBook"
 _INTERVAL_MAP = {"1m": "ONE_MINUTE", "1d": "ONE_DAY"}
 _PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825}
 _PRODUCT_MAP = {"MIS": "INTRADAY", "CNC": "DELIVERY"}
+_PRODUCT_FROM_ANGEL = {"INTRADAY": "MIS", "DELIVERY": "CNC", "CARRYFORWARD": "NRML"}
 
 
 class AngelOneAdapter:
@@ -313,6 +314,8 @@ class AngelOneAdapter:
                 quantity=float(row.get("netqty", 0) or 0),
                 avg_price=float(row.get("avgnetprice", 0) or 0),
                 unrealized_pnl=float(row.get("pnl", 0) or 0),
+                exchange=row.get("exchange"),
+                product=_PRODUCT_FROM_ANGEL.get((row.get("producttype") or "").upper()),
             )
         return result
 
