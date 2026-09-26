@@ -19,6 +19,7 @@ from backend.prefs import PrefsStore
 from backend.journal.store import JournalStore
 from backend.guardrails.store import GuardrailStore
 from backend.guardrails import monitor as guardrail_monitor
+from backend.engine import autorun
 from backend import broadcast
 from backend import scheduler
 from backend.ws.hub import hub, handle_broadcast_event
@@ -113,6 +114,10 @@ async def startup_db_client():
     orphaned = await runs.close_orphaned()
     if orphaned:
         logger.info(f"Closed {orphaned} orphaned trading run(s) from a previous process.")
+
+    # Daily intraday paper run for users who turned it on. Started after the
+    # orphan sweep so this worker's own first run is not swept with the rest.
+    autorun.start(db.db, db.redis)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

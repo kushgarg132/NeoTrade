@@ -213,14 +213,19 @@ class StopRequest(BaseModel):
     run_id: str
 
 
-@router.post("/start", response_model=StartResponse)
-async def start_trading(
-    req: StartRequest,
-    user: User = Depends(get_current_user),
-    runs: RunStore = Depends(get_run_store),
-):
+async def launch_run(
+    user_id: str, mode: str, universe: Optional[list[str]], poll_interval_seconds: float,
+    runs: RunStore, origin: str = "manual",
+) -> str:
+    """Starts one engine run for `user_id` and returns its run_id. Shared by
+    POST /trading/start and the daily intraday auto-run
+    (backend/engine/autorun.py); `origin` records which one started it.
+
+    Every registered strategy for `mode` runs on paper. The backtest gate
+    decides only which of them may route live -- an unproven strategy still
+    paper-trades, which is how it earns a track record at all."""
     master = InstrumentMaster(db.db)
-    symbols = req.universe or list(ALL_SCAN_STOCKS)
+    symbols = universe or list(ALL_SCAN_STOCKS)
 
     instruments = []
     for symbol in symbols:
@@ -231,28 +236,24 @@ async def start_trading(
         raise HTTPException(status_code=400, detail="No resolvable instruments in universe")
 
     symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
-    candidate_strategies = [
+    strategies = [
         s for s in build_default_strategies(
             universe=[i.tradingsymbol for i in instruments], symbol_for_token=symbol_for_token,
         )
-        if s.spec.mode == req.mode
+        if s.spec.mode == mode
     ]
-    strategies = await live_eligible_strategies(candidate_strategies, BacktestGateStore(db.db))
     if not strategies:
-        reason = (
-            "have not cleared the backtest gate" if candidate_strategies
-            else f"registered for mode {req.mode!r}"
-        )
-        raise HTTPException(status_code=400, detail=f"No strategies {reason}")
+        raise HTTPException(status_code=400, detail=f"No strategies registered for mode {mode!r}")
+    eligible = await live_eligible_strategies(strategies, BacktestGateStore(db.db))
 
-    prefs = await PrefsStore(db.db).get(user.id)
+    prefs = await PrefsStore(db.db).get(user_id)
     account_size = prefs["account_size"]
     max_exposure = prefs["max_exposure"]
 
     credentials = get_credential_store()
-    active_adapter = await get_active_broker_adapter(user.id, credentials)
+    active_adapter = await get_active_broker_adapter(user_id, credentials)
     live_strategy_names = set(prefs["live_strategies"])
-    eligible_names = {s.spec.name for s in strategies}
+    eligible_names = {s.spec.name for s in eligible}
 
     # A strategy routes live only if ALL of: the user toggled it live, this
     # broker session is ACTIVE, and it cleared the backtest gate above.
@@ -262,12 +263,12 @@ async def start_trading(
     if active_adapter is not None:
         live_order_store = LiveOrderStore(db.db)
         for name in live_strategy_names & eligible_names:
-            live_by_strategy[name] = BrokerExecutionClient(active_adapter, live_order_store, user_id=user.id)
+            live_by_strategy[name] = BrokerExecutionClient(active_adapter, live_order_store, user_id=user_id)
 
     run_id = str(uuid.uuid4())
     feed = await build_feed(
-        instruments, req.mode, req.poll_interval_seconds,
-        user_id=user.id, credentials=credentials,
+        instruments, mode, poll_interval_seconds,
+        user_id=user_id, credentials=credentials,
     )
     paper_execution = SimulatedExecutionClient()
     execution = (
@@ -290,11 +291,11 @@ async def start_trading(
         for symbol, position in broker_positions.items():
             if symbol in live_symbols:
                 portfolio.positions[symbol] = position
-    ledger = LedgerStore(db.db, user_id=user.id, run_id=run_id, on_change=publisher_for(user.id))
+    ledger = LedgerStore(db.db, user_id=user_id, run_id=run_id, on_change=publisher_for(user_id))
 
     # INTRADAY orders execute themselves; LONGTERM ones stop at a PENDING
     # suggestion and wait for the user to approve or reject them.
-    sink = SuggestionSink(SuggestionStore(db.db), user_id=user.id, run_id=run_id)
+    sink = SuggestionSink(SuggestionStore(db.db), user_id=user_id, run_id=run_id)
 
     coro = run(
         strategies=strategies, feed=feed, execution=execution, portfolio=portfolio,
@@ -305,16 +306,30 @@ async def start_trading(
         kill_switch_store=KillSwitchStore(db.db),
     )
     await runs.create(
-        run_id=run_id, user_id=user.id, mode=req.mode,
+        run_id=run_id, user_id=user_id, mode=mode,
         universe=[i.tradingsymbol for i in instruments],
         params={
-            **req.model_dump(exclude={"universe"}),
+            "mode": mode, "poll_interval_seconds": poll_interval_seconds, "origin": origin,
             "account_size": account_size, "max_exposure": max_exposure,
+            "live_strategies": sorted(live_by_strategy),
         },
     )
     start_background_run(coro, run_id=run_id, runs=runs)
-    await hub.publish(user.id, "runs", "started", await runs.get(run_id))
-    logger.info("started paper-trading run %s (mode=%s, %d instruments)", run_id, req.mode, len(instruments))
+    await hub.publish(user_id, "runs", "started", await runs.get(run_id))
+    logger.info(
+        "started %s run %s (mode=%s, %d instruments, live=%s)",
+        origin, run_id, mode, len(instruments), sorted(live_by_strategy) or "none",
+    )
+    return run_id
+
+
+@router.post("/start", response_model=StartResponse)
+async def start_trading(
+    req: StartRequest,
+    user: User = Depends(get_current_user),
+    runs: RunStore = Depends(get_run_store),
+):
+    run_id = await launch_run(user.id, req.mode, req.universe, req.poll_interval_seconds, runs)
     return StartResponse(run_id=run_id)
 
 

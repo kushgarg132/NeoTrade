@@ -54,6 +54,7 @@ class PreferencesPatch(BaseModel):
     cooldown_after_losses: Optional[int] = Field(default=None, ge=0, le=20)
     cooldown_minutes: Optional[int] = Field(default=None, ge=0, le=390)
     auto_square_off: Optional[Literal["off", "preview", "live"]] = None
+    auto_paper_intraday: Optional[bool] = None
 
 
 @router.get("/settings/preferences")
