@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Sheet, Statement, Row, Cell, Ruling, Scrip } from '../doc/Doc';
 import api, { endpoints } from '../../utils/api';
-import { formatSignedPercent, formatNoteDate, formatTimeAgo } from '../../utils/formatters';
+import { formatSignedPercent, formatNoteDate, formatTimeAgo, bareSymbol, formatLevel } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 
 /**
@@ -10,19 +10,33 @@ import { cn } from '../../utils/cn';
  * the indices, the day's movers, and the headlines the analyst agent read.
  */
 
-const Quote = ({ item, onClick }) => (
+/** An index name that opens its detail on the statement, the way a scrip does. */
+const IndexName = ({ item }) => (
+  <Link
+    to="/"
+    state={{ index: item.symbol }}
+    onClick={(event) => event.stopPropagation()}
+    className="text-sm underline decoration-[var(--rule)] decoration-1 underline-offset-[3px] hover:decoration-[var(--stamp)] hover:text-[var(--stamp)] transition-colors"
+    aria-label={`Open ${item.name}`}
+  >
+    {item.name}
+  </Link>
+);
+
+const Quote = ({ item, onClick, index = false }) => (
   <Row className={onClick && 'cursor-pointer hover:bg-[var(--paper-sunk)]'} onClick={onClick}>
     <Cell>
-      {onClick ? (
-        <Scrip symbol={item.symbol} className="text-sm font-normal">
-          {item.name || item.symbol}
-        </Scrip>
+      {index ? (
+        <IndexName item={item} />
       ) : (
-        <span className="text-sm">{item.name || item.symbol}</span>
+        <Scrip symbol={item.symbol} className="text-sm font-normal">
+          {/* The movers feed names each scrip by its Yahoo ticker. */}
+          {item.name && item.name !== item.symbol ? item.name : bareSymbol(item.symbol)}
+        </Scrip>
       )}
     </Cell>
     <Cell align="right" mono>
-      {typeof item.value === 'number' ? item.value.toFixed(2) : '—'}
+      {formatLevel(item.value)}
     </Cell>
     <Cell align="right">
       <span className={cn('figure-md text-sm', item.percent >= 0 ? 'text-up' : 'text-down')}>
@@ -78,7 +92,12 @@ const Market = () => {
             ]}
           >
             {quotes.map((item) => (
-              <Quote key={item.symbol || item.name} item={item} />
+              <Quote
+                key={item.symbol || item.name}
+                item={item}
+                index
+                onClick={() => navigate('/', { state: { index: item.symbol } })}
+              />
             ))}
           </Statement>
         </Sheet>
@@ -97,7 +116,7 @@ const Market = () => {
               <Quote
                 key={item.symbol}
                 item={item}
-                onClick={() => navigate('/', { state: { symbol: item.symbol } })}
+                onClick={() => navigate('/', { state: { symbol: bareSymbol(item.symbol) } })}
               />
             ))}
           </Statement>

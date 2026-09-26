@@ -202,7 +202,8 @@ The app installs to a phone's home screen (`public/manifest.webmanifest`, `publi
 icon (`public/icon.svg`, rasterised to `icon-192/512.png` and `apple-touch-icon.png`) is the
 stamp on office bond: a stamp-violet double-bordered box around an "N", over a double net rule,
 drawn from shapes only so every raster matches. Installed, the masthead pads for
-`safe-area-inset-top`, and form fields render at 16px under `lg` so iOS never zooms into them.
+`safe-area-inset-top` and a fixed paper strip (`body::before`) sits behind the status bar so
+scrolled content never runs under the clock, and form fields render at 16px under `lg` so iOS never zooms into them.
 
 ## Elevation & Depth
 
@@ -257,7 +258,12 @@ the page, and precisely because it is singular, it reads as a stamp rather than 
 - A scrip name is always printed through `Scrip` (`doc/Doc.jsx`): one tap opens its enquiry on
   the statement, from any page. It carries a hairline `rule` underline that turns stamp-violet on
   hover, and stops its click so a clickable or expanding row does not act twice. F&O contracts
-  print without a link, since the enquiry covers equities only.
+  print without a link, since the enquiry covers equities only. Yahoo-fed lists (the movers)
+  name scrip as `AXISBANK.NS`; `Scrip` strips the `.NS`/`.BO` suffix for both label and enquiry.
+- Index names in the statement's index table link the same way and open an index card in
+  place of the stack (`components/dashboard/IndexCard.jsx`): level at figure scale in points
+  (`formatLevel`, never ₹), the day change, a 1M/3M/6M/1Y close chart inked gain or loss by
+  the range's direction, and the 52-week range and 50/200-day averages.
 - Money never breaks between its sign and its figure (`Money` is `whitespace-nowrap`); a
   `NetLine` drops its figure under the label rather than overflowing.
 

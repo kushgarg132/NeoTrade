@@ -103,3 +103,15 @@ export const marketPhase = (now = new Date()) => {
   if (minutes >= 930) return 'closed';
   return 'open';
 };
+
+/** Index levels are points, not rupees: grouped, two decimals, no symbol. */
+export const formatLevel = (value) => {
+  if (value === null || value === undefined || isNaN(value)) return '—';
+  return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+};
+
+/**
+ * Yahoo-sourced lists (the day's movers) name NSE/BSE scrip as "AXISBANK.NS";
+ * the instrument master and every other screen use the bare symbol.
+ */
+export const bareSymbol = (symbol) => (symbol ? symbol.replace(/\.(NS|BO)$/i, '') : symbol);

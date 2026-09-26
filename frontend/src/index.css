@@ -360,3 +360,17 @@
 html {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Installed on a notched phone the page runs edge to edge, so anything
+   scrolled up would pass under the clock and battery. A fixed strip of
+   paper the height of the status bar keeps that band clear. Zero-height
+   everywhere else. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: env(safe-area-inset-top);
+  background-color: var(--paper);
+  z-index: 60;
+  pointer-events: none;
+}

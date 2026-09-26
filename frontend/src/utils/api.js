@@ -131,6 +131,7 @@ export const endpoints = {
     details: '/watchlist/details',
   },
   globalIndices: '/market/global',
+  marketIndex: (ticker) => `/market/index/${encodeURIComponent(ticker)}`,
   marketNews: '/news/market',
   trading: {
     start: '/trading/start',

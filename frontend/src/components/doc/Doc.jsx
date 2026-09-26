@@ -1,7 +1,7 @@
 import React, { Children, cloneElement, createContext, isValidElement, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../utils/cn';
-import { formatSigned, formatSignedPercent } from '../../utils/formatters';
+import { formatSigned, formatSignedPercent, bareSymbol } from '../../utils/formatters';
 
 /**
  * The contract note's building blocks. Everything in the app is assembled from
@@ -33,7 +33,8 @@ const DERIVATIVE = /(\d(CE|PE)|FUT)$/;
  * statement. Stops the click there so a row that is itself clickable (or that
  * expands on click) does not act twice.
  */
-export const Scrip = ({ symbol, children, className }) => {
+export const Scrip = ({ symbol: raw, children, className }) => {
+  const symbol = bareSymbol(raw);
   const label = children ?? symbol;
   if (!symbol || DERIVATIVE.test(symbol)) {
     return <span className={cn('figure-md', className)}>{label}</span>;
