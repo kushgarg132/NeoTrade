@@ -63,6 +63,7 @@ dist/
 data/
 !backend/data/
 !backend/data/**
+backend/data/**/__pycache__/
 *.db
 *.sqlite3
 redis-data/
