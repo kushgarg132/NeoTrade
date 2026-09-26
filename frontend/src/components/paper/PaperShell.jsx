@@ -18,6 +18,7 @@ const PAPER_TABS = [
   { path: '/paper/decisions', label: 'Decisions', short: 'Decide', counter: true },
   { path: '/paper/holdings', label: 'Holdings', short: 'Book' },
   { path: '/paper/engine', label: 'Engine' },
+  { path: '/paper/settings', label: 'Settings', short: 'Setup' },
 ];
 
 const PaperShell = ({ children }) => {
@@ -33,7 +34,7 @@ const PaperShell = ({ children }) => {
           <p className="doc-meta normal-case text-right">Practice money · not your broker account</p>
         </div>
         <nav
-          className="grid grid-cols-4 border-t border-dashed border-[var(--stamp)]"
+          className="grid grid-cols-5 border-t border-dashed border-[var(--stamp)]"
           aria-label="Paper trading"
         >
           {PAPER_TABS.map((tab) => (
@@ -44,14 +45,14 @@ const PaperShell = ({ children }) => {
               className={({ isActive }) =>
                 cn(
                   'min-w-0 min-h-11 px-1 sm:px-3 inline-flex items-center justify-center gap-1 sm:gap-1.5 whitespace-nowrap border-b-2 -mb-px transition-colors',
-                  'font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em]',
+                  'font-[family-name:var(--font-narrow)] text-[0.625rem] sm:text-[0.6875rem] font-semibold uppercase tracking-[0.04em] sm:tracking-[0.11em]',
                   isActive
                     ? 'border-[var(--stamp)] text-[var(--ink)] bg-[var(--paper)]'
                     : 'border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]'
                 )
               }
             >
-              {/* A phone fits four tabs only on the short names. */}
+              {/* A phone fits five tabs only on the short names. */}
               <span className="sm:hidden">{tab.short || tab.label}</span>
               <span className="hidden sm:inline">{tab.label}</span>
               {tab.counter && pending > 0 && (

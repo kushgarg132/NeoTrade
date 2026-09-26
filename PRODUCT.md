@@ -62,11 +62,12 @@ stop?"*
 | Decisions `/paper/decisions` | Operate | Triage pending AI proposals — approve or reject — split Intraday / Long-term. Approvals fill on paper |
 | Holdings `/paper/holdings` | Operate | Paper equity curve, open paper positions marked live, closed paper trades |
 | Engine `/paper/engine` | Operate | Start/stop an engine run, watch paper positions and fills; a "live mode armed" band names any strategy that will trade real money |
+| Engine settings `/paper/settings` | Operate | The engine's sizing (account size, max exposure, per-trade cap), the daily scan and its universe, and each strategy's paper/live switch. Shows the daily loss limit read-only |
 | Watchlist `/watchlist` | Operate | Tracked symbols at a glance |
 | Scanner `/scanner` | Operate | On-demand bullish scan results |
 | Journal `/journal` *(planned)* | Review | P&L calendar, every broker trade auto-imported, notes and setup tags |
 | Insights *(planned)* | Review | Plain-language findings about their own habits, e.g. "trades after 2 losses in a row: 31% win rate" |
-| Settings `/settings` | Operate | Broker connection, scan universe, risk caps and kill-switch limit, per-strategy paper/live mode, AI model |
+| Settings `/settings` | Operate | Broker connection, guardrails (including the daily loss limit, which also trips the engine's kill-switch), AI model |
 | Architecture `/system` | Explain | A live view of how the system fits together |
 | Login `/login` | Operate | Google sign-in, nothing else |
 

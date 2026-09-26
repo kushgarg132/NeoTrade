@@ -1,41 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Loader2, Check, ExternalLink, Unplug } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search, Loader2, Check, ExternalLink, Unplug, ArrowRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Sheet, Empty, Ruling, Stamp } from '../components/doc/Doc';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
-import { formatCurrency } from '../utils/formatters';
 import { cn } from '../utils/cn';
 import { useAuth } from '../context/AuthContext';
+import { Row, NumberField } from '../components/settings/Fields';
 
 /**
- * Standing instructions: who the broker is, what the engine is allowed to
- * trade and how large, and which model writes the theses.
+ * Standing instructions for the real account: who the broker is, the limits
+ * the user holds themselves to, and which model writes the theses. The
+ * engine's own settings (sizing, the daily scan, paper/live per strategy)
+ * live in the Paper tab with everything else the engine does.
  */
-
-const Row = ({ label, hint, children }) => (
-  <div className="py-3 border-b border-[var(--rule)] last:border-b-0">
-    <div className="flex items-baseline justify-between gap-4 flex-wrap">
-      <div className="min-w-0">
-        <p className="field-label">{label}</p>
-        {hint && <p className="doc-meta normal-case mt-1">{hint}</p>}
-      </div>
-      <div className="shrink-0">{children}</div>
-    </div>
-  </div>
-);
-
-const NumberField = ({ value, onChange, onCommit }) => (
-  <input
-    type="number"
-    inputMode="numeric"
-    value={value}
-    onChange={(event) => onChange(event.target.value)}
-    onBlur={onCommit}
-    className="w-36 bg-transparent border-b border-[var(--rule-strong)] py-1 text-right figure-md text-sm focus:outline-none focus:border-[var(--stamp)]"
-  />
-);
 
 /* -------------------------------------------------------------------------- */
 /* Broker                                                                     */
@@ -320,163 +300,6 @@ const BrokerSheet = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/* Mandate                                                                    */
-/* -------------------------------------------------------------------------- */
-
-const MandateSheet = () => {
-  const [prefs, setPrefs] = useState(null);
-  const [draft, setDraft] = useState({
-    account_size: '',
-    max_exposure: '',
-    per_trade_cap: '',
-    daily_loss_limit: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [strategyNames, setStrategyNames] = useState([]);
-
-  useEffect(() => {
-    api
-      .get(endpoints.settings.preferences)
-      .then((res) => {
-        setPrefs(res.data);
-        setDraft({
-          account_size: res.data.account_size,
-          max_exposure: res.data.max_exposure,
-          per_trade_cap: res.data.per_trade_cap,
-          daily_loss_limit: res.data.daily_loss_limit,
-        });
-      })
-      .catch(() => setPrefs(null));
-  }, []);
-
-  useEffect(() => {
-    api
-      .get(endpoints.settings.strategies)
-      .then((res) => setStrategyNames(res.data))
-      .catch(() => setStrategyNames([]));
-  }, []);
-
-  const save = async (patch) => {
-    setSaving(true);
-    try {
-      const res = await api.put(endpoints.settings.preferences, patch);
-      setPrefs(res.data);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (!prefs) {
-    return (
-      <Sheet title="Mandate">
-        <Ruling rows={3} />
-      </Sheet>
-    );
-  }
-
-  return (
-    <Sheet
-      title="Mandate"
-      meta={saving ? 'Saving…' : undefined}
-    >
-      <Row
-        label="Account size"
-        hint="What position sizing risks a percentage of."
-      >
-        <NumberField
-          value={draft.account_size}
-          onChange={(value) => setDraft((d) => ({ ...d, account_size: value }))}
-          onCommit={() => save({ account_size: Number(draft.account_size) })}
-        />
-      </Row>
-
-      <Row label="Maximum exposure" hint="The engine will not open past this notional.">
-        <NumberField
-          value={draft.max_exposure}
-          onChange={(value) => setDraft((d) => ({ ...d, max_exposure: value }))}
-          onCommit={() => save({ max_exposure: Number(draft.max_exposure) })}
-        />
-      </Row>
-
-      <Row label="Per-trade cap" hint="Hard notional ceiling for any single trade.">
-        <NumberField
-          value={draft.per_trade_cap}
-          onChange={(value) => setDraft((d) => ({ ...d, per_trade_cap: value }))}
-          onCommit={() => save({ per_trade_cap: Number(draft.per_trade_cap) })}
-        />
-      </Row>
-
-      <Row
-        label="Daily loss limit"
-        hint="Kill-switch trigger. Tripping halts new intraday orders for the rest of the day."
-      >
-        <NumberField
-          value={draft.daily_loss_limit}
-          onChange={(value) => setDraft((d) => ({ ...d, daily_loss_limit: value }))}
-          onCommit={() => save({ daily_loss_limit: Number(draft.daily_loss_limit) })}
-        />
-      </Row>
-
-      <Row
-        label="Daily scan"
-        hint="Runs after the close at 16:00 IST and files proposals for your decision."
-      >
-        <button
-          type="button"
-          role="switch"
-          aria-checked={prefs.scan_enabled}
-          onClick={() => save({ scan_enabled: !prefs.scan_enabled })}
-          className={cn(
-            'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
-            prefs.scan_enabled
-              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-              : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-          )}
-        >
-          {prefs.scan_enabled ? 'On' : 'Off'}
-        </button>
-      </Row>
-
-      <Row label="Scan universe" hint="Scrip the daily scan considers.">
-        <span className="figure-md text-sm">{prefs.universe.length} scrip</span>
-      </Row>
-
-      {strategyNames.map((name) => {
-        const isLive = (prefs.live_strategies || []).includes(name);
-        return (
-          <Row key={name} label={name} hint={isLive ? 'Trading with real orders.' : 'Paper only.'}>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={isLive}
-              onClick={() => {
-                const next = isLive
-                  ? (prefs.live_strategies || []).filter((n) => n !== name)
-                  : [...(prefs.live_strategies || []), name];
-                save({ live_strategies: next });
-              }}
-              className={cn(
-                'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
-                isLive
-                  ? 'bg-[var(--loss)] text-[var(--paper)] border-[var(--loss)]'
-                  : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-              )}
-            >
-              {isLive ? 'Live' : 'Paper'}
-            </button>
-          </Row>
-        );
-      })}
-
-      <p className="pt-3 doc-meta normal-case">
-        Sizing risks up to 1% of {formatCurrency(prefs.account_size)} per trade at full
-        conviction, scaled down as conviction falls.
-      </p>
-    </Sheet>
-  );
-};
-
-/* -------------------------------------------------------------------------- */
 /* Model                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -618,7 +441,7 @@ const ModelSheet = () => {
 /* Guardrails                                                                 */
 /* -------------------------------------------------------------------------- */
 
-const GUARD_FIELDS = ['max_trades_per_day', 'cooldown_after_losses', 'cooldown_minutes'];
+const GUARD_FIELDS = ['max_trades_per_day', 'cooldown_after_losses', 'cooldown_minutes', 'daily_loss_limit'];
 
 const GuardrailsSheet = () => {
   const [prefs, setPrefs] = useState(null);
@@ -707,9 +530,13 @@ const GuardrailsSheet = () => {
 
       <Row
         label="Daily loss limit"
-        hint="The limit from Mandate above, checked against your broker's own day P&L. Reaching it also halts the engine for the day."
+        hint="Checked against your broker's own day P&L. Reaching it also trips the engine's kill-switch for the day."
       >
-        <span className="figure-md text-sm">{formatCurrency(prefs.daily_loss_limit)}</span>
+        <NumberField
+          value={draft.daily_loss_limit}
+          onChange={(value) => setDraft((d) => ({ ...d, daily_loss_limit: value }))}
+          onCommit={() => save({ daily_loss_limit: Number(draft.daily_loss_limit) })}
+        />
       </Row>
 
       {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this. 0 is off.')}
@@ -868,8 +695,19 @@ const Settings = () => {
     <Layout>
       <div className="space-y-4 max-w-3xl">
         <BrokerSheet />
-        <MandateSheet />
         <GuardrailsSheet />
+        <Link
+          to="/paper/settings"
+          className="flex items-center justify-between gap-4 sheet px-4 py-3 border-dashed border-[var(--stamp)] hover:bg-[var(--stamp-soft)] transition-colors"
+        >
+          <span className="min-w-0">
+            <span className="block field-label text-[var(--stamp)]">Engine settings moved</span>
+            <span className="block mt-1 text-sm text-[var(--ink-soft)]">
+              Sizing, the daily scan and each strategy's paper/live switch are in Paper trading.
+            </span>
+          </span>
+          <ArrowRight className="w-5 h-5 shrink-0 text-[var(--stamp)]" />
+        </Link>
         <ModelSheet />
         {user?.role === 'admin' && <BetaSheet />}
       </div>

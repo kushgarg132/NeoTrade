@@ -278,7 +278,8 @@ system is static or a plain colour/opacity transition.
   the real-money sections and **Paper trading**. Everything under `/paper` prints inside
   `PaperShell` (`components/paper/PaperShell.jsx`): a dashed stamp-violet band on `stamp-soft`
   that reads "Paper trading · practice money, not your broker account", carrying the section's
-  own four tabs (Overview, Decisions, Holdings, Engine; Decide/Book on a phone). The dashed
+  own five tabs (Overview, Decisions, Holdings, Engine, Settings; Decide/Book/Setup on a phone,
+in tighter lettering so all five fit a 360px screen). The dashed
   border is the specimen copy's mark — solid rules belong to the real statement.
 - **Live mode armed** prints as a `loss`-ruled band on `loss-wash` at the top of the Engine
   tab, naming the live strategies and saying their orders are real and print on the statement.

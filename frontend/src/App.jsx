@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Link, Navigate } from 'react-router-dom';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const PaperOverview = lazy(() => import('./pages/PaperOverview'));
+const PaperSettings = lazy(() => import('./pages/PaperSettings'));
 const Suggestions = lazy(() => import('./pages/Suggestions'));
 const ScannerPage = lazy(() => import('./pages/ScannerPage'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
@@ -68,6 +69,7 @@ const App = () => {
       <Route path="/paper/decisions" element={gated(<Suggestions />)} />
       <Route path="/paper/holdings" element={gated(<Portfolio />)} />
       <Route path="/paper/engine" element={gated(<Trading />)} />
+      <Route path="/paper/settings" element={gated(<PaperSettings />)} />
       {/* The engine's pages moved under /paper; old links and bookmarks follow. */}
       <Route path="/suggestions" element={<Navigate to="/paper/decisions" replace />} />
       <Route path="/portfolio" element={<Navigate to="/paper/holdings" replace />} />
