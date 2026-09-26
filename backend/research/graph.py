@@ -20,6 +20,7 @@ from langgraph.graph import StateGraph, END
 from backend.components.analyst.agent import AnalystAgent
 from backend.components.master.search import resolve_company_query
 from backend.llm import llm_service
+from backend.prompts import render
 
 logger = logging.getLogger(__name__)
 
@@ -110,24 +111,15 @@ class ResearchAgent:
         logger.info("Synthesizing research thesis...")
         analyst_out = state.get("analyst_output", {})
 
-        summary_prompt = f"""
-        Act as a research analyst. Write a concise investment research thesis for {state['symbol']}
-        based on the following fundamental/news report.
-
-        [Sentiment]
-        Score: {analyst_out.get('sentiment_score', 0)}
-        Summary: {analyst_out.get('summary', 'N/A')}
-
-        Task:
-        1. Summarize the key narrative and recent developments.
-        2. Identify the biggest opportunity and the biggest risk.
-        3. Conclude with a clear one-sentence outlook.
-
-        Output a concise paragraph.
-        """
+        system, summary_prompt = render(
+            "research_thesis",
+            symbol=state["symbol"],
+            sentiment_score=analyst_out.get("sentiment_score", 0),
+            summary=analyst_out.get("summary", "N/A"),
+        )
 
         try:
-            thesis = await llm_service.get_completion(summary_prompt)
+            thesis = await llm_service.get_completion(summary_prompt, system_prompt=system)
         except Exception:
             thesis = "Synthesis failed."
 

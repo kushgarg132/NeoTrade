@@ -6,6 +6,7 @@ from backend.database import get_database
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.resolve import resolve_symbol
 from backend.llm import llm_service
+from backend.prompts import render
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +46,9 @@ async def _find_peers(symbol: str, name: str) -> List[str]:
     """Best-effort peer/competitor suggestions for display only -- these are
     not validated against the instrument master, so never treated as
     authoritative symbol resolution."""
-    prompt = f"""
-    Company: "{name}" (ticker {symbol}).
-    List up to 5 peer/competitor tickers in the same sector.
-    Return ONLY a valid JSON array of strings, e.g. ["PEER1", "PEER2"]. If unsure, return [].
-    """
+    system, prompt = render("peers", name=name, symbol=symbol)
     try:
-        response_text = await llm_service.get_completion(prompt, system_prompt="You are a strict JSON output generator.")
+        response_text = await llm_service.get_completion(prompt, system_prompt=system)
         clean_text = response_text.replace("```json", "").replace("```", "").strip()
         peers = json.loads(clean_text)
         if isinstance(peers, list):

@@ -7,6 +7,7 @@ import json
 
 from backend.components.shared.models import NewsArticle, Sentiment
 from backend.llm import llm_service
+from backend.prompts import render
 
 logger = logging.getLogger(__name__)
 
@@ -46,42 +47,18 @@ async def _analyze_one(article: NewsArticle, target_symbol: str = None) -> NewsA
     # Construct prompt - handle None content
     content_preview = (article.content or "")[:500]  # Increased context
 
-    prompt = f"""
-    You are a senior financial analyst. Analyze the following news for the stock symbol: {target_symbol if target_symbol else "GENERAL MARKET"}.
-
-    News Headline: {article.title}
-    News Content: {content_preview}
-
-    Step 1: Relevance Check
-    - Is this article directly relevant to {target_symbol if target_symbol else "finance"}?
-    - If it mentions {target_symbol} only in passing (e.g., as part of a list of top gainers) with no specific news, relevance is LOW.
-    - If it discusses earnings, products, management, or sector trends affecting {target_symbol}, relevance is HIGH.
-
-    Step 2: Sentiment Analysis
-    - Determine the sentiment (POSITIVE, NEGATIVE, NEUTRAL).
-    - Assign a score (-1.0 to 1.0).
-    - Assign an impact score (1-10). 10 = massive market mover (e.g. merger, earnings beat). 1 = noise.
-
-    Step 3: Reasoning
-    - Explain in one sentence WHY you assigned this score.
-
-    Return strict JSON format:
-    {{
-        "is_relevant": true,
-        "relevance_reason": "...",
-        "sentiment": "POSITIVE",
-        "score": 0.5,
-        "impact": 5,
-        "reasoning": "..."
-    }}
-
-    If NOT relevant, return: {{ "is_relevant": false, "relevance_reason": "Not about target stock" }}
-    """
+    system, prompt = render(
+        "article_sentiment",
+        target=target_symbol or "GENERAL MARKET",
+        relevance_target=target_symbol or "finance",
+        headline=article.title,
+        content=content_preview,
+    )
 
     try:
         response = await llm_service.get_completion(
             prompt,
-            system_prompt="You are a simplified financial reasoning engine. Return strict JSON only."
+            system_prompt=system
         )
 
         if response == "LLM_DISABLED":

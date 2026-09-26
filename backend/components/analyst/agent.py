@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from pydantic import BaseModel, ConfigDict
 from backend.components.shared.models import NewsArticle, FinancialEvent
 from backend.llm import llm_service
+from backend.prompts import render
 from backend.configs.settings import settings
 import logging
 
@@ -72,27 +73,12 @@ class AnalystAgent:
             logger.error(f"AnalystAgent Error classifying events: {e}")
 
         # 4. Synthesize Summary using LLM with Chain of Thought
-        summary_prompt = f"""
-        You are a senior financial analyst. Analyze the following news for {symbol} and provide a structured market sentiment report.
+        system, summary_prompt = render(
+            "analyst_summary", symbol=symbol, news=combined_text[:3000], events=events,
+        )
 
-        News Articles:
-        {combined_text[:3000]}
-
-        Events:
-        {events}
-
-        Instructions:
-        1. **Market Sentiment**: Analyze the overall mood (Bullish/Bearish/Neutral) and explain WHY.
-        2. **Key Drivers**: Identify the specific factors driving this sentiment (e.g., earnings, product launches, macro factors).
-        3. **Risks**: Highlight any potential downsides or contrarian indicators.
-        4. **Verdict**: A single concise sentence summarizing the outlook.
-
-        Output Format:
-        Provide the response in clear Markdown paragraphs. Do not use JSON.
-        """
-        
         try:
-            summary = await llm_service.get_completion(summary_prompt, system_prompt="You are a senior hedge fund analyst.")
+            summary = await llm_service.get_completion(summary_prompt, system_prompt=system)
         except Exception as e:
             logger.error(f"AnalystAgent LLM Error: {e}")
             summary = "Unable to generate summary due to LLM error."

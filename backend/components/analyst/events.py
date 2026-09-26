@@ -7,6 +7,7 @@ import json
 
 from backend.components.shared.models import FinancialEvent
 from backend.llm import llm_service
+from backend.prompts import render
 
 logger = logging.getLogger(__name__)
 
@@ -29,22 +30,12 @@ async def classify_events(request: EventClassificationRequest):
 
 async def classify_events_logic(text: str, date: datetime) -> List[FinancialEvent]:
     logger.info(f"Classifying events from text ({len(text)} chars)")
-    prompt = f"""
-    Extract financial events from the following text:
-    "{text}"
-    
-    Events to look for: Earnings, Mergers, Acquisitions, Layoffs, Guidance Change, FDA Approval, etc.
-    
-    Return a JSON list of objects: 
-    [{{ "event_type": "...", "description": "...", "symbols": ["AAPL"], "impact_rating": 1-10 }}]
-    
-    If no events found, return [].
-    """
-    
+    system, prompt = render("classify_events", text=text)
+
     try:
         response = await llm_service.get_completion(
             prompt,
-            system_prompt="You are a financial event detector. Return strict JSON."
+            system_prompt=system
         )
         
         if response == "LLM_DISABLED":

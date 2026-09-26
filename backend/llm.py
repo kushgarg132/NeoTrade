@@ -98,7 +98,8 @@ class LLMService:
         if not self.keys:
             logger.warning("OMNIROUTE_API_KEY(S) not set. LLM features will be disabled.")
 
-    async def get_completion(self, prompt: str, system_prompt: str = "You are a helpful assistant.") -> str:
+    async def get_completion(self, prompt: str, system_prompt: str) -> str:
+        """Both prompts come from backend/prompts/*.md via prompts.render."""
         llm = await self.get_llm()
         if not llm:
             return "LLM_DISABLED"

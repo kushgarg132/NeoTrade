@@ -5,6 +5,7 @@ from typing import Optional
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument
 from backend.llm import llm_service
+from backend.prompts import render
 
 logger = logging.getLogger(__name__)
 
@@ -48,17 +49,9 @@ async def resolve_symbol(query: str, master: InstrumentMaster) -> Instrument:
 
 async def _llm_pick(query: str, candidates: list[Instrument]) -> Optional[Instrument]:
     options = [{"tradingsymbol": c.tradingsymbol, "name": c.name} for c in candidates]
-    prompt = (
-        f'User query: "{query}"\n\n'
-        f"Candidate instruments (JSON): {json.dumps(options)}\n\n"
-        "Pick the single best match for the user's query from the candidates "
-        'above. Respond with ONLY the chosen "tradingsymbol" value as plain '
-        "text, or the word NONE if none of the candidates match."
-    )
+    system, prompt = render("resolve_instrument", query=query, candidates=json.dumps(options))
     try:
-        response = await llm_service.get_completion(
-            prompt, system_prompt="You are a strict instrument-matching assistant."
-        )
+        response = await llm_service.get_completion(prompt, system_prompt=system)
     except Exception as e:
         logger.warning(f"LLM resolution failed for {query!r}: {e}")
         return None
