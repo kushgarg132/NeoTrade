@@ -7,6 +7,7 @@ import BrokerPnl from '../components/dashboard/BrokerPnl';
 import TradeLedger from '../components/dashboard/TradeLedger';
 import GuardrailAlerts from '../components/journal/GuardrailAlerts';
 import IndexCard from '../components/dashboard/IndexCard';
+import IndexAnalysis from '../components/dashboard/IndexAnalysis';
 import { bareSymbol } from '../utils/formatters';
 import Market from '../components/dashboard/Market';
 import AnalysisCard from '../components/AnalysisCard';
@@ -226,6 +227,7 @@ const Dashboard = () => {
               </Button>
             </div>
             <IndexCard detail={indexDetail} loading={!indexDetail && !indexError} error={indexError} />
+            <IndexAnalysis key={indexTicker} ticker={indexTicker} />
           </div>
         )}
 

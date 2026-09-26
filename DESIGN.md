@@ -263,7 +263,11 @@ the page, and precisely because it is singular, it reads as a stamp rather than 
 - Index names in the statement's index table link the same way and open an index card in
   place of the stack (`components/dashboard/IndexCard.jsx`): level at figure scale in points
   (`formatLevel`, never ₹), the day change, a 1M/3M/6M/1Y close chart inked gain or loss by
-  the range's direction, and the 52-week range and 50/200-day averages.
+  the range's direction, and the 52-week range and 50/200-day averages. Beneath it, a **Why it
+  moved** sheet (`IndexAnalysis.jsx`, sparkles icon in stamp violet, meta "AI · date") renders
+  the model's Markdown through `Markdown`, lists the headlines it read, and closes with a
+  `doc-meta` line saying it is AI-written and not advice. It is requested as soon as the index
+  opens, since the explanation is why the reader tapped.
 - Money never breaks between its sign and its figure (`Money` is `whitespace-nowrap`); a
   `NetLine` drops its figure under the label rather than overflowing.
 
