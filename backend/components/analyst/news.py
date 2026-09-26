@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
 from datetime import datetime, timedelta
+import asyncio
 import logging
 from backend.configs.settings import settings
 
@@ -105,7 +106,9 @@ async def fetch_finnhub_news(symbol: str, limit: int = 10) -> List[NewsArticle]:
     }
     
     try:
-        response = requests.get(url, params=params, timeout=10)
+        # requests blocks; on the event loop it would freeze every other
+        # request this single-worker process is serving for up to 10s.
+        response = await asyncio.to_thread(requests.get, url, params=params, timeout=10)
         if response.status_code == 401 or response.status_code == 403:
              logger.error("Finnhub API Key Invalid or Limit Reached.")
              return []
@@ -152,7 +155,7 @@ async def fetch_google_news(query: str, region: str = "US", lang: str = "en-US",
     
     try:
         logger.info(f"Querying Google News RSS: {query} ({region})")
-        response = requests.get(base_url, params=params, timeout=10)
+        response = await asyncio.to_thread(requests.get, base_url, params=params, timeout=10)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.content, features="xml")
