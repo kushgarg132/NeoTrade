@@ -91,12 +91,16 @@ read), `suggestions` (`backend/suggestions/store.py`), `user_prefs` (`backend/pr
 `trading_runs` (`backend/runs.py`), `watchlist` (`backend/routers/watchlist.py`).
 
 Correctly global (shared reference data, not personal): `instruments`, `instrument_meta`,
-and the `sentiment:{symbol}` Redis cache.
+and the `analyst:{symbol}` / `sentiment:{symbol}` Redis caches (4 hours, written by
+`AnalystAgent`, `backend/components/analyst/agent.py`).
 
 ### 1.5 Suggestions (the long-term approval inbox)
 
 - Created by `SuggestionStore.create` (`backend/suggestions/store.py:31-70`), persisting the
   sized order plus the score breakdown `{rule, ai, final}` and publishing to the WS hub.
+- Rescored by `attach_theses` (`backend/suggestions/thesis.py`) once research has measured
+  real news sentiment, through the same `CompositeScore`. At scan time the sentiment cache
+  is usually empty, so the AI half starts neutral.
 - Approved/rejected by `store.decide()` (`store.py:96-122`) using an atomic
   `find_one_and_update` gated on `status == PENDING` — double-approval is impossible by
   construction.
@@ -152,7 +156,9 @@ hardcoded `0.0` (`backtest.py:94-95`) — they are not computed.
 have **no production callers**. The LangGraph decision node was deliberately removed; what
 survives is `ResearchAgent` (`backend/research/graph.py:58-159`), whose graph is
 `resolve_query → company_info → analyst → synthesize → END` and which returns a narrative
-`ResearchReport` with no BUY/SELL/HOLD, plus `AnalystAgent` and `ChatAgent`.
+`ResearchReport` with no BUY/SELL/HOLD, plus `AnalystAgent` and `ChatAgent`. Since
+2026-09-26 the analyst makes two LLM calls per stock (`prompts/score_news.md`, then
+`prompts/research_report.md`, which also writes the thesis), so `synthesize` makes none.
 
 `RiskAgent` carries its own inert `confidence*0.6 + alignment*0.4` blend with a `0.25`
 threshold (`components/risk/agent.py:95-99`) — a *different* formula from the enforced
