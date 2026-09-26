@@ -1,10 +1,13 @@
 # NeoTrade
 
-A trading cockpit for Indian equities and F&O. A strategy engine emits fully-formed trades —
+The discipline layer on top of an Indian trader's own broker (Kite / Upstox / Angel One):
+an auto-imported trade journal, behaviour findings over it, and self-set guardrails
+(`backend/journal/`, `/journal`). Nothing sold here is advice — see `PRODUCT.md`.
+
+A strategy engine also exists as a secondary, free feature: it emits fully-formed trades —
 size, entry, stop, target, the rule codes that fired, and a composite score — then either
-executes them (intraday) or routes them to an approval inbox (long-term). Each user connects
-their own broker (Kite / Upstox / Angel One) and chooses per strategy whether it trades on
-paper or with real money.
+executes them (intraday) or routes them to an approval inbox (long-term), per strategy on
+paper or live.
 
 FastAPI + MongoDB + Redis backend on this VM; React 19 + Vite frontend on Vercel.
 
