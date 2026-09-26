@@ -17,6 +17,8 @@ from backend.runs import RunStore
 from backend.suggestions.store import SuggestionStore
 from backend.prefs import PrefsStore
 from backend.journal.store import JournalStore
+from backend.guardrails.store import GuardrailStore
+from backend.guardrails import monitor as guardrail_monitor
 from backend import broadcast
 from backend import scheduler
 from backend.ws.hub import hub, handle_broadcast_event
@@ -93,6 +95,7 @@ async def startup_db_client():
     await SuggestionStore(db.db).ensure_indexes()
     await PrefsStore(db.db).ensure_indexes()
     await JournalStore(db.db).ensure_indexes()
+    await GuardrailStore(db.db).ensure_indexes()
     await BrokerCredentialStore(db.db, fernet_from_settings()).ensure_indexes()
     await AppSettingsStore(db.db).load_into_cache()
 
@@ -100,6 +103,8 @@ async def startup_db_client():
     scheduler.start(db.db, db.redis)
     # Live prices and P&L for whoever has a socket open.
     ws_pump.start(db.db)
+    # The user's own limits, checked against their broker once a minute in session.
+    guardrail_monitor.start(db.db, db.redis)
 
     # An asyncio.Task cannot outlive the process that created it, so any run
     # still marked RUNNING belongs to a previous life of this container.
@@ -144,6 +149,7 @@ from backend.routers import suggestions
 from backend.routers import analytics
 from backend.routers import broker
 from backend.routers import journal
+from backend.routers import guardrails as guardrails_router
 
 app.include_router(market_data.router, prefix=settings.API_PREFIX, tags=["Market Data"], dependencies=[Depends(get_current_user)])
 app.include_router(watchlist.router, prefix=settings.API_PREFIX, tags=["Watchlist"], dependencies=[Depends(get_current_user)])
@@ -152,6 +158,7 @@ app.include_router(suggestions.router, prefix=settings.API_PREFIX, tags=["Sugges
 app.include_router(analytics.router, prefix=settings.API_PREFIX, tags=["Analytics"], dependencies=[Depends(get_current_user)])
 app.include_router(broker.router, prefix=settings.API_PREFIX, tags=["Broker"], dependencies=[Depends(get_current_user)])
 app.include_router(journal.router, prefix=settings.API_PREFIX, tags=["Journal"], dependencies=[Depends(get_current_user)])
+app.include_router(guardrails_router.router, prefix=settings.API_PREFIX, tags=["Guardrails"], dependencies=[Depends(get_current_user)])
 
 # The socket authenticates its own handshake (see backend/ws/routes.py): the
 # HTTP bearer dependency cannot run on a WebSocket upgrade.

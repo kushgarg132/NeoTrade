@@ -20,6 +20,12 @@ DEFAULTS = {
     "scan_enabled": True,
     "omniroute_model": None,
     "live_strategies": [],  # strategy names the user has toggled to trade with real orders
+    # Guardrails (backend/guardrails/): watch the user's own broker activity
+    # during the session. Off until the user turns it on; 0 turns a rule off.
+    "guardrails_enabled": False,
+    "max_trades_per_day": 0,
+    "cooldown_after_losses": 0,
+    "cooldown_minutes": 30,
 }
 
 EDITABLE = tuple(DEFAULTS)

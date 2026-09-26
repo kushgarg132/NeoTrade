@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # requires re-encrypting them.
     CREDENTIAL_ENCRYPTION_KEY: Optional[str] = None
 
+    # Guardrail alerts (backend/guardrails/telegram.py). One bot for the whole
+    # deployment, created with @BotFather; unset means in-app alerts only.
+    TELEGRAM_BOT_TOKEN: Optional[str] = None
+
     # Emails allowed to change deployment-wide settings. Role is re-derived
     # from this list on every login.
     ADMIN_EMAILS: Annotated[List[str], NoDecode] = []

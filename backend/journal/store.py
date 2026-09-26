@@ -44,9 +44,12 @@ class JournalStore:
             return exc.details["nInserted"]
         return len(docs)
 
-    async def list_trades(self, user_id: str) -> list[dict]:
+    async def list_trades(self, user_id: str, since: datetime | None = None) -> list[dict]:
         # ponytail: loads a user's whole history; page by date once someone has 50k+ fills
-        docs = await self.trades.find({"user_id": user_id}).to_list(length=None)
+        query = {"user_id": user_id}
+        if since is not None:
+            query["traded_at"] = {"$gte": since}
+        docs = await self.trades.find(query).to_list(length=None)
         for d in docs:
             if d["traded_at"].tzinfo is None:  # Mongo hands back naive UTC
                 d["traded_at"] = d["traded_at"].replace(tzinfo=timezone.utc)

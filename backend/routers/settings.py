@@ -13,7 +13,7 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.app_settings import AppSettingsStore
 from backend.auth.broker_credentials import (
@@ -49,6 +49,10 @@ class PreferencesPatch(BaseModel):
     scan_enabled: Optional[bool] = None
     omniroute_model: Optional[str] = None
     live_strategies: Optional[list[str]] = None
+    guardrails_enabled: Optional[bool] = None
+    max_trades_per_day: Optional[int] = Field(default=None, ge=0, le=500)
+    cooldown_after_losses: Optional[int] = Field(default=None, ge=0, le=20)
+    cooldown_minutes: Optional[int] = Field(default=None, ge=0, le=390)
 
 
 @router.get("/settings/preferences")

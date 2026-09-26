@@ -25,6 +25,7 @@ services:
       # Broker credentials are per-user and encrypted with this key; without
       # it the app refuses to store them rather than writing plaintext.
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
