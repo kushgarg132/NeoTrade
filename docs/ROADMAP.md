@@ -19,7 +19,7 @@ where to start — nothing else in this repo tracks it.
 | 7 | Multi-worker readiness | — | **done 2026-09-14** |
 | 8 | Reposition as the discipline layer (docs) | — | **done 2026-09-26** |
 | 9 | Trade journal MVP | 8 | **done 2026-09-26** (live broker sync unverified, see phase notes) |
-| 10 | Behaviour insights | 9 | not started |
+| 10 | Behaviour insights | 9 | **done 2026-09-26** |
 | 11 | Guardrails (loss cap, trade count, cooldown) | 9 | not started |
 | 12 | Free beta, 20–50 real traders | 9, 10, 11 | not started |
 | 13 | Billing + real domain | 12 | not started |
@@ -555,7 +555,7 @@ a Console CSV import is idempotent (importing twice adds nothing), and `pytest` 
   `store.py`). Page it by date once anyone has tens of thousands of fills.
 - Only Zerodha Console's CSV is importable. Upstox and Angel One exports are not wired up.
 
-## Phase 10 — Behaviour insights
+## Phase 10 — Behaviour insights — **done 2026-09-26**
 
 **Goal:** tell the user, in plain language, which of their habits cost them money.
 
@@ -565,6 +565,26 @@ a Console CSV import is idempotent (importing twice adds nothing), and `pytest` 
   −₹8,400". No scores, no streaks, no celebration (`PRODUCT.md` brand rules).
 
 **Done when:** each finding matches a hand-computed value on a fixture journal.
+
+### What landed
+
+- `backend/journal/insights.py`: pure `build_insights(trips)` over closed round trips,
+  returned as `insights` in `GET /journal`. Each finding is one group of trades set against
+  every other closed trade: trades, P&L, win rate, average P&L, and the same for the rest.
+- Findings: worst and best time-of-day bucket, worst and best weekday, trades opened after
+  2+ losses in a row that day, the 4th and later trades of a day, position size right after
+  a loss (reported only at 1.25× usual or more), losers held 1.5× as long as winners or
+  more, and one per setup tag.
+- A group needs at least 5 trades (`MIN_TRIPS`) before it is shown. Sorted costliest first.
+- `backend/tests/test_journal_insights.py` checks every kind against hand-computed values.
+- The Journal page shows them as "Your patterns", between the calendar and the trade list.
+
+### Known limits
+
+- Same gross-P&L caveat as Phase 9.
+- "That day" streaks and trade numbers reset at the IST date boundary, so overnight
+  positions count on the day they opened.
+- The thresholds (5 trades, 1.25×, 1.5×) are judgement calls, not tuned on real users.
 
 ## Phase 11 — Guardrails
 
