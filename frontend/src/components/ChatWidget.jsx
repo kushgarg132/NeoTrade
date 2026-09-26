@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MessageSquare, X, Send, Loader2, Maximize2, Minimize2 } from 'lucide-react';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import Markdown from './common/Markdown';
 import { stream } from '../lib/ws';
 import { cn } from '../utils/cn';
 
@@ -127,12 +126,7 @@ const ChatWidget = () => {
                       : 'border-[var(--rule)]'
                   )}
                 >
-                  <div
-                    className="[&_a]:text-[var(--stamp)] [&_a]:underline [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_table]:w-full [&_td]:border [&_td]:border-[var(--rule)] [&_td]:px-1.5 [&_th]:border [&_th]:border-[var(--rule)] [&_th]:px-1.5"
-                    dangerouslySetInnerHTML={{
-                      __html: DOMPurify.sanitize(marked.parse(message.content)),
-                    }}
-                  />
+                  <Markdown>{message.content}</Markdown>
                 </div>
               </div>
             ))}

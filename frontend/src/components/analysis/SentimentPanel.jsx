@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sheet } from '../doc/Doc';
 import { cn } from '../../utils/cn';
+import Markdown from '../common/Markdown';
 
 /**
  * News sentiment as a calibrated reading rather than a dial: the scale is
@@ -61,15 +62,15 @@ const SentimentPanel = ({ score, summary, sentiment, thesis }) => {
       )}
 
       {summary && (
-        <p className="mt-3 pt-3 border-t border-[var(--rule)] text-sm text-[var(--ink-soft)] leading-relaxed">
+        <Markdown className="mt-3 pt-3 border-t border-[var(--rule)] text-sm text-[var(--ink-soft)] leading-relaxed">
           {summary}
-        </p>
+        </Markdown>
       )}
 
       {thesis && (
         <div className="mt-3 pt-3 border-t border-[var(--rule)]">
           <p className="field-label mb-1.5">Thesis</p>
-          <p className="text-sm text-[var(--ink-soft)] leading-relaxed">{thesis}</p>
+          <Markdown className="text-sm text-[var(--ink-soft)] leading-relaxed">{thesis}</Markdown>
         </div>
       )}
     </Sheet>
