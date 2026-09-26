@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Search, Loader2, Check, ExternalLink, Unplug, ArrowRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Sheet, Empty, Ruling, Stamp } from '../components/doc/Doc';
@@ -45,7 +45,16 @@ const TextField = ({ id, label, ...props }) => (
 );
 
 const BrokerSheet = () => {
-  const [broker, setBroker] = useState('kite');
+  // A broker's redirect lands here: Upstox appends ?code=, Kite ?request_token=.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [pending, setPending] = useState(() => {
+    const code = searchParams.get('code');
+    if (code) return { broker: 'upstox', token: code };
+    const requestToken = searchParams.get('request_token');
+    if (requestToken) return { broker: 'kite', token: requestToken };
+    return null;
+  });
+  const [broker, setBroker] = useState(pending?.broker || 'kite');
   const [state, setState] = useState(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
@@ -106,7 +115,7 @@ const BrokerSheet = () => {
     try {
       const res = await api.get(endpoints.broker.loginUrl(broker));
       window.open(res.data.url, '_blank', 'noopener');
-      setNote(`Complete the ${BROKER_LABEL[broker]} login, then paste the code from the redirect URL.`);
+      setNote(`Complete the ${BROKER_LABEL[broker]} login, then paste the code from the redirect URL if it isn't picked up automatically.`);
     } catch (err) {
       setNote(err?.response?.data?.detail || 'Could not build the login URL');
     } finally {
@@ -114,12 +123,12 @@ const BrokerSheet = () => {
     }
   };
 
-  const connectWithRequestToken = async () => {
-    if (!requestToken.trim()) return;
+  const connectWithRequestToken = async (token = requestToken) => {
+    if (!token.trim()) return;
     setBusy(true);
     setNote(null);
     try {
-      await api.post(endpoints.broker.connect(broker), { request_token: requestToken.trim() });
+      await api.post(endpoints.broker.connect(broker), { request_token: token.trim() });
       setRequestToken('');
       await refresh(broker);
     } catch (err) {
@@ -128,6 +137,16 @@ const BrokerSheet = () => {
       setBusy(false);
     }
   };
+
+  // Submit a redirect's code once the sheet knows the broker is waiting for
+  // one, then drop it from the URL so a reload doesn't replay a spent code.
+  useEffect(() => {
+    if (!pending || !state || pending.broker !== broker) return;
+    setPending(null);
+    setSearchParams({}, { replace: true });
+    if (state.state === 'NEEDS_LOGIN') connectWithRequestToken(pending.token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, state, broker]);
 
   const connectWithCredentials = async () => {
     if (!clientCode.trim() || !password.trim() || !totp.trim()) return;
@@ -278,7 +297,7 @@ const BrokerSheet = () => {
             <Button
               variant="secondary"
               size="sm"
-              onClick={connectWithRequestToken}
+              onClick={() => connectWithRequestToken()}
               disabled={busy || !requestToken.trim()}
             >
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
