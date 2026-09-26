@@ -189,7 +189,7 @@ the revived chain emits `Intent` and is scored by `composite.py` like everything
 | No backtest gate | nothing marks a strategy live-eligible; `backend/strategies/registry.py:16-59` is the only filter | A registered strategy trades immediately |
 | Single-process state | `_RUNS` (`routers/trading.py:62`), `ws/hub.py:9-10`, `scheduler.py:8-10` | Breaks with more than one worker |
 | `llm_service` module singleton | `backend/llm.py:125` | Per-user model choice (`omniroute_model` in `user_prefs`) is stored but never read |
-| `/trading/start` trusts request-body risk caps | `routers/trading.py:216-318` vs `scheduler.py:52-59` which reads `PrefsStore` | The manual path can bypass a user's stored limits |
+| `/trading/start` trusts request-body risk caps | `routers/trading.py:216-323` (`launch_run`) vs `scheduler.py:52-59` which reads `PrefsStore` | The manual path can bypass a user's stored limits |
 
 ---
 
@@ -243,7 +243,26 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   realized + unrealized loss crosses the user's limit, and does not re-arm by itself.
 - **Backtest gate** — a strategy is live-eligible only if a stored, dated backtest result
   meets the criteria in [`ROADMAP.md`](ROADMAP.md) Phase 3. Requires
-  `max_drawdown`/`sharpe_ratio` to actually be computed, unlike today.
+  `max_drawdown`/`sharpe_ratio` to actually be computed, unlike today. The gate governs
+  **live routing only**: `launch_run` (`backend/routers/trading.py`) runs every registered
+  strategy for the mode on paper and hands a strategy a `BrokerExecutionClient` only when it
+  is toggled live, the broker session is ACTIVE, *and* it passes the gate. Until 2026-09-26
+  the gate also dropped unproven strategies from paper runs, which left no way to build the
+  paper track record the product relies on.
+- **Daily paper auto-run** — `backend/engine/autorun.py`, a 60s loop on every worker, keeps
+  one INTRADAY paper run alive 09:15–15:30 IST on weekdays for users with
+  `auto_paper_intraday` on (no NSE holiday calendar: on a holiday the feed simply delivers no
+  bars). A Redis key `autorun:{user_id}` holding the owning worker's token, renewed each tick
+  with a 150s TTL, makes exactly one worker start it and lets another take over after a
+  deploy; Mongo run status is not trusted for this because every worker's startup sweeps all
+  RUNNING rows as orphaned. A run the user stops during the session is not restarted that
+  day, and at most 5 auto runs start per day.
+- **Paper scorecard** — `compute_scorecard` (`backend/analytics.py`, `GET
+  /analytics/scorecard?venue=paper`): closed trades grouped by IST exit day and by the
+  `strategy` stamped on each trade at open (`LedgerStore._open_trade`, from the opening
+  order's `strategy_name`), every figure net of charges (`realized_pnl - costs`), with
+  profit factor, win rate, max drawdown on the daily running total, and NIFTY 50's return
+  over the same days as a benchmark (closes cached an hour).
 - **Per-trade and per-day capital caps**, read from the user's stored prefs rather than
   from the request body.
 
