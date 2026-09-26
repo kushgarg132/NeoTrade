@@ -84,7 +84,7 @@ const ChatWidget = () => {
   };
 
   return (
-    <div className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 flex flex-col items-end pointer-events-none">
+    <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 lg:bottom-6 lg:right-6 z-50 flex flex-col items-end pointer-events-none">
       {open && (
         <div
           className={cn(

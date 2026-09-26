@@ -1,0 +1,22 @@
+{
+  "name": "NeoTrade",
+  "short_name": "NeoTrade",
+  "description": "Your trade journal, behaviour findings and self-set guardrails, on top of your own broker.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f4f1",
+  "theme_color": "#f4f4f1",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Decisions", "url": "/suggestions", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Journal", "url": "/journal", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

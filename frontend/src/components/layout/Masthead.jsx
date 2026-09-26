@@ -49,7 +49,11 @@ const Masthead = ({ noteNumber }) => {
   const { theme, toggle } = useTheme();
 
   return (
-    <header className="border-b border-[var(--rule-strong)] bg-[var(--paper)]">
+    <header
+      className="border-b border-[var(--rule-strong)] bg-[var(--paper)]"
+      // Installed on a notched phone the page runs under the status bar.
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       <div className="mx-auto max-w-6xl px-4 lg:px-8">
         <div className="flex items-center justify-between gap-4 py-3">
           <Link to="/" className="min-w-0">

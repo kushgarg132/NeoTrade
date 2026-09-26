@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- NeoTrade app icon: the contract note's rubber stamp on office bond.
+       Drawn from shapes only (no text), so every rasterisation matches.
+       Content stays inside the central 80% so it survives a maskable crop. -->
+  <rect width="512" height="512" fill="#f4f4f1"/>
+  <g transform="rotate(-4 256 256)" fill="none" stroke="#3a32a0" stroke-linecap="square">
+    <rect x="136" y="136" width="240" height="240" stroke-width="18"/>
+    <rect x="160" y="160" width="192" height="192" stroke-width="5"/>
+    <path d="M206 316V196l100 120V196" stroke-width="26" stroke-linejoin="miter"/>
+  </g>
+  <!-- The net rule: a statement closes its total under a double rule. -->
+  <path d="M136 418h240M136 432h240" stroke="#17181b" stroke-width="5"/>
+</svg>
