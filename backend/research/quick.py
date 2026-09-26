@@ -6,7 +6,8 @@ This is what a stock click should render immediately. The AI-derived report
 (news, sentiment, thesis -- backend.research.graph.ResearchAgent) is a
 separate, slower request the frontend only fires when its own tab is opened,
 since that pipeline makes several sequential LLM calls and was the actual
-source of "opening a stock is slow".
+source of "opening a stock is slow". (A second source hid here until
+2026-09-26: resolve_company_query's LLM peer lookup, ~10s, now opt-in.)
 """
 
 import asyncio

@@ -2,7 +2,7 @@
 LLM call, so nothing here should ever touch backend.llm."""
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -80,3 +80,17 @@ async def test_quick_analysis_handles_no_price_history(wired, monkeypatch):
 
     assert result.price_data == []
     assert result.technical_analysis == {}
+
+
+async def test_resolving_a_stock_makes_no_llm_call_unless_peers_are_asked_for():
+    """The LLM peer lookup was ~10s of a ~11s stock search, for data no
+    screen displays. It must stay opt-in."""
+    from backend.components.master import search
+
+    instrument = MagicMock(tradingsymbol="RELIANCE", name="Reliance Industries")
+    with patch(f"{search.__name__}.resolve_symbol", AsyncMock(return_value=instrument)), \
+         patch(f"{search.__name__}.get_database", AsyncMock(return_value=MagicMock())), \
+         patch(f"{search.__name__}._find_peers", AsyncMock(return_value=["TCS"])) as peers:
+        assert (await search.resolve_company_query("reliance"))["peers"] == []
+        peers.assert_not_awaited()
+        assert (await search.resolve_company_query("reliance", with_peers=True))["peers"] == ["TCS"]

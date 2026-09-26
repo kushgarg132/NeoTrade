@@ -10,7 +10,7 @@ from backend.llm import llm_service
 logger = logging.getLogger(__name__)
 
 
-async def resolve_company_query(query: str) -> Dict:
+async def resolve_company_query(query: str, with_peers: bool = False) -> Dict:
     """
     Resolves a user query (ticker or company name) to a valid instrument via
     the deterministic instrument master (see backend.instruments.resolve),
@@ -23,6 +23,10 @@ async def resolve_company_query(query: str) -> Dict:
             "name": "Reliance Industries Ltd"
         }
 
+    `with_peers` adds an LLM round trip (~10s through the gateway) for the
+    peer list. Off by default: no screen displays peers, and it was most of
+    the time a stock search took. Only the chat agent's tool asks for it.
+
     Raises:
         backend.instruments.resolve.SymbolNotFoundError if `query` cannot be
         resolved to a known instrument. Callers must not fall back to
@@ -32,7 +36,7 @@ async def resolve_company_query(query: str) -> Dict:
     master = InstrumentMaster(await get_database())
     instrument = await resolve_symbol(query, master)
 
-    peers = await _find_peers(instrument.tradingsymbol, instrument.name)
+    peers = await _find_peers(instrument.tradingsymbol, instrument.name) if with_peers else []
 
     return {"symbol": instrument.tradingsymbol, "name": instrument.name, "peers": peers}
 

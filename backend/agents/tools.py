@@ -92,7 +92,7 @@ async def resolve_symbol_tool(query: str) -> str:
     Useful if the user asks for 'Tata Motors' and you need to know it's 'TATAMOTORS.NS'.
     """
     try:
-        data = await resolve_company_query(query)
+        data = await resolve_company_query(query, with_peers=True)
         symbol = data.get("symbol")
         name = data.get("name")
         peers = data.get("peers", [])
