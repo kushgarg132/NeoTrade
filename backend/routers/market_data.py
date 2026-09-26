@@ -149,3 +149,64 @@ async def get_global_indices():
     results = await asyncio.gather(*tasks)
     return [r for r in results if r is not None]
 
+
+
+# ---------------------------------------------------------------------------
+# One index, in detail: what a tap on an index row opens. Only the tickers
+# this module already lists are accepted, so the route is not a general
+# Yahoo proxy.
+# ---------------------------------------------------------------------------
+
+def _known_index_names() -> Dict[str, str]:
+    return {ticker: name for name, ticker in {**INDICES, **GLOBAL_INDICES}.items()}
+
+
+def _mean_of_last(closes: List[float], window: int):
+    if len(closes) < window:
+        return None
+    return sum(closes[-window:]) / window
+
+
+def _fetch_index_detail_sync(ticker: str, name: str) -> Dict[str, Any] | None:
+    hist = yf.Ticker(ticker).history(period="1y", interval="1d")
+    if hist is None or hist.empty:
+        return None
+
+    points = [
+        {"date": index.strftime("%Y-%m-%d"), "close": float(row["Close"])}
+        for index, row in hist.iterrows()
+    ]
+    closes = [point["close"] for point in points]
+    value = closes[-1]
+    previous = closes[-2] if len(closes) > 1 else value
+    change = value - previous
+
+    return {
+        "name": name,
+        "symbol": ticker,
+        "value": value,
+        "change": change,
+        "percent": (change / previous) * 100 if previous else 0.0,
+        "high_52w": max(closes),
+        "low_52w": min(closes),
+        "sma_50": _mean_of_last(closes, 50),
+        "sma_200": _mean_of_last(closes, 200),
+        "points": points,
+    }
+
+
+@router.get("/market/index/{ticker}")
+async def get_index_detail(ticker: str):
+    """A year of daily closes plus the figures a reader checks on an index:
+    level, day change, 52-week range and the 50/200-day averages."""
+    name = _known_index_names().get(ticker)
+    if name is None:
+        raise HTTPException(status_code=404, detail=f"{ticker} is not a tracked index")
+    try:
+        detail = await asyncio.to_thread(_fetch_index_detail_sync, ticker, name)
+    except Exception as e:
+        logger.error(f"Error fetching index detail for {ticker}: {e}")
+        detail = None
+    if detail is None:
+        raise HTTPException(status_code=502, detail=f"No price data for {name} right now")
+    return detail
