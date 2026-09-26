@@ -18,7 +18,7 @@ where to start — nothing else in this repo tracks it.
 | 6 | Revive the long-term agent engine | — | **done 2026-09-11** |
 | 7 | Multi-worker readiness | — | **done 2026-09-14** |
 | 8 | Reposition as the discipline layer (docs) | — | **done 2026-09-26** |
-| 9 | Trade journal MVP | 8 | not started |
+| 9 | Trade journal MVP | 8 | **done 2026-09-26** (live broker sync unverified, see phase notes) |
 | 10 | Behaviour insights | 9 | not started |
 | 11 | Guardrails (loss cap, trade count, cooldown) | 9 | not started |
 | 12 | Free beta, 20–50 real traders | 9, 10, 11 | not started |
@@ -508,7 +508,7 @@ Two reasons, both recorded there: every intraday strategy fails the backtest gat
 and charging for trade ideas needs SEBI Research Analyst registration. Paid features must be
 tools that work on the user's own trades and rules, never recommendations.
 
-## Phase 9 — Trade journal MVP
+## Phase 9 — Trade journal MVP — **done 2026-09-26**
 
 **Goal:** every trade a user makes in their broker shows up in NeoTrade without manual entry.
 
@@ -522,6 +522,38 @@ tools that work on the user's own trades and rules, never recommendations.
 
 **Done when:** a connected broker's trades for the day land in the journal after the sync,
 a Console CSV import is idempotent (importing twice adds nothing), and `pytest` passes.
+
+### What landed
+
+- `BrokerTrade` (`backend/core/models.py`) and `get_trades()` on all three adapters.
+  Kite uses the SDK's `trades()`. Upstox uses `/v2/order/trades/get-trades-for-day`, with
+  fields checked against the official SDK's `TradeData` model. Angel One uses `getTradeBook`,
+  whose `filltime` is a bare `HH:MM:SS` dated today IST. Timestamp parsing for all of them
+  lives in `backend/brokers/trades.py`.
+- `backend/journal/`: `store.py` (`journal_trades`, `_id` = user:broker:trade_id, so syncs
+  and imports never duplicate; `journal_notes`), `roundtrips.py` (pure flat-to-flat
+  grouping per broker+exchange+symbol, splits a fill that crosses zero, plus the daily
+  calendar), `console_csv.py`, `sync.py`.
+- `backend/routers/journal.py`: `GET /journal`, `POST /journal/sync`,
+  `POST /journal/import/zerodha-console` (CSV text in a JSON body, so no multipart
+  dependency), `PUT /journal/round-trips/{id}/note`.
+- The 16:00 IST daily pass now syncs every user's connected brokers (`scheduler.py`
+  `_sync_journals`).
+- `frontend/src/pages/Journal.jsx`: month calendar of daily P&L, round-trip list, per-trip
+  note and tags, sync and CSV import buttons. Added to the nav as "Journal".
+
+### Known limits
+
+- **Live broker sync has never run against a real account.** Same posture as every other
+  adapter: the mapping is verified against docs and SDK source only. Upstox's
+  `exchange_timestamp` format is only documented as "user readable", so more than one
+  format is accepted.
+- P&L is **gross**. No broker's trade book carries brokerage, STT or exchange charges.
+- A round trip's id is its first fill's id. Backfilling *older* fills for the same symbol
+  can regroup trips and detach a note from the trip it was written on.
+- `GET /journal` loads a user's whole history on every call (`ponytail:` comment in
+  `store.py`). Page it by date once anyone has tens of thousands of fills.
+- Only Zerodha Console's CSV is importable. Upstox and Angel One exports are not wired up.
 
 ## Phase 10 — Behaviour insights
 
