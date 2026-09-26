@@ -155,7 +155,7 @@ hardcoded `0.0` (`backtest.py:94-95`) — they are not computed.
   `PollingLiveFeed`, `KiteTickerFeed`.
 - One WebSocket, `GET /api/v1/ws` (`backend/ws/routes.py:60-86`), topic pub/sub through an
   in-process `Hub` (`backend/ws/hub.py:24-95`). A 15-second pump
-  (`backend/ws/pump.py:23,26-62`) publishes marks and recomputed PnL: per venue under `paper`/`live`, plus the combined figures at the top level for pre-venue clients; suggestion and run
+  (`backend/ws/pump.py:23,26-65`) publishes marks and recomputed PnL: per venue under `paper`/`live`, plus the combined figures at the top level for pre-venue clients; suggestion and run
   events are published reactively by their own stores.
 
 ### 1.8 Dead code (scheduled for revival, not deletion)
