@@ -216,8 +216,13 @@ const BrokerSheet = () => {
       }
     >
       <p className="text-sm text-[var(--ink-soft)]">
-        A connected {BROKER_LABEL[broker]} session supplies live tick data for intraday runs.
-        Orders stay simulated — no real money moves, in either direction.
+        A connected {BROKER_LABEL[broker]} session imports your trades into the journal and lets
+        guardrails check your account.{' '}
+        {broker === 'angel_one'
+          ? 'Intraday runs still use delayed quotes — live ticks from Angel One aren’t supported yet.'
+          : 'It also supplies live tick data for intraday runs.'}{' '}
+        Real orders go out only for a strategy you’ve set to live, or a guardrail square-off you’ve
+        set to Live; everything else stays on paper.
       </p>
 
       {state.state === 'UNCONFIGURED' ? (
