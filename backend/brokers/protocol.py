@@ -19,7 +19,7 @@ from typing import Optional, Protocol
 
 from backend.auth.kite_session import KiteSessionState as BrokerSessionState
 from backend.components.shared.models import PriceCandle
-from backend.core.models import BrokerOrderStatus, Order, Position
+from backend.core.models import BrokerOrderStatus, BrokerTrade, Order, Position
 from backend.engine.protocols import DataFeed
 from backend.instruments.models import Instrument
 
@@ -77,4 +77,11 @@ class BrokerAdapter(Protocol):
         """This broker's own current-day position book, keyed by
         tradingsymbol -- the source of truth reconciliation
         (backend/routers/trading.py) merges into the local Portfolio."""
+        ...
+
+    async def get_trades(self) -> list[BrokerTrade]:
+        """Today's executions from this broker's trade book. Every supported
+        broker only exposes the current day here -- older history comes
+        from the daily journal sync having run on those days, or from a
+        CSV import (backend/journal/console_csv.py)."""
         ...

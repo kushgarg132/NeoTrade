@@ -21,6 +21,8 @@ from backend.engine.portfolio import Portfolio
 from backend.engine.session import IST
 from backend.instruments.master import InstrumentMaster
 from backend.options.resolver import STRIKE_INTERVALS, parse_underlying
+from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
+from backend.journal.sync import sync_user_trades
 from backend.prefs import PrefsStore
 from backend.suggestions.scan import scan_universe
 from backend.suggestions.store import SuggestionStore
@@ -83,16 +85,35 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
             await attach_theses(db, user_id, created)
             await _refresh_sentiment_for(created, redis)
 
+    journal_imported = await _sync_journals(db, redis)
+
     logger.info(
-        "daily pass: %d expired, %d option position(s) closed, %d verdict(s) refreshed, "
+        "daily pass: %d journal trade(s) imported, %d expired, %d option position(s) closed, %d verdict(s) refreshed, "
         "%d user(s) scanned, %d suggestion(s) created",
-        expired, options_closed, verdicts_refreshed, scanned_users, created_total,
+        journal_imported, expired, options_closed, verdicts_refreshed, scanned_users, created_total,
     )
     return {
         "expired": expired, "options_closed": options_closed,
         "verdicts_refreshed": verdicts_refreshed,
         "users": scanned_users, "created": created_total,
+        "journal_imported": journal_imported,
     }
+
+
+async def _sync_journals(db, redis) -> int:
+    """Every broker only serves today's trade book, so a day nobody syncs is
+    a day missing from the journal. 16:00 IST is after the close and before
+    any broker's token expiry (Angel One midnight, Upstox 03:30, Kite 06:00)."""
+    if redis is None:
+        return 0  # broker sessions live in Redis; nothing is connected without it
+    credentials = BrokerCredentialStore(db, fernet_from_settings())
+    total = 0
+    for user in await db["users"].find({}).to_list(length=None):
+        try:
+            total += (await sync_user_trades(db, redis, credentials, user["id"]))["imported"]
+        except Exception as exc:
+            logger.exception("journal sync failed for %s: %s", user["id"], exc)
+    return total
 
 
 async def _run_locked(db, redis) -> Optional[dict]:

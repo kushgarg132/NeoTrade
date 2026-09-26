@@ -18,6 +18,9 @@ orders/ + .../portfolio/, fetched live 2026-09-09):
   every other broker adapter in this codebase).
 - `positions()` -> {"net": [...], "day": [...]} directly (SDK unwraps the
   data envelope, same as KiteProvider.quote already relies on).
+- `trades()` -> list of today's fills: trade_id, order_id, exchange,
+  tradingsymbol, transaction_type, quantity, average_price, fill_timestamp
+  (the SDK parses 19-char timestamps into naive IST datetimes itself).
 
 Only MARKET orders are placed here -- LIMIT order price handling is out of
 scope (see docs/superpowers/specs/2026-09-09-live-equity-execution-design.md).
@@ -26,7 +29,8 @@ scope (see docs/superpowers/specs/2026-09-09-live-equity-execution-design.md).
 import asyncio
 from typing import Callable
 
-from backend.core.models import BrokerOrderStatus, Order, Position, Side
+from backend.brokers.trades import parse_ist
+from backend.core.models import BrokerOrderStatus, BrokerTrade, Order, Position, Side
 
 
 class KiteOrderClient:
@@ -84,3 +88,17 @@ class KiteOrderClient:
             )
             for row in data["net"]
         }
+
+    async def get_trades(self) -> list[BrokerTrade]:
+        kite = self._kite_client_factory()
+        rows = await asyncio.to_thread(kite.trades)
+        return [
+            BrokerTrade(
+                trade_id=str(row["trade_id"]), order_id=str(row.get("order_id", "")),
+                symbol=row["tradingsymbol"], exchange=row.get("exchange", "NSE"),
+                side=Side(row["transaction_type"]), quantity=float(row["quantity"]),
+                price=float(row["average_price"]),
+                traded_at=parse_ist(row.get("fill_timestamp") or row["exchange_timestamp"]),
+            )
+            for row in rows
+        ]

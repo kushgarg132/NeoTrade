@@ -38,6 +38,12 @@ Real API surface used:
 - Positions:   GET https://api.upstox.com/v2/portfolio/short-term-positions,
   Bearer auth -> {"data": [{"trading_symbol": "...", "quantity": ...,
   "average_price": ..., "unrealised": ..., "realised": ...}]}.
+- Trades:      GET https://api.upstox.com/v2/order/trades/get-trades-for-day,
+  Bearer auth -> {"data": [{"exchange", "tradingsymbol", "transaction_type",
+  "quantity", "order_id", "trade_id", "average_price", "exchange_timestamp",
+  ...}]} (field list verified against the official SDK's TradeData model,
+  2026-09-26; the timestamp's exact format is only documented as "user
+  readable", so brokers/trades.py accepts more than one).
 
 Because instrument_key (Upstox's actual query key) isn't ISIN data the
 shared Instrument model carries from other brokers' sources, quote()/
@@ -57,7 +63,8 @@ import httpx
 from backend.brokers.expiry import ttl_seconds_until
 from backend.brokers.protocol import BrokerSessionState
 from backend.components.shared.models import PriceCandle
-from backend.core.models import BrokerOrderStatus, Order, Position
+from backend.brokers.trades import parse_ist
+from backend.core.models import BrokerOrderStatus, BrokerTrade, Order, Position, Side
 from backend.instruments.models import Instrument
 
 _AUTHORIZE_URL = "https://api.upstox.com/v2/login/authorization/dialog"
@@ -69,6 +76,7 @@ _PLACE_ORDER_URL = "https://api-hft.upstox.com/v2/order/place"
 _CANCEL_ORDER_URL = "https://api-hft.upstox.com/v2/order/cancel"
 _ORDER_DETAILS_URL = "https://api.upstox.com/v2/order/details"
 _POSITIONS_URL = "https://api.upstox.com/v2/portfolio/short-term-positions"
+_TRADES_URL = "https://api.upstox.com/v2/order/trades/get-trades-for-day"
 
 _INTERVAL_MAP = {"1m": "1minute", "30m": "30minute", "1d": "day"}
 _PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825}
@@ -299,3 +307,20 @@ class UpstoxAdapter:
             )
             for row in resp.json()["data"]
         }
+
+    async def get_trades(self) -> list[BrokerTrade]:
+        token = await self.get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(_TRADES_URL, headers=self._headers(token))
+            resp.raise_for_status()
+
+        return [
+            BrokerTrade(
+                trade_id=str(row["trade_id"]), order_id=str(row.get("order_id") or ""),
+                symbol=row.get("tradingsymbol") or row["trading_symbol"],
+                exchange=row.get("exchange") or "NSE", side=Side(row["transaction_type"]),
+                quantity=float(row["quantity"]), price=float(row["average_price"]),
+                traded_at=parse_ist(row.get("exchange_timestamp") or row["order_timestamp"]),
+            )
+            for row in resp.json().get("data") or []
+        ]

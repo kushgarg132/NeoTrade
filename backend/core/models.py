@@ -151,3 +151,21 @@ class BrokerOrderStatus(BaseModel):
     status: LiveOrderState
     filled_quantity: float
     average_price: float
+
+
+class BrokerTrade(BaseModel):
+    """One execution from a broker's own trade book, normalized by whichever
+    BrokerAdapter fetched it (or the Console CSV importer). `traded_at` is
+    timezone-aware UTC -- every broker reports IST wall-clock, and the
+    adapter is where that gets pinned down, never downstream."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    trade_id: str
+    order_id: str = ""
+    symbol: str
+    exchange: str = "NSE"
+    side: Side
+    quantity: float
+    price: float
+    traded_at: datetime

@@ -10,7 +10,7 @@ from typing import Optional
 from backend.auth.kite_session import KiteSessionManager, KiteSessionState
 from backend.brokers.kite_orders import KiteOrderClient
 from backend.components.shared.models import PriceCandle
-from backend.core.models import BrokerOrderStatus, Order, Position
+from backend.core.models import BrokerOrderStatus, BrokerTrade, Order, Position
 from backend.data.feeds.live_kite import KiteTickerFeed
 from backend.data.providers.kite_provider import KiteProvider
 from backend.instruments.kite_source import KiteInstrumentSource
@@ -83,3 +83,7 @@ class KiteAdapter:
     async def get_positions(self) -> dict[str, Position]:
         token = await self.get_access_token()
         return await KiteOrderClient(self._client_factory(token)).get_positions()
+
+    async def get_trades(self) -> list[BrokerTrade]:
+        token = await self.get_access_token()
+        return await KiteOrderClient(self._client_factory(token)).get_trades()

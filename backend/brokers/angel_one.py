@@ -44,6 +44,11 @@ Real API surface used (root https://apiconnect.angelone.in):
 - Positions: GET /rest/secure/angelbroking/order/v1/getPosition ->
   {"status": true, "data": [{"tradingsymbol", "netqty", "avgnetprice",
   "pnl", ...}]}.
+- Trade Book: GET /rest/secure/angelbroking/order/v1/getTradeBook (the
+  SDK's `tradeBook()`, route "api.trade.book") -> {"status": true, "data":
+  [{"tradingsymbol", "exchange", "transactiontype", "fillsize",
+  "fillprice", "orderid", "fillid", "filltime", ...}]}. `filltime` is a bare
+  "HH:MM:SS" -- the book only ever holds today, so the date is today IST.
 - Every authenticated call needs: Authorization: Bearer {jwtToken},
   X-PrivateKey: {api key}, X-UserType: USER, X-SourceID: WEB,
   Content-type: application/json (the SDK also sends X-ClientLocalIP/
@@ -66,7 +71,8 @@ import httpx
 from backend.brokers.expiry import next_fixed_time_ist
 from backend.brokers.protocol import BrokerSessionState
 from backend.components.shared.models import PriceCandle
-from backend.core.models import BrokerOrderStatus, Order, Position
+from backend.brokers.trades import parse_ist, today_ist
+from backend.core.models import BrokerOrderStatus, BrokerTrade, Order, Position, Side
 from backend.instruments.models import Instrument
 
 _ROOT = "https://apiconnect.angelone.in"
@@ -78,6 +84,7 @@ _PLACE_ORDER_URL = f"{_ROOT}/rest/secure/angelbroking/order/v1/placeOrder"
 _CANCEL_ORDER_URL = f"{_ROOT}/rest/secure/angelbroking/order/v1/cancelOrder"
 _ORDER_BOOK_URL = f"{_ROOT}/rest/secure/angelbroking/order/v1/getOrderBook"
 _POSITIONS_URL = f"{_ROOT}/rest/secure/angelbroking/order/v1/getPosition"
+_TRADE_BOOK_URL = f"{_ROOT}/rest/secure/angelbroking/order/v1/getTradeBook"
 
 _INTERVAL_MAP = {"1m": "ONE_MINUTE", "1d": "ONE_DAY"}
 _PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825}
@@ -307,6 +314,25 @@ class AngelOneAdapter:
                 avg_price=float(row.get("avgnetprice", 0) or 0),
                 unrealized_pnl=float(row.get("pnl", 0) or 0),
             )
+        return result
+
+    async def get_trades(self) -> list[BrokerTrade]:
+        token = await self.get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(_TRADE_BOOK_URL, headers=self._headers(token))
+            resp.raise_for_status()
+
+        day = today_ist()
+        result = []
+        for row in resp.json().get("data") or []:
+            symbol = row["tradingsymbol"]
+            result.append(BrokerTrade(
+                trade_id=str(row["fillid"]), order_id=str(row.get("orderid") or ""),
+                symbol=symbol[:-3] if symbol.endswith("-EQ") else symbol,
+                exchange=row.get("exchange") or "NSE", side=Side(row["transactiontype"]),
+                quantity=float(row["fillsize"]), price=float(row["fillprice"]),
+                traded_at=parse_ist(row["filltime"], on_day=day),
+            ))
         return result
 
     async def instruments(self, exchanges: tuple[str, ...] = ("NSE",)) -> list[Instrument]:

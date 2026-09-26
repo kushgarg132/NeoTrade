@@ -16,6 +16,7 @@ from backend.configs.settings import settings
 from backend.runs import RunStore
 from backend.suggestions.store import SuggestionStore
 from backend.prefs import PrefsStore
+from backend.journal.store import JournalStore
 from backend import broadcast
 from backend import scheduler
 from backend.ws.hub import hub, handle_broadcast_event
@@ -91,6 +92,7 @@ async def startup_db_client():
 
     await SuggestionStore(db.db).ensure_indexes()
     await PrefsStore(db.db).ensure_indexes()
+    await JournalStore(db.db).ensure_indexes()
     await BrokerCredentialStore(db.db, fernet_from_settings()).ensure_indexes()
     await AppSettingsStore(db.db).load_into_cache()
 
@@ -141,6 +143,7 @@ from backend.routers import trading
 from backend.routers import suggestions
 from backend.routers import analytics
 from backend.routers import broker
+from backend.routers import journal
 
 app.include_router(market_data.router, prefix=settings.API_PREFIX, tags=["Market Data"], dependencies=[Depends(get_current_user)])
 app.include_router(watchlist.router, prefix=settings.API_PREFIX, tags=["Watchlist"], dependencies=[Depends(get_current_user)])
@@ -148,6 +151,7 @@ app.include_router(trading.router, prefix=settings.API_PREFIX, tags=["Trading"],
 app.include_router(suggestions.router, prefix=settings.API_PREFIX, tags=["Suggestions"], dependencies=[Depends(get_current_user)])
 app.include_router(analytics.router, prefix=settings.API_PREFIX, tags=["Analytics"], dependencies=[Depends(get_current_user)])
 app.include_router(broker.router, prefix=settings.API_PREFIX, tags=["Broker"], dependencies=[Depends(get_current_user)])
+app.include_router(journal.router, prefix=settings.API_PREFIX, tags=["Journal"], dependencies=[Depends(get_current_user)])
 
 # The socket authenticates its own handshake (see backend/ws/routes.py): the
 # HTTP bearer dependency cannot run on a WebSocket upgrade.
