@@ -14,15 +14,27 @@ to that closed range itself. Real intraday period limits on the actual
 yfinance API aren't exercised here since tests use a fake provider.
 """
 
+import asyncio
 import logging
-from datetime import datetime
-from typing import AsyncIterator
+from datetime import datetime, timezone
+from typing import AsyncIterator, Optional
 
 from backend.core.models import Bar
 from backend.data.protocols import MarketDataProvider
 from backend.instruments.models import Instrument
 
 logger = logging.getLogger(__name__)
+
+_MAX_CONCURRENT_FETCHES = 10
+# yfinance's fixed periods, smallest first, with the days each reaches back.
+_DAILY_PERIODS = [("1mo", 30), ("3mo", 91), ("6mo", 182), ("1y", 365), ("2y", 730), ("5y", 1826), ("10y", 3652)]
+
+
+def period_for(timeframe: str, start: datetime, now: datetime) -> str:
+    if timeframe != "1d":
+        return "max"
+    days_back = (_naive(now) - _naive(start)).days + 7  # a week of slack for holidays
+    return next((period for period, days in _DAILY_PERIODS if days >= days_back), "max")
 
 
 def _naive(dt: datetime) -> datetime:
@@ -37,8 +49,10 @@ class HistoricalFeed:
         start: datetime,
         end: datetime,
         timeframe: str,
+        now: Optional[datetime] = None,
     ) -> None:
         self._provider = provider
+        self._period = period_for(timeframe, start, now or datetime.now(timezone.utc))
         self._instruments = instruments
         self._start = start
         self._end = end
@@ -47,17 +61,23 @@ class HistoricalFeed:
             instrument.instrument_token: instrument.tradingsymbol for instrument in instruments
         }
 
-    async def __aiter__(self) -> AsyncIterator[Bar]:
-        bars: list[Bar] = []
-        for instrument in self._instruments:
-            # A real universe has 80+ symbols; yfinance returning nothing for
-            # one delisted/renamed one is routine, not exceptional -- it must
-            # not discard every other instrument's history in the same batch.
+    async def _candles(self, instrument: Instrument, semaphore: asyncio.Semaphore):
+        # A real universe has 80+ symbols; yfinance returning nothing for
+        # one delisted/renamed one is routine, not exceptional -- it must
+        # not discard every other instrument's history in the same batch.
+        async with semaphore:
             try:
-                candles = await self._provider.history(instrument, self._timeframe, "max")
+                return instrument, await self._provider.history(instrument, self._timeframe, self._period)
             except Exception as exc:
                 logger.warning("skipping %s: %s", instrument.tradingsymbol, exc)
-                continue
+                return instrument, []
+
+    async def __aiter__(self) -> AsyncIterator[Bar]:
+        semaphore = asyncio.Semaphore(_MAX_CONCURRENT_FETCHES)
+        fetched = await asyncio.gather(*(self._candles(i, semaphore) for i in self._instruments))
+
+        bars: list[Bar] = []
+        for instrument, candles in fetched:
             for candle in candles:
                 if not (_naive(self._start) <= _naive(candle.timestamp) <= _naive(self._end)):
                     continue
