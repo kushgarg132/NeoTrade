@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.auth.broker_credentials import BrokerCredentialStore, get_credential_store
-from backend.auth.dependency import get_current_user
+from backend.auth.dependency import get_current_user, require_admin
 from backend.auth.models import User
 from backend.database import db
+from backend.journal.beta import beta_metrics, record_open
 from backend.journal.console_csv import parse_console_tradebook
 from backend.journal.insights import build_insights
 from backend.journal.roundtrips import build_round_trips, daily_pnl
@@ -38,6 +39,7 @@ class NoteRequest(BaseModel):
 async def get_journal(
     user: User = Depends(get_current_user), store: JournalStore = Depends(get_journal_store),
 ):
+    await record_open(db.db, user.id)
     trips = build_round_trips(await store.list_trades(user.id))
     notes = await store.notes_for(user.id)
     for trip in trips:
@@ -88,3 +90,9 @@ async def set_round_trip_note(
     tags = sorted({t.strip().lower() for t in body.tags if t.strip()})
     await store.set_note(user.id, round_trip_id, body.note.strip(), tags)
     return {"note": body.note.strip(), "tags": tags}
+
+
+@router.get("/beta-metrics")
+async def get_beta_metrics(_admin: User = Depends(require_admin)):
+    """Phase 12: is anyone coming back? Admin only -- it counts every user."""
+    return await beta_metrics(db.db)
