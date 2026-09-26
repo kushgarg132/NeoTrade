@@ -14,7 +14,12 @@ and every user. The same run also fills `sentiment:{symbol}`, the cache the
 engine and scan read for the AI half of conviction.
 
 Sentiment is an impact- and recency-weighted average over *relevant* articles
-only. Irrelevant articles, and any the classifier did not return a valid
+only: weight = impact**2 * 0.5**(age_days / 30). Squared impact so a major
+event (an earnings miss, impact 8) outweighs a minor piece (impact 4); a
+30-day half-life because news on Indian mid-caps arrives weeks apart. A
+3-day half-life was tried first and let one fresh promotional article
+outvote a two-month-old 23% profit drop (Tata Elxsi, 2026-09-26: +0.60 vs
+the report's own "Bearish"; this weighting gives -0.25). Irrelevant articles, and any the classifier did not return a valid
 score for, are left out rather than counted as 0 -- counting them dragged
 every stock's sentiment toward neutral.
 """
@@ -35,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 NEWS_LIMIT = 5
 CACHE_TTL_SECONDS = 4 * 60 * 60
-RECENCY_HALF_LIFE_DAYS = 3.0
+RECENCY_HALF_LIFE_DAYS = 30.0
 THESIS_MARKER = "===THESIS==="
 
 
@@ -101,7 +106,7 @@ def _weighted_sentiment(scored: List[tuple[NewsArticle, _ArticleScore]], now: da
         if published.tzinfo is None:
             published = published.replace(tzinfo=timezone.utc)
         age_days = max(0.0, (now - published).total_seconds() / 86400)
-        weight = max(score.impact, 1) * 0.5 ** (age_days / RECENCY_HALF_LIFE_DAYS)
+        weight = max(score.impact, 1) ** 2 * 0.5 ** (age_days / RECENCY_HALF_LIFE_DAYS)
         total += weight * score.score
         weight_sum += weight
     return total / weight_sum if weight_sum else 0.0

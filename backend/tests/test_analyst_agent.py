@@ -58,8 +58,8 @@ async def test_two_calls_relevant_only_weighted_sentiment_and_split_report(wired
     out = await AnalystAgent().analyze({"symbol": "SBIN"})
 
     assert llm.await_count == 2
-    # (8 * 0.8 + 2 * -0.4) / (8 + 2); the irrelevant article is not a 0 in the average.
-    assert out["sentiment_score"] == pytest.approx(0.56)
+    # (64 * 0.8 + 4 * -0.4) / (64 + 4); the irrelevant article is not a 0 in the average.
+    assert out["sentiment_score"] == pytest.approx(49.6 / 68)
     assert out["sentiment_analysis"]["relevant_count"] == 2
     assert out["sentiment_analysis"]["article_count"] == 3
     assert out["sentiment_analysis"]["label"] == "bullish"
@@ -77,7 +77,7 @@ async def test_result_is_cached_and_feeds_the_engine_sentiment_cache(wired):
 
     assert llm.await_count == 2  # the second analysis made no calls
     assert second == first
-    assert float(redis.store["sentiment:SBIN"]) == pytest.approx(0.56)
+    assert float(redis.store["sentiment:SBIN"]) == pytest.approx(49.6 / 68)
 
 
 async def test_invalid_json_is_retried_once(monkeypatch, wired):
@@ -108,6 +108,18 @@ async def test_no_news_makes_no_llm_call_and_is_not_cached(monkeypatch, wired):
 
 def test_older_news_counts_for_less():
     fresh = (_article("new"), _ArticleScore(index=0, is_relevant=True, score=1.0, impact=5))
-    old = (_article("old", age_days=3), _ArticleScore(index=1, is_relevant=True, score=-1.0, impact=5))
-    # Weights 5 and 2.5 (one half-life): (5 - 2.5) / 7.5
+    old = (_article("old", age_days=30), _ArticleScore(index=1, is_relevant=True, score=-1.0, impact=5))
+    # Weights 25 and 12.5 (one 30-day half-life): (25 - 12.5) / 37.5
     assert _weighted_sentiment([fresh, old], NOW) == pytest.approx(1 / 3, abs=1e-3)
+
+
+def test_a_big_older_earnings_miss_outweighs_a_fresh_minor_puff_piece():
+    """The real Tata Elxsi case (2026-09-26) that a 3-day half-life got
+    wrong: it scored +0.60 while the written report said Bearish."""
+    scored = [
+        (_article("Fundamentals behind gain", age_days=11), _ArticleScore(index=0, is_relevant=True, score=0.6, impact=4)),
+        (_article("Shares slide 6% after weak Q1", age_days=73), _ArticleScore(index=1, is_relevant=True, score=-0.7, impact=7)),
+        (_article("Five-year low after PAT -23%", age_days=73), _ArticleScore(index=2, is_relevant=True, score=-0.8, impact=8)),
+        (_article("Ex-dividend in three days", age_days=112), _ArticleScore(index=3, is_relevant=True, score=0.0, impact=2)),
+    ]
+    assert _weighted_sentiment(scored, NOW) < -0.15  # bearish, like the report
