@@ -21,7 +21,7 @@ where to start — nothing else in this repo tracks it.
 | 9 | Trade journal MVP | 8 | **done 2026-09-26** (live broker sync unverified, see phase notes) |
 | 10 | Behaviour insights | 9 | **done 2026-09-26** |
 | 11 | Guardrails (loss cap, trade count, cooldown) | 9 | **done 2026-09-26** (alerts only; auto square-off deferred) |
-| 12 | Free beta, 20–50 real traders | 9, 10, 11 | not started |
+| 12 | Free beta, 20–50 real traders | 9, 10, 11 | **in progress** — tooling done 2026-09-26, recruiting not started |
 | 13 | Billing + real domain | 12 | not started |
 
 Two orderings are not negotiable: **Phase 3 before Phase 5** (no real order may be
@@ -632,6 +632,24 @@ works on paper before it is ever enabled live.
 Not code. Recruit 20–50 traders (r/IndianStreetBets, r/IndiaInvestments, fintwit, Telegram
 groups). Track weekly-active users and whether people open the journal after a losing day.
 If they don't come back weekly, fix the product before building Phase 13.
+
+### Tooling landed 2026-09-26
+
+- `backend/journal/beta.py`: every `GET /journal` records one `journal_opens` document per
+  user per IST day. `GET /journal/beta-metrics` (admin only) returns sign-ups, users with
+  trades, weekly active, how many of last week's active users came back, guardrails on,
+  Telegram linked, and losing days followed by a journal visit within 3 days. Settings shows
+  it to admins as the "Beta" sheet.
+- The login page now says what the product does (journal, patterns, guardrails) and that
+  it is not advice and holds no money. The old "paper trading only" line was stale.
+
+### Onboarding friction to know before recruiting
+
+- **Broker API keys are per user.** Connecting Kite, Upstox or Angel One means each trader
+  creating their own developer app and pasting its key into Settings. Most won't. The
+  Zerodha Console CSV import is the realistic first step for a beta user; lead with it.
+- **Google sign-in** only lets in listed test users while the OAuth consent screen is in
+  "Testing" mode. Check it is published before inviting strangers.
 
 ## Phase 13 — Billing + real domain
 
