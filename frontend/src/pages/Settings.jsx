@@ -613,11 +613,165 @@ const ModelSheet = () => {
   );
 };
 
+/* -------------------------------------------------------------------------- */
+/* Guardrails                                                                 */
+/* -------------------------------------------------------------------------- */
+
+const GUARD_FIELDS = ['max_trades_per_day', 'cooldown_after_losses', 'cooldown_minutes'];
+
+const GuardrailsSheet = () => {
+  const [prefs, setPrefs] = useState(null);
+  const [draft, setDraft] = useState({});
+  const [telegram, setTelegram] = useState(null);
+  const [linkUrl, setLinkUrl] = useState(null);
+  const [note, setNote] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api
+      .get(endpoints.settings.preferences)
+      .then((res) => {
+        setPrefs(res.data);
+        setDraft(Object.fromEntries(GUARD_FIELDS.map((key) => [key, res.data[key]])));
+      })
+      .catch(() => setPrefs(null));
+    api
+      .get(endpoints.guardrails.status)
+      .then((res) => setTelegram(res.data.telegram))
+      .catch(() => setTelegram(null));
+  }, []);
+
+  const save = (patch) => api.put(endpoints.settings.preferences, patch).then((res) => setPrefs(res.data));
+
+  const act = (request, onDone) => {
+    setBusy(true);
+    setNote(null);
+    request()
+      .then(onDone)
+      .catch((err) => setNote(err?.response?.data?.detail || 'That did not work'))
+      .finally(() => setBusy(false));
+  };
+
+  if (!prefs) {
+    return (
+      <Sheet title="Guardrails">
+        <Ruling rows={3} />
+      </Sheet>
+    );
+  }
+
+  const numberRow = (key, label, hint) => (
+    <Row label={label} hint={hint}>
+      <NumberField
+        value={draft[key]}
+        onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
+        onCommit={() => save({ [key]: Math.max(0, Math.round(Number(draft[key]) || 0)) })}
+      />
+    </Row>
+  );
+
+  return (
+    <Sheet title="Guardrails" meta={prefs.guardrails_enabled ? 'Watching' : 'Off'}>
+      <p className="doc-meta normal-case pb-3 border-b border-[var(--rule)]">
+        Limits you set for yourself. NeoTrade checks them against your broker every minute during the
+        session and alerts you when one is crossed. It cannot stop an order you place in your broker's
+        own app.
+      </p>
+
+      <Row label="Watch my broker" hint="Checks every connected broker from 09:15 to 15:35 IST.">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={prefs.guardrails_enabled}
+          onClick={() => save({ guardrails_enabled: !prefs.guardrails_enabled })}
+          className={cn(
+            'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
+            prefs.guardrails_enabled
+              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
+              : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
+          )}
+        >
+          {prefs.guardrails_enabled ? 'On' : 'Off'}
+        </button>
+      </Row>
+
+      <Row
+        label="Daily loss limit"
+        hint="The limit from Mandate above, checked against your broker's own day P&L. Reaching it also halts the engine for the day."
+      >
+        <span className="figure-md text-sm">{formatCurrency(prefs.daily_loss_limit)}</span>
+      </Row>
+
+      {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this. 0 is off.')}
+      {numberRow('cooldown_after_losses', 'Cooldown after losses in a row', 'Start a cooldown after this many losses in a row. 0 is off.')}
+      {numberRow('cooldown_minutes', 'Cooldown length, minutes', 'Any trade opened inside it is flagged.')}
+
+      <Row
+        label="Telegram alerts"
+        hint={
+          telegram?.configured === false
+            ? 'Not set up on this server yet. Alerts still appear in the app.'
+            : 'Alerts arrive on your phone even when the app is closed.'
+        }
+      >
+        {telegram?.configured &&
+          (telegram.linked ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                act(() => api.delete(endpoints.guardrails.telegram), () =>
+                  setTelegram((t) => ({ ...t, linked: false }))
+                )
+              }
+            >
+              Unlink
+            </Button>
+          ) : linkUrl ? (
+            <div className="flex gap-2">
+              <a href={linkUrl} target="_blank" rel="noreferrer">
+                <Button variant="secondary" size="sm">
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Open Telegram
+                </Button>
+              </a>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  act(() => api.post(endpoints.guardrails.verify), () => {
+                    setLinkUrl(null);
+                    setTelegram((t) => ({ ...t, linked: true }));
+                  })
+                }
+              >
+                I tapped Start
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={busy}
+              onClick={() => act(() => api.post(endpoints.guardrails.link), (res) => setLinkUrl(res.data.url))}
+            >
+              Link Telegram
+            </Button>
+          ))}
+      </Row>
+      {note && <p className="doc-meta normal-case pt-2">{note}</p>}
+    </Sheet>
+  );
+};
+
 const Settings = () => (
   <Layout>
     <div className="space-y-4 max-w-3xl">
       <BrokerSheet />
       <MandateSheet />
+      <GuardrailsSheet />
       <ModelSheet />
     </div>
   </Layout>

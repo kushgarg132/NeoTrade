@@ -149,6 +149,12 @@ export const endpoints = {
   analytics: {
     pnl: '/analytics/pnl',
   },
+  guardrails: {
+    status: '/guardrails',
+    link: '/guardrails/telegram/link',
+    verify: '/guardrails/telegram/verify',
+    telegram: '/guardrails/telegram',
+  },
   journal: {
     get: '/journal',
     sync: '/journal/sync',

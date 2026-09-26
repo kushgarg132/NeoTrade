@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
+import { useTopic } from '../hooks/useStream';
 import { cn } from '../utils/cn';
 import {
   formatCurrency,
@@ -168,6 +169,15 @@ const Journal = () => {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const fileInput = useRef(null);
+  const [alerts, setAlerts] = useState([]);
+
+  useEffect(() => {
+    api
+      .get(endpoints.guardrails.status)
+      .then((res) => setAlerts(res.data.events))
+      .catch(() => setAlerts([]));
+  }, []);
+  useTopic('guardrails', (message) => setAlerts((current) => [...current, message.data]));
 
   const load = () =>
     api
@@ -280,6 +290,19 @@ const Journal = () => {
   return (
     <Layout>
       <div className="space-y-4">
+        {alerts.length > 0 && (
+          <Sheet title="Guardrails today" meta={`${alerts.length} alert${alerts.length === 1 ? '' : 's'}`}>
+            <ul role="status">
+              {alerts.map((alert) => (
+                <li key={alert.key} className="py-2 border-b border-[var(--rule)] last:border-b-0">
+                  <p className="text-sm text-[var(--ink)]">{alert.title}</p>
+                  <p className="doc-meta normal-case mt-1">{alert.detail}</p>
+                </li>
+              ))}
+            </ul>
+          </Sheet>
+        )}
+
         <Sheet
           title="Journal"
           meta={summary ? `${summary.trips} closed` : undefined}
