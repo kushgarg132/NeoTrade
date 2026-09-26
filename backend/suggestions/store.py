@@ -122,10 +122,19 @@ class SuggestionStore:
         await hub.publish(user_id, "suggestions", "decided", decided)
         return decided
 
-    async def attach_thesis(self, user_id: str, suggestion_id: str, thesis: str) -> None:
-        await self.collection.update_one(
-            {"user_id": user_id, "id": suggestion_id}, {"$set": {"ai_thesis": thesis}}
-        )
+    async def attach_thesis(
+        self, user_id: str, suggestion_id: str, thesis: Optional[str], score: Optional[dict] = None,
+    ) -> None:
+        """`score` replaces the stored one when research produced a real
+        sentiment reading (backend/suggestions/thesis.py)."""
+        changes = {}
+        if thesis:
+            changes["ai_thesis"] = thesis
+        if score:
+            changes["score"] = score
+        if not changes:
+            return
+        await self.collection.update_one({"user_id": user_id, "id": suggestion_id}, {"$set": changes})
         await hub.publish(user_id, "suggestions", "enriched", await self.get(user_id, suggestion_id))
 
     async def expire_stale(self, now: Optional[datetime] = None) -> int:
