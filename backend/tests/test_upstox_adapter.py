@@ -31,6 +31,7 @@ import pytest
 
 from backend.brokers.protocol import BrokerSessionState
 from backend.brokers.upstox import UpstoxAdapter
+from backend.data.feeds.live_upstox import UpstoxMarketFeed
 from backend.instruments.models import Instrument
 
 
@@ -196,11 +197,33 @@ async def test_instruments_parses_the_gzip_scrip_master(monkeypatch):
     assert result[0].instrument_token == 2885
 
 
-async def test_ticker_feed_is_not_supported_yet():
-    """Upstox streaming isn't implemented in this pass -- callers fall back
-    to polling, which is a real and already-working path, not a broken one."""
+async def test_ticker_feed_is_none_without_a_session():
     adapter = _adapter()
-    assert await adapter.ticker_feed([2885], timeframe="5m", timeframe_seconds=300.0) is None
+    assert await adapter.ticker_feed([_instrument()], timeframe="5m", timeframe_seconds=300.0) is None
+
+
+async def test_ticker_feed_subscribes_by_instrument_key_and_keeps_the_app_token():
+    redis = _redis()
+    await redis.set("broker:alice:upstox:access_token", "up-tok")
+    adapter = _adapter(redis)
+    adapter._scrip_cache["NSE"] = {"RELIANCE": {"instrument_key": "NSE_EQ|INE002A01018"}}
+
+    feed = await adapter.ticker_feed(
+        [_instrument(), _instrument("NOSUCH")], timeframe="5m", timeframe_seconds=300.0,
+    )
+
+    assert isinstance(feed, UpstoxMarketFeed)
+    assert feed._token_for_key == {"NSE_EQ|INE002A01018": 16927}
+    assert feed._access_token == "up-tok"
+
+
+async def test_ticker_feed_is_none_when_nothing_resolves():
+    redis = _redis()
+    await redis.set("broker:alice:upstox:access_token", "up-tok")
+    adapter = _adapter(redis)
+    adapter._scrip_cache["NSE"] = {}
+
+    assert await adapter.ticker_feed([_instrument()], timeframe="5m", timeframe_seconds=300.0) is None
 
 
 async def test_disconnect_clears_the_cached_token():

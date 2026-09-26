@@ -35,6 +35,8 @@ Real API surface used:
   Bearer auth -> {"status": "success", "data": {"order_id": "..."}}.
 - Order Status: GET https://api.upstox.com/v2/order/details?order_id={order_id},
   Bearer auth -> {"data": {"status": "...", "filled_quantity": ..., "average_price": ...}}.
+- Market feed: wss://api.upstox.com/v3/feed/market-data-feed, protobuf
+  frames -- see backend/data/feeds/live_upstox.py.
 - Positions:   GET https://api.upstox.com/v2/portfolio/short-term-positions,
   Bearer auth -> {"data": [{"trading_symbol": "...", "quantity": ...,
   "average_price": ..., "unrealised": ..., "realised": ...}]}.
@@ -55,6 +57,7 @@ the key Upstox's REST API actually accepts).
 
 import gzip
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -65,6 +68,7 @@ from backend.brokers.protocol import BrokerSessionState
 from backend.components.shared.models import PriceCandle
 from backend.brokers.trades import parse_ist
 from backend.core.models import BrokerOrderStatus, BrokerTrade, Order, Position, Side
+from backend.data.feeds.live_upstox import UpstoxMarketFeed
 from backend.instruments.models import Instrument
 
 _AUTHORIZE_URL = "https://api.upstox.com/v2/login/authorization/dialog"
@@ -82,6 +86,8 @@ _INTERVAL_MAP = {"1m": "1minute", "30m": "30minute", "1d": "day"}
 _PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825}
 _PRODUCT_MAP = {"MIS": "I", "CNC": "D"}
 _PRODUCT_FROM_UPSTOX = {v: k for k, v in _PRODUCT_MAP.items()}
+
+logger = logging.getLogger(__name__)
 
 
 class UpstoxAdapter:
@@ -227,11 +233,27 @@ class UpstoxAdapter:
                 ))
         return result
 
-    async def ticker_feed(self, instrument_tokens, timeframe, timeframe_seconds):
-        # Upstox does offer a WebSocket feed, but wiring its (protobuf-framed)
-        # binary protocol is out of scope for this pass -- callers fall back
-        # to polling, exactly as when no broker is connected at all.
-        return None
+    async def ticker_feed(self, instruments, timeframe, timeframe_seconds):
+        token = await self.get_access_token()
+        if not self._api_key or not self._api_secret or not token:
+            return None
+
+        # The feed subscribes by instrument_key; bars go out under each
+        # instrument's own instrument_token, whatever source it came from.
+        token_for_key = {}
+        for instrument in instruments:
+            try:
+                row = await self._resolve(instrument)
+            except ValueError as exc:
+                logger.warning("upstox feed: skipping %s", exc)
+                continue
+            token_for_key[row["instrument_key"]] = instrument.instrument_token
+        if not token_for_key:
+            return None
+
+        return UpstoxMarketFeed(
+            token, token_for_key, timeframe=timeframe, timeframe_seconds=timeframe_seconds,
+        )
 
     @staticmethod
     def _map_status(raw_status: str) -> str:

@@ -193,7 +193,7 @@ async def test_instruments_parses_the_scrip_master_and_strips_the_eq_suffix(monk
 
 async def test_ticker_feed_is_not_supported_yet():
     adapter = _adapter()
-    assert await adapter.ticker_feed([2885], timeframe="5m", timeframe_seconds=300.0) is None
+    assert await adapter.ticker_feed([], timeframe="5m", timeframe_seconds=300.0) is None
 
 
 async def test_disconnect_clears_the_cached_token():

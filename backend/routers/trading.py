@@ -126,18 +126,17 @@ async def build_feed(instruments, mode: str, poll_interval_seconds: float, user_
     a daily one, where a poll of the current quote is both sufficient and
     available without a broker login. Tries the user's connected brokers in
     a fixed order and uses the first that both is ACTIVE and supports
-    streaming (only Kite does, today) -- BROKERS order in the registry, not
+    streaming (Kite and Upstox do; Angel One doesn't yet) -- BROKERS order in the registry, not
     hardcoded here, is what a fourth streaming-capable broker would join.
     """
     if mode == "INTRADAY":
-        tokens = [i.instrument_token for i in instruments]
         for broker in BROKERS:
             adapter = await get_broker_adapter(broker, user_id, credentials, db.redis)
             if await adapter.state() != BrokerSessionState.ACTIVE:
                 continue
-            feed = await adapter.ticker_feed(tokens, timeframe="5m", timeframe_seconds=300.0)
+            feed = await adapter.ticker_feed(instruments, timeframe="5m", timeframe_seconds=300.0)
             if feed is not None:
-                logger.info("using live %s ticks for %d instrument(s)", broker, len(tokens))
+                logger.info("using live %s ticks for %d instrument(s)", broker, len(instruments))
                 return feed
 
     return PollingLiveFeed(

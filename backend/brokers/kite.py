@@ -55,7 +55,7 @@ class KiteAdapter:
         return await KiteInstrumentSource(self._client_factory(token), exchanges=exchanges).fetch()
 
     async def ticker_feed(
-        self, instrument_tokens: list[int], timeframe: str, timeframe_seconds: float
+        self, instruments: list[Instrument], timeframe: str, timeframe_seconds: float
     ) -> Optional[KiteTickerFeed]:
         if await self.state() != KiteSessionState.ACTIVE:
             return None
@@ -65,7 +65,7 @@ class KiteAdapter:
         token = await self.get_access_token()
         return KiteTickerFeed(
             lambda: KiteTicker(api_key=self._api_key, access_token=token),
-            instrument_tokens, timeframe=timeframe, timeframe_seconds=timeframe_seconds,
+            [i.instrument_token for i in instruments], timeframe=timeframe, timeframe_seconds=timeframe_seconds,
         )
 
     async def place_order(self, order: Order) -> str:
