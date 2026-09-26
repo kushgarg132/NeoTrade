@@ -1,12 +1,17 @@
 """Ported from backend/components/quant/strategies.py::TechnicalBreakout.
 Same logic, thresholds, and stop/target formulas -- structural port onto the
-Strategy protocol, not a redesign."""
+Strategy protocol, not a redesign.
+
+Strength is graded 0.55..0.95 (was a flat 0.8): how far volume exceeds the
+1.5x confirmation (full at 3x), how decisively price cleared resistance
+(full at 1 ATR above), and whether the 200-day trend is up."""
 
 from backend.components.quant.indicators import Indicators
 from backend.components.quant.support import SupportResistance
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
+from backend.strategies.strength import graded, ramp, sma
 
 
 class TechnicalBreakoutStrategy(TokenResolvingStrategy):
@@ -49,8 +54,15 @@ class TechnicalBreakoutStrategy(TokenResolvingStrategy):
         if df["volume"].iloc[-1] <= 1.5 * avg_vol:
             return
 
+        sma_200 = sma([b.close for b in ctx.history(symbol, 200)], 200)
+        strength = graded(
+            0.55, 0.95,
+            ramp(df["volume"].iloc[-1] / avg_vol, 1.5, 3.0),
+            ramp((current_price - resistance) / df["atr_14"].iloc[-1], 0.0, 1.0),
+            ramp(None if sma_200 is None else current_price - sma_200, 0.0, 0.0),
+        )
         ctx.submit(Intent(
-            symbol=symbol, side=Side.BUY, strength=0.8,
+            symbol=symbol, side=Side.BUY, strength=strength,
             reason_codes=["breakout_above_resistance_with_volume"],
             stop_hint=resistance * 0.98,  # stop below the breakout level
             target_hint=current_price + (current_price - resistance) * 2,  # 2R target

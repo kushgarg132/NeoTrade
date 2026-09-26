@@ -6,12 +6,18 @@ Note: the original's target formula checked for a `sma_20` column that
 sma_200), so that branch was always dead code and the target always fell
 back to `current_price * 1.05`. Ported as the fallback directly rather than
 carrying forward a check that can never be true.
+
+Strength is graded 0.5..0.9 (was a flat 0.7): how oversold RSI is (full at
+15), how far price is stretched below the lower band (full at 1 ATR), and
+whether the 200-day trend is still up -- a dip in an uptrend reverts more
+reliably than a fall in a downtrend.
 """
 
 from backend.components.quant.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
+from backend.strategies.strength import graded, ramp, sma
 
 
 class MeanReversionStrategy(TokenResolvingStrategy):
@@ -40,8 +46,15 @@ class MeanReversionStrategy(TokenResolvingStrategy):
         if not (rsi < 30 and current_price < lower_band):
             return
 
+        sma_200 = sma([b.close for b in ctx.history(symbol, 200)], 200)
+        strength = graded(
+            0.5, 0.9,
+            ramp(30 - rsi, 0.0, 15.0),
+            ramp((lower_band - current_price) / df["atr_14"].iloc[-1], 0.0, 1.0),
+            ramp(None if sma_200 is None else current_price - sma_200, 0.0, 0.0),
+        )
         ctx.submit(Intent(
-            symbol=symbol, side=Side.BUY, strength=0.7,
+            symbol=symbol, side=Side.BUY, strength=strength,
             reason_codes=["oversold_rsi_below_lower_band"],
             stop_hint=current_price * 0.95,
             target_hint=current_price * 1.05,

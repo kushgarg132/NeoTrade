@@ -1,10 +1,15 @@
 """Ported from backend/components/quant/strategies.py::MACDCrossover. Same
-logic and thresholds -- structural port, not a redesign."""
+logic and thresholds -- structural port, not a redesign.
+
+Strength is graded 0.5..0.9 (was a flat 0.75): whether the crossover agrees
+with the 200-day trend, how much momentum the histogram already has (full
+at 0.25 ATR), and how much room RSI has before overbought/oversold."""
 
 from backend.components.quant.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
+from backend.strategies.strength import graded, ramp, sma
 
 
 class MACDCrossoverStrategy(TokenResolvingStrategy):
@@ -29,16 +34,33 @@ class MACDCrossoverStrategy(TokenResolvingStrategy):
         curr_hist = df["macd_hist"].iloc[-1]
         prev_hist = df["macd_hist"].iloc[-2]
 
+        sma_200 = sma([b.close for b in ctx.history(symbol, 200)], 200)
+        trend = None if sma_200 is None else current_price - sma_200
+        atr = df["atr_14"].iloc[-1]
+        rsi = df["rsi_14"].iloc[-1]
+
         if prev_hist < 0 and curr_hist > 0:
+            strength = graded(
+                0.5, 0.9,
+                ramp(trend, 0.0, 0.0),
+                ramp(curr_hist / atr, 0.0, 0.25),
+                ramp(70 - rsi, 0.0, 20.0),
+            )
             ctx.submit(Intent(
-                symbol=symbol, side=Side.BUY, strength=0.75,
+                symbol=symbol, side=Side.BUY, strength=strength,
                 reason_codes=["macd_bullish_crossover"],
                 stop_hint=current_price * 0.97,
                 target_hint=current_price * 1.06,
             ))
         elif prev_hist > 0 and curr_hist < 0:
+            strength = graded(
+                0.5, 0.9,
+                ramp(None if trend is None else -trend, 0.0, 0.0),
+                ramp(-curr_hist / atr, 0.0, 0.25),
+                ramp(rsi - 30, 0.0, 20.0),
+            )
             ctx.submit(Intent(
-                symbol=symbol, side=Side.SELL, strength=0.75,
+                symbol=symbol, side=Side.SELL, strength=strength,
                 reason_codes=["macd_bearish_crossover"],
                 stop_hint=current_price * 1.03,
                 target_hint=current_price * 0.94,

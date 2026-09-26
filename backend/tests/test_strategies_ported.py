@@ -90,7 +90,7 @@ def test_breakout_strategy_emits_buy_intent():
     intent = intents[0]
     assert intent.symbol == SYMBOL
     assert intent.side == Side.BUY
-    assert intent.strength == 0.8
+    assert 0.55 <= intent.strength <= 0.95  # graded, was a flat 0.8
     assert intent.reason_codes == ["breakout_above_resistance_with_volume"]
     assert intent.stop_hint is not None
     assert intent.target_hint is not None
@@ -121,7 +121,7 @@ def test_mean_reversion_strategy_emits_buy_intent():
     intent = intents[0]
     assert intent.symbol == SYMBOL
     assert intent.side == Side.BUY
-    assert intent.strength == 0.7
+    assert 0.5 <= intent.strength <= 0.9  # graded, was a flat 0.7
     assert intent.reason_codes == ["oversold_rsi_below_lower_band"]
 
 
@@ -187,7 +187,7 @@ def test_macd_crossover_strategy_emits_bullish_buy_intent():
     intent = intents[0]
     assert intent.symbol == SYMBOL
     assert intent.side == Side.BUY
-    assert intent.strength == 0.75
+    assert 0.5 <= intent.strength <= 0.9  # graded, was a flat 0.75
     assert intent.reason_codes == ["macd_bullish_crossover"]
 
 
@@ -203,7 +203,7 @@ def test_macd_crossover_strategy_emits_bearish_sell_intent():
     assert len(intents) == 1
     intent = intents[0]
     assert intent.side == Side.SELL
-    assert intent.strength == 0.75
+    assert 0.5 <= intent.strength <= 0.9  # graded, was a flat 0.75
     assert intent.reason_codes == ["macd_bearish_crossover"]
 
 
