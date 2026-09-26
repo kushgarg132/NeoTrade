@@ -53,6 +53,12 @@ const SentimentPanel = ({ score, summary, sentiment, thesis }) => {
           <span className="text-[var(--ink-soft)]">
             Articles read{' '}
             <span className="figure-md text-[var(--ink)]">{sentiment.article_count || 0}</span>
+            {sentiment.relevant_count != null && (
+              <>
+                {' · relevant '}
+                <span className="figure-md text-[var(--ink)]">{sentiment.relevant_count}</span>
+              </>
+            )}
           </span>
           <span className="text-[var(--ink-soft)]">
             Impact{' '}
