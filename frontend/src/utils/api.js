@@ -160,6 +160,7 @@ export const endpoints = {
     sync: '/journal/sync',
     importConsole: '/journal/import/zerodha-console',
     note: (id) => `/journal/round-trips/${encodeURIComponent(id)}/note`,
+    betaMetrics: '/journal/beta-metrics',
   },
   broker: {
     list: '/broker/list',

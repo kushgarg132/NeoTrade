@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/useTheme';
 import { formatNoteDate } from '../utils/formatters';
 
-/** The cover sheet: the note's head, unfilled, waiting to be issued to someone. */
+/** The cover sheet: what NeoTrade does for a trader, then Google sign-in. */
 const Login = () => {
   const { login } = useAuth();
   const { theme } = useTheme();
@@ -32,16 +32,18 @@ const Login = () => {
         </div>
 
         <div className="px-6 py-8">
-          <dl className="space-y-3 mb-8">
+          <p className="text-sm text-[var(--ink)] mb-5">
+            A journal and guardrails for your own trading, on top of the broker you already use.
+          </p>
+          <dl className="space-y-4 mb-8">
             {[
-              ['Issued to', '—'],
-              ['Account', '—'],
-              ['Status', 'Unissued'],
+              ['Journal', 'Every trade from Zerodha, Upstox or Angel One, imported for you, on a calendar of daily P&L.'],
+              ['Patterns', 'Where your money actually goes: time of day, trading after losses, sizing up, holding losers.'],
+              ['Guardrails', 'Your own loss limit, trade cap and cooldown, checked every minute, alerted on your phone.'],
             ].map(([label, value]) => (
-              <div key={label} className="flex items-baseline justify-between gap-4">
+              <div key={label}>
                 <dt className="field-label">{label}</dt>
-                <dd className="flex-1 border-b border-dotted border-[var(--rule)] mx-2" aria-hidden="true" />
-                <dd className="figure-md text-sm text-[var(--ink-faint)]">{value}</dd>
+                <dd className="text-sm text-[var(--ink-soft)] mt-0.5">{value}</dd>
               </div>
             ))}
           </dl>
@@ -67,7 +69,7 @@ const Login = () => {
         </div>
 
         <p className="px-6 py-3 border-t border-[var(--rule)] doc-meta text-center normal-case">
-          Paper trading only. No real orders are placed.
+          Free while in beta. Not investment advice. NeoTrade never holds your money.
         </p>
       </div>
     </div>
