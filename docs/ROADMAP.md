@@ -17,6 +17,12 @@ where to start — nothing else in this repo tracks it.
 | 5 | Live execution + F&O | 1, 2, 3 | **5a (equity) done 2026-09-10**, **5b (CSP plumbing) done 2026-09-11** |
 | 6 | Revive the long-term agent engine | — | **done 2026-09-11** |
 | 7 | Multi-worker readiness | — | **done 2026-09-14** |
+| 8 | Reposition as the discipline layer (docs) | — | **done 2026-09-26** |
+| 9 | Trade journal MVP | 8 | not started |
+| 10 | Behaviour insights | 9 | not started |
+| 11 | Guardrails (loss cap, trade count, cooldown) | 9 | not started |
+| 12 | Free beta, 20–50 real traders | 9, 10, 11 | not started |
+| 13 | Billing + real domain | 12 | not started |
 
 Two orderings are not negotiable: **Phase 3 before Phase 5** (no real order may be
 placeable before the kill-switch and the gate exist), and **Phase 1 before anything that
@@ -492,3 +498,67 @@ updates produced by the other.
   above is unit-tested against mocked Redis; actually flipping `--workers` to more than 1 in
   production and confirming the "Done when" behavior end-to-end is a follow-up smoke test,
   not something this phase's unit tests can prove.
+
+---
+
+## Phase 8 — Reposition as the discipline layer — **done 2026-09-26**
+
+`PRODUCT.md` now leads with the journal, insights, and guardrails, not the strategy engine.
+Two reasons, both recorded there: every intraday strategy fails the backtest gate (Phase 4),
+and charging for trade ideas needs SEBI Research Analyst registration. Paid features must be
+tools that work on the user's own trades and rules, never recommendations.
+
+## Phase 9 — Trade journal MVP
+
+**Goal:** every trade a user makes in their broker shows up in NeoTrade without manual entry.
+
+- Add `get_trades()` to `BrokerAdapter` (`backend/brokers/protocol.py`) and implement it in
+  all three adapters: Kite `/trades`, Upstox trades-for-day, Angel One `getTradeBook`.
+- All three only return **today's** trades. So add an end-of-day sync job (reuse the
+  scheduler's Redis lock from Phase 7) and a CSV import of the Zerodha Console tradebook to
+  backfill history.
+- Trades are stored per user (Phase 1 scoping) and grouped into round trips (entry to exit).
+- New `/journal` surface, phone first: P&L calendar, trade list, notes and setup tags.
+
+**Done when:** a connected broker's trades for the day land in the journal after the sync,
+a Console CSV import is idempotent (importing twice adds nothing), and `pytest` passes.
+
+## Phase 10 — Behaviour insights
+
+**Goal:** tell the user, in plain language, which of their habits cost them money.
+
+- Aggregates over journal round trips: P&L by time of day and weekday, trades after N
+  losses in a row, size after a loss vs normal, holding time, win rate per setup tag.
+- Shown as findings with the ₹ amount, e.g. "Trades after 2 losses in a row: win rate 31%,
+  −₹8,400". No scores, no streaks, no celebration (`PRODUCT.md` brand rules).
+
+**Done when:** each finding matches a hand-computed value on a fixture journal.
+
+## Phase 11 — Guardrails
+
+**Goal:** enforce the limits the user set for themselves.
+
+- Per-user rules: daily loss cap, max trades per day, cooldown after N losses.
+- Watch live positions through the existing WS feed. When a rule trips, alert the user
+  (Telegram bot or web push) and optionally square off, reusing
+  `backend/risk/kill_switch.py` and `place_order`.
+- Honest limit, stated in the UI: NeoTrade **cannot block** orders placed in the broker's
+  own app. It can only alert and square off.
+
+**Done when:** a rule trips in paper mode, the alert reaches a phone, and auto square-off
+works on paper before it is ever enabled live.
+
+## Phase 12 — Free beta
+
+Not code. Recruit 20–50 traders (r/IndianStreetBets, r/IndiaInvestments, fintwit, Telegram
+groups). Track weekly-active users and whether people open the journal after a losing day.
+If they don't come back weekly, fix the product before building Phase 13.
+
+## Phase 13 — Billing + real domain
+
+- A real domain replaces `nip.io` (needed for Razorpay KYC and user trust). Add privacy
+  policy, terms, and refund policy pages.
+- Razorpay Subscriptions. Free: 1 broker, 30 days of journal. Pro (around ₹299–499/month):
+  unlimited history, insights, guardrails, multiple brokers.
+- Before launch, check Kite Connect's current fees and its rules for multi-user third-party
+  apps. Upstox and Angel One APIs are free.

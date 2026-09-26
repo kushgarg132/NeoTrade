@@ -6,11 +6,19 @@
 
 ## What it is
 
-A trading cockpit for **Indian equities and F&O**. A strategy engine watches a universe of
+**The discipline layer on top of your broker**, for traders in **Indian equities and F&O**.
+Each user connects their own broker account (Zerodha Kite, Upstox, or Angel One). NeoTrade
+journals their real trades automatically, shows the habits that are costing them money, and
+enforces the loss limits they set for themselves.
+
+Why this and not "AI trade ideas": SEBI's own studies show roughly nine in ten retail F&O
+traders lose money. What they lack is not ideas but discipline, visibility, and an honest
+review of their own trading. And this product's own strategies currently fail their backtest
+gate (see `docs/ROADMAP.md` Phase 4), so selling their output would be selling losses.
+
+The strategy engine still exists as a secondary, free feature. It watches a universe of
 instruments, sizes and scores its own trade ideas, and either executes them (intraday) or
-hands them to the trader to approve or reject (long-term). Each user connects their own
-broker account — Zerodha Kite, Upstox, or Angel One — and chooses per strategy whether it
-trades on paper or with real money.
+hands them to the trader to approve or reject (long-term), per strategy on paper or live.
 
 ## The mechanism nobody else has
 
@@ -30,8 +38,9 @@ stop-loss and an R:R ratio without explanation, running this alongside a day job
 
 Where it is going: other traders, on their own broker accounts, with their own portfolios.
 The trajectory is deliberate — auth, per-user data scoping, and per-user broker sessions are
-built for it rather than retrofitted. It is free, and monetization is not being designed for
-until there are real users.
+built for it rather than retrofitted. The plan is freemium: the journal is free to start; history
+beyond 30 days, insights, guardrails, and multiple brokers are paid. Billing is not built
+until a free beta shows traders come back weekly (see `docs/ROADMAP.md` Phase 12).
 
 ## The real scene
 
@@ -54,6 +63,8 @@ stop?"*
 | Trading `/trading` | Operate | Start/stop an engine run, watch positions and fills, see whether the run is paper or live |
 | Watchlist `/watchlist` | Operate | Tracked symbols at a glance |
 | Scanner `/scanner` | Operate | On-demand bullish scan results |
+| Journal `/journal` *(planned)* | Review | P&L calendar, every broker trade auto-imported, notes and setup tags |
+| Insights *(planned)* | Review | Plain-language findings about their own habits, e.g. "trades after 2 losses in a row: 31% win rate" |
 | Settings `/settings` | Operate | Broker connection, scan universe, risk caps and kill-switch limit, per-strategy paper/live mode, AI model |
 | Architecture `/system` | Explain | A live view of how the system fits together |
 | Login `/login` | Operate | Google sign-in, nothing else |
@@ -93,6 +104,12 @@ See [`DESIGN.md`](DESIGN.md); its tokens are implemented in `frontend/src/index.
 merely documented. New surfaces inherit it rather than inventing.
 
 ## Explicitly not this product
+
+Not an advisor. NeoTrade never tells a user what to buy or sell for a fee. Recommending trades
+for money needs SEBI Research Analyst registration, which this product does not have and
+does not seek. Paid features are tools that work on the user's own trades and the user's own
+rules: journal, insights, guardrails, and backtests of rules the user wrote. The engine's
+suggestions are never a paid feature.
 
 Not a broker — NeoTrade routes orders through the user's own broker and holds no funds. Not
 social. Not a signal-selling service: no user's trades or scores are visible to another, and
