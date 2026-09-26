@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import Layout from '../components/Layout';
 import SmartSearch from '../components/dashboard/SmartSearch';
 import BrokerPnl from '../components/dashboard/BrokerPnl';
@@ -180,7 +180,19 @@ const Dashboard = () => {
         )}
 
         {quickError && (
-          <Sheet title="Enquiry failed">
+          <Sheet
+            title="Enquiry failed"
+            actions={
+              <button
+                type="button"
+                onClick={() => setQuickError(null)}
+                className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 -my-2 -mr-2 text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+                aria-label="Dismiss the failed enquiry"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            }
+          >
             <Empty
               title={quickError}
               detail="The scrip may not be in the instrument master, or the data provider is unreachable."
