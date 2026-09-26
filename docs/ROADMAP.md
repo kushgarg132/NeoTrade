@@ -20,7 +20,7 @@ where to start — nothing else in this repo tracks it.
 | 8 | Reposition as the discipline layer (docs) | — | **done 2026-09-26** |
 | 9 | Trade journal MVP | 8 | **done 2026-09-26** (live broker sync unverified, see phase notes) |
 | 10 | Behaviour insights | 9 | **done 2026-09-26** |
-| 11 | Guardrails (loss cap, trade count, cooldown) | 9 | not started |
+| 11 | Guardrails (loss cap, trade count, cooldown) | 9 | **done 2026-09-26** (alerts only; auto square-off deferred) |
 | 12 | Free beta, 20–50 real traders | 9, 10, 11 | not started |
 | 13 | Billing + real domain | 12 | not started |
 
@@ -586,7 +586,7 @@ a Console CSV import is idempotent (importing twice adds nothing), and `pytest` 
   positions count on the day they opened.
 - The thresholds (5 trades, 1.25×, 1.5×) are judgement calls, not tuned on real users.
 
-## Phase 11 — Guardrails
+## Phase 11 — Guardrails — **done 2026-09-26** (alerts only)
 
 **Goal:** enforce the limits the user set for themselves.
 
@@ -599,6 +599,33 @@ a Console CSV import is idempotent (importing twice adds nothing), and `pytest` 
 
 **Done when:** a rule trips in paper mode, the alert reaches a phone, and auto square-off
 works on paper before it is ever enabled live.
+
+### What landed
+
+- `backend/guardrails/rules.py`: pure `evaluate(trips, day_pnl, prefs)`. Daily loss uses the
+  existing `daily_loss_limit` against the broker's own day P&L (realised + unrealised over
+  its position book). New prefs: `guardrails_enabled` (default off), `max_trades_per_day`,
+  `cooldown_after_losses`, `cooldown_minutes`. 0 turns a rule off.
+- `backend/guardrails/monitor.py`: once a minute, 09:15–15:35 IST on weekdays, one worker
+  per tick (Redis `SET NX` lock). For each opted-in user it syncs today's trades into the
+  journal, evaluates, and alerts each new breach once (`guardrail_events`, keyed per user +
+  day + breach). A daily-loss breach also trips `KillSwitchStore` for the day.
+- Alerts go over the socket (topic `guardrails`, shown on the Journal page) and to Telegram
+  when linked (`backend/guardrails/telegram.py`, `backend/routers/guardrails.py`). Linking
+  uses a t.me deep link with a one-time code plus `getUpdates`, so no webhook is needed.
+- Settings has a Guardrails sheet. `backend/tests/test_guardrails.py` covers the rules, the
+  once-only alert, the kill-switch trip, the lock, and the session window.
+
+### Not done, deliberately
+
+- **Auto square-off.** It would be the first code path that places real orders without the
+  user approving them, and the adapters' position books don't carry each position's product
+  (MIS/CNC/NRML), so an exit order could go in with the wrong product. It needs `product` on
+  `Position` from all three adapters, and a paper-mode test, before it is built.
+- **Telegram needs a human step.** Create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`
+  in the deploy clone's `.env`. Until then Settings says Telegram is not set up and alerts
+  stay in the app.
+- **Never run against a live broker**, same as Phase 9.
 
 ## Phase 12 — Free beta
 
