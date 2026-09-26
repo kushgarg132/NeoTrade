@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import PaperShell from '../components/paper/PaperShell';
 import PnlStatement from '../components/dashboard/PnlStatement';
 import TradeLedger from '../components/dashboard/TradeLedger';
+import Scorecard from '../components/paper/Scorecard';
 import api, { endpoints } from '../utils/api';
 import { useTopic } from '../hooks/useStream';
 
@@ -79,6 +80,10 @@ const PaperOverview = () => {
             </div>
           </Link>
         )}
+
+        {/* The track record first: it is what decides whether a strategy
+            has earned real money. Today's live figures follow it. */}
+        <Scorecard />
 
         <PnlStatement pnl={pnl} loading={pnlLoading} />
 

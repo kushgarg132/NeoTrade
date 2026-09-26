@@ -291,6 +291,12 @@ system is static or a plain colour/opacity transition.
   own five tabs (Overview, Decisions, Holdings, Engine, Settings; Decide/Book/Setup on a phone,
 in tighter lettering so all five fit a 360px screen). The dashed
   border is the specimen copy's mark — solid rules belong to the real statement.
+- **Track record** (`components/paper/Scorecard.jsx`) leads the Paper overview: eight fields
+  (trading days, trades and win rate, profit factor, worst drawdown, best and worst day,
+  charges, versus NIFTY) closing on the net result under a double rule, then the shared
+  `MonthGrid` calendar (`components/journal/MonthGrid.jsx`, also the Journal's), then a
+  per-strategy statement. Losing figures print as plainly as winning ones, and a line states
+  that paper fills at the bar close without slippage.
 - **Live mode armed** prints as a `loss`-ruled band on `loss-wash` at the top of the Engine
   tab, naming the live strategies and saying their orders are real and print on the statement.
 

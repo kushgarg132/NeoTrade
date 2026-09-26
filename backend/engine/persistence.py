@@ -166,6 +166,9 @@ class LedgerStore:
             "realized_pnl": 0.0,
             "costs": fill.costs,
             "suggestion_id": (order or {}).get("suggestion_id"),
+            # Which strategy's signal opened it, for the per-strategy
+            # scorecard. None for an approved proposal or a pre-tag row.
+            "strategy": (order or {}).get("strategy_name"),
             # A trade is paper or live for its whole life: the fill that
             # opened it decides, and closing fills never change it.
             "venue": fill.venue,

@@ -159,6 +159,7 @@ export const endpoints = {
   },
   analytics: {
     pnl: (venue) => inBook('/analytics/pnl', venue),
+    scorecard: (venue) => inBook('/analytics/scorecard', venue),
   },
   guardrails: {
     status: '/guardrails',

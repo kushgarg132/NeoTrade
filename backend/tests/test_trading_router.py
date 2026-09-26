@@ -444,27 +444,72 @@ async def test_longterm_never_uses_the_tick_feed(monkeypatch):
     assert isinstance(feed, PollingLiveFeed)
 
 
-def test_start_excludes_strategies_that_have_not_cleared_the_backtest_gate(monkeypatch):
-    """No strategy has a stored backtest result in this test's fresh db --
-    the gate must exclude all of them rather than let an unproven strategy
-    trade, so the request comes back as "nothing to run", not a silent
-    partial start."""
+def _start_longterm(monkeypatch, fresh_db, adapter_state):
+    """Starts a LONGTERM run against `fresh_db` with a broker session in
+    `adapter_state`, and returns the stored run row."""
+    class _LiveCapableAdapter(_FakeAdapter):
+        async def get_positions(self):
+            return {}
+
     monkeypatch.setattr(trading, "InstrumentMaster", _FakeMaster)
     monkeypatch.setattr(trading, "YFinanceProvider", _ForeverQuoteProvider)
-    monkeypatch.setattr(trading, "db", type("_Db", (), {"db": AsyncMongoMockClient()["test_db"], "redis": None})())
+    monkeypatch.setattr(trading, "db", type("_Db", (), {"db": fresh_db, "redis": None})())
+    monkeypatch.setattr(
+        trading, "get_broker_adapter", AsyncMock(return_value=_LiveCapableAdapter(adapter_state)),
+    )
 
     app = FastAPI()
     app.include_router(trading.router, prefix="/api/v1")
     app.dependency_overrides[get_current_user] = lambda: _USER
-    app.dependency_overrides[trading.get_run_store] = lambda: RunStore(trading.db.db)
+    app.dependency_overrides[trading.get_run_store] = lambda: RunStore(fresh_db)
 
     with TestClient(app) as test_client:
         resp = test_client.post("/api/v1/trading/start", json={
             "mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 0.01,
         })
+        assert resp.status_code == 200
+        run_id = resp.json()["run_id"]
+        test_client.post("/api/v1/trading/stop", json={"run_id": run_id})
+    return run_id
 
-    assert resp.status_code == 400
-    assert "backtest" in resp.json()["detail"].lower()
+
+def test_unproven_strategies_still_paper_trade(monkeypatch):
+    """No strategy has a stored backtest in this fresh db. The gate governs
+    live routing only: every strategy still runs on paper, which is how one
+    earns a track record in the first place."""
+    from backend.brokers.protocol import BrokerSessionState
+
+    fresh_db = AsyncMongoMockClient()["test_db"]
+    run_id = _start_longterm(monkeypatch, fresh_db, BrokerSessionState.NEEDS_LOGIN)
+
+    row = asyncio.run(fresh_db["trading_runs"].find_one({"run_id": run_id}))
+    assert row["params"]["live_strategies"] == []
+    assert row["params"]["origin"] == "manual"
+
+
+def test_a_strategy_toggled_live_routes_live_only_after_passing_the_gate(monkeypatch):
+    """The user switched every long-term strategy to live and the broker
+    session is ACTIVE; only the one with a passing backtest may route live.
+    The rest stay on paper."""
+    from backend.brokers.protocol import BrokerSessionState
+    from backend.components.shared.models import BacktestResult
+    from backend.prefs import PrefsStore
+    from backend.risk.backtest_gate import BacktestGateStore
+
+    fresh_db = AsyncMongoMockClient()["test_db"]
+    names = ["technical_breakout", "mean_reversion", "macd_crossover"]
+    asyncio.run(PrefsStore(fresh_db).update(_USER.id, {"live_strategies": names}))
+    asyncio.run(BacktestGateStore(fresh_db).record("mean_reversion", BacktestResult(
+        symbol="RELIANCE", start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        end_date=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        total_trades=40, win_rate=0.55, profit_factor=1.5, total_pnl=50_000.0,
+        max_drawdown=0.10, sharpe_ratio=1.2, trades=[],
+    )))
+
+    run_id = _start_longterm(monkeypatch, fresh_db, BrokerSessionState.ACTIVE)
+
+    row = asyncio.run(fresh_db["trading_runs"].find_one({"run_id": run_id}))
+    assert row["params"]["live_strategies"] == ["mean_reversion"]
 
 
 @pytest.mark.asyncio

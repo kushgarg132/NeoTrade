@@ -78,3 +78,91 @@ async def compute_pnl(
             "equity": sum(p.realized_pnl for p in positions.values()) + unrealized,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Scorecard: the track record a strategy is judged on before real money.
+# Every figure is net of charges (realized_pnl - costs): a strategy that only
+# wins before brokerage and taxes does not win.
+# ---------------------------------------------------------------------------
+
+def _profit_factor(nets: list[float]) -> Optional[float]:
+    """Gross winnings over gross losses. None when there are no losing
+    trades (undefined, not infinitely good) or no trades at all."""
+    losses = -sum(n for n in nets if n < 0)
+    if not losses:
+        return None
+    return sum(n for n in nets if n > 0) / losses
+
+
+def _max_drawdown(nets: list[float]) -> float:
+    """Deepest peak-to-trough fall of the running total, in rupees (>= 0)."""
+    total = peak = worst = 0.0
+    for net in nets:
+        total += net
+        peak = max(peak, total)
+        worst = max(worst, peak - total)
+    return worst
+
+
+def _summary(nets: list[float]) -> dict:
+    wins = sum(1 for n in nets if n > 0)
+    return {
+        "trades": len(nets),
+        "wins": wins,
+        "win_rate": wins / len(nets) if nets else 0.0,
+        "net": sum(nets),
+        "profit_factor": _profit_factor(nets),
+        "max_drawdown": _max_drawdown(nets),
+    }
+
+
+async def compute_scorecard(
+    ledger: LedgerStore, venue: Optional[Venue], account_size: float
+) -> dict:
+    closed = sorted(
+        (t for t in await ledger.get_trades(status="CLOSED", limit=5000, venue=venue) if t.get("exit_at")),
+        key=lambda t: t["exit_at"],
+    )
+
+    days: dict[str, dict] = {}
+    by_strategy: dict[str, list[float]] = {}
+    costs = 0.0
+    for trade in closed:
+        cost = trade.get("costs") or 0.0
+        net = (trade.get("realized_pnl") or 0.0) - cost
+        costs += cost
+        day = _ist(trade["exit_at"]).date().isoformat()
+        row = days.setdefault(day, {"day": day, "pnl": 0.0, "trades": 0, "wins": 0})
+        row["pnl"] += net
+        row["trades"] += 1
+        row["wins"] += net > 0
+        by_strategy.setdefault(trade.get("strategy") or "unattributed", []).append(net)
+
+    daily = list(days.values())
+    totals = _summary([day["pnl"] for day in daily])
+    trade_level = _summary([n for nets in by_strategy.values() for n in nets])
+    return {
+        "venue": venue,
+        "account_size": account_size,
+        "days": daily,
+        "strategies": sorted(
+            ({"strategy": name, **_summary(nets)} for name, nets in by_strategy.items()),
+            key=lambda s: s["net"], reverse=True,
+        ),
+        "totals": {
+            **trade_level,
+            # Drawdown is measured on the day-by-day running total, the way
+            # the account would actually have felt it.
+            "max_drawdown": totals["max_drawdown"],
+            "max_drawdown_pct": totals["max_drawdown"] / account_size * 100 if account_size else None,
+            "return_pct": trade_level["net"] / account_size * 100 if account_size else None,
+            "costs": costs,
+            "trading_days": len(daily),
+            "winning_days": totals["wins"],
+            "best_day": max(daily, key=lambda d: d["pnl"]) if daily else None,
+            "worst_day": min(daily, key=lambda d: d["pnl"]) if daily else None,
+            "first_day": daily[0]["day"] if daily else None,
+            "last_day": daily[-1]["day"] if daily else None,
+        },
+    }
