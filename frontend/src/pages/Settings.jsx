@@ -672,7 +672,16 @@ const GuardrailsSheet = () => {
   );
 
   return (
-    <Sheet title="Guardrails" meta={prefs.guardrails_enabled ? 'Watching' : 'Off'}>
+    <Sheet
+      title="Guardrails"
+      meta={
+        prefs.guardrails_enabled
+          ? prefs.auto_square_off === 'live'
+            ? 'Watching · square-off live'
+            : 'Watching'
+          : 'Off'
+      }
+    >
       <p className="doc-meta normal-case pb-3 border-b border-[var(--rule)]">
         Limits you set for yourself. NeoTrade checks them against your broker every minute during the
         session and alerts you when one is crossed. It cannot stop an order you place in your broker's
@@ -706,6 +715,51 @@ const GuardrailsSheet = () => {
       {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this. 0 is off.')}
       {numberRow('cooldown_after_losses', 'Cooldown after losses in a row', 'Start a cooldown after this many losses in a row. 0 is off.')}
       {numberRow('cooldown_minutes', 'Cooldown length, minutes', 'Any trade opened inside it is flagged.')}
+
+      <Row
+        label="Square off at the loss limit"
+        hint={
+          prefs.auto_square_off === 'live'
+            ? 'Live: when the daily loss limit is hit, NeoTrade places market orders to close your NSE intraday (MIS) positions, once a day. Delivery and F&O positions are never touched.'
+            : 'Preview alerts you with the exact exit orders it would place, without sending them. Live sends them. Only NSE intraday (MIS) positions, once a day.'
+        }
+      >
+        <div className="flex" role="radiogroup" aria-label="Square off at the loss limit">
+          {[
+            ['off', 'Off'],
+            ['preview', 'Preview'],
+            ['live', 'Live'],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={prefs.auto_square_off === value}
+              onClick={() => {
+                if (value === prefs.auto_square_off) return;
+                if (
+                  value === 'live' &&
+                  !window.confirm(
+                    'Live square-off places real market orders on your broker account, without asking, when your daily loss limit is hit. Turn it on?'
+                  )
+                )
+                  return;
+                save({ auto_square_off: value });
+              }}
+              className={cn(
+                'px-3 py-1 border -ml-px first:ml-0 font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
+                prefs.auto_square_off === value
+                  ? value === 'live'
+                    ? 'bg-[var(--loss)] text-[var(--paper)] border-[var(--loss)]'
+                    : 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
+                  : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Row>
 
       <Row
         label="Telegram alerts"
