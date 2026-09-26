@@ -1,0 +1,16 @@
+{
+  "extraKnownMarketplaces": {
+    "superpowers-marketplace": { "source": { "source": "github", "repo": "obra/superpowers-marketplace" } },
+    "thedotmack": { "source": { "source": "github", "repo": "thedotmack/claude-mem" } },
+    "caveman": { "source": { "source": "github", "repo": "JuliusBrussee/caveman" } },
+    "ponytail": { "source": { "source": "github", "repo": "DietrichGebert/ponytail" } },
+    "impeccable": { "source": { "source": "github", "repo": "pbakaus/impeccable" } }
+  },
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true,
+    "claude-mem@thedotmack": true,
+    "caveman@caveman": true,
+    "ponytail@ponytail": true,
+    "impeccable@impeccable": true
+  }
+}
