@@ -1,4 +1,5 @@
 import React, { Children, cloneElement, createContext, isValidElement, useContext } from 'react';
+import { Link } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { formatSigned, formatSignedPercent } from '../../utils/formatters';
 
@@ -22,6 +23,37 @@ export const Sheet = ({ title, meta, actions, children, className, bodyClassName
     <div className={cn('p-4', bodyClassName)}>{children}</div>
   </section>
 );
+
+// F&O contracts (NIFTY24OCT25000CE, RELIANCE24OCTFUT) are not in the equity
+// instrument master the enquiry reads, so they print but do not link.
+const DERIVATIVE = /(\d(CE|PE)|FUT)$/;
+
+/**
+ * A scrip name, wherever it is printed: one tap opens its enquiry on the
+ * statement. Stops the click there so a row that is itself clickable (or that
+ * expands on click) does not act twice.
+ */
+export const Scrip = ({ symbol, children, className }) => {
+  const label = children ?? symbol;
+  if (!symbol || DERIVATIVE.test(symbol)) {
+    return <span className={cn('figure-md', className)}>{label}</span>;
+  }
+  return (
+    <Link
+      to="/"
+      state={{ symbol }}
+      onClick={(event) => event.stopPropagation()}
+      className={cn(
+        'figure-md underline decoration-[var(--rule)] decoration-1 underline-offset-[3px]',
+        'hover:decoration-[var(--stamp)] hover:text-[var(--stamp)] transition-colors',
+        className
+      )}
+      aria-label={`Enquire on ${symbol}`}
+    >
+      {label}
+    </Link>
+  );
+};
 
 /** A field: the label above, the value below, as an official form prints it. */
 export const Field = ({ label, value, tone, className }) => (

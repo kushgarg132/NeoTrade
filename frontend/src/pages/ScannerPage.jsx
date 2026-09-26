@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ScanLine, Loader2, ArrowRight } from 'lucide-react';
 import Layout from '../components/Layout';
-import { Sheet, Statement, Row, Cell, Empty, Ruling, Field } from '../components/doc/Doc';
+import { Sheet, Statement, Row, Cell, Empty, Ruling, Field, Scrip } from '../components/doc/Doc';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
@@ -134,7 +134,7 @@ const ScannerPage = () => {
                     onClick={() => navigate('/', { state: { symbol: pick.symbol } })}
                   >
                     <Cell>
-                      <span className="figure-md">{pick.symbol}</span>
+                      <Scrip symbol={pick.symbol} />
                       <span className="block doc-meta normal-case truncate max-w-[18rem]">
                         {pick.reasons?.join(' · ')}
                       </span>

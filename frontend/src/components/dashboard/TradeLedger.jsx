@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sheet, Statement, Row, Cell, Money, Empty, Ruling } from '../doc/Doc';
+import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, Scrip } from '../doc/Doc';
 import { Badge as Mark } from '../common/Badge';
 import { formatCurrency, formatQuantity, formatClock, formatNoteDate } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
@@ -28,7 +28,7 @@ const ModeMark = ({ mode }) => (
 const OpenRecord = ({ trade }) => (
   <li className="py-3 border-b border-[var(--rule)] last:border-b-0">
     <div className="flex items-baseline justify-between gap-3">
-      <span className="figure-md text-sm">{trade.symbol}</span>
+      <Scrip symbol={trade.symbol} className="text-sm" />
       <Money value={trade.realized_pnl} />
     </div>
     <div className="mt-1.5 flex items-center justify-between gap-3 doc-meta normal-case">
@@ -99,7 +99,7 @@ const TradeLedger = ({ trades, loading, error }) => {
               ) : (
                 <li key={trade.id} className="py-3 border-b border-[var(--rule)] last:border-b-0">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="figure-md text-sm">{trade.symbol}</span>
+                    <Scrip symbol={trade.symbol} className="text-sm" />
                     <Money value={trade.realized_pnl} />
                   </div>
                   <div className="mt-1.5 flex items-center justify-between gap-3 doc-meta normal-case">
@@ -139,7 +139,7 @@ const TradeLedger = ({ trades, loading, error }) => {
               {rows.map((trade) => (
                 <Row key={trade.id}>
                   <Cell>
-                    <span className="figure-md">{trade.symbol}</span>{' '}
+                    <Scrip symbol={trade.symbol} />{' '}
                     <ModeMark mode={trade.mode} />
                   </Cell>
                   {tab === 'OPEN' && <Cell>{trade.side}</Cell>}

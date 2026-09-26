@@ -136,9 +136,12 @@ const Dashboard = () => {
     }
   };
 
-  // Arriving from the watchlist or scanner with a symbol in hand.
+  // Arriving with a symbol in hand: a scrip tapped anywhere in the app.
   useEffect(() => {
     if (location.state?.symbol) {
+      // A scrip can be tapped from far down any page; the enquiry prints at
+      // the top of the statement, so start reading there.
+      window.scrollTo(0, 0);
       analyse(location.state.symbol);
       navigate('.', { replace: true, state: {} });
     }

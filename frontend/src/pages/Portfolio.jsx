@@ -10,7 +10,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import Layout from '../components/Layout';
-import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine } from '../components/doc/Doc';
+import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { useTopic } from '../hooks/useStream';
 import {
@@ -174,7 +174,7 @@ const Portfolio = () => {
                     onClick={() => navigate('/', { state: { symbol: position.symbol } })}
                   >
                     <Cell>
-                      <span className="figure-md">{position.symbol}</span>
+                      <Scrip symbol={position.symbol} />
                     </Cell>
                     <Cell align="right" mono>
                       {formatQuantity(position.quantity)}

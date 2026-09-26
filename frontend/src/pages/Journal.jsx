@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
-import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine } from '../components/doc/Doc';
+import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { useTopic } from '../hooks/useStream';
 import { cn } from '../utils/cn';
@@ -412,7 +412,7 @@ const Journal = () => {
                     aria-expanded={openTrip === trip.id}
                   >
                     <Cell>
-                      <span className="figure-md">{trip.symbol}</span>
+                      <Scrip symbol={trip.symbol} />
                       <span className="doc-meta ml-2">{trip.direction === 'SHORT' ? 'Short' : 'Long'}</span>
                       {trip.tags?.length > 0 && (
                         <span className="doc-meta normal-case block">{trip.tags.join(' · ')}</span>

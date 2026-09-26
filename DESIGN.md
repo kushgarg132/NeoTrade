@@ -254,6 +254,10 @@ the page, and precisely because it is singular, it reads as a stamp rather than 
   `index.css`): the first cell heads the record full-width, every other cell prints under its
   column's label (passed down by `Row` as `data-label`), and a label-less column holds row
   actions at the record's far edge. So put the identifying column (the scrip) first.
+- A scrip name is always printed through `Scrip` (`doc/Doc.jsx`): one tap opens its enquiry on
+  the statement, from any page. It carries a hairline `rule` underline that turns stamp-violet on
+  hover, and stops its click so a clickable or expanding row does not act twice. F&O contracts
+  print without a link, since the enquiry covers equities only.
 - Money never breaks between its sign and its figure (`Money` is `whitespace-nowrap`); a
   `NetLine` drops its figure under the label rather than overflowing.
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Check, X, Loader2, Quote } from 'lucide-react';
-import { Money, Stamp, Field } from '../doc/Doc';
+import { Money, Stamp, Field, Scrip } from '../doc/Doc';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { formatCurrency, formatQuantity, formatTimeAgo } from '../../utils/formatters';
@@ -84,7 +84,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="figure-md text-lg">{suggestion.symbol}</h3>
+            <h3 className="text-lg"><Scrip symbol={suggestion.symbol} /></h3>
             <Badge variant={suggestion.side === 'BUY' ? 'success' : 'destructive'}>
               {suggestion.side}
             </Badge>

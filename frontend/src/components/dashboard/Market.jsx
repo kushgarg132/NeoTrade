@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sheet, Statement, Row, Cell, Ruling } from '../doc/Doc';
+import { Sheet, Statement, Row, Cell, Ruling, Scrip } from '../doc/Doc';
 import api, { endpoints } from '../../utils/api';
 import { formatSignedPercent, formatNoteDate, formatTimeAgo } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
@@ -13,7 +13,13 @@ import { cn } from '../../utils/cn';
 const Quote = ({ item, onClick }) => (
   <Row className={onClick && 'cursor-pointer hover:bg-[var(--paper-sunk)]'} onClick={onClick}>
     <Cell>
-      <span className="text-sm">{item.name || item.symbol}</span>
+      {onClick ? (
+        <Scrip symbol={item.symbol} className="text-sm font-normal">
+          {item.name || item.symbol}
+        </Scrip>
+      ) : (
+        <span className="text-sm">{item.name || item.symbol}</span>
+      )}
     </Cell>
     <Cell align="right" mono>
       {typeof item.value === 'number' ? item.value.toFixed(2) : '—'}

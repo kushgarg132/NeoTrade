@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, ArrowRight } from 'lucide-react';
 import Layout from '../components/Layout';
-import { Sheet, Statement, Row, Cell, Empty, Ruling } from '../components/doc/Doc';
+import { Sheet, Statement, Row, Cell, Empty, Ruling, Scrip } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatSignedPercent } from '../utils/formatters';
 import { cn } from '../utils/cn';
@@ -60,7 +60,7 @@ const Watchlist = () => {
                 onClick={() => navigate('/', { state: { symbol: stock.symbol } })}
               >
                 <Cell>
-                  <span className="figure-md">{stock.symbol}</span>
+                  <Scrip symbol={stock.symbol} />
                   <span className="block doc-meta normal-case truncate max-w-[16rem]">
                     {stock.error ? 'Quote unavailable' : stock.name}
                   </span>

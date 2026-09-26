@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Play, Square, Loader2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import TradingControlBar from '../components/trading/TradingControlBar';
-import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine } from '../components/doc/Doc';
+import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
@@ -191,7 +191,7 @@ const Trading = () => {
                 {openPositions.map((position) => (
                   <Row key={position.symbol}>
                     <Cell>
-                      <span className="figure-md">{position.symbol}</span>
+                      <Scrip symbol={position.symbol} />
                     </Cell>
                     <Cell align="right" mono>
                       {formatQuantity(position.quantity)}
@@ -231,7 +231,7 @@ const Trading = () => {
               {recentFills.map((fill) => (
                 <Row key={`${fill.order_id}-${fill.timestamp}`}>
                   <Cell>
-                    <span className="figure-md">{fill.symbol}</span>
+                    <Scrip symbol={fill.symbol} />
                   </Cell>
                   <Cell className="doc-meta normal-case">{formatClock(fill.timestamp)}</Cell>
                   <Cell>
