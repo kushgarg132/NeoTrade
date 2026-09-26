@@ -5,6 +5,7 @@ import {
   Activity,
   ScanLine,
   BookMarked,
+  NotebookPen,
   Network,
   Settings,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ export const SECTIONS = [
   { icon: Stamp, label: 'Decisions', short: 'Decide', path: '/suggestions', primary: true, counter: true },
   { icon: Wallet, label: 'Holdings', short: 'Book', path: '/portfolio', primary: true },
   { icon: Activity, label: 'Engine', short: 'Engine', path: '/trading', primary: true },
+  { icon: NotebookPen, label: 'Journal', path: '/journal' },
   { icon: ScanLine, label: 'Scanner', path: '/scanner' },
   { icon: BookMarked, label: 'Watchlist', path: '/watchlist' },
   { icon: Network, label: 'Architecture', path: '/system' },

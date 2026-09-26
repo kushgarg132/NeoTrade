@@ -149,6 +149,12 @@ export const endpoints = {
   analytics: {
     pnl: '/analytics/pnl',
   },
+  journal: {
+    get: '/journal',
+    sync: '/journal/sync',
+    importConsole: '/journal/import/zerodha-console',
+    note: (id) => `/journal/round-trips/${encodeURIComponent(id)}/note`,
+  },
   broker: {
     list: '/broker/list',
     status: (broker) => `/broker/${broker}/status`,

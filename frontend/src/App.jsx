@@ -5,6 +5,7 @@ const Suggestions = lazy(() => import('./pages/Suggestions'));
 const ScannerPage = lazy(() => import('./pages/ScannerPage'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
+const Journal = lazy(() => import('./pages/Journal'));
 const Trading = lazy(() => import('./pages/Trading'));
 const Settings = lazy(() => import('./pages/Settings'));
 import Login from './pages/Login';
@@ -67,6 +68,7 @@ const App = () => {
       <Route path="/trading" element={gated(<Trading />)} />
       <Route path="/watchlist" element={gated(<Watchlist />)} />
       <Route path="/portfolio" element={gated(<Portfolio />)} />
+      <Route path="/journal" element={gated(<Journal />)} />
       <Route path="/settings" element={gated(<Settings />)} />
       <Route path="/system" element={gated(<SystemArchitecturePage />)} />
       <Route path="*" element={gated(<NotFound />)} />
