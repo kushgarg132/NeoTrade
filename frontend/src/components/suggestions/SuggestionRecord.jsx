@@ -5,6 +5,7 @@ import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { formatCurrency, formatQuantity, formatTimeAgo } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import Markdown from '../common/Markdown';
 
 /**
  * One proposal, printed as a record on the note.
@@ -145,9 +146,12 @@ const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
       )}
 
       {suggestion.ai_thesis && (
-        <blockquote className="mt-4 pl-3 border-l border-[var(--stamp)] text-sm text-[var(--ink-soft)]">
-          <Quote className="w-3 h-3 inline mr-1 -mt-1 text-[var(--stamp)]" aria-hidden="true" />
-          {suggestion.ai_thesis}
+        <blockquote className="mt-4 pl-3 border-l border-[var(--stamp)] text-sm text-[var(--ink-soft)] leading-relaxed">
+          <p className="field-label mb-1 flex items-center gap-1">
+            <Quote className="w-3 h-3 text-[var(--stamp)]" aria-hidden="true" />
+            Thesis
+          </p>
+          <Markdown>{suggestion.ai_thesis}</Markdown>
         </blockquote>
       )}
 
