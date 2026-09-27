@@ -47,6 +47,21 @@ Real API surface used:
   2026-09-26; the timestamp's exact format is only documented as "user
   readable", so brokers/trades.py accepts more than one).
 
+- Option contracts: GET https://api.upstox.com/v2/option/contract
+  ?instrument_key={underlying}[&expiry_date=YYYY-MM-DD], Bearer auth ->
+  {"data": [{"expiry", "strike_price", "lot_size", "instrument_type",
+  "instrument_key", "trading_symbol", "weekly", ...}]}.
+- Option chain: GET https://api.upstox.com/v2/option/chain
+  ?instrument_key={underlying}&expiry_date=YYYY-MM-DD (both required),
+  Bearer auth -> {"data": [{"expiry", "pcr", "strike_price",
+  "underlying_key", "underlying_spot_price", "call_options"/"put_options":
+  {"instrument_key", "market_data": {ltp, volume, oi, close_price,
+  bid_price, bid_qty, ask_price, ask_qty, prev_oi}, "option_greeks":
+  {vega, theta, gamma, delta, iv, pop}}}]}. Underlying keys for the indices
+  are "NSE_INDEX|Nifty 50" and "NSE_INDEX|Nifty Bank". Both verified
+  2026-09-27 against the official SDK's generated OptionsApi and models
+  (upstox/upstox-python on GitHub); upstox.com itself was not reachable.
+
 Because instrument_key (Upstox's actual query key) isn't ISIN data the
 shared Instrument model carries from other brokers' sources, quote()/
 history() resolve it themselves from this adapter's own cached scrip-master
@@ -81,6 +96,8 @@ _CANCEL_ORDER_URL = "https://api-hft.upstox.com/v2/order/cancel"
 _ORDER_DETAILS_URL = "https://api.upstox.com/v2/order/details"
 _POSITIONS_URL = "https://api.upstox.com/v2/portfolio/short-term-positions"
 _TRADES_URL = "https://api.upstox.com/v2/order/trades/get-trades-for-day"
+_OPTION_CONTRACT_URL = "https://api.upstox.com/v2/option/contract"
+_OPTION_CHAIN_URL = "https://api.upstox.com/v2/option/chain"
 
 _INTERVAL_MAP = {"1m": "1minute", "30m": "30minute", "1d": "day"}
 _PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825}
@@ -184,6 +201,59 @@ class UpstoxAdapter:
             "close": ohlc.get("close", data["last_price"]),
             "volume": data.get("volume", 0),
         }
+
+    async def _get_data(self, url: str, params: dict):
+        token = await self.get_access_token()
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, params=params, headers=self._headers(token))
+            resp.raise_for_status()
+        return resp.json().get("data") or []
+
+    async def option_expiries(self, underlying_key: str) -> list[str]:
+        """Every listed expiry for `underlying_key`, soonest first, as
+        YYYY-MM-DD -- read from the exchange's own contract list rather than
+        computed, so an expiry-day change never needs a code change."""
+        rows = await self._get_data(_OPTION_CONTRACT_URL, {"instrument_key": underlying_key})
+        return sorted({str(row["expiry"])[:10] for row in rows if row.get("expiry")})
+
+    async def option_chain(self, underlying_key: str, expiry: str) -> list[dict]:
+        """One row per strike, lowest first, with the call and the put side
+        by side: live premium, open interest and its change, volume, best
+        bid/ask and implied volatility/greeks, straight from Upstox."""
+        def side(leg: Optional[dict]) -> Optional[dict]:
+            if not leg:
+                return None
+            market, greeks = leg.get("market_data") or {}, leg.get("option_greeks") or {}
+            return {
+                "instrument_key": leg.get("instrument_key"),
+                "ltp": market.get("ltp"),
+                "close": market.get("close_price"),
+                "oi": market.get("oi"),
+                "oi_change": (market.get("oi") or 0) - (market.get("prev_oi") or 0),
+                "volume": market.get("volume"),
+                "bid": market.get("bid_price"),
+                "ask": market.get("ask_price"),
+                "iv": greeks.get("iv"),
+                "delta": greeks.get("delta"),
+                "theta": greeks.get("theta"),
+            }
+
+        rows = await self._get_data(
+            _OPTION_CHAIN_URL, {"instrument_key": underlying_key, "expiry_date": expiry},
+        )
+        return sorted(
+            (
+                {
+                    "strike": row["strike_price"],
+                    "spot": row.get("underlying_spot_price"),
+                    "pcr": row.get("pcr"),
+                    "call": side(row.get("call_options")),
+                    "put": side(row.get("put_options")),
+                }
+                for row in rows
+            ),
+            key=lambda row: row["strike"],
+        )
 
     async def history(self, instrument: Instrument, interval: str, period: str) -> list[PriceCandle]:
         try:

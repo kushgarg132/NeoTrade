@@ -173,6 +173,11 @@ survives is `ResearchAgent` (`backend/research/graph.py:58-159`), whose graph is
 2026-09-26 the analyst makes two LLM calls per stock (`prompts/score_news.md`, then
 `prompts/research_report.md`, which also writes the thesis), so `synthesize` makes none.
 
+Option chains (`backend/routers/options.py`) are read-only market data from the user's own
+Upstox session -- Upstox's `/v2/option/chain` and `/v2/option/contract`, wrapped by
+`UpstoxAdapter.option_chain`/`option_expiries` -- for NIFTY 50 and BANK NIFTY only. No
+ACTIVE Upstox session is a 409 telling the user to connect it; an Upstox failure is a 502.
+
 A tapped index gets its own single LLM call: `explain_index_move`
 (`backend/research/index_move.py`, served at `GET /market/index/{ticker}/analysis`) gathers
 the latest session's OHLC and trend from yfinance, the other tracked indices, the day's

@@ -359,8 +359,13 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
 - Live broker margin-API integration (`estimate_margin`'s upgrade path — see
   `backend/options/pricing.py`'s `ponytail:` comment).
 - Covered call strategy.
-- Real option-chain data source, if one ever becomes available (no live broker account exists
-  to test against today, same constraint 5a operated under).
+- ~~Real option-chain data source~~ -- **2026-09-27:** live NIFTY/BANK NIFTY chains from the
+  user's Upstox session (`UpstoxAdapter.option_chain`/`option_expiries`, `/options/*`, the
+  Option chain page). Verified against the official SDK's generated models; upstox.com was
+  not reachable to check the live docs, and no account exists to call it for real. Kite has
+  no chain endpoint, so it is Upstox-only. Not yet used for paper fills: the cash-secured
+  put still prices off Black-Scholes, and `resolver.py`'s last-Thursday expiry and static
+  strike table are unchanged (the contract list now gives real expiries to replace them).
 
 ---
 

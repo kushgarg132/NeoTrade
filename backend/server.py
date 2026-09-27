@@ -148,6 +148,7 @@ from backend.routers import settings as settings_router
 app.include_router(settings_router.router, prefix=settings.API_PREFIX, tags=["Settings"], dependencies=[Depends(get_current_user)])
 
 from backend.routers import market_data
+from backend.routers import options as options_router
 from backend.routers import watchlist
 from backend.routers import trading
 from backend.routers import suggestions
@@ -157,6 +158,7 @@ from backend.routers import journal
 from backend.routers import guardrails as guardrails_router
 
 app.include_router(market_data.router, prefix=settings.API_PREFIX, tags=["Market Data"], dependencies=[Depends(get_current_user)])
+app.include_router(options_router.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
 app.include_router(watchlist.router, prefix=settings.API_PREFIX, tags=["Watchlist"], dependencies=[Depends(get_current_user)])
 app.include_router(trading.router, prefix=settings.API_PREFIX, tags=["Trading"], dependencies=[Depends(get_current_user)])
 app.include_router(suggestions.router, prefix=settings.API_PREFIX, tags=["Suggestions"], dependencies=[Depends(get_current_user)])
