@@ -363,9 +363,19 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
   user's Upstox session (`UpstoxAdapter.option_chain`/`option_expiries`, `/options/*`, the
   Option chain page). Verified against the official SDK's generated models; upstox.com was
   not reachable to check the live docs, and no account exists to call it for real. Kite has
-  no chain endpoint, so it is Upstox-only. Not yet used for paper fills: the cash-secured
-  put still prices off Black-Scholes, and `resolver.py`'s last-Thursday expiry and static
-  strike table are unchanged (the contract list now gives real expiries to replace them).
+  no chain endpoint, so it is Upstox-only.
+- **2026-09-27, real contracts and live premiums for the cash-secured put.** The sizer now
+  picks from the listed contracts in the broker's own NFO dump
+  (`InstrumentMaster.option_contracts`, synced when Kite connects): the soonest expiry at
+  least 5 days out, at the listed strike nearest 5% OTM. `resolver.py`'s computed
+  last-Thursday expiry, strike-interval table and symbol formatter are gone (only the
+  eligible-underlying list remains, as `FO_UNDERLYINGS`). Premiums come from
+  `backend/options/premiums.py` -- a Kite quote of the contract, else the Upstox chain --
+  with the Black-Scholes estimate kept only as a flagged fallback (`premium_is_live`).
+  Approving an option proposal fills at the live premium; it previously priced the NFO
+  symbol as an NSE equity and always failed with "Unknown instrument", so no option
+  proposal had ever filled. Upstox's own NFO instrument mapping is still open: contracts
+  come from Kite's dump.
 
 ---
 

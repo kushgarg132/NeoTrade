@@ -146,3 +146,64 @@ def test_cannot_act_on_another_users_suggestion(client, store):
 
     assert client.post(f"/api/v1/suggestions/{suggestion['id']}/approve").status_code == 404
     assert client.post(f"/api/v1/suggestions/{suggestion['id']}/reject").status_code == 404
+
+
+def _option_proposal() -> Proposal:
+    contract = {"strike": 2760.0, "expiry": "2026-10-27", "option_type": "PE", "lot_size": 250,
+                "premium_estimate": 38.0, "premium_is_live": False, "margin_estimate": 1.0, "underlying_spot": 2905.0}
+    return Proposal(
+        order=Order(id="o-opt", symbol="RELIANCE26OCT2760PE", side=Side.SELL, quantity=250.0,
+                    order_type="MARKET", limit_price=None, product="NRML"),
+        intent=Intent(symbol="RELIANCE", side=Side.SELL, strength=0.9, reason_codes=["oversold_csp"],
+                      option_flavor="CSP"),
+        score=CompositeScore(rule_score=0.9, ai_score=0.0), entry=38.0, mode="LONGTERM",
+        option_contract=contract,
+    )
+
+
+def test_approving_an_option_fills_at_its_live_premium_not_an_equity_mark(client, store, ledger):
+    """An option's symbol is an NFO contract; pricing it as an NSE equity used
+    to fail with "Unknown instrument", so option proposals could never fill."""
+    import asyncio
+
+    async def premium(user_id, symbol):
+        assert (user_id, symbol) == ("alice", "RELIANCE26OCT2760PE")
+        return 41.35
+
+    async def no_equity_mark(symbol):
+        raise AssertionError("an option must not be priced as an equity")
+
+    client.app.dependency_overrides[suggestions_router.get_option_premium] = lambda: premium
+    client.app.dependency_overrides[suggestions_router.get_mark_price] = lambda: no_equity_mark
+    suggestion = asyncio.run(_seed(store, proposal=_option_proposal()))
+
+    resp = client.post(f"/api/v1/suggestions/{suggestion['id']}/approve")
+
+    assert resp.status_code == 200
+    (fill,) = asyncio.run(ledger.get_fills())
+    assert fill.symbol == "RELIANCE26OCT2760PE" and fill.price == 41.35
+
+
+@pytest.mark.asyncio
+async def test_an_option_cannot_fill_without_a_broker_to_price_it(mongo, monkeypatch):
+    from fastapi import HTTPException
+
+    from backend.instruments.master import InstrumentMaster
+    from backend.instruments.models import Instrument
+
+    await InstrumentMaster(mongo).upsert_many([Instrument(
+        exchange="NFO", tradingsymbol="RELIANCE26OCT2760PE", name="RELIANCE", instrument_token=9,
+        exchange_token=9, instrument_type="PE", segment="NFO-OPT", lot_size=250, tick_size=0.05,
+        expiry=datetime(2026, 10, 27), strike=2760.0,
+    )])
+    monkeypatch.setattr(suggestions_router, "db", type("_Db", (), {"db": mongo, "redis": None})())
+    monkeypatch.setattr(suggestions_router, "get_credential_store", lambda: None)
+
+    async def nobody(*args):
+        return None
+    monkeypatch.setattr(suggestions_router, "live_premium_source", nobody)
+
+    with pytest.raises(HTTPException) as caught:
+        await suggestions_router._live_option_premium("alice", "RELIANCE26OCT2760PE")
+    assert caught.value.status_code == 409
+    assert "Connect Kite or Upstox" in caught.value.detail

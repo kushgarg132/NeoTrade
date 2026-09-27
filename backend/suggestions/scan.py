@@ -21,7 +21,9 @@ from backend.engine.execution.simulated import SimulatedExecutionClient
 from backend.engine.portfolio import Portfolio
 from backend.engine.runner import run
 from backend.instruments.master import InstrumentMaster
-from backend.options.resolver import STRIKE_INTERVALS
+from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
+from backend.options.premiums import live_premium_source
+from backend.options.resolver import FO_UNDERLYINGS
 from backend.screening.providers.yfinance_fundamentals import YFinanceFundamentalsProvider
 from backend.screening.universe import build_quality_universe
 from backend.strategies.registry import build_default_strategies
@@ -104,7 +106,7 @@ async def scan_universe(
 
     analyst_verdicts = {}
     if redis is not None:
-        for symbol in STRIKE_INTERVALS:
+        for symbol in FO_UNDERLYINGS:
             verdict = await get_cached_verdict(symbol, redis)
             if verdict is not None:
                 analyst_verdicts[symbol] = verdict
@@ -158,6 +160,11 @@ async def scan_universe(
         ledger=None,
         order_sink=sink,
         master=master,
+        # Option proposals carry the contract's live premium when the user
+        # has Kite or Upstox connected; otherwise an estimate, flagged.
+        premium_source=await live_premium_source(
+            db, user_id, BrokerCredentialStore(db, fernet_from_settings()), redis,
+        ),
     )
 
     created = [

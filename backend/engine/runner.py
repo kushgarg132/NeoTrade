@@ -67,6 +67,7 @@ async def size_intents(
     per_trade_cap: Optional[float] = None,
     kill_switch_tripped: bool = False,
     master: Optional[InstrumentMaster] = None,
+    premium_source=None,
 ) -> list[Order]:
     """Scores each Intent (backend.scoring.composite.score_intent, which
     caps AI's influence at AI_CAP regardless of what's passed here), then
@@ -119,7 +120,7 @@ async def size_intents(
             continue
 
         if intent.option_flavor is not None:
-            result = await size_option_intent(intent, scored, ctx, account_size, master)
+            result = await size_option_intent(intent, scored, ctx, account_size, master, premium_source)
             if result is None:
                 continue
             result.order.strategy_name = (
@@ -131,6 +132,7 @@ async def size_intents(
                 "option_type": result.contract.instrument_type,
                 "lot_size": result.contract.lot_size,
                 "premium_estimate": result.premium_estimate,
+                "premium_is_live": result.premium_is_live,
                 "margin_estimate": result.margin_estimate,
                 "underlying_spot": result.underlying_spot,
             }
@@ -249,6 +251,7 @@ async def run(
     daily_loss_limit: Optional[float] = None,
     kill_switch_store=None,
     master: Optional[InstrumentMaster] = None,
+    premium_source=None,
 ) -> None:
     """`symbol_for_token` is not in the plan's pseudocode signature; it's
     needed because `Bar` identifies instruments by `instrument_token` while
@@ -331,7 +334,7 @@ async def run(
         orders = await size_intents(
             ctx.drain_intents(), portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,
             order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
-            master=master,
+            master=master, premium_source=premium_source,
         )
         orders.extend(_square_off_orders(symbol, bar.timestamp, portfolio, owner_by_symbol))
 

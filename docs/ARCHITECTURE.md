@@ -178,6 +178,14 @@ Upstox session -- Upstox's `/v2/option/chain` and `/v2/option/contract`, wrapped
 `UpstoxAdapter.option_chain`/`option_expiries` -- for NIFTY 50 and BANK NIFTY only. No
 ACTIVE Upstox session is a 409 telling the user to connect it; an Upstox failure is a 502.
 
+Option proposals (the cash-secured put) use real listed contracts from the broker's NFO dump
+(`InstrumentMaster.option_contracts`) and a live premium from
+`backend/options/premiums.py::live_premium_source` -- Kite's quote of the contract, else the
+Upstox chain; Black-Scholes only as a fallback, flagged `premium_is_live: false`. The daily
+scan passes that source into `run`/`size_intents`; approval fills at it
+(`routers/suggestions.py::_live_option_premium`), and without a connected broker the
+approval is a 409 rather than a guessed price.
+
 A tapped index gets its own single LLM call: `explain_index_move`
 (`backend/research/index_move.py`, served at `GET /market/index/{ticker}/analysis`) gathers
 the latest session's OHLC and trend from yfinance, the other tracked indices, the day's

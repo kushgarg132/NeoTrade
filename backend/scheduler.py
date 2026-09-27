@@ -19,7 +19,7 @@ from backend.engine.persistence import LedgerStore
 from backend.engine.portfolio import Portfolio
 from backend.engine.session import IST
 from backend.instruments.master import InstrumentMaster
-from backend.options.resolver import STRIKE_INTERVALS, parse_underlying
+from backend.options.resolver import FO_UNDERLYINGS
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
 from backend.journal.sync import sync_user_trades
 from backend.prefs import PrefsStore
@@ -185,8 +185,8 @@ async def close_expired_option_positions(
             if contract_expiry >= now_naive:
                 continue
 
-            underlying = parse_underlying(symbol, contract.expiry.date(), contract.strike, contract.instrument_type)
-            spot = await spot_lookup(underlying)
+            # The broker's NFO dump names each contract's underlying.
+            spot = await spot_lookup(contract.name)
             if spot is None:
                 continue
 
@@ -216,7 +216,7 @@ async def _refresh_analyst_verdicts(redis) -> int:
     if redis is None:
         return 0
     count = 0
-    for symbol in STRIKE_INTERVALS:
+    for symbol in FO_UNDERLYINGS:
         try:
             await refresh_analyst_verdict(symbol, redis)
             count += 1

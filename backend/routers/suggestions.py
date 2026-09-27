@@ -19,7 +19,9 @@ from backend.database import db
 from backend.data.providers.yfinance_provider import YFinanceProvider
 from backend.engine.persistence import LedgerStore
 from backend.ws.publish import publisher_for
+from backend.auth.broker_credentials import get_credential_store
 from backend.instruments.master import InstrumentMaster
+from backend.options.premiums import live_premium_source
 from backend.prefs import PrefsStore
 from backend.suggestions.scan import scan_universe
 from backend.suggestions.service import execute_suggestion
@@ -53,6 +55,28 @@ async def _live_mark_price(symbol: str) -> float:
 def get_mark_price():
     """Injected so tests can approve a suggestion without a yfinance call."""
     return _live_mark_price
+
+
+async def _live_option_premium(user_id: str, symbol: str) -> float:
+    """An option proposal fills at the contract's live premium from the
+    user's own broker. Its symbol is an NFO contract, so the equity mark
+    above cannot price it (it used to answer "Unknown instrument")."""
+    contract = await InstrumentMaster(db.db).get("NFO", symbol)
+    if contract is None:
+        raise HTTPException(status_code=400, detail=f"Unknown option contract {symbol!r}")
+    source = await live_premium_source(db.db, user_id, get_credential_store(), db.redis)
+    premium = await source(contract) if source is not None else None
+    if not premium:
+        raise HTTPException(
+            status_code=409,
+            detail="Connect Kite or Upstox in Settings to fill this option at its live premium.",
+        )
+    return float(premium)
+
+
+def get_option_premium():
+    """Injected so tests can approve an option proposal without a broker."""
+    return _live_option_premium
 
 
 class RejectRequest(BaseModel):
@@ -109,6 +133,7 @@ async def approve_suggestion(
     store: SuggestionStore = Depends(get_suggestion_store),
     ledger: LedgerStore = Depends(get_ledger_store),
     mark_price=Depends(get_mark_price),
+    option_premium=Depends(get_option_premium),
 ):
     suggestion = await store.get(user.id, suggestion_id)
     if suggestion is None:
@@ -118,7 +143,11 @@ async def approve_suggestion(
             status_code=409, detail=f"Suggestion already {suggestion['status'].lower()}"
         )
 
-    price = await mark_price(suggestion["symbol"])
+    price = (
+        await option_premium(user.id, suggestion["symbol"])
+        if suggestion.get("option_contract")
+        else await mark_price(suggestion["symbol"])
+    )
     order = await execute_suggestion(suggestion, ledger, price)
 
     decided = await store.decide(user.id, suggestion_id, status="EXECUTED", order_id=order.id)

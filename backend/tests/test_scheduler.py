@@ -231,9 +231,9 @@ async def test_pass_refreshes_analyst_verdicts_for_curated_symbols(mongo, monkey
     redis = AsyncMock()
     result = await scheduler.run_daily_jobs(mongo, redis=redis, now=datetime(2024, 1, 15, tzinfo=timezone.utc))
 
-    from backend.options.resolver import STRIKE_INTERVALS
-    assert set(refreshed) == set(STRIKE_INTERVALS)
-    assert result["verdicts_refreshed"] == len(STRIKE_INTERVALS)
+    from backend.options.resolver import FO_UNDERLYINGS
+    assert set(refreshed) == set(FO_UNDERLYINGS)
+    assert result["verdicts_refreshed"] == len(FO_UNDERLYINGS)
 
 
 @pytest.mark.asyncio
@@ -267,11 +267,11 @@ async def test_one_symbols_verdict_refresh_failure_does_not_stop_the_others(mong
         return {}
     monkeypatch.setattr(scheduler, "refresh_analyst_verdict", flaky_refresh)
 
-    from backend.options.resolver import STRIKE_INTERVALS
+    from backend.options.resolver import FO_UNDERLYINGS
     redis = AsyncMock()
     result = await scheduler.run_daily_jobs(mongo, redis=redis, now=datetime(2024, 1, 15, tzinfo=timezone.utc))
 
-    assert result["verdicts_refreshed"] == len(STRIKE_INTERVALS) - 1
+    assert result["verdicts_refreshed"] == len(FO_UNDERLYINGS) - 1
 
 
 # ---------------------------------------------------------------------------

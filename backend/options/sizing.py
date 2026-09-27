@@ -14,11 +14,13 @@ from typing import Optional
 from backend.core.models import Intent, Order
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument
-from backend.options import resolver
+from backend.options.premiums import PremiumSource
 from backend.options.pricing import black_scholes_put, estimate_margin, realized_volatility
 from backend.scoring.composite import CompositeScore
 
 DEFAULT_PUT_OTM_PCT = 0.05
+# Too close to expiry to be worth opening a new position against.
+MIN_DAYS_TO_EXPIRY = 5
 MAX_LOTS_PER_TRADE = 2
 # Fraction of account_size treated as max collateral budget at full
 # conviction (scored.final == 1.0), scaled linearly down like equity
@@ -38,6 +40,9 @@ class OptionSizingResult:
     premium_estimate: float
     margin_estimate: float
     underlying_spot: float
+    # True when premium_estimate is the contract's live last traded price
+    # from the user's broker; False when it is the Black-Scholes fallback.
+    premium_is_live: bool = False
 
 
 async def size_option_intent(
@@ -46,11 +51,17 @@ async def size_option_intent(
     ctx,
     account_size: float,
     master: Optional[InstrumentMaster],
+    premium_source: Optional[PremiumSource] = None,
 ) -> Optional[OptionSizingResult]:
     """None means no order: no instrument master given, not enough price
-    history for a volatility estimate, the deterministically-computed
-    contract hasn't been synced from a connected broker yet, or the
-    collateral budget doesn't cover even one lot."""
+    history, no listed contract far enough from expiry (the broker's NFO
+    dump has not been synced -- connect Kite), or the collateral budget
+    doesn't cover even one lot.
+
+    The contract is a real listed one: the soonest expiry at least
+    MIN_DAYS_TO_EXPIRY out, at the listed strike nearest the target. Its
+    premium is the live price from `premium_source` when one is given and
+    can price it; otherwise the Black-Scholes estimate, flagged as such."""
     if master is None:
         return None
 
@@ -61,16 +72,21 @@ async def size_option_intent(
     spot = closes[-1]
 
     today = ctx.now().date()
-    expiry = resolver.next_monthly_expiry(today)
-    strike = resolver.nearest_strike(intent.symbol, spot, DEFAULT_PUT_OTM_PCT)
-
-    contract = await resolver.resolve_contract(master, intent.symbol, expiry, strike, "PE")
-    if contract is None:
+    listed = [
+        c for c in await master.option_contracts(intent.symbol, "PE")
+        if (c.expiry.date() - today).days >= MIN_DAYS_TO_EXPIRY
+    ]
+    if not listed:
         return None
+    expiry = listed[0].expiry.date()
+    target = spot * (1 - DEFAULT_PUT_OTM_PCT)
+    contract = min((c for c in listed if c.expiry.date() == expiry), key=lambda c: abs(c.strike - target))
+    strike = contract.strike
 
-    iv = realized_volatility(closes)
-    days_to_expiry = (expiry - today).days
-    premium = black_scholes_put(spot, strike, days_to_expiry, iv)
+    live = await premium_source(contract) if premium_source is not None else None
+    premium = live if live is not None else black_scholes_put(
+        spot, strike, (expiry - today).days, realized_volatility(closes),
+    )
     margin = estimate_margin(spot, strike, premium, contract.lot_size)
 
     budget = account_size * (COLLATERAL_BUDGET_PCT * scored.final)
@@ -85,5 +101,5 @@ async def size_option_intent(
     )
     return OptionSizingResult(
         order=order, contract=contract, premium_estimate=premium,
-        margin_estimate=margin * lots, underlying_spot=spot,
+        margin_estimate=margin * lots, underlying_spot=spot, premium_is_live=live is not None,
     )

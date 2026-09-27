@@ -7,7 +7,7 @@ regardless of the exact conviction-to-size formula:
 Plus the exposure-limit rejection and missing-stop_hint skip paths.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -19,7 +19,6 @@ from backend.engine.portfolio import Portfolio
 from backend.engine.runner import size_intents
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument
-from backend.options import resolver
 
 
 class _FakeCtx:
@@ -274,9 +273,11 @@ async def test_option_flavored_intent_skips_equity_sizing_and_needs_no_stop_hint
 @pytest.mark.asyncio
 async def test_option_flavored_intent_produces_an_order_with_a_synced_contract():
     master = InstrumentMaster(AsyncMongoMockClient()["test_db"])
-    expiry = resolver.next_monthly_expiry(_NOW.date())
-    strike = resolver.nearest_strike("RELIANCE", _CLOSES[-1], 0.05)
-    tradingsymbol = resolver.format_tradingsymbol("RELIANCE", expiry, strike, "PE")
+    # A listed contract as the broker's NFO dump reports it: an expiry more
+    # than MIN_DAYS_TO_EXPIRY out and a strike near 5% below spot.
+    expiry = (_NOW + timedelta(days=20)).date()
+    strike = round(_CLOSES[-1] * 0.95 / 20) * 20
+    tradingsymbol = "RELIANCE26OCT2760PE"
     await master.upsert_many([Instrument(
         exchange="NFO", tradingsymbol=tradingsymbol, name="RELIANCE",
         instrument_token=1, exchange_token=1, instrument_type="PE", segment="NFO-OPT",

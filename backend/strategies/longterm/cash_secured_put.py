@@ -6,7 +6,7 @@ that backend/engine/runner.py::size_intents dispatches to
 backend/options/sizing.py instead of the equity stop-distance sizer.
 
 Only fires for a symbol in backend/options/resolver.py's curated F&O-
-eligible table -- most of the mid/small-cap scan universe has no listed
+eligible list -- most of the mid/small-cap scan universe has no listed
 F&O contract at all.
 """
 

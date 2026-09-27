@@ -58,6 +58,19 @@ class InstrumentMaster:
         doc = await self.collection.find_one({"instrument_token": token})
         return _to_instrument(doc) if doc else None
 
+    async def option_contracts(self, underlying: str, option_type: str) -> list[Instrument]:
+        """Every listed NFO contract of `option_type` (CE/PE) on `underlying`,
+        as the connected broker's own instrument dump reported it, soonest
+        expiry then lowest strike first. Real expiries, strikes and lot sizes,
+        never computed."""
+        cursor = self.collection.find({
+            "exchange": "NFO", "name": underlying, "instrument_type": option_type,
+            "expiry": {"$ne": None}, "strike": {"$ne": None},
+        })
+        contracts = [_to_instrument(doc) for doc in await cursor.to_list(length=None)]
+        contracts.sort(key=lambda c: (c.expiry, c.strike))
+        return contracts
+
     async def search(self, query: str, limit: int = 10) -> list[Instrument]:
         """Case-insensitive substring match against tradingsymbol/name. Exact
         tradingsymbol match (case-insensitive) is ranked first."""

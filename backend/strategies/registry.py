@@ -54,7 +54,7 @@ def build_default_strategies(
     factory can't do it itself either. Default `None` means "don't include
     AnalystVerdictStrategy"; the caller (backend.suggestions.scan.scan_universe) is expected
     to have already fetched it for the curated symbol list in
-    `backend.options.resolver.STRIKE_INTERVALS`.
+    `backend.options.resolver.FO_UNDERLYINGS`.
     """
     universe = list(universe) if universe is not None else list(ALL_SCAN_STOCKS)
     symbol_for_token = symbol_for_token or {}
