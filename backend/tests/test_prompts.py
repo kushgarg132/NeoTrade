@@ -17,6 +17,8 @@ PROMPTS = {
     "index_move": {"name": "NIFTY 50", "session_date": "2026-09-26", "session": "- Close 25,123.45",
                    "trend": "- Month +1.2%", "peers": "- SENSEX: -0.40%", "movers": "- HDFCBANK: -1.90%",
                    "headlines": "- RBI holds rates (ET)"},
+    "portfolio_review": {"totals": "Value 10,00,000.00", "concentration": "Largest HDFCBANK at 28%",
+                         "holdings": "- HDFCBANK (STOCK): reason codes: overweight"},
 }
 
 

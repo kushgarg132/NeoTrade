@@ -278,3 +278,19 @@ def test_strategy_promotion_includes_the_last_backtest_and_the_options_strategy(
     assert rows["orb_breakout"]["backtest"]["days"] == 58
     assert rows["orb_breakout"]["backtest"]["trades"] == 198
     assert rows["orb_options"]["backtest"] is None
+
+
+def test_portfolio_verdicts_default_to_admin_and_only_an_admin_changes_them(db):
+    admin = _client(db, user=_user("boss", role="admin"))
+    assert admin.get("/api/v1/settings/portfolio-verdicts").json() == {"audience": "admin"}
+    assert _client(db).put("/api/v1/settings/portfolio-verdicts", json={"audience": "all"}).status_code == 403
+    assert admin.put("/api/v1/settings/portfolio-verdicts", json={"audience": "all"}).json() == {"audience": "all"}
+    assert admin.put("/api/v1/settings/portfolio-verdicts", json={"audience": "everyone"}).status_code == 422
+    assert admin.get("/api/v1/settings/portfolio-verdicts").json() == {"audience": "all"}
+
+
+def test_portfolio_limits_are_editable_preferences(client):
+    resp = client.put("/api/v1/settings/preferences", json={"portfolio_max_loss_pct": 15, "portfolio_max_weight_pct": 10})
+    assert resp.status_code == 200
+    assert (resp.json()["portfolio_max_loss_pct"], resp.json()["portfolio_max_weight_pct"]) == (15, 10)
+    assert client.put("/api/v1/settings/preferences", json={"portfolio_max_loss_pct": 0}).status_code == 422

@@ -81,6 +81,16 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
 
     journal_imported = await _sync_journals(db, redis)
 
+    # Weekly portfolio review: Friday's pass, after the journal sync, while
+    # that day's broker sessions are still valid.
+    portfolios = 0
+    if now.astimezone(IST).weekday() == 4:
+        from backend.portfolio.service import weekly_reviews
+        try:
+            portfolios = await weekly_reviews(db, redis)
+        except Exception as exc:
+            logger.exception("weekly portfolio reviews failed: %s", exc)
+
     logger.info(
         "daily pass: %d journal trade(s) imported, %d expired, %d option position(s) closed, %d verdict(s) refreshed, "
         "%d user(s) scanned, %d suggestion(s) created",
@@ -90,7 +100,7 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         "expired": expired, "options_closed": options_closed,
         "verdicts_refreshed": verdicts_refreshed,
         "users": scanned_users, "created": created_total,
-        "journal_imported": journal_imported,
+        "journal_imported": journal_imported, "portfolios_reviewed": portfolios,
     }
 
 

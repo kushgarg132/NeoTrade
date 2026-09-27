@@ -157,9 +157,9 @@ async def test_refresh_saves_a_snapshot_and_reports_a_failed_broker(monkeypatch)
     monkeypatch.setattr(service, "get_broker_adapter", AsyncMock(side_effect=lambda b, *a: brokers[b]))
     monkeypatch.setattr(service, "_nifty", AsyncMock(return_value=[]))
     monkeypatch.setattr(service, "_sector_sync", lambda ticker: "Energy")
-    monkeypatch.setattr(service, "_daily_returns_sync", lambda tickers: {})
+    monkeypatch.setattr(service, "_daily_closes_sync", lambda tickers: {})
 
-    snapshot = await service.refresh_portfolio(db, "alice", None, None)
+    snapshot = await service.refresh_portfolio(db, "alice", None, None, analyse=False)
     assert snapshot["errors"] == {"upstox": "token expired"} and snapshot["brokers"] == ["kite"]
     assert snapshot["totals"]["value"] == 1500
     latest = await service.latest_snapshot(db, "alice")

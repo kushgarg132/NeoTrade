@@ -57,6 +57,8 @@ class PreferencesPatch(BaseModel):
     max_option_trades_per_day: Optional[int] = Field(default=None, ge=0, le=500)
     max_option_lots: Optional[int] = Field(default=None, ge=0, le=1000)
     warn_naked_options: Optional[bool] = None
+    portfolio_max_loss_pct: Optional[float] = Field(default=None, gt=0, le=100)
+    portfolio_max_weight_pct: Optional[float] = Field(default=None, gt=0, le=100)
     auto_square_off: Optional[Literal["off", "preview", "live"]] = None
     auto_paper_intraday: Optional[bool] = None
 
@@ -122,6 +124,30 @@ async def strategy_promotion(
             "eligible": passed and records[name]["passed"],
         })
     return rows
+
+
+class PortfolioVerdictsRequest(BaseModel):
+    audience: Literal["admin", "all"]
+
+
+@router.get("/settings/portfolio-verdicts")
+async def get_portfolio_verdicts(
+    app_settings: AppSettingsStore = Depends(get_app_settings_store),
+    _admin: User = Depends(require_admin),
+):
+    return {"audience": await app_settings.get_portfolio_verdicts()}
+
+
+@router.put("/settings/portfolio-verdicts")
+async def set_portfolio_verdicts(
+    body: PortfolioVerdictsRequest,
+    app_settings: AppSettingsStore = Depends(get_app_settings_store),
+    _admin: User = Depends(require_admin),
+):
+    """Deployment-wide: switching to "all" shows verdicts to every user,
+    which needs SEBI Research Analyst registration first."""
+    await app_settings.set_portfolio_verdicts(body.audience)
+    return {"audience": body.audience}
 
 
 @router.get("/settings/omniroute-models")

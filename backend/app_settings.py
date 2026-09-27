@@ -62,6 +62,20 @@ class AppSettingsStore:
         _cached_llm_model = model
         _cache_loaded_at = time.monotonic()
 
+    async def get_portfolio_verdicts(self) -> str:
+        """Who sees SELL / HOLD / ADD on the Portfolio page: "admin" (the
+        default) or "all". Verdicts for every user need SEBI Research Analyst
+        registration first -- see PRODUCT.md."""
+        doc = await self.collection.find_one({"_id": _DOC_ID})
+        return (doc or {}).get("portfolio_verdicts") or "admin"
+
+    async def set_portfolio_verdicts(self, audience: str) -> None:
+        await self.collection.update_one(
+            {"_id": _DOC_ID},
+            {"$set": {"portfolio_verdicts": audience, "updated_at": datetime.now(timezone.utc)}},
+            upsert=True,
+        )
+
     async def load_into_cache(self) -> None:
         global _cached_llm_model, _cache_loaded_at
         _cached_llm_model = await self.get_llm_model()

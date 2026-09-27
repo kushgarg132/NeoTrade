@@ -39,6 +39,11 @@ DEFAULTS = {
     # Start an intraday paper run by itself every trading day at the open
     # (backend/engine/autorun.py). Paper only; off until the user turns it on.
     "auto_paper_intraday": False,
+    # Portfolio review (backend/portfolio/rules.py): a holding this far below
+    # its average cost, or this large a share of the portfolio, counts
+    # against it.
+    "portfolio_max_loss_pct": 25.0,
+    "portfolio_max_weight_pct": 20.0,
 }
 
 EDITABLE = tuple(DEFAULTS)
