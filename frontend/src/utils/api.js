@@ -190,6 +190,7 @@ export const endpoints = {
     omnirouteModel: '/settings/omniroute-model',
     preferences: '/settings/preferences',
     strategies: '/settings/strategies',
+    promotion: '/settings/strategies/promotion',
     brokerCredentials: '/settings/broker-credentials',
   },
   auth: {

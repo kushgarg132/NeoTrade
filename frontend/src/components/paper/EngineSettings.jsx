@@ -18,11 +18,27 @@ const SWITCH =
 
 const SIZING = ['account_size', 'max_exposure', 'per_trade_cap'];
 
+const GAP = {
+  days: (c) => `${c.need - c.have} more paper days`,
+  trades: (c) => `${c.need - c.have} more trades`,
+  net: () => 'a net profit',
+  profit_factor: (c) => `profit factor ${c.need} (now ${c.have ?? '–'})`,
+  max_drawdown_pct: (c) => `drawdown under ${c.need}% (now ${c.have}%)`,
+};
+
+// What a strategy still lacks before its live switch sends real orders.
+function promotionGaps(row) {
+  const gaps = row.backtest_passed ? [] : ['a passing backtest'];
+  for (const check of row.paper.checks) if (!check.ok) gaps.push(GAP[check.rule](check));
+  return gaps.join(', ');
+}
+
 const EngineSettings = () => {
   const [prefs, setPrefs] = useState(null);
   const [draft, setDraft] = useState({ account_size: '', max_exposure: '', per_trade_cap: '' });
   const [saving, setSaving] = useState(false);
   const [strategyNames, setStrategyNames] = useState([]);
+  const [promotion, setPromotion] = useState({});
 
   useEffect(() => {
     api
@@ -36,6 +52,10 @@ const EngineSettings = () => {
       .get(endpoints.settings.strategies)
       .then((res) => setStrategyNames(res.data))
       .catch(() => setStrategyNames([]));
+    api
+      .get(endpoints.settings.promotion)
+      .then((res) => setPromotion(Object.fromEntries(res.data.map((row) => [row.name, row]))))
+      .catch(() => setPromotion({}));
   }, []);
 
   const save = async (patch) => {
@@ -89,8 +109,8 @@ const EngineSettings = () => {
           </button>
         </Row>
         <p className="pt-3 doc-meta normal-case">
-          Paper only: a strategy you switched live still trades real money only if it has passed the
-          backtest gate.
+          Paper only: a strategy you switched live trades real money only once it has passed its
+          backtest and earned it on paper (see Strategies below).
         </p>
       </Sheet>
 
@@ -146,13 +166,21 @@ const EngineSettings = () => {
       {strategyNames.length > 0 && (
         <Sheet title="Strategies" meta={`${(prefs.live_strategies || []).length} live`}>
           <p className="doc-meta normal-case pb-3 border-b border-[var(--rule)]">
-            Every strategy trades paper unless you switch it live. A live strategy sends real
-            orders to your broker; they leave this paper book and print on the statement.
+            Every strategy trades paper unless you switch it live. Switching live sends real
+            orders only once the strategy has passed its backtest and earned it here on paper:
+            20 trading days, 30 trades, net profit after charges, profit factor 1.3, and no fall
+            deeper than 5% of your account. Until then it keeps trading paper.
           </p>
           {strategyNames.map((name) => {
             const isLive = (prefs.live_strategies || []).includes(name);
+            const earned = promotion[name]?.eligible;
+            let hint = isLive ? 'Trading with real orders.' : 'Paper only.';
+            if (promotion[name] && !earned) {
+              const gaps = promotionGaps(promotion[name]);
+              hint = `${isLive ? 'Switched live, still on paper. ' : ''}Needs ${gaps}.`;
+            }
             return (
-              <Row key={name} label={name} hint={isLive ? 'Trading with real orders.' : 'Paper only.'}>
+              <Row key={name} label={name} hint={hint}>
                 <button
                   type="button"
                   role="switch"
