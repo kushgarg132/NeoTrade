@@ -2,7 +2,7 @@
 only writes prose: every figure it is given is gathered here first, and a
 missing model is a clear 503, never a page of error text."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import pytest
@@ -30,7 +30,7 @@ class _FakeTicker:
 
 def _article(title, hours_ago=1):
     return NewsArticle(title=title, url=f"https://x/{title}", source="Wire",
-                       published_at=datetime.now() - timedelta(hours=hours_ago))
+                       published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours_ago))
 
 
 @pytest.fixture
@@ -53,7 +53,8 @@ def world(monkeypatch):
         return "### What happened\nIt rose."
 
     monkeypatch.setattr(index_move.yf, "Ticker", _FakeTicker)
-    monkeypatch.setattr(index_move, "fetch_google_news", news)
+    from backend.components.analyst import news as news_module
+    monkeypatch.setattr(news_module, "fetch_google_news", news)
     monkeypatch.setattr(market_data, "fetch_ticker_data", peers)
     monkeypatch.setattr(market_data, "get_trending_stocks", trending)
     monkeypatch.setattr(index_move.llm_service, "get_completion", completion)

@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import yfinance as yf
 
-from backend.components.analyst.news import fetch_google_news
+from backend.components.analyst.news import fresh_headlines
 from backend.llm import llm_service
 from backend.prompts import render
 
@@ -94,27 +94,10 @@ def _format_trend(s: Dict[str, Any]) -> str:
 
 
 async def _headlines(ticker: str) -> List[Dict[str, Any]]:
-    queries = NEWS_QUERIES.get(ticker, [])
-    batches = await asyncio.gather(
-        *(fetch_google_news(q, region=r, lang=l, limit=HEADLINE_LIMIT) for q, r, l in queries),
-        return_exceptions=True,
-    )
-    cutoff = datetime.now() - HEADLINE_MAX_AGE
-    seen, merged = set(), []
-    for batch in batches:
-        if isinstance(batch, Exception):
-            continue
-        for article in batch:
-            key = article.title.strip().lower()
-            if key in seen or article.published_at < cutoff:
-                continue
-            seen.add(key)
-            merged.append(article)
-    merged.sort(key=lambda a: a.published_at, reverse=True)
+    articles = await fresh_headlines(NEWS_QUERIES.get(ticker, []), max_age=HEADLINE_MAX_AGE, limit=HEADLINE_LIMIT)
     return [
-        {"title": a.title, "url": a.url, "source": a.source,
-         "published_at": a.published_at.isoformat()}
-        for a in merged[:HEADLINE_LIMIT]
+        {"title": a.title, "url": a.url, "source": a.source, "published_at": a.published_at.isoformat()}
+        for a in articles
     ]
 
 

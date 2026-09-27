@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 import logging
+import time
 from backend.configs.settings import settings
 
 from backend.components.shared.models import NewsArticle
@@ -28,15 +29,63 @@ async def fetch_news(request: NewsFetchRequest):
     articles = await fetch_news_logic(request.symbols, request.limit)
     return NewsFetchResponse(articles=articles)
 
+# What an Indian trader checks before and during the session: the market
+# itself, then the macro that moves it. Google News' `when:1d` keeps each
+# search to the last day at the source. (This used to search Finnhub and
+# Google for the ticker codes "^BSESN"/"^NSEI", which Finnhub has no news
+# under and Google answered with stale single-stock quote pages.)
+MARKET_QUERIES = [
+    ("Sensex Nifty stock market when:1d", "IN", "en-IN"),
+    ("Indian stock market today when:1d", "IN", "en-IN"),
+    ("RBI rupee crude oil FII markets when:1d", "IN", "en-IN"),
+]
+HEADLINE_MAX_AGE = timedelta(hours=36)
+MARKET_NEWS_TTL_SECONDS = 10 * 60
+_market_cache: dict = {"at": 0.0, "articles": None}
+
+
+def _title_key(title: str) -> str:
+    """Google News titles end in " - Source"; the same story from two
+    outlets, or twice from one, should count once."""
+    return title.rsplit(" - ", 1)[0].strip().lower()
+
+
+async def fresh_headlines(
+    queries, max_age: timedelta = HEADLINE_MAX_AGE, limit: int = 10
+) -> List[NewsArticle]:
+    """Newest-first headlines across Google News searches, none older than
+    `max_age`, each story once. `queries` is (query, region, lang) tuples."""
+    batches = await asyncio.gather(
+        *(fetch_google_news(q, region=r, lang=l, limit=limit * 2) for q, r, l in queries),
+        return_exceptions=True,
+    )
+    # fetch_google_news returns naive UTC timestamps.
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - max_age
+    seen, fresh = set(), []
+    for batch in batches:
+        if isinstance(batch, BaseException):
+            continue
+        for article in batch:
+            key = _title_key(article.title)
+            if key in seen or article.published_at < cutoff:
+                continue
+            seen.add(key)
+            fresh.append(article)
+    fresh.sort(key=lambda a: a.published_at, reverse=True)
+    return fresh[:limit]
+
+
 @router.get("/news/market", response_model=NewsFetchResponse)
 async def fetch_market_news():
-    """
-    Fetches general market news using proxies (Sensex, Nifty).
-    """
-    # Use Indices as proxies for general market news
-    proxies = ["^BSESN", "^NSEI"] 
-    articles = await fetch_news_logic(proxies, limit=10)
-    return NewsFetchResponse(articles=articles)
+    """Today's Indian market headlines, newest first. Cached ten minutes:
+    every statement view asks, and the news does not move that fast."""
+    if _market_cache["articles"] is None or time.time() - _market_cache["at"] > MARKET_NEWS_TTL_SECONDS:
+        articles = await fresh_headlines(MARKET_QUERIES)
+        # An empty answer (Google down) is not cached, so the next view retries.
+        if articles:
+            _market_cache.update(at=time.time(), articles=articles)
+        return NewsFetchResponse(articles=articles)
+    return NewsFetchResponse(articles=_market_cache["articles"])
 
 async def fetch_news_logic(symbols: List[str], limit: int = 10) -> List[NewsArticle]:
     """
