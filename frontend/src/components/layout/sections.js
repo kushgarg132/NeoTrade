@@ -2,6 +2,7 @@ import {
   FileText,
   Stamp,
   ScanLine,
+  Layers,
   BookMarked,
   NotebookPen,
   Network,
@@ -17,6 +18,7 @@ export const SECTIONS = [
   { icon: NotebookPen, label: 'Journal', path: '/journal', primary: true },
   { icon: BookMarked, label: 'Watchlist', short: 'Watch', path: '/watchlist', primary: true },
   { icon: ScanLine, label: 'Scanner', path: '/scanner' },
+  { icon: Layers, label: 'Option chain', path: '/options' },
   // Everything the engine does with practice money lives under one section,
   // apart from the real-money pages above it.
   { icon: Stamp, label: 'Paper trading', short: 'Paper', path: '/paper', primary: true, counter: true, divider: true },

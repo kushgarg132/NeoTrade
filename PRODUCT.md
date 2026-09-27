@@ -65,6 +65,7 @@ stop?"*
 | Engine settings `/paper/settings` | Operate | The daily auto-run switch (paper-trade intraday every session, 09:15–15:30 IST, no Start button), the engine's sizing (account size, max exposure, per-trade cap), the daily scan and its universe, and each strategy's paper/live switch. Shows the daily loss limit read-only |
 | Watchlist `/watchlist` | Operate | Tracked symbols at a glance |
 | Scanner `/scanner` | Operate | On-demand bullish scan results |
+| Option chain `/options` | Operate | Live NIFTY 50 / BANK NIFTY chain from the user's Upstox session: every strike's call and put premium, open interest and its change, IV, spot and put/call ratio. Read-only; also reached from those two index cards |
 | Journal `/journal` *(planned)* | Review | P&L calendar, every broker trade auto-imported, notes and setup tags |
 | Insights *(planned)* | Review | Plain-language findings about their own habits, e.g. "trades after 2 losses in a row: 31% win rate" |
 | Settings `/settings` | Operate | Broker connection, guardrails (including the daily loss limit, which also trips the engine's kill-switch), AI model |

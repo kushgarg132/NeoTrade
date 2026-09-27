@@ -3,6 +3,7 @@ import { Routes, Route, Link, Navigate } from 'react-router-dom';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const PaperOverview = lazy(() => import('./pages/PaperOverview'));
 const PaperSettings = lazy(() => import('./pages/PaperSettings'));
+const OptionChain = lazy(() => import('./pages/OptionChain'));
 const Suggestions = lazy(() => import('./pages/Suggestions'));
 const ScannerPage = lazy(() => import('./pages/ScannerPage'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
@@ -75,6 +76,7 @@ const App = () => {
       <Route path="/portfolio" element={<Navigate to="/paper/holdings" replace />} />
       <Route path="/trading" element={<Navigate to="/paper/engine" replace />} />
       <Route path="/scanner" element={gated(<ScannerPage />)} />
+      <Route path="/options" element={gated(<OptionChain />)} />
       <Route path="/watchlist" element={gated(<Watchlist />)} />
       <Route path="/journal" element={gated(<Journal />)} />
       <Route path="/settings" element={gated(<Settings />)} />

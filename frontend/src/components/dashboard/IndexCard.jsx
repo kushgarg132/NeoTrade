@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { Sheet, Field, Empty, Ruling } from '../doc/Doc';
 import { formatLevel, formatSignedPercent, formatNoteDate } from '../../utils/formatters';
@@ -27,6 +29,9 @@ const CloseTooltip = ({ active, payload }) => {
     </div>
   );
 };
+
+// Indices with a live option chain (backend/routers/options.py).
+const CHAINS = { '^NSEI': 'NIFTY', '^NSEBANK': 'BANKNIFTY' };
 
 const versus = (value, average) =>
   average ? `${value >= average ? 'Above' : 'Below'} by ${formatSignedPercent(((value - average) / average) * 100)}` : null;
@@ -67,6 +72,14 @@ const IndexCard = ({ detail, loading, error }) => {
         </span>
       </div>
       <p className="doc-meta normal-case mt-1">Day change against the previous close</p>
+      {CHAINS[detail.symbol] && (
+        <Link
+          to={`/options?u=${CHAINS[detail.symbol]}`}
+          className="mt-3 inline-flex items-center gap-1.5 min-h-9 field-label text-[var(--stamp)] hover:underline"
+        >
+          Option chain <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      )}
 
       <div className="mt-4 flex border border-[var(--rule-strong)] w-fit" role="tablist" aria-label="Chart range">
         {RANGES.map((item) => (

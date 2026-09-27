@@ -133,6 +133,10 @@ export const endpoints = {
   globalIndices: '/market/global',
   marketIndex: (ticker) => `/market/index/${encodeURIComponent(ticker)}`,
   marketIndexAnalysis: (ticker) => `/market/index/${encodeURIComponent(ticker)}/analysis`,
+  options: {
+    expiries: (underlying) => `/options/expiries?underlying=${underlying}`,
+    chain: (underlying, expiry) => `/options/chain?underlying=${underlying}&expiry=${expiry}`,
+  },
   marketNews: '/news/market',
   trading: {
     start: '/trading/start',
