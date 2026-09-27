@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from backend import market_cache
 from backend.components.analyst import news
 from backend.components.shared.models import NewsArticle
 
@@ -30,7 +31,7 @@ def searches(monkeypatch):
         ]
 
     monkeypatch.setattr(news, "fetch_google_news", fake)
-    monkeypatch.setattr(news, "_market_cache", {"at": 0.0, "articles": None})
+    monkeypatch.setattr(market_cache, "_local", {})
     return calls
 
 
@@ -61,8 +62,8 @@ def test_an_empty_answer_is_not_cached(monkeypatch):
     async def nothing(query, region="US", lang="en-US", limit=10):
         return []
     monkeypatch.setattr(news, "fetch_google_news", nothing)
-    monkeypatch.setattr(news, "_market_cache", {"at": 0.0, "articles": None})
+    monkeypatch.setattr(market_cache, "_local", {})
     app = FastAPI()
     app.include_router(news.router, prefix="/api/v1")
     TestClient(app).get("/api/v1/news/market")
-    assert news._market_cache["articles"] is None
+    assert "news" not in market_cache._local

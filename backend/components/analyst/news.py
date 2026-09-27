@@ -7,6 +7,7 @@ import logging
 import time
 from backend.configs.settings import settings
 
+from backend.market_cache import cached
 from backend.components.shared.models import NewsArticle
 import random
 
@@ -41,7 +42,6 @@ MARKET_QUERIES = [
 ]
 HEADLINE_MAX_AGE = timedelta(hours=36)
 MARKET_NEWS_TTL_SECONDS = 10 * 60
-_market_cache: dict = {"at": 0.0, "articles": None}
 
 
 def _title_key(title: str) -> str:
@@ -77,15 +77,13 @@ async def fresh_headlines(
 
 @router.get("/news/market", response_model=NewsFetchResponse)
 async def fetch_market_news():
-    """Today's Indian market headlines, newest first. Cached ten minutes:
-    every statement view asks, and the news does not move that fast."""
-    if _market_cache["articles"] is None or time.time() - _market_cache["at"] > MARKET_NEWS_TTL_SECONDS:
-        articles = await fresh_headlines(MARKET_QUERIES)
-        # An empty answer (Google down) is not cached, so the next view retries.
-        if articles:
-            _market_cache.update(at=time.time(), articles=articles)
-        return NewsFetchResponse(articles=articles)
-    return NewsFetchResponse(articles=_market_cache["articles"])
+    """Today's Indian market headlines, newest first. Refreshed every ten
+    minutes behind a stale-while-revalidate cache (backend/market_cache.py):
+    every statement view asks, and none should wait on Google News."""
+    async def fetch():
+        return [a.model_dump(mode="json") for a in await fresh_headlines(MARKET_QUERIES)]
+
+    return NewsFetchResponse(articles=await cached("news", MARKET_NEWS_TTL_SECONDS, fetch))
 
 async def fetch_news_logic(symbols: List[str], limit: int = 10) -> List[NewsArticle]:
     """

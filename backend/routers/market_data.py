@@ -4,6 +4,8 @@ import yfinance as yf
 import logging
 import asyncio
 
+from backend.market_cache import cached
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -78,60 +80,45 @@ NIFTY_50_SYMBOLS = [
     "TITAN.NS", "ULTRACEMCO.NS", "UPL.NS", "WIPRO.NS"
 ]
 
-# Simple in-memory cache
-class MarketCache:
-    def __init__(self):
-        self.data = None
-        self.last_updated = 0
-        self.ttl = 300  # 5 minutes
+# How long a feed is fresh; older ones are still served while a refresh
+# runs (backend/market_cache.py).
+QUOTES_TTL = 60
+MOVERS_TTL = 5 * 60
 
-    def get(self):
-        import time
-        if self.data and (time.time() - self.last_updated < self.ttl):
-            return self.data
-        return None
 
-    def set(self, data):
-        import time
-        self.data = data
-        self.last_updated = time.time()
+def _movers_sync() -> List[Dict[str, Any]]:
+    """The six NIFTY 50 stocks that moved most today, from one batched
+    download of every constituent's last few daily closes -- 49 separate
+    quote calls took most of the home page's load time."""
+    closes = yf.download(NIFTY_50_SYMBOLS, period="5d", interval="1d", progress=False, threads=True)["Close"]
+    movers = []
+    for symbol in NIFTY_50_SYMBOLS:
+        if symbol not in closes:
+            continue
+        series = closes[symbol].dropna()
+        if len(series) < 2:
+            continue
+        price, prev = float(series.iloc[-1]), float(series.iloc[-2])
+        movers.append({"name": symbol, "symbol": symbol, "value": price, "change": price - prev,
+                       "percent": (price - prev) / prev * 100 if prev else 0.0})
+    movers.sort(key=lambda m: abs(m["percent"]), reverse=True)
+    return movers[:6]
 
-trending_cache = MarketCache()
+
+async def _quotes(names_to_symbols: Dict[str, str]) -> List[Dict[str, Any]]:
+    results = await asyncio.gather(*(fetch_ticker_data(sym, name) for name, sym in names_to_symbols.items()))
+    return [r for r in results if r is not None]
 
 
 @router.get("/market/indices")
 async def get_market_indices():
-    tasks = [fetch_ticker_data(sym, name) for name, sym in INDICES.items()]
-    results = await asyncio.gather(*tasks)
-    # Filter out failed fetches
-    return [r for r in results if r is not None]
+    return await cached("indices", QUOTES_TTL, lambda: _quotes(INDICES))
+
 
 @router.get("/market/trending")
 async def get_trending_stocks():
-    # Check cache first
-    cached_data = trending_cache.get()
-    if cached_data:
-        return cached_data
+    return await cached("movers", MOVERS_TTL, lambda: asyncio.to_thread(_movers_sync))
 
-    # Fetch all NIFTY 50 stocks
-    # The name is just the symbol for now to save complexity/time on additional fetches, 
-    # or we could carry a map if specific names are needed.
-    tasks = [fetch_ticker_data(sym, sym) for sym in NIFTY_50_SYMBOLS]
-    results = await asyncio.gather(*tasks)
-    
-    # Filter valid results and sort by absolute percentage change (volatility/trending)
-    valid_results = [r for r in results if r is not None]
-    
-    # Sort by absolute percent change descending
-    valid_results.sort(key=lambda x: abs(x['percent']), reverse=True)
-    
-    # Take top 6
-    top_trending = valid_results[:6]
-    
-    # Update cache
-    trending_cache.set(top_trending)
-    
-    return top_trending
 
 # Global Indices
 GLOBAL_INDICES = {
@@ -145,9 +132,7 @@ GLOBAL_INDICES = {
 @router.get("/market/global")
 async def get_global_indices():
     """Fetch global market indices."""
-    tasks = [fetch_ticker_data(sym, name) for name, sym in GLOBAL_INDICES.items()]
-    results = await asyncio.gather(*tasks)
-    return [r for r in results if r is not None]
+    return await cached("global", QUOTES_TTL, lambda: _quotes(GLOBAL_INDICES))
 
 
 
