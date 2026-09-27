@@ -16,7 +16,7 @@ from backend.core.models import Order, Side
 from backend.engine.execution.routing import RoutingExecutionClient
 from backend.engine.execution.simulated import SimulatedExecutionClient
 from backend.instruments.models import Instrument
-from tests.test_upstox_adapter import _adapter, _redis, _scrip
+from backend.tests.test_upstox_adapter import _adapter, _redis, _scrip
 
 CONTRACT = Instrument(
     exchange="NFO", tradingsymbol="RELIANCE24DEC1300CE", name="RELIANCE", instrument_token=11,

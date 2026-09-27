@@ -16,7 +16,7 @@ from backend.instruments.models import Instrument
 from backend.options.backtest import ModelOptions, _expiry, _strike_step
 from backend.risk.backtest_gate import BacktestGateStore
 from backend.risk.gate_backtest import backtest_for_gate
-from tests.test_intraday_options import _BuyCallOnce
+from backend.tests.test_intraday_options import _BuyCallOnce
 
 START = datetime(2024, 12, 2, 4, 0, tzinfo=timezone.utc)  # 09:30 IST, a Monday
 
