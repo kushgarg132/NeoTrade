@@ -66,6 +66,7 @@ stop?"*
 | Watchlist `/watchlist` | Operate | Tracked symbols at a glance |
 | Scanner `/scanner` | Operate | On-demand bullish scan results |
 | Option chain `/options` | Operate | Live NIFTY 50 / BANK NIFTY chain from the user's Upstox session: every strike's call and put premium, open interest and its change, IV, spot and put/call ratio. Read-only; also reached from those two index cards |
+| Portfolio `/portfolio` | Review | Long-term holdings read from every connected broker (Kite, Upstox, Angel One; Kite's mutual funds too), merged by ISIN: value, gain, today's move, weights, sector split, holdings that move together, and each holding against NIFTY over the same days (from the journal's buy dates, saying how much it covers). Facts only for now; AI review and verdicts are the next phases |
 | Journal `/journal` | Review | P&L calendar, every broker trade auto-imported (options and futures included, each round trip marked CALL/PUT/FUT), stocks/options/futures P&L kept apart, notes and setup tags |
 | Insights *(planned)* | Review | Plain-language findings about their own habits, e.g. "trades after 2 losses in a row: 31% win rate" |
 | Settings `/settings` | Operate | Broker connection, guardrails (including the daily loss limit, which also trips the engine's kill-switch, and options limits: trades per day, lots per trade, a warning on unhedged option selling), AI model |

@@ -9,6 +9,7 @@ const ScannerPage = lazy(() => import('./pages/ScannerPage'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
 const Journal = lazy(() => import('./pages/Journal'));
+const MyPortfolio = lazy(() => import('./pages/MyPortfolio'));
 const Trading = lazy(() => import('./pages/Trading'));
 const Settings = lazy(() => import('./pages/Settings'));
 import Login from './pages/Login';
@@ -73,7 +74,7 @@ const App = () => {
       <Route path="/paper/settings" element={gated(<PaperSettings />)} />
       {/* The engine's pages moved under /paper; old links and bookmarks follow. */}
       <Route path="/suggestions" element={<Navigate to="/paper/decisions" replace />} />
-      <Route path="/portfolio" element={<Navigate to="/paper/holdings" replace />} />
+      <Route path="/portfolio" element={gated(<MyPortfolio />)} />
       <Route path="/trading" element={<Navigate to="/paper/engine" replace />} />
       <Route path="/scanner" element={gated(<ScannerPage />)} />
       <Route path="/options" element={gated(<OptionChain />)} />

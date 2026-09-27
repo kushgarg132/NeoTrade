@@ -5,6 +5,7 @@ import {
   Layers,
   BookMarked,
   NotebookPen,
+  PieChart,
   Network,
   Settings,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import {
 export const SECTIONS = [
   { icon: FileText, label: 'Statement', short: 'Note', path: '/', primary: true },
   { icon: NotebookPen, label: 'Journal', path: '/journal', primary: true },
+  { icon: PieChart, label: 'Portfolio', path: '/portfolio' },
   { icon: BookMarked, label: 'Watchlist', short: 'Watch', path: '/watchlist', primary: true },
   { icon: ScanLine, label: 'Scanner', path: '/scanner' },
   { icon: Layers, label: 'Option chain', path: '/options' },

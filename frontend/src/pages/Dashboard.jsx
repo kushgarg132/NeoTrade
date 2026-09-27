@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, X } from 'lucide-react';
 import Layout from '../components/Layout';
 import SmartSearch from '../components/dashboard/SmartSearch';
@@ -236,6 +236,19 @@ const Dashboard = () => {
             <GuardrailAlerts />
 
             <BrokerPnl journal={journal} loading={journalLoading} error={journalError} />
+
+            <Link
+              to="/portfolio"
+              className="sheet flex items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--paper-sunk)] transition-colors"
+            >
+              <span>
+                <span className="field-label text-[var(--ink)] block">Portfolio</span>
+                <span className="doc-meta normal-case">
+                  Your holdings from every broker, how spread out they are, and how they compare with NIFTY
+                </span>
+              </span>
+              <span aria-hidden="true" className="text-[var(--stamp)]">→</span>
+            </Link>
 
             {/* Real orders a live strategy placed. Absent unless one exists,
                 because most accounts never switch a strategy live. */}

@@ -173,6 +173,10 @@ export const endpoints = {
     verify: '/guardrails/telegram/verify',
     telegram: '/guardrails/telegram',
   },
+  portfolio: {
+    get: '/portfolio',
+    refresh: '/portfolio/refresh',
+  },
   journal: {
     get: '/journal',
     sync: '/journal/sync',

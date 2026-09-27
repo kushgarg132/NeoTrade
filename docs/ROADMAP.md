@@ -427,6 +427,19 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
   `orb_options` to fail: its equity twin `orb_breakout` had profit factor 0.64 in Phase 4.
   Not verified against a real account: neither broker's NFO order path, Upstox's
   `product: "D"` for F&O carry-forward, Kite's per-request history caps (from its docs).
+- **2026-09-27, portfolio phases 1-2 (holdings + scorecard).** `get_holdings` on every
+  adapter: Kite `holdings()` + `mf_holdings()` (fields from Zerodha's kiteconnect-mocks),
+  Upstox `/v2/portfolio/long-term-holdings` (official SDK model), Angel One `getHolding`
+  (path from the Python SDK; averageprice/ltp/close in neither SDK, read defensively).
+  `backend/portfolio/scorecard.py` (pure) merges by ISIN and computes totals, weights,
+  effective number of holdings, sectors (yfinance, cached a month in `instrument_sectors`),
+  pairs correlating 0.8+ over a year, and a FIFO lot-by-lot NIFTY comparison from journal
+  buys; `service.py` saves each run to `portfolio_snapshots`. `/portfolio` page, linked from
+  home. Open, and why: ETF/MF overlap and expense ratios need a holdings/expense data source
+  not in the app; ETFs are recognised by name only; Upstox `quantity` vs `t1_quantity` and
+  Angel One's price fields need a real account. Next: phase 3 (stock health), phase 4
+  (rule-scored SELL/HOLD/ADD through `composite.py`, behind `portfolio_verdicts: admin|all`
+  -- verdicts for all users need SEBI RA registration first), phase 5 (weekly run + alerts).
 
 ---
 
