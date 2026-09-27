@@ -9,7 +9,12 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="NeoTrade" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- black-translucent: iOS runs the page under the status bar and reports
+         its real height in env(safe-area-inset-top), which the status-bar
+         strip in index.css fills. "default" drew the page under the clock
+         while reporting a height of 0. The clock is always white here, so
+         the strip is always dark. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#14150f" media="(prefers-color-scheme: dark)" />
     <title>NeoTrade</title>
