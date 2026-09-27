@@ -268,9 +268,9 @@ async def _option_exit_orders(
     reaches the stop or target the strategy set on it, or at the 15:15
     square-off. Every open leg on this underlying is repriced first, so its
     `mark` is the premium an exit fills at and what the kill-switch counts.
-    ponytail: a leg whose repricing fails keeps its last mark, and exits at
-    that stale premium if it must close -- fine for paper; live options
-    orders (roadmap step 4) must use the broker's own fill instead."""
+    ponytail: a leg whose repricing fails keeps its last mark, and a paper
+    exit fills at that stale premium; a live leg fills at the broker's own
+    price regardless."""
     orders = []
     for symbol, leg in option_legs.items():
         position = portfolio.positions.get(symbol)
@@ -285,7 +285,7 @@ async def _option_exit_orders(
             orders.append(Order(
                 id=str(uuid.uuid4()), symbol=symbol, side=Side.SELL, quantity=position.quantity,
                 order_type="MARKET", limit_price=None, product="MIS",
-                strategy_name=leg["strategy_name"],
+                strategy_name=leg["strategy_name"], contract=leg["contract"],
             ))
     return orders
 
@@ -400,7 +400,7 @@ async def run(
             # An option has no bar of its own: paper fills it at the
             # premium last read for it.
             if order.symbol in option_legs and hasattr(execution, "mark"):
-                execution.mark(order.symbol, option_legs[order.symbol]["mark"], bar.timestamp, option=True)
+                execution.mark(order.symbol, option_legs[order.symbol]["mark"], bar.timestamp)
             if ledger is not None:
                 await ledger.record_order(order)
             await execution.submit(order)

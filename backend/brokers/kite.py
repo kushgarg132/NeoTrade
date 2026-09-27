@@ -18,6 +18,9 @@ from backend.instruments.models import Instrument
 
 
 class KiteAdapter:
+    # Places NFO option orders (Order.contract) as well as NSE equity.
+    supports_options = True
+
     def __init__(self, api_key: Optional[str], api_secret: Optional[str], redis, user_id: str) -> None:
         self._api_key = api_key
         self._session = KiteSessionManager(api_key, api_secret, redis, user_id=user_id)

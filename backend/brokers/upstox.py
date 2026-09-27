@@ -101,8 +101,9 @@ _OPTION_CHAIN_URL = "https://api.upstox.com/v2/option/chain"
 
 _INTERVAL_MAP = {"1m": "1minute", "30m": "30minute", "1d": "day"}
 _PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825}
-_PRODUCT_MAP = {"MIS": "I", "CNC": "D"}
-_PRODUCT_FROM_UPSTOX = {v: k for k, v in _PRODUCT_MAP.items()}
+_PRODUCT_FROM_UPSTOX = {"I": "MIS", "D": "CNC"}
+# "D" is delivery for equity and carry-forward for F&O, so NRML maps there too.
+_PRODUCT_MAP = {"MIS": "I", "CNC": "D", "NRML": "D"}
 
 logger = logging.getLogger(__name__)
 
@@ -336,12 +337,36 @@ class UpstoxAdapter:
             return "CANCELLED"
         return "ACKNOWLEDGED"
 
-    async def place_order(self, order: Order) -> str:
-        row = await self._resolve(Instrument(
-            exchange="NSE", tradingsymbol=order.symbol, name=order.symbol,
+    # Places option orders too: the contract's instrument_key comes off the
+    # option chain (see _option_key).
+    supports_options = True
+
+    async def _option_key(self, contract: Instrument) -> str:
+        """Upstox's instrument_key for a contract from Kite's NFO dump. The
+        two brokers spell option symbols differently, so it is matched by
+        underlying, expiry, strike and CE/PE on Upstox's own option chain,
+        whose legs carry their instrument_key (verified against the SDK's
+        models, like option_chain itself). Refuses rather than guesses."""
+        underlying = await self._resolve(Instrument(
+            exchange="NSE", tradingsymbol=contract.name, name=contract.name,
             instrument_token=0, exchange_token=0, instrument_type="EQ",
             segment="NSE_EQ", lot_size=1, tick_size=0.05,
         ))
+        leg = "put" if contract.instrument_type == "PE" else "call"
+        for row in await self.option_chain(underlying["instrument_key"], contract.expiry.date().isoformat()):
+            if row["strike"] == contract.strike and (row[leg] or {}).get("instrument_key"):
+                return row[leg]["instrument_key"]
+        raise ValueError(f"{contract.tradingsymbol!r} not found on Upstox's option chain")
+
+    async def place_order(self, order: Order) -> str:
+        if order.contract is not None:
+            instrument_key = await self._option_key(order.contract)
+        else:
+            instrument_key = (await self._resolve(Instrument(
+                exchange="NSE", tradingsymbol=order.symbol, name=order.symbol,
+                instrument_token=0, exchange_token=0, instrument_type="EQ",
+                segment="NSE_EQ", lot_size=1, tick_size=0.05,
+            )))["instrument_key"]
         token = await self.get_access_token()
 
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -352,7 +377,7 @@ class UpstoxAdapter:
                 "transaction_type": order.side.value,
                 "validity": "DAY",
                 "price": 0,
-                "instrument_token": row["instrument_key"],
+                "instrument_token": instrument_key,
                 "trigger_price": 0,
                 "disclosed_quantity": 0,
             }, headers=self._headers(token))

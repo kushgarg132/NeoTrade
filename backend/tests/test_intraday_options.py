@@ -9,8 +9,7 @@ import pytest
 from mongomock_motor import AsyncMongoMockClient
 
 from backend.core.clock import SimClock
-from backend.core.models import Bar, Intent, Order, Side
-from backend.engine.execution.routing import RoutingExecutionClient
+from backend.core.models import Bar, Intent, Side
 from backend.engine.execution.simulated import SimulatedExecutionClient
 from backend.engine.portfolio import Portfolio
 from backend.engine.protocols import StrategySpec
@@ -149,20 +148,6 @@ class _NoPremium(_Premiums):
 
     async def __call__(self, contract):
         return None
-
-
-@pytest.mark.asyncio
-async def test_routing_keeps_option_orders_on_paper():
-    class _Live:
-        async def submit(self, order):
-            raise AssertionError("an option order reached the broker")
-
-    paper = SimulatedExecutionClient()
-    routing = RoutingExecutionClient(paper=paper, live_by_strategy={"orb_options": _Live()})
-    routing.mark(CALL, 5.0, START, option=True)
-    order = Order(id="1", symbol=CALL, side=Side.BUY, quantity=250, order_type="MARKET",
-                  strategy_name="orb_options")
-    assert await routing.submit(order) == "1"
 
 
 def test_orb_options_turns_a_breakdown_into_a_bought_put(monkeypatch):

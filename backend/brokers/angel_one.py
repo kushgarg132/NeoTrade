@@ -242,7 +242,11 @@ class AngelOneAdapter:
             return "CANCELLED"
         return "ACKNOWLEDGED"
 
+    supports_options = False
+
     async def place_order(self, order: Order) -> str:
+        if order.contract is not None:
+            raise ValueError("Angel One option orders are not supported yet")
         row = await self._resolve(Instrument(
             exchange="NSE", tradingsymbol=order.symbol, name=order.symbol,
             instrument_token=0, exchange_token=0, instrument_type="EQ",

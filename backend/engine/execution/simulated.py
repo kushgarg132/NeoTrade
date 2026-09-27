@@ -20,7 +20,6 @@ class SimulatedExecutionClient:
         self._last_price: dict[str, float] = {}
         self._last_timestamp: dict = {}
         self._pending_fills: list[Fill] = []
-        self._options: set[str] = set()
 
     def on_bar(self, symbol: str, bar: Bar) -> None:
         """Runner-side hook, not part of the shared ExecutionClient
@@ -29,14 +28,12 @@ class SimulatedExecutionClient:
         against it."""
         self.mark(symbol, bar.close, bar.timestamp)
 
-    def mark(self, symbol: str, price: float, timestamp, option: bool = False) -> None:
+    def mark(self, symbol: str, price: float, timestamp) -> None:
         """The price a MARKET order for `symbol` fills at next. The runner
         calls it directly for an option contract, which has no bar of its
-        own; `option` selects the options cost model for its fills."""
+        own."""
         self._last_price[symbol] = price
         self._last_timestamp[symbol] = timestamp
-        if option:
-            self._options.add(symbol)
 
     async def submit(self, order: Order) -> str:
         if order.order_type != "MARKET":
@@ -50,7 +47,7 @@ class SimulatedExecutionClient:
             )
 
         costs = (
-            calculate_options_costs(price, order.quantity, order.side) if order.symbol in self._options
+            calculate_options_costs(price, order.quantity, order.side) if order.contract is not None
             else calculate_indian_costs(price, order.quantity, order.side, order.product)
         )
         self._pending_fills.append(Fill(

@@ -39,6 +39,10 @@ class BrokerExecutionClient:
         self._user_id = user_id
         self._pending_fills: list[Fill] = []
 
+    @property
+    def supports_options(self) -> bool:
+        return getattr(self._adapter, "supports_options", False)
+
     async def submit(self, order: Order) -> str:
         existing = await self._store.get_broker_order_id(order.id)
         if existing is not None:

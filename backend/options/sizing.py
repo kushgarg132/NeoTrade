@@ -111,7 +111,7 @@ async def size_option_intent(
         order = Order(
             id=str(uuid.uuid4()), symbol=contract.tradingsymbol, side=Side.BUY,
             quantity=float(lots * contract.lot_size), order_type="MARKET", limit_price=None,
-            product="MIS",
+            product="MIS", contract=contract,
         )
         return OptionSizingResult(
             order=order, contract=contract, premium_estimate=live,
@@ -130,7 +130,7 @@ async def size_option_intent(
     order = Order(
         id=str(uuid.uuid4()), symbol=contract.tradingsymbol, side=intent.side,
         quantity=float(lots * contract.lot_size), order_type="MARKET", limit_price=None,
-        product="NRML",
+        product="NRML", contract=contract,
     )
     return OptionSizingResult(
         order=order, contract=contract, premium_estimate=premium,

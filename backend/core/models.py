@@ -11,6 +11,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from backend.instruments.models import Instrument
+
 
 class Side(str, Enum):
     """Compare by identity (`side == Side.BUY`) or, once a value has round-
@@ -99,6 +101,11 @@ class Order(BaseModel):
     # RoutingExecutionClient (backend/engine/execution/routing.py), only
     # to paper. Set by size_intents from owner_by_symbol.
     strategy_name: Optional[str] = None
+    # The listed F&O contract for an option order (its NFO row from the
+    # instrument master); None for every equity order. Brokers that can
+    # place option orders read the contract off it; any other broker
+    # adapter must refuse it (see supports_options on the adapters).
+    contract: Optional[Instrument] = None
 
     def whole_quantity(self) -> int:
         """Equities trade in whole shares -- every broker adapter's

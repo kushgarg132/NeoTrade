@@ -22,6 +22,12 @@ orders/ + .../portfolio/, fetched live 2026-09-09):
   tradingsymbol, transaction_type, quantity, average_price, fill_timestamp
   (the SDK parses 19-char timestamps into naive IST datetimes itself).
 
+An option order carries its NFO contract (Order.contract): Kite takes the
+same tradingsymbol with exchange="NFO", product NRML or MIS (Kite's order
+docs list NFO among the exchanges and NRML as the F&O carry-forward
+product). The contract list itself is Kite's own dump, so the symbol is
+Kite's format already.
+
 Only MARKET orders are placed here -- LIMIT order price handling is out of
 scope (see docs/superpowers/specs/2026-09-09-live-equity-execution-design.md).
 """
@@ -42,7 +48,7 @@ class KiteOrderClient:
         return await asyncio.to_thread(
             kite.place_order,
             variety="regular",
-            exchange="NSE",
+            exchange=order.contract.exchange if order.contract is not None else "NSE",
             tradingsymbol=order.symbol,
             transaction_type=order.side.value,
             quantity=order.whole_quantity(),
