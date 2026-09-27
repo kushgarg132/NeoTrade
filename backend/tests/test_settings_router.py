@@ -259,3 +259,22 @@ def test_strategy_promotion_lists_what_each_strategy_still_needs(client, db, mon
     assert {c["rule"] for c in row["paper"]["checks"]} == {
         "days", "trades", "net", "profit_factor", "max_drawdown_pct",
     }
+
+
+def test_strategy_promotion_includes_the_last_backtest_and_the_options_strategy(client, db, monkeypatch):
+    import asyncio
+    from datetime import datetime, timezone
+
+    from backend.components.shared.models import BacktestResult
+    from backend.risk.backtest_gate import BacktestGateStore
+
+    monkeypatch.setattr(settings_router, "db", type("_Db", (), {"db": db})())
+    asyncio.run(BacktestGateStore(db).record("orb_breakout", BacktestResult(
+        symbol="X", start_date=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        end_date=datetime(2026, 8, 28, tzinfo=timezone.utc), total_trades=198, win_rate=0.42,
+        profit_factor=0.64, total_pnl=-1.0, max_drawdown=0.25, sharpe_ratio=-4.2, trades=[],
+    )))
+    rows = {r["name"]: r for r in client.get("/api/v1/settings/strategies/promotion").json()}
+    assert rows["orb_breakout"]["backtest"]["days"] == 58
+    assert rows["orb_breakout"]["backtest"]["trades"] == 198
+    assert rows["orb_options"]["backtest"] is None

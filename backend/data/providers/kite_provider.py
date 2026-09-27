@@ -50,7 +50,16 @@ _PERIOD_DAYS = {
     "2y": 730,
     "5y": 1825,
     "10y": 3650,
+    # HistoricalFeed asks for "max" on intraday timeframes; a year is what
+    # the backtest gate's window needs.
+    "max": 365,
 }
+# Kite's documented cap on one historical request's span, by interval
+# (https://kite.trade/docs/connect/v3/historical/): 60 days of minute
+# candles, 100 of 3-60 minute ones, 2000 of daily. Longer ranges are
+# fetched in windows under the cap.
+_MAX_DAYS_PER_REQUEST = {"minute": 60, "day": 2000}
+_DEFAULT_MAX_DAYS = 100
 
 
 class KiteProvider:
@@ -84,9 +93,14 @@ class KiteProvider:
         from_date, to_date = self._period_to_range(period)
 
         kite = self._kite_client_factory()
-        rows = await asyncio.to_thread(
-            kite.historical_data, instrument.instrument_token, from_date, to_date, kite_interval, False, False
-        )
+        window = timedelta(days=_MAX_DAYS_PER_REQUEST.get(kite_interval, _DEFAULT_MAX_DAYS) - 1)
+        rows, start = [], from_date
+        while start < to_date:
+            end = min(start + window, to_date)
+            rows += await asyncio.to_thread(
+                kite.historical_data, instrument.instrument_token, start, end, kite_interval, False, False
+            )
+            start = end + timedelta(seconds=1)
         return [
             PriceCandle(
                 symbol=instrument.tradingsymbol,

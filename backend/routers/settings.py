@@ -9,6 +9,7 @@ and the deployment model lives in Mongo behind an admin check.
 """
 
 import logging
+from datetime import datetime
 from typing import Literal, Optional
 
 import httpx
@@ -84,7 +85,7 @@ async def list_strategies(user: User = Depends(get_current_user)):
     name list doesn't depend on it."""
     from backend.strategies.registry import build_default_strategies
 
-    return [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"])]
+    return [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"])]
 
 
 @router.get("/settings/strategies/promotion")
@@ -100,7 +101,7 @@ async def strategy_promotion(
     from backend.risk.paper_gate import paper_records
     from backend.strategies.registry import build_default_strategies
 
-    names = [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"])]
+    names = [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"])]
     account_size = (await prefs.get(user.id))["account_size"]
     records = await paper_records(db.db, user.id, names, account_size)
     gate = BacktestGateStore(db.db)
@@ -108,8 +109,16 @@ async def strategy_promotion(
     for name in names:
         backtest = await gate.latest(name)
         passed = bool(backtest and backtest["passed"])
+        summary = None
+        if backtest:
+            result = backtest["result"]
+            summary = {
+                "run_at": backtest["run_at"], "trades": result["total_trades"],
+                "profit_factor": result["profit_factor"], "max_drawdown": result["max_drawdown"],
+                "days": (datetime.fromisoformat(result["end_date"]) - datetime.fromisoformat(result["start_date"])).days,
+            }
         rows.append({
-            "name": name, "backtest_passed": passed, "paper": records[name],
+            "name": name, "backtest_passed": passed, "backtest": summary, "paper": records[name],
             "eligible": passed and records[name]["passed"],
         })
     return rows

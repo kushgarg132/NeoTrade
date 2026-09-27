@@ -26,7 +26,7 @@ def realized_volatility(closes: list[float], window: int = 20) -> float:
 
 
 def black_scholes_put(
-    spot: float, strike: float, days_to_expiry: int, iv: float, risk_free_rate: float = 0.07,
+    spot: float, strike: float, days_to_expiry: float, iv: float, risk_free_rate: float = 0.07,
 ) -> float:
     """Standard Black-Scholes European put premium. Returns 0.0 for a
     non-positive time-to-expiry, volatility, spot, or strike (degenerate
@@ -39,6 +39,17 @@ def black_scholes_put(
     d2 = d1 - iv * math.sqrt(t)
     put = strike * math.exp(-risk_free_rate * t) * _NORMAL.cdf(-d2) - spot * _NORMAL.cdf(-d1)
     return max(put, 0.0)
+
+
+def black_scholes_call(
+    spot: float, strike: float, days_to_expiry: float, iv: float, risk_free_rate: float = 0.07,
+) -> float:
+    """The call, by put-call parity from black_scholes_put (same guards)."""
+    if days_to_expiry <= 0 or iv <= 0 or spot <= 0 or strike <= 0:
+        return 0.0
+    t = days_to_expiry / 365.0
+    put = black_scholes_put(spot, strike, days_to_expiry, iv, risk_free_rate)
+    return max(put + spot - strike * math.exp(-risk_free_rate * t), 0.0)
 
 
 # ponytail: flat approximation, no live broker margin-API call this phase.

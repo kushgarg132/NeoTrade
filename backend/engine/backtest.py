@@ -15,6 +15,7 @@ from backend.engine.portfolio import Portfolio
 from backend.engine.protocols import Strategy
 from backend.engine.runner import run
 from backend.instruments.models import Instrument
+from backend.options.backtest import ModelOptions
 
 
 async def run_backtest(
@@ -26,7 +27,10 @@ async def run_backtest(
     timeframe: str,
     account_size: float = 1_000_000.0,
     max_exposure: float = 1_000_000.0,
+    model_options: ModelOptions | None = None,
 ) -> BacktestResult:
+    """`model_options` prices option contracts for an options strategy
+    (backend/options/backtest.py); without it an option intent never sizes."""
     feed = HistoricalFeed(provider, instruments, start, end, timeframe)
     execution = SimulatedExecutionClient()
     portfolio = Portfolio()
@@ -44,6 +48,8 @@ async def run_backtest(
         # really ran (see docs/ROADMAP.md Phase 4).
         async for bar in original_feed_iter():
             bar_timestamps.append(bar.timestamp)
+            if model_options is not None:
+                model_options.observe(feed.symbol_for_token[bar.instrument_token], bar)
             yield bar
 
     trades: list[dict] = []
@@ -82,6 +88,8 @@ async def run_backtest(
         symbol_for_token=feed.symbol_for_token,
         account_size=account_size,
         max_exposure=max_exposure,
+        master=model_options,
+        premium_source=model_options,
     )
 
     actual_start = min(bar_timestamps) if bar_timestamps else start

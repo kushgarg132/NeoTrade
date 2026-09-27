@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from backend import broadcast
 from backend.auth.broker_credentials import get_credential_store
-from backend.auth.dependency import get_current_user
+from backend.auth.dependency import get_current_user, require_admin
 from backend.auth.models import User
 from backend.core.models import Venue
 from backend.brokers.protocol import BrokerSessionState
@@ -33,6 +33,7 @@ from backend.prefs import PrefsStore
 from backend.risk.backtest_gate import BacktestGateStore
 from backend.risk.kill_switch import KillSwitchStore
 from backend.risk.paper_gate import paper_records
+from backend.risk.gate_backtest import backtest_for_gate
 from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
 from backend.core.clock import SystemClock
 from backend.database import db
@@ -452,3 +453,33 @@ async def search_instruments(q: str, limit: int = 10):
     master = InstrumentMaster(db.db)
     instruments = await master.search(q, limit=limit)
     return [i.model_dump() for i in instruments]
+
+
+@router.post("/backtests/{strategy_name}", status_code=202)
+async def run_gate_backtest(strategy_name: str, admin: User = Depends(require_admin)):
+    """Backtests one strategy over the last year and records the result
+    into the backtest gate every user's live routing reads -- hence admin
+    only. History comes from the admin's own Kite session when connected
+    (a year of 5-minute candles); yfinance otherwise, whose ~60 days of
+    intraday history cannot clear the gate's one-year window. Runs in the
+    background; GET the same path for the result."""
+    kite = await get_broker_adapter("kite", admin.id, get_credential_store(), db.redis)
+    provider = kite if await kite.state() == BrokerSessionState.ACTIVE else YFinanceProvider()
+
+    async def _run():
+        try:
+            await backtest_for_gate(db.db, strategy_name, provider, datetime.now(IST))
+        except Exception:
+            logger.exception("gate backtest of %s failed", strategy_name)
+
+    asyncio.create_task(_run())
+    return {"started": strategy_name, "history": "kite" if provider is kite else "yfinance"}
+
+
+@router.get("/backtests/{strategy_name}")
+async def latest_gate_backtest(strategy_name: str, _user: User = Depends(get_current_user)):
+    doc = await BacktestGateStore(db.db).latest(strategy_name)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="No backtest recorded")
+    result = {k: v for k, v in doc["result"].items() if k != "trades"}
+    return {"strategy": strategy_name, "passed": doc["passed"], "run_at": doc["run_at"], **result}

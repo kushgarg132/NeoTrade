@@ -406,6 +406,27 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
   net P&L within 5% of `account_size`. Added to the backtest gate, never replacing it.
   Enforced in `launch_run`; `GET /settings/strategies/promotion` reports each check's need
   and have, and Engine settings shows the gap under each strategy's switch.
+- **2026-09-27, live options orders.** `Order.contract` carries the NFO row. Kite places it
+  on exchange NFO with its own tradingsymbol; Upstox matches the contract on its option
+  chain (underlying, expiry, strike, CE/PE) for the leg's `instrument_key` and refuses when it
+  is missing, since Upstox spells option symbols differently from Kite's dump; Angel One
+  refuses option orders (`supports_options`). `RoutingExecutionClient` routes an option order
+  live only through a broker that supports it. Two sources:
+  (1) an option proposal approved live (`POST /suggestions/{id}/approve-live`, a second
+  confirming tap in Decisions): claimed as SENDING before the order goes out, refused on a
+  kill-switch day, status checked for 5 seconds, a fill booked as `venue="live"` at the
+  broker's average price, a broker refusal returns it to PENDING;
+  (2) `orb_options`, once switched live and through both gates. For that it can now be
+  backtested: `backend/options/backtest.py` lists monthly contracts around spot and prices
+  them by Black-Scholes on the last five sessions' 5-minute volatility (no smile, spread or
+  liquidity -- optimistic), and `backend/risk/gate_backtest.py` runs any registered strategy
+  over a year and records it into the gate -- replacing Phase 4's uncommitted scratch script.
+  Admin-only `POST /trading/backtests/{name}` (a link under each strategy in Engine settings
+  for an admin) uses the admin's Kite session, whose historical API now fetches a year of
+  5-minute candles in 99-day windows; yfinance's ~60 days cannot clear the window. Expect
+  `orb_options` to fail: its equity twin `orb_breakout` had profit factor 0.64 in Phase 4.
+  Not verified against a real account: neither broker's NFO order path, Upstox's
+  `product: "D"` for F&O carry-forward, Kite's per-request history caps (from its docs).
 
 ---
 
