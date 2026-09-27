@@ -146,6 +146,7 @@ export const endpoints = {
     fills: (venue) => inBook('/trading/fills', venue),
     equity: (venue) => inBook('/trading/equity', venue),
     killSwitch: '/trading/kill-switch',
+    backtest: (name) => `/trading/backtests/${name}`,
     trades: (status, venue) =>
       inBook(status ? `/trading/trades?status=${status}` : '/trading/trades', venue),
     instruments: (q) => `/trading/instruments?q=${encodeURIComponent(q)}`,

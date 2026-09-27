@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Sheet, Ruling } from '../doc/Doc';
 import { Row, NumberField } from '../settings/Fields';
 import api, { endpoints } from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 
@@ -28,7 +29,14 @@ const GAP = {
 
 // What a strategy still lacks before its live switch sends real orders.
 function promotionGaps(row) {
-  const gaps = row.backtest_passed ? [] : ['a passing backtest'];
+  const last = row.backtest;
+  const gaps = row.backtest_passed
+    ? []
+    : [
+        last
+          ? `a passing backtest (last: ${last.trades} trades over ${last.days} days, profit factor ${last.profit_factor.toFixed(2)})`
+          : 'a passing backtest (none run yet)',
+      ];
   for (const check of row.paper.checks) if (!check.ok) gaps.push(GAP[check.rule](check));
   return gaps.join(', ');
 }
@@ -39,6 +47,22 @@ const EngineSettings = () => {
   const [saving, setSaving] = useState(false);
   const [strategyNames, setStrategyNames] = useState([]);
   const [promotion, setPromotion] = useState({});
+  const [backtesting, setBacktesting] = useState({});
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  const runBacktest = async (name) => {
+    setBacktesting((state) => ({ ...state, [name]: 'Starting…' }));
+    try {
+      const res = await api.post(endpoints.trading.backtest(name));
+      setBacktesting((state) => ({
+        ...state,
+        [name]: `Running on ${res.data.history} history. Reopen this page in a few minutes.`,
+      }));
+    } catch (err) {
+      setBacktesting((state) => ({ ...state, [name]: err?.response?.data?.detail || 'Could not start' }));
+    }
+  };
 
   useEffect(() => {
     api
@@ -180,7 +204,29 @@ const EngineSettings = () => {
               hint = `${isLive ? 'Switched live, still on paper. ' : ''}Needs ${gaps}.`;
             }
             return (
-              <Row key={name} label={name} hint={hint}>
+              <Row
+                key={name}
+                label={name}
+                hint={
+                  <>
+                    {hint}
+                    {isAdmin && (
+                      <>
+                        {' '}
+                        <button
+                          type="button"
+                          className="underline text-[var(--stamp)]"
+                          onClick={() => runBacktest(name)}
+                          disabled={Boolean(backtesting[name])}
+                        >
+                          Run a year's backtest
+                        </button>
+                        {backtesting[name] && <span> {backtesting[name]}</span>}
+                      </>
+                    )}
+                  </>
+                }
+              >
                 <button
                   type="button"
                   role="switch"
