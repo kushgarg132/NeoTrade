@@ -3,7 +3,7 @@ import { Check, X, Loader2, Quote } from 'lucide-react';
 import { Money, Stamp, Field, Scrip } from '../doc/Doc';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
-import { formatCurrency, formatQuantity, formatTimeAgo } from '../../utils/formatters';
+import { formatCurrency, formatQuantity, formatTimeAgo, formatNoteDate } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 import Markdown from '../common/Markdown';
 
@@ -50,6 +50,39 @@ const Conviction = ({ score }) => {
   );
 };
 
+/**
+ * An option proposal's own terms. A cash-secured put has no stop or target:
+ * it collects a premium and blocks margin, so those are what print.
+ */
+const OptionTerms = ({ contract, quantity }) => (
+  <>
+    <div className="mt-4 grid grid-cols-3 gap-3 py-3 border-y border-[var(--rule)]">
+      <Field label="Strike" value={formatCurrency(contract.strike)} />
+      <Field label="Expiry" value={contract.expiry ? formatNoteDate(new Date(contract.expiry)) : '—'} />
+      <Field label="Lots" value={`${quantity / contract.lot_size} × ${contract.lot_size}`} />
+    </div>
+    <div className="mt-3 flex items-baseline justify-between gap-4">
+      <span className="field-label">
+        Premium · {contract.premium_is_live ? 'live' : 'estimated'}
+      </span>
+      <span className="figure-md text-sm">
+        {formatCurrency(contract.premium_estimate)}
+        <span className="text-[var(--ink-faint)]"> ({formatCurrency(contract.premium_estimate * quantity)} total)</span>
+      </span>
+    </div>
+    <div className="mt-1.5 flex items-baseline justify-between gap-4">
+      <span className="field-label">Margin blocked, approx.</span>
+      <span className="figure-md text-sm">{formatCurrency(contract.margin_estimate)}</span>
+    </div>
+    {!contract.premium_is_live && (
+      <p className="mt-2 doc-meta normal-case">
+        No broker priced this contract, so the premium is a formula estimate. Approving fills at the
+        live premium from Kite or Upstox.
+      </p>
+    )}
+  </>
+);
+
 const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
   const [busy, setBusy] = useState(null);
   const [failure, setFailure] = useState(null);
@@ -88,10 +121,15 @@ const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
             <Badge variant={suggestion.side === 'BUY' ? 'success' : 'destructive'}>
               {suggestion.side}
             </Badge>
-            <Badge variant="secondary">{suggestion.mode === 'INTRADAY' ? 'MIS' : 'CNC'}</Badge>
+            <Badge variant="secondary">
+              {suggestion.option_contract
+                ? suggestion.option_contract.option_type === 'CE' ? 'CALL' : 'PUT'
+                : suggestion.mode === 'INTRADAY' ? 'MIS' : 'CNC'}
+            </Badge>
           </div>
           <p className="doc-meta mt-1 normal-case">
-            {formatQuantity(suggestion.quantity)} sh · {formatCurrency(suggestion.notional)} ·{' '}
+            {formatQuantity(suggestion.quantity)} {suggestion.option_contract ? 'units' : 'sh'} ·{' '}
+            {formatCurrency(suggestion.notional)} ·{' '}
             proposed {formatTimeAgo(suggestion.created_at)}
           </p>
         </div>
@@ -111,6 +149,10 @@ const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
         )}
       </header>
 
+      {suggestion.option_contract ? (
+        <OptionTerms contract={suggestion.option_contract} quantity={suggestion.quantity} />
+      ) : (
+      <>
       <div className="mt-4 grid grid-cols-3 gap-3 py-3 border-y border-[var(--rule)]">
         <Field label="Entry ref" value={formatCurrency(suggestion.entry_ref)} />
         <Field label="Stop" value={formatCurrency(suggestion.stop)} tone="down" />
@@ -127,6 +169,9 @@ const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
           </span>
         </span>
       </div>
+
+      </>
+      )}
 
       <div className="mt-4">
         <Conviction score={suggestion.score} />
