@@ -64,8 +64,11 @@ class Intent:
     # "CSP" (cash-secured put) marks an Intent that size_intents dispatches
     # to backend/options/sizing.py instead of the equity stop-distance
     # sizer -- see that module's docstring. None (every existing strategy)
-    # means "ordinary equity intent", zero behavior change.
-    option_flavor: Optional[Literal["CSP"]] = None
+    # means "ordinary equity intent", zero behavior change. "LONG_CALL" /
+    # "LONG_PUT" buy an at-the-money option for an intraday move; for those
+    # stop_hint/target_hint are levels on the underlying, and the runner
+    # closes the option when the underlying reaches either.
+    option_flavor: Optional[Literal["CSP", "LONG_CALL", "LONG_PUT"]] = None
 
     def __post_init__(self) -> None:
         if not self.reason_codes:

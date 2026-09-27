@@ -20,9 +20,12 @@ class RoutingExecutionClient:
     ) -> None:
         self._paper = paper
         self._live_by_strategy = live_by_strategy
+        # Option contracts the runner has priced for paper. The broker
+        # adapters place NSE equity orders only, so these never route live.
+        self._options: set[str] = set()
 
     def _client_for(self, order: Order):
-        if order.strategy_name is None:
+        if order.strategy_name is None or order.symbol in self._options:
             return self._paper
         return self._live_by_strategy.get(order.strategy_name, self._paper)
 
@@ -55,6 +58,12 @@ class RoutingExecutionClient:
         # close to fill against; a real broker fills at its own price.
         if hasattr(self._paper, "on_bar"):
             self._paper.on_bar(symbol, bar)
+
+    def mark(self, symbol: str, price: float, timestamp, option: bool = False) -> None:
+        if option:
+            self._options.add(symbol)
+        if hasattr(self._paper, "mark"):
+            self._paper.mark(symbol, price, timestamp, option=option)
 
     async def poll_once(self) -> None:
         for client in self._live_by_strategy.values():

@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional
 
-from backend.core.models import Intent, Order
+from backend.core.models import Intent, Order, Side
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument
 from backend.options.premiums import PremiumSource
@@ -29,6 +29,15 @@ MAX_LOTS_PER_TRADE = 2
 # typical large-cap strike against the ~1M default account_size
 # (backend/prefs.py DEFAULTS) -- verified against tests/test_options_sizing.py.
 COLLATERAL_BUDGET_PCT = 0.20
+# Bought options (LONG_CALL / LONG_PUT): the premium paid is the whole
+# possible loss, so the budget is premium outlay, as a fraction of
+# account_size at full conviction -- 2%, twice BASE_RISK_PCT in runner.py,
+# because the runner's underlying-level stop usually exits well before the
+# premium goes to zero.
+LONG_PREMIUM_BUDGET_PCT = 0.02
+# ponytail: skips only same-day expiries. An expiry-day-aware rule (gamma,
+# theta) belongs here if the paper record shows those trades hurting.
+LONG_MIN_DAYS_TO_EXPIRY = 1
 
 _BARS_NEEDED_FOR_VOL = 20
 
@@ -61,9 +70,14 @@ async def size_option_intent(
     The contract is a real listed one: the soonest expiry at least
     MIN_DAYS_TO_EXPIRY out, at the listed strike nearest the target. Its
     premium is the live price from `premium_source` when one is given and
-    can price it; otherwise the Black-Scholes estimate, flagged as such."""
+    can price it; otherwise the Black-Scholes estimate, flagged as such.
+
+    LONG_CALL / LONG_PUT buy the at-the-money contract, intraday (MIS), and
+    need a live premium: an intraday paper trade filled at a model price
+    would score the model, not the strategy."""
     if master is None:
         return None
+    long = intent.option_flavor in ("LONG_CALL", "LONG_PUT")
 
     history = ctx.history(intent.symbol, _BARS_NEEDED_FOR_VOL)
     if len(history) < _BARS_NEEDED_FOR_VOL:
@@ -72,18 +86,37 @@ async def size_option_intent(
     spot = closes[-1]
 
     today = ctx.now().date()
+    option_type = "CE" if intent.option_flavor == "LONG_CALL" else "PE"
+    min_days = LONG_MIN_DAYS_TO_EXPIRY if long else MIN_DAYS_TO_EXPIRY
     listed = [
-        c for c in await master.option_contracts(intent.symbol, "PE")
-        if (c.expiry.date() - today).days >= MIN_DAYS_TO_EXPIRY
+        c for c in await master.option_contracts(intent.symbol, option_type)
+        if (c.expiry.date() - today).days >= min_days
     ]
     if not listed:
         return None
     expiry = listed[0].expiry.date()
-    target = spot * (1 - DEFAULT_PUT_OTM_PCT)
+    target = spot if long else spot * (1 - DEFAULT_PUT_OTM_PCT)
     contract = min((c for c in listed if c.expiry.date() == expiry), key=lambda c: abs(c.strike - target))
     strike = contract.strike
 
     live = await premium_source(contract) if premium_source is not None else None
+    if long:
+        if live is None:
+            return None
+        outlay = live * contract.lot_size
+        budget = account_size * (LONG_PREMIUM_BUDGET_PCT * scored.final)
+        lots = min(int(budget // outlay), MAX_LOTS_PER_TRADE)
+        if lots < 1:
+            return None
+        order = Order(
+            id=str(uuid.uuid4()), symbol=contract.tradingsymbol, side=Side.BUY,
+            quantity=float(lots * contract.lot_size), order_type="MARKET", limit_price=None,
+            product="MIS",
+        )
+        return OptionSizingResult(
+            order=order, contract=contract, premium_estimate=live,
+            margin_estimate=outlay * lots, underlying_spot=spot, premium_is_live=True,
+        )
     premium = live if live is not None else black_scholes_put(
         spot, strike, (expiry - today).days, realized_volatility(closes),
     )

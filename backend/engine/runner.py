@@ -68,6 +68,7 @@ async def size_intents(
     kill_switch_tripped: bool = False,
     master: Optional[InstrumentMaster] = None,
     premium_source=None,
+    option_legs: Optional[dict[str, dict]] = None,
 ) -> list[Order]:
     """Scores each Intent (backend.scoring.composite.score_intent, which
     caps AI's influence at AI_CAP regardless of what's passed here), then
@@ -96,6 +97,11 @@ async def size_intents(
     as orders are added within this same call so a burst of same-call
     intents can't jointly blow past `max_exposure` even though each looked
     fine against the pre-call snapshot alone.
+
+    An INTRADAY option Intent (LONG_CALL / LONG_PUT) is only sized when the
+    caller passes `option_legs`, the run's record of the option positions it
+    must later close (see _option_exit_orders); each order made is added to
+    it. One such trade per underlying per day, none after the square-off.
     """
     orders: list[Order] = []
     current_exposure = sum(
@@ -120,8 +126,17 @@ async def size_intents(
             continue
 
         if intent.option_flavor is not None:
+            intraday = mode == "INTRADAY"
+            today = ctx.now().astimezone(IST).date()
+            if intraday and (
+                option_legs is None or is_past_square_off_time(ctx.now())
+                or any(leg["underlying"] == intent.symbol and leg["day"] == today for leg in option_legs.values())
+            ):
+                continue
             result = await size_option_intent(intent, scored, ctx, account_size, master, premium_source)
             if result is None:
+                continue
+            if intraday and per_trade_cap is not None and result.margin_estimate > per_trade_cap:
                 continue
             result.order.strategy_name = (
                 owning_strategy.spec.name if owning_strategy is not None else None
@@ -143,6 +158,13 @@ async def size_intents(
                 )
                 if not await order_sink(proposal):
                     continue
+            if intraday:
+                option_legs[result.order.symbol] = {
+                    "underlying": intent.symbol, "day": today, "contract": result.contract,
+                    "bullish": intent.option_flavor == "LONG_CALL",
+                    "stop": intent.stop_hint, "target": intent.target_hint,
+                    "mark": result.premium_estimate, "strategy_name": result.order.strategy_name,
+                }
             orders.append(result.order)
             continue
 
@@ -235,6 +257,39 @@ def _square_off_orders(
     )]
 
 
+async def _option_exit_orders(
+    bar_symbol: Optional[str],
+    bar,
+    portfolio: Portfolio,
+    option_legs: dict[str, dict],
+    premium_source,
+) -> list[Order]:
+    """Closes a bought intraday option when its underlying (`bar_symbol`)
+    reaches the stop or target the strategy set on it, or at the 15:15
+    square-off. Every open leg on this underlying is repriced first, so its
+    `mark` is the premium an exit fills at and what the kill-switch counts.
+    ponytail: a leg whose repricing fails keeps its last mark, and exits at
+    that stale premium if it must close -- fine for paper; live options
+    orders (roadmap step 4) must use the broker's own fill instead."""
+    orders = []
+    for symbol, leg in option_legs.items():
+        position = portfolio.positions.get(symbol)
+        if leg["underlying"] != bar_symbol or position is None or position.quantity <= 0:
+            continue
+        if premium_source is not None and (premium := await premium_source(leg["contract"])) is not None:
+            leg["mark"] = premium
+        price = bar.close
+        stopped = price <= leg["stop"] if leg["bullish"] else price >= leg["stop"]
+        reached = price >= leg["target"] if leg["bullish"] else price <= leg["target"]
+        if stopped or reached or is_past_square_off_time(bar.timestamp):
+            orders.append(Order(
+                id=str(uuid.uuid4()), symbol=symbol, side=Side.SELL, quantity=position.quantity,
+                order_type="MARKET", limit_price=None, product="MIS",
+                strategy_name=leg["strategy_name"],
+            ))
+    return orders
+
+
 async def run(
     strategies: list[Strategy],
     feed: DataFeed,
@@ -290,6 +345,7 @@ async def run(
         strategy.on_start(ctx)
 
     kill_switch_tripped = False
+    option_legs: dict[str, dict] = {}
 
     async for bar in feed:
         if isinstance(clock, SimClock):
@@ -309,6 +365,7 @@ async def run(
                         for pos_symbol in portfolio.positions
                         if (history := ctx.history(pos_symbol, 1))
                     }
+                    mark_prices.update({s: leg["mark"] for s, leg in option_legs.items()})
                     equity = portfolio.equity(mark_prices)
                     if should_trip(equity, daily_loss_limit):
                         kill_switch_tripped = True
@@ -334,11 +391,16 @@ async def run(
         orders = await size_intents(
             ctx.drain_intents(), portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,
             order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
-            master=master, premium_source=premium_source,
+            master=master, premium_source=premium_source, option_legs=option_legs,
         )
         orders.extend(_square_off_orders(symbol, bar.timestamp, portfolio, owner_by_symbol))
+        orders.extend(await _option_exit_orders(symbol, bar, portfolio, option_legs, premium_source))
 
         for order in orders:
+            # An option has no bar of its own: paper fills it at the
+            # premium last read for it.
+            if order.symbol in option_legs and hasattr(execution, "mark"):
+                execution.mark(order.symbol, option_legs[order.symbol]["mark"], bar.timestamp, option=True)
             if ledger is not None:
                 await ledger.record_order(order)
             await execution.submit(order)

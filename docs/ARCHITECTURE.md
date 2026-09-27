@@ -33,12 +33,12 @@ flowchart LR
 |---|---|---|
 | Strategy | `backend/engine/protocols.py:37-42` (`Strategy` Protocol), `backend/strategies/base.py:30-56` | `Intent` |
 | Scoring | `backend/scoring/composite.py:37-43` (`score_intent`) | `CompositeScore` or `None` |
-| Sizing | `backend/engine/runner.py:50-143` (`size_intents`) | `Proposal` |
-| Routing | `backend/engine/runner.py:183-262` (`run`), `backend/suggestions/sink.py:32-50` | order **or** suggestion |
-| Fills | `backend/engine/execution/simulated.py:17-66` | `Fill` |
+| Sizing | `backend/engine/runner.py:58-220` (`size_intents`) | `Proposal` |
+| Routing | `backend/engine/runner.py:293-429` (`run`), `backend/suggestions/sink.py:32-50` | order **or** suggestion |
+| Fills | `backend/engine/execution/simulated.py:18-80` | `Fill` |
 | Book | `backend/engine/portfolio.py:14-57`, `backend/engine/persistence.py` | positions, PnL, ledger |
 
-`Intent` (`backend/core/models.py:48-69`) is deliberately thin: `symbol`, `side`,
+`Intent` (`backend/core/models.py:48-77`) is deliberately thin: `symbol`, `side`,
 `strength` (0–1), `reason_codes` (non-empty, enforced in the constructor), `stop_hint`,
 `target_hint`. No entry price, no sizing, no timestamp — those are added downstream. This
 thinness is what makes the scoring cap below possible, so treat it as load-bearing.
@@ -55,10 +55,10 @@ code and covered by tests, not left to discipline.
   `backend/tests/test_composite_score.py:18-20`.
 - **AI cannot rescue a trade the rules did not support.** `RULE_FLOOR = 0.45`
   (`composite.py:16`); `score_intent()` returns `None` outright when
-  `intent.strength < RULE_FLOOR`, and `runner.py:96-97` skips the intent entirely. Tested
+  `intent.strength < RULE_FLOOR`, and `runner.py:113-115` skips the intent entirely. Tested
   arithmetically in `test_composite_score.py:11-15`.
 - **Every intent must carry reasons.** `Intent.__post_init__` rejects empty `reason_codes`
-  (`core/models.py:65-69`). A trade with no explanation cannot exist.
+  (`core/models.py:73-77`). A trade with no explanation cannot exist.
 - **Every per-account record carries `user_id`.** See §1.4.
 
 ### 1.3 Risk and sizing
@@ -67,9 +67,9 @@ One shared module: `RiskRules` (`backend/components/risk/risk.py:85-121`) —
 `calculate_position_size(account_size, risk_per_trade_percent, entry_price, stop_loss)` and
 `check_exposure_limit(...)`.
 
-It has exactly one production caller: `size_intents` (`backend/engine/runner.py:111,118`),
+It has exactly one production caller: `size_intents` (`backend/engine/runner.py:183,196`),
 where risk per trade scales with conviction: `risk_pct = BASE_RISK_PCT * scored.final`
-(`runner.py:110`). Position sizing lives downstream of the strategy, never inside it.
+(`runner.py:182`). Position sizing lives downstream of the strategy, never inside it.
 
 ### 1.4 Auth and multi-tenancy
 
@@ -123,7 +123,7 @@ and the `analyst:{symbol}` / `sentiment:{symbol}` Redis caches (4 hours, written
 
 ### 1.6 Execution and backtest
 
-`SimulatedExecutionClient` (`backend/engine/execution/simulated.py:17-66`) is the *only*
+`SimulatedExecutionClient` (`backend/engine/execution/simulated.py:18-80`) is the *only*
 `ExecutionClient` implementation. It fills MARKET orders at the last-seen bar close and
 applies Indian transaction costs (`backend/engine/execution/costs.py`). The same class
 serves both backtest and paper trading.
@@ -204,9 +204,9 @@ the revived chain emits `Intent` and is scored by `composite.py` like everything
 | Limit | Where | Consequence |
 |---|---|---|
 | No backtest gate | nothing marks a strategy live-eligible; `backend/strategies/registry.py:16-59` is the only filter | A registered strategy trades immediately |
-| Single-process state | `_RUNS` (`routers/trading.py:62`), `ws/hub.py:9-10`, `scheduler.py:8-10` | Breaks with more than one worker |
+| Single-process state | `_RUNS` (`routers/trading.py:64`), `ws/hub.py:9-10`, `scheduler.py:8-10` | Breaks with more than one worker |
 | `llm_service` module singleton | `backend/llm.py:125` | Per-user model choice (`omniroute_model` in `user_prefs`) is stored but never read |
-| `/trading/start` trusts request-body risk caps | `routers/trading.py:216-323` (`launch_run`) vs `scheduler.py:52-59` which reads `PrefsStore` | The manual path can bypass a user's stored limits |
+| `/trading/start` trusts request-body risk caps | `routers/trading.py:217-337` (`launch_run`) vs `scheduler.py:52-59` which reads `PrefsStore` | The manual path can bypass a user's stored limits |
 
 ---
 

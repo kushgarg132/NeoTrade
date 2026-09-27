@@ -50,6 +50,8 @@ from backend.engine.runner import run
 from backend.runs import RunStore
 from backend.instruments.master import InstrumentMaster
 from backend.marks import mark_prices
+from backend.options.premiums import live_premium_source
+from backend.options.resolver import FO_UNDERLYINGS
 from backend.strategies.registry import build_default_strategies
 from backend.suggestions.sink import SuggestionSink
 from backend.suggestions.store import SuggestionStore
@@ -225,22 +227,35 @@ async def launch_run(
     paper-trades, which is how it earns a track record at all."""
     master = InstrumentMaster(db.db)
     symbols = universe or list(ALL_SCAN_STOCKS)
+    credentials = get_credential_store()
 
-    instruments = []
-    for symbol in symbols:
+    # The intraday options strategy trades only with live premiums from the
+    # user's broker, and only on the default universe: its F&O large-caps
+    # are fed alongside, not added to the equity strategies' universe.
+    premium_source = None
+    option_symbols: list[str] = []
+    if mode == "INTRADAY" and universe is None:
+        premium_source = await live_premium_source(db.db, user_id, credentials, db.redis)
+        if premium_source is not None:
+            option_symbols = [s for s in FO_UNDERLYINGS if s not in symbols]
+
+    instruments, option_instruments = [], []
+    for symbol in symbols + option_symbols:
         instrument = await master.get("NSE", symbol)
         if instrument is not None:
-            instruments.append(instrument)
+            (option_instruments if symbol in option_symbols else instruments).append(instrument)
     if not instruments:
         raise HTTPException(status_code=400, detail="No resolvable instruments in universe")
 
-    symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
+    symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments + option_instruments}
     strategies = [
         s for s in build_default_strategies(
             universe=[i.tradingsymbol for i in instruments], symbol_for_token=symbol_for_token,
+            option_universe=[i.tradingsymbol for i in option_instruments],
         )
         if s.spec.mode == mode
     ]
+    instruments += option_instruments
     if not strategies:
         raise HTTPException(status_code=400, detail=f"No strategies registered for mode {mode!r}")
     eligible = await live_eligible_strategies(strategies, BacktestGateStore(db.db))
@@ -249,7 +264,6 @@ async def launch_run(
     account_size = prefs["account_size"]
     max_exposure = prefs["max_exposure"]
 
-    credentials = get_credential_store()
     active_adapter = await get_active_broker_adapter(user_id, credentials)
     live_strategy_names = set(prefs["live_strategies"])
     eligible_names = {s.spec.name for s in eligible}
@@ -303,6 +317,7 @@ async def launch_run(
         order_sink=sink,
         per_trade_cap=prefs["per_trade_cap"], daily_loss_limit=prefs["daily_loss_limit"],
         kill_switch_store=KillSwitchStore(db.db),
+        master=master if premium_source is not None else None, premium_source=premium_source,
     )
     await runs.create(
         run_id=run_id, user_id=user_id, mode=mode,

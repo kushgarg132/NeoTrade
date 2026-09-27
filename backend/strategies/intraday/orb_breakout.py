@@ -9,6 +9,7 @@ the range anchor is the session's first bars, not whatever the last
 """
 
 from datetime import timedelta
+from typing import Optional
 
 import pandas as pd
 
@@ -31,22 +32,23 @@ class ORBStrategy(TokenResolvingStrategy):
 
     def on_bar(self, ctx, bar) -> None:
         symbol = self.symbol_for(bar)
-        if symbol is None:
-            return
+        if symbol is not None and (intent := self.signal(ctx, symbol)) is not None:
+            ctx.submit(intent)
 
+    def signal(self, ctx, symbol: str) -> Optional[Intent]:
         history = ctx.history(symbol, SESSION_LOOKBACK_BARS)
         if not history:
-            return
+            return None
         session_date = history[-1].timestamp.date()
         session_bars = [b for b in history if b.timestamp.date() == session_date]
         if len(session_bars) < self.spec.warmup_bars:
-            return
+            return None
 
         range_end = session_bars[0].timestamp + timedelta(minutes=OPENING_RANGE_MINUTES)
         range_bars = [b for b in session_bars if b.timestamp < range_end]
         breakout_bars = [b for b in session_bars if b.timestamp >= range_end]
         if not range_bars or not breakout_bars:
-            return  # still inside (or hasn't reached) the opening range
+            return None  # still inside (or hasn't reached) the opening range
 
         or_high = max(b.high for b in range_bars)
         or_low = min(b.low for b in range_bars)
@@ -56,28 +58,29 @@ class ORBStrategy(TokenResolvingStrategy):
         # tuned from > avg_range_volume (218 trades/59d backtest, PF 0.93 --
         # net loser, too many marginal whipsaw breakouts) -- see spec memlog
         if current.volume <= 1.5 * avg_range_volume:
-            return
+            return None
 
         df = Indicators.calculate_all(bars_to_dataframe(session_bars))
         atr = df["atr_14"].iloc[-1]
         if pd.isna(atr):
-            return
+            return None
 
         # Require the close to clear the range by a real margin (0.3 ATR),
         # not just tick past it -- filters marginal breakouts that whipsaw
         # straight back. Stop is ATR-based, not the full opposite range edge
         # (that was too wide a risk relative to the 2*ATR target).
         if current.close > or_high + 0.3 * atr:
-            ctx.submit(Intent(
+            return Intent(
                 symbol=symbol, side=Side.BUY, strength=0.65,
                 reason_codes=["orb_breakout"],
                 stop_hint=current.close - 1.5 * atr,
                 target_hint=current.close + 2 * atr,
-            ))
+            )
         elif current.close < or_low - 0.3 * atr:
-            ctx.submit(Intent(
+            return Intent(
                 symbol=symbol, side=Side.SELL, strength=0.65,
                 reason_codes=["orb_breakout"],
                 stop_hint=current.close + 1.5 * atr,
                 target_hint=current.close - 2 * atr,
-            ))
+            )
+        return None

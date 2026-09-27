@@ -7,6 +7,7 @@ from typing import Optional
 from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
 from backend.engine.protocols import Strategy
 from backend.strategies.intraday.orb_breakout import ORBStrategy
+from backend.strategies.intraday.orb_options import ORBOptionsStrategy
 from backend.strategies.intraday.rsi_momentum_scalp import RSIMomentumScalpStrategy
 from backend.strategies.intraday.volume_surge import VolumeSurgeStrategy
 from backend.strategies.intraday.vwap_reversion import VWAPReversionStrategy
@@ -24,6 +25,7 @@ def build_default_strategies(
     quality_universe: Optional[list[str]] = None,
     quality_scores: Optional[dict[str, float]] = None,
     analyst_verdicts: Optional[dict[str, dict]] = None,
+    option_universe: Optional[list[str]] = None,
 ) -> list[Strategy]:
     """`universe` defaults to `indian_stocks.ALL_SCAN_STOCKS` (the existing
     NSE mid/small-cap symbol list already used elsewhere in this codebase),
@@ -55,6 +57,11 @@ def build_default_strategies(
     AnalystVerdictStrategy"; the caller (backend.suggestions.scan.scan_universe) is expected
     to have already fetched it for the curated symbol list in
     `backend.options.resolver.FO_UNDERLYINGS`.
+
+    `option_universe` adds ORBOptionsStrategy over those symbols. It is kept
+    apart from `universe` so the F&O large-caps it needs don't also join
+    every equity strategy's universe. Default `None` leaves it out, as
+    backtests and the suggestion scan do: it needs live premiums to trade.
     """
     universe = list(universe) if universe is not None else list(ALL_SCAN_STOCKS)
     symbol_for_token = symbol_for_token or {}
@@ -73,6 +80,8 @@ def build_default_strategies(
         strategies.append(
             QualityMomentumStrategy(quality_universe, symbol_for_token, quality_scores)
         )
+    if option_universe:
+        strategies.append(ORBOptionsStrategy(option_universe, symbol_for_token))
     if analyst_verdicts is not None:
         strategies.append(
             AnalystVerdictStrategy(list(analyst_verdicts.keys()), symbol_for_token, analyst_verdicts)

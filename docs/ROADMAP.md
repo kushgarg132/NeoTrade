@@ -385,6 +385,20 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
   the same underlying open (strike/expiry/type not matched -- see `guardrails/rules.py`).
   Alerts only: nothing here can stop an order placed in the broker's own app. Not done:
   expiry-day findings (needs a reliable expiry per traded contract).
+- **2026-09-27, intraday options on paper.** `orb_options`
+  (`backend/strategies/intraday/orb_options.py`) takes `orb_breakout`'s trigger on the
+  `FO_UNDERLYINGS` large-caps and buys the at-the-money call on a breakout, the put on a
+  breakdown (`option_flavor` LONG_CALL / LONG_PUT). `size_option_intent` sizes it by premium
+  outlay (2% of account at full conviction, max 2 lots, soonest expiry at least a day out)
+  and only with a live premium -- no model-priced intraday fills. The runner fills it at the
+  premium it just read, keeps one such trade per underlying per day, and sells it when the
+  underlying reaches the strategy's stop or target or at 15:15 (`_option_exit_orders`),
+  counting its marked premium in the kill-switch's P&L. Paper only, in code:
+  `RoutingExecutionClient` never routes a priced option contract live, whatever the toggle.
+  It joins a run only on the default universe and only when Kite or Upstox is connected
+  (that is where premiums come from). Not in backtests: there is no premium history to
+  replay, so it can never clear the backtest gate. Next: live options orders (the broker
+  adapters place NSE equity orders only).
 
 ---
 
