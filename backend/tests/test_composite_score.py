@@ -72,3 +72,17 @@ def test_ai_sentiment_can_nudge_final_score_up_or_down():
     bullish = score_intent(intent, 1.0)
     bearish = score_intent(intent, -1.0)
     assert bullish.final > bearish.final
+
+
+@pytest.mark.parametrize("side, flavor, bearish", [
+    (Side.BUY, None, False),
+    (Side.SELL, None, True),
+    (Side.SELL, "CSP", False),       # selling a put pays when the stock holds up
+    (Side.BUY, "LONG_CALL", False),
+    (Side.BUY, "LONG_PUT", True),
+])
+def test_good_news_supports_bullish_trades_and_argues_against_bearish_ones(side, flavor, bearish):
+    intent = Intent(symbol="TEST", side=side, strength=0.8, reason_codes=["r"], option_flavor=flavor)
+    good, bad = score_intent(intent, 1.0), score_intent(intent, -1.0)
+    assert (good.final < bad.final) is bearish
+    assert abs(good.final - bad.final) <= AI_CAP + 1e-9

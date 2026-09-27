@@ -32,7 +32,7 @@ flowchart LR
 | Stage | Where | What it produces |
 |---|---|---|
 | Strategy | `backend/engine/protocols.py:37-42` (`Strategy` Protocol), `backend/strategies/base.py:30-56` | `Intent` |
-| Scoring | `backend/scoring/composite.py:37-43` (`score_intent`) | `CompositeScore` or `None` |
+| Scoring | `backend/scoring/composite.py:45-56` (`score_intent`; news sentiment turned to face the trade by `is_bearish`, `:37-42`) | `CompositeScore` or `None` |
 | Sizing | `backend/engine/runner.py:58-220` (`size_intents`) | `Proposal` |
 | Routing | `backend/engine/runner.py:293-429` (`run`), `backend/suggestions/sink.py:32-50` | order **or** suggestion |
 | Fills | `backend/engine/execution/simulated.py:18-77` | `Fill` |

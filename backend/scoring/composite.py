@@ -10,7 +10,7 @@ exceed AI_CAP regardless of caller input -- see CompositeScore.__post_init__.
 from dataclasses import dataclass
 from typing import Optional
 
-from backend.core.models import Intent
+from backend.core.models import Intent, Side
 
 AI_CAP = 0.30
 RULE_FLOOR = 0.45  # rule_score below this: the trade is dead regardless of AI
@@ -34,10 +34,23 @@ class CompositeScore:
         return (1 - self.ai_weight) * self.rule_score + self.ai_weight * ((self.ai_score + 1) / 2)
 
 
+def is_bearish(intent: Intent) -> bool:
+    """Whether the trade wins when the stock falls: an equity sell, or a
+    bought put. Selling a put (CSP) and buying a call win when it rises."""
+    if intent.option_flavor is None:
+        return intent.side == Side.SELL
+    return intent.option_flavor == "LONG_PUT"
+
+
 def score_intent(intent: Intent, ai_sentiment: Optional[float]) -> Optional[CompositeScore]:
     """Returns None if the rule floor isn't met -- AI cannot rescue a trade the
     rules didn't already support. rule_score comes from intent.strength (already
-    0..1 per Task 2's Intent validation)."""
+    0..1 per Task 2's Intent validation).
+
+    `ai_sentiment` is news sentiment about the stock (positive = good news);
+    it is turned to face the trade, so good news supports a bullish trade and
+    argues against a bearish one."""
     if intent.strength < RULE_FLOOR:
         return None
-    return CompositeScore(rule_score=intent.strength, ai_score=ai_sentiment or 0.0)
+    sentiment = ai_sentiment or 0.0
+    return CompositeScore(rule_score=intent.strength, ai_score=-sentiment if is_bearish(intent) else sentiment)

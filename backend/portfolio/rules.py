@@ -76,9 +76,9 @@ def _scored(symbol: str, side: Side, codes: list[str], weights: dict, sentiment:
     intent = Intent(
         symbol=symbol, side=side, strength=min(sum(weights[c] for c in codes), 1.0), reason_codes=codes,
     )
-    # Sentiment is oriented to the verdict: good news argues against selling.
-    ai = None if sentiment is None else (-sentiment if side == Side.SELL else sentiment)
-    return score_intent(intent, ai)
+    # score_intent turns sentiment to face the verdict: good news argues
+    # against a SELL.
+    return score_intent(intent, sentiment)
 
 
 def stock_verdict(row: dict, health: dict, limits: dict, sentiment: Optional[float]) -> dict:
