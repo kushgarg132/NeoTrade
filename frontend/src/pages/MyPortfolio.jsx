@@ -2,20 +2,108 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, RefreshCw } from 'lucide-react';
 import Layout from '../components/Layout';
-import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
+import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip, Stamp } from '../components/doc/Doc';
+import Markdown from '../components/common/Markdown';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatQuantity, formatPercent, formatDateTime } from '../utils/formatters';
 
 /**
  * Real money: the user's long-term holdings across every connected broker,
- * and how they are doing. Facts only — how much, how concentrated, against
- * NIFTY. It does not yet say what to do about any of it.
+ * how they are doing, and a verdict on each from plain rules (scored by the
+ * same conviction formula as everything else; the AI only explains). Until
+ * the deployment allows it, only admins see SELL / HOLD / ADD — everyone
+ * else sees the same facts, with serious holdings marked "Review first".
  */
 
 const BUTTON =
   'inline-flex items-center gap-2 px-3 py-1.5 min-h-9 border border-[var(--rule-strong)] font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] text-[var(--ink-soft)] hover:text-[var(--ink)] hover:border-[var(--ink)] transition-colors disabled:opacity-50';
 
 const BROKER = { kite: 'Kite', upstox: 'Upstox', angel_one: 'Angel One' };
+
+const REASONS = {
+  loss_beyond_limit: 'Further below its cost than your loss limit',
+  earnings_falling_3q: 'Profit fell in each of the last three quarters',
+  earnings_rising_3q: 'Profit rose in each of the last three quarters',
+  below_200dma: 'Price is under its 200-day average',
+  uptrend: 'Price above its 50-day average, which is above its 200-day',
+  overweight: 'A bigger share of your portfolio than your size limit',
+  high_debt: 'Debt is more than twice equity',
+  strong_roe: 'Return on equity of 15% or more',
+  reasonable_valuation: 'Price to earnings under 40',
+};
+
+const TONE = { SELL: 'loss', REVIEW: 'loss', ADD: 'gain' };
+const LABEL = { REVIEW: 'Review first' };
+// Most urgent first.
+const ORDER = { SELL: 0, REVIEW: 1, HOLD: 2, ADD: 3, KEEP: 4 };
+
+const Verdict = ({ row }) =>
+  row.verdict ? (
+    <span className="inline-flex flex-col items-end gap-1">
+      <Stamp label={LABEL[row.verdict] || row.verdict} tone={TONE[row.verdict] || 'stamp'} />
+      {row.previous_verdict && row.previous_verdict !== row.verdict && (
+        <span className="doc-meta normal-case">was {LABEL[row.previous_verdict] || row.previous_verdict}</span>
+      )}
+    </span>
+  ) : null;
+
+const figure = (value, suffix = '') => (value == null ? '—' : `${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 })}${suffix}`);
+
+const Detail = ({ row }) => {
+  const health = row.health || {};
+  const trend = health.trend || {};
+  const fundamentals = health.fundamentals || {};
+  return (
+    <div className="py-3 space-y-3 text-sm">
+      {row.note && <p className="text-[var(--ink)] leading-relaxed">{row.note}</p>}
+      {row.reason_codes?.length > 0 && (
+        <ul className="space-y-1">
+          {row.reason_codes.map((code) => (
+            <li key={code} className="text-[var(--ink-soft)]">
+              · {REASONS[code] || code.replace(/_/g, ' ')}
+            </li>
+          ))}
+        </ul>
+      )}
+      {row.score && (
+        <p className="doc-meta normal-case">
+          Conviction {row.score.final.toFixed(2)} · rules {row.score.rule.toFixed(2)}, news weighted to 0.30 at most
+        </p>
+      )}
+      {row.kind === 'STOCK' && (
+        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
+          {[
+            ['Price', figure(trend.close)],
+            ['50-day avg', figure(trend.sma_50)],
+            ['200-day avg', figure(trend.sma_200)],
+            ['Below 52w high', figure(trend.below_high_pct, '%')],
+            ['3-month move', figure(trend.return_3m_pct, '%')],
+            ['P/E', figure(fundamentals.pe)],
+            ['ROE', fundamentals.roe == null ? '—' : figure(fundamentals.roe * 100, '%')],
+            ['Debt / equity', figure(fundamentals.debt_to_equity, '×')],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dt className="field-label">{label}</dt>
+              <dd className="figure-md">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {health.headlines?.length > 0 && (
+        <ul className="space-y-1">
+          {health.headlines.map((headline) => (
+            <li key={headline.url}>
+              <a href={headline.url} target="_blank" rel="noreferrer" className="text-[var(--stamp)] hover:underline">
+                {headline.title}
+              </a>
+              <span className="doc-meta normal-case"> · {headline.source}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 const Line = ({ label, children }) => (
   <div className="flex items-baseline justify-between gap-4 py-1.5">
@@ -92,9 +180,10 @@ const Concentration = ({ concentration, count }) => (
   </Sheet>
 );
 
-const HoldingsTable = ({ rows }) => (
+const HoldingsTable = ({ rows, open, onToggle }) => (
   <Statement
     columns={[
+      { key: 'verdict', label: 'Review', align: 'right' },
       { key: 'scrip', label: 'Holding' },
       { key: 'qty', label: 'Qty', align: 'right' },
       { key: 'avg', label: 'Avg cost', align: 'right' },
@@ -104,7 +193,15 @@ const HoldingsTable = ({ rows }) => (
     ]}
   >
     {rows.map((row) => (
-      <Row key={row.isin || row.symbol}>
+      <React.Fragment key={row.isin || row.symbol}>
+      <Row
+        className="cursor-pointer hover:bg-[var(--paper-sunk)]"
+        onClick={() => onToggle(row.isin || row.symbol)}
+        aria-expanded={open === (row.isin || row.symbol)}
+      >
+        <Cell align="right">
+          <Verdict row={row} />
+        </Cell>
         <Cell>
           {row.kind === 'MF' ? (
             <span className="text-sm">{row.name || row.symbol}</span>
@@ -137,6 +234,14 @@ const HoldingsTable = ({ rows }) => (
           {row.nifty_pnl_pct != null ? <Money value={row.nifty_pnl_pct} percent /> : <span className="doc-meta">—</span>}
         </Cell>
       </Row>
+      {open === (row.isin || row.symbol) && (
+        <tr>
+          <td colSpan={7}>
+            <Detail row={row} />
+          </td>
+        </tr>
+      )}
+      </React.Fragment>
     ))}
   </Statement>
 );
@@ -146,6 +251,8 @@ const MyPortfolio = () => {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState(null);
+  const [open, setOpen] = useState(null);
+  const toggle = (key) => setOpen((current) => (current === key ? null : key));
 
   useEffect(() => {
     api
@@ -171,12 +278,14 @@ const MyPortfolio = () => {
   const action = (
     <button type="button" className={BUTTON} onClick={refresh} disabled={busy}>
       {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-      {busy ? 'Reading brokers' : 'Analyse now'}
+      {busy ? 'Reviewing, this takes a minute' : 'Analyse now'}
     </button>
   );
 
-  const stocks = snapshot?.holdings.filter((row) => row.kind === 'STOCK') || [];
-  const funds = snapshot?.holdings.filter((row) => row.kind !== 'STOCK') || [];
+  const urgency = (row) => ORDER[row.verdict] ?? 5;
+  const byUrgency = [...(snapshot?.holdings || [])].sort((a, b) => urgency(a) - urgency(b));
+  const stocks = byUrgency.filter((row) => row.kind === 'STOCK');
+  const funds = byUrgency.filter((row) => row.kind !== 'STOCK');
   const brokers = (snapshot?.brokers || []).map((b) => BROKER[b] || b).join(', ');
 
   return (
@@ -218,6 +327,12 @@ const MyPortfolio = () => {
                 <span className="figure-lg">{formatCurrency(snapshot.totals.value)}</span>
               </NetLine>
               <Benchmark benchmark={snapshot.benchmark} />
+              {snapshot.stale_since && (
+                <p className="doc-meta normal-case pt-2">
+                  No broker was connected: holdings as of {formatDateTime(snapshot.stale_since)}, repriced from the
+                  latest closes. Log in to your broker to refresh them.
+                </p>
+              )}
               {snapshot.totals.unpriced.length > 0 && (
                 <p className="doc-meta normal-case pt-2">
                   No price from your broker for {snapshot.totals.unpriced.join(', ')}; left out of the totals.
@@ -229,15 +344,27 @@ const MyPortfolio = () => {
 
         {snapshot && snapshot.holdings.length > 0 && (
           <>
+            {snapshot.summary && (
+              <Sheet title="Review" meta="AI write-up of the figures below">
+                <div className="text-sm leading-relaxed">
+                  <Markdown>{snapshot.summary}</Markdown>
+                </div>
+              </Sheet>
+            )}
             <Concentration concentration={snapshot.concentration} count={snapshot.totals.count} />
             {stocks.length > 0 && (
-              <Sheet title="Stocks" meta={`${stocks.length}`}>
-                <HoldingsTable rows={stocks} />
+              <Sheet title="Stocks" meta={`${stocks.length} · tap one for its reasons`}>
+                {!snapshot.verdicts_visible && (
+                  <p className="doc-meta normal-case pb-2">
+                    Holdings marked Review first have serious results on the review rules. What to do is your call.
+                  </p>
+                )}
+                <HoldingsTable rows={stocks} open={open} onToggle={toggle} />
               </Sheet>
             )}
             {funds.length > 0 && (
               <Sheet title="Funds & ETFs" meta={`${funds.length}`}>
-                <HoldingsTable rows={funds} />
+                <HoldingsTable rows={funds} open={open} onToggle={toggle} />
               </Sheet>
             )}
           </>

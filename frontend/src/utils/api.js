@@ -197,6 +197,7 @@ export const endpoints = {
     preferences: '/settings/preferences',
     strategies: '/settings/strategies',
     promotion: '/settings/strategies/promotion',
+    portfolioVerdicts: '/settings/portfolio-verdicts',
     brokerCredentials: '/settings/broker-credentials',
   },
   auth: {

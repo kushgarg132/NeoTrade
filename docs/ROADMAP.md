@@ -437,9 +437,20 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
   buys; `service.py` saves each run to `portfolio_snapshots`. `/portfolio` page, linked from
   home. Open, and why: ETF/MF overlap and expense ratios need a holdings/expense data source
   not in the app; ETFs are recognised by name only; Upstox `quantity` vs `t1_quantity` and
-  Angel One's price fields need a real account. Next: phase 3 (stock health), phase 4
-  (rule-scored SELL/HOLD/ADD through `composite.py`, behind `portfolio_verdicts: admin|all`
-  -- verdicts for all users need SEBI RA registration first), phase 5 (weekly run + alerts).
+  Angel One's price fields need a real account.
+- **2026-09-27, portfolio phases 3-5 (health, verdicts, weekly run).** `portfolio/health.py`:
+  last four quarters' net profit, ROE, debt/equity, P/E (yfinance), 50/200-day averages,
+  distance from the 52-week high, 3-month move, two weeks of headlines; cached per stock per
+  IST day in `stock_health`. `portfolio/rules.py`: rules become an Intent scored by
+  `composite.py` (sentiment oriented to the verdict, capped at 30%, below the floor a HOLD);
+  funds REVIEW/KEEP; loss/size limits are prefs (25% / 20%). `portfolio/review.py` +
+  `prompts/portfolio_review.md`: summary and per-holding notes that explain, forbidden from
+  telling the reader to trade. `AppSettingsStore.portfolio_verdicts` (admin|all, default
+  admin) gates who sees verdicts; `routers/portfolio.py::present` masks them. Friday's
+  post-close pass runs `weekly_reviews`: reuses the last holdings repriced from yfinance when
+  no broker session is live, alerts (socket + Telegram) only on a verdict that got worse.
+  Not done: P/E against the stock's own history, debt trend (only a debt level), fund overlap
+  and expense ratios.
 
 ---
 
