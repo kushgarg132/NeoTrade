@@ -207,3 +207,101 @@ async def test_an_option_cannot_fill_without_a_broker_to_price_it(mongo, monkeyp
         await suggestions_router._live_option_premium("alice", "RELIANCE26OCT2760PE")
     assert caught.value.status_code == 409
     assert "Connect Kite or Upstox" in caught.value.detail
+
+
+# --- approve live: a real option order with the user's broker ---------------
+
+class _FakeBroker:
+    supports_options = True
+
+    def __init__(self, statuses=("FILLED",), fail=None):
+        self.statuses, self.fail, self.placed = list(statuses), fail, []
+
+    async def place_order(self, order):
+        if self.fail:
+            raise RuntimeError(self.fail)
+        self.placed.append(order)
+        return "b-1"
+
+    async def get_order_status(self, broker_order_id):
+        from backend.core.models import BrokerOrderStatus
+        status = self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
+        filled = 250.0 if status == "FILLED" else 0.0
+        return BrokerOrderStatus(broker_order_id=broker_order_id, status=status,
+                                 filled_quantity=filled, average_price=40.5 if filled else 0.0)
+
+
+@pytest.fixture
+def live_client(client, mongo, monkeypatch):
+    import asyncio
+
+    from backend.instruments.master import InstrumentMaster
+    from backend.instruments.models import Instrument
+
+    asyncio.run(InstrumentMaster(mongo).upsert_many([Instrument(
+        exchange="NFO", tradingsymbol="RELIANCE26OCT2760PE", name="RELIANCE", instrument_token=9,
+        exchange_token=9, instrument_type="PE", segment="NFO-OPT", lot_size=250, tick_size=0.05,
+        expiry=datetime(2026, 10, 27), strike=2760.0,
+    )]))
+    monkeypatch.setattr(suggestions_router, "db", type("_Db", (), {"db": mongo, "redis": None})())
+    return client
+
+
+def _with_broker(client, broker):
+    async def find(user_id):
+        return broker
+    client.app.dependency_overrides[suggestions_router.get_options_broker] = lambda: find
+
+
+def test_approve_live_places_a_real_option_order_and_books_a_live_fill(live_client, store, ledger):
+    import asyncio
+    broker = _FakeBroker(statuses=("OPEN", "FILLED"))
+    _with_broker(live_client, broker)
+    suggestion = asyncio.run(_seed(store, proposal=_option_proposal()))
+
+    resp = live_client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "EXECUTED" and resp.json()["venue"] == "live"
+    (order,) = broker.placed
+    assert order.contract.exchange == "NFO" and order.product == "NRML" and order.quantity == 250
+    (fill,) = asyncio.run(ledger.get_fills())
+    assert (fill.venue, fill.price, fill.quantity) == ("live", 40.5, 250.0)
+
+    again = live_client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
+    assert again.status_code == 409 and len(broker.placed) == 1
+
+
+def test_approve_live_refused_by_the_broker_goes_back_to_pending(live_client, store, ledger):
+    import asyncio
+    _with_broker(live_client, _FakeBroker(fail="insufficient margin"))
+    suggestion = asyncio.run(_seed(store, proposal=_option_proposal()))
+
+    resp = live_client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
+
+    assert resp.status_code == 502 and "insufficient margin" in resp.json()["detail"]
+    assert asyncio.run(store.get("alice", suggestion["id"]))["status"] == "PENDING"
+    assert asyncio.run(ledger.get_fills()) == []
+
+
+def test_approve_live_needs_an_option_a_broker_and_no_kill_switch(live_client, store, mongo):
+    import asyncio
+
+    from backend.engine.session import IST
+    from backend.risk.kill_switch import KillSwitchStore
+
+    _with_broker(live_client, None)
+    equity = asyncio.run(_seed(store))
+    assert live_client.post(f"/api/v1/suggestions/{equity['id']}/approve-live").status_code == 400
+
+    option = asyncio.run(_seed(store, proposal=_option_proposal()))
+    resp = live_client.post(f"/api/v1/suggestions/{option['id']}/approve-live")
+    assert resp.status_code == 409 and "Connect Kite or Upstox" in resp.json()["detail"]
+
+    broker = _FakeBroker()
+    _with_broker(live_client, broker)
+    today = datetime.now(timezone.utc).astimezone(IST).date()
+    asyncio.run(KillSwitchStore(mongo).trip("alice", today, reason="test", equity=-1.0))
+    resp = live_client.post(f"/api/v1/suggestions/{option['id']}/approve-live")
+    assert resp.status_code == 409 and "Daily loss limit" in resp.json()["detail"]
+    assert broker.placed == []

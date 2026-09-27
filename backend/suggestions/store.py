@@ -122,6 +122,22 @@ class SuggestionStore:
         await hub.publish(user_id, "suggestions", "decided", decided)
         return decided
 
+    async def settle(
+        self, user_id: str, suggestion_id: str, status: str, **fields,
+    ) -> Optional[dict]:
+        """Ends an approve-live that decide() claimed as SENDING: EXECUTED
+        or SENT once the broker has the order, back to PENDING if it never
+        placed. Only a SENDING suggestion moves, so nothing else is undone."""
+        result = await self.collection.find_one_and_update(
+            {"user_id": user_id, "id": suggestion_id, "status": "SENDING"},
+            {"$set": {"status": status, **fields}},
+        )
+        if result is None:
+            return None
+        settled = await self.get(user_id, suggestion_id)
+        await hub.publish(user_id, "suggestions", "decided", settled)
+        return settled
+
     async def attach_thesis(
         self, user_id: str, suggestion_id: str, thesis: Optional[str], score: Optional[dict] = None,
     ) -> None:

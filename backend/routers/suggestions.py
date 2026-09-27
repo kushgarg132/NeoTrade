@@ -8,6 +8,7 @@ app where a person causes a trade.
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,7 +25,12 @@ from backend.instruments.master import InstrumentMaster
 from backend.options.premiums import live_premium_source
 from backend.prefs import PrefsStore
 from backend.suggestions.scan import scan_universe
-from backend.suggestions.service import execute_suggestion
+from backend.brokers.protocol import BrokerSessionState
+from backend.brokers.registry import BROKERS, get_broker_adapter
+from backend.engine.execution.live_order_store import LiveOrderStore
+from backend.engine.session import IST
+from backend.risk.kill_switch import KillSwitchStore
+from backend.suggestions.service import execute_option_suggestion_live, execute_suggestion
 from backend.suggestions.store import SuggestionStore
 from backend.suggestions.thesis import attach_theses
 
@@ -170,3 +176,69 @@ async def reject_suggestion(
     if decided is None:
         raise HTTPException(status_code=404, detail="No such pending suggestion")
     return decided
+
+
+async def _options_broker(user_id: str):
+    """The user's first connected broker that can place option orders."""
+    for broker in BROKERS:
+        adapter = await get_broker_adapter(broker, user_id, get_credential_store(), db.redis)
+        if getattr(adapter, "supports_options", False) and await adapter.state() == BrokerSessionState.ACTIVE:
+            return adapter
+    return None
+
+
+def get_options_broker():
+    """Injected so tests can approve live against a fake broker."""
+    return _options_broker
+
+
+@router.post("/{suggestion_id}/approve-live")
+async def approve_suggestion_live(
+    suggestion_id: str,
+    user: User = Depends(get_current_user),
+    store: SuggestionStore = Depends(get_suggestion_store),
+    ledger: LedgerStore = Depends(get_ledger_store),
+    options_broker=Depends(get_options_broker),
+):
+    """Sends an option proposal to the user's broker as a real order. The
+    one path where a person's tap places real money, so: option proposals
+    only, a connected Kite or Upstox, not on a day the kill-switch tripped,
+    and claimed before the order goes out so a double tap cannot send two."""
+    suggestion = await store.get(user.id, suggestion_id)
+    if suggestion is None:
+        raise HTTPException(status_code=404, detail="No such suggestion")
+    if suggestion["status"] != "PENDING":
+        raise HTTPException(status_code=409, detail=f"Suggestion already {suggestion['status'].lower()}")
+    if not suggestion.get("option_contract"):
+        raise HTTPException(status_code=400, detail="Only option proposals can be approved live")
+    today = datetime.now(timezone.utc).astimezone(IST).date()
+    if await KillSwitchStore(db.db).is_tripped(user.id, today):
+        raise HTTPException(status_code=409, detail="Daily loss limit hit today: no new live orders")
+    contract = await InstrumentMaster(db.db).get("NFO", suggestion["symbol"])
+    if contract is None:
+        raise HTTPException(status_code=400, detail=f"Unknown option contract {suggestion['symbol']!r}")
+    adapter = await options_broker(user.id)
+    if adapter is None:
+        raise HTTPException(status_code=409, detail="Connect Kite or Upstox in Settings to trade options live.")
+
+    if await store.decide(user.id, suggestion_id, status="SENDING") is None:
+        raise HTTPException(status_code=409, detail="Suggestion was decided concurrently")
+    try:
+        order, broker_status, filled = await execute_option_suggestion_live(
+            suggestion, ledger, adapter, contract, LiveOrderStore(db.db),
+        )
+    except Exception as exc:
+        logger.warning("approve-live: order for suggestion %s not placed: %s", suggestion_id, exc)
+        await store.settle(user.id, suggestion_id, "PENDING", reason=f"Broker refused: {exc}")
+        raise HTTPException(status_code=502, detail=f"Your broker did not take the order: {exc}")
+
+    if filled > 0:
+        status, reason = "EXECUTED", None
+    elif broker_status in ("REJECTED", "CANCELLED"):
+        status, reason = "PENDING", f"Broker {broker_status.lower()} the order"
+    else:
+        status, reason = "SENT", "Placed with your broker, not filled yet"
+    return await store.settle(
+        user.id, suggestion_id, status, reason=reason, order_id=order.id, venue="live",
+        filled_quantity=filled,
+    )
