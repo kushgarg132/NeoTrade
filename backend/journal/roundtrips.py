@@ -6,7 +6,38 @@ P&L here is gross -- brokerage, STT and exchange charges are not in any
 broker's trade book, so they are not subtracted.
 """
 
+import re
+
 from backend.engine.session import IST
+
+FNO_EXCHANGES = {"NFO", "BFO", "NSE_FO", "BSE_FO"}
+_UNDERLYING = re.compile(r"^[A-Z&-]+")
+
+
+def instrument_kind(symbol: str, exchange: str) -> str:
+    """CALL, PUT, FUTURE or STOCK, from the broker's own symbol and exchange.
+    NSE option symbols end in the strike then CE/PE (NIFTY24OCT25000CE),
+    futures in FUT; some brokers space the parts out and put CE/PE mid-symbol.
+    An F&O exchange with neither suffix still counts as a future."""
+    words = symbol.upper().split()
+    if len(words) > 1:  # spaced form, e.g. "NIFTY 25100 CE 30 SEP 25"
+        for word, kind in (("CE", "CALL"), ("PE", "PUT"), ("FUT", "FUTURE")):
+            if word in words:
+                return kind
+    compact = "".join(words)
+    if re.search(r"\dCE$", compact):
+        return "CALL"
+    if re.search(r"\dPE$", compact):
+        return "PUT"
+    if compact.endswith("FUT") or (exchange or "").upper() in FNO_EXCHANGES:
+        return "FUTURE"
+    return "STOCK"
+
+
+def underlying_of(symbol: str) -> str:
+    """NIFTY24OCT25000CE -> NIFTY; a stock is its own underlying."""
+    match = _UNDERLYING.match(symbol.replace(" ", "").upper())
+    return match.group(0) if match else symbol
 
 
 def _new_trip(trade: dict, direction: str) -> dict:
@@ -34,6 +65,8 @@ def _finish(trip: dict) -> dict:
         "opened_at": trip["opened_at"], "closed_at": closed, "pnl": pnl,
         "day": closed.astimezone(IST).date().isoformat() if closed else None,
         "trade_ids": trip["trade_ids"],
+        "kind": instrument_kind(trip["symbol"], trip["exchange"]),
+        "underlying": underlying_of(trip["symbol"]),
     }
 
 

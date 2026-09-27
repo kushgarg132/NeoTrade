@@ -30,6 +30,7 @@ from backend.guardrails import telegram
 from backend.guardrails.rules import evaluate
 from backend.guardrails.square_off import describe, exit_orders
 from backend.guardrails.store import GuardrailStore
+from backend.instruments.master import InstrumentMaster
 from backend.journal.roundtrips import build_round_trips
 from backend.journal.store import JournalStore
 from backend.journal.sync import sync_user_trades
@@ -64,7 +65,16 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
     store = GuardrailStore(db)
     chat_id = await store.telegram_chat(user_id)
     fresh = []
-    for breach in evaluate(trips, synced["day_pnl"], prefs):
+    # Lot sizes for today's options trades, from the broker's NFO dump.
+    master = InstrumentMaster(db)
+    lot_sizes = {}
+    for trip in trips:
+        if trip["kind"] in ("CALL", "PUT") and trip["symbol"] not in lot_sizes:
+            contract = await master.get("NFO", trip["symbol"])
+            if contract is not None:
+                lot_sizes[trip["symbol"]] = contract.lot_size
+
+    for breach in evaluate(trips, synced["day_pnl"], prefs, lot_sizes):
         if not await store.record(user_id, day, breach):
             continue
         fresh.append(breach)

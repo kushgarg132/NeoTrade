@@ -54,8 +54,22 @@ async def get_journal(
             "trips": len(closed),
             "pnl": round(sum(t["pnl"] for t in closed), 2),
             "wins": sum(t["pnl"] > 0 for t in closed),
+            "by_kind": _by_kind(closed),
         },
     }
+
+
+def _by_kind(closed: list[dict]) -> dict:
+    """Stocks, options and futures kept apart: an options habit can sink an
+    otherwise sound stock book, and the total hides which."""
+    groups: dict[str, dict] = {}
+    for trip in closed:
+        label = {"CALL": "options", "PUT": "options", "FUTURE": "futures"}.get(trip["kind"], "stocks")
+        row = groups.setdefault(label, {"trips": 0, "pnl": 0.0, "wins": 0})
+        row["trips"] += 1
+        row["pnl"] = round(row["pnl"] + trip["pnl"], 2)
+        row["wins"] += trip["pnl"] > 0
+    return groups
 
 
 @router.post("/sync")

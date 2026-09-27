@@ -26,6 +26,12 @@ DEFAULTS = {
     "max_trades_per_day": 0,
     "cooldown_after_losses": 0,
     "cooldown_minutes": 30,
+    # Options guardrails (0/False is off): options round trips opened per
+    # day, lots in any one options trade, and a warning on selling an option
+    # with no bought option on the same underlying to cap the loss.
+    "max_option_trades_per_day": 0,
+    "max_option_lots": 0,
+    "warn_naked_options": False,
     # What happens to open NSE intraday positions when the daily loss limit
     # is hit: "off", "preview" (alert with the orders it would place), or
     # "live" (place them). Never defaults to live.

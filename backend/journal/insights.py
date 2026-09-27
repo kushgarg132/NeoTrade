@@ -104,12 +104,33 @@ def _same_day_context(closed: list[dict]):
     return context
 
 
+_KIND_LABELS = {"STOCK": "Stocks", "CALL": "Options", "PUT": "Options", "FUTURE": "Futures"}
+
+
+def _options_findings(closed: list[dict]) -> list[dict]:
+    """Where the options money goes: buying options against selling them,
+    and options against the rest of the book."""
+    options = [t for t in closed if t.get("kind") in ("CALL", "PUT")]
+    found = []
+    bought = [t for t in options if t["direction"] == "LONG"]
+    sold = [t for t in options if t["direction"] == "SHORT"]
+    if len(bought) >= MIN_TRIPS:
+        found.append(_finding("option_buying", "Options you bought", bought, closed))
+    if len(sold) >= MIN_TRIPS:
+        found.append(_finding("option_selling", "Options you sold", sold, closed))
+    by_kind = defaultdict(list)
+    for t in closed:
+        by_kind[_KIND_LABELS.get(t.get("kind"), "Stocks")].append(t)
+    found += _extremes("instrument", {f"Trading {label}": g for label, g in by_kind.items()}, closed)
+    return found
+
+
 def build_insights(trips: list[dict]) -> list[dict]:
     closed = [t for t in trips if t["pnl"] is not None]
     if len(closed) < MIN_TRIPS:
         return []
 
-    findings = []
+    findings = _options_findings(closed)
 
     by_bucket, by_weekday = defaultdict(list), defaultdict(list)
     for t in closed:

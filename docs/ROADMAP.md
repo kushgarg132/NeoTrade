@@ -376,6 +376,15 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
   symbol as an NSE equity and always failed with "Unknown instrument", so no option
   proposal had ever filled. Upstox's own NFO instrument mapping is still open: contracts
   come from Kite's dump.
+- **2026-09-27, options in the journal and guardrails.** Every round trip carries `kind`
+  (STOCK/CALL/PUT/FUTURE, from the broker's symbol and exchange -- including the spaced
+  "NIFTY 25100 CE 30 SEP 25" form) and `underlying`. The journal summary splits P&L by
+  stocks/options/futures; findings add options bought vs sold and options vs stocks. Three
+  opt-in guardrails: options trades per day, lots per options trade (lot sizes from the NFO
+  dump, so Kite must have synced), and a warning on an option sold with no bought option on
+  the same underlying open (strike/expiry/type not matched -- see `guardrails/rules.py`).
+  Alerts only: nothing here can stop an order placed in the broker's own app. Not done:
+  expiry-day findings (needs a reliable expiry per traded contract).
 
 ---
 

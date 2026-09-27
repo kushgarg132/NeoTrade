@@ -53,6 +53,9 @@ class PreferencesPatch(BaseModel):
     max_trades_per_day: Optional[int] = Field(default=None, ge=0, le=500)
     cooldown_after_losses: Optional[int] = Field(default=None, ge=0, le=20)
     cooldown_minutes: Optional[int] = Field(default=None, ge=0, le=390)
+    max_option_trades_per_day: Optional[int] = Field(default=None, ge=0, le=500)
+    max_option_lots: Optional[int] = Field(default=None, ge=0, le=1000)
+    warn_naked_options: Optional[bool] = None
     auto_square_off: Optional[Literal["off", "preview", "live"]] = None
     auto_paper_intraday: Optional[bool] = None
 
