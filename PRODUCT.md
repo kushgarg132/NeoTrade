@@ -62,7 +62,7 @@ stop?"*
 | Decisions `/paper/decisions` | Operate | Triage pending AI proposals — approve or reject — split Intraday / Long-term. Approvals fill on paper |
 | Holdings `/paper/holdings` | Operate | Paper equity curve, open paper positions marked live, closed paper trades |
 | Engine `/paper/engine` | Operate | Start/stop an engine run, watch paper positions and fills; a "live mode armed" band names any strategy that will trade real money |
-| Engine settings `/paper/settings` | Operate | The daily auto-run switch (paper-trade intraday every session, 09:15–15:30 IST, no Start button), the engine's sizing (account size, max exposure, per-trade cap), the daily scan and its universe, and each strategy's paper/live switch. Shows the daily loss limit read-only |
+| Engine settings `/paper/settings` | Operate | The daily auto-run switch (paper-trade intraday every session, 09:15–15:30 IST, no Start button), the engine's sizing (account size, max exposure, per-trade cap), the daily scan and its universe, and each strategy's paper/live switch with what it still needs to go live (a passing backtest plus a paper record: 20 trading days, 30 trades, net profit after charges, profit factor 1.3, drawdown within 5% of account). Shows the daily loss limit read-only |
 | Watchlist `/watchlist` | Operate | Tracked symbols at a glance |
 | Scanner `/scanner` | Operate | On-demand bullish scan results |
 | Option chain `/options` | Operate | Live NIFTY 50 / BANK NIFTY chain from the user's Upstox session: every strike's call and put premium, open interest and its change, IV, spot and put/call ratio. Read-only; also reached from those two index cards |

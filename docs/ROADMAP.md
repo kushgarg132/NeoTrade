@@ -399,6 +399,13 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
   (that is where premiums come from). Not in backtests: there is no premium history to
   replay, so it can never clear the backtest gate. Next: live options orders (the broker
   adapters place NSE equity orders only).
+- **2026-09-27, the paper gate (promotion to live).** A strategy switched live routes real
+  orders only if it passes the backtest gate *and* its closed paper trades in that user's
+  account clear `backend/risk/paper_gate.py`: at least 20 trading days and 30 trades, net
+  profit after charges, profit factor at least 1.3, and a drawdown of the strategy's running
+  net P&L within 5% of `account_size`. Added to the backtest gate, never replacing it.
+  Enforced in `launch_run`; `GET /settings/strategies/promotion` reports each check's need
+  and have, and Engine settings shows the gap under each strategy's switch.
 
 ---
 

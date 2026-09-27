@@ -206,7 +206,7 @@ the revived chain emits `Intent` and is scored by `composite.py` like everything
 | No backtest gate | nothing marks a strategy live-eligible; `backend/strategies/registry.py:16-59` is the only filter | A registered strategy trades immediately |
 | Single-process state | `_RUNS` (`routers/trading.py:64`), `ws/hub.py:9-10`, `scheduler.py:8-10` | Breaks with more than one worker |
 | `llm_service` module singleton | `backend/llm.py:125` | Per-user model choice (`omniroute_model` in `user_prefs`) is stored but never read |
-| `/trading/start` trusts request-body risk caps | `routers/trading.py:217-337` (`launch_run`) vs `scheduler.py:52-59` which reads `PrefsStore` | The manual path can bypass a user's stored limits |
+| `/trading/start` trusts request-body risk caps | `routers/trading.py:218-342` (`launch_run`) vs `scheduler.py:52-59` which reads `PrefsStore` | The manual path can bypass a user's stored limits |
 
 ---
 
@@ -266,6 +266,11 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   is toggled live, the broker session is ACTIVE, *and* it passes the gate. Until 2026-09-26
   the gate also dropped unproven strategies from paper runs, which left no way to build the
   paper track record the product relies on.
+- **Paper gate** — on top of the backtest gate, never instead of it: live routing also needs
+  the strategy's closed paper trades in that user's account to clear
+  `backend/risk/paper_gate.py` (20 trading days, 30 trades, net profit after charges, profit
+  factor 1.3, drawdown within 5% of `account_size`). Priced option contracts never route live
+  at all (`RoutingExecutionClient`): the broker adapters place NSE equity orders only.
 - **Daily paper auto-run** — `backend/engine/autorun.py`, a 60s loop on every worker, keeps
   one INTRADAY paper run alive 09:15–15:30 IST on weekdays for users with
   `auto_paper_intraday` on (no NSE holiday calendar: on a holiday the feed simply delivers no

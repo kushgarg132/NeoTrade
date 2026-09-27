@@ -87,6 +87,34 @@ async def list_strategies(user: User = Depends(get_current_user)):
     return [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"])]
 
 
+@router.get("/settings/strategies/promotion")
+async def strategy_promotion(
+    user: User = Depends(get_current_user),
+    prefs: PrefsStore = Depends(get_prefs_store),
+):
+    """What each strategy still needs before its live switch sends real
+    orders: a passing backtest, and a paper record in this account that
+    clears backend/risk/paper_gate.py. Until both hold, a strategy switched
+    live keeps trading paper."""
+    from backend.risk.backtest_gate import BacktestGateStore
+    from backend.risk.paper_gate import paper_records
+    from backend.strategies.registry import build_default_strategies
+
+    names = [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"])]
+    account_size = (await prefs.get(user.id))["account_size"]
+    records = await paper_records(db.db, user.id, names, account_size)
+    gate = BacktestGateStore(db.db)
+    rows = []
+    for name in names:
+        backtest = await gate.latest(name)
+        passed = bool(backtest and backtest["passed"])
+        rows.append({
+            "name": name, "backtest_passed": passed, "paper": records[name],
+            "eligible": passed and records[name]["passed"],
+        })
+    return rows
+
+
 @router.get("/settings/omniroute-models")
 async def list_omniroute_models():
     """Proxies OmniRoute's OpenAI-compatible GET /models so the frontend can

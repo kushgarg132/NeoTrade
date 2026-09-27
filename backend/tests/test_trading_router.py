@@ -11,7 +11,7 @@
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -489,8 +489,8 @@ def test_unproven_strategies_still_paper_trade(monkeypatch):
 
 def test_a_strategy_toggled_live_routes_live_only_after_passing_the_gate(monkeypatch):
     """The user switched every long-term strategy to live and the broker
-    session is ACTIVE; only the one with a passing backtest may route live.
-    The rest stay on paper."""
+    session is ACTIVE; only the one with a passing backtest and a paper
+    record may route live. The rest stay on paper."""
     from backend.brokers.protocol import BrokerSessionState
     from backend.components.shared.models import BacktestResult
     from backend.prefs import PrefsStore
@@ -505,6 +505,9 @@ def test_a_strategy_toggled_live_routes_live_only_after_passing_the_gate(monkeyp
         total_trades=40, win_rate=0.55, profit_factor=1.5, total_pnl=50_000.0,
         max_drawdown=0.10, sharpe_ratio=1.2, trades=[],
     )))
+    # Both earned a paper record; only mean_reversion also passed a backtest.
+    for name in ("mean_reversion", "technical_breakout"):
+        asyncio.run(_seed_paper_record(type("_Db", (), {"db": fresh_db})(), name))
 
     run_id = _start_longterm(monkeypatch, fresh_db, BrokerSessionState.ACTIVE)
 
@@ -635,6 +638,18 @@ async def _seed_gate_and_prefs(fake_db, live_strategies):
             max_drawdown=0.10, sharpe_ratio=1.2, trades=[],
         ))
     await PrefsStore(fake_db.db).update(_USER.id, {"live_strategies": live_strategies})
+    await _seed_paper_record(fake_db, "technical_breakout")
+
+
+async def _seed_paper_record(fake_db, strategy):
+    """A paper record that clears backend/risk/paper_gate.py: 30 closed
+    trades over 30 days, 2 of every 3 winning."""
+    start = datetime(2026, 1, 1, 6, 0, tzinfo=timezone.utc)
+    await fake_db.db["paper_trades"].insert_many([
+        {"user_id": _USER.id, "strategy": strategy, "status": "CLOSED", "venue": "paper",
+         "exit_at": start + timedelta(days=i), "realized_pnl": 1000.0 if i % 3 else -500.0, "costs": 20.0}
+        for i in range(30)
+    ])
 
 
 def test_start_routes_a_toggled_live_strategy_and_reconciles_positions(monkeypatch):
@@ -768,6 +783,38 @@ def test_start_falls_back_to_paper_when_broker_session_is_not_active(monkeypatch
 
     async def _scenario():
         await _seed_gate_and_prefs(fake_db, ["technical_breakout"])
+        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=0.01)
+        await trading.start_trading(req, user=_USER, runs=RunStore(fake_db.db))
+        for _ in range(5):
+            await asyncio.sleep(0)
+
+    asyncio.run(_scenario())
+
+    assert isinstance(seen["execution"], trading.SimulatedExecutionClient)
+
+
+def test_start_keeps_a_toggled_strategy_on_paper_without_a_paper_record(monkeypatch):
+    """Backtest passed, switched live, broker ACTIVE -- but no paper record
+    in this account yet, so the paper gate keeps it on paper."""
+    from backend.brokers.protocol import BrokerSessionState
+
+    fake_db = _fresh_fake_db()
+    monkeypatch.setattr(trading, "InstrumentMaster", _FakeMaster)
+    monkeypatch.setattr(trading, "YFinanceProvider", _ForeverQuoteProvider)
+    monkeypatch.setattr(trading, "db", fake_db)
+    monkeypatch.setattr(
+        trading, "get_active_broker_adapter",
+        AsyncMock(return_value=_LiveAdapter(BrokerSessionState.ACTIVE, {})),
+    )
+    seen = {}
+
+    async def _spying_run(**kwargs):
+        seen["execution"] = kwargs["execution"]
+
+    monkeypatch.setattr(trading, "run", _spying_run)
+
+    async def _scenario():
+        await _seed_gate_and_prefs(fake_db, ["mean_reversion"])  # paper record is technical_breakout's
         req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=0.01)
         await trading.start_trading(req, user=_USER, runs=RunStore(fake_db.db))
         for _ in range(5):

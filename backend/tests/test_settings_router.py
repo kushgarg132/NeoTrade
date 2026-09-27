@@ -247,3 +247,15 @@ def test_list_strategies_returns_plain_name_list(client):
     names = resp.json()
     assert isinstance(names, list)
     assert "volume_surge" in names
+
+
+def test_strategy_promotion_lists_what_each_strategy_still_needs(client, db, monkeypatch):
+    monkeypatch.setattr(settings_router, "db", type("_Db", (), {"db": db})())
+    resp = client.get("/api/v1/settings/strategies/promotion")
+    assert resp.status_code == 200
+    rows = {r["name"]: r for r in resp.json()}
+    row = rows["volume_surge"]
+    assert row["backtest_passed"] is False and row["eligible"] is False
+    assert {c["rule"] for c in row["paper"]["checks"]} == {
+        "days", "trades", "net", "profit_factor", "max_drawdown_pct",
+    }

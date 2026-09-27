@@ -32,6 +32,7 @@ from backend.configs.settings import settings
 from backend.prefs import PrefsStore
 from backend.risk.backtest_gate import BacktestGateStore
 from backend.risk.kill_switch import KillSwitchStore
+from backend.risk.paper_gate import paper_records
 from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
 from backend.core.clock import SystemClock
 from backend.database import db
@@ -224,7 +225,8 @@ async def launch_run(
 
     Every registered strategy for `mode` runs on paper. The backtest gate
     decides only which of them may route live -- an unproven strategy still
-    paper-trades, which is how it earns a track record at all."""
+    paper-trades, which is how it earns a track record at all. Routing live
+    also needs that record to clear the paper gate (backend/risk/paper_gate.py)."""
     master = InstrumentMaster(db.db)
     symbols = universe or list(ALL_SCAN_STOCKS)
     credentials = get_credential_store()
@@ -258,18 +260,21 @@ async def launch_run(
     instruments += option_instruments
     if not strategies:
         raise HTTPException(status_code=400, detail=f"No strategies registered for mode {mode!r}")
-    eligible = await live_eligible_strategies(strategies, BacktestGateStore(db.db))
-
     prefs = await PrefsStore(db.db).get(user_id)
     account_size = prefs["account_size"]
     max_exposure = prefs["max_exposure"]
+
+    eligible = await live_eligible_strategies(strategies, BacktestGateStore(db.db))
+    records = await paper_records(db.db, user_id, [s.spec.name for s in eligible], account_size)
+    eligible = [s for s in eligible if records[s.spec.name]["passed"]]
 
     active_adapter = await get_active_broker_adapter(user_id, credentials)
     live_strategy_names = set(prefs["live_strategies"])
     eligible_names = {s.spec.name for s in eligible}
 
     # A strategy routes live only if ALL of: the user toggled it live, this
-    # broker session is ACTIVE, and it cleared the backtest gate above.
+    # broker session is ACTIVE, and it cleared both the backtest gate and
+    # this user's paper gate above.
     # Anything uncertain (no active session, not toggled, not eligible)
     # falls back to paper -- never the other way around.
     live_by_strategy: dict[str, BrokerExecutionClient] = {}
