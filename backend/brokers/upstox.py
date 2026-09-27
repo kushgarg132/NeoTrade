@@ -47,6 +47,13 @@ Real API surface used:
   2026-09-26; the timestamp's exact format is only documented as "user
   readable", so brokers/trades.py accepts more than one).
 
+- Holdings:    GET https://api.upstox.com/v2/portfolio/long-term-holdings,
+  Bearer auth -> {"data": [{"isin", "company_name", "tradingsymbol",
+  "trading_symbol", "exchange", "quantity", "t1_quantity", "average_price",
+  "last_price", "close_price", ...}]} (the official SDK's PortfolioApi and
+  HoldingsData model, 2026-09-27). ponytail: `quantity` is taken as the
+  whole holding; whether it already includes t1_quantity is not stated
+  there -- check against a real account. No mutual fund holdings API.
 - Option contracts: GET https://api.upstox.com/v2/option/contract
   ?instrument_key={underlying}[&expiry_date=YYYY-MM-DD], Bearer auth ->
   {"data": [{"expiry", "strike_price", "lot_size", "instrument_type",
@@ -82,7 +89,8 @@ from backend.brokers.expiry import ttl_seconds_until
 from backend.brokers.protocol import BrokerSessionState
 from backend.components.shared.models import PriceCandle
 from backend.brokers.trades import parse_ist
-from backend.core.models import BrokerOrderStatus, BrokerTrade, Order, Position, Side
+from backend.brokers.holdings import kind_of
+from backend.core.models import BrokerOrderStatus, BrokerTrade, Holding, Order, Position, Side
 from backend.data.feeds.live_upstox import UpstoxMarketFeed
 from backend.instruments.models import Instrument
 
@@ -96,6 +104,7 @@ _CANCEL_ORDER_URL = "https://api-hft.upstox.com/v2/order/cancel"
 _ORDER_DETAILS_URL = "https://api.upstox.com/v2/order/details"
 _POSITIONS_URL = "https://api.upstox.com/v2/portfolio/short-term-positions"
 _TRADES_URL = "https://api.upstox.com/v2/order/trades/get-trades-for-day"
+_HOLDINGS_URL = "https://api.upstox.com/v2/portfolio/long-term-holdings"
 _OPTION_CONTRACT_URL = "https://api.upstox.com/v2/option/contract"
 _OPTION_CHAIN_URL = "https://api.upstox.com/v2/option/chain"
 
@@ -429,6 +438,27 @@ class UpstoxAdapter:
             )
             for row in resp.json()["data"]
         }
+
+    async def get_holdings(self) -> list[Holding]:
+        token = await self.get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(_HOLDINGS_URL, headers=self._headers(token))
+            resp.raise_for_status()
+
+        holdings = []
+        for row in resp.json().get("data") or []:
+            symbol = row.get("trading_symbol") or row.get("tradingsymbol")
+            quantity = float(row.get("quantity") or 0)
+            if not symbol or quantity <= 0:
+                continue
+            holdings.append(Holding(
+                symbol=symbol, isin=row.get("isin"), name=row.get("company_name"),
+                exchange=row.get("exchange"), kind=kind_of(symbol), quantity=quantity,
+                avg_price=float(row.get("average_price") or 0),
+                last_price=row.get("last_price") or None, close_price=row.get("close_price") or None,
+                broker="upstox",
+            ))
+        return holdings
 
     async def get_trades(self) -> list[BrokerTrade]:
         token = await self.get_access_token()

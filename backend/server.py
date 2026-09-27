@@ -96,6 +96,7 @@ async def startup_db_client():
     await SuggestionStore(db.db).ensure_indexes()
     await PrefsStore(db.db).ensure_indexes()
     await JournalStore(db.db).ensure_indexes()
+    await db.db["portfolio_snapshots"].create_index([("user_id", 1), ("at", -1)])
     await GuardrailStore(db.db).ensure_indexes()
     await BrokerCredentialStore(db.db, fernet_from_settings()).ensure_indexes()
     await AppSettingsStore(db.db).load_into_cache()
@@ -156,6 +157,7 @@ from backend.routers import analytics
 from backend.routers import broker
 from backend.routers import journal
 from backend.routers import guardrails as guardrails_router
+from backend.routers import portfolio as portfolio_router
 
 app.include_router(market_data.router, prefix=settings.API_PREFIX, tags=["Market Data"], dependencies=[Depends(get_current_user)])
 app.include_router(options_router.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
@@ -166,6 +168,7 @@ app.include_router(analytics.router, prefix=settings.API_PREFIX, tags=["Analytic
 app.include_router(broker.router, prefix=settings.API_PREFIX, tags=["Broker"], dependencies=[Depends(get_current_user)])
 app.include_router(journal.router, prefix=settings.API_PREFIX, tags=["Journal"], dependencies=[Depends(get_current_user)])
 app.include_router(guardrails_router.router, prefix=settings.API_PREFIX, tags=["Guardrails"], dependencies=[Depends(get_current_user)])
+app.include_router(portfolio_router.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
 
 # The socket authenticates its own handshake (see backend/ws/routes.py): the
 # HTTP bearer dependency cannot run on a WebSocket upgrade.

@@ -18,6 +18,11 @@ orders/ + .../portfolio/, fetched live 2026-09-09):
   every other broker adapter in this codebase).
 - `positions()` -> {"net": [...], "day": [...]} directly (SDK unwraps the
   data envelope, same as KiteProvider.quote already relies on).
+- `holdings()` / `mf_holdings()` -> equity and mutual fund holdings. Field
+  names checked against Zerodha's own kiteconnect-mocks responses
+  (holdings.json, mf_holdings.json on GitHub, 2026-09-27): quantity is
+  settled shares, t1_quantity those still settling; MF rows carry the fund
+  name in `fund` and the ISIN in `tradingsymbol`.
 - `trades()` -> list of today's fills: trade_id, order_id, exchange,
   tradingsymbol, transaction_type, quantity, average_price, fill_timestamp
   (the SDK parses 19-char timestamps into naive IST datetimes itself).
@@ -35,8 +40,9 @@ scope (see docs/superpowers/specs/2026-09-09-live-equity-execution-design.md).
 import asyncio
 from typing import Callable
 
+from backend.brokers.holdings import kind_of
 from backend.brokers.trades import parse_ist
-from backend.core.models import BrokerOrderStatus, BrokerTrade, Order, Position, Side
+from backend.core.models import BrokerOrderStatus, BrokerTrade, Holding, Order, Position, Side
 
 
 class KiteOrderClient:
@@ -110,3 +116,28 @@ class KiteOrderClient:
             )
             for row in rows
         ]
+
+    async def get_holdings(self) -> list[Holding]:
+        kite = self._kite_client_factory()
+        stocks = await asyncio.to_thread(kite.holdings)
+        funds = await asyncio.to_thread(kite.mf_holdings)
+        result = [
+            Holding(
+                symbol=row["tradingsymbol"], isin=row.get("isin"), exchange=row.get("exchange"),
+                kind=kind_of(row["tradingsymbol"]),
+                quantity=float(row.get("quantity") or 0) + float(row.get("t1_quantity") or 0),
+                avg_price=float(row.get("average_price") or 0),
+                last_price=row.get("last_price") or None, close_price=row.get("close_price") or None,
+                broker="kite",
+            )
+            for row in stocks
+        ]
+        result += [
+            Holding(
+                symbol=row["tradingsymbol"], isin=row["tradingsymbol"], name=row.get("fund"), kind="MF",
+                quantity=float(row.get("quantity") or 0), avg_price=float(row.get("average_price") or 0),
+                last_price=row.get("last_price") or None, broker="kite",
+            )
+            for row in funds
+        ]
+        return [h for h in result if h.quantity > 0]

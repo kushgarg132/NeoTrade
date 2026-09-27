@@ -72,7 +72,8 @@ from backend.brokers.expiry import next_fixed_time_ist
 from backend.brokers.protocol import BrokerSessionState
 from backend.components.shared.models import PriceCandle
 from backend.brokers.trades import parse_ist, today_ist
-from backend.core.models import BrokerOrderStatus, BrokerTrade, Order, Position, Side
+from backend.brokers.holdings import kind_of
+from backend.core.models import BrokerOrderStatus, BrokerTrade, Holding, Order, Position, Side
 from backend.instruments.models import Instrument
 
 _ROOT = "https://apiconnect.angelone.in"
@@ -85,6 +86,7 @@ _CANCEL_ORDER_URL = f"{_ROOT}/rest/secure/angelbroking/order/v1/cancelOrder"
 _ORDER_BOOK_URL = f"{_ROOT}/rest/secure/angelbroking/order/v1/getOrderBook"
 _POSITIONS_URL = f"{_ROOT}/rest/secure/angelbroking/order/v1/getPosition"
 _TRADE_BOOK_URL = f"{_ROOT}/rest/secure/angelbroking/order/v1/getTradeBook"
+_HOLDINGS_URL = f"{_ROOT}/rest/secure/angelbroking/portfolio/v1/getHolding"
 
 _INTERVAL_MAP = {"1m": "ONE_MINUTE", "1d": "ONE_DAY"}
 _PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825}
@@ -322,6 +324,34 @@ class AngelOneAdapter:
                 product=_PRODUCT_FROM_ANGEL.get((row.get("producttype") or "").upper()),
             )
         return result
+
+    async def get_holdings(self) -> list[Holding]:
+        """GET .../portfolio/v1/getHolding (the path in the official Python
+        SDK). tradingsymbol, exchange, isin, quantity and t1quantity are in
+        the official Go SDK's Holding struct. ponytail: `averageprice`,
+        `ltp` and `close` are Angel One's documented names but in neither
+        SDK, and its docs were not reachable to re-check: a holding without
+        them keeps a zero cost basis / no price rather than a guess."""
+        token = await self.get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(_HOLDINGS_URL, headers=self._headers(token))
+            resp.raise_for_status()
+
+        holdings = []
+        for row in resp.json().get("data") or []:
+            symbol = row["tradingsymbol"]
+            plain = symbol[:-3] if symbol.endswith("-EQ") else symbol
+            quantity = float(row.get("quantity") or 0) + float(row.get("t1quantity") or 0)
+            if quantity <= 0:
+                continue
+            holdings.append(Holding(
+                symbol=plain, isin=row.get("isin"), exchange=row.get("exchange"), kind=kind_of(plain),
+                quantity=quantity, avg_price=float(row.get("averageprice") or 0),
+                last_price=float(row["ltp"]) if row.get("ltp") else None,
+                close_price=float(row["close"]) if row.get("close") else None,
+                broker="angel_one",
+            ))
+        return holdings
 
     async def get_trades(self) -> list[BrokerTrade]:
         token = await self.get_access_token()

@@ -19,7 +19,7 @@ from typing import Optional, Protocol
 
 from backend.auth.kite_session import KiteSessionState as BrokerSessionState
 from backend.components.shared.models import PriceCandle
-from backend.core.models import BrokerOrderStatus, BrokerTrade, Order, Position
+from backend.core.models import BrokerOrderStatus, BrokerTrade, Holding, Order, Position
 from backend.engine.protocols import DataFeed
 from backend.instruments.models import Instrument
 
@@ -73,6 +73,11 @@ class BrokerAdapter(Protocol):
     async def cancel_order(self, broker_order_id: str) -> None: ...
 
     async def get_order_status(self, broker_order_id: str) -> BrokerOrderStatus: ...
+
+    async def get_holdings(self) -> list[Holding]:
+        """Long-term holdings (and mutual funds where the broker exposes
+        them) with the broker's own cost basis and latest price."""
+        ...
 
     async def get_positions(self) -> dict[str, Position]:
         """This broker's own current-day position book, keyed by

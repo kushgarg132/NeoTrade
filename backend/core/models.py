@@ -197,3 +197,23 @@ class BrokerTrade(BaseModel):
     quantity: float
     price: float
     traded_at: datetime
+
+
+class Holding(BaseModel):
+    """One long-term holding read from a broker's own portfolio: settled
+    shares plus those still in T+1 settlement, or mutual fund units.
+    `avg_price` is the broker's cost basis; `last_price` its latest mark
+    (None where the broker gave none -- never guessed)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str
+    isin: Optional[str] = None
+    name: Optional[str] = None
+    exchange: Optional[str] = None
+    kind: Literal["STOCK", "ETF", "MF"] = "STOCK"
+    quantity: float
+    avg_price: float
+    last_price: Optional[float] = None
+    close_price: Optional[float] = None
+    broker: str
