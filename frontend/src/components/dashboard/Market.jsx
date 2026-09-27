@@ -48,40 +48,41 @@ const Quote = ({ item, onClick, index = false }) => (
 
 const Market = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState({ indices: [], global: [], trending: [], news: [] });
-  const [loading, setLoading] = useState(true);
+  // Each feed is shown the moment it arrives; null means still loading.
+  const [data, setData] = useState({ indices: null, global: null, trending: null, news: null });
 
   useEffect(() => {
-    Promise.allSettled([
-      api.get(endpoints.marketIndices),
-      api.get(endpoints.globalIndices),
-      api.get(endpoints.trendingStocks),
-      api.get(endpoints.marketNews),
-    ])
-      .then(([indices, global, trending, news]) => {
-        setData({
-          indices: indices.status === 'fulfilled' ? indices.value.data : [],
-          global: global.status === 'fulfilled' ? global.value.data : [],
-          trending: trending.status === 'fulfilled' ? trending.value.data : [],
-          news: news.status === 'fulfilled' ? news.value.data.articles || [] : [],
-        });
-      })
-      .finally(() => setLoading(false));
+    const feeds = [
+      ['indices', endpoints.marketIndices, (res) => res.data],
+      ['global', endpoints.globalIndices, (res) => res.data],
+      ['trending', endpoints.trendingStocks, (res) => res.data],
+      ['news', endpoints.marketNews, (res) => res.data.articles || []],
+    ];
+    let live = true;
+    feeds.forEach(([key, url, pick]) => {
+      api
+        .get(url)
+        .then((res) => pick(res))
+        .catch(() => [])
+        .then((value) => live && setData((current) => ({ ...current, [key]: value })));
+    });
+    return () => {
+      live = false;
+    };
   }, []);
 
-  if (loading) {
-    return (
-      <Sheet title="Market">
-        <Ruling rows={4} />
-      </Sheet>
-    );
-  }
-
-  const quotes = [...data.indices, ...data.global];
-  if (quotes.length === 0 && data.trending.length === 0 && data.news.length === 0) return null;
+  const quotes = [...(data.indices || []), ...(data.global || [])];
+  const quotesLoading = data.indices === null && data.global === null;
+  const done = Object.values(data).every((value) => value !== null);
+  if (done && quotes.length === 0 && data.trending.length === 0 && data.news.length === 0) return null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      {quotesLoading && (
+        <Sheet title="Indices">
+          <Ruling rows={4} />
+        </Sheet>
+      )}
       {quotes.length > 0 && (
         <Sheet title="Indices" meta={formatNoteDate()}>
           <Statement
@@ -103,7 +104,12 @@ const Market = () => {
         </Sheet>
       )}
 
-      {data.trending.length > 0 && (
+      {data.trending === null && (
+        <Sheet title="Movers" meta="NIFTY 50">
+          <Ruling rows={4} />
+        </Sheet>
+      )}
+      {data.trending?.length > 0 && (
         <Sheet title="Movers" meta="NIFTY 50">
           <Statement
             columns={[
@@ -123,7 +129,7 @@ const Market = () => {
         </Sheet>
       )}
 
-      {data.news.length > 0 && (
+      {data.news?.length > 0 && (
         <Sheet title="Headlines" className="lg:col-span-2">
           <ul>
             {data.news.slice(0, 6).map((article, index) => (
