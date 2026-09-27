@@ -465,7 +465,10 @@ const ModelSheet = () => {
 /* Guardrails                                                                 */
 /* -------------------------------------------------------------------------- */
 
-const GUARD_FIELDS = ['max_trades_per_day', 'cooldown_after_losses', 'cooldown_minutes', 'daily_loss_limit'];
+const GUARD_FIELDS = [
+  'max_trades_per_day', 'cooldown_after_losses', 'cooldown_minutes', 'daily_loss_limit',
+  'max_option_trades_per_day', 'max_option_lots',
+];
 
 const GuardrailsSheet = () => {
   const [prefs, setPrefs] = useState(null);
@@ -566,6 +569,28 @@ const GuardrailsSheet = () => {
       {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this. 0 is off.')}
       {numberRow('cooldown_after_losses', 'Cooldown after losses in a row', 'Start a cooldown after this many losses in a row. 0 is off.')}
       {numberRow('cooldown_minutes', 'Cooldown length, minutes', 'Any trade opened inside it is flagged.')}
+      {numberRow('max_option_trades_per_day', 'Options trades per day', 'Alert when you open more options trades than this. 0 is off.')}
+      {numberRow('max_option_lots', 'Lots per options trade', 'Alert when one options position is bigger than this many lots. Needs Kite connected for lot sizes. 0 is off.')}
+
+      <Row
+        label="Warn on unhedged option selling"
+        hint="Alert when you sell an option with no bought option on the same underlying open to cap the loss. A sold option's loss has no fixed limit."
+      >
+        <button
+          type="button"
+          role="switch"
+          aria-checked={Boolean(prefs.warn_naked_options)}
+          onClick={() => save({ warn_naked_options: !prefs.warn_naked_options })}
+          className={cn(
+            'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
+            prefs.warn_naked_options
+              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
+              : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
+          )}
+        >
+          {prefs.warn_naked_options ? 'On' : 'Off'}
+        </button>
+      </Row>
 
       <Row
         label="Square off at the loss limit"

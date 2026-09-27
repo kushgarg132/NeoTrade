@@ -267,6 +267,20 @@ const Journal = () => {
                   </span>
                 </div>
               </div>
+              {/* Stocks, options and futures apart: a total hides which one
+                  is carrying the book and which is sinking it. */}
+              {summary.by_kind && Object.keys(summary.by_kind).length > 1 && (
+                <div className="grid sm:grid-cols-3 gap-x-4 gap-y-2 mt-4 pt-3 border-t border-[var(--rule)]">
+                  {['stocks', 'options', 'futures'].filter((k) => summary.by_kind[k]).map((kind) => (
+                    <div key={kind} className="min-w-0 flex items-baseline justify-between gap-3 sm:block">
+                      <p className="field-label sm:mb-1">
+                        {kind} · {summary.by_kind[kind].trips}
+                      </p>
+                      <Money value={summary.by_kind[kind].pnl} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </Sheet>
@@ -319,6 +333,11 @@ const Journal = () => {
                     <Cell>
                       <Scrip symbol={trip.symbol} />
                       <span className="doc-meta ml-2">{trip.direction === 'SHORT' ? 'Short' : 'Long'}</span>
+                      {trip.kind && trip.kind !== 'STOCK' && (
+                        <span className="ml-2 px-1 border border-[var(--rule-strong)] field-label text-[0.625rem]">
+                          {trip.kind === 'FUTURE' ? 'FUT' : trip.kind}
+                        </span>
+                      )}
                       {trip.tags?.length > 0 && (
                         <span className="doc-meta normal-case block">{trip.tags.join(' · ')}</span>
                       )}
