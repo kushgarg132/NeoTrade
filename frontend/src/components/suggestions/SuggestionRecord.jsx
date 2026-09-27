@@ -83,9 +83,12 @@ const OptionTerms = ({ contract, quantity }) => (
   </>
 );
 
-const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
+const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject }) => {
   const [busy, setBusy] = useState(null);
   const [failure, setFailure] = useState(null);
+  // Real money takes two taps: the first only says what will be sent.
+  const [confirmLive, setConfirmLive] = useState(false);
+  const canGoLive = Boolean(suggestion.option_contract && onApproveLive);
 
   const decided = suggestion.status !== 'PENDING';
   const risk = suggestion.entry_ref - suggestion.stop;
@@ -96,14 +99,15 @@ const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
     setBusy(kind);
     setFailure(null);
     try {
-      await (kind === 'approve' ? onApprove() : onReject());
+      await { approve: onApprove, live: onApproveLive, reject: onReject }[kind]();
     } catch (err) {
       setFailure(
         err?.response?.data?.detail ||
-          (kind === 'approve' ? 'Could not place the order' : 'Could not record the decision')
+          (kind === 'reject' ? 'Could not record the decision' : 'Could not place the order')
       );
     } finally {
       setBusy(null);
+      setConfirmLive(false);
     }
   };
 
@@ -137,7 +141,13 @@ const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
         {decided && (
           <Stamp
             animate
-            label={suggestion.status === 'EXECUTED' ? 'Executed' : suggestion.status}
+            label={
+              {
+                EXECUTED: suggestion.venue === 'live' ? 'Executed live' : 'Executed',
+                SENT: 'Sent to broker',
+                SENDING: 'Sending',
+              }[suggestion.status] || suggestion.status
+            }
             tone={
               suggestion.status === 'EXECUTED'
                 ? 'gain'
@@ -222,15 +232,48 @@ const SuggestionRecord = ({ suggestion, onApprove, onReject }) => {
             onClick={() => act('approve')}
             disabled={busy !== null}
             aria-label={`Approve ${suggestion.symbol} and place the paper order`}
+            title={canGoLive ? 'Fills on paper' : undefined}
           >
             {busy === 'approve' ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Check className="w-4 h-4" />
             )}
-            Approve
+            {canGoLive ? 'On paper' : 'Approve'}
           </Button>
+          {canGoLive && (
+            <div className="col-span-2 border-t border-[var(--rule)] pt-3 mt-1">
+              {confirmLive && (
+                <p className="mb-2 text-sm text-[var(--loss)]" role="alert">
+                  Real money: {suggestion.side === 'SELL' ? 'sells' : 'buys'}{' '}
+                  {formatQuantity(suggestion.quantity)} units of {suggestion.symbol} at market with
+                  your broker. Tap again to send.
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                {confirmLive && (
+                  <Button variant="secondary" onClick={() => setConfirmLive(false)} disabled={busy !== null}>
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  variant="danger"
+                  className={confirmLive ? '' : 'col-span-2'}
+                  onClick={() => (confirmLive ? act('live') : setConfirmLive(true))}
+                  disabled={busy !== null}
+                  aria-label={`Send ${suggestion.symbol} to your broker as a real order`}
+                >
+                  {busy === 'live' && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {confirmLive ? 'Send real order' : 'Approve live'}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
+      )}
+
+      {!decided && suggestion.reason && (
+        <p className="mt-3 doc-meta normal-case">Last try: {suggestion.reason}</p>
       )}
 
       {decided && suggestion.reason && (

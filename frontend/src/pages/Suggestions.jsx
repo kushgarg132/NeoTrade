@@ -57,10 +57,11 @@ const Suggestions = () => {
   });
 
   const decide = async (suggestion, kind) => {
-    const url =
-      kind === 'approve'
-        ? endpoints.suggestions.approve(suggestion.id)
-        : endpoints.suggestions.reject(suggestion.id);
+    const url = {
+      approve: endpoints.suggestions.approve(suggestion.id),
+      live: endpoints.suggestions.approveLive(suggestion.id),
+      reject: endpoints.suggestions.reject(suggestion.id),
+    }[kind];
     const res = await api.post(url, kind === 'reject' ? {} : undefined);
     setItems((list) => list.map((item) => (item.id === suggestion.id ? res.data : item)));
   };
@@ -202,6 +203,7 @@ const Suggestions = () => {
                 key={suggestion.id}
                 suggestion={suggestion}
                 onApprove={() => decide(suggestion, 'approve')}
+                onApproveLive={() => decide(suggestion, 'live')}
                 onReject={() => decide(suggestion, 'reject')}
               />
             ))}
