@@ -192,6 +192,10 @@ export const endpoints = {
     connect: (broker) => `/broker/${broker}/connect`,
     disconnect: (broker) => `/broker/${broker}/disconnect`,
   },
+  chat: {
+    confirm: (id) => `/chat/actions/${encodeURIComponent(id)}/confirm`,
+    cancel: (id) => `/chat/actions/${encodeURIComponent(id)}/cancel`,
+  },
   settings: {
     omnirouteModels: '/settings/omniroute-models',
     omnirouteModel: '/settings/omniroute-model',

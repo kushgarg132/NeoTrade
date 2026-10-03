@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MessageSquare, X, Send, Loader2, Maximize2, Minimize2 } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { MessageSquare, X, Send, Loader2, Maximize2, Minimize2, Check } from 'lucide-react';
 import Markdown from './common/Markdown';
 import { stream } from '../lib/ws';
+import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 
 /**
@@ -14,10 +16,96 @@ import { cn } from '../utils/cn';
 const OPENING = {
   role: 'assistant',
   content:
-    "Ask about a scrip, a position, or what the engine is doing. I read the same data the statement does.",
+    "Ask about your portfolio, your trades, the engine or a stock. I read your own account, and anything I would change waits for your Confirm.",
+};
+
+/** Questions worth one tap, by the page the user is on. */
+const SUGGESTED = [
+  ['/portfolio', ['What should I trim?', 'Explain my biggest risk', 'What does the plan say to add?']],
+  ['/journal', ['How did I do this month?', "What's my costliest habit?"]],
+  ['/paper', ['Is the engine running?', 'Which proposal is strongest?', 'How far is any strategy from going live?']],
+  ['/settings', ['What are my limits?', 'Did any guardrail trip today?']],
+  ['/', ['How am I doing today?', 'Anything waiting for me?', 'Why did NIFTY move today?']],
+];
+// '/' is last, so it catches every page without its own list.
+const suggestionsFor = (path) =>
+  SUGGESTED.find(([prefix]) => prefix === '/' || path === prefix || path.startsWith(`${prefix}/`))[1];
+
+/**
+ * A change the assistant prepared. Nothing happens until Confirm; a live
+ * order takes a second tap, the same as approving one live elsewhere.
+ */
+const ActionCard = ({ action, onUpdate }) => {
+  const [busy, setBusy] = useState(false);
+  const live = action.card.venue === 'live';
+  const final = ['CONFIRMED', 'CANCELLED', 'FAILED'].includes(action.state);
+
+  const run = async (kind) => {
+    setBusy(true);
+    try {
+      if (kind === 'cancel') {
+        await api.post(endpoints.chat.cancel(action.card.id));
+        onUpdate({ state: 'CANCELLED', note: 'Cancelled. Nothing changed.' });
+      } else {
+        const res = await api.post(endpoints.chat.confirm(action.card.id), {
+          second_tap: action.state === 'NEEDS_SECOND_TAP',
+        });
+        onUpdate({ state: res.data.status, note: res.data.result });
+      }
+    } catch (err) {
+      onUpdate({ state: 'FAILED', note: err?.response?.data?.detail || 'That did not go through.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={cn('border px-3 py-2.5 text-sm', live ? 'border-[var(--loss)]' : 'border-[var(--rule-strong)]')}>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className="field-label text-[var(--ink)]">Proposed change</span>
+        <span className={cn('field-label', live ? 'text-[var(--loss)]' : 'text-[var(--ink-soft)]')}>
+          {live ? 'Live · real money' : action.card.venue === 'paper' ? 'Paper' : ''}
+        </span>
+      </div>
+      <p className="figure-md">{action.card.summary}</p>
+      {action.state === 'NEEDS_SECOND_TAP' && (
+        <p className="mt-1.5 text-[var(--loss)]" role="alert">Real money. Tap Confirm again to send it.</p>
+      )}
+      {action.note && action.state !== 'NEEDS_SECOND_TAP' && (
+        <p className={cn('mt-1.5', action.state === 'FAILED' ? 'text-[var(--loss)]' : 'text-[var(--ink-soft)]')}>
+          {action.note}
+        </p>
+      )}
+      {!final && (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => run('cancel')}
+            disabled={busy}
+            className="min-h-9 border border-[var(--rule-strong)] field-label text-[var(--ink)] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => run('confirm')}
+            disabled={busy}
+            className={cn(
+              'min-h-9 inline-flex items-center justify-center gap-1.5 field-label text-white disabled:opacity-50',
+              live ? 'bg-[var(--loss)]' : 'bg-[var(--gain)]'
+            )}
+          >
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            {action.state === 'NEEDS_SECOND_TAP' ? 'Send real order' : 'Confirm'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const ChatWidget = () => {
+  const location = useLocation();
   const [open, setOpen] = useState(false);
 
   // On a phone the masthead opens it; the floating button is desktop only.
@@ -37,13 +125,19 @@ const ChatWidget = () => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, thinking]);
 
+  const updateAction = (id, patch) =>
+    setMessages((list) => list.map((m) => (m.role === 'action' && m.card.id === id ? { ...m, ...patch } : m)));
+
   const submit = (event) => {
     event.preventDefault();
-    const text = input.trim();
+    send(input.trim());
+  };
+
+  const send = (text) => {
     if (!text || busy) return;
 
     const history = messages
-      .filter((message) => message !== OPENING)
+      .filter((message) => message !== OPENING && message.role !== 'action')
       .map(({ role, content }) => ({ role, content }));
 
     setMessages((list) => [...list, { role: 'user', content: text }]);
@@ -52,9 +146,16 @@ const ChatWidget = () => {
     setThinking('');
 
     let answer = '';
-    const request = stream.request('chat', { message: text, history }, (event_) => {
+    const context = { page: location.pathname, symbol: location.state?.symbol };
+    const request = stream.request('chat', { message: text, history, context }, (event_) => {
       if (event_.event === 'thinking') {
         setThinking(event_.data.text);
+      } else if (event_.event === 'action') {
+        answer = '';
+        setMessages((list) => {
+          const settled = list.map((m) => (m.streaming ? { role: m.role, content: m.content } : m));
+          return [...settled, { role: 'action', card: event_.data, state: 'PROPOSED' }];
+        });
       } else if (event_.event === 'content') {
         answer += event_.data.text;
         setMessages((list) => {
@@ -122,7 +223,14 @@ const ChatWidget = () => {
           </header>
 
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-            {messages.map((message, index) => (
+            {messages.map((message, index) =>
+              message.role === 'action' ? (
+                <ActionCard
+                  key={message.card.id}
+                  action={message}
+                  onUpdate={(patch) => updateAction(message.card.id, patch)}
+                />
+              ) : (
               <div key={index} className={cn(message.role === 'user' && 'text-right')}>
                 <p className="field-label mb-1">{message.role === 'user' ? 'You' : 'Assistant'}</p>
                 <div
@@ -136,7 +244,23 @@ const ChatWidget = () => {
                   <Markdown>{message.content}</Markdown>
                 </div>
               </div>
-            ))}
+              )
+            )}
+
+            {messages.length === 1 && !busy && (
+              <div className="flex flex-wrap gap-1.5">
+                {suggestionsFor(location.pathname).map((question) => (
+                  <button
+                    key={question}
+                    type="button"
+                    onClick={() => send(question)}
+                    className="px-2.5 py-1.5 border border-[var(--rule-strong)] text-xs text-[var(--ink)] hover:bg-[var(--stamp-soft)] text-left"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {busy && (
               <div className="flex items-center gap-2 text-[var(--ink-soft)]">
@@ -151,7 +275,7 @@ const ChatWidget = () => {
             <input
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask about a scrip or a position"
+              placeholder="Ask about your account or a stock"
               disabled={busy}
               className="flex-1 bg-transparent border-0 py-1.5 text-sm focus:outline-none disabled:opacity-50"
               aria-label="Message"
