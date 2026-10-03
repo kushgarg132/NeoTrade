@@ -98,6 +98,8 @@ async def startup_db_client():
     await JournalStore(db.db).ensure_indexes()
     await db.db["portfolio_snapshots"].create_index([("user_id", 1), ("at", -1)])
     await GuardrailStore(db.db).ensure_indexes()
+    from backend.chat.actions import ChatActionStore
+    await ChatActionStore(db.db).ensure_indexes()
     await BrokerCredentialStore(db.db, fernet_from_settings()).ensure_indexes()
     await AppSettingsStore(db.db).load_into_cache()
 
@@ -144,6 +146,8 @@ from backend.routers import chat
 
 app.include_router(agents.router, prefix=f"{settings.API_PREFIX}/agents", tags=["Agents"], dependencies=[Depends(get_current_user)])
 app.include_router(chat.router, prefix=f"{settings.API_PREFIX}/chat", tags=["Chat"], dependencies=[Depends(get_current_user)])
+from backend.routers import chat_actions
+app.include_router(chat_actions.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
 
 from backend.routers import settings as settings_router
 app.include_router(settings_router.router, prefix=settings.API_PREFIX, tags=["Settings"], dependencies=[Depends(get_current_user)])
