@@ -29,7 +29,8 @@ LIVE_FILL_CHECKS = 5
 
 
 async def execute_suggestion(
-    suggestion: dict, ledger: LedgerStore, price: float, now: Optional[datetime] = None
+    suggestion: dict, ledger: LedgerStore, price: float, now: Optional[datetime] = None,
+    strategy_name: Optional[str] = None,
 ) -> Order:
     now = now or datetime.now(timezone.utc)
     side = Side(suggestion["side"])
@@ -39,7 +40,7 @@ async def execute_suggestion(
 
     order = Order(
         id=str(uuid.uuid4()), symbol=suggestion["symbol"], side=side, quantity=quantity,
-        order_type="MARKET", limit_price=None, product=product,
+        order_type="MARKET", limit_price=None, product=product, strategy_name=strategy_name,
     )
     await ledger.record_order(order)
 
@@ -82,11 +83,22 @@ async def execute_option_suggestion_live(
         quantity=suggestion["quantity"], order_type="MARKET", limit_price=None, product="NRML",
         contract=contract,
     )
+    return await execute_live_order(order, ledger, adapter, orders)
+
+
+async def execute_live_order(
+    order: Order, ledger: LedgerStore, adapter, orders: LiveOrderStore,
+    strategy_name: str = "", reason: Optional[str] = None,
+) -> tuple[Order, str, float]:
+    """Places `order` with the user's broker as a real MARKET order, checks
+    its status for up to LIVE_FILL_CHECKS seconds, and books whatever filled
+    as a live fill at the broker's own average price. Shared by an option
+    proposal approved live and an order confirmed from the chat."""
     broker_order_id = await adapter.place_order(order)
     await ledger.record_order(order)
     await orders.record_submitted(
         order_id=order.id, broker_order_id=broker_order_id, user_id=ledger.user_id,
-        strategy_name="", symbol=order.symbol, side=order.side,
+        strategy_name=strategy_name, symbol=order.symbol, side=order.side, reason=reason,
     )
 
     status = None
