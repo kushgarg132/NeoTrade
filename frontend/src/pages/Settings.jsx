@@ -537,8 +537,11 @@ const ProviderRow = ({ provider }) => {
         {known.length ? (
           <>
             <Bar pct={lowest} />
-            <span className="figure-md text-xs w-20 text-right shrink-0">
-              {known.length > 1 ? 'lowest ' : ''}{pctText(lowest)}
+            <span
+              className="figure-md text-xs w-20 text-right shrink-0 whitespace-nowrap"
+              title={known.length > 1 ? 'Lowest of its models' : undefined}
+            >
+              {pctText(lowest)}
             </span>
           </>
         ) : (
@@ -551,7 +554,7 @@ const ProviderRow = ({ provider }) => {
             <li key={quota.name} className="flex items-center gap-3 text-xs">
               <span className="w-28 shrink-0 truncate text-[var(--ink-soft)]">{quota.name}</span>
               <Bar pct={quota.remaining_pct} />
-              <span className="figure-md w-20 text-right shrink-0">{pctText(quota.remaining_pct)}</span>
+              <span className="figure-md w-20 text-right shrink-0 whitespace-nowrap">{pctText(quota.remaining_pct)}</span>
             </li>
           ))}
           {known[0]?.reset_at && (
@@ -600,7 +603,7 @@ const UsageSheet = () => {
 
           <p className="field-label mt-4 mb-1">Providers · quota left</p>
           <p className="doc-meta normal-case mb-1">
-            The gateway's shared accounts, not only this app's use. Tap one for each model.
+            The gateway's shared accounts, not only this app's use. The bar is the model with the least left; tap for each model.
           </p>
           <ul>
             {usage.providers.map((provider) => (
