@@ -77,6 +77,20 @@ def test_list_omniroute_models_returns_stripped_ids(client, monkeypatch):
     ]
 
 
+def test_list_omniroute_models_sends_the_gateway_key(client, monkeypatch):
+    seen = {}
+
+    async def fake_get(self, url, **kwargs):
+        seen.update(kwargs.get("headers") or {})
+        return _FakeModelsResponse()
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+
+    assert client.get("/api/v1/settings/omniroute-models").status_code == 200
+    assert seen.get("Authorization") == "Bearer gw-key"
+
+
 def test_list_omniroute_models_returns_502_on_gateway_error(client, monkeypatch):
     async def fake_get(self, url, **kwargs):
         raise httpx.ConnectError("refused")

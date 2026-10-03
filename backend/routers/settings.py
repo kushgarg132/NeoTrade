@@ -155,9 +155,11 @@ async def list_omniroute_models():
     """Proxies OmniRoute's OpenAI-compatible GET /models so the frontend can
     offer a searchable picker instead of a hardcoded model string. Returns
     only `id` per entry -- the picker doesn't need context_length/capabilities."""
+    # The gateway requires its key on /models too, same as on completions.
+    headers = {"Authorization": f"Bearer {settings.OMNIROUTE_API_KEYS[0]}"} if settings.OMNIROUTE_API_KEYS else {}
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{settings.OMNIROUTE_BASE_URL}/models")
+            resp = await client.get(f"{settings.OMNIROUTE_BASE_URL}/models", headers=headers)
             resp.raise_for_status()
     except httpx.HTTPError as e:
         logger.error(f"Failed to fetch OmniRoute model list: {e}")
