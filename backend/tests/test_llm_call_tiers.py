@@ -13,7 +13,7 @@ EXPECTED = {
     "instruments/resolve.py": ["fast"],
     "research/index_move.py": ["standard"],
     "portfolio/review.py": ["deep"],
-    "chat/agent.py": ["deep"],
+    "chat/agent.py": ["fast", "deep"],                   # follow-up chips; the reply
 }
 
 

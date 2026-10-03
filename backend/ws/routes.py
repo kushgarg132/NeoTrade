@@ -193,7 +193,7 @@ async def _stream_chat(connection, message: str, history: list, req_id: str, con
         prefs = await PrefsStore(db.db).get(connection.user_id)
         with use_model(prefs.get("omniroute_model")):
             async for event in agent.stream_chat(db.db, db.redis, connection.user_id, message, history, context or {}):
-                data = event["data"] if event["type"] == "action" else {"text": event["data"]}
+                data = event["data"] if event["type"] in ("action", "suggestions") else {"text": event["data"]}
                 connection.offer(_frame(topic, event["type"], data))
             connection.offer(_frame(topic, "done", {}))
     except Exception as exc:

@@ -22,6 +22,7 @@ PROMPTS = {
     "portfolio_review": {"totals": "Value 10,00,000.00", "concentration": "Largest HDFCBANK at 28%",
                          "holdings": "- HDFCBANK (STOCK): reason codes: overweight",
                          "candidates": "- TCS: score 0.62, reasons quality_momentum"},
+    "chat_followups": {"question": "Is the engine running?", "answer": "Yes, 166 bars scanned."},
 }
 
 

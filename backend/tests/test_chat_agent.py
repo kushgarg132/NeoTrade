@@ -48,3 +48,25 @@ async def test_system_prompt_carries_snapshot_and_page(monkeypatch):
     assert isinstance(first, SystemMessage)
     assert "session_open=False" in first.content and "/portfolio" in first.content
     assert seen["snapshot_user"] == "alice"
+
+
+async def test_a_finished_reply_ends_with_follow_up_questions(monkeypatch):
+    async def fake_completion(prompt, system_prompt, tier=None):
+        assert tier == "fast" and "Card ready." in prompt
+        return "1. Why SJVN?\n- What else is pending?\nnot a question\n\"How much is at risk?\"\nOne more?"
+
+    monkeypatch.setattr(agent.llm_service, "get_completion", fake_completion)
+    events = await _run(monkeypatch, {})
+    assert events[-1] == {
+        "type": "suggestions",
+        "data": ["Why SJVN?", "What else is pending?", "How much is at risk?"],
+    }
+
+
+async def test_a_follow_up_failure_still_leaves_the_reply(monkeypatch):
+    async def broken(prompt, system_prompt, tier=None):
+        raise RuntimeError("gateway down")
+
+    monkeypatch.setattr(agent.llm_service, "get_completion", broken)
+    events = await _run(monkeypatch, {})
+    assert events[-1] == {"type": "content", "data": "Card ready."}

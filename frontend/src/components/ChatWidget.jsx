@@ -119,11 +119,13 @@ const ChatWidget = () => {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [thinking, setThinking] = useState('');
+  // What the assistant suggests asking next, shown under its latest reply.
+  const [followups, setFollowups] = useState([]);
   const endRef = useRef(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, thinking]);
+  }, [messages, thinking, followups]);
 
   const updateAction = (id, patch) =>
     setMessages((list) => list.map((m) => (m.role === 'action' && m.card.id === id ? { ...m, ...patch } : m)));
@@ -144,11 +146,14 @@ const ChatWidget = () => {
     setInput('');
     setBusy(true);
     setThinking('');
+    setFollowups([]);
 
     let answer = '';
     const context = { page: location.pathname, symbol: location.state?.symbol };
     const request = stream.request('chat', { message: text, history, context }, (event_) => {
-      if (event_.event === 'thinking') {
+      if (event_.event === 'suggestions') {
+        setFollowups(event_.data);
+      } else if (event_.event === 'thinking') {
         setThinking(event_.data.text);
       } else if (event_.event === 'action') {
         answer = '';
@@ -247,9 +252,9 @@ const ChatWidget = () => {
               )
             )}
 
-            {messages.length === 1 && !busy && (
+            {!busy && (messages.length === 1 || followups.length > 0) && (
               <div className="flex flex-wrap gap-1.5">
-                {suggestionsFor(location.pathname).map((question) => (
+                {(messages.length === 1 ? suggestionsFor(location.pathname) : followups).map((question) => (
                   <button
                     key={question}
                     type="button"

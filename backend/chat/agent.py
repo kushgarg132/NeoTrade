@@ -31,6 +31,24 @@ def _text(content) -> str:
     return str(content or "")
 
 
+def _questions(text: str) -> list[str]:
+    """Up to three one-line questions from the model's reply, with any list
+    numbering or bullets it added anyway stripped off."""
+    lines = (line.strip().lstrip("-*•0123456789.) ").strip().strip('"') for line in text.splitlines())
+    return [line for line in lines if line.endswith("?") and len(line) <= 90][:3]
+
+
+async def suggest_followups(question: str, answer: str) -> list[str]:
+    """Next questions worth one tap. Best-effort: any failure means no chips,
+    never a broken reply."""
+    try:
+        system, prompt = render("chat_followups", question=question, answer=answer[-2000:])
+        return _questions(await llm_service.get_completion(prompt, system_prompt=system, tier="fast"))
+    except Exception as exc:
+        logger.warning("chat follow-ups failed: %s", exc)
+        return []
+
+
 async def stream_chat(db, redis, user_id: str, message: str, history: list, context: dict) -> AsyncIterator[dict]:
     llm = await llm_service.get_llm(tier="deep")
     if not llm:
@@ -50,6 +68,7 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
     messages.append(HumanMessage(content=message))
 
     agent = create_react_agent(llm, read_tools(db, redis, user_id) + action_tools(db, redis, user_id, message))
+    answer = ""
     try:
         async for event in agent.astream_events({"messages": messages}, version="v1"):
             kind = event["event"]
@@ -63,7 +82,12 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
             elif kind == "on_chat_model_stream":
                 text = _text(event["data"]["chunk"].content)
                 if text:
+                    answer += text
                     yield {"type": "content", "data": text}
     except Exception as exc:
         logger.error("chat agent failed for %s: %s", user_id, exc)
         yield {"type": "content", "data": f"Something went wrong answering that: {exc}"}
+        return
+
+    if answer and (questions := await suggest_followups(message, answer)):
+        yield {"type": "suggestions", "data": questions}
