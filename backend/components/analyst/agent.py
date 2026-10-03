@@ -91,7 +91,8 @@ async def _score_news(symbol: str, articles: List[NewsArticle]) -> Optional[_New
     )
     system, prompt = render("score_news", symbol=symbol, articles=listing)
     for attempt in (1, 2):
-        response = await llm_service.get_completion(prompt, system_prompt=system)
+        # Deep: this score feeds every trade's AI share; Flash disagreed on 1 of 3 stocks.
+        response = await llm_service.get_completion(prompt, system_prompt=system, tier="deep")
         try:
             return _NewsScores.model_validate_json(_extract_json(response))
         except (ValueError, ValidationError) as exc:
@@ -184,7 +185,7 @@ class AnalystAgent:
             events=json.dumps([e.model_dump() for e in raw_events]),
         )
         try:
-            summary, thesis = _split_report(await llm_service.get_completion(prompt, system_prompt=system))
+            summary, thesis = _split_report(await llm_service.get_completion(prompt, system_prompt=system, tier="standard"))
         except Exception as e:
             logger.error(f"AnalystAgent LLM Error: {e}")
             summary, thesis = "Unable to generate summary.", ""

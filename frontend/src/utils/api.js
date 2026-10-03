@@ -201,6 +201,7 @@ export const endpoints = {
     omnirouteModel: '/settings/omniroute-model',
     omnirouteModelTest: '/settings/omniroute-model/test',
     omnirouteUsage: '/settings/omniroute-usage',
+    omnirouteTiers: '/settings/omniroute-tiers',
     preferences: '/settings/preferences',
     strategies: '/settings/strategies',
     promotion: '/settings/strategies/promotion',

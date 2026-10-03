@@ -58,7 +58,8 @@ async def _analyze_one(article: NewsArticle, target_symbol: str = None) -> NewsA
     try:
         response = await llm_service.get_completion(
             prompt,
-            system_prompt=system
+            system_prompt=system,
+            tier="fast",
         )
 
         if response == "LLM_DISABLED":

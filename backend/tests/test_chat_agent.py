@@ -21,7 +21,7 @@ class _FakeAgent:
 
 
 async def _run(monkeypatch, seen):
-    async def fake_llm():
+    async def fake_llm(tier=None):
         return object()
 
     async def fake_snapshot(db, redis, user_id, now=None):

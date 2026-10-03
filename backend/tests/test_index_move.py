@@ -48,7 +48,7 @@ def world(monkeypatch):
     async def trending():
         return [{"symbol": "HDFCBANK.NS", "name": "HDFCBANK.NS", "value": 1.0, "percent": 2.5}]
 
-    async def completion(prompt, system_prompt):
+    async def completion(prompt, system_prompt, tier=None):
         calls["llm"].append((system_prompt, prompt))
         return "### What happened\nIt rose."
 
@@ -105,7 +105,7 @@ def test_a_second_tap_is_served_from_cache(world, client):
 
 @pytest.mark.parametrize("reply", ["LLM_DISABLED", "Error generating response: boom", ""])
 def test_an_unavailable_model_is_a_503_not_error_text(world, client, monkeypatch, reply):
-    async def broken(prompt, system_prompt):
+    async def broken(prompt, system_prompt, tier=None):
         return reply
     monkeypatch.setattr(index_move.llm_service, "get_completion", broken)
 

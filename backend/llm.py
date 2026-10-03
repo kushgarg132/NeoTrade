@@ -98,9 +98,11 @@ class LLMService:
         if not self.keys:
             logger.warning("OMNIROUTE_API_KEY(S) not set. LLM features will be disabled.")
 
-    async def get_completion(self, prompt: str, system_prompt: str) -> str:
-        """Both prompts come from backend/prompts/*.md via prompts.render."""
-        llm = await self.get_llm()
+    async def get_completion(self, prompt: str, system_prompt: str, tier: Optional[str] = None) -> str:
+        """Both prompts come from backend/prompts/*.md via prompts.render.
+        `tier` (fast / standard / deep) picks the admin's model for that
+        kind of task; see app_settings.TIERS."""
+        llm = await self.get_llm(tier=tier)
         if not llm:
             return "LLM_DISABLED"
         
@@ -119,7 +121,7 @@ class LLMService:
             logger.error(f"LLM Error: {e}")
             return f"Error generating response: {str(e)}"
 
-    async def get_llm(self):
+    async def get_llm(self, tier: Optional[str] = None):
         """Returns a MultiKeyChain wrapping ChatOpenAI instances pointed at the OmniRoute gateway"""
         from langchain_openai import ChatOpenAI
 
@@ -127,7 +129,7 @@ class LLMService:
         if not keys:
             return None
 
-        model = _model_override.get() or await current_llm_model()
+        model = _model_override.get() or await current_llm_model(tier=tier)
         llms = []
         for key in keys:
             llms.append(ChatOpenAI(

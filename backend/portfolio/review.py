@@ -69,7 +69,7 @@ async def write_review(card: dict, candidates: list[dict] | None = None) -> dict
         holdings="\n".join(_holding_line(r) for r in rows),
         candidates="\n".join(_candidate_line(c) for c in candidates or []) or "none",
     )
-    text = (await llm_service.get_completion(prompt, system_prompt=system) or "").strip()
+    text = (await llm_service.get_completion(prompt, system_prompt=system, tier="deep") or "").strip()
     match = re.search(r"\{.*\}", text, re.S)
     try:
         parsed = json.loads(match.group(0)) if match else {}

@@ -30,7 +30,7 @@ def service(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _default_model(monkeypatch):
-    async def fake_current_llm_model():
+    async def fake_current_llm_model(tier=None):
         return "deployment/default"
 
     monkeypatch.setattr(llm_module, "current_llm_model", fake_current_llm_model)

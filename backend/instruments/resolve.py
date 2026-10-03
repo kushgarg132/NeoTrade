@@ -51,7 +51,7 @@ async def _llm_pick(query: str, candidates: list[Instrument]) -> Optional[Instru
     options = [{"tradingsymbol": c.tradingsymbol, "name": c.name} for c in candidates]
     system, prompt = render("resolve_instrument", query=query, candidates=json.dumps(options))
     try:
-        response = await llm_service.get_completion(prompt, system_prompt=system)
+        response = await llm_service.get_completion(prompt, system_prompt=system, tier="fast")
     except Exception as e:
         logger.warning(f"LLM resolution failed for {query!r}: {e}")
         return None

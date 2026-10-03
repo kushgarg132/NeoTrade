@@ -153,7 +153,7 @@ async def explain_index_move(ticker: str, name: str) -> Dict[str, Any]:
             "No recent headlines were found.",
         ),
     )
-    text = (await llm_service.get_completion(prompt, system_prompt=system) or "").strip()
+    text = (await llm_service.get_completion(prompt, system_prompt=system, tier="standard") or "").strip()
     # get_completion reports failure as text rather than raising.
     if not text or text == "LLM_DISABLED" or text.startswith("Error generating response"):
         raise ExplanationUnavailable("The analysis model is unavailable right now")

@@ -35,7 +35,8 @@ async def classify_events_logic(text: str, date: datetime) -> List[FinancialEven
     try:
         response = await llm_service.get_completion(
             prompt,
-            system_prompt=system
+            system_prompt=system,
+            tier="fast",
         )
         
         if response == "LLM_DISABLED":

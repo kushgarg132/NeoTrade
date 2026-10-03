@@ -48,7 +48,7 @@ async def _find_peers(symbol: str, name: str) -> List[str]:
     authoritative symbol resolution."""
     system, prompt = render("peers", name=name, symbol=symbol)
     try:
-        response_text = await llm_service.get_completion(prompt, system_prompt=system)
+        response_text = await llm_service.get_completion(prompt, system_prompt=system, tier="deep")
         clean_text = response_text.replace("```json", "").replace("```", "").strip()
         peers = json.loads(clean_text)
         if isinstance(peers, list):

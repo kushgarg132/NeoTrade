@@ -460,6 +460,16 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
 
 ---
 
+### 2026-10-04 — a model per kind of task
+
+Every LLM call names a tier (`fast` / `standard` / `deep`, guarded by
+`tests/test_llm_call_tiers.py`); an admin picks each tier's model in Settings → AI and an unset
+tier uses the single fallback model. Set from a same-input comparison against Opus on WIPRO,
+SJVN and HFCL news: Gemini 3 Flash matched Opus on research reports at 3-4x the speed, but
+moved WIPRO's news score from +0.03 to +0.32 and named non-Indian peers for INFY, so news
+scoring and peers stay on `deep`. Use unversioned model ids (`agy/gemini-3-flash`): agy
+rotates its versioned ids within hours.
+
 ### 2026-10-04 — chat assistant over the user's own data
 
 `backend/chat/` replaces the generic ReAct chat (and the unused `POST /chat/message`). Each message

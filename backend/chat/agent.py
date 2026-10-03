@@ -32,7 +32,7 @@ def _text(content) -> str:
 
 
 async def stream_chat(db, redis, user_id: str, message: str, history: list, context: dict) -> AsyncIterator[dict]:
-    llm = await llm_service.get_llm()
+    llm = await llm_service.get_llm(tier="deep")
     if not llm:
         yield {"type": "content", "data": "The AI service is not available right now."}
         return

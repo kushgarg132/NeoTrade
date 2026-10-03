@@ -22,22 +22,28 @@ _DOC_ID = "singleton"
 _TTL_SECONDS = 30
 
 _cached_llm_model: Optional[str] = None
+# Per-task tiers: each LLM call site asks for one. An unset tier falls back
+# to the single model above, so nothing changes until an admin sets one.
+TIERS = ("fast", "standard", "deep")
+_cached_tiers: dict = {}
 _cache_loaded_at: float = 0.0
 
 
-async def current_llm_model(db=None) -> str:
+async def current_llm_model(db=None, tier: Optional[str] = None) -> str:
     from backend.configs.settings import settings
 
-    global _cached_llm_model, _cache_loaded_at
+    global _cached_llm_model, _cached_tiers, _cache_loaded_at
 
     if time.monotonic() - _cache_loaded_at >= _TTL_SECONDS:
         if db is None:
             from backend.database import db as _db
             db = _db.db
-        _cached_llm_model = await AppSettingsStore(db).get_llm_model()
+        store = AppSettingsStore(db)
+        _cached_llm_model = await store.get_llm_model()
+        _cached_tiers = await store.get_llm_tiers()
         _cache_loaded_at = time.monotonic()
 
-    return _cached_llm_model or settings.OMNIROUTE_MODEL
+    return (tier and _cached_tiers.get(tier)) or _cached_llm_model or settings.OMNIROUTE_MODEL
 
 
 class AppSettingsStore:
@@ -62,6 +68,21 @@ class AppSettingsStore:
         _cached_llm_model = model
         _cache_loaded_at = time.monotonic()
 
+    async def get_llm_tiers(self) -> dict:
+        doc = await self.collection.find_one({"_id": _DOC_ID})
+        stored = (doc or {}).get("llm_tiers") or {}
+        return {tier: stored.get(tier) for tier in TIERS}
+
+    async def set_llm_tier(self, tier: str, model: Optional[str]) -> None:
+        """None clears the tier, so it falls back to the single model."""
+        global _cached_tiers, _cache_loaded_at
+        if tier not in TIERS:
+            raise ValueError(f"Unknown tier {tier!r}")
+        update = {"$set": {f"llm_tiers.{tier}": model, "updated_at": datetime.now(timezone.utc)}}
+        await self.collection.update_one({"_id": _DOC_ID}, update, upsert=True)
+        _cached_tiers = await self.get_llm_tiers()
+        _cache_loaded_at = time.monotonic()
+
     async def get_portfolio_verdicts(self) -> str:
         """Who sees SELL / HOLD / ADD on the Portfolio page: "admin" (the
         default) or "all". Verdicts for every user need SEBI Research Analyst
@@ -77,6 +98,7 @@ class AppSettingsStore:
         )
 
     async def load_into_cache(self) -> None:
-        global _cached_llm_model, _cache_loaded_at
+        global _cached_llm_model, _cached_tiers, _cache_loaded_at
         _cached_llm_model = await self.get_llm_model()
+        _cached_tiers = await self.get_llm_tiers()
         _cache_loaded_at = time.monotonic()

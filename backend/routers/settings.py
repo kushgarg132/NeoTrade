@@ -335,6 +335,36 @@ async def test_omniroute_model(update: ModelUpdate, _admin: User = Depends(requi
     return {"ok": False, "model": model, "latency_ms": round((time.monotonic() - started) * 1000), "reply": None, "error": error}
 
 
+class TierUpdate(BaseModel):
+    tier: Literal["fast", "standard", "deep"]
+    model: Optional[str] = None
+
+
+@router.get("/settings/omniroute-tiers")
+async def get_omniroute_tiers(app_settings: AppSettingsStore = Depends(get_app_settings_store)):
+    """Which model each kind of task runs on. A tier left unset uses
+    `fallback`, the single model below it. Fast: event tagging, symbol
+    resolution, per-article sentiment. Standard: research reports and
+    theses, index explanations. Deep: chat, portfolio review, news scoring
+    and peers (see backend/tests/test_llm_call_tiers.py)."""
+    return {
+        "tiers": await app_settings.get_llm_tiers(),
+        "fallback": await app_settings.get_llm_model() or settings.OMNIROUTE_MODEL,
+    }
+
+
+@router.post("/settings/omniroute-tiers")
+async def set_omniroute_tier(
+    update: TierUpdate,
+    _admin: User = Depends(require_admin),
+    app_settings: AppSettingsStore = Depends(get_app_settings_store),
+):
+    model = (update.model or "").strip() or None
+    await app_settings.set_llm_tier(update.tier, model)
+    logger.info(f"OmniRoute {update.tier} tier set to {model!r}.")
+    return {"tier": update.tier, "model": model}
+
+
 # Angel One's REST flow needs no long-lived secret: the account password and
 # TOTP are supplied fresh at connect time (backend/brokers/angel_one.py),
 # never stored. Every other broker needs a real secret.

@@ -416,3 +416,20 @@ def test_quotas_group_into_pools_by_family_and_window():
     assert pools["Gemini"]["remaining_pct"] == 96.47 and pools["Gemini"]["models"] == ["gemini-3-flash", "gemini-3.1-pro-high"]
     assert pools["Claude & GPT"]["remaining_pct"] == 90 and pools["Claude & GPT"]["reset_at"] == "2026-10-04T02:50:22Z"
     assert pools["Claude & GPT · weekly"]["remaining_pct"] == 96.4
+
+
+def test_tiers_can_be_read_set_and_cleared_by_an_admin(db):
+    admin = _client(db, _user(role="admin"))
+    assert admin.get("/api/v1/settings/omniroute-tiers").json()["tiers"] == {"fast": None, "standard": None, "deep": None}
+
+    assert admin.post("/api/v1/settings/omniroute-tiers", json={"tier": "fast", "model": " agy/gemini-3-flash "}).status_code == 200
+    assert admin.get("/api/v1/settings/omniroute-tiers").json()["tiers"]["fast"] == "agy/gemini-3-flash"
+
+    assert admin.post("/api/v1/settings/omniroute-tiers", json={"tier": "fast", "model": None}).status_code == 200
+    assert admin.get("/api/v1/settings/omniroute-tiers").json()["tiers"]["fast"] is None
+
+
+def test_tier_changes_are_admin_only_and_tiers_are_known(client, db):
+    assert client.post("/api/v1/settings/omniroute-tiers", json={"tier": "fast", "model": "a/b"}).status_code == 403
+    admin = _client(db, _user(role="admin"))
+    assert admin.post("/api/v1/settings/omniroute-tiers", json={"tier": "huge", "model": "a/b"}).status_code == 422

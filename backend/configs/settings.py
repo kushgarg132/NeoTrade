@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     OMNIROUTE_API_KEY: Optional[str] = None
     OMNIROUTE_API_KEYS: List[str] = []
     OMNIROUTE_BASE_URL: str = "http://omniroute:20128/v1"
-    OMNIROUTE_MODEL: str = "agy/gemini-3.6-flash-medium"
+    OMNIROUTE_MODEL: str = "agy/gemini-3-flash"  # unversioned: agy rotates versioned ids within hours
 
     FINNHUB_API_KEY: Optional[str] = None
 

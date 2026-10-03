@@ -330,45 +330,155 @@ const BrokerSheet = () => {
 /* Model                                                                      */
 /* -------------------------------------------------------------------------- */
 
-const ModelSheet = () => {
-  const [models, setModels] = useState([]);
-  const [current, setCurrent] = useState('');
-  const [selected, setSelected] = useState('');
+const TIER_ROWS = [
+  { id: 'deep', label: 'Deep', hint: 'Chat, portfolio review, news scoring, peers' },
+  { id: 'standard', label: 'Standard', hint: 'Research reports and theses, index explanations' },
+  { id: 'fast', label: 'Fast', hint: 'Event tagging, symbol lookup, article sentiment' },
+];
+
+/** One model choice: search the gateway's list, test it, save it. */
+const ModelRow = ({ label, hint, value, fallback, models, onSave, clearable }) => {
+  const [selected, setSelected] = useState(value || '');
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [note, setNote] = useState(null);
-  const [loadError, setLoadError] = useState('');
-  const [testing, setTesting] = useState(false);
+  const [busy, setBusy] = useState(null);
   const [test, setTest] = useState(null);
+  const [note, setNote] = useState(null);
 
+  useEffect(() => setSelected(value || ''), [value]);
   // A result belongs to the model it ran on; picking another clears it.
   useEffect(() => setTest(null), [selected]);
 
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return (term ? models.filter((m) => m.id.toLowerCase().includes(term)) : models).slice(0, 40);
+  }, [models, query]);
+
+  const effective = selected || fallback;
+
   const runTest = async () => {
-    setTesting(true);
-    setTest(null);
+    setBusy('test');
     try {
-      const res = await api.post(endpoints.settings.omnirouteModelTest, { model: selected });
+      const res = await api.post(endpoints.settings.omnirouteModelTest, { model: effective });
       setTest(res.data);
     } catch (err) {
       setTest({ ok: false, error: err?.response?.data?.detail || 'The test request failed' });
     } finally {
-      setTesting(false);
+      setBusy(null);
     }
   };
+
+  const save = async (model) => {
+    setBusy('save');
+    setNote(null);
+    try {
+      await onSave(model);
+      setNote(model ? 'Saved.' : 'Cleared: uses the fallback.');
+    } catch (err) {
+      setNote(err?.response?.status === 403 ? 'Only an administrator can change models.' : 'Could not save.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="py-3 border-b border-[var(--rule)] last:border-b-0">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="field-label text-[var(--ink)]">{label}</span>
+        {clearable && value && (
+          <button type="button" onClick={() => save(null)} disabled={busy !== null} className="field-label text-[var(--stamp)] hover:underline">
+            Use fallback
+          </button>
+        )}
+      </div>
+      <p className="doc-meta normal-case mt-0.5">{hint}</p>
+      <div className="mt-2 flex items-center gap-2 border-b border-[var(--rule-strong)] focus-within:border-[var(--stamp)]">
+        <Search className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
+        <input
+          value={open ? query : selected}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => {
+            setQuery('');
+            setOpen(true);
+          }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder={clearable ? `Uses fallback: ${fallback}` : 'Filter models'}
+          className="w-full bg-transparent border-0 py-2 text-sm figure-md focus:outline-none placeholder:font-normal"
+          aria-label={`${label} model`}
+        />
+      </div>
+      {open && (
+        <ul className="sheet mt-px max-h-64 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2.5 text-sm text-[var(--ink-soft)]">No match.</li>
+          ) : (
+            filtered.map((model) => (
+              <li key={model.id}>
+                <button
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setSelected(model.id);
+                    setOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm figure-md border-b border-[var(--rule)] last:border-b-0 hover:bg-[var(--stamp-soft)]"
+                >
+                  {model.id}
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+      <div className="mt-2 flex items-center justify-end gap-2">
+        <Button variant="secondary" size="sm" onClick={runTest} disabled={busy !== null || !effective}>
+          {busy === 'test' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+          Test
+        </Button>
+        <Button variant="primary" size="sm" onClick={() => save(selected)} disabled={busy !== null || !selected || selected === value}>
+          {busy === 'save' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+          Save
+        </Button>
+      </div>
+      {test && (
+        <p
+          role="status"
+          className={cn(
+            'mt-2 text-sm px-3 py-2 border break-words',
+            test.ok
+              ? 'text-[var(--gain)] border-[var(--gain)] bg-[var(--gain-wash)]'
+              : 'text-[var(--loss)] border-[var(--loss)] bg-[var(--loss-wash)]'
+          )}
+        >
+          {test.ok ? `${test.model} works · ${(test.latency_ms / 1000).toFixed(1)}s · replied: ${test.reply}` : `Failed: ${test.error}`}
+        </p>
+      )}
+      {note && <p className="mt-1.5 doc-meta normal-case">{note}</p>}
+    </div>
+  );
+};
+
+const ModelSheet = () => {
+  const [models, setModels] = useState([]);
+  const [fallback, setFallback] = useState('');
+  const [tiers, setTiers] = useState({});
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       api.get(endpoints.settings.omnirouteModels),
       api.get(endpoints.settings.omnirouteModel),
+      api.get(endpoints.settings.omnirouteTiers),
     ])
-      .then(([modelsRes, currentRes]) => {
+      .then(([modelsRes, currentRes, tiersRes]) => {
         if (cancelled) return;
         setModels(modelsRes.data);
-        setCurrent(currentRes.data.model);
-        setSelected(currentRes.data.model);
+        setFallback(currentRes.data.model);
+        setTiers(tiersRes.data.tiers);
       })
       .catch(() => {
         if (!cancelled) setLoadError('Could not reach the OmniRoute gateway.');
@@ -378,127 +488,46 @@ const ModelSheet = () => {
     };
   }, []);
 
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    const list = term ? models.filter((m) => m.id.toLowerCase().includes(term)) : models;
-    return list.slice(0, 40);
-  }, [models, query]);
+  const saveTier = (tier) => async (model) => {
+    await api.post(endpoints.settings.omnirouteTiers, { tier, model });
+    setTiers((current) => ({ ...current, [tier]: model }));
+  };
 
-  const save = async () => {
-    if (!selected.trim()) return;
-    setSaving(true);
-    setNote(null);
-    try {
-      await api.post(endpoints.settings.omnirouteModel, { model: selected });
-      setCurrent(selected);
-      setNote('Saved.');
-    } catch (err) {
-      setNote(
-        err?.response?.status === 403
-          ? 'The model applies to every account, so only an administrator can change it.'
-          : 'Could not save the model.',
-      );
-    } finally {
-      setSaving(false);
-    }
+  const saveFallback = async (model) => {
+    await api.post(endpoints.settings.omnirouteModel, { model });
+    setFallback(model);
   };
 
   return (
-    <Sheet title="Analysis model" meta={`${models.length} available`}>
+    <Sheet title="Models" meta={`${models.length} available`}>
       {loadError ? (
         <Empty title="Gateway unreachable" detail={loadError} />
       ) : (
         <>
           <p className="text-sm text-[var(--ink-soft)]">
-            Writes the thesis on each proposal and answers in chat. The trading engine itself
-            never calls a model on the hot path.
+            Each kind of task runs on its own model, so cheap work does not spend the strongest model's quota.
+            The trading engine itself never calls a model on the hot path.
           </p>
-
-          <div className="mt-4">
-            <label htmlFor="model-search" className="field-label block mb-1">
-              In use
-            </label>
-            <div className="flex items-center gap-2 border-b border-[var(--rule-strong)] focus-within:border-[var(--stamp)]">
-              <Search className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
-              <input
-                id="model-search"
-                value={open ? query : selected}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setOpen(true);
-                }}
-                onFocus={() => {
-                  setQuery('');
-                  setOpen(true);
-                }}
-                placeholder="Filter models"
-                className="w-full bg-transparent border-0 py-2 text-sm figure-md focus:outline-none"
-              />
-            </div>
-
-            {open && (
-              <ul className="sheet mt-px max-h-64 overflow-y-auto">
-                {filtered.length === 0 ? (
-                  <li className="px-3 py-2.5 text-sm text-[var(--ink-soft)]">No match.</li>
-                ) : (
-                  filtered.map((model) => (
-                    <li key={model.id}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelected(model.id);
-                          setOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2 text-sm figure-md border-b border-[var(--rule)] last:border-b-0 hover:bg-[var(--stamp-soft)]"
-                      >
-                        {model.id}
-                      </button>
-                    </li>
-                  ))
-                )}
-              </ul>
-            )}
-          </div>
-
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <span className="doc-meta normal-case truncate">
-              {selected === current ? `Current: ${current}` : `Changing from ${current}`}
-            </span>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="secondary" size="sm" onClick={runTest} disabled={testing || !selected}>
-                {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                Test
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={save}
-                disabled={saving || selected === current}
-              >
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                Save
-              </Button>
-            </div>
-          </div>
-
-          {testing && <p className="mt-2 doc-meta normal-case">Asking {selected} for a one-word reply…</p>}
-          {test && (
-            <p
-              role="status"
-              className={cn(
-                'mt-2 text-sm px-3 py-2 border break-words',
-                test.ok
-                  ? 'text-[var(--gain)] border-[var(--gain)] bg-[var(--gain-wash)]'
-                  : 'text-[var(--loss)] border-[var(--loss)] bg-[var(--loss-wash)]'
-              )}
-            >
-              {test.ok
-                ? `Works · ${(test.latency_ms / 1000).toFixed(1)}s · replied: ${test.reply}`
-                : `Failed: ${test.error}`}
-            </p>
-          )}
-
-          {note && <p className="mt-2 text-sm text-[var(--ink-soft)]">{note}</p>}
+          {TIER_ROWS.map((row) => (
+            <ModelRow
+              key={row.id}
+              label={row.label}
+              hint={row.hint}
+              value={tiers[row.id]}
+              fallback={fallback}
+              models={models}
+              onSave={saveTier(row.id)}
+              clearable
+            />
+          ))}
+          <ModelRow
+            label="Fallback"
+            hint="Any task whose tier is not set"
+            value={fallback}
+            fallback={fallback}
+            models={models}
+            onSave={saveFallback}
+          />
         </>
       )}
     </Sheet>

@@ -122,3 +122,30 @@ async def test_a_read_past_the_ttl_window_refetches_from_mongo(monkeypatch):
 
     assert first == "first"
     assert second == "second"
+
+
+async def test_a_tier_model_wins_over_the_single_model_and_falls_back_to_it(monkeypatch):
+    monkeypatch.setattr(app_settings_module, "_cached_llm_model", None)
+    monkeypatch.setattr(app_settings_module, "_cached_tiers", {})
+    monkeypatch.setattr(app_settings_module, "_cache_loaded_at", 0.0)
+    store = _store()
+    await store.set_llm_model("auto/claude-opus")
+    await store.set_llm_tier("fast", "agy/gemini-3-flash")
+
+    assert await current_llm_model(db=store._db, tier="fast") == "agy/gemini-3-flash"
+    assert await current_llm_model(db=store._db, tier="standard") == "auto/claude-opus"
+    assert await current_llm_model(db=store._db) == "auto/claude-opus"
+    assert await store.get_llm_tiers() == {"fast": "agy/gemini-3-flash", "standard": None, "deep": None}
+
+    await store.set_llm_tier("fast", None)  # cleared: back to the single model
+    assert await current_llm_model(db=store._db, tier="fast") == "auto/claude-opus"
+
+
+async def test_tiers_survive_the_ttl_refresh(monkeypatch):
+    monkeypatch.setattr(app_settings_module, "_cached_tiers", {})
+    store = _store()
+    await store.collection.update_one(
+        {"_id": "singleton"}, {"$set": {"llm_model": "m", "llm_tiers": {"deep": "auto/claude-opus"}}}, upsert=True
+    )
+    monkeypatch.setattr(app_settings_module, "_cache_loaded_at", 0.0)
+    assert await current_llm_model(db=store._db, tier="deep") == "auto/claude-opus"
