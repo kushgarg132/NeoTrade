@@ -227,7 +227,7 @@ const Journal = () => {
 
   return (
     <Layout>
-      <div className="space-y-3 sm:space-y-4">
+      <div className="private space-y-3 sm:space-y-4">
         <GuardrailAlerts />
 
         {!empty && (

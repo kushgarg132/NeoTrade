@@ -301,6 +301,11 @@ system is static or a plain colour/opacity transition.
   2px stamp-violet top border; pending count renders as a small solid-stamp badge on the Paper
   icon. More is Settings, which lists the remaining sections (Watchlist, Scanner, Option chain,
   Architecture) at its top on a phone.
+- **Hide amounts** (eye button in the masthead, `hooks/usePrivacy.js`): blurs every `figure-md` /
+  `figure-lg` inside a `.private` region -- the user's own money: Portfolio, the statement's portfolio
+  glance and broker P&L, live engine orders, Journal, everything under Paper trading. Amounts and
+  percentages both; market data, labels and stock names stay readable. Remembered per device on
+  `<html data-private>`. New account surfaces go inside a `.private` region.
 - Both share one label voice: Field Label style, never body text.
 - **Real money and paper never share a page.** The sidebar tears (a `perforated` rule) between
   the real-money sections and **Paper trading**. Everything under `/paper` prints inside

@@ -25,7 +25,7 @@ const PaperShell = ({ children }) => {
   const pending = usePendingCount();
 
   return (
-    <div className="space-y-3 sm:space-y-4">
+    <div className="private space-y-3 sm:space-y-4">
       <div className="border-2 border-dashed border-[var(--stamp)] bg-[var(--stamp-soft)]">
         <div className="flex items-baseline justify-between gap-3 px-3 py-1.5 sm:px-4 sm:pt-2.5 sm:pb-2">
           <p className="font-[family-name:var(--font-narrow)] text-xs font-bold uppercase tracking-[0.16em] text-[var(--stamp)]">

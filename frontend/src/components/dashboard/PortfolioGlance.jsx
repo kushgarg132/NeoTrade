@@ -21,7 +21,7 @@ const Names = ({ label, names, tone }) =>
   names.length > 0 && (
     <p className="flex items-baseline gap-2 min-w-0">
       <span className="field-label shrink-0 w-[5.5rem]">{label}</span>
-      <span className={`figure-md text-sm truncate ${tone}`}>{names.join(' · ')}</span>
+      <span className={`font-semibold text-sm truncate ${tone}`}>{names.join(' · ')}</span>
     </p>
   );
 
@@ -47,7 +47,7 @@ const PortfolioGlance = ({ snapshot, loading }) => {
   const sell = planNames(snapshot.plan, 'sell');
   const add = planNames(snapshot.plan, 'add');
   return (
-    <Link to="/portfolio" className="sheet block hover:bg-[var(--paper-sunk)] transition-colors" aria-label="Open the portfolio">
+    <Link to="/portfolio" className="private sheet block hover:bg-[var(--paper-sunk)] transition-colors" aria-label="Open the portfolio">
       <div className="flex items-center justify-between gap-3 px-3 py-2 sm:px-4 border-b border-[var(--rule)] bg-[var(--paper-sunk)]">
         <span className="field-label text-[var(--ink)]">Portfolio</span>
         <ArrowRight className="w-4 h-4 text-[var(--stamp)]" aria-hidden="true" />

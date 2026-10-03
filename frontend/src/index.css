@@ -382,3 +382,10 @@ body::before {
   z-index: 60;
   pointer-events: none;
 }
+
+/* Hide amounts (hooks/usePrivacy.js): every figure in the user's own money
+   regions is blurred past reading, for when someone can see the screen. */
+html[data-private="on"] .private :is(.figure-md, .figure-lg) {
+  filter: blur(0.4em);
+  user-select: none;
+}

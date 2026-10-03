@@ -82,7 +82,7 @@ const BrokerPnl = ({ journal, loading, error }) => {
   const worst = monthRows.length ? Math.min(...monthRows.map((row) => row.pnl)) : null;
 
   return (
-    <Sheet title="Your broker" meta="Gross · last journal sync">
+    <Sheet title="Your broker" meta="Gross · last journal sync" className="private">
       <div className="grid grid-cols-2 divide-x divide-[var(--rule)]">
         <div className="pr-3 min-w-0">
           <p className="field-label mb-1">Today</p>

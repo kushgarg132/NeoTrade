@@ -267,7 +267,9 @@ const Dashboard = () => {
                   {/* Real orders a live strategy placed. Absent unless one exists,
                       because most accounts never switch a strategy live. */}
                   {liveTrades.length > 0 && (
-                    <TradeLedger title="Live engine orders" trades={liveTrades} loading={false} error={null} />
+                    <div className="private">
+                      <TradeLedger title="Live engine orders" trades={liveTrades} loading={false} error={null} />
+                    </div>
                   )}
                 </>
               )}

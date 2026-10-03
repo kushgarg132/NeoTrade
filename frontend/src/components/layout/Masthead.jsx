@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Sun, Moon, MessageSquare } from 'lucide-react';
+import { Sun, Moon, MessageSquare, Eye, EyeOff } from 'lucide-react';
+import { usePrivacy, togglePrivacy } from '../../hooks/usePrivacy';
 import { useStreamStatus } from '../../hooks/useStream';
 import { useTheme } from '../../context/useTheme';
 import { formatNoteDate, marketPhase } from '../../utils/formatters';
@@ -39,8 +40,9 @@ export const FeedStatus = ({ className }) => {
         className="w-1.5 h-1.5 shrink-0"
         style={{ backgroundColor: feed.tone }}
       />
-      <span style={{ color: feed.tone }}>{feed.label}</span>
-      <span aria-hidden="true" className="text-[var(--rule-strong)]">/</span>
+      {/* A phone has room for the dot and the phase; the dot's colour is the feed. */}
+      <span className="hidden sm:inline" style={{ color: feed.tone }}>{feed.label}</span>
+      <span aria-hidden="true" className="hidden sm:inline text-[var(--rule-strong)]">/</span>
       <span className="sm:hidden">{PHASE_SHORT[phase]}</span>
       <span className="hidden sm:inline">{PHASE[phase]}</span>
     </span>
@@ -60,6 +62,7 @@ const ICON_BUTTON =
  */
 const Masthead = ({ noteNumber }) => {
   const { theme, toggle } = useTheme();
+  const hidden = usePrivacy();
 
   return (
     <header
@@ -81,6 +84,15 @@ const Masthead = ({ noteNumber }) => {
           <FeedStatus className="mr-1" />
           <button type="button" onClick={toggleMarginNote} className={cn(ICON_BUTTON, 'lg:hidden')} aria-label="Open the margin note">
             <MessageSquare className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={togglePrivacy}
+            className={cn(ICON_BUTTON, hidden && 'text-[var(--stamp)] border-[var(--stamp)]')}
+            aria-pressed={hidden}
+            aria-label={hidden ? 'Show amounts' : 'Hide amounts'}
+          >
+            {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
           <button
             type="button"
