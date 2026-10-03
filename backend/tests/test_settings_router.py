@@ -342,3 +342,57 @@ def test_model_test_reports_a_gateway_error_as_not_ok(db, monkeypatch):
 
 def test_model_test_is_admin_only(client):
     assert client.post("/api/v1/settings/omniroute-model/test", json={"model": "a/b"}).status_code == 403
+
+
+class _FakeStatusResponse:
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {
+            "apiKey": {"id": "k1", "name": "AI Stock"},
+            "usage": {
+                "cost": {"usedUsd": 0, "limitUsd": None, "resetAt": "2026-11-01T00:00:00.000Z"},
+                "tokens": {"inputTokens": 10, "outputTokens": 5, "reasoningTokens": 2, "totalTokens": 17},
+            },
+            "accountQuotas": [
+                {"provider": "trae", "available": False, "reason": "not_supported"},
+                {"provider": "kiro", "plan": "KIRO FREE", "quotas": {
+                    "credit": {"usedPercentage": 9.45, "remainingPercentage": 40.55, "resetAt": "2026-11-01T00:00:00.000Z"}}},
+            ],
+        }
+
+
+def test_omniroute_usage_is_shaped_for_the_page(db, monkeypatch):
+    seen = {}
+
+    async def fake_get(self, url, **kwargs):
+        seen["url"], seen["headers"] = url, kwargs.get("headers")
+        return _FakeStatusResponse()
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+    settings_router._USAGE_CACHE.clear()
+    body = _client(db, _user(role="admin")).get("/api/v1/settings/omniroute-usage").json()
+
+    assert seen["url"].endswith("/me/status") and seen["headers"]["Authorization"] == "Bearer gw-key"
+    assert body["key_name"] == "AI Stock"
+    assert body["tokens"]["total"] == 17 and body["cost"]["used_usd"] == 0
+    assert body["providers"][0] == {"provider": "trae", "plan": None, "available": False, "reason": "not_supported", "quotas": []}
+    assert body["providers"][1]["quotas"] == [
+        {"name": "credit", "remaining_pct": 40.55, "reset_at": "2026-11-01T00:00:00.000Z"}
+    ]
+
+
+def test_omniroute_usage_is_admin_only(client):
+    assert client.get("/api/v1/settings/omniroute-usage").status_code == 403
+
+
+def test_omniroute_usage_gateway_error_is_502(db, monkeypatch):
+    async def fake_get(self, url, **kwargs):
+        raise httpx.ConnectError("refused")
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+    settings_router._USAGE_CACHE.clear()
+    assert _client(db, _user(role="admin")).get("/api/v1/settings/omniroute-usage").status_code == 502

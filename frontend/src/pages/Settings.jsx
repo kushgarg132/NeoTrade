@@ -11,6 +11,7 @@ import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
+import { formatQuantity, formatDateTime } from '../utils/formatters';
 
 /**
  * Standing instructions for the real account: who the broker is, the limits
@@ -504,6 +505,114 @@ const ModelSheet = () => {
   );
 };
 
+/** The gateway key's own month, and how much each provider account has left. */
+const Bar = ({ pct }) => (
+  <div className="h-1.5 bg-[var(--paper-sunk)] flex-1 min-w-[3rem]" aria-hidden="true">
+    <div
+      className={cn('h-full', pct < 20 ? 'bg-[var(--loss)]' : 'bg-[var(--ink)]')}
+      style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+    />
+  </div>
+);
+
+const pctText = (pct) => (pct == null ? '—' : `${Math.round(pct)}% left`);
+
+const ProviderRow = ({ provider }) => {
+  const [open, setOpen] = useState(false);
+  const known = provider.quotas.filter((q) => q.remaining_pct != null);
+  const lowest = known.length ? Math.min(...known.map((q) => q.remaining_pct)) : null;
+  return (
+    <li className="border-b border-[var(--rule)] last:border-b-0">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        disabled={!known.length}
+        aria-expanded={open}
+        className="w-full flex items-center gap-3 py-2 text-left disabled:cursor-default"
+      >
+        <span className="min-w-0 w-28 shrink-0">
+          <span className="figure-md text-sm block truncate">{provider.provider}</span>
+          <span className="doc-meta normal-case block truncate">{provider.plan || ' '}</span>
+        </span>
+        {known.length ? (
+          <>
+            <Bar pct={lowest} />
+            <span className="figure-md text-xs w-20 text-right shrink-0">
+              {known.length > 1 ? 'lowest ' : ''}{pctText(lowest)}
+            </span>
+          </>
+        ) : (
+          <span className="doc-meta normal-case">Quota not reported</span>
+        )}
+      </button>
+      {open && (
+        <ul className="pb-2 space-y-1.5">
+          {known.map((quota) => (
+            <li key={quota.name} className="flex items-center gap-3 text-xs">
+              <span className="w-28 shrink-0 truncate text-[var(--ink-soft)]">{quota.name}</span>
+              <Bar pct={quota.remaining_pct} />
+              <span className="figure-md w-20 text-right shrink-0">{pctText(quota.remaining_pct)}</span>
+            </li>
+          ))}
+          {known[0]?.reset_at && (
+            <li className="doc-meta normal-case">Resets {formatDateTime(known[0].reset_at)}</li>
+          )}
+        </ul>
+      )}
+    </li>
+  );
+};
+
+const UsageSheet = () => {
+  const [usage, setUsage] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api
+      .get(endpoints.settings.omnirouteUsage)
+      .then((res) => setUsage(res.data))
+      .catch((err) => setError(err?.response?.data?.detail || 'Could not read usage from the gateway.'));
+  }, []);
+
+  return (
+    <Sheet title="Usage" meta={usage?.key_name ? `Key · ${usage.key_name}` : 'OmniRoute'} className="mt-3 sm:mt-4">
+      {error ? (
+        <Empty title="Usage unavailable" detail={error} />
+      ) : !usage ? (
+        <Ruling rows={3} />
+      ) : (
+        <>
+          <p className="field-label mb-1">This month, this app's key</p>
+          <p className="figure-md text-xl">{formatQuantity(usage.tokens.total)} tokens</p>
+          <dl className="mt-2 grid grid-cols-3 gap-2">
+            {[['Input', usage.tokens.input], ['Output', usage.tokens.output], ['Reasoning', usage.tokens.reasoning]].map(([label, value]) => (
+              <div key={label}>
+                <dt className="field-label">{label}</dt>
+                <dd className="figure-md text-sm">{formatQuantity(value)}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="doc-meta normal-case mt-2">
+            Cost ${Number(usage.cost.used_usd || 0).toFixed(2)}
+            {usage.cost.limit_usd != null ? ` of $${Number(usage.cost.limit_usd).toFixed(2)}` : ' · no cost limit'}
+            {usage.cost.reset_at ? ` · resets ${formatDateTime(usage.cost.reset_at)}` : ''}
+          </p>
+
+          <p className="field-label mt-4 mb-1">Providers · quota left</p>
+          <p className="doc-meta normal-case mb-1">
+            The gateway's shared accounts, not only this app's use. Tap one for each model.
+          </p>
+          <ul>
+            {usage.providers.map((provider) => (
+              <ProviderRow key={provider.provider} provider={provider} />
+            ))}
+          </ul>
+        </>
+      )}
+    </Sheet>
+  );
+};
+
 /* -------------------------------------------------------------------------- */
 /* Guardrails                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -922,7 +1031,12 @@ const Settings = () => {
             {tab === 'broker' && <BrokerSheet />}
             {tab === 'guardrails' && <GuardrailsSheet />}
             {tab === 'portfolio' && <PortfolioSheet isAdmin={isAdmin} />}
-            {tab === 'ai' && <ModelSheet />}
+            {tab === 'ai' && (
+              <>
+                <ModelSheet />
+                {isAdmin && <UsageSheet />}
+              </>
+            )}
             {tab === 'beta' && isAdmin && <BetaSheet />}
           </div>
         </div>

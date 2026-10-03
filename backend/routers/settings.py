@@ -197,6 +197,64 @@ async def set_omniroute_model(
     return {"message": "Model updated successfully"}
 
 
+USAGE_CACHE_SECONDS = 60
+_USAGE_CACHE: dict = {}  # {"at": monotonic seconds, "body": dict}
+
+
+def _shape_usage(status: dict) -> dict:
+    tokens = (status.get("usage") or {}).get("tokens") or {}
+    cost = (status.get("usage") or {}).get("cost") or {}
+    providers = []
+    for account in status.get("accountQuotas") or []:
+        quotas = [
+            {"name": name, "remaining_pct": quota.get("remainingPercentage"), "reset_at": quota.get("resetAt")}
+            for name, quota in (account.get("quotas") or {}).items()
+        ]
+        providers.append({
+            "provider": account.get("provider"), "plan": account.get("plan"),
+            "available": account.get("available", True) is not False, "reason": account.get("reason"),
+            "quotas": quotas,
+        })
+    return {
+        "key_name": (status.get("apiKey") or {}).get("name"),
+        "tokens": {
+            "input": tokens.get("inputTokens", 0), "output": tokens.get("outputTokens", 0),
+            "reasoning": tokens.get("reasoningTokens", 0), "total": tokens.get("totalTokens", 0),
+            "since": tokens.get("periodStartAt"),
+        },
+        "cost": {"used_usd": cost.get("usedUsd"), "limit_usd": cost.get("limitUsd"), "reset_at": cost.get("resetAt")},
+        "providers": providers,
+    }
+
+
+@router.get("/settings/omniroute-usage")
+async def omniroute_usage(_admin: User = Depends(require_admin)):
+    """This deployment's gateway key: its tokens and cost this month, and each
+    provider account's remaining quota, from OmniRoute's self-service
+    GET /v1/me/status (the key's default `self:usage` scope -- no management
+    key needed). Provider quotas are the gateway's shared accounts, not this
+    key's share. Cached a minute."""
+    import time
+
+    if _USAGE_CACHE and time.monotonic() - _USAGE_CACHE["at"] < USAGE_CACHE_SECONDS:
+        return _USAGE_CACHE["body"]
+    if not settings.OMNIROUTE_API_KEYS:
+        raise HTTPException(status_code=409, detail="No gateway key configured")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{settings.OMNIROUTE_BASE_URL}/me/status",
+                headers={"Authorization": f"Bearer {settings.OMNIROUTE_API_KEYS[0]}"},
+            )
+            resp.raise_for_status()
+    except httpx.HTTPError as e:
+        logger.error(f"Failed to fetch OmniRoute usage: {e}")
+        raise HTTPException(status_code=502, detail="Could not read usage from the OmniRoute gateway")
+    body = _shape_usage(resp.json())
+    _USAGE_CACHE.update(at=time.monotonic(), body=body)
+    return body
+
+
 MODEL_TEST_TIMEOUT_SECONDS = 30
 
 
