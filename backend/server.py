@@ -142,10 +142,8 @@ app.include_router(stock_scanner.router, prefix=settings.API_PREFIX, tags=["Scan
 
 # Agents Router
 from backend.routers import agents
-from backend.routers import chat
 
 app.include_router(agents.router, prefix=f"{settings.API_PREFIX}/agents", tags=["Agents"], dependencies=[Depends(get_current_user)])
-app.include_router(chat.router, prefix=f"{settings.API_PREFIX}/chat", tags=["Chat"], dependencies=[Depends(get_current_user)])
 from backend.routers import chat_actions
 app.include_router(chat_actions.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
 

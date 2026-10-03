@@ -206,12 +206,12 @@ def test_a_quick_analysis_failure_is_reported_on_the_topic(client, monkeypatch):
 
 
 def test_chat_streams_thinking_then_content_then_done(client, monkeypatch):
-    class _ChatAgent:
-        async def stream_message(self, message, history):
-            yield {"type": "thinking", "data": "looking it up"}
-            yield {"type": "content", "data": "Reliance is a conglomerate."}
+    async def fake_stream(db, redis, user_id, message, history, context):
+        yield {"type": "thinking", "data": "looking it up"}
+        yield {"type": "content", "data": "Reliance is a conglomerate."}
+        yield {"type": "action", "data": {"id": "a1", "summary": "Approve SJVN"}}
 
-    monkeypatch.setattr("backend.components.chat.agent.chat_agent", _ChatAgent())
+    monkeypatch.setattr("backend.chat.agent.stream_chat", fake_stream)
 
     with client.websocket_connect(
         "/api/v1/ws?token=good-token", headers={"origin": ALLOWED_ORIGIN}
@@ -219,10 +219,12 @@ def test_chat_streams_thinking_then_content_then_done(client, monkeypatch):
         socket.receive_json()
         socket.send_json({"action": "chat", "message": "what is reliance", "req_id": "c1"})
 
-        events = [socket.receive_json() for _ in range(3)]
+        events = [socket.receive_json() for _ in range(4)]
 
-    assert [e["event"] for e in events] == ["thinking", "content", "done"]
+    assert [e["event"] for e in events] == ["thinking", "content", "action", "done"]
     assert all(e["topic"] == "chat:c1" for e in events)
+    assert events[1]["data"] == {"text": "Reliance is a conglomerate."}
+    assert events[2]["data"] == {"id": "a1", "summary": "Approve SJVN"}
 
 
 def test_an_analysis_failure_is_reported_on_the_topic(client, monkeypatch):
@@ -281,20 +283,21 @@ def test_chat_uses_the_users_saved_model_preference(client, monkeypatch):
 
     seen_model = {}
 
-    class _ChatAgent:
-        async def stream_message(self, message, history):
-            from backend.llm import _model_override
-            seen_model["model"] = _model_override.get()
-            yield {"type": "content", "data": "hi"}
+    async def fake_stream(db, redis, user_id, message, history, context):
+        from backend.llm import _model_override
+        seen_model["model"] = _model_override.get()
+        seen_model["user_id"], seen_model["context"] = user_id, context
+        yield {"type": "content", "data": "hi"}
 
-    monkeypatch.setattr("backend.components.chat.agent.chat_agent", _ChatAgent())
+    monkeypatch.setattr("backend.chat.agent.stream_chat", fake_stream)
 
     with client.websocket_connect(
         "/api/v1/ws?token=good-token", headers={"origin": ALLOWED_ORIGIN}
     ) as socket:
         socket.receive_json()
-        socket.send_json({"action": "chat", "message": "hi", "req_id": "c2"})
+        socket.send_json({"action": "chat", "message": "hi", "req_id": "c2", "context": {"page": "/portfolio"}})
         socket.receive_json()  # content
         socket.receive_json()  # done
 
     assert seen_model["model"] == "user/preferred"
+    assert seen_model["user_id"] == "alice" and seen_model["context"] == {"page": "/portfolio"}

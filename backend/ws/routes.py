@@ -108,6 +108,7 @@ async def _handle(websocket: WebSocket, connection, message: dict) -> None:
     elif action == "chat":
         asyncio.create_task(_stream_chat(
             connection, message.get("message", ""), message.get("history") or [], message.get("req_id", ""),
+            message.get("context") or {},
         ))
     elif action == "subscribe":
         connection.subscribe(topics)
@@ -178,21 +179,22 @@ async def _stream_quick_analysis(connection, symbol: str, req_id: str) -> None:
         connection.offer(_frame(topic, "error", {"detail": str(exc)}))
 
 
-async def _stream_chat(connection, message: str, history: list, req_id: str) -> None:
+async def _stream_chat(connection, message: str, history: list, req_id: str, context: dict | None = None) -> None:
     topic = f"chat:{req_id}"
     if not message:
         connection.offer(_frame(topic, "error", {"detail": "message is required"}))
         return
 
-    from backend.components.chat.agent import chat_agent
+    from backend.chat import agent
     from backend.llm import use_model
     from backend.prefs import PrefsStore
 
     try:
         prefs = await PrefsStore(db.db).get(connection.user_id)
         with use_model(prefs.get("omniroute_model")):
-            async for event in chat_agent.stream_message(message, history):
-                connection.offer(_frame(topic, event["type"], {"text": event["data"]}))
+            async for event in agent.stream_chat(db.db, db.redis, connection.user_id, message, history, context or {}):
+                data = event["data"] if event["type"] == "action" else {"text": event["data"]}
+                connection.offer(_frame(topic, event["type"], data))
             connection.offer(_frame(topic, "done", {}))
     except Exception as exc:
         logger.warning("chat stream failed: %s", exc)
