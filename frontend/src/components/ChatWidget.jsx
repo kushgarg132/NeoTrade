@@ -122,6 +122,7 @@ const ChatWidget = () => {
   // What the assistant suggests asking next, shown under its latest reply.
   const [followups, setFollowups] = useState([]);
   const endRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -144,6 +145,9 @@ const ChatWidget = () => {
 
     setMessages((list) => [...list, { role: 'user', content: text }]);
     setInput('');
+    // On a phone this closes the keyboard; left open, the first tap on a chip
+    // only dismisses it and the panel jumps out from under the finger.
+    inputRef.current?.blur();
     setBusy(true);
     setThinking('');
     setFollowups([]);
@@ -259,7 +263,7 @@ const ChatWidget = () => {
                     key={question}
                     type="button"
                     onClick={() => send(question)}
-                    className="px-2.5 py-1.5 border border-[var(--rule-strong)] text-xs text-[var(--ink)] hover:bg-[var(--stamp-soft)] text-left"
+                    className="min-h-11 lg:min-h-0 px-2.5 py-1.5 border border-[var(--rule-strong)] text-xs text-[var(--ink)] hover:bg-[var(--stamp-soft)] active:bg-[var(--stamp-soft)] text-left touch-manipulation"
                   >
                     {question}
                   </button>
@@ -278,6 +282,7 @@ const ChatWidget = () => {
 
           <form onSubmit={submit} className="flex items-center gap-2 px-3 py-2 border-t border-[var(--rule-strong)]">
             <input
+              ref={inputRef}
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder="Ask about your account or a stock"
