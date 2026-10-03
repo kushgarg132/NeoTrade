@@ -198,3 +198,20 @@ async def test_angel_one_get_trades_dates_bare_fill_time_today(monkeypatch):
     assert trades[0].symbol == "SBIN"
     assert trades[0].quantity == 3
     assert trades[0].traded_at == parse_ist(datetime(2026, 9, 1, 13, 27, 53))
+
+
+async def test_connected_brokers_lists_only_active_sessions(monkeypatch):
+    from backend.brokers.protocol import BrokerSessionState
+    from backend.journal import sync
+
+    class _A:
+        def __init__(self, state):
+            self._state = state
+
+        async def state(self):
+            return self._state
+
+    states = {"kite": BrokerSessionState.NEEDS_LOGIN, "upstox": BrokerSessionState.ACTIVE,
+              "angel_one": BrokerSessionState.UNCONFIGURED}
+    monkeypatch.setattr(sync, "get_broker_adapter", AsyncMock(side_effect=lambda b, *a: _A(states[b])))
+    assert await sync.connected_brokers(None, None, "alice") == ["upstox"]

@@ -11,6 +11,14 @@ from backend.journal.store import JournalStore
 logger = logging.getLogger(__name__)
 
 
+async def connected_brokers(redis, credentials, user_id: str) -> list[str]:
+    """Brokers this user has a live session with right now."""
+    return [
+        broker for broker in BROKERS
+        if await (await get_broker_adapter(broker, user_id, credentials, redis)).state() == BrokerSessionState.ACTIVE
+    ]
+
+
 async def sync_user_trades(db, redis, credentials, user_id: str, include_pnl: bool = False) -> dict:
     """`include_pnl` also sums each synced broker's own day P&L (realised +
     unrealised across its position book) -- what guardrails check the daily

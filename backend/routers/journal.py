@@ -15,7 +15,7 @@ from backend.journal.console_csv import parse_console_tradebook
 from backend.journal.insights import build_insights
 from backend.journal.roundtrips import build_round_trips, daily_pnl
 from backend.journal.store import JournalStore
-from backend.journal.sync import sync_user_trades
+from backend.journal.sync import connected_brokers, sync_user_trades
 
 router = APIRouter(prefix="/journal", tags=["Journal"])
 
@@ -38,6 +38,7 @@ class NoteRequest(BaseModel):
 @router.get("")
 async def get_journal(
     user: User = Depends(get_current_user), store: JournalStore = Depends(get_journal_store),
+    credentials: BrokerCredentialStore = Depends(get_credential_store),
 ):
     await record_open(db.db, user.id)
     trips = build_round_trips(await store.list_trades(user.id))
@@ -50,6 +51,9 @@ async def get_journal(
         "round_trips": trips,
         "calendar": daily_pnl(trips),
         "insights": build_insights(trips),
+        # So an empty journal can say "connected, nothing imported yet"
+        # rather than "connect a broker".
+        "brokers_connected": await connected_brokers(db.redis, credentials, user.id),
         "summary": {
             "trips": len(closed),
             "pnl": round(sum(t["pnl"] for t in closed), 2),

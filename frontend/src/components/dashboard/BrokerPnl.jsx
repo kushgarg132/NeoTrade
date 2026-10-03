@@ -11,6 +11,8 @@ import { cn } from '../../utils/cn';
  * live feed.
  */
 
+const BROKER_NAMES = { kite: 'Kite', upstox: 'Upstox', angel_one: 'Angel One' };
+
 const todayIst = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
 
@@ -34,6 +36,24 @@ const BrokerPnl = ({ journal, loading, error }) => {
           <Ruling rows={3} />
         </Sheet>
       </div>
+    );
+  }
+
+  const connected = journal?.brokers_connected || [];
+  if (!error && journal && journal.calendar.length === 0 && connected.length > 0) {
+    const names = connected.map((b) => BROKER_NAMES[b] || b).join(' and ');
+    return (
+      <Sheet title="Your broker account">
+        <Empty
+          title={`${names} connected`}
+          detail="No trades imported yet. Each trading day's trades import after the market closes."
+          action={
+            <Link to="/journal" className="field-label text-[var(--stamp)] hover:underline">
+              Open the journal
+            </Link>
+          }
+        />
+      </Sheet>
     );
   }
 
