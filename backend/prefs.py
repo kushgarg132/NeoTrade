@@ -36,9 +36,10 @@ DEFAULTS = {
     # is hit: "off", "preview" (alert with the orders it would place), or
     # "live" (place them). Never defaults to live.
     "auto_square_off": "off",
-    # Start an intraday paper run by itself every trading day at the open
-    # (backend/engine/autorun.py). Paper only; off until the user turns it on.
+    # Start an intraday / long-term paper run by itself every trading day at
+    # the open (backend/engine/autorun.py). Paper only; off until turned on.
     "auto_paper_intraday": False,
+    "auto_paper_longterm": False,
     # Portfolio review (backend/portfolio/rules.py): a holding this far below
     # its average cost, or this large a share of the portfolio, counts
     # against it.

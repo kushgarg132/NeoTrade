@@ -1,11 +1,13 @@
-"""Daily intraday paper run, started without anyone pressing Start.
+"""Daily paper runs, started without anyone pressing Start.
 
 For every user with `auto_paper_intraday` on, one INTRADAY run is kept alive
 from the 09:15 IST open to the 15:30 close on weekdays, then stopped (the
-runner itself squares off MIS positions at 15:15). Checked once a minute on
-every worker.
+runner itself squares off MIS positions at 15:15). `auto_paper_longterm` does
+the same for a LONGTERM run, whose signals file as proposals for the user to
+decide. Checked once a minute on every worker.
 
-Which worker owns a user's run: a Redis key `autorun:{user_id}` holding that
+Which worker owns a user's run: a Redis key `autorun:{user_id}` (INTRADAY;
+`autorun:{user_id}:LONGTERM` for the long-term run) holding that
 worker's token, renewed every tick while its run is alive. Only a worker that
 wins the key with SET NX starts a run, so two workers never both start one;
 if the owner dies (a deploy), the key expires within KEY_TTL_MS and another
@@ -36,9 +38,12 @@ MAX_STARTS_PER_DAY = 5
 SESSION_OPEN, SESSION_CLOSE = time(9, 15), time(15, 30)
 POLL_SECONDS = 60.0
 
+# Which pref turns each mode's daily run on.
+MODES = {"INTRADAY": "auto_paper_intraday", "LONGTERM": "auto_paper_longterm"}
+
 # This process's identity for key ownership, and the auto runs it drives.
 _TOKEN = str(uuid.uuid4())
-_LOCAL: dict[str, str] = {}  # user_id -> run_id
+_LOCAL: dict[str, str] = {}  # slot -> run_id
 
 
 def in_session(now: datetime) -> bool:
@@ -48,29 +53,40 @@ def in_session(now: datetime) -> bool:
     return local.weekday() < 5 and SESSION_OPEN <= local.time() < SESSION_CLOSE
 
 
-def _key(user_id: str) -> str:
-    return f"autorun:{user_id}"
+def _slot(user_id: str, mode: str) -> str:
+    """One auto run per user per mode. INTRADAY keeps the bare user id it had
+    before LONGTERM existed."""
+    return user_id if mode == "INTRADAY" else f"{user_id}:{mode}"
 
 
-async def _release(redis, user_id: str) -> None:
-    if await redis.get(_key(user_id)) in (_TOKEN, _TOKEN.encode()):
-        await redis.delete(_key(user_id))
+def _split(slot: str) -> tuple[str, str]:
+    user_id, _, mode = slot.partition(":")
+    return user_id, mode or "INTRADAY"
 
 
-async def _stop_local(redis, runs: RunStore, user_id: str) -> None:
+def _key(slot: str) -> str:
+    return f"autorun:{slot}"
+
+
+async def _release(redis, slot: str) -> None:
+    if await redis.get(_key(slot)) in (_TOKEN, _TOKEN.encode()):
+        await redis.delete(_key(slot))
+
+
+async def _stop_local(redis, runs: RunStore, slot: str) -> None:
     from backend.routers.trading import stop_background_run
 
-    run_id = _LOCAL.pop(user_id, None)
+    run_id = _LOCAL.pop(slot, None)
     if run_id is not None:
         await stop_background_run(run_id)
         await runs.mark_stopped(run_id)
-    await _release(redis, user_id)
+    await _release(redis, slot)
 
 
-async def _may_start(runs: RunStore, user_id: str, now: datetime) -> bool:
+async def _may_start(runs: RunStore, user_id: str, mode: str, now: datetime) -> bool:
     day_start = datetime.combine(now.astimezone(IST).date(), time(0, 0), tzinfo=IST).astimezone(timezone.utc)
     today = await runs.collection.find({
-        "user_id": user_id, "mode": "INTRADAY", "started_at": {"$gte": day_start},
+        "user_id": user_id, "mode": mode, "started_at": {"$gte": day_start},
     }).to_list(length=None)
     if any(r["status"] == ACTIVE and r["params"].get("origin") != "auto" for r in today):
         return False  # the user already started one by hand
@@ -93,43 +109,46 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
         return done
 
     enabled = {
-        doc["user_id"] for doc in await db["user_prefs"].find({"auto_paper_intraday": True}).to_list(length=None)
+        _slot(doc["user_id"], mode)
+        for mode, pref in MODES.items()
+        for doc in await db["user_prefs"].find({pref: True}).to_list(length=None)
     }
 
     if not in_session(now):
-        for user_id in list(_LOCAL):
-            await _stop_local(redis, runs, user_id)
-            done["stopped"].append(user_id)
+        for slot in list(_LOCAL):
+            await _stop_local(redis, runs, slot)
+            done["stopped"].append(slot)
         return done
 
-    for user_id in list(_LOCAL):
-        if user_id not in enabled:  # turned off mid-session
-            await _stop_local(redis, runs, user_id)
-            done["stopped"].append(user_id)
+    for slot in list(_LOCAL):
+        if slot not in enabled:  # turned off mid-session
+            await _stop_local(redis, runs, slot)
+            done["stopped"].append(slot)
 
     prefs_store = PrefsStore(db)
-    for user_id in sorted(enabled):
-        run_id = _LOCAL.get(user_id)
+    for slot in sorted(enabled):
+        user_id, mode = _split(slot)
+        run_id = _LOCAL.get(slot)
         if run_id is not None and run_id in trading._RUNS:
-            await redis.set(_key(user_id), _TOKEN, xx=True, px=KEY_TTL_MS)
-            done["renewed"].append(user_id)
+            await redis.set(_key(slot), _TOKEN, xx=True, px=KEY_TTL_MS)
+            done["renewed"].append(slot)
             continue
-        _LOCAL.pop(user_id, None)  # our run ended (stopped by the user, or crashed)
-        await _release(redis, user_id)
+        _LOCAL.pop(slot, None)  # our run ended (stopped by the user, or crashed)
+        await _release(redis, slot)
 
-        if not await _may_start(runs, user_id, now):
+        if not await _may_start(runs, user_id, mode, now):
             continue
-        if not await redis.set(_key(user_id), _TOKEN, nx=True, px=KEY_TTL_MS):
-            continue  # another worker owns this user's run
+        if not await redis.set(_key(slot), _TOKEN, nx=True, px=KEY_TTL_MS):
+            continue  # another worker owns this run
         try:
             prefs = await prefs_store.get(user_id)
-            _LOCAL[user_id] = await launch(
-                user_id, "INTRADAY", prefs["universe"], POLL_SECONDS, runs, origin="auto",
+            _LOCAL[slot] = await launch(
+                user_id, mode, prefs["universe"], POLL_SECONDS, runs, origin="auto",
             )
-            done["started"].append(user_id)
+            done["started"].append(slot)
         except Exception as exc:
-            logger.exception("auto-run start failed for %s: %s", user_id, exc)
-            await _release(redis, user_id)
+            logger.exception("auto-run start failed for %s: %s", slot, exc)
+            await _release(redis, slot)
     return done
 
 

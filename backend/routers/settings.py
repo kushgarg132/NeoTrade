@@ -61,6 +61,7 @@ class PreferencesPatch(BaseModel):
     portfolio_max_weight_pct: Optional[float] = Field(default=None, gt=0, le=100)
     auto_square_off: Optional[Literal["off", "preview", "live"]] = None
     auto_paper_intraday: Optional[bool] = None
+    auto_paper_longterm: Optional[bool] = None
 
 
 @router.get("/settings/preferences")

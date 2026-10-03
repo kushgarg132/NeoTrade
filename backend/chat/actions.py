@@ -37,7 +37,7 @@ CARD_PREFIX = "ACTION_CARD:"
 SETTINGS = {
     "daily_loss_limit": float, "per_trade_cap": float, "max_trades_per_day": int,
     "cooldown_after_losses": int, "cooldown_minutes": int,
-    "auto_paper_intraday": bool, "guardrails_enabled": bool,
+    "auto_paper_intraday": bool, "auto_paper_longterm": bool, "guardrails_enabled": bool,
 }
 
 

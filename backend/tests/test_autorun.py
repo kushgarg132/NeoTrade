@@ -169,3 +169,27 @@ async def test_the_run_stops_at_the_close_and_when_turned_off(world, monkeypatch
     await _tick(world, datetime(2026, 9, 29, 10, 0, tzinfo=IST))
     await world.db["user_prefs"].update_one({"user_id": "alice"}, {"$set": {"auto_paper_intraday": False}})
     assert (await _tick(world, datetime(2026, 9, 29, 10, 1, tzinfo=IST)))["stopped"] == ["alice"]
+
+
+@pytest.mark.asyncio
+async def test_a_long_term_run_starts_on_its_own_switch(world, monkeypatch):
+    async def stop(run_id):
+        return True
+    monkeypatch.setattr(trading, "stop_background_run", stop)
+
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True})
+
+    assert (await _tick(world, SUNDAY_10AM))["started"] == []
+    assert (await _tick(world, MONDAY_10AM))["started"] == ["alice:LONGTERM"]
+    assert world.launched == [("alice", "LONGTERM", "auto")]
+    assert world.redis.data["autorun:alice:LONGTERM"] == "worker-a"
+    assert (await _tick(world, MONDAY_EVENING))["stopped"] == ["alice:LONGTERM"]
+
+
+@pytest.mark.asyncio
+async def test_both_switches_run_both_engines(world):
+    await world.db["user_prefs"].insert_one(
+        {"user_id": "alice", "auto_paper_intraday": True, "auto_paper_longterm": True}
+    )
+    assert sorted((await _tick(world, MONDAY_10AM))["started"]) == ["alice", "alice:LONGTERM"]
+    assert sorted(m for _, m, _ in world.launched) == ["INTRADAY", "LONGTERM"]

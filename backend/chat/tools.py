@@ -92,6 +92,7 @@ def read_tools(db, redis, user_id: str) -> list:
             "open_positions": [{"symbol": s, "quantity": p.quantity, "avg_price": p.avg_price} for s, p in positions.items()],
             "running": [run_summary(r) for r in await RunStore(db).list_active(user_id)],
             "auto_paper_intraday": prefs.get("auto_paper_intraday"),
+            "auto_paper_longterm": prefs.get("auto_paper_longterm"),
             "kill_switch": {"tripped": bool(tripped), "reason": (tripped or {}).get("reason")},
             "go_live_progress": progress,
         })

@@ -21,7 +21,7 @@ from backend.suggestions.store import SuggestionStore
 
 logger = logging.getLogger(__name__)
 
-LIMIT_KEYS = ("daily_loss_limit", "per_trade_cap", "max_trades_per_day", "auto_paper_intraday", "guardrails_enabled")
+LIMIT_KEYS = ("daily_loss_limit", "per_trade_cap", "max_trades_per_day", "auto_paper_intraday", "auto_paper_longterm", "guardrails_enabled")
 
 
 def plan_names(plan: Optional[str], heading: str) -> list[str]:

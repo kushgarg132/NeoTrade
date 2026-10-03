@@ -100,6 +100,25 @@ const EngineSettings = () => {
     );
   }
 
+  const switchRow = (key, label, hint) => (
+    <Row label={label} hint={hint}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={Boolean(prefs[key])}
+        onClick={() => save({ [key]: !prefs[key] })}
+        className={cn(
+          SWITCH,
+          prefs[key]
+            ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
+            : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
+        )}
+      >
+        {prefs[key] ? 'On' : 'Off'}
+      </button>
+    </Row>
+  );
+
   const sizingRow = (key, label, hint) => (
     <Row label={label} hint={hint}>
       <NumberField
@@ -112,26 +131,20 @@ const EngineSettings = () => {
 
   return (
     <div className="space-y-4">
-      <Sheet title="Daily auto-run" meta={prefs.auto_paper_intraday ? 'On' : 'Off'}>
-        <Row
-          label="Paper-trade intraday every session"
-          hint="Starts an intraday paper run at 09:15 IST each weekday and stops it at 15:30, with positions squared off at 15:15. It restarts itself after an interruption; stop it on the Engine tab and it stays off for the rest of that day."
-        >
-          <button
-            type="button"
-            role="switch"
-            aria-checked={prefs.auto_paper_intraday}
-            onClick={() => save({ auto_paper_intraday: !prefs.auto_paper_intraday })}
-            className={cn(
-              SWITCH,
-              prefs.auto_paper_intraday
-                ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-                : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-            )}
-          >
-            {prefs.auto_paper_intraday ? 'On' : 'Off'}
-          </button>
-        </Row>
+      <Sheet
+        title="Daily auto-run"
+        meta={prefs.auto_paper_intraday || prefs.auto_paper_longterm ? 'On' : 'Off'}
+      >
+        {switchRow(
+          'auto_paper_intraday',
+          'Paper-trade intraday every session',
+          'Starts an intraday paper run at 09:15 IST each weekday and stops it at 15:30, with positions squared off at 15:15. It restarts itself after an interruption; stop it on the Engine tab and it stays off for the rest of that day.'
+        )}
+        {switchRow(
+          'auto_paper_longterm',
+          'Run the long-term engine every session',
+          'Starts a long-term run at 09:15 IST each weekday and stops it at 15:30. Its signals file as proposals under Decisions; nothing is bought until you approve it. Positions are held across days.'
+        )}
         <p className="pt-3 doc-meta normal-case">
           Paper only: a strategy you switched live trades real money only once it has passed its
           backtest and earned it on paper (see Strategies below).
