@@ -336,10 +336,136 @@ const TIER_ROWS = [
   { id: 'fast', label: 'Fast', hint: 'Event tagging, symbol lookup, article sentiment' },
 ];
 
-/** One model choice: search the gateway's list, test it, save it. */
-const ModelRow = ({ label, hint, value, fallback, models, onSave, clearable }) => {
-  const [selected, setSelected] = useState(value || '');
+const STEP_BUTTON =
+  'w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm border-b border-[var(--rule)] last:border-b-0 hover:bg-[var(--stamp-soft)]';
+
+/**
+ * Family -> model line -> version, the way people think about models
+ * ("Claude, then Opus, then 4.6"). A family with one line skips that step.
+ * Search all keeps the raw list for an id the tree does not place well.
+ */
+const ModelChooser = ({ catalog, models, onPick, onClose }) => {
+  const [familyKey, setFamilyKey] = useState(null);
+  const [lineKey, setLineKey] = useState(null);
+  const [search, setSearch] = useState(false);
   const [query, setQuery] = useState('');
+
+  const family = catalog.find((f) => f.key === familyKey);
+  const line = family && (family.lines.length === 1 ? family.lines[0] : family.lines.find((l) => l.key === lineKey));
+  const step = search ? 'search' : !family ? 'family' : !line ? 'line' : 'version';
+
+  const back = () => {
+    if (search) setSearch(false);
+    else if (line && family.lines.length > 1) setLineKey(null);
+    else if (family) setFamilyKey(null);
+    else onClose();
+  };
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return (term ? models.filter((m) => m.id.toLowerCase().includes(term)) : models).slice(0, 40);
+  }, [models, query]);
+
+  // Versions grouped under their number, newest first (the API already sorted them).
+  const groups = useMemo(() => {
+    if (!line) return [];
+    const out = [];
+    for (const model of line.models) {
+      const key = model.version || model.label;
+      const last = out[out.length - 1];
+      if (last && last.key === key && model.version) last.models.push(model);
+      else out.push({ key, models: [model] });
+    }
+    return out;
+  }, [line]);
+
+  const crumb = [family?.label, family && family.lines.length > 1 ? line?.label : null].filter(Boolean).join(' › ');
+
+  return (
+    <div className="mt-2 sheet">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--rule-strong)] bg-[var(--paper-sunk)]">
+        <button type="button" onClick={back} className="field-label text-[var(--stamp)] hover:underline min-h-8">
+          ‹ {step === 'family' ? 'Close' : 'Back'}
+        </button>
+        <span className="doc-meta normal-case truncate">
+          {step === 'search' ? 'All models' : crumb || 'Choose a family'}
+        </span>
+        {step !== 'search' ? (
+          <button type="button" onClick={() => setSearch(true)} className="field-label text-[var(--ink-soft)] hover:underline min-h-8">
+            Search all
+          </button>
+        ) : (
+          <span />
+        )}
+      </div>
+      <div className="max-h-72 overflow-y-auto">
+        {step === 'family' &&
+          catalog.map((f) => (
+            <button key={f.key} type="button" className={STEP_BUTTON} onClick={() => { setFamilyKey(f.key); setLineKey(null); }}>
+              <span className="figure-md">{f.label}</span>
+              <span className="doc-meta normal-case">{f.count} ›</span>
+            </button>
+          ))}
+        {step === 'line' &&
+          family.lines.map((l) => (
+            <button key={l.key} type="button" className={STEP_BUTTON} onClick={() => setLineKey(l.key)}>
+              <span className="figure-md">{l.label}</span>
+              <span className="doc-meta normal-case">{l.models.length} ›</span>
+            </button>
+          ))}
+        {step === 'version' &&
+          groups.map((group) => (
+            <div key={group.key}>
+              {group.models[0].version && (
+                <p className="px-3 pt-2 pb-1 field-label text-[var(--ink)] bg-[var(--paper-sunk)]">
+                  {line.key === 'all' || line.key === 'other' ? '' : `${line.label} `}{group.key}
+                </p>
+              )}
+              {group.models.map((model) => (
+                <button key={model.id} type="button" className={STEP_BUTTON} onClick={() => onPick(model.id)}>
+                  <span className="min-w-0">
+                    <span className="text-sm block truncate">
+                      {model.version ? model.variant || 'standard' : model.label}
+                    </span>
+                    <span className="doc-meta normal-case block truncate">{model.id}</span>
+                  </span>
+                  <span className="doc-meta normal-case shrink-0">{model.provider}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        {step === 'search' && (
+          <>
+            <div className="flex items-center gap-2 px-3 border-b border-[var(--rule-strong)]">
+              <Search className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Filter every model id"
+                className="w-full bg-transparent border-0 py-2 text-sm focus:outline-none"
+                aria-label="Filter models"
+              />
+            </div>
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2.5 text-sm text-[var(--ink-soft)]">No match.</p>
+            ) : (
+              filtered.map((model) => (
+                <button key={model.id} type="button" className={STEP_BUTTON} onClick={() => onPick(model.id)}>
+                  <span className="figure-md truncate">{model.id}</span>
+                </button>
+              ))
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** One model choice: pick it step by step, test it, save it. */
+const ModelRow = ({ label, hint, value, fallback, models, catalog, onSave, clearable }) => {
+  const [selected, setSelected] = useState(value || '');
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(null);
   const [test, setTest] = useState(null);
@@ -348,11 +474,6 @@ const ModelRow = ({ label, hint, value, fallback, models, onSave, clearable }) =
   useEffect(() => setSelected(value || ''), [value]);
   // A result belongs to the model it ran on; picking another clears it.
   useEffect(() => setTest(null), [selected]);
-
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return (term ? models.filter((m) => m.id.toLowerCase().includes(term)) : models).slice(0, 40);
-  }, [models, query]);
 
   const effective = selected || fallback;
 
@@ -392,46 +513,29 @@ const ModelRow = ({ label, hint, value, fallback, models, onSave, clearable }) =
         )}
       </div>
       <p className="doc-meta normal-case mt-0.5">{hint}</p>
-      <div className="mt-2 flex items-center gap-2 border-b border-[var(--rule-strong)] focus-within:border-[var(--stamp)]">
-        <Search className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
-        <input
-          value={open ? query : selected}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => {
-            setQuery('');
-            setOpen(true);
-          }}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder={clearable ? `Uses fallback: ${fallback}` : 'Filter models'}
-          className="w-full bg-transparent border-0 py-2 text-sm figure-md focus:outline-none placeholder:font-normal"
-          aria-label={`${label} model`}
-        />
+      <div className="mt-2 flex items-center justify-between gap-3 border-b border-[var(--rule-strong)] pb-2">
+        <span className={cn('min-w-0 truncate text-sm', selected ? 'figure-md' : 'text-[var(--ink-faint)]')}>
+          {selected || (clearable ? `Uses fallback: ${fallback}` : 'No model')}
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen((value_) => !value_)}
+          aria-expanded={open}
+          className="field-label text-[var(--stamp)] hover:underline shrink-0 min-h-8"
+        >
+          {open ? 'Close' : 'Change'}
+        </button>
       </div>
       {open && (
-        <ul className="sheet mt-px max-h-64 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <li className="px-3 py-2.5 text-sm text-[var(--ink-soft)]">No match.</li>
-          ) : (
-            filtered.map((model) => (
-              <li key={model.id}>
-                <button
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    setSelected(model.id);
-                    setOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm figure-md border-b border-[var(--rule)] last:border-b-0 hover:bg-[var(--stamp-soft)]"
-                >
-                  {model.id}
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
+        <ModelChooser
+          catalog={catalog}
+          models={models}
+          onClose={() => setOpen(false)}
+          onPick={(id) => {
+            setSelected(id);
+            setOpen(false);
+          }}
+        />
       )}
       <div className="mt-2 flex items-center justify-end gap-2">
         <Button variant="secondary" size="sm" onClick={runTest} disabled={busy !== null || !effective}>
@@ -465,6 +569,7 @@ const ModelSheet = () => {
   const [models, setModels] = useState([]);
   const [fallback, setFallback] = useState('');
   const [tiers, setTiers] = useState({});
+  const [catalog, setCatalog] = useState([]);
   const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
@@ -473,12 +578,14 @@ const ModelSheet = () => {
       api.get(endpoints.settings.omnirouteModels),
       api.get(endpoints.settings.omnirouteModel),
       api.get(endpoints.settings.omnirouteTiers),
+      api.get(endpoints.settings.omnirouteCatalog),
     ])
-      .then(([modelsRes, currentRes, tiersRes]) => {
+      .then(([modelsRes, currentRes, tiersRes, catalogRes]) => {
         if (cancelled) return;
         setModels(modelsRes.data);
         setFallback(currentRes.data.model);
         setTiers(tiersRes.data.tiers);
+        setCatalog(catalogRes.data);
       })
       .catch(() => {
         if (!cancelled) setLoadError('Could not reach the OmniRoute gateway.');
@@ -516,6 +623,7 @@ const ModelSheet = () => {
               value={tiers[row.id]}
               fallback={fallback}
               models={models}
+              catalog={catalog}
               onSave={saveTier(row.id)}
               clearable
             />
@@ -526,6 +634,7 @@ const ModelSheet = () => {
             value={fallback}
             fallback={fallback}
             models={models}
+            catalog={catalog}
             onSave={saveFallback}
           />
         </>

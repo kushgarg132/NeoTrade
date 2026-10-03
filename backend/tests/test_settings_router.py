@@ -433,3 +433,13 @@ def test_tier_changes_are_admin_only_and_tiers_are_known(client, db):
     assert client.post("/api/v1/settings/omniroute-tiers", json={"tier": "fast", "model": "a/b"}).status_code == 403
     admin = _client(db, _user(role="admin"))
     assert admin.post("/api/v1/settings/omniroute-tiers", json={"tier": "huge", "model": "a/b"}).status_code == 422
+
+
+def test_catalog_groups_the_gateway_models(client, monkeypatch):
+    async def fake_get(self, url, **kwargs):
+        return _FakeModelsResponse()
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    tree = client.get("/api/v1/settings/omniroute-catalog").json()
+    assert [f["key"] for f in tree] == ["gemini", "other"]
+    assert tree[0]["lines"][0]["models"][0]["id"] == "antigravity/gemini-2.5-flash"

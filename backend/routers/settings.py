@@ -150,11 +150,8 @@ async def set_portfolio_verdicts(
     return {"audience": body.audience}
 
 
-@router.get("/settings/omniroute-models")
-async def list_omniroute_models():
-    """Proxies OmniRoute's OpenAI-compatible GET /models so the frontend can
-    offer a searchable picker instead of a hardcoded model string. Returns
-    only `id` per entry -- the picker doesn't need context_length/capabilities."""
+async def _gateway_models() -> list[dict]:
+    """OmniRoute's OpenAI-compatible GET /models, full entries."""
     # The gateway requires its key on /models too, same as on completions.
     headers = {"Authorization": f"Bearer {settings.OMNIROUTE_API_KEYS[0]}"} if settings.OMNIROUTE_API_KEYS else {}
     try:
@@ -164,9 +161,22 @@ async def list_omniroute_models():
     except httpx.HTTPError as e:
         logger.error(f"Failed to fetch OmniRoute model list: {e}")
         raise HTTPException(status_code=502, detail="Could not reach OmniRoute gateway")
+    return resp.json().get("data", [])
 
-    data = resp.json().get("data", [])
-    return [{"id": m["id"]} for m in data]
+
+@router.get("/settings/omniroute-models")
+async def list_omniroute_models():
+    """Every model id the gateway lists, for the picker's Search all."""
+    return [{"id": m["id"]} for m in await _gateway_models()]
+
+
+@router.get("/settings/omniroute-catalog")
+async def omniroute_catalog():
+    """The same list as a Family -> Model line -> Version tree, chat models
+    only, for the step-by-step picker (backend/model_catalog.py)."""
+    from backend.model_catalog import build_catalog
+
+    return build_catalog(await _gateway_models())
 
 
 @router.get("/settings/omniroute-model")
