@@ -43,14 +43,21 @@ async def execute_suggestion(
         order_type="MARKET", limit_price=None, product=product,
         strategy_name=strategy_name or suggestion.get("strategy"), suggestion_id=suggestion.get("id"),
     )
-    await ledger.record_order(order)
+    return await fill_on_paper(ledger, order, price, now, is_option=is_option)
 
+
+async def fill_on_paper(
+    ledger: LedgerStore, order: Order, price: float, now: datetime, is_option: bool = False,
+) -> Order:
+    """Records `order` and fills it in full at `price`, with the same
+    charges and ledger bookkeeping as an engine fill."""
+    await ledger.record_order(order)
     costs = (
-        calculate_options_costs(price, quantity, side) if is_option
-        else calculate_indian_costs(price, quantity, side, product)
+        calculate_options_costs(price, order.quantity, order.side) if is_option
+        else calculate_indian_costs(price, order.quantity, order.side, order.product)
     )
     fill = Fill(
-        order_id=order.id, symbol=order.symbol, side=side, quantity=quantity, price=price,
+        order_id=order.id, symbol=order.symbol, side=order.side, quantity=order.quantity, price=price,
         timestamp=now, costs=costs,
     )
     await _book(ledger, fill)

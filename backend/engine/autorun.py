@@ -2,12 +2,18 @@
 
 For every user with `auto_paper_intraday` on, one INTRADAY run is kept alive
 from the 09:15 IST open to the 15:30 close on weekdays, then stopped (the
-runner itself squares off MIS positions at 15:15). `auto_paper_longterm` does
-the same for a LONGTERM run, whose signals file as proposals for the user to
-decide. Checked once a minute on every worker.
+runner itself squares off MIS positions at 15:15). Checked once a minute on
+every worker.
 
-Which worker owns a user's run: a Redis key `autorun:{user_id}` (INTRADAY;
-`autorun:{user_id}:LONGTERM` for the long-term run) holding that
+`auto_paper_longterm` is not a run. Long-term strategies read months of daily
+bars, which a live feed cannot supply, so their ideas come from the
+history-backed scan (backend/suggestions/scan.py, daily at 16:00 in
+backend/scheduler.py). During the session this switch instead closes approved
+long-term positions at their stop or target every 15 minutes
+(backend/suggestions/exits.py), and from 09:20 sends the morning digest --
+re-running the scan first if the 16:00 pass was missed.
+
+Which worker owns a user's run: a Redis key `autorun:{user_id}` holding that
 worker's token, renewed every tick while its run is alive. Only a worker that
 wins the key with SET NX starts a run, so two workers never both start one;
 if the owner dies (a deploy), the key expires within KEY_TTL_MS and another
@@ -22,7 +28,7 @@ session, or once MAX_STARTS_PER_DAY auto runs have started (a crash loop).
 import asyncio
 import logging
 import uuid
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 
 from backend.core.clock import SystemClock
@@ -39,7 +45,10 @@ SESSION_OPEN, SESSION_CLOSE = time(9, 15), time(15, 30)
 POLL_SECONDS = 60.0
 
 # Which pref turns each mode's daily run on.
-MODES = {"INTRADAY": "auto_paper_intraday", "LONGTERM": "auto_paper_longterm"}
+MODES = {"INTRADAY": "auto_paper_intraday"}
+LONGTERM_PREF = "auto_paper_longterm"
+EXIT_CHECK_MINUTES = 15
+MORNING = time(9, 20)
 
 # This process's identity for key ownership, and the auto runs it drives.
 _TOKEN = str(uuid.uuid4())
@@ -126,6 +135,15 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
             done["stopped"].append(slot)
 
     prefs_store = PrefsStore(db)
+    for user_id in sorted(
+        doc["user_id"] for doc in await db["user_prefs"].find({LONGTERM_PREF: True}).to_list(length=None)
+    ):
+        try:
+            if await _longterm_pass(db, redis, user_id, now):
+                done.setdefault("longterm", []).append(user_id)
+        except Exception as exc:
+            logger.exception("long-term pass failed for %s: %s", user_id, exc)
+
     for slot in sorted(enabled):
         user_id, mode = _split(slot)
         run_id = _LOCAL.get(slot)
@@ -150,6 +168,52 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
             logger.exception("auto-run start failed for %s: %s", slot, exc)
             await _release(redis, slot)
     return done
+
+
+def _previous_weekday(day):
+    day -= timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
+
+
+async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
+    """Exit checks once per EXIT_CHECK_MINUTES bucket, and once a day from
+    MORNING the catch-up scan + digest. Redis SET NX makes each happen on
+    one worker only. Returns whether this worker did anything."""
+    from backend.scheduler import LAST_PASS_KEY
+    from backend.suggestions.exits import check_exits
+    from backend.suggestions.notify import exits_text, notify, proposals_text
+    from backend.suggestions.scan import scan_universe
+    from backend.suggestions.store import SuggestionStore
+
+    local = now.astimezone(IST)
+    day = local.date().isoformat()
+    did = False
+
+    bucket = (local.hour * 60 + local.minute) // EXIT_CHECK_MINUTES
+    if await redis.set(f"longterm:{user_id}:{day}:{bucket}", _TOKEN, nx=True, px=EXIT_CHECK_MINUTES * 60_000 * 2):
+        did = True
+        closed = await check_exits(db, user_id, now=now)
+        if closed:
+            await notify(db, user_id, exits_text(closed))
+
+    if local.time() >= MORNING and await redis.set(f"longterm:{user_id}:{day}:morning", _TOKEN, nx=True, px=86_400_000):
+        did = True
+        last_pass = await redis.get(LAST_PASS_KEY)
+        last_pass = last_pass.decode() if isinstance(last_pass, bytes) else last_pass
+        if last_pass is None or last_pass < _previous_weekday(local.date()).isoformat():
+            prefs = await PrefsStore(db).get(user_id)
+            logger.info("16:00 scan missed (last pass %s); catching up for %s", last_pass, user_id)
+            await scan_universe(
+                db, user_id=user_id, universe=prefs["universe"], account_size=prefs["account_size"],
+                max_exposure=prefs["max_exposure"], source="scheduler", redis=redis, now=now,
+            )
+        pending = await SuggestionStore(db).list(user_id, mode="LONGTERM", status="PENDING", limit=100)
+        if pending:
+            pending.sort(key=lambda s: s["expires_at"])
+            await notify(db, user_id, proposals_text(pending, f"Good morning: {len(pending)} long-term proposal(s) waiting."))
+    return did
 
 
 async def autorun_loop(db, redis) -> None:

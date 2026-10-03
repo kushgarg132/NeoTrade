@@ -171,25 +171,64 @@ async def test_the_run_stops_at_the_close_and_when_turned_off(world, monkeypatch
     assert (await _tick(world, datetime(2026, 9, 29, 10, 1, tzinfo=IST)))["stopped"] == ["alice"]
 
 
-@pytest.mark.asyncio
-async def test_a_long_term_run_starts_on_its_own_switch(world, monkeypatch):
-    async def stop(run_id):
+@pytest.fixture
+def longterm(world, monkeypatch):
+    """The long-term switch on, with exits, scan and Telegram recorded."""
+    import backend.suggestions.exits as exits
+    import backend.suggestions.notify as notify
+    import backend.suggestions.scan as scan
+
+    calls = {"exits": [], "scans": [], "sent": []}
+
+    async def check_exits(db, user_id, now=None):
+        calls["exits"].append(now)
+        return [{"symbol": "SJVN", "reason": "target", "price": 60.0, "quantity": 10.0,
+                 "entry_price": 55.0, "gross_pnl": 50.0}]
+
+    async def scan_universe(db, user_id, **kwargs):
+        calls["scans"].append(kwargs["source"])
+        return []
+
+    async def send(db, user_id, text):
+        calls["sent"].append(text)
         return True
-    monkeypatch.setattr(trading, "stop_background_run", stop)
 
-    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True})
-
-    assert (await _tick(world, SUNDAY_10AM))["started"] == []
-    assert (await _tick(world, MONDAY_10AM))["started"] == ["alice:LONGTERM"]
-    assert world.launched == [("alice", "LONGTERM", "auto")]
-    assert world.redis.data["autorun:alice:LONGTERM"] == "worker-a"
-    assert (await _tick(world, MONDAY_EVENING))["stopped"] == ["alice:LONGTERM"]
+    monkeypatch.setattr(exits, "check_exits", check_exits)
+    monkeypatch.setattr(scan, "scan_universe", scan_universe)
+    monkeypatch.setattr(notify, "notify", send)
+    return calls
 
 
 @pytest.mark.asyncio
-async def test_both_switches_run_both_engines(world):
-    await world.db["user_prefs"].insert_one(
-        {"user_id": "alice", "auto_paper_intraday": True, "auto_paper_longterm": True}
-    )
-    assert sorted((await _tick(world, MONDAY_10AM))["started"]) == ["alice", "alice:LONGTERM"]
-    assert sorted(m for _, m, _ in world.launched) == ["INTRADAY", "LONGTERM"]
+async def test_the_long_term_switch_never_starts_a_live_run(world, longterm):
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True})
+    result = await _tick(world, MONDAY_10AM)
+    assert world.launched == []
+    assert result["longterm"] == ["alice"]
+    assert (await _tick(world, SUNDAY_10AM)).get("longterm") is None
+
+
+@pytest.mark.asyncio
+async def test_exits_are_checked_once_per_quarter_hour_and_reported(world, longterm):
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True})
+    world.redis.data["scheduler:last_pass"] = "2026-09-25"  # Friday's 16:00 pass ran
+
+    await _tick(world, datetime(2026, 9, 28, 10, 0, tzinfo=IST))
+    await _tick(world, datetime(2026, 9, 28, 10, 7, tzinfo=IST))
+    await _tick(world, datetime(2026, 9, 28, 10, 16, tzinfo=IST))
+
+    assert len(longterm["exits"]) == 2
+    assert sum("SJVN" in text for text in longterm["sent"]) == 2
+    assert longterm["scans"] == []  # 16:00 was not missed
+
+
+@pytest.mark.asyncio
+async def test_a_missed_close_scan_is_caught_up_at_the_open(world, longterm):
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True})
+    world.redis.data["scheduler:last_pass"] = "2026-09-24"  # Friday's pass never happened
+
+    await _tick(world, datetime(2026, 9, 28, 9, 16, tzinfo=IST))
+    assert longterm["scans"] == []  # before 09:20
+    await _tick(world, datetime(2026, 9, 28, 9, 21, tzinfo=IST))
+    await _tick(world, datetime(2026, 9, 28, 11, 0, tzinfo=IST))
+    assert longterm["scans"] == ["scheduler"]  # once a day

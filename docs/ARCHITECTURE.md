@@ -285,6 +285,18 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   deploy; Mongo run status is not trusted for this because every worker's startup sweeps all
   RUNNING rows as orphaned. A run the user stops during the session is not restarted that
   day, and at most 5 auto runs start per day.
+- **Long-term engine** — not a live run: long-term strategies need months of daily bars,
+  which a live feed never has, so their ideas come only from the history-backed scan
+  (`backend/suggestions/scan.py`; 16:00 IST in `scheduler.py`, which records
+  `scheduler:last_pass` in Redis). With `auto_paper_longterm` on, the same autorun loop
+  calls `_longterm_pass`. Every 15 minutes in session it calls
+  `backend/suggestions/exits.py:check_exits`, which sells an approved long-term paper long
+  at its proposal's stop or target. From 09:20 it re-runs the scan once if the 16:00 pass
+  was missed, then sends a Telegram digest of pending proposals
+  (`backend/suggestions/notify.py`, same bot and chat link as guardrail alerts). A scan only
+  proposes an equity SELL for a held long, capped at the held quantity (`SuggestionSink.held`):
+  a delivery account cannot short. Proposals store their `strategy`, and an approved order
+  carries it plus `suggestion_id` onto the trade.
 - **Paper scorecard** — `compute_scorecard` (`backend/analytics.py`, `GET
   /analytics/scorecard?venue=paper`): closed trades grouped by IST exit day and by the
   `strategy` stamped on each trade at open (`LedgerStore._open_trade`, from the opening

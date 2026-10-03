@@ -23,6 +23,7 @@ from backend.options.resolver import FO_UNDERLYINGS
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
 from backend.journal.sync import sync_user_trades
 from backend.prefs import PrefsStore
+from backend.suggestions.notify import notify, proposals_text
 from backend.suggestions.scan import scan_universe
 from backend.suggestions.store import SuggestionStore
 from backend.suggestions.thesis import attach_theses
@@ -37,6 +38,10 @@ RUN_MINUTE = 0
 # Distributed lock so two workers running scheduler_loop concurrently
 # produce exactly one daily pass, not two.
 LOCK_KEY = "scheduler:daily_lock"
+# IST date of the last finished daily pass. The long-term engine's 09:20
+# check (backend/engine/autorun.py) re-runs the scan when this is stale,
+# e.g. a deploy restarted the process across 16:00.
+LAST_PASS_KEY = "scheduler:last_pass"
 LOCK_TTL_MS = 2 * 60 * 60 * 1000  # 2 hours: covers a full pass, including
 # per-user LLM calls, rather than a heartbeat/renewal loop -- a crashed
 # holder self-heals at TTL expiry instead of leaving the pass permanently
@@ -78,6 +83,7 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         created_total += len(created)
         if created:
             await attach_theses(db, user_id, created)
+            await notify(db, user_id, proposals_text(created, f"{len(created)} new long-term proposal(s) from today's close:"))
 
     journal_imported = await _sync_journals(db, redis)
 
@@ -90,6 +96,9 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
             portfolios = await weekly_reviews(db, redis)
         except Exception as exc:
             logger.exception("weekly portfolio reviews failed: %s", exc)
+
+    if redis is not None:
+        await redis.set(LAST_PASS_KEY, now.astimezone(IST).date().isoformat())
 
     logger.info(
         "daily pass: %d journal trade(s) imported, %d expired, %d option position(s) closed, %d verdict(s) refreshed, "
