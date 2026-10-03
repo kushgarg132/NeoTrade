@@ -18,6 +18,7 @@ from backend.data.feeds.historical import HistoricalFeed
 from backend.data.providers.cached import CachedFundamentals, CachedHistory
 from backend.data.providers.yfinance_provider import YFinanceProvider
 from backend.engine.execution.simulated import SimulatedExecutionClient
+from backend.engine.persistence import LedgerStore
 from backend.engine.portfolio import Portfolio
 from backend.engine.runner import run
 from backend.instruments.master import InstrumentMaster
@@ -142,7 +143,11 @@ async def scan_universe(
         return []
 
     store = SuggestionStore(db)
-    sink = SuggestionSink(store, user_id=user_id, source=source)
+    held: dict[str, float] = {}
+    for trade in await LedgerStore(db, user_id=user_id).get_trades(status="OPEN", venue="paper", mode="LONGTERM"):
+        if trade["side"] == "BUY":
+            held[trade["symbol"]] = held.get(trade["symbol"], 0.0) + trade["quantity"]
+    sink = SuggestionSink(store, user_id=user_id, source=source, held=held)
     sink.armed = False
 
     before = {s["id"] for s in await store.list(user_id, status="PENDING", limit=1000)}

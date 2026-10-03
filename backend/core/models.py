@@ -101,6 +101,9 @@ class Order(BaseModel):
     # RoutingExecutionClient (backend/engine/execution/routing.py), only
     # to paper. Set by size_intents from owner_by_symbol.
     strategy_name: Optional[str] = None
+    # The proposal an approved order executes; the trade it opens carries it
+    # so an exit can find that proposal's stop and target.
+    suggestion_id: Optional[str] = None
     # The listed F&O contract for an option order (its NFO row from the
     # instrument master); None for every equity order. Brokers that can
     # place option orders read the contract off it; any other broker

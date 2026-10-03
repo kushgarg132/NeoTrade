@@ -22,18 +22,32 @@ class SuggestionSink:
     warmup bars are history, not advice, so they are dropped rather than
     recorded. A live run leaves it armed throughout."""
 
-    def __init__(self, store, user_id: str, run_id: Optional[str] = None, source: str = "run") -> None:
+    def __init__(
+        self, store, user_id: str, run_id: Optional[str] = None, source: str = "run",
+        held: Optional[dict[str, float]] = None,
+    ) -> None:
         self.store = store
         self.user_id = user_id
         self.run_id = run_id
         self.source = source
         self.armed = True
+        # symbol -> quantity of open long-term paper longs. When given, an
+        # equity SELL may only exit what is held: a delivery (CNC) account
+        # cannot short, so a SELL on anything else is not a trade at all.
+        self.held = held
 
     async def __call__(self, proposal: Proposal) -> bool:
         if proposal.mode != GATED_MODE:
             return True
         if not self.armed:
             return False
+        order = proposal.order
+        is_equity_sell = getattr(order.side, "value", order.side) == "SELL" and not getattr(proposal, "option_contract", None)
+        if is_equity_sell and self.held is not None:
+            held = self.held.get(order.symbol, 0.0)
+            if held <= 0:
+                return False
+            order.quantity = min(order.quantity, held)
 
         # One open idea per symbol: a daily scan re-derives the same signal
         # from the same bars, and the inbox is for deciding, not scrolling.

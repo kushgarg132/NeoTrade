@@ -40,7 +40,8 @@ async def execute_suggestion(
 
     order = Order(
         id=str(uuid.uuid4()), symbol=suggestion["symbol"], side=side, quantity=quantity,
-        order_type="MARKET", limit_price=None, product=product, strategy_name=strategy_name,
+        order_type="MARKET", limit_price=None, product=product,
+        strategy_name=strategy_name or suggestion.get("strategy"), suggestion_id=suggestion.get("id"),
     )
     await ledger.record_order(order)
 

@@ -340,3 +340,52 @@ async def test_scan_wires_quality_universe_into_strategy_build(mongo, monkeypatc
 
     assert captured["quality_scores"] == {"RELIANCE": 0.8}
     assert captured["quality_universe"] == ["RELIANCE"]
+
+
+def _sell(symbol="RELIANCE", quantity=5.0, option_contract=None) -> Proposal:
+    return Proposal(
+        order=Order(id="o2", symbol=symbol, side=Side.SELL, quantity=quantity,
+                    order_type="MARKET", limit_price=None, product="CNC", strategy_name="macd_crossover"),
+        intent=Intent(symbol=symbol, side=Side.SELL, strength=0.7,
+                      reason_codes=["macd_bearish_crossover"], stop_hint=110.0, target_hint=90.0),
+        score=CompositeScore(rule_score=0.7, ai_score=0.0),
+        entry=100.0, mode="LONGTERM", option_contract=option_contract,
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_equity_sell_only_exits_what_is_held(mongo):
+    store = SuggestionStore(mongo)
+    sink = SuggestionSink(store, user_id="alice", source="scan", held={"TCS": 3.0})
+
+    await sink(_sell("RELIANCE"))           # not held: a delivery account cannot short it
+    await sink(_sell("TCS", quantity=5.0))  # held 3: capped at 3
+
+    pending = await store.list("alice", status="PENDING")
+    assert [(s["symbol"], s["quantity"], s["strategy"]) for s in pending] == [("TCS", 3.0, "macd_crossover")]
+
+
+@pytest.mark.asyncio
+async def test_an_option_sell_is_not_an_equity_short(mongo):
+    store = SuggestionStore(mongo)
+    sink = SuggestionSink(store, user_id="alice", source="scan", held={})
+    await sink(_sell("NIFTY", option_contract={"strike": 100.0}))
+    assert len(await store.list("alice", status="PENDING")) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_approved_proposal_opens_a_trade_tagged_with_its_strategy(mongo):
+    from backend.engine.persistence import LedgerStore
+    from backend.suggestions.service import execute_suggestion
+
+    store = SuggestionStore(mongo)
+    proposal = _proposal()
+    proposal.order.strategy_name = "breakout"
+    await SuggestionSink(store, user_id="alice", source="scan")(proposal)
+    suggestion = (await store.list("alice"))[0]
+
+    ledger = LedgerStore(mongo, user_id="alice")
+    await execute_suggestion(suggestion, ledger, price=100.0)
+
+    trade = (await ledger.get_trades(status="OPEN"))[0]
+    assert (trade["strategy"], trade["suggestion_id"], trade["mode"]) == ("breakout", suggestion["id"], "LONGTERM")

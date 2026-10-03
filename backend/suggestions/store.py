@@ -55,6 +55,9 @@ class SuggestionStore:
             "option_contract": getattr(proposal, "option_contract", None),
             "strength": intent.strength,
             "reason_codes": list(intent.reason_codes),
+            # Which strategy proposed it, so the trade an approval opens is
+            # scored against that strategy rather than "unattributed".
+            "strategy": order.strategy_name,
             "score": {"rule": score.rule_score, "ai": score.ai_score, "final": score.final},
             "ai_thesis": None,
             "source": source,
