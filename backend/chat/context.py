@@ -16,7 +16,7 @@ from backend.journal.store import JournalStore
 from backend.portfolio.service import latest_snapshot
 from backend.prefs import PrefsStore
 from backend.risk.kill_switch import KillSwitchStore
-from backend.runs import RunStore
+from backend.runs import RunStore, run_summary
 from backend.suggestions.store import SuggestionStore
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ async def _paper(db, user_id, now):
     )
     return {
         "as_of": now.isoformat(),
-        "running": [{"run_id": r["run_id"], "mode": r["mode"], "origin": r["params"].get("origin")} for r in runs],
+        "running": [run_summary(r) for r in runs],
         "open_paper_positions": open_paper,
         "kill_switch": {"tripped": bool(tripped), "reason": (tripped or {}).get("reason")},
     }

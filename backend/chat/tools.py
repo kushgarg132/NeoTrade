@@ -20,7 +20,7 @@ from backend.journal.store import JournalStore
 from backend.portfolio.service import latest_snapshot
 from backend.prefs import PrefsStore
 from backend.risk.kill_switch import KillSwitchStore
-from backend.runs import RunStore
+from backend.runs import RunStore, run_summary
 from backend.suggestions.store import SuggestionStore
 
 MAX_HOLDINGS, MAX_TRIPS, MAX_PROPOSALS = 40, 30, 20
@@ -90,8 +90,7 @@ def read_tools(db, redis, user_id: str) -> list:
         return _json({
             "scorecard": {"totals": card["totals"], "strategies": card["strategies"], "last_days": card["days"][-5:]},
             "open_positions": [{"symbol": s, "quantity": p.quantity, "avg_price": p.avg_price} for s, p in positions.items()],
-            "running": [{"run_id": r["run_id"], "mode": r["mode"], "origin": r["params"].get("origin")}
-                        for r in await RunStore(db).list_active(user_id)],
+            "running": [run_summary(r) for r in await RunStore(db).list_active(user_id)],
             "auto_paper_intraday": prefs.get("auto_paper_intraday"),
             "kill_switch": {"tripped": bool(tripped), "reason": (tripped or {}).get("reason")},
             "go_live_progress": progress,

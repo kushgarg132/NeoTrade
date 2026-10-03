@@ -77,6 +77,19 @@ class RunStore:
         return result.modified_count
 
 
+def run_summary(run: dict) -> dict:
+    """What the chat assistant sees of a run: identity plus live progress
+    (bars scanned, signals, orders, last bar), so it can say how the engine
+    is doing rather than only that it is running."""
+    started_at = run.get("started_at")
+    return {
+        "run_id": run["run_id"], "mode": run["mode"], "origin": run["params"].get("origin"),
+        "started_at": started_at.isoformat() if started_at else None,
+        "scrip": len(run.get("universe") or []),
+        "progress": run.get("progress") or "no bar processed yet",
+    }
+
+
 def _clean(doc: dict) -> dict:
     doc = dict(doc)
     doc.pop("_id", None)

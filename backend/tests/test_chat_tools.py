@@ -54,3 +54,16 @@ async def test_get_decisions_lists_ids_terms_and_score():
     out = await _tools(db, "alice")["get_decisions"].ainvoke({})
     for expected in ("s-alice", "SJVN", "57.91", "55.01", "60.81", "0.54"):
         assert expected in out
+
+
+async def test_get_paper_reports_a_running_runs_progress():
+    from backend.runs import RunStore
+
+    db = AsyncMongoMockClient()["test_db"]
+    await _seed(db)
+    runs = RunStore(db)
+    await runs.create("r-alice", "alice", "LONGTERM", ["SJVN"], {"origin": "manual"})
+    await runs.set_progress("r-alice", {"bars": 166, "signals": 2, "orders": 1, "last_symbol": "SJVN"})
+    out = await _tools(db, "alice")["get_paper"].ainvoke({})
+    for expected in ("r-alice", "'bars': 166", "'signals': 2", "started_at"):
+        assert expected in out or expected.replace("'", '"') in out
