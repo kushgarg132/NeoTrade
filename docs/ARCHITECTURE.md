@@ -169,7 +169,10 @@ hardcoded `0.0` (`backtest.py:94-95`) — they are not computed.
 have **no production callers**. The LangGraph decision node was deliberately removed; what
 survives is `ResearchAgent` (`backend/research/graph.py:58-159`), whose graph is
 `resolve_query → company_info → analyst → synthesize → END` and which returns a narrative
-`ResearchReport` with no BUY/SELL/HOLD, plus `AnalystAgent` and `ChatAgent`. Since
+`ResearchReport` with no BUY/SELL/HOLD, plus `AnalystAgent`. The chat lives in `backend/chat/` (2026-10-04): a
+per-message day snapshot (`context.py`) in `prompts/chat.md`, read tools bound to the caller's `user_id`
+(`tools.py`), and propose-only action tools whose records in `chat_actions` run only through
+`POST /chat/actions/{id}/confirm`, which re-checks everything (`actions.py`). Since
 2026-09-26 the analyst makes two LLM calls per stock (`prompts/score_news.md`, then
 `prompts/research_report.md`, which also writes the thesis), so `synthesize` makes none.
 

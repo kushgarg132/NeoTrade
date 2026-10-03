@@ -62,7 +62,8 @@ const Overview = () => (
           Broker sessions, sentiment and verdict caches, job locks, cross-worker events.
         </Part>
         <Part title="OmniRoute gateway" where="backend/llm.py · prompts/*.md">
-          The one LLM door: research, theses, portfolio review, index moves, chat.
+          The one LLM door: research, theses, portfolio review, index moves, and the chat, which reads your own
+          data through tools and prepares changes as cards you confirm.
         </Part>
       </Side>
       <Down label="outbound" />

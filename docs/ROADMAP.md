@@ -460,6 +460,17 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
 
 ---
 
+### 2026-10-04 — chat assistant over the user's own data
+
+`backend/chat/` replaces the generic ReAct chat (and the unused `POST /chat/message`). Each message
+carries a day snapshot; read tools cover portfolio, journal, paper engine, proposals and limits;
+action tools only prepare cards, executed by `POST /chat/actions/{id}/confirm` after an atomic claim
+and every check again (ad-hoc live orders: NSE equity market, active broker, market open, kill switch
+clear, per-trade cap, second tap). Spec and plan in `docs/superpowers/`. Not done: server-side
+history, F&O/limit orders from chat; ad-hoc paper orders are not gated by the kill switch.
+
+---
+
 ## Phase 6 — Revive the long-term agent engine — **done 2026-09-11**
 
 **Goal.** Give long-term suggestions a genuine reasoning source instead of reusing the

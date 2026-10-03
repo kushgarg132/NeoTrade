@@ -69,6 +69,7 @@ stop?"*
 | Portfolio `/portfolio` | Review | Long-term holdings read from every connected broker (Kite, Upstox, Angel One; Kite's mutual funds too), merged by ISIN: value, gain, today's move, weights, sector split, holdings that move together, and each holding against NIFTY over the same days (from the journal's buy dates, saying how much it covers). Each holding gets a verdict from plain rules scored by the one conviction formula (SELL / HOLD / ADD for stocks, REVIEW / KEEP for funds) with its reasons, health figures and headlines, plus an AI write-up that explains but never decides. Admins also get an AI action plan (improve the mix, sell or trim, add), every point citing its figures, with new stocks drawn only from the long-term scan's recent buy suggestions. Verdicts are admin-only until the deployment switch `portfolio_verdicts` is set to all (needs SEBI RA registration); others see the facts with serious holdings marked Review first. Re-reviewed every Friday after the close, with a Telegram alert when a verdict gets worse |
 | Journal `/journal` | Review | P&L calendar, every broker trade auto-imported (options and futures included, each round trip marked CALL/PUT/FUT), stocks/options/futures P&L kept apart, notes and setup tags |
 | Insights *(planned)* | Review | Plain-language findings about their own habits, e.g. "trades after 2 losses in a row: 31% win rate" |
+| Margin note (chat, every page) | Operate | Ask about your own portfolio, journal, paper engine, proposals and limits, or a stock, and get the answer from your data. It can prepare any change the app makes -- approve or decline a proposal, start or stop the paper run, change a limit, place an NSE equity market order on paper or live -- as a card that does nothing until you tap Confirm (twice for a live order); every check runs again at confirm |
 | Settings `/settings` | Operate | Broker connection, guardrails (including the daily loss limit, which also trips the engine's kill-switch, and options limits: trades per day, lots per trade, a warning on unhedged option selling), AI model |
 | Architecture `/system` | Explain | A live view of how the system fits together |
 | Login `/login` | Operate | Google sign-in, nothing else |
@@ -123,4 +124,6 @@ will feel like mockery on a red one.
 
 Once real orders are possible, one more rule: the product never places a trade the user
 cannot reconstruct after the fact. Every live fill traces back to the intent, the rule codes,
-and the score that produced it.
+and the score that produced it -- or, for an order placed from the chat, to the user's own
+message and their confirming tap (stored on the `chat_actions` record and as `reason` on the
+`live_orders` record, `strategy_name="chat"`).
