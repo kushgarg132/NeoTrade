@@ -36,6 +36,9 @@ class RunStore:
             "error": None,
         })
 
+    async def set_progress(self, run_id: str, progress: dict) -> None:
+        await self.collection.update_one({"run_id": run_id}, {"$set": {"progress": progress}})
+
     async def mark_stopped(self, run_id: str) -> None:
         await self._close(run_id, status="STOPPED", error=None)
 

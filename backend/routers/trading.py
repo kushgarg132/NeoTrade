@@ -14,8 +14,9 @@ backend/tests/test_trading_router.py). `_RUNS` is what can be *cancelled*;
 
 import asyncio
 import logging
+import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -216,6 +217,37 @@ class StopRequest(BaseModel):
     run_id: str
 
 
+PROGRESS_EVERY_SECONDS = 2.0
+
+
+def progress_reporter(user_id: str, run_id: str, runs: RunStore):
+    """The runner reports after every bar; a poll cycle over the default
+    universe is ~80 bars in a burst, so this saves and publishes at most one
+    update every PROGRESS_EVERY_SECONDS rather than one per bar."""
+    last_sent = 0.0
+
+    async def report(progress: dict) -> None:
+        nonlocal last_sent
+        now = time.monotonic()
+        if now - last_sent < PROGRESS_EVERY_SECONDS:
+            return
+        last_sent = now
+        # ISO strings, not datetimes: the Redis broadcast path is plain json.dumps.
+        last_bar_at = progress["last_bar_at"]
+        progress = {
+            **progress,
+            "last_bar_at": last_bar_at.isoformat() if last_bar_at else None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            await runs.set_progress(run_id, progress)
+            await hub.publish(user_id, "runs", "progress", {"run_id": run_id, "progress": progress})
+        except Exception as exc:  # a progress hiccup must never stop a live run
+            logger.warning("run %s progress update failed: %s", run_id, exc)
+
+    return report
+
+
 async def launch_run(
     user_id: str, mode: str, universe: Optional[list[str]], poll_interval_seconds: float,
     runs: RunStore, origin: str = "manual",
@@ -324,6 +356,7 @@ async def launch_run(
         per_trade_cap=prefs["per_trade_cap"], daily_loss_limit=prefs["daily_loss_limit"],
         kill_switch_store=KillSwitchStore(db.db),
         master=master if premium_source is not None else None, premium_source=premium_source,
+        on_progress=progress_reporter(user_id, run_id, runs),
     )
     await runs.create(
         run_id=run_id, user_id=user_id, mode=mode,

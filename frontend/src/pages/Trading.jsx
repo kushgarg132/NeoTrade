@@ -68,7 +68,16 @@ const Trading = () => {
       .catch(() => setLiveStrategies([]));
   }, []);
 
-  useTopic('runs', loadRuns);
+  useTopic('runs', (message) => {
+    // Progress ticks arrive every few seconds while a run polls; patch in place
+    // rather than refetching every run on each one.
+    if (message.event !== 'progress') {
+      loadRuns();
+      return;
+    }
+    const { run_id: runId, progress } = message.data;
+    setRuns((current) => current.map((run) => (run.run_id === runId ? { ...run, progress } : run)));
+  });
   useTopic('positions', (message) => setPositions(paperPositions(message.data)));
   useTopic('trades', () => {
     loadLedger();
@@ -165,6 +174,11 @@ const Trading = () => {
               {active.params?.origin === 'auto' && <Badge variant="outline">Auto-run</Badge>}
               <span className="doc-meta normal-case">
                 {active.universe.length} scrip · run {active.run_id.slice(0, 8)}
+              </span>
+              <span className="doc-meta normal-case w-full">
+                {active.progress
+                  ? `${active.progress.bars} bars scanned · ${active.progress.signals} signals · ${active.progress.orders} orders · last ${active.progress.last_symbol ?? 'bar'} at ${formatClock(active.progress.updated_at)}`
+                  : 'Waiting for the first bar…'}
               </span>
               {active.mode === 'LONGTERM' && (
                 <p className="w-full text-sm text-[var(--ink-soft)]">

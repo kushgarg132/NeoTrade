@@ -105,3 +105,26 @@ async def test_runner_persists_orders_fills_and_positions_to_ledger():
     open_positions = await ledger.get_open_positions()
     assert SYMBOL in open_positions
     assert open_positions[SYMBOL].quantity == portfolio.positions[SYMBOL].quantity
+
+
+@pytest.mark.asyncio
+async def test_runner_reports_progress_after_every_bar():
+    instrument = _instrument()
+    candles = _candles()
+    feed = HistoricalFeed(_FakeProvider(candles), [instrument], candles[0].timestamp, candles[-1].timestamp, TIMEFRAME)
+    reports = []
+
+    async def on_progress(progress):
+        reports.append(progress)
+
+    await run(
+        strategies=[_FirstBarBuyStrategy()], feed=feed, execution=SimulatedExecutionClient(),
+        portfolio=Portfolio(), clock=SimClock(), symbol_for_token=feed.symbol_for_token,
+        on_progress=on_progress,
+    )
+
+    assert [r["bars"] for r in reports] == [1, 2, 3]
+    assert reports[-1]["signals"] == 1
+    assert reports[-1]["orders"] == 1
+    assert reports[-1]["last_symbol"] == SYMBOL
+    assert reports[-1]["last_bar_at"] == candles[-1].timestamp

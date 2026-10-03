@@ -307,6 +307,7 @@ async def run(
     kill_switch_store=None,
     master: Optional[InstrumentMaster] = None,
     premium_source=None,
+    on_progress: Optional[Callable[[dict], Awaitable[None]]] = None,
 ) -> None:
     """`symbol_for_token` is not in the plan's pseudocode signature; it's
     needed because `Bar` identifies instruments by `instrument_token` while
@@ -334,6 +335,10 @@ async def run(
     getting a fresh chance to lose more before re-detecting the breach.
     Omit either argument and the kill-switch simply never engages, exactly
     as before this parameter existed.
+
+    `on_progress`, if given, is awaited after every bar with running counts
+    (bars seen, signals raised, orders sent, the last bar's symbol and time)
+    so a live run can show it is alive. Throttling is the caller's job.
     """
     symbol_for_token = symbol_for_token or {}
     ctx = SimpleStrategyContext(clock, portfolio, symbol_for_token)
@@ -346,6 +351,7 @@ async def run(
 
     kill_switch_tripped = False
     option_legs: dict[str, dict] = {}
+    progress = {"bars": 0, "signals": 0, "orders": 0, "last_symbol": None, "last_bar_at": None}
 
     async for bar in feed:
         if isinstance(clock, SimClock):
@@ -388,8 +394,9 @@ async def run(
                 if symbol in strategy.spec.universe and bar.timeframe == strategy.spec.timeframe:
                     strategy.on_bar(ctx, bar)
 
+        intents = ctx.drain_intents()
         orders = await size_intents(
-            ctx.drain_intents(), portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,
+            intents, portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,
             order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
             master=master, premium_source=premium_source, option_legs=option_legs,
         )
@@ -427,3 +434,11 @@ async def run(
 
         if ledger is not None:
             await ledger.snapshot_positions(portfolio.positions)
+
+        if on_progress is not None:
+            progress["bars"] += 1
+            progress["signals"] += len(intents)
+            progress["orders"] += len(orders)
+            progress["last_symbol"] = symbol
+            progress["last_bar_at"] = bar.timestamp
+            await on_progress(dict(progress))
