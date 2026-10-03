@@ -89,3 +89,20 @@ async def test_bar_falls_back_to_last_price_when_quote_has_no_ohlc():
 
     assert bar.open == bar.high == bar.low == bar.close == 101.0
     assert bar.volume == 0.0
+
+
+async def test_skips_an_instrument_whose_quote_fails():
+    # A delisted or renamed symbol (GMRINFRA.NS) must not end the whole run.
+    class _OneBadProvider(_FakeProvider):
+        async def quote(self, instrument):
+            if instrument.tradingsymbol == "BAD":
+                raise ValueError("No quote data found for BAD.NS")
+            return await super().quote(instrument)
+
+    instruments = [_instrument(1, "AAA"), _instrument(2, "BAD"), _instrument(3, "CCC")]
+    feed = PollingLiveFeed(_OneBadProvider(), instruments, timeframe="1m", sleep_fn=_FakeSleeper())
+
+    gen = feed.__aiter__()
+    bars = [await gen.__anext__() for _ in range(4)]
+
+    assert [bar.instrument_token for bar in bars] == [1, 3, 1, 3]

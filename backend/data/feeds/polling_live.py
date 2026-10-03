@@ -8,12 +8,15 @@ YFinanceProvider from Task 1.
 """
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import AsyncIterator, Callable
 
 from backend.core.models import Bar
 from backend.data.protocols import MarketDataProvider
 from backend.instruments.models import Instrument
+
+logger = logging.getLogger(__name__)
 
 
 class PollingLiveFeed:
@@ -38,7 +41,12 @@ class PollingLiveFeed:
         while True:
             now = datetime.now(timezone.utc)
             for instrument in self._instruments:
-                quote = await self._provider.quote(instrument)
+                try:
+                    quote = await self._provider.quote(instrument)
+                except Exception as exc:
+                    # One delisted or renamed symbol must not end the whole run.
+                    logger.warning("no quote for %s, skipped this poll: %s", instrument.tradingsymbol, exc)
+                    continue
                 last_price = quote["last_price"]
                 yield Bar(
                     instrument_token=instrument.instrument_token,
