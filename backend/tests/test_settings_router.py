@@ -308,3 +308,37 @@ def test_portfolio_limits_are_editable_preferences(client):
     assert resp.status_code == 200
     assert (resp.json()["portfolio_max_loss_pct"], resp.json()["portfolio_max_weight_pct"]) == (15, 10)
     assert client.put("/api/v1/settings/preferences", json={"portfolio_max_loss_pct": 0}).status_code == 422
+
+
+def test_model_test_reports_a_working_model(db, monkeypatch):
+    from langchain_openai import ChatOpenAI
+
+    calls = {}
+
+    async def fake_ainvoke(self, messages, **kwargs):
+        calls["model"] = self.model_name
+        return type("R", (), {"content": "OK"})()
+
+    monkeypatch.setattr(ChatOpenAI, "ainvoke", fake_ainvoke)
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+    resp = _client(db, _user(role="admin")).post("/api/v1/settings/omniroute-model/test", json={"model": "aug/sonnet5-high"})
+
+    body = resp.json()
+    assert resp.status_code == 200 and body["ok"] is True and body["reply"] == "OK"
+    assert calls["model"] == "aug/sonnet5-high" and body["latency_ms"] >= 0
+
+
+def test_model_test_reports_a_gateway_error_as_not_ok(db, monkeypatch):
+    from langchain_openai import ChatOpenAI
+
+    async def fake_ainvoke(self, messages, **kwargs):
+        raise RuntimeError("Error code: 404 - model not found")
+
+    monkeypatch.setattr(ChatOpenAI, "ainvoke", fake_ainvoke)
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+    body = _client(db, _user(role="admin")).post("/api/v1/settings/omniroute-model/test", json={"model": "nope/x"}).json()
+    assert body["ok"] is False and "model not found" in body["error"]
+
+
+def test_model_test_is_admin_only(client):
+    assert client.post("/api/v1/settings/omniroute-model/test", json={"model": "a/b"}).status_code == 403

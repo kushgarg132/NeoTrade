@@ -8,6 +8,7 @@ import pytest
 from backend.prompts import render
 
 PROMPTS = {
+    "model_test": {},
     "resolve_instrument": {"query": "tata motors", "candidates": '[{"tradingsymbol": "TATAMOTORS"}]'},
     "peers": {"name": "Reliance Industries", "symbol": "RELIANCE"},
     "classify_events": {"text": "Q1 profit fell 23%"},

@@ -338,6 +338,24 @@ const ModelSheet = () => {
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState(null);
   const [loadError, setLoadError] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [test, setTest] = useState(null);
+
+  // A result belongs to the model it ran on; picking another clears it.
+  useEffect(() => setTest(null), [selected]);
+
+  const runTest = async () => {
+    setTesting(true);
+    setTest(null);
+    try {
+      const res = await api.post(endpoints.settings.omnirouteModelTest, { model: selected });
+      setTest(res.data);
+    } catch (err) {
+      setTest({ ok: false, error: err?.response?.data?.detail || 'The test request failed' });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -445,16 +463,39 @@ const ModelSheet = () => {
             <span className="doc-meta normal-case truncate">
               {selected === current ? `Current: ${current}` : `Changing from ${current}`}
             </span>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={save}
-              disabled={saving || selected === current}
-            >
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-              Save
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="secondary" size="sm" onClick={runTest} disabled={testing || !selected}>
+                {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                Test
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={save}
+                disabled={saving || selected === current}
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                Save
+              </Button>
+            </div>
           </div>
+
+          {testing && <p className="mt-2 doc-meta normal-case">Asking {selected} for a one-word reply…</p>}
+          {test && (
+            <p
+              role="status"
+              className={cn(
+                'mt-2 text-sm px-3 py-2 border break-words',
+                test.ok
+                  ? 'text-[var(--gain)] border-[var(--gain)] bg-[var(--gain-wash)]'
+                  : 'text-[var(--loss)] border-[var(--loss)] bg-[var(--loss-wash)]'
+              )}
+            >
+              {test.ok
+                ? `Works · ${(test.latency_ms / 1000).toFixed(1)}s · replied: ${test.reply}`
+                : `Failed: ${test.error}`}
+            </p>
+          )}
 
           {note && <p className="mt-2 text-sm text-[var(--ink-soft)]">{note}</p>}
         </>

@@ -197,6 +197,53 @@ async def set_omniroute_model(
     return {"message": "Model updated successfully"}
 
 
+MODEL_TEST_TIMEOUT_SECONDS = 30
+
+
+@router.post("/settings/omniroute-model/test")
+async def test_omniroute_model(update: ModelUpdate, _admin: User = Depends(require_admin)):
+    """One tiny prompt to `model` through the gateway, before anyone saves it.
+    Calls the model directly: LLMService.get_completion turns a failure into
+    a reply string, which would read as a pass here."""
+    import asyncio
+    import time
+
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_openai import ChatOpenAI
+
+    from backend.prompts import render
+
+    model = update.model.strip()
+    if not model:
+        raise HTTPException(status_code=400, detail="Model cannot be empty")
+    if not settings.OMNIROUTE_API_KEYS:
+        return {"ok": False, "model": model, "latency_ms": None, "reply": None, "error": "No gateway key configured"}
+
+    system, prompt = render("model_test")
+    llm = ChatOpenAI(
+        model=model, api_key=settings.OMNIROUTE_API_KEYS[0], base_url=settings.OMNIROUTE_BASE_URL,
+        temperature=0.0, max_retries=0,
+    )
+    started = time.monotonic()
+    try:
+        response = await asyncio.wait_for(
+            llm.ainvoke([SystemMessage(content=system), HumanMessage(content=prompt)]),
+            timeout=MODEL_TEST_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        error = f"No answer within {MODEL_TEST_TIMEOUT_SECONDS}s"
+    except Exception as e:
+        error = str(e)[:300]
+    else:
+        latency = round((time.monotonic() - started) * 1000)
+        reply = (response.content or "").strip()[:200] if isinstance(response.content, str) else str(response.content)[:200]
+        if not reply:
+            return {"ok": False, "model": model, "latency_ms": latency, "reply": None, "error": "Empty reply"}
+        return {"ok": True, "model": model, "latency_ms": latency, "reply": reply, "error": None}
+    logger.warning(f"Model test failed for {model!r}: {error}")
+    return {"ok": False, "model": model, "latency_ms": round((time.monotonic() - started) * 1000), "reply": None, "error": error}
+
+
 # Angel One's REST flow needs no long-lived secret: the account password and
 # TOTP are supplied fresh at connect time (backend/brokers/angel_one.py),
 # never stored. Every other broker needs a real secret.
