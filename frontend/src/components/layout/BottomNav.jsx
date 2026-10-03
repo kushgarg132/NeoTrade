@@ -22,7 +22,7 @@ const BottomNav = ({ pendingCount = 0 }) => (
             end={item.path === '/'}
             className={({ isActive }) =>
               cn(
-                'relative flex flex-col items-center justify-center gap-1 py-2.5 min-h-[3.25rem] transition-colors',
+                'relative flex flex-col items-center justify-center gap-0.5 py-1.5 min-h-12 transition-colors',
                 'font-[family-name:var(--font-narrow)] text-[0.625rem] font-semibold uppercase tracking-[0.1em]',
                 isActive ? 'text-[var(--ink)]' : 'text-[var(--ink-faint)]'
               )

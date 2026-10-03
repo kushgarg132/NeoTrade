@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Search, Loader2, Check, ExternalLink, Unplug, ArrowRight } from 'lucide-react';
 import Layout from '../components/Layout';
-import { Sheet, Empty, Ruling, Stamp } from '../components/doc/Doc';
+import { Sheet, Empty, Ruling, Stamp, Tabs } from '../components/doc/Doc';
+import { useTab } from '../hooks/useTab';
+import { SECTIONS } from '../components/layout/sections';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
@@ -827,28 +829,62 @@ const BetaSheet = () => {
   );
 };
 
+/** Sections the phone's bottom bar has no room for; "More" lands here. */
+const MoreSections = () => (
+  <nav aria-label="More sections" className="sheet lg:hidden">
+    <ul className="grid grid-cols-2">
+      {SECTIONS.filter((item) => !item.primary).map((item, index) => (
+        <li
+          key={item.path}
+          className={cn(index % 2 === 0 && 'border-r border-[var(--rule)]', index > 1 && 'border-t border-[var(--rule)]')}
+        >
+          <Link
+            to={item.path}
+            className="flex items-center gap-2 px-3 min-h-11 field-label text-[var(--ink)] hover:bg-[var(--paper-sunk)]"
+          >
+            <item.icon className="w-4 h-4 text-[var(--ink-soft)]" strokeWidth={1.75} />
+            {item.label}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  </nav>
+);
+
 const Settings = () => {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const tabs = [
+    { id: 'broker', label: 'Broker' },
+    { id: 'guardrails', label: 'Limits' },
+    { id: 'portfolio', label: 'Review' },
+    { id: 'ai', label: 'AI' },
+    ...(isAdmin ? [{ id: 'beta', label: 'Beta' }] : []),
+  ];
+  const [tab, setTab] = useTab(tabs.map((t) => t.id));
   return (
     <Layout>
-      <div className="space-y-4 max-w-3xl">
-        <BrokerSheet />
-        <GuardrailsSheet />
-        <PortfolioSheet isAdmin={user?.role === 'admin'} />
+      <div className="space-y-3 sm:space-y-4 max-w-3xl">
+        <MoreSections />
         <Link
           to="/paper/settings"
-          className="flex items-center justify-between gap-4 sheet px-4 py-3 border-dashed border-[var(--stamp)] hover:bg-[var(--stamp-soft)] transition-colors"
+          className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 border-dashed border-[var(--stamp)] hover:bg-[var(--stamp-soft)] transition-colors"
         >
-          <span className="min-w-0">
-            <span className="block field-label text-[var(--stamp)]">Engine settings moved</span>
-            <span className="block mt-1 text-sm text-[var(--ink-soft)]">
-              Sizing, the daily scan and each strategy's paper/live switch are in Paper trading.
-            </span>
+          <span className="min-w-0 text-sm text-[var(--ink-soft)]">
+            <span className="field-label text-[var(--stamp)]">Engine settings</span> are in Paper trading
           </span>
-          <ArrowRight className="w-5 h-5 shrink-0 text-[var(--stamp)]" />
+          <ArrowRight className="w-4 h-4 shrink-0 text-[var(--stamp)]" />
         </Link>
-        <ModelSheet />
-        {user?.role === 'admin' && <BetaSheet />}
+        <div>
+          <Tabs tabs={tabs} active={tab} onSelect={setTab} label="Settings sections" />
+          <div className="pt-3 sm:pt-4">
+            {tab === 'broker' && <BrokerSheet />}
+            {tab === 'guardrails' && <GuardrailsSheet />}
+            {tab === 'portfolio' && <PortfolioSheet isAdmin={isAdmin} />}
+            {tab === 'ai' && <ModelSheet />}
+            {tab === 'beta' && isAdmin && <BetaSheet />}
+          </div>
+        </div>
       </div>
     </Layout>
   );

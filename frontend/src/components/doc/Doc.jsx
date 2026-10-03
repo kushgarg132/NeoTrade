@@ -12,15 +12,15 @@ import { formatSigned, formatSignedPercent, bareSymbol } from '../../utils/forma
 export const Sheet = ({ title, meta, actions, children, className, bodyClassName }) => (
   <section className={cn('sheet min-w-0', className)}>
     {(title || actions || meta) && (
-      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 px-4 py-2.5 border-b border-[var(--rule)] bg-[var(--paper-sunk)]">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 px-3 py-2 sm:px-4 sm:py-2.5 border-b border-[var(--rule)] bg-[var(--paper-sunk)]">
         <div className="flex items-baseline gap-3 min-w-0">
-          {title && <h2 className="field-label text-[var(--ink)] truncate">{title}</h2>}
-          {meta && <span className="doc-meta shrink-0">{meta}</span>}
+          {title && <h2 className="field-label text-[var(--ink)] shrink-0">{title}</h2>}
+          {meta && <span className="doc-meta truncate min-w-0">{meta}</span>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2 max-w-full">{actions}</div>}
       </header>
     )}
-    <div className={cn('p-4', bodyClassName)}>{children}</div>
+    <div className={cn('p-3 sm:p-4', bodyClassName)}>{children}</div>
   </section>
 );
 
@@ -231,4 +231,44 @@ export const Ruling = ({ rows = 3, className }) => (
       <div key={index} className="h-3 border-b border-[var(--rule)]" />
     ))}
   </div>
+);
+
+/**
+ * A ruled tab strip: the sections of one long page, so a phone shows one at a
+ * time instead of a scroll through all of them. Sticks under the masthead.
+ */
+export const Tabs = ({ tabs, active, onSelect, label, className }) => (
+  <nav
+    aria-label={label}
+    className={cn(
+      'sticky top-[calc(var(--masthead-h)+env(safe-area-inset-top))] z-30 flex border-b border-[var(--rule-strong)] bg-[var(--paper)]',
+      className
+    )}
+  >
+    {tabs.map((tab) => {
+      const selected = tab.id === active;
+      return (
+        <button
+          key={tab.id}
+          type="button"
+          aria-current={selected ? 'page' : undefined}
+          onClick={() => onSelect(tab.id)}
+          className={cn(
+            'flex-1 min-w-0 min-h-11 px-1.5 inline-flex items-center justify-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors',
+            'font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.08em]',
+            selected
+              ? 'border-[var(--stamp)] text-[var(--ink)]'
+              : 'border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]'
+          )}
+        >
+          <span className="truncate">{tab.label}</span>
+          {tab.count > 0 && (
+            <span className="figure-md px-1 text-[0.5625rem] leading-4 bg-[var(--stamp)] text-[var(--paper)]">
+              {tab.count}
+            </span>
+          )}
+        </button>
+      );
+    })}
+  </nav>
 );

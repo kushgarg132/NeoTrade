@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, Upload, History } from 'lucide-react';
 import Layout from '../components/Layout';
 import GuardrailAlerts from '../components/journal/GuardrailAlerts';
 import MonthGrid from '../components/journal/MonthGrid';
 import { monthKey, shiftMonth, monthLabel, todayIst } from '../utils/months';
-import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
+import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip, Tabs } from '../components/doc/Doc';
+import { useTab } from '../hooks/useTab';
 import api, { endpoints } from '../utils/api';
 import {
   formatCurrency,
@@ -21,7 +22,7 @@ import {
  */
 
 const BUTTON =
-  'px-3 py-1.5 min-h-9 border border-[var(--rule-strong)] font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] text-[var(--ink-soft)] hover:text-[var(--ink)] hover:border-[var(--ink)] transition-colors disabled:opacity-50';
+  'inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-9 border border-[var(--rule-strong)] font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] text-[var(--ink-soft)] hover:text-[var(--ink)] hover:border-[var(--ink)] transition-colors disabled:opacity-50';
 
 
 const Finding = ({ finding }) => (
@@ -95,6 +96,7 @@ const Journal = () => {
   const [month, setMonth] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [openTrip, setOpenTrip] = useState(null);
+  const [tab, setTab] = useTab(['calendar', 'trades', 'patterns']);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const fileInput = useRef(null);
@@ -191,16 +193,19 @@ const Journal = () => {
   }, [data, selectedDay]);
 
   const actions = (
-    <div className="flex gap-2">
-      <button type="button" className={BUTTON} onClick={sync} disabled={busy}>
-        Sync today
+    <div className="flex gap-1.5">
+      <button type="button" className={BUTTON} onClick={sync} disabled={busy} aria-label="Sync today's trades">
+        <RefreshCw className="w-3.5 h-3.5" />
+        Sync
       </button>
-      <button type="button" className={BUTTON} onClick={() => fileInput.current?.click()} disabled={busy}>
-        Import CSV
+      <button type="button" className={BUTTON} onClick={() => fileInput.current?.click()} disabled={busy} aria-label="Import a Zerodha Console CSV">
+        <Upload className="w-3.5 h-3.5" />
+        CSV
       </button>
       {data?.brokers_connected?.includes('upstox') && (
-        <button type="button" className={BUTTON} onClick={importUpstox} disabled={busy}>
-          Import Upstox history
+        <button type="button" className={BUTTON} onClick={importUpstox} disabled={busy} aria-label="Import Upstox trade history">
+          <History className="w-3.5 h-3.5" />
+          Upstox
         </button>
       )}
       <input ref={fileInput} type="file" accept=".csv,text/csv" className="hidden" onChange={importCsv} />
@@ -222,9 +227,23 @@ const Journal = () => {
 
   return (
     <Layout>
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <GuardrailAlerts />
 
+        {!empty && (
+          <Tabs
+            tabs={[
+              { id: 'calendar', label: 'Calendar' },
+              { id: 'trades', label: selectedDay ? `Trades · ${selectedDay.slice(5)}` : 'Trades' },
+              { id: 'patterns', label: 'Patterns' },
+            ]}
+            active={tab}
+            onSelect={setTab}
+            label="Journal sections"
+          />
+        )}
+
+        {(empty || tab === 'calendar') && (
         <Sheet
           title="Journal"
           meta={summary ? `${summary.trips} closed` : undefined}
@@ -265,11 +284,19 @@ const Journal = () => {
                   <ChevronRight size={16} />
                 </button>
               </div>
-              <MonthGrid month={month} byDay={byDay} selected={selectedDay} onSelect={setSelectedDay} />
+              <MonthGrid
+                month={month}
+                byDay={byDay}
+                selected={selectedDay}
+                onSelect={(day) => {
+                  setSelectedDay(day);
+                  if (day) setTab('trades');
+                }}
+              />
               <NetLine label={`${monthLabel(month)}, ${monthTotal.trips} closed`}>
                 <Money value={monthTotal.pnl} size="lg" />
               </NetLine>
-              <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
                   <p className="field-label mb-1">All time, gross</p>
                   <Money value={summary.pnl} />
@@ -298,8 +325,9 @@ const Journal = () => {
             </>
           )}
         </Sheet>
+        )}
 
-        {!empty && (
+        {!empty && tab === 'patterns' && (
           <Sheet title="Your patterns" meta="Your own trades, gross">
             {data.insights.length === 0 ? (
               <Empty
@@ -316,7 +344,7 @@ const Journal = () => {
           </Sheet>
         )}
 
-        {!empty && (
+        {!empty && tab === 'trades' && (
           <Sheet
             title={selectedDay ? `Trades closed ${selectedDay}` : 'Recent round trips'}
             meta="Gross of charges"

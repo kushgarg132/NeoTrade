@@ -99,7 +99,8 @@ const Suggestions = () => {
               ) : (
                 <RefreshCw className="w-3.5 h-3.5" />
               )}
-              Scan now
+              <span className="hidden sm:inline">Scan now</span>
+              <span className="sm:hidden">Scan</span>
             </Button>
           }
           bodyClassName="p-0"
@@ -121,7 +122,7 @@ const Suggestions = () => {
                     setShowDecided(false);
                   }}
                   className={cn(
-                    'flex-1 min-h-11 sm:min-h-0 px-4 py-3 font-[family-name:var(--font-narrow)] text-xs font-semibold uppercase tracking-[0.11em] border-b-2 -mb-px transition-colors',
+                    'flex-1 min-h-11 sm:min-h-0 px-3 py-2 sm:px-4 sm:py-3 font-[family-name:var(--font-narrow)] text-xs font-semibold uppercase tracking-[0.11em] border-b-2 -mb-px transition-colors',
                     selected
                       ? 'border-[var(--stamp)] text-[var(--ink)]'
                       : 'border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]'
@@ -138,8 +139,8 @@ const Suggestions = () => {
             })}
           </div>
 
-          <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[var(--paper-sunk)]">
-            <p className="doc-meta normal-case">
+          <div className="flex items-center justify-between gap-3 px-3 py-2 sm:px-4 sm:py-2.5 bg-[var(--paper-sunk)]">
+            <p className="doc-meta normal-case hidden sm:block">
               {mode === 'INTRADAY'
                 ? 'Intraday signals execute without approval — this is the record.'
                 : 'Long-term proposals wait for your decision.'}
@@ -147,7 +148,7 @@ const Suggestions = () => {
             <button
               type="button"
               onClick={() => setShowDecided((value) => !value)}
-              className="field-label text-[var(--stamp)] hover:underline shrink-0"
+              className="field-label text-[var(--stamp)] hover:underline shrink-0 ml-auto min-h-9"
             >
               {showDecided ? `Pending (${pending.length})` : `Decided (${decided.length})`}
             </button>
@@ -197,7 +198,7 @@ const Suggestions = () => {
             />
           </Sheet>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {visible.map((suggestion) => (
               <SuggestionRecord
                 key={suggestion.id}

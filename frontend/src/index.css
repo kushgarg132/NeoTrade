@@ -88,6 +88,8 @@
     --loss-wash: #f6e5e1;
 
     --sheet-shadow: 0 1px 2px rgba(23, 24, 27, 0.06), 0 8px 24px -12px rgba(23, 24, 27, 0.18);
+    /* The masthead's own height, so sticky tab strips sit right under it. */
+    --masthead-h: 3rem;
 
     /* Behind the installed app's status bar, whose clock iOS draws white. */
     --status-bar: var(--ink);

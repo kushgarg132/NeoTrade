@@ -4,6 +4,7 @@ import { Loader2, X } from 'lucide-react';
 import Layout from '../components/Layout';
 import SmartSearch from '../components/dashboard/SmartSearch';
 import BrokerPnl from '../components/dashboard/BrokerPnl';
+import PortfolioGlance from '../components/dashboard/PortfolioGlance';
 import TradeLedger from '../components/dashboard/TradeLedger';
 import GuardrailAlerts from '../components/journal/GuardrailAlerts';
 import IndexCard from '../components/dashboard/IndexCard';
@@ -11,7 +12,8 @@ import IndexAnalysis from '../components/dashboard/IndexAnalysis';
 import { bareSymbol } from '../utils/formatters';
 import Market from '../components/dashboard/Market';
 import AnalysisCard from '../components/AnalysisCard';
-import { Sheet, Empty } from '../components/doc/Doc';
+import { Sheet, Empty, Tabs } from '../components/doc/Doc';
+import { useTab } from '../hooks/useTab';
 import { Button } from '../components/common/Button';
 import api, { endpoints } from '../utils/api';
 import { stream } from '../lib/ws';
@@ -35,6 +37,9 @@ const Dashboard = () => {
   const [journalLoading, setJournalLoading] = useState(true);
   const [journalError, setJournalError] = useState(null);
   const [liveTrades, setLiveTrades] = useState([]);
+  const [portfolio, setPortfolio] = useState(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(true);
+  const [tab, setTab] = useTab(['today', 'markets']);
 
   // An index opened from the index table replaces the stack the same way an
   // enquiry does; the two never show at once.
@@ -67,6 +72,12 @@ const Dashboard = () => {
       .finally(() => setJournalLoading(false));
 
     loadLiveTrades();
+
+    api
+      .get(endpoints.portfolio.get)
+      .then((res) => setPortfolio(res.data))
+      .catch(() => setPortfolio(null))
+      .finally(() => setPortfolioLoading(false));
   }, []);
 
   useTopic('trades', loadLiveTrades);
@@ -166,8 +177,15 @@ const Dashboard = () => {
 
   return (
     <Layout>
-      <div className="space-y-4">
-        <Sheet bodyClassName="p-4">
+      <div className="space-y-3 sm:space-y-4">
+        {!quick && !quickLoading && !indexTicker && (
+          <>
+            <GuardrailAlerts />
+            <PortfolioGlance snapshot={portfolio} loading={portfolioLoading} />
+          </>
+        )}
+
+        <Sheet bodyClassName="px-3 py-2.5 sm:p-4">
           <SmartSearch onSearch={analyse} isLoading={quickLoading} />
         </Sheet>
 
@@ -232,32 +250,30 @@ const Dashboard = () => {
         )}
 
         {!quick && !quickLoading && !indexTicker && (
-          <>
-            <GuardrailAlerts />
-
-            <BrokerPnl journal={journal} loading={journalLoading} error={journalError} />
-
-            <Link
-              to="/portfolio"
-              className="sheet flex items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--paper-sunk)] transition-colors"
-            >
-              <span>
-                <span className="field-label text-[var(--ink)] block">Portfolio</span>
-                <span className="doc-meta normal-case">
-                  Your holdings from every broker, how spread out they are, and how they compare with NIFTY
-                </span>
-              </span>
-              <span aria-hidden="true" className="text-[var(--stamp)]">→</span>
-            </Link>
-
-            {/* Real orders a live strategy placed. Absent unless one exists,
-                because most accounts never switch a strategy live. */}
-            {liveTrades.length > 0 && (
-              <TradeLedger title="Live engine orders" trades={liveTrades} loading={false} error={null} />
-            )}
-
-            <Market />
-          </>
+          <div>
+            <Tabs
+              tabs={[
+                { id: 'today', label: 'Your broker' },
+                { id: 'markets', label: 'Markets' },
+              ]}
+              active={tab}
+              onSelect={setTab}
+              label="Statement sections"
+            />
+            <div className="pt-3 sm:pt-4 space-y-3 sm:space-y-4">
+              {tab === 'today' && (
+                <>
+                  <BrokerPnl journal={journal} loading={journalLoading} error={journalError} />
+                  {/* Real orders a live strategy placed. Absent unless one exists,
+                      because most accounts never switch a strategy live. */}
+                  {liveTrades.length > 0 && (
+                    <TradeLedger title="Live engine orders" trades={liveTrades} loading={false} error={null} />
+                  )}
+                </>
+              )}
+              {tab === 'markets' && <Market />}
+            </div>
+          </div>
         )}
       </div>
     </Layout>

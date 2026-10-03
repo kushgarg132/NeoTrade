@@ -12,13 +12,14 @@ import {
 
 /**
  * The sections of the note, shared by the desktop index and the phone's bottom
- * bar. `primary` marks the five that are thumb-reachable on a phone.
+ * bar. `primary` marks the five that are thumb-reachable on a phone; the rest are
+ * listed at the top of Settings, which the phone labels More.
  */
 export const SECTIONS = [
   { icon: FileText, label: 'Statement', short: 'Note', path: '/', primary: true },
   { icon: NotebookPen, label: 'Journal', path: '/journal', primary: true },
-  { icon: PieChart, label: 'Portfolio', path: '/portfolio' },
-  { icon: BookMarked, label: 'Watchlist', short: 'Watch', path: '/watchlist', primary: true },
+  { icon: PieChart, label: 'Portfolio', path: '/portfolio', primary: true },
+  { icon: BookMarked, label: 'Watchlist', short: 'Watch', path: '/watchlist' },
   { icon: ScanLine, label: 'Scanner', path: '/scanner' },
   { icon: Layers, label: 'Option chain', path: '/options' },
   // Everything the engine does with practice money lives under one section,

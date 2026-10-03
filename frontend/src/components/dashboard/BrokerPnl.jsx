@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Sheet, Money, NetLine, Ruling, Empty } from '../doc/Doc';
-import { formatQuantity, formatPercent, formatNoteDate } from '../../utils/formatters';
+import { formatQuantity, formatPercent } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 
 /**
@@ -28,14 +28,9 @@ const Line = ({ label, children, muted }) => (
 const BrokerPnl = ({ journal, loading, error }) => {
   if (loading) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Sheet title="Today · your broker">
-          <Ruling rows={3} />
-        </Sheet>
-        <Sheet title="Month to date">
-          <Ruling rows={3} />
-        </Sheet>
-      </div>
+      <Sheet title="Your broker">
+        <Ruling rows={2} />
+      </Sheet>
     );
   }
 
@@ -87,48 +82,31 @@ const BrokerPnl = ({ journal, loading, error }) => {
   const worst = monthRows.length ? Math.min(...monthRows.map((row) => row.pnl)) : null;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Sheet title="Today · your broker" meta={formatNoteDate()}>
-        <Line label="Round trips closed" muted>
-          {formatQuantity(todayRow?.trips || 0)}
-          {todayRow?.trips > 0 && (
-            <span className="text-[var(--ink-faint)]">
-              {' '}
-              ({todayRow.wins} won)
-            </span>
-          )}
-        </Line>
-        <p className="doc-meta normal-case pt-1">
-          Gross of charges · as of the last journal sync
+    <Sheet title="Your broker" meta="Gross · last journal sync">
+      <div className="grid grid-cols-2 divide-x divide-[var(--rule)]">
+        <div className="pr-3 min-w-0">
+          <p className="field-label mb-1">Today</p>
+          <Money value={todayRow?.pnl || 0} className="text-xl" />
+          <p className="doc-meta normal-case mt-1">
+            {formatQuantity(todayRow?.trips || 0)} closed
+            {todayRow?.trips > 0 && ` · ${todayRow.wins} won`}
+          </p>
+        </div>
+        <div className="pl-3 min-w-0">
+          <p className="field-label mb-1">This month</p>
+          <Money value={monthPnl} className="text-xl" />
+          <p className="doc-meta normal-case mt-1">
+            {formatQuantity(monthTrips)} closed
+            {monthTrips ? ` · ${formatPercent((monthWins / monthTrips) * 100)} won` : ''}
+          </p>
+        </div>
+      </div>
+      {best !== null && (
+        <p className="doc-meta normal-case pt-2 mt-2 border-t border-[var(--rule)]">
+          Best day <Money value={best} size="sm" className="text-xs" /> · worst <Money value={worst} size="sm" className="text-xs" />
         </p>
-        <NetLine label="Net today">
-          <Money value={todayRow?.pnl || 0} size="lg" />
-        </NetLine>
-      </Sheet>
-
-      <Sheet title="Month to date">
-        <Line label="Round trips closed" muted>
-          {formatQuantity(monthTrips)}
-        </Line>
-        <Line label="Strike rate" muted>
-          {monthTrips ? formatPercent((monthWins / monthTrips) * 100) : '—'}
-        </Line>
-        <Line label="Best / worst day">
-          {best === null ? (
-            '—'
-          ) : (
-            <>
-              <Money value={best} />
-              <span className="text-[var(--ink-faint)]"> / </span>
-              <Money value={worst} />
-            </>
-          )}
-        </Line>
-        <NetLine label="Net this month">
-          <Money value={monthPnl} />
-        </NetLine>
-      </Sheet>
-    </div>
+      )}
+    </Sheet>
   );
 };
 

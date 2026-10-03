@@ -43,7 +43,7 @@ const Layout = ({ children }) => {
 
       <div className="lg:pl-56">
         <Masthead noteNumber={noteNumber()} />
-        <main className="mx-auto max-w-6xl px-4 lg:px-8 py-5 pb-28 lg:pb-12">
+        <main className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-8 py-3 sm:py-5 pb-24 lg:pb-12">
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>

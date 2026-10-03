@@ -19,6 +19,13 @@ const OPENING = {
 
 const ChatWidget = () => {
   const [open, setOpen] = useState(false);
+
+  // On a phone the masthead opens it; the floating button is desktop only.
+  useEffect(() => {
+    const onToggle = () => setOpen((value) => !value);
+    window.addEventListener('margin-note:toggle', onToggle);
+    return () => window.removeEventListener('margin-note:toggle', onToggle);
+  }, []);
   const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState([OPENING]);
   const [input, setInput] = useState('');
@@ -164,7 +171,7 @@ const ChatWidget = () => {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="pointer-events-auto w-11 h-11 border border-[var(--rule-strong)] bg-[var(--paper)] text-[var(--ink)] flex items-center justify-center shadow-[var(--sheet-shadow)] hover:bg-[var(--stamp-soft)] transition-colors"
+        className="pointer-events-auto hidden lg:flex w-11 h-11 border border-[var(--rule-strong)] bg-[var(--paper)] text-[var(--ink)] items-center justify-center shadow-[var(--sheet-shadow)] hover:bg-[var(--stamp-soft)] transition-colors"
         aria-label={open ? 'Close the margin note' : 'Open the margin note'}
       >
         {open ? <X className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />}

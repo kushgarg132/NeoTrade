@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, RefreshCw } from 'lucide-react';
 import Layout from '../components/Layout';
-import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip, Stamp } from '../components/doc/Doc';
+import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, Scrip, Stamp, Tabs } from '../components/doc/Doc';
+import { useTab } from '../hooks/useTab';
 import Markdown from '../components/common/Markdown';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatQuantity, formatPercent, formatDateTime } from '../utils/formatters';
@@ -37,11 +38,15 @@ const LABEL = { REVIEW: 'Review first' };
 // Most urgent first.
 const ORDER = { SELL: 0, REVIEW: 1, HOLD: 2, ADD: 3, KEEP: 4 };
 
-const Verdict = ({ row }) =>
+const Verdict = ({ row, compact = false }) =>
   row.verdict ? (
     <span className="inline-flex flex-col items-end gap-1">
-      <Stamp label={LABEL[row.verdict] || row.verdict} tone={TONE[row.verdict] || 'stamp'} />
-      {row.previous_verdict && row.previous_verdict !== row.verdict && (
+      <Stamp
+        label={LABEL[row.verdict] || row.verdict}
+        tone={TONE[row.verdict] || 'stamp'}
+        className={compact ? 'px-1.5 py-0.5 text-[0.5625rem] tracking-[0.12em]' : undefined}
+      />
+      {!compact && row.previous_verdict && row.previous_verdict !== row.verdict && (
         <span className="doc-meta normal-case">was {LABEL[row.previous_verdict] || row.previous_verdict}</span>
       )}
     </span>
@@ -115,27 +120,21 @@ const Line = ({ label, children }) => (
 const Benchmark = ({ benchmark }) => {
   if (!benchmark.covered_pct) {
     return (
-      <p className="doc-meta normal-case pt-3">
-        No NIFTY comparison yet: it needs the dates you bought, from your trade history.{' '}
+      <p className="doc-meta normal-case">
+        No NIFTY comparison yet: it needs your buy dates.{' '}
         <Link to="/journal" className="text-[var(--stamp)] underline">
-          Import it in Journal
+          Import them in Journal
         </Link>
         .
       </p>
     );
   }
   return (
-    <div className="pt-3">
-      <Line label="Your holdings">
-        <Money value={benchmark.portfolio_pct} percent />
-      </Line>
-      <Line label="NIFTY 50, same money, same days">
-        <Money value={benchmark.nifty_pct} percent />
-      </Line>
-      <p className="doc-meta normal-case pt-1">
-        Covers the {formatPercent(benchmark.covered_pct)} of your money whose buy dates your journal knows.
-      </p>
-    </div>
+    <p className="text-sm text-[var(--ink-soft)]">
+      Against NIFTY, same money, same days: you <Money value={benchmark.portfolio_pct} percent size="sm" className="text-sm" />
+      {' · '}NIFTY <Money value={benchmark.nifty_pct} percent size="sm" className="text-sm" />
+      <span className="doc-meta normal-case"> · covers {formatPercent(benchmark.covered_pct)}</span>
+    </p>
   );
 };
 
@@ -151,7 +150,7 @@ const Concentration = ({ concentration, count }) => (
       </p>
     )}
     <p className="field-label mt-3 mb-2">By sector</p>
-    <ul className="space-y-2">
+    <ul className="space-y-1.5">
       {concentration.sectors.map((sector) => (
         <li key={sector.sector}>
           <div className="flex justify-between text-sm">
@@ -180,7 +179,61 @@ const Concentration = ({ concentration, count }) => (
   </Sheet>
 );
 
+/**
+ * A phone's holdings: one line each -- name and weight, value and gain, the
+ * verdict -- with everything else a tap away. The full statement is for
+ * wider sheets.
+ */
+const HoldingsList = ({ rows, open, onToggle }) => (
+  <ul className="sm:hidden -mx-3 divide-y divide-[var(--rule)]">
+    {rows.map((row) => {
+      const key = row.isin || row.symbol;
+      return (
+        <li key={key}>
+          <button
+            type="button"
+            onClick={() => onToggle(key)}
+            aria-expanded={open === key}
+            className="w-full px-3 py-2.5 flex items-center gap-3 text-left hover:bg-[var(--paper-sunk)]"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="figure-md text-sm block truncate">{row.kind === 'MF' ? row.name || row.symbol : row.symbol}</span>
+              <span className="doc-meta normal-case block truncate">
+                {row.weight_pct != null ? `${formatPercent(row.weight_pct)}` : row.kind}
+                {row.sector ? ` · ${row.sector}` : ''}
+              </span>
+            </span>
+            <span className="text-right shrink-0">
+              <span className="figure-md text-sm block">{row.value != null ? formatCurrency(row.value) : '—'}</span>
+              <Money value={row.pnl_pct} percent size="sm" className="text-xs" />
+            </span>
+            <span className="w-[4.5rem] flex justify-end shrink-0">
+              <Verdict row={row} compact />
+            </span>
+          </button>
+          {open === key && (
+            <div className="px-3 pb-3">
+              <dl className="grid grid-cols-3 gap-2 pb-1 border-b border-[var(--rule)]">
+                <div><dt className="field-label">Qty</dt><dd className="figure-md text-sm">{formatQuantity(row.quantity)}</dd></div>
+                <div><dt className="field-label">Avg cost</dt><dd className="figure-md text-sm">{formatCurrency(row.avg_price)}</dd></div>
+                <div><dt className="field-label">P&amp;L</dt><dd><Money value={row.pnl} size="sm" className="text-sm" /></dd></div>
+              </dl>
+              {row.kind !== 'MF' && (
+                <p className="pt-2">
+                  <Scrip symbol={row.symbol}>Open {row.symbol}'s enquiry</Scrip>
+                </p>
+              )}
+              <Detail row={row} />
+            </div>
+          )}
+        </li>
+      );
+    })}
+  </ul>
+);
+
 const HoldingsTable = ({ rows, open, onToggle }) => (
+  <div className="hidden sm:block">
   <Statement
     columns={[
       { key: 'verdict', label: 'Review', align: 'right' },
@@ -244,6 +297,14 @@ const HoldingsTable = ({ rows, open, onToggle }) => (
       </React.Fragment>
     ))}
   </Statement>
+  </div>
+);
+
+const Holdings = (props) => (
+  <>
+    <HoldingsList {...props} />
+    <HoldingsTable {...props} />
+  </>
 );
 
 const MyPortfolio = () => {
@@ -276,9 +337,9 @@ const MyPortfolio = () => {
   };
 
   const action = (
-    <button type="button" className={BUTTON} onClick={refresh} disabled={busy}>
+    <button type="button" className={BUTTON} onClick={refresh} disabled={busy} aria-label="Analyse the portfolio now">
       {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-      {busy ? 'Reviewing, this takes a minute' : 'Analyse now'}
+      <span className={busy ? '' : 'hidden sm:inline'}>{busy ? 'Reviewing…' : 'Analyse now'}</span>
     </button>
   );
 
@@ -287,10 +348,19 @@ const MyPortfolio = () => {
   const stocks = byUrgency.filter((row) => row.kind === 'STOCK');
   const funds = byUrgency.filter((row) => row.kind !== 'STOCK');
   const brokers = (snapshot?.brokers || []).map((b) => BROKER[b] || b).join(', ');
+  const hasHoldings = snapshot && snapshot.holdings.length > 0;
+
+  const TABS = [
+    { id: 'plan', label: 'Plan' },
+    { id: 'holdings', label: `Holdings${hasHoldings ? ` · ${snapshot.holdings.length}` : ''}` },
+    { id: 'mix', label: 'Mix' },
+    { id: 'review', label: 'Review' },
+  ];
+  const [tab, setTab] = useTab(TABS.map((t) => t.id));
 
   return (
     <Layout>
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <Sheet
           title="Portfolio"
           meta={snapshot ? `${formatDateTime(snapshot.at)}${brokers ? ` · ${brokers}` : ''}` : null}
@@ -307,74 +377,115 @@ const MyPortfolio = () => {
             </p>
           ))}
           {loading ? (
-            <Ruling rows={4} />
+            <Ruling rows={3} />
           ) : !snapshot ? (
             <Empty
               title="Your holdings, from your own broker"
               detail="Reads long-term holdings from every connected broker — Kite, Upstox, Angel One — and shows how they are doing against NIFTY."
             />
           ) : (
-            <>
-              <Line label="Invested">{formatCurrency(snapshot.totals.invested)}</Line>
-              <Line label="Gain">
-                <Money value={snapshot.totals.pnl} />{' '}
-                <Money value={snapshot.totals.pnl_pct} percent size="sm" />
-              </Line>
-              <Line label="Today">
-                <Money value={snapshot.totals.day_change} />
-              </Line>
-              <NetLine label="Current value">
-                <span className="figure-lg">{formatCurrency(snapshot.totals.value)}</span>
-              </NetLine>
+            <div className="space-y-3">
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="field-label mb-1">Current value</p>
+                  <p className="figure-lg text-[clamp(1.75rem,8vw,2.5rem)]">{formatCurrency(snapshot.totals.value)}</p>
+                </div>
+              </div>
+              <dl className="grid grid-cols-3 gap-2 pt-2 border-t border-[var(--rule)]">
+                <div className="min-w-0">
+                  <dt className="field-label mb-0.5">Invested</dt>
+                  <dd className="figure-md text-sm truncate">{formatCurrency(snapshot.totals.invested)}</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="field-label mb-0.5">Gain</dt>
+                  <dd className="truncate"><Money value={snapshot.totals.pnl} size="sm" className="text-sm" /></dd>
+                  <dd><Money value={snapshot.totals.pnl_pct} percent size="sm" className="text-xs" /></dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="field-label mb-0.5">Today</dt>
+                  <dd className="truncate"><Money value={snapshot.totals.day_change} size="sm" className="text-sm" /></dd>
+                </div>
+              </dl>
               <Benchmark benchmark={snapshot.benchmark} />
               {snapshot.stale_since && (
-                <p className="doc-meta normal-case pt-2">
-                  No broker was connected: holdings as of {formatDateTime(snapshot.stale_since)}, repriced from the
-                  latest closes. Log in to your broker to refresh them.
+                <p className="doc-meta normal-case">
+                  No broker connected: holdings as of {formatDateTime(snapshot.stale_since)}, repriced from the latest
+                  closes. Log in to your broker to refresh them.
                 </p>
               )}
               {snapshot.totals.unpriced.length > 0 && (
-                <p className="doc-meta normal-case pt-2">
+                <p className="doc-meta normal-case">
                   No price from your broker for {snapshot.totals.unpriced.join(', ')}; left out of the totals.
                 </p>
               )}
-            </>
+            </div>
           )}
         </Sheet>
 
-        {snapshot && snapshot.holdings.length > 0 && (
-          <>
-            {snapshot.summary && (
-              <Sheet title="Review" meta="AI write-up of the figures below">
-                <div className="text-sm leading-relaxed">
-                  <Markdown>{snapshot.summary}</Markdown>
+        {hasHoldings && (
+          <div>
+            <Tabs tabs={TABS} active={tab} onSelect={setTab} label="Portfolio sections" />
+            <div className="pt-3 sm:pt-4">
+              {tab === 'plan' &&
+                (snapshot.plan ? (
+                  <Sheet title="Action plan" meta="AI write-up">
+                    <div className="text-sm leading-relaxed">
+                      <Markdown>{snapshot.plan}</Markdown>
+                    </div>
+                    <p className="doc-meta normal-case pt-3 mt-3 border-t border-[var(--rule)]">
+                      Rules and an AI write-up, not a registered adviser's advice.
+                    </p>
+                  </Sheet>
+                ) : (
+                  <Sheet>
+                    <Empty
+                      title="No action plan yet"
+                      detail={
+                        snapshot.verdicts_visible
+                          ? 'Analyse now to write one from your holdings and the latest scan.'
+                          : 'The action plan is not available on this account.'
+                      }
+                      action={snapshot.verdicts_visible ? action : null}
+                    />
+                  </Sheet>
+                ))}
+
+              {tab === 'holdings' && (
+                <div className="space-y-3 sm:space-y-4">
+                  {stocks.length > 0 && (
+                    <Sheet title="Stocks" meta={`${stocks.length} · tap for reasons`}>
+                      {!snapshot.verdicts_visible && (
+                        <p className="doc-meta normal-case pb-2">
+                          Holdings marked Review first have serious results on the review rules. What to do is your call.
+                        </p>
+                      )}
+                      <Holdings rows={stocks} open={open} onToggle={toggle} />
+                    </Sheet>
+                  )}
+                  {funds.length > 0 && (
+                    <Sheet title="Funds & ETFs" meta={`${funds.length}`}>
+                      <Holdings rows={funds} open={open} onToggle={toggle} />
+                    </Sheet>
+                  )}
                 </div>
-              </Sheet>
-            )}
-            {snapshot.plan && (
-              <Sheet title="Action plan" meta="AI suggestions from the figures and the app's own scan">
-                <div className="text-sm leading-relaxed">
-                  <Markdown>{snapshot.plan}</Markdown>
-                </div>
-              </Sheet>
-            )}
-            <Concentration concentration={snapshot.concentration} count={snapshot.totals.count} />
-            {stocks.length > 0 && (
-              <Sheet title="Stocks" meta={`${stocks.length} · tap one for its reasons`}>
-                {!snapshot.verdicts_visible && (
-                  <p className="doc-meta normal-case pb-2">
-                    Holdings marked Review first have serious results on the review rules. What to do is your call.
-                  </p>
-                )}
-                <HoldingsTable rows={stocks} open={open} onToggle={toggle} />
-              </Sheet>
-            )}
-            {funds.length > 0 && (
-              <Sheet title="Funds & ETFs" meta={`${funds.length}`}>
-                <HoldingsTable rows={funds} open={open} onToggle={toggle} />
-              </Sheet>
-            )}
-          </>
+              )}
+
+              {tab === 'mix' && <Concentration concentration={snapshot.concentration} count={snapshot.totals.count} />}
+
+              {tab === 'review' &&
+                (snapshot.summary ? (
+                  <Sheet title="Review" meta="AI write-up of the figures">
+                    <div className="text-sm leading-relaxed">
+                      <Markdown>{snapshot.summary}</Markdown>
+                    </div>
+                  </Sheet>
+                ) : (
+                  <Sheet>
+                    <Empty title="No write-up yet" detail="Analyse now to have the figures explained." />
+                  </Sheet>
+                ))}
+            </div>
+          </div>
         )}
       </div>
     </Layout>

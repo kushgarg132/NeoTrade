@@ -195,8 +195,22 @@ the primary target (per PRODUCT.md's own use-scene finding): a fixed bottom nav 
 safe-area aware) carries the five primary sections and the live pending-decision count; a desktop
 sidebar (`w-56`, `hidden lg:flex`) replaces it above `lg`. Tables collapse to stacked "record"
 cards under `sm` rather than scrolling horizontally — a statement column you have to swipe to
-reach is a column nobody reads. Spacing rhythm is `space-y-4` between sheets, `p-4` sheet body
-padding, `py-1.5`–`py-3` row rhythm inside a sheet.
+reach is a column nobody reads. Spacing rhythm is `space-y-3` between sheets on a phone
+(`space-y-4` from `sm`), `p-3` sheet body padding on a phone (`p-4` from `sm`), `py-1.5`–`py-3`
+row rhythm inside a sheet.
+
+**One section at a time on a phone.** A page with more than one kind of content splits it with
+`Tabs` (`doc/Doc.jsx`) instead of stacking every sheet: Statement (Your broker / Markets),
+Portfolio (Plan / Holdings / Mix / Review), Journal (Calendar / Trades / Patterns), Settings
+(Broker / Limits / Review / AI / Beta). The strip is a ruled row of Field Label buttons, the
+active one underlined in 2px stamp violet, sticky under the masthead. The tab lives in `?tab=`
+(`hooks/useTab.js`) so a link opens the right section and Back returns to it. What answers "where
+am I" stays above the tabs: the Statement leads with a portfolio glance (value, today, overall,
+and the names the action plan says to sell/trim and add), the Portfolio page with its totals.
+Long lists print one line per record on a phone (Portfolio holdings: name and weight, value and
+gain, verdict) with the rest a tap away; the full statement table is `sm` and up. A proposal in
+Decisions shows its terms, risk, conviction and the two buttons; its grounds and thesis open
+under "Why".
 
 The app installs to a phone's home screen (`public/manifest.webmanifest`, `public/sw.js`). The
 icon (`public/icon.svg`, rasterised to `icon-192/512.png` and `apple-touch-icon.png`) is the
@@ -280,9 +294,13 @@ system is static or a plain colour/opacity transition.
 ### Navigation
 - **Desktop sidebar:** `w-56`, `paper-sunk` ground, active item marked by a 2px stamp-violet left
   border plus a `paper` background — never a filled pill.
-- **Mobile bottom nav:** 5 items (Note, Journal, Watch, Paper, More), active item marked by a
+- **Masthead:** one 3rem row (`--masthead-h`), sticky: the title, the feed status (short phase
+  on a phone: Open / Closed), the margin-note button (phone only; the floating one is desktop
+  only) and the theme switch. Date and note number print from `md`.
+- **Mobile bottom nav:** 5 items (Note, Journal, Portfolio, Paper, More), active item marked by a
   2px stamp-violet top border; pending count renders as a small solid-stamp badge on the Paper
-  icon.
+  icon. More is Settings, which lists the remaining sections (Watchlist, Scanner, Option chain,
+  Architecture) at its top on a phone.
 - Both share one label voice: Field Label style, never body text.
 - **Real money and paper never share a page.** The sidebar tears (a `perforated` rule) between
   the real-money sections and **Paper trading**. Everything under `/paper` prints inside

@@ -25,13 +25,15 @@ const PaperShell = ({ children }) => {
   const pending = usePendingCount();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <div className="border-2 border-dashed border-[var(--stamp)] bg-[var(--stamp-soft)]">
-        <div className="flex items-baseline justify-between gap-3 px-4 pt-2.5 pb-2">
+        <div className="flex items-baseline justify-between gap-3 px-3 py-1.5 sm:px-4 sm:pt-2.5 sm:pb-2">
           <p className="font-[family-name:var(--font-narrow)] text-xs font-bold uppercase tracking-[0.16em] text-[var(--stamp)]">
             Paper trading
           </p>
-          <p className="doc-meta normal-case text-right">Practice money · not your broker account</p>
+          <p className="doc-meta normal-case text-right">
+            Practice money<span className="hidden sm:inline"> · not your broker account</span>
+          </p>
         </div>
         <nav
           className="grid grid-cols-5 border-t border-dashed border-[var(--stamp)]"
@@ -44,7 +46,7 @@ const PaperShell = ({ children }) => {
               end={tab.end}
               className={({ isActive }) =>
                 cn(
-                  'min-w-0 min-h-11 px-1 sm:px-3 inline-flex items-center justify-center gap-1 sm:gap-1.5 whitespace-nowrap border-b-2 -mb-px transition-colors',
+                  'min-w-0 min-h-10 px-1 sm:px-3 inline-flex items-center justify-center gap-1 sm:gap-1.5 whitespace-nowrap border-b-2 -mb-px transition-colors',
                   'font-[family-name:var(--font-narrow)] text-[0.625rem] sm:text-[0.6875rem] font-semibold uppercase tracking-[0.04em] sm:tracking-[0.11em]',
                   isActive
                     ? 'border-[var(--stamp)] text-[var(--ink)] bg-[var(--paper)]'
