@@ -378,7 +378,7 @@ def test_omniroute_usage_is_shaped_for_the_page(db, monkeypatch):
     assert seen["url"].endswith("/me/status") and seen["headers"]["Authorization"] == "Bearer gw-key"
     assert body["key_name"] == "AI Stock"
     assert body["tokens"]["total"] == 17 and body["cost"]["used_usd"] == 0
-    assert body["providers"][0] == {"provider": "trae", "plan": None, "available": False, "reason": "not_supported", "quotas": []}
+    assert body["providers"][0] == {"provider": "trae", "plan": None, "available": False, "reason": "not_supported", "quotas": [], "pools": []}
     assert body["providers"][1]["quotas"] == [
         {"name": "credit", "remaining_pct": 40.55, "reset_at": "2026-11-01T00:00:00.000Z"}
     ]
@@ -396,3 +396,23 @@ def test_omniroute_usage_gateway_error_is_502(db, monkeypatch):
     monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
     settings_router._USAGE_CACHE.clear()
     assert _client(db, _user(role="admin")).get("/api/v1/settings/omniroute-usage").status_code == 502
+
+
+def test_quotas_group_into_pools_by_family_and_window():
+    from backend.routers.settings import _pools
+
+    quotas = {
+        "gemini-3-flash": {"remainingPercentage": 96.47, "resetAt": "2026-10-04T00:49:42Z"},
+        "gemini-3.1-pro-high": {"remainingPercentage": 96.47, "resetAt": "2026-10-04T00:49:42Z"},
+        "claude-sonnet-4-6": {"remainingPercentage": 100, "resetAt": "2026-10-04T02:50:22Z"},
+        "gpt-oss-120b-medium": {"remainingPercentage": 90, "resetAt": "2026-10-04T02:50:22Z"},
+        "gemini_weekly": {"remainingPercentage": 98.31, "resetAt": "2026-10-07T03:46:50Z"},
+        "claude_gpt_weekly": {"remainingPercentage": 96.4, "resetAt": "2026-10-10T08:31:54Z"},
+        "chat_20706": {"remainingPercentage": 100, "resetAt": None},
+        "credit": {"remainingPercentage": 40.55, "resetAt": "2026-11-01T00:00:00Z"},
+    }
+    pools = {p["label"]: p for p in _pools(quotas)}
+    assert set(pools) == {"Gemini", "Claude & GPT", "Gemini · weekly", "Claude & GPT · weekly", "Credit"}
+    assert pools["Gemini"]["remaining_pct"] == 96.47 and pools["Gemini"]["models"] == ["gemini-3-flash", "gemini-3.1-pro-high"]
+    assert pools["Claude & GPT"]["remaining_pct"] == 90 and pools["Claude & GPT"]["reset_at"] == "2026-10-04T02:50:22Z"
+    assert pools["Claude & GPT · weekly"]["remaining_pct"] == 96.4

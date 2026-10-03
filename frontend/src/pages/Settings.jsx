@@ -517,54 +517,59 @@ const Bar = ({ pct }) => (
 
 const pctText = (pct) => (pct == null ? '—' : `${Math.round(pct)}% left`);
 
-const ProviderRow = ({ provider }) => {
+/** "06:19" today, "07 Oct" later: when a pool fills back up. */
+const resetText = (iso) => {
+  if (!iso) return '';
+  const when = new Date(iso);
+  const sameDay = when.toDateString() === new Date().toDateString();
+  return sameDay
+    ? when.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' })
+    : when.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' });
+};
+
+const PoolRow = ({ pool }) => {
   const [open, setOpen] = useState(false);
-  const known = provider.quotas.filter((q) => q.remaining_pct != null);
-  const lowest = known.length ? Math.min(...known.map((q) => q.remaining_pct)) : null;
   return (
-    <li className="border-b border-[var(--rule)] last:border-b-0">
+    <li>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        disabled={!known.length}
+        disabled={!pool.models.length}
         aria-expanded={open}
-        className="w-full flex items-center gap-3 py-2 text-left disabled:cursor-default"
+        className="w-full flex items-center gap-2 py-1 text-left text-xs disabled:cursor-default"
       >
-        <span className="min-w-0 w-28 shrink-0">
-          <span className="figure-md text-sm block truncate">{provider.provider}</span>
-          <span className="doc-meta normal-case block truncate">{provider.plan || ' '}</span>
-        </span>
-        {known.length ? (
-          <>
-            <Bar pct={lowest} />
-            <span
-              className="figure-md text-xs w-20 text-right shrink-0 whitespace-nowrap"
-              title={known.length > 1 ? 'Lowest of its models' : undefined}
-            >
-              {pctText(lowest)}
-            </span>
-          </>
-        ) : (
-          <span className="doc-meta normal-case">Quota not reported</span>
-        )}
+        <span className="w-[6.5rem] shrink-0 truncate text-[var(--ink)]">{pool.label}</span>
+        <Bar pct={pool.remaining_pct} />
+        <span className="figure-md w-[4.25rem] text-right shrink-0 whitespace-nowrap">{pctText(pool.remaining_pct)}</span>
       </button>
+      <p className="doc-meta normal-case pl-[6.5rem] -mt-0.5">
+        {pool.reset_at ? `resets ${resetText(pool.reset_at)}` : ''}
+        {pool.models.length ? ` · ${pool.models.length} model${pool.models.length === 1 ? '' : 's'}` : ''}
+      </p>
       {open && (
-        <ul className="pb-2 space-y-1.5">
-          {known.map((quota) => (
-            <li key={quota.name} className="flex items-center gap-3 text-xs">
-              <span className="w-28 shrink-0 truncate text-[var(--ink-soft)]">{quota.name}</span>
-              <Bar pct={quota.remaining_pct} />
-              <span className="figure-md w-20 text-right shrink-0 whitespace-nowrap">{pctText(quota.remaining_pct)}</span>
-            </li>
-          ))}
-          {known[0]?.reset_at && (
-            <li className="doc-meta normal-case">Resets {formatDateTime(known[0].reset_at)}</li>
-          )}
-        </ul>
+        <p className="pl-[6.5rem] pt-1 pb-1.5 text-xs text-[var(--ink-soft)] break-words">{pool.models.join(', ')}</p>
       )}
     </li>
   );
 };
+
+const ProviderRow = ({ provider }) => (
+  <li className="py-2 border-b border-[var(--rule)] last:border-b-0">
+    <p className="flex items-baseline gap-2 mb-1">
+      <span className="figure-md text-sm">{provider.provider}</span>
+      {provider.plan && <span className="doc-meta normal-case">{provider.plan}</span>}
+    </p>
+    {provider.pools?.length ? (
+      <ul className="space-y-1">
+        {provider.pools.map((pool) => (
+          <PoolRow key={pool.label} pool={pool} />
+        ))}
+      </ul>
+    ) : (
+      <p className="doc-meta normal-case">Quota not reported</p>
+    )}
+  </li>
+);
 
 const UsageSheet = () => {
   const [usage, setUsage] = useState(null);
@@ -603,7 +608,7 @@ const UsageSheet = () => {
 
           <p className="field-label mt-4 mb-1">Providers · quota left</p>
           <p className="doc-meta normal-case mb-1">
-            The gateway's shared accounts, not only this app's use. The bar is the model with the least left; tap for each model.
+            The gateway's shared accounts, not only this app's use. Models in one pool share its limit; tap a pool for its models.
           </p>
           <ul>
             {usage.providers.map((provider) => (

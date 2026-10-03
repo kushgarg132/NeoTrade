@@ -201,6 +201,39 @@ USAGE_CACHE_SECONDS = 60
 _USAGE_CACHE: dict = {}  # {"at": monotonic seconds, "body": dict}
 
 
+def _family(name: str) -> str:
+    lowered = name.lower()
+    if lowered.startswith("gemini"):
+        return "Gemini"
+    if lowered.startswith(("claude", "gpt")):
+        return "Claude & GPT"
+    return name.replace("_", " ").capitalize()
+
+
+def _pools(quotas: dict) -> list[dict]:
+    """A provider's quotas grouped the way its limits actually work: every
+    Gemini model draws on one pool, Claude and GPT on another, and a
+    `*_weekly` entry is that family's weekly cap. Counters with no reset
+    time (antigravity's `chat_<n>`) are internal and left out."""
+    pools: dict[str, dict] = {}
+    for name, quota in quotas.items():
+        pct = quota.get("remainingPercentage")
+        if pct is None or (name.startswith("chat_") and not quota.get("resetAt")):
+            continue
+        weekly = name.endswith("_weekly")
+        label = _family(name) + (" · weekly" if weekly else "")
+        pool = pools.setdefault(label, {"label": label, "remaining_pct": pct, "reset_at": quota.get("resetAt"), "models": []})
+        pool["remaining_pct"] = min(pool["remaining_pct"], pct)
+        if quota.get("resetAt") and (not pool["reset_at"] or quota["resetAt"] < pool["reset_at"]):
+            pool["reset_at"] = quota["resetAt"]
+        if not weekly:
+            pool["models"].append(name)
+    for pool in pools.values():
+        pool["models"].sort()
+    order = {"Gemini": 0, "Claude & GPT": 1}
+    return sorted(pools.values(), key=lambda p: (" · weekly" in p["label"], order.get(p["label"].split(" · ")[0], 2), p["label"]))
+
+
 def _shape_usage(status: dict) -> dict:
     tokens = (status.get("usage") or {}).get("tokens") or {}
     cost = (status.get("usage") or {}).get("cost") or {}
@@ -213,7 +246,7 @@ def _shape_usage(status: dict) -> dict:
         providers.append({
             "provider": account.get("provider"), "plan": account.get("plan"),
             "available": account.get("available", True) is not False, "reason": account.get("reason"),
-            "quotas": quotas,
+            "quotas": quotas, "pools": _pools(account.get("quotas") or {}),
         })
     return {
         "key_name": (status.get("apiKey") or {}).get("name"),
