@@ -3,9 +3,11 @@ with into their journal. Run on demand (POST /journal/sync) and by the
 16:00 IST daily pass, since no broker serves yesterday's trades."""
 
 import logging
+from datetime import date, timedelta
 
 from backend.brokers.protocol import BrokerSessionState
 from backend.brokers.registry import BROKERS, get_broker_adapter
+from backend.engine.session import IST
 from backend.journal.store import JournalStore
 
 logger = logging.getLogger(__name__)
@@ -45,3 +47,31 @@ async def sync_user_trades(db, redis, credentials, user_id: str, include_pnl: bo
     if include_pnl:
         result["day_pnl"] = round(day_pnl, 2)
     return result
+
+
+HISTORY_CHUNK_DAYS = 31
+
+
+async def import_upstox_history(db, redis, credentials, user_id: str, start: date, end: date) -> dict:
+    """Backfills the journal from Upstox's trade history, a month per request.
+    A day that already has fills from the live sync is left alone: the two
+    sources may number the same fill differently, and the sync's own copy
+    has real times. Importing twice adds nothing (store ids)."""
+    adapter = await get_broker_adapter("upstox", user_id, credentials, redis)
+    if await adapter.state() != BrokerSessionState.ACTIVE:
+        raise ValueError("Upstox is not connected. Log in to Upstox in Settings first.")
+    trades, chunk = [], start
+    while chunk <= end:
+        chunk_end = min(chunk + timedelta(days=HISTORY_CHUNK_DAYS - 1), end)
+        trades += await adapter.get_trade_history(chunk, chunk_end)
+        chunk = chunk_end + timedelta(days=1)
+
+    store = JournalStore(db)
+    synced_days = {
+        t["traded_at"].astimezone(IST).date() for t in await store.list_trades(user_id)
+        if t["broker"] == "upstox" and t.get("source") != "upstox_history"
+    }
+    fresh = [t for t in trades if t.traded_at.astimezone(IST).date() not in synced_days]
+    skipped_days = {t.traded_at.astimezone(IST).date() for t in trades} & synced_days
+    imported = await store.add_trades(user_id, "upstox", fresh, source="upstox_history")
+    return {"imported": imported, "fetched": len(trades), "skipped_synced_days": len(skipped_days)}

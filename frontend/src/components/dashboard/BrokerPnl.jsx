@@ -46,7 +46,7 @@ const BrokerPnl = ({ journal, loading, error }) => {
       <Sheet title="Your broker account">
         <Empty
           title={`${names} connected`}
-          detail="No trades imported yet. Each trading day's trades import after the market closes."
+          detail="No trades imported yet. Each trading day's trades import after the market closes. For Upstox, Import Upstox history in the journal brings in the past year."
           action={
             <Link to="/journal" className="field-label text-[var(--stamp)] hover:underline">
               Open the journal

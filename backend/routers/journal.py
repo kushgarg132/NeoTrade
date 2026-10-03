@@ -15,7 +15,7 @@ from backend.journal.console_csv import parse_console_tradebook
 from backend.journal.insights import build_insights
 from backend.journal.roundtrips import build_round_trips, daily_pnl
 from backend.journal.store import JournalStore
-from backend.journal.sync import connected_brokers, sync_user_trades
+from backend.journal.sync import connected_brokers, import_upstox_history, sync_user_trades
 
 router = APIRouter(prefix="/journal", tags=["Journal"])
 
@@ -28,6 +28,10 @@ def get_journal_store() -> JournalStore:
 
 class ImportRequest(BaseModel):
     csv: str = Field(max_length=MAX_CSV_BYTES)
+
+
+class HistoryRequest(BaseModel):
+    days: int = Field(default=365, ge=1, le=730)
 
 
 class NoteRequest(BaseModel):
@@ -95,6 +99,23 @@ async def import_console_csv(
         raise HTTPException(status_code=422, detail=str(exc))
     imported = await store.add_trades(user.id, "kite", trades, source="console_csv")
     return {"imported": imported, "duplicates": len(trades) - imported, "skipped": skipped}
+
+
+@router.post("/import/upstox-history")
+async def import_upstox(
+    body: HistoryRequest = HistoryRequest(),
+    user: User = Depends(get_current_user),
+    credentials: BrokerCredentialStore = Depends(get_credential_store),
+):
+    from backend.brokers.trades import today_ist
+    from datetime import timedelta
+    end = today_ist()
+    try:
+        return await import_upstox_history(db.db, db.redis, credentials, user.id, end - timedelta(days=body.days), end)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:  # Upstox refused or is down: say so, don't 500
+        raise HTTPException(status_code=502, detail=f"Upstox did not return the trade history: {exc}")
 
 
 @router.put("/round-trips/{round_trip_id}/note")

@@ -138,6 +138,15 @@ const Journal = () => {
             (result.failed.length ? `. ${result.failed.join(', ')} did not respond.` : '.')
     );
 
+  const importUpstox = () =>
+    run(
+      () => api.post(endpoints.journal.importUpstox, { days: 365 }),
+      (result) =>
+        `${result.imported} fill${result.imported === 1 ? '' : 's'} imported from Upstox's last year` +
+        (result.skipped_synced_days ? `; ${result.skipped_synced_days} day(s) already synced were left as they were` : '') +
+        '. History has dates but no times, so each day\'s fills are shown at 09:15.'
+    );
+
   const importCsv = (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -189,6 +198,11 @@ const Journal = () => {
       <button type="button" className={BUTTON} onClick={() => fileInput.current?.click()} disabled={busy}>
         Import CSV
       </button>
+      {data?.brokers_connected?.includes('upstox') && (
+        <button type="button" className={BUTTON} onClick={importUpstox} disabled={busy}>
+          Import Upstox history
+        </button>
+      )}
       <input ref={fileInput} type="file" accept=".csv,text/csv" className="hidden" onChange={importCsv} />
     </div>
   );

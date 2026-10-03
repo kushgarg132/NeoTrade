@@ -181,6 +181,7 @@ export const endpoints = {
     get: '/journal',
     sync: '/journal/sync',
     importConsole: '/journal/import/zerodha-console',
+    importUpstox: '/journal/import/upstox-history',
     note: (id) => `/journal/round-trips/${encodeURIComponent(id)}/note`,
     betaMetrics: '/journal/beta-metrics',
   },

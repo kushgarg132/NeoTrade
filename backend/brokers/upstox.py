@@ -104,6 +104,11 @@ _CANCEL_ORDER_URL = "https://api-hft.upstox.com/v2/order/cancel"
 _ORDER_DETAILS_URL = "https://api.upstox.com/v2/order/details"
 _POSITIONS_URL = "https://api.upstox.com/v2/portfolio/short-term-positions"
 _TRADES_URL = "https://api.upstox.com/v2/order/trades/get-trades-for-day"
+# Past trades by date range. Path, params and row fields from the official
+# upstox-python-sdk 2.30.0 (PostTradeApi.get_trades_by_date_range,
+# TradeHistoryResponseTradeData); not yet called against a real account.
+_TRADE_HISTORY_URL = "https://api.upstox.com/v2/charges/historical-trades"
+_TRADE_HISTORY_PAGE_SIZE = 100
 _HOLDINGS_URL = "https://api.upstox.com/v2/portfolio/long-term-holdings"
 _OPTION_CONTRACT_URL = "https://api.upstox.com/v2/option/contract"
 _OPTION_CHAIN_URL = "https://api.upstox.com/v2/option/chain"
@@ -460,6 +465,27 @@ class UpstoxAdapter:
             ))
         return holdings
 
+    async def get_trade_history(self, start, end) -> list[BrokerTrade]:
+        """Equity and F&O trades between two dates (inclusive). The history
+        carries a date but no time, so every fill is stamped 09:15 IST that
+        day: daily P&L holds, intraday order within a day does not."""
+        token = await self.get_access_token()
+        trades = []
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            for segment in ("EQ", "FO"):
+                page, total = 1, 1
+                while page <= total:
+                    resp = await client.get(_TRADE_HISTORY_URL, params={
+                        "segment": segment, "start_date": start.isoformat(), "end_date": end.isoformat(),
+                        "page_number": page, "page_size": _TRADE_HISTORY_PAGE_SIZE,
+                    }, headers=self._headers(token))
+                    resp.raise_for_status()
+                    body = resp.json()
+                    trades += [_history_trade(row) for row in body.get("data") or []]
+                    total = ((body.get("metaData") or {}).get("page") or {}).get("total_pages") or 1
+                    page += 1
+        return trades
+
     async def get_trades(self) -> list[BrokerTrade]:
         token = await self.get_access_token()
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -476,3 +502,42 @@ class UpstoxAdapter:
             )
             for row in resp.json().get("data") or []
         ]
+
+
+_HISTORY_DATE_FORMATS = ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d-%b-%Y")
+
+
+def _history_day(text: str):
+    # ponytail: the SDK types trade_date as a bare string; formats beyond these
+    # need a real response to know.
+    for fmt in _HISTORY_DATE_FORMATS:
+        try:
+            return datetime.strptime(str(text).strip()[:11].strip(), fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Unrecognized Upstox trade_date: {text!r}")
+
+
+def _history_symbol(row: dict) -> str:
+    """Options come back as underlying + option_type/strike/expiry; spell them
+    the spaced way journal/roundtrips.instrument_kind reads ("NIFTY 25100 CE ...")."""
+    symbol = row.get("symbol") or row.get("scrip_name")
+    if row.get("segment") != "FO":
+        return symbol
+    from backend.journal.roundtrips import instrument_kind
+    if instrument_kind(symbol, "") != "STOCK":
+        return symbol  # already a full contract symbol
+    strike = str(row.get("strike_price") or "").removesuffix(".0")
+    option = (row.get("option_type") or "").upper()
+    parts = [symbol, strike, option] if option in ("CE", "PE") else [symbol, "FUT"]
+    return " ".join(p for p in parts + [str(row.get("expiry") or "")] if p)
+
+
+def _history_trade(row: dict) -> BrokerTrade:
+    day = _history_day(row["trade_date"])
+    return BrokerTrade(
+        trade_id=str(row["trade_id"]), order_id="", symbol=_history_symbol(row),
+        exchange=row.get("exchange") or "NSE", side=Side(row["transaction_type"].upper()),
+        quantity=float(row["quantity"]), price=float(row["price"]),
+        traded_at=parse_ist(datetime.combine(day, datetime.min.time().replace(hour=9, minute=15))),
+    )

@@ -650,6 +650,13 @@ a Console CSV import is idempotent (importing twice adds nothing), and `pytest` 
 - `GET /journal` loads a user's whole history on every call (`ponytail:` comment in
   `store.py`). Page it by date once anyone has tens of thousands of fills.
 - Only Zerodha Console's CSV is importable. Upstox and Angel One exports are not wired up.
+- **2026-10-03:** Upstox history by API instead of a CSV: `UpstoxAdapter.get_trade_history`
+  (`/v2/charges/historical-trades`, EQ + FO, paged; checked against upstox-python-sdk 2.30.0
+  only) and `POST /journal/import/upstox-history` (default a year, fetched a month at a
+  time), an "Import Upstox history" button in the journal. Rows carry a date and no time, so
+  fills are stamped 09:15 IST: daily P&L holds, intraday trip order within a day does not.
+  Days already filled by the live sync are skipped, since the two may number fills
+  differently. `trade_date` format is a guess list until a real response is seen.
 
 ## Phase 10 — Behaviour insights — **done 2026-09-26**
 
