@@ -112,8 +112,11 @@ export const AUTH_TOKEN_STORAGE_KEY = TOKEN_STORAGE_KEY;
  * `live` (real orders a live strategy sent to the broker). Every ledger read
  * names one, so the two never print on the same page by accident.
  */
-const inBook = (path, venue) =>
-  venue ? `${path}${path.includes('?') ? '&' : '?'}venue=${venue}` : path;
+const withParam = (path, key, value) =>
+  value ? `${path}${path.includes('?') ? '&' : '?'}${key}=${value}` : path;
+const inBook = (path, venue) => withParam(path, 'venue', venue);
+// `mode` (INTRADAY / LONGTERM) narrows a paper figure to one engine.
+const inMode = (path, venue, mode) => withParam(inBook(path, venue), 'mode', mode);
 
 export const endpoints = {
   analyze: (symbol) => `/agents/analyze/${symbol}`,
@@ -147,8 +150,8 @@ export const endpoints = {
     equity: (venue) => inBook('/trading/equity', venue),
     killSwitch: '/trading/kill-switch',
     backtest: (name) => `/trading/backtests/${name}`,
-    trades: (status, venue) =>
-      inBook(status ? `/trading/trades?status=${status}` : '/trading/trades', venue),
+    trades: (status, venue, mode) =>
+      inMode(status ? `/trading/trades?status=${status}` : '/trading/trades', venue, mode),
     instruments: (q) => `/trading/instruments?q=${encodeURIComponent(q)}`,
   },
   suggestions: {
@@ -164,8 +167,8 @@ export const endpoints = {
     scan: '/suggestions/scan',
   },
   analytics: {
-    pnl: (venue) => inBook('/analytics/pnl', venue),
-    scorecard: (venue) => inBook('/analytics/scorecard', venue),
+    pnl: (venue, mode) => inMode('/analytics/pnl', venue, mode),
+    scorecard: (venue, mode) => inMode('/analytics/scorecard', venue, mode),
   },
   guardrails: {
     status: '/guardrails',

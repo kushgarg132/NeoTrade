@@ -176,11 +176,13 @@ class LedgerStore:
 
     async def get_trades(
         self, status: Optional[str] = None, limit: int = 200,
-        venue: Optional[Venue] = None,
+        venue: Optional[Venue] = None, mode: Optional[str] = None,
     ) -> list[dict]:
         query: dict = {"user_id": self.user_id, **venue_filter(venue)}
         if status is not None:
             query["status"] = status
+        if mode is not None:
+            query["mode"] = mode
         cursor = self.trades.find(query).sort("entry_at", -1).limit(limit)
         docs = await cursor.to_list(length=None)
         for doc in docs:

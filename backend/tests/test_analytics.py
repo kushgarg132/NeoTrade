@@ -124,3 +124,31 @@ async def test_analytics_are_scoped_to_the_caller(mongo):
     await _closed_trade(alice, realized=500.0, exit_at=NOW - timedelta(hours=1))
 
     assert (await compute_pnl(bob, mark_prices={}, now=NOW))["today"]["realized"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_mode_splits_the_book_into_intraday_and_long_term(ledger):
+    from backend.analytics import compute_scorecard
+
+    await _closed_trade(ledger, realized=500.0, exit_at=NOW - timedelta(hours=1))  # LONGTERM
+    await ledger.trades.insert_one({
+        "id": "t-intra", "user_id": "alice", "symbol": "TCS", "mode": "INTRADAY", "side": "BUY",
+        "status": "CLOSED", "quantity": 10.0, "entry_price": 100.0, "entry_at": NOW - timedelta(hours=1),
+        "exit_price": 98.0, "exit_at": NOW - timedelta(minutes=30), "realized_pnl": -20.0, "costs": 1.0,
+    })
+    await ledger.trades.insert_one({
+        "id": "t-hold", "user_id": "alice", "symbol": "SJVN", "mode": "LONGTERM", "side": "BUY",
+        "status": "OPEN", "quantity": 100.0, "entry_price": 50.0, "entry_at": NOW - timedelta(days=5),
+        "exit_price": None, "exit_at": None, "realized_pnl": 0.0, "costs": 2.0,
+    })
+    marks = {"SJVN": 55.0}
+
+    longterm = await compute_pnl(ledger, marks, now=NOW, mode="LONGTERM")
+    intraday = await compute_pnl(ledger, marks, now=NOW, mode="INTRADAY")
+    assert (longterm["today"]["realized"], longterm["today"]["trades"]) == (500.0, 1)
+    assert longterm["open"] == {"positions": 1, "exposure": 5000.0, "equity": 500.0}
+    assert longterm["today"]["unrealized"] == 500.0
+    assert (intraday["today"]["realized"], intraday["open"]["positions"]) == (-20.0, 0)
+
+    card = await compute_scorecard(ledger, "paper", 1_000_000, mode="INTRADAY")
+    assert card["totals"]["trades"] == 1 and card["totals"]["net"] == -21.0

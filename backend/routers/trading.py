@@ -460,12 +460,13 @@ async def get_trades(
     status: Optional[Literal["OPEN", "CLOSED"]] = None,
     limit: int = 200,
     venue: Optional[Venue] = None,
+    mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None,
     ledger: LedgerStore = Depends(get_ledger_store),
 ):
     """Round trips, not executions: `status=OPEN` is what the Active tab
     shows, `CLOSED` the Completed one. `venue` picks the paper or live book;
-    omitted, both."""
-    return await ledger.get_trades(status=status, limit=limit, venue=venue)
+    omitted, both. `mode` narrows to the intraday or long-term engine."""
+    return await ledger.get_trades(status=status, limit=limit, venue=venue, mode=mode)
 
 
 @router.get("/equity")

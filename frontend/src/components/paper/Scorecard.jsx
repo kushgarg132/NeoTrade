@@ -18,14 +18,14 @@ import { formatPercent, formatSignedPercent, formatCurrency, formatNoteDate } fr
 
 const ratio = (value) => (value === null || value === undefined ? '—' : value.toFixed(2));
 
-const Scorecard = () => {
+const Scorecard = ({ mode }) => {
   const [card, setCard] = useState(null);
   const [error, setError] = useState(null);
   const [month, setMonth] = useState(null);
 
   const load = () =>
     api
-      .get(endpoints.analytics.scorecard('paper'))
+      .get(endpoints.analytics.scorecard('paper', mode))
       .then((res) => {
         setCard(res.data);
         setError(null);
@@ -33,8 +33,10 @@ const Scorecard = () => {
       .catch((err) => setError(err?.response?.data?.detail || 'The scorecard did not load'));
 
   useEffect(() => {
+    setCard(null);
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
   useTopic('trades', load);
 
   const byDay = useMemo(

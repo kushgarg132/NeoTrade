@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import time
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends
 
@@ -19,18 +19,23 @@ from backend.prefs import PrefsStore
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
+Mode = Literal["INTRADAY", "LONGTERM"]
+
 
 def get_ledger_store(user: User = Depends(get_current_user)) -> LedgerStore:
     return LedgerStore(db.db, user_id=user.id, on_change=publisher_for(user.id))
 
 
 @router.get("/pnl")
-async def get_pnl(venue: Optional[Venue] = None, ledger: LedgerStore = Depends(get_ledger_store)):
+async def get_pnl(
+    venue: Optional[Venue] = None, mode: Optional[Mode] = None,
+    ledger: LedgerStore = Depends(get_ledger_store),
+):
     """`venue=paper` is the Paper tab's book, `venue=live` real engine orders;
-    omitted, both combined."""
+    omitted, both combined. `mode` narrows to the intraday or long-term engine."""
     positions = await ledger.get_open_positions(venue=venue)
     marks = await mark_prices(db.db, positions.keys())
-    return await compute_pnl(ledger, marks, venue=venue)
+    return await compute_pnl(ledger, marks, venue=venue, mode=mode)
 
 
 logger = logging.getLogger(__name__)
@@ -62,13 +67,14 @@ def nifty_return(points, first_day: str):
 @router.get("/scorecard")
 async def get_scorecard(
     venue: Optional[Venue] = "paper",
+    mode: Optional[Mode] = None,
     user: User = Depends(get_current_user),
     ledger: LedgerStore = Depends(get_ledger_store),
 ):
     """The engine's track record, day by day and per strategy, net of
     charges -- what decides whether a strategy has earned real money."""
     prefs = await PrefsStore(db.db).get(user.id)
-    card = await compute_scorecard(ledger, venue, prefs["account_size"])
+    card = await compute_scorecard(ledger, venue, prefs["account_size"], mode=mode)
     card["nifty_return_pct"] = None
     first_day = card["totals"]["first_day"]
     if first_day:

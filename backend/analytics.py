@@ -24,35 +24,50 @@ def _ist(value: datetime) -> datetime:
 
 async def compute_pnl(
     ledger: LedgerStore, mark_prices: dict[str, float], now: Optional[datetime] = None,
-    venue: Optional[Venue] = None,
+    venue: Optional[Venue] = None, mode: Optional[str] = None,
 ) -> dict:
     """`venue` narrows every figure to one book (paper or live); None keeps
-    the combined view."""
+    the combined view. `mode` (INTRADAY / LONGTERM) narrows to one engine's
+    trades; positions are per symbol, not per mode, so with a mode the open
+    figures come from that mode's OPEN trades instead."""
     now = _ist(now or datetime.now(timezone.utc))
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = day_start.replace(day=1)
 
     closed = [
-        t for t in await ledger.get_trades(status="CLOSED", limit=2000, venue=venue) if t.get("exit_at")
+        t for t in await ledger.get_trades(status="CLOSED", limit=2000, venue=venue, mode=mode) if t.get("exit_at")
     ]
     today = [t for t in closed if _ist(t["exit_at"]) >= day_start]
     month = [t for t in closed if _ist(t["exit_at"]) >= month_start]
 
-    positions = await ledger.get_open_positions(venue=venue)
     unrealized = 0.0
     exposure = 0.0
-    for symbol, position in positions.items():
-        exposure += abs(position.quantity * position.avg_price)
-        mark = mark_prices.get(symbol)
-        if mark is not None:
-            unrealized += position.quantity * (mark - position.avg_price)
+    if mode is None:
+        positions = await ledger.get_open_positions(venue=venue)
+        for symbol, position in positions.items():
+            exposure += abs(position.quantity * position.avg_price)
+            mark = mark_prices.get(symbol)
+            if mark is not None:
+                unrealized += position.quantity * (mark - position.avg_price)
+        open_count = len(positions)
+        open_equity = sum(p.realized_pnl for p in positions.values()) + unrealized
+    else:
+        open_trades = await ledger.get_trades(status="OPEN", limit=2000, venue=venue, mode=mode)
+        for trade in open_trades:
+            exposure += trade["quantity"] * trade["entry_price"]
+            mark = mark_prices.get(trade["symbol"])
+            if mark is not None:
+                sign = 1 if trade["side"] == "BUY" else -1
+                unrealized += sign * trade["quantity"] * (mark - trade["entry_price"])
+        open_count = len(open_trades)
+        open_equity = unrealized
 
     realized_today = sum(t["realized_pnl"] for t in today)
     realized_month = sum(t["realized_pnl"] for t in month)
     month_wins = [t for t in month if t["realized_pnl"] > 0]
 
     entered_today = [
-        t for t in await ledger.get_trades(limit=2000, venue=venue)
+        t for t in await ledger.get_trades(limit=2000, venue=venue, mode=mode)
         if t.get("entry_at") and _ist(t["entry_at"]) >= day_start
     ]
 
@@ -73,9 +88,9 @@ async def compute_pnl(
             "worst": min((t["realized_pnl"] for t in month), default=0.0),
         },
         "open": {
-            "positions": len(positions),
+            "positions": open_count,
             "exposure": exposure,
-            "equity": sum(p.realized_pnl for p in positions.values()) + unrealized,
+            "equity": open_equity,
         },
     }
 
@@ -118,10 +133,10 @@ def _summary(nets: list[float]) -> dict:
 
 
 async def compute_scorecard(
-    ledger: LedgerStore, venue: Optional[Venue], account_size: float
+    ledger: LedgerStore, venue: Optional[Venue], account_size: float, mode: Optional[str] = None,
 ) -> dict:
     closed = sorted(
-        (t for t in await ledger.get_trades(status="CLOSED", limit=5000, venue=venue) if t.get("exit_at")),
+        (t for t in await ledger.get_trades(status="CLOSED", limit=5000, venue=venue, mode=mode) if t.get("exit_at")),
         key=lambda t: t["exit_at"],
     )
 
