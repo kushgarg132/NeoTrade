@@ -351,6 +351,13 @@ const MyPortfolio = () => {
                 </div>
               </Sheet>
             )}
+            {snapshot.plan && (
+              <Sheet title="Action plan" meta="AI suggestions from the figures and the app's own scan">
+                <div className="text-sm leading-relaxed">
+                  <Markdown>{snapshot.plan}</Markdown>
+                </div>
+              </Sheet>
+            )}
             <Concentration concentration={snapshot.concentration} count={snapshot.totals.count} />
             {stocks.length > 0 && (
               <Sheet title="Stocks" meta={`${stocks.length} · tap one for its reasons`}>

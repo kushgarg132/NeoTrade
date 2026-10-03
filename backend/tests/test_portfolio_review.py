@@ -91,8 +91,8 @@ async def test_write_up_parses_the_models_json_and_survives_garbage(monkeypatch)
             "holdings": [{"symbol": "A", "kind": "STOCK", "reason_codes": []}]}
     answers = iter(['Sure! {"summary": "### How it is doing\\nFine", "notes": {"A": "Steady."}}', "LLM_DISABLED"])
     monkeypatch.setattr(review.llm_service, "get_completion", AsyncMock(side_effect=lambda *a, **k: next(answers)))
-    assert await review.write_review(card) == {"summary": "### How it is doing\nFine", "notes": {"A": "Steady."}}
-    assert await review.write_review(card) == {"summary": None, "notes": {}}
+    assert await review.write_review(card) == {"summary": "### How it is doing\nFine", "notes": {"A": "Steady."}, "plan": None}
+    assert await review.write_review(card) == {"summary": None, "notes": {}, "plan": None}
 
 
 def _patch_sources(monkeypatch, brokers, closes=None):
@@ -176,3 +176,41 @@ async def test_weekly_review_alerts_only_on_a_worse_verdict(monkeypatch):
     ((chat, text),) = sent
     assert chat == 42 and "A: worth a closer look" in text and "SELL" not in text  # not an admin
     assert await service.weekly_reviews(db, None) == 1 and len(sent) == 1  # still SELL: no repeat alert
+
+
+def test_non_admins_do_not_see_the_action_plan():
+    snapshot = {"holdings": [], "plan": "### Sell or trim\n- A"}
+    assert present(snapshot, show_verdicts=False)["plan"] is None
+    assert present(snapshot, show_verdicts=True)["plan"] == "### Sell or trim\n- A"
+
+
+async def test_write_up_returns_the_plan_and_sends_the_candidates(monkeypatch):
+    card = {"totals": {"value": 1, "invested": 1, "pnl_pct": 0, "day_change": 0},
+            "benchmark": {"covered_pct": None, "portfolio_pct": None, "nifty_pct": None},
+            "concentration": {"top_symbol": "A", "top_pct": 100, "top5_pct": 100, "effective_holdings": 1,
+                              "sectors": [], "correlated": []},
+            "holdings": [{"symbol": "A", "kind": "STOCK", "reason_codes": []}]}
+    llm = AsyncMock(return_value='{"summary": "S", "notes": {}, "plan": "### Add\\n- NEWCO"}')
+    monkeypatch.setattr(review.llm_service, "get_completion", llm)
+    candidates = [{"symbol": "NEWCO", "score": {"final": 0.62}, "reason_codes": ["quality_momentum"], "ai_thesis": None}]
+    assert (await review.write_review(card, candidates))["plan"] == "### Add\n- NEWCO"
+    assert "NEWCO" in llm.call_args.args[0] and "quality_momentum" in llm.call_args.args[0]
+
+
+async def test_add_candidates_are_recent_scanned_buys_not_already_held():
+    from datetime import datetime
+    db = AsyncMongoMockClient()["test_db"]
+    now = datetime.now(timezone.utc)
+
+    def s(symbol, final, days_ago=0, side="BUY", mode="LONGTERM", status="PENDING", user="alice"):
+        return {"user_id": user, "symbol": symbol, "side": side, "mode": mode, "status": status,
+                "score": {"final": final}, "reason_codes": ["r"], "ai_thesis": None,
+                "created_at": now - timedelta(days=days_ago)}
+
+    await db["suggestions"].insert_many([
+        s("HELD", 0.9), s("OLD", 0.9, days_ago=10), s("SHORT", 0.9, side="SELL"), s("INTRA", 0.9, mode="INTRADAY"),
+        s("NOPE", 0.9, status="REJECTED"), s("OTHER", 0.9, user="bob"),
+        s("LOW", 0.5), s("TOP", 0.8), s("TOP", 0.7),
+    ])
+    picks = await service.add_candidates(db, "alice", held={"HELD"}, now=now)
+    assert [p["symbol"] for p in picks] == ["TOP", "LOW"]

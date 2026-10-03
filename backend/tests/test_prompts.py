@@ -18,7 +18,8 @@ PROMPTS = {
                    "trend": "- Month +1.2%", "peers": "- SENSEX: -0.40%", "movers": "- HDFCBANK: -1.90%",
                    "headlines": "- RBI holds rates (ET)"},
     "portfolio_review": {"totals": "Value 10,00,000.00", "concentration": "Largest HDFCBANK at 28%",
-                         "holdings": "- HDFCBANK (STOCK): reason codes: overweight"},
+                         "holdings": "- HDFCBANK (STOCK): reason codes: overweight",
+                         "candidates": "- TCS: score 0.62, reasons quality_momentum"},
 }
 
 

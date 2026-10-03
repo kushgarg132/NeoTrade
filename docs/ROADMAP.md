@@ -451,6 +451,12 @@ Design: `docs/superpowers/specs/2026-09-11-phase-5b-fno-cash-secured-put-design.
   no broker session is live, alerts (socket + Telegram) only on a verdict that got worse.
   Not done: P/E against the stock's own history, debt trend (only a debt level), fund overlap
   and expense ratios.
+- **2026-10-03, AI action plan on the Portfolio page.** `write_review` also returns `plan`
+  (improve the mix / sell or trim / add). Stocks to add come only from
+  `service.add_candidates`: the user's LONGTERM BUY suggestions from the last 7 days, not
+  held, not rejected, best score first, at most 5. So the plan has nothing to add until the
+  daily scan runs for that user (`scan_enabled`). Hidden with the verdicts
+  (`routers/portfolio.py::present`), so admin-only until SEBI RA registration.
 
 ---
 

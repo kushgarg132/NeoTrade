@@ -173,13 +173,35 @@ async def _review(db, user_id: str, redis, card: dict, closes: dict, previous: d
         row["previous_verdict"] = before.get(row.get("isin") or row["symbol"])
 
     try:
-        review = await write_review(card)
+        held = {r["symbol"] for r in card["holdings"]}
+        review = await write_review(card, await add_candidates(db, user_id, held))
     except Exception as exc:
         logger.warning("portfolio review write-up failed for %s: %s", user_id, exc)
         review = {"summary": None, "notes": {}}
     card["summary"] = review["summary"]
+    card["plan"] = review.get("plan")
     for row in card["holdings"]:
         row["note"] = review["notes"].get(row["symbol"])
+
+
+CANDIDATE_DAYS = 7
+MAX_CANDIDATES = 5
+
+
+async def add_candidates(db, user_id: str, held: set, now: datetime | None = None) -> list[dict]:
+    """Stocks the user does not hold that the long-term scan scored as buys
+    this past week, best score first, one per symbol: the only stocks the
+    action plan may suggest adding. Rejected ones stay out."""
+    now = now or datetime.now(timezone.utc)
+    docs = await db["suggestions"].find({
+        "user_id": user_id, "mode": "LONGTERM", "side": "BUY", "status": {"$ne": "REJECTED"},
+        "created_at": {"$gte": now - timedelta(days=CANDIDATE_DAYS)},
+    }).to_list(length=None)
+    best: dict[str, dict] = {}
+    for doc in sorted(docs, key=lambda d: (d.get("score") or {}).get("final") or 0, reverse=True):
+        if doc["symbol"] not in held:
+            best.setdefault(doc["symbol"], doc)
+    return list(best.values())[:MAX_CANDIDATES]
 
 
 async def latest_snapshot(db, user_id: str) -> dict | None:

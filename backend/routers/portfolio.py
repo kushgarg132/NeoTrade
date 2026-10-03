@@ -3,7 +3,7 @@ brokers, how they are doing, and a rule-scored verdict on each.
 
 Verdicts are deployment-gated (AppSettingsStore.portfolio_verdicts): until
 it is "all", only admins see SELL / HOLD / ADD; everyone else sees the same
-facts and reasons, with a SELL shown as "review first". Showing verdicts to
+facts and reasons, with a SELL shown as "review first", and no action plan. Showing verdicts to
 every user needs SEBI Research Analyst registration (PRODUCT.md).
 """
 
@@ -24,6 +24,7 @@ def present(snapshot: dict, show_verdicts: bool) -> dict:
     snapshot["verdicts_visible"] = show_verdicts
     if show_verdicts:
         return snapshot
+    snapshot["plan"] = None  # sell / add suggestions: same audience as the verdicts
 
     def mask(verdict):
         return "REVIEW" if verdict in ("SELL", "REVIEW") else None

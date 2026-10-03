@@ -1,7 +1,9 @@
 """The AI write-up of a reviewed portfolio: a summary and a short note per
 holding, from the figures and rule results already computed. It explains;
 the verdicts come from backend/portfolio/rules.py and are not changed here.
-Prompt: backend/prompts/portfolio_review.md.
+It also writes an action plan (sell / trim / add), whose new stocks can only
+come from the app's own long-term scan; routers/portfolio.py shows it to the
+same audience as the verdicts. Prompt: backend/prompts/portfolio_review.md.
 """
 
 import json
@@ -38,8 +40,16 @@ def _holding_line(row: dict) -> str:
     )
 
 
-async def write_review(card: dict) -> dict:
-    """{"summary": markdown or None, "notes": {symbol: text}}. A model that
+def _candidate_line(c: dict) -> str:
+    thesis = str(c.get("ai_thesis") or "")[:200]
+    return (
+        f"- {c['symbol']}: score {_fmt((c.get('score') or {}).get('final'))}, "
+        f"reasons {', '.join(c.get('reason_codes') or []) or 'none'}" + (f". Thesis: {thesis}" if thesis else "")
+    )
+
+
+async def write_review(card: dict, candidates: list[dict] | None = None) -> dict:
+    """{"summary": markdown or None, "notes": {symbol: text}, "plan": markdown or None}. A model that
     is off or answers badly leaves the review without prose, never fails it."""
     totals, bench, conc = card["totals"], card["benchmark"], card["concentration"]
     rows = card["holdings"][:MAX_HOLDINGS]
@@ -57,6 +67,7 @@ async def write_review(card: dict) -> dict:
             + ". Moving together: " + (", ".join(f"{p['a']}/{p['b']} {p['correlation']}" for p in conc["correlated"]) or "none")
         ),
         holdings="\n".join(_holding_line(r) for r in rows),
+        candidates="\n".join(_candidate_line(c) for c in candidates or []) or "none",
     )
     text = (await llm_service.get_completion(prompt, system_prompt=system) or "").strip()
     match = re.search(r"\{.*\}", text, re.S)
@@ -68,4 +79,5 @@ async def write_review(card: dict) -> dict:
         logger.warning("portfolio review: no usable answer from the model: %.200s", text)
     notes = parsed.get("notes") if isinstance(parsed.get("notes"), dict) else {}
     summary = parsed.get("summary") if isinstance(parsed.get("summary"), str) else None
-    return {"summary": summary, "notes": {k: v for k, v in notes.items() if isinstance(v, str)}}
+    plan = parsed.get("plan") if isinstance(parsed.get("plan"), str) else None
+    return {"summary": summary, "notes": {k: v for k, v in notes.items() if isinstance(v, str)}, "plan": plan}
