@@ -389,7 +389,7 @@ async def test_intraday_uses_a_broker_tick_feed_when_the_broker_is_connected(mon
 @pytest.mark.asyncio
 async def test_intraday_falls_back_to_polling_without_a_broker_session(monkeypatch):
     from backend.brokers.protocol import BrokerSessionState
-    from backend.data.feeds.polling_live import PollingLiveFeed
+    from backend.data.feeds.candle_poll import CandlePollingFeed
 
     monkeypatch.setattr(
         trading, "get_broker_adapter",
@@ -401,7 +401,7 @@ async def test_intraday_falls_back_to_polling_without_a_broker_session(monkeypat
         _instruments(), "INTRADAY", 60.0, user_id="alice", credentials=_Credentials(),
     )
 
-    assert isinstance(feed, PollingLiveFeed)
+    assert isinstance(feed, CandlePollingFeed)
 
 
 @pytest.mark.asyncio
@@ -409,7 +409,7 @@ async def test_intraday_polls_when_no_connected_broker_supports_streaming(monkey
     """Active but without streaming support (Upstox/Angel One today) must
     fall back cleanly, not error."""
     from backend.brokers.protocol import BrokerSessionState
-    from backend.data.feeds.polling_live import PollingLiveFeed
+    from backend.data.feeds.candle_poll import CandlePollingFeed
 
     monkeypatch.setattr(
         trading, "get_broker_adapter",
@@ -421,7 +421,7 @@ async def test_intraday_polls_when_no_connected_broker_supports_streaming(monkey
         _instruments(), "INTRADAY", 60.0, user_id="alice", credentials=_Credentials(stored=None),
     )
 
-    assert isinstance(feed, PollingLiveFeed)
+    assert isinstance(feed, CandlePollingFeed)
 
 
 @pytest.mark.asyncio

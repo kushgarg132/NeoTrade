@@ -40,6 +40,7 @@ from backend.core.clock import SystemClock
 from backend.database import db
 from backend.data.providers.yfinance_provider import YFinanceProvider
 from backend.engine.session import IST
+from backend.data.feeds.candle_poll import CandlePollingFeed
 from backend.data.feeds.polling_live import PollingLiveFeed
 from backend.engine.execution.broker import BrokerExecutionClient
 from backend.engine.execution.live_order_store import LiveOrderStore
@@ -144,6 +145,10 @@ async def build_feed(instruments, mode: str, poll_interval_seconds: float, user_
                 logger.info("using live %s ticks for %d instrument(s)", broker, len(instruments))
                 return feed
 
+    if mode == "INTRADAY":
+        # No broker session: real 5-minute candles, late, rather than a daily
+        # quote dressed up as a 5-minute bar.
+        return CandlePollingFeed(YFinanceProvider(), instruments)
     return PollingLiveFeed(
         YFinanceProvider(), instruments, timeframe=_MODE_TIMEFRAME[mode],
         poll_interval_seconds=poll_interval_seconds,
@@ -365,6 +370,7 @@ async def launch_run(
             "mode": mode, "poll_interval_seconds": poll_interval_seconds, "origin": origin,
             "account_size": account_size, "max_exposure": max_exposure,
             "live_strategies": sorted(live_by_strategy),
+            "feed": getattr(feed, "source", "live broker ticks"),
         },
     )
     start_background_run(coro, run_id=run_id, runs=runs)

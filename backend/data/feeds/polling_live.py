@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class PollingLiveFeed:
+    source = "yfinance quotes"
     def __init__(
         self,
         provider: MarketDataProvider,
