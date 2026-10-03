@@ -559,15 +559,11 @@ const ProviderRow = ({ provider }) => (
       <span className="figure-md text-sm">{provider.provider}</span>
       {provider.plan && <span className="doc-meta normal-case">{provider.plan}</span>}
     </p>
-    {provider.pools?.length ? (
-      <ul className="space-y-1">
-        {provider.pools.map((pool) => (
-          <PoolRow key={pool.label} pool={pool} />
-        ))}
-      </ul>
-    ) : (
-      <p className="doc-meta normal-case">Quota not reported</p>
-    )}
+    <ul className="space-y-1">
+      {provider.pools.map((pool) => (
+        <PoolRow key={pool.label} pool={pool} />
+      ))}
+    </ul>
   </li>
 );
 
@@ -611,9 +607,11 @@ const UsageSheet = () => {
             The gateway's shared accounts, not only this app's use. Models in one pool share its limit; tap a pool for its models.
           </p>
           <ul>
-            {usage.providers.map((provider) => (
-              <ProviderRow key={provider.provider} provider={provider} />
-            ))}
+            {usage.providers
+              .filter((provider) => provider.pools?.length)
+              .map((provider) => (
+                <ProviderRow key={provider.provider} provider={provider} />
+              ))}
           </ul>
         </>
       )}
