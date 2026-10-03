@@ -8,6 +8,7 @@ import pytest
 from backend.prompts import render
 
 PROMPTS = {
+    "chat": {"snapshot": "portfolio: value=401747", "page": "/portfolio"},
     "model_test": {},
     "resolve_instrument": {"query": "tata motors", "candidates": '[{"tradingsymbol": "TATAMOTORS"}]'},
     "peers": {"name": "Reliance Industries", "symbol": "RELIANCE"},
