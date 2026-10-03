@@ -538,7 +538,7 @@ const PoolRow = ({ pool }) => {
         aria-expanded={open}
         className="w-full flex items-center gap-2 py-1 text-left text-xs disabled:cursor-default"
       >
-        <span className="w-[6.5rem] shrink-0 truncate text-[var(--ink)]">{pool.label}</span>
+        <span className="w-[6.5rem] shrink-0 leading-tight text-[var(--ink)]">{pool.label}</span>
         <Bar pct={pool.remaining_pct} />
         <span className="figure-md w-[4.25rem] text-right shrink-0 whitespace-nowrap">{pctText(pool.remaining_pct)}</span>
       </button>
