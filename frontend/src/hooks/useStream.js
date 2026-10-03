@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { stream } from '../lib/ws';
 
 /** Subscribe to one live topic for as long as a component is mounted. */
 export function useTopic(topic, handler) {
+  // Subscribed once per topic -- callers pass an inline function, and
+  // re-subscribing on every render would thrash the socket -- but each
+  // message goes to the latest handler, so it never sees stale state.
+  const latest = useRef(handler);
+  useLayoutEffect(() => {
+    latest.current = handler;
+  });
   useEffect(() => {
     if (!topic) return undefined;
-    return stream.subscribe(topic, handler);
-    // The handler is intentionally not a dependency: callers pass an inline
-    // function, and re-subscribing on every render would thrash the socket.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return stream.subscribe(topic, (message) => latest.current(message));
   }, [topic]);
 }
 
