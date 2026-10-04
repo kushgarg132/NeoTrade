@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import Layout from '../components/Layout';
-import PaperShell from '../components/paper/PaperShell';
 import SuggestionRecord from '../components/suggestions/SuggestionRecord';
-import { Sheet, Empty, Ruling } from '../components/doc/Doc';
+import { Sheet, Empty, Ruling, Tabs } from '../components/doc/Doc';
+import WaitingCards from '../components/decisions/WaitingCards';
+import AiToday from '../components/decisions/AiToday';
 import { Button } from '../components/common/Button';
 import api, { endpoints } from '../utils/api';
 import { useTopic } from '../hooks/useStream';
 import { cn } from '../utils/cn';
 
 /**
- * The decisions inbox.
+ * The decisions inbox, for every account: engine proposals (approve on paper
+ * or with real money on the user's own account), cards from the chat or the
+ * order ticket that wait for a Confirm, and -- read only -- what the AI
+ * account's autopilot did today. Nothing here can trade the AI account.
+ *
  *
  * Long-term proposals wait here for an explicit approve or decline; intraday
  * signals execute themselves — nobody can approve a five-minute breakout in
@@ -23,7 +28,16 @@ const MODES = [
   { id: 'INTRADAY', label: 'Intraday' },
 ];
 
-const Suggestions = () => {
+const ACCOUNTS = [
+  { id: 'all', label: 'All' },
+  { id: 'paper', label: 'Paper' },
+  { id: 'mine', label: 'Mine' },
+  { id: 'ai', label: 'AI' },
+];
+
+const Decisions = () => {
+  const [account, setAccount] = useState('all');
+  const [hasMine, setHasMine] = useState(true);
   const [mode, setMode] = useState('LONGTERM');
   const [showDecided, setShowDecided] = useState(false);
   const [items, setItems] = useState([]);
@@ -45,6 +59,13 @@ const Suggestions = () => {
   };
 
   useEffect(load, []);
+
+  useEffect(() => {
+    api
+      .get(endpoints.settings.preferences)
+      .then((res) => setHasMine(Object.values(res.data.broker_roles || {}).includes('mine')))
+      .catch(() => setHasMine(false));
+  }, []);
 
   useTopic('suggestions', (message) => {
     if (message.event === 'created') {
@@ -88,9 +109,20 @@ const Suggestions = () => {
 
   return (
     <Layout>
-      <PaperShell>
+      <div className="space-y-3 sm:space-y-4">
+        <Tabs
+          tabs={ACCOUNTS}
+          active={account}
+          onSelect={setAccount}
+          label="Which account"
+        />
+
+        {account !== 'ai' && <WaitingCards venue={account === 'all' ? null : account === 'mine' ? 'live' : 'paper'} />}
+
+        {account !== 'ai' && (
+        <>
         <Sheet
-          title="Decisions"
+          title="Proposals"
           meta={`${items.filter((i) => i.status === 'PENDING').length} awaiting`}
           actions={
             <Button variant="secondary" size="sm" onClick={scan} disabled={scanning}>
@@ -206,13 +238,18 @@ const Suggestions = () => {
                 onApprove={() => decide(suggestion, 'approve')}
                 onApproveLive={() => decide(suggestion, 'live')}
                 onReject={() => decide(suggestion, 'reject')}
+                hasMine={hasMine}
               />
             ))}
           </div>
         )}
-      </PaperShell>
+        </>
+        )}
+
+        {(account === 'all' || account === 'ai') && <AiToday />}
+      </div>
     </Layout>
   );
 };
 
-export default Suggestions;
+export default Decisions;

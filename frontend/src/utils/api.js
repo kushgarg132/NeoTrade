@@ -211,6 +211,7 @@ export const endpoints = {
   chat: {
     confirm: (id) => `/chat/actions/${encodeURIComponent(id)}/confirm`,
     cancel: (id) => `/chat/actions/${encodeURIComponent(id)}/cancel`,
+    pending: '/chat/actions/pending',
   },
   settings: {
     omnirouteModels: '/settings/omniroute-models',

@@ -17,7 +17,7 @@ import { usePendingCount } from '../../context/pendingContext';
 
 const PAPER_TABS = [
   { path: '/ai/practice', label: 'Overview', end: true },
-  { path: '/ai/practice/decisions', label: 'Decisions', short: 'Decide', counter: true },
+  { path: '/decisions', label: 'Decisions', short: 'Decide', counter: true },
   { path: '/ai/practice/book', label: 'Book' },
   { path: '/ai/practice/settings', label: 'Settings', short: 'Setup' },
 ];

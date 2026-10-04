@@ -81,7 +81,15 @@ const expiresIn = (iso) => {
 };
 
 const NeedsYou = ({ items }) => (
-  <Sheet title="Needs you" meta={items.length ? String(items.length) : undefined}>
+  <Sheet
+    title="Needs you"
+    meta={items.length ? String(items.length) : undefined}
+    actions={
+      <Link to="/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
+        All decisions ›
+      </Link>
+    }
+  >
     {items.length === 0 ? (
       <p className="font-[family-name:var(--font-narrow)] text-2xl font-bold uppercase tracking-[0.06em] py-4">You’re clear.</p>
     ) : (

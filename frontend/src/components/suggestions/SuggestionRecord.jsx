@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Check, X, Loader2, Quote, ChevronDown } from 'lucide-react';
 import { Money, Stamp, Field, Scrip } from '../doc/Doc';
 import { Button } from '../common/Button';
@@ -89,14 +90,14 @@ const OptionTerms = ({ contract, quantity }) => (
   </>
 );
 
-const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject }) => {
+const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasMine = true }) => {
   const [busy, setBusy] = useState(null);
   const [failure, setFailure] = useState(null);
   // Real money takes two taps: the first only says what will be sent.
   const [confirmLive, setConfirmLive] = useState(false);
   // Grounds and thesis are a tap away: the terms, risk and score are what Approve needs.
   const [why, setWhy] = useState(false);
-  const canGoLive = Boolean(suggestion.option_contract && onApproveLive);
+  const canGoLive = Boolean(onApproveLive);
 
   const decided = suggestion.status !== 'PENDING';
   const risk = suggestion.entry_ref - suggestion.stop;
@@ -261,17 +262,25 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject }) =>
             ) : (
               <Check className="w-4 h-4" />
             )}
-            {canGoLive ? 'On paper' : 'Approve'}
+            {canGoLive ? 'Approve on paper' : 'Approve'}
           </Button>
           {canGoLive && (
             <div className="col-span-2 border-t border-[var(--rule)] pt-3 mt-1">
               {confirmLive && (
                 <p className="mb-2 text-sm text-[var(--loss)]" role="alert">
                   Real money: {suggestion.side === 'SELL' ? 'sells' : 'buys'}{' '}
-                  {formatQuantity(suggestion.quantity)} units of {suggestion.symbol} at market with
-                  your broker. Tap again to send.
+                  {formatQuantity(suggestion.quantity)} {suggestion.option_contract ? 'units' : 'shares'} of{' '}
+                  {suggestion.symbol} at market on your account. Tap again to send.
                 </p>
               )}
+              {!hasMine ? (
+                <p className="doc-meta normal-case">
+                  <Link to="/settings?tab=accounts" className="underline">
+                    Connect your broker and set it as My account in Settings
+                  </Link>{' '}
+                  to approve with real money.
+                </p>
+              ) : (
               <div className="grid grid-cols-2 gap-2">
                 {confirmLive && (
                   <Button variant="secondary" onClick={() => setConfirmLive(false)} disabled={busy !== null}>
@@ -286,9 +295,10 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject }) =>
                   aria-label={`Send ${suggestion.symbol} to your broker as a real order`}
                 >
                   {busy === 'live' && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {confirmLive ? 'Send real order' : 'Approve live'}
+                  {confirmLive ? 'Send real order' : 'Approve with real money'}
                 </Button>
               </div>
+              )}
             </div>
           )}
         </div>
