@@ -483,7 +483,7 @@ history, F&O/limit orders from chat; ad-hoc paper orders are not gated by the ki
 
 The linked Telegram bot is a second client of the same agent: live draft streaming with visible
 reasoning and tool steps, Confirm/Cancel buttons, follow-up buttons, `/portfolio` `/proposals`
-`/engine` `/limits` `/journal` `/new` `/help`, and 10 turns of memory. `query_my_data` lets the
+`/engine` `/limits` `/journal` `/new` `/help`, `/usage` (admins: the Settings usage sheet as one message), and 10 turns of memory. `query_my_data` lets the
 agent (web and Telegram) read any of the user's own collections on an allowlist, never secrets or
 another user's rows. See ARCHITECTURE.md.
 

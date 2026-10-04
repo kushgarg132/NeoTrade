@@ -271,19 +271,25 @@ def _shape_usage(status: dict) -> dict:
     }
 
 
-@router.get("/settings/omniroute-usage")
-async def omniroute_usage(_admin: User = Depends(require_admin)):
+class UsageUnavailable(Exception):
+    def __init__(self, status: int, detail: str):
+        super().__init__(detail)
+        self.status, self.detail = status, detail
+
+
+async def fetch_usage() -> dict:
     """This deployment's gateway key: its tokens and cost this month, and each
     provider account's remaining quota, from OmniRoute's self-service
     GET /v1/me/status (the key's default `self:usage` scope -- no management
     key needed). Provider quotas are the gateway's shared accounts, not this
-    key's share. Cached a minute."""
+    key's share. Cached a minute. Shared by the Settings sheet and Telegram's
+    /usage; raises UsageUnavailable."""
     import time
 
     if _USAGE_CACHE and time.monotonic() - _USAGE_CACHE["at"] < USAGE_CACHE_SECONDS:
         return _USAGE_CACHE["body"]
     if not settings.OMNIROUTE_API_KEYS:
-        raise HTTPException(status_code=409, detail="No gateway key configured")
+        raise UsageUnavailable(409, "No gateway key configured")
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
@@ -293,10 +299,18 @@ async def omniroute_usage(_admin: User = Depends(require_admin)):
             resp.raise_for_status()
     except httpx.HTTPError as e:
         logger.error(f"Failed to fetch OmniRoute usage: {e}")
-        raise HTTPException(status_code=502, detail="Could not read usage from the OmniRoute gateway")
+        raise UsageUnavailable(502, "Could not read usage from the OmniRoute gateway")
     body = _shape_usage(resp.json())
     _USAGE_CACHE.update(at=time.monotonic(), body=body)
     return body
+
+
+@router.get("/settings/omniroute-usage")
+async def omniroute_usage(_admin: User = Depends(require_admin)):
+    try:
+        return await fetch_usage()
+    except UsageUnavailable as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail)
 
 
 MODEL_TEST_TIMEOUT_SECONDS = 30

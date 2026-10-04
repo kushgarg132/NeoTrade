@@ -238,3 +238,50 @@ async def test_new_message_removes_the_previous_suggestions(monkeypatch):
     clear.assert_awaited_once_with(42, 101, "tok")
     # The new reply's buttons become the ones to clear next time.
     redis.set.assert_any_await(telegram_bot.SUGGEST_LAST_PREFIX + "alice", "101", ex=telegram_bot.HISTORY_SECONDS)
+
+
+USAGE = {
+    "key_name": "neotrade",
+    "tokens": {"input": 1200000, "output": 34000, "reasoning": 0, "total": 1234000},
+    "cost": {"used_usd": 1.5, "limit_usd": None, "reset_at": None},
+    "providers": [
+        {"provider": "claude", "plan": "Max", "pools": [
+            {"label": "Claude & GPT", "remaining_pct": 62, "reset_at": None, "models": ["claude-opus", "gpt-5"]},
+            {"label": "Claude & GPT · weekly", "remaining_pct": 12, "reset_at": None, "models": []},
+        ]},
+        {"provider": "empty", "plan": None, "pools": []},
+    ],
+}
+
+
+def test_usage_message_mirrors_the_settings_sheet():
+    text = telegram_bot._usage_html(USAGE)
+    assert "<b>Usage</b> · Key neotrade" in text
+    assert "This month, this app's key" in text and "<b>1,234,000 tokens</b>" in text
+    assert "Input 1,200,000 · Output 34,000 · Reasoning 0" in text
+    assert "Cost $1.50 · no cost limit" in text
+    assert "Providers · quota left" in text and "<b>claude</b> Max" in text
+    assert "▓▓▓▓▓▓░░░░ 62% left" in text and "2 models" in text
+    assert "🔴" in text  # under 20% left
+    assert "<blockquote expandable>claude-opus, gpt-5</blockquote>" in text
+    assert "empty" not in text  # providers with no pools are hidden, like the UI
+
+
+async def test_usage_command_is_admin_only(monkeypatch):
+    from datetime import datetime, timezone
+
+    db = AsyncMongoMockClient()["test_db"]
+    for uid, role in (("alice", "admin"), ("bob", "user")):
+        await db["users"].insert_one({"id": uid, "google_sub": uid, "email": f"{uid}@x.io", "name": uid,
+                                      "picture": None, "role": role, "created_at": datetime(2024, 1, 1, tzinfo=timezone.utc)})
+    monkeypatch.setattr(telegram_bot, "fetch_usage", AsyncMock(return_value=USAGE))
+    sent = AsyncMock(return_value=1)
+    monkeypatch.setattr(telegram_bot.telegram, "send_html", sent)
+    plain = AsyncMock(return_value=True)
+    monkeypatch.setattr(telegram_bot.telegram, "send", plain)
+
+    await telegram_bot._reply(db, None, "alice", 42, "tok", "/usage")
+    assert "Key neotrade" in sent.await_args.args[1]
+    await telegram_bot._reply(db, None, "bob", 43, "tok", "/usage")
+    plain.assert_awaited_once_with(43, "Usage is for administrators.", "tok")
+    assert {"command": "usage", "description": "Gateway usage (admins)"} in telegram_bot.COMMANDS

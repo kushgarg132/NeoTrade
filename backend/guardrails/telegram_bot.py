@@ -14,6 +14,7 @@ import logging
 import random
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from backend.auth.broker_credentials import get_credential_store
@@ -23,6 +24,9 @@ from backend.guardrails import telegram
 from backend.guardrails.store import GuardrailStore
 from backend.llm import use_model
 from backend.prefs import PrefsStore
+from backend.auth.store import UserStore
+from backend.engine.session import IST
+from backend.routers.settings import UsageUnavailable, fetch_usage
 
 logger = logging.getLogger(__name__)
 POLL_SECONDS = 0.5  # pause between polls; the long poll itself does the waiting
@@ -53,6 +57,7 @@ SHORTCUTS = {
 }
 COMMANDS = [{"command": name, "description": label} for name, (_, label) in SHORTCUTS.items()] + [
     {"command": "new", "description": "Start a fresh conversation"},
+    {"command": "usage", "description": "Gateway usage (admins)"},
     {"command": "help", "description": "What I can do"},
 ]
 HELP = ("Ask NeoTrade anything about your account -- portfolio and its history, real and paper trades, engine runs, "
@@ -111,6 +116,63 @@ async def _clear_suggestions(redis, user_id: str, chat_id: int, token: Optional[
         await telegram.clear_buttons(chat_id, int(message_id), token)
 
 
+def _when(iso: Optional[str], with_time: bool = False) -> str:
+    """Like the sheet: "06:19" today, "07 Oct" later (IST)."""
+    if not iso:
+        return ""
+    when = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    when = (when if when.tzinfo else when.replace(tzinfo=timezone.utc)).astimezone(IST)
+    if with_time:
+        return when.strftime("%d %b %H:%M")
+    return when.strftime("%H:%M") if when.date() == datetime.now(IST).date() else when.strftime("%d %b")
+
+
+def _bar(pct) -> str:
+    if pct is None:
+        return "—"
+    filled = round(max(0, min(100, pct)) / 10)
+    return f"{'▓' * filled}{'░' * (10 - filled)} {round(pct)}% left" + (" 🔴" if pct < 20 else "")
+
+
+def _usage_html(usage: dict) -> str:
+    """The Settings > AI > Usage sheet as one Telegram message."""
+    esc = html.escape
+    tokens, cost = usage["tokens"], usage["cost"]
+    lines = [f"<b>Usage</b> · " + (f"Key {esc(usage['key_name'])}" if usage.get("key_name") else "OmniRoute"), "",
+             "This month, this app's key", f"<b>{tokens['total']:,} tokens</b>",
+             f"Input {tokens['input']:,} · Output {tokens['output']:,} · Reasoning {tokens['reasoning']:,}",
+             f"Cost ${float(cost.get('used_usd') or 0):.2f}"
+             + (f" of ${float(cost['limit_usd']):.2f}" if cost.get("limit_usd") is not None else " · no cost limit")
+             + (f" · resets {_when(cost['reset_at'], with_time=True)}" if cost.get("reset_at") else ""),
+             "", "<b>Providers · quota left</b>",
+             "<i>The gateway's shared accounts, not only this app's use. Models in one pool share its limit.</i>"]
+    for provider in usage["providers"]:
+        if not provider.get("pools"):
+            continue
+        lines += ["", f"<b>{esc(provider['provider'] or '')}</b>" + (f" {esc(provider['plan'])}" if provider.get("plan") else "")]
+        for pool in provider["pools"]:
+            meta = " · ".join(filter(None, [
+                f"resets {_when(pool['reset_at'])}" if pool.get("reset_at") else "",
+                f"{len(pool['models'])} model{'s' if len(pool['models']) != 1 else ''}" if pool["models"] else "",
+            ]))
+            lines.append(f"{esc(pool['label'])}\n<code>{_bar(pool.get('remaining_pct'))}</code>" + (f"\n<i>{meta}</i>" if meta else ""))
+            if pool["models"]:
+                lines.append(f"<blockquote expandable>{esc(', '.join(pool['models']))}</blockquote>")
+    return "\n".join(lines)
+
+
+async def _usage(db, user_id: str, chat_id: int, token: Optional[str]) -> None:
+    # Same gate as the Settings sheet: it is the deployment's shared gateway key.
+    user = await UserStore(db).get_by_id(user_id)
+    if not user or user.role != "admin":
+        await telegram.send(chat_id, "Usage is for administrators.", token)
+        return
+    try:
+        await telegram.send_html(chat_id, _usage_html(await fetch_usage()), token)
+    except UsageUnavailable as exc:
+        await telegram.send(chat_id, f"Usage unavailable: {exc.detail}", token)
+
+
 async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], text: str) -> None:
     await _clear_suggestions(redis, user_id, chat_id, token)
     if text.startswith("/"):
@@ -118,6 +180,9 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
         command = word.split("@")[0].lower()  # "/portfolio@MyBot" in groups
         if command in SHORTCUTS:
             text = SHORTCUTS[command][0] + (f" Focus on: {args.strip()}" if args.strip() else "")
+        elif command == "usage":
+            await _usage(db, user_id, chat_id, token)
+            return
         elif command == "new":
             if redis is not None:
                 await redis.delete(HISTORY_PREFIX + user_id)
