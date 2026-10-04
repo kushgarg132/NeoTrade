@@ -29,11 +29,12 @@ class _Provider:
         self.polls = {}
 
     async def history(self, instrument, interval, period):
-        assert (interval, period) == ("5m", "1d")
+        assert (interval, period) == ("5m", "5d")
         if instrument.tradingsymbol == "GONE":
             raise ValueError("No price data found")
         n = self.polls[instrument.tradingsymbol] = self.polls.get(instrument.tradingsymbol, 0) + 1
-        return [_candle(i) for i in range(n + 2)]
+        yesterday = _candle(0).model_copy(update={"timestamp": OPEN - timedelta(days=1)})
+        return [yesterday] + [_candle(i) for i in range(n + 2)]
 
 
 @pytest.mark.asyncio

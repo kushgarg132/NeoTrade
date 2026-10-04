@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import AsyncIterator, Callable, Optional
 
 from backend.core.models import Bar
+from backend.engine.session import IST
 from backend.instruments.models import Instrument
 
 logger = logging.getLogger(__name__)
@@ -45,14 +46,19 @@ class CandlePollingFeed:
 
     async def _closed_candles(self, instrument: Instrument, now: datetime) -> list:
         try:
-            candles = await self._provider.history(instrument, interval="5m", period="1d")
+            # "5d", not "1d": yfinance's 1d window can be empty (weekend,
+            # just after the open). Only today's candles are kept below --
+            # an older candle replayed now would trade on yesterday's price.
+            candles = await self._provider.history(instrument, interval="5m", period="5d")
         except Exception as exc:
             logger.warning("no 5m candles for %s, skipped this poll: %s", instrument.tradingsymbol, exc)
             return []
         last: Optional[datetime] = self._last.get(instrument.instrument_token)
+        today = now.astimezone(IST).date()
         return [
             c for c in candles
-            if c.timestamp + CANDLE <= now and (last is None or c.timestamp > last)
+            if c.timestamp.astimezone(IST).date() == today
+            and c.timestamp + CANDLE <= now and (last is None or c.timestamp > last)
         ]
 
     async def __aiter__(self) -> AsyncIterator[Bar]:
