@@ -143,7 +143,7 @@ const EngineSettings = () => {
         {switchRow(
           'auto_paper_longterm',
           'Run the long-term engine every session',
-          'Each weekday: sells an approved long-term position on paper once it reaches its stop or target (checked every 15 minutes in session), and at 09:20 buys every pending long-term stock proposal on paper at the live price, then sends a Telegram digest. New proposals come from the scan after every close (16:00 IST); option proposals still wait for your approval.'
+          'Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 09:20 on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest. Proposals from the 16:00 scan wait for your approval.'
         )}
         <p className="pt-3 doc-meta normal-case">
           Paper only: a strategy you switched live trades real money only once it has passed its

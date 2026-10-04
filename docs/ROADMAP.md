@@ -808,3 +808,25 @@ If they don't come back weekly, fix the product before building Phase 13.
   unlimited history, insights, guardrails, multiple brokers.
 - Before launch, check Kite Connect's current fees and its rules for multi-user third-party
   apps. Upstox and Angel One APIs are free.
+
+### 2026-10-04 — evidence-based core strategy (factor portfolio) on paper
+
+The engine's per-symbol strategies have no edge (intraday PF 0.64–0.91; long-term never
+backtested), and the backtester itself was flattering them. Plan:
+`/home/ubuntu/.claude/plans/iridescent-munching-cherny.md`.
+
+- Backtester honesty: metrics net of charges, 10 bps slippage per side, intraday stamp duty
+  fixed (`engine/backtest.py`, `execution/simulated.py`, `execution/costs.py`).
+- `backend/factor/`: Nifty 200 momentum (6/12m skip-1m ÷ vol) + low-vol, top N with a rank
+  buffer, inverse-vol capped weights, vol-targeted, risk-off below the Nifty 200-DMA. Daily
+  mark-to-market backtest that trades the day after deciding; 8-variant walk-forward
+  (3y in-sample → next year) and Deflated Sharpe counting all 16 variants ever tried.
+  `python -m backend.factor.report`.
+- Result, out-of-sample 2012-01 → 2026-10, net: **21.8% CAGR, Sharpe 1.59, max DD −15%**
+  vs Nifty 200 12.8% / 0.83 / −38%; DSR 1.00 — passes. Caveat: today's members over past
+  years (survivorship); equal-weight of the same names: 24.6% / 1.37 / −38%.
+- Paper: `backend/factor/paper.py`, its own `factor_paper_capital` (₹3 lakh) book,
+  rebalanced at the first 09:20 pass of each month. Per-symbol proposals are no longer
+  auto-bought. Risk-off sleeve modelled as cash at a liquid-ETF yield (LIQUIDBEES has no mark).
+- Next: intraday experimental/off for new users; discipline mirrors (costs, benchmark,
+  edge by setup); live only after 3 months of paper beating the benchmark.

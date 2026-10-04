@@ -10,9 +10,10 @@ bars, which a live feed cannot supply, so their ideas come from the
 history-backed scan (backend/suggestions/scan.py, daily at 16:00 in
 backend/scheduler.py). During the session this switch instead closes approved
 long-term positions at their stop or target every 15 minutes
-(backend/suggestions/exits.py), and from 09:20 buys every pending long-term
-stock proposal on paper at its live mark and sends the morning digest --
-re-running the scan first if the 16:00 pass was missed.
+(backend/suggestions/exits.py), and from 09:20 rebalances the factor
+portfolio on paper once a month (backend/factor/paper.py) and sends the
+morning digest of proposals waiting for the user -- re-running the scan
+first if the 16:00 pass was missed.
 
 Which worker owns a user's run: a Redis key `autorun:{user_id}` holding that
 worker's token, renewed every tick while its run is alive. Only a worker that
@@ -50,7 +51,6 @@ MODES = {"INTRADAY": "auto_paper_intraday"}
 LONGTERM_PREF = "auto_paper_longterm"
 EXIT_CHECK_MINUTES = 15
 MORNING = time(9, 20)
-MIN_FILL_FRACTION = 0.25  # an auto-approval cut below this share of its size is skipped
 
 # This process's identity for key ownership, and the auto runs it drives.
 _TOKEN = str(uuid.uuid4())
@@ -211,60 +211,23 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
                 db, user_id=user_id, universe=prefs["universe"], account_size=prefs["account_size"],
                 max_exposure=prefs["max_exposure"], source="scheduler", redis=redis, now=now,
             )
+        # The factor portfolio is the automatic long-term strategy: rebalanced
+        # on paper at the first morning pass of each month (backend/factor/).
+        from backend.factor import paper as factor_paper
+        if await factor_paper.due(db, user_id, now):
+            try:
+                summary = await factor_paper.rebalance(db, user_id, now=now)
+                await notify(db, user_id, factor_paper.summary_text(summary))
+            except Exception as exc:
+                logger.exception("factor rebalance failed for %s: %s", user_id, exc)
+        # Per-symbol proposals have no backtest evidence: they wait for the user.
         store = SuggestionStore(db)
         await store.expire_stale(now=now)
         pending = await store.list(user_id, mode="LONGTERM", status="PENDING", limit=100)
-        approved = await _auto_approve(db, store, user_id, pending, now)
-        if approved:
-            await notify(db, user_id, proposals_text(approved, f"Good morning: bought {len(approved)} long-term proposal(s) on paper."))
-        pending = [s for s in pending if s not in approved]
         if pending:
             pending.sort(key=lambda s: s["expires_at"])
             await notify(db, user_id, proposals_text(pending, f"Good morning: {len(pending)} long-term proposal(s) waiting."))
     return did
-
-
-async def _auto_approve(db, store, user_id: str, pending: list[dict], now: datetime) -> list[dict]:
-    """Approves pending long-term stock proposals on paper at their live
-    mark, as the Approve button does -- best score first, and only while
-    they fit: each is cut to `per_trade_cap`, and the total (open paper
-    positions included) stays within min(account_size, max_exposure).
-    Options, symbols without a mark, and whatever no longer fits are left
-    pending for the user."""
-    from backend.engine.persistence import LedgerStore
-    from backend.marks import mark_prices
-    from backend.suggestions.service import execute_suggestion
-    from backend.ws.publish import publisher_for
-
-    stocks = [s for s in pending if not s.get("option_contract")]
-    if not stocks:
-        return []
-    stocks.sort(key=lambda s: (s.get("score") or {}).get("final") or 0.0, reverse=True)
-    marks = await mark_prices(db, {s["symbol"] for s in stocks})
-    ledger = LedgerStore(db, user_id=user_id, on_change=publisher_for(user_id))
-    prefs = await PrefsStore(db).get(user_id)
-    held = sum(abs(p.quantity) * p.avg_price for p in (await ledger.get_open_positions(venue="paper")).values())
-    room = min(prefs["account_size"], prefs["max_exposure"]) - held
-    approved = []
-    for suggestion in stocks:
-        price = marks.get(suggestion["symbol"])
-        if not price:
-            continue
-        intended = int(min(suggestion["quantity"], prefs["per_trade_cap"] // price))
-        quantity = int(min(intended, room // price))
-        # Whatever room is left must buy a real position, not a share or two of dust.
-        if quantity < 1 or quantity < MIN_FILL_FRACTION * intended:
-            continue
-        try:
-            order = await execute_suggestion({**suggestion, "quantity": quantity}, ledger, price, now=now)
-        except Exception as exc:
-            logger.exception("auto-approve of %s failed: %s", suggestion["id"], exc)
-            continue
-        if await store.decide(user_id, suggestion["id"], status="EXECUTED", reason="auto-approved", order_id=order.id, now=now) is None:
-            logger.warning("suggestion %s was decided concurrently after order %s", suggestion["id"], order.id)
-        room -= quantity * price
-        approved.append(suggestion)
-    return approved
 
 
 async def autorun_loop(db, redis) -> None:

@@ -248,7 +248,7 @@ const Trading = () => {
             Scans a year of daily prices after each close (16:00 IST) and files what it finds under{' '}
             <Link to="/paper/decisions" className="underline underline-offset-2">Decisions</Link>.
             {prefs?.auto_paper_longterm
-              ? ' At 09:20 pending stock proposals are bought on paper automatically; in session, positions are sold at their stop or target, checked every 15 minutes.'
+              ? ' At 09:20 on the first trading day of each month the factor portfolio rebalances on paper; in session, approved positions are sold at their stop or target, checked every 15 minutes.'
               : ' Turn on the daily long-term engine in Settings to close approved positions at their stop or target.'}
           </p>
           <p className="mt-2 doc-meta normal-case">

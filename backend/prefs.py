@@ -36,6 +36,9 @@ DEFAULTS = {
     # is hit: "off", "preview" (alert with the orders it would place), or
     # "live" (place them). Never defaults to live.
     "auto_square_off": "off",
+    # The factor portfolio's own paper allocation (backend/factor/paper.py),
+    # apart from account_size: it needs ~₹3 lakh to hold its names in whole shares.
+    "factor_paper_capital": 300_000.0,
     # Start an intraday / long-term paper run by itself every trading day at
     # the open (backend/engine/autorun.py). Paper only; off until turned on.
     "auto_paper_intraday": False,
