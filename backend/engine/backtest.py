@@ -17,6 +17,9 @@ from backend.engine.runner import run
 from backend.instruments.models import Instrument
 from backend.options.backtest import ModelOptions
 
+# Adverse slippage per side on every backtest fill (spread + impact).
+BACKTEST_SLIPPAGE_BPS = 10.0
+
 
 async def run_backtest(
     strategies: list[Strategy],
@@ -32,7 +35,7 @@ async def run_backtest(
     """`model_options` prices option contracts for an options strategy
     (backend/options/backtest.py); without it an option intent never sizes."""
     feed = HistoricalFeed(provider, instruments, start, end, timeframe)
-    execution = SimulatedExecutionClient()
+    execution = SimulatedExecutionClient(slippage_bps=BACKTEST_SLIPPAGE_BPS)
     portfolio = Portfolio()
     clock = SimClock()
 
@@ -66,6 +69,7 @@ async def run_backtest(
             pre_realized = pre.realized_pnl if pre else 0.0
             yield fill  # runner calls portfolio.apply(fill) here
             post = portfolio.positions[fill.symbol]
+            gross = post.realized_pnl - pre_realized
             trades.append({
                 "order_id": fill.order_id,
                 "symbol": fill.symbol,
@@ -74,7 +78,11 @@ async def run_backtest(
                 "price": fill.price,
                 "timestamp": fill.timestamp.isoformat(),
                 "costs": fill.costs,
-                "realized_pnl": post.realized_pnl - pre_realized,
+                "gross_pnl": gross,
+                # Every fill pays charges, the opening one included; the
+                # metrics below are all computed on this net figure.
+                "net_pnl": gross - fill.costs,
+                "realized_pnl": gross - fill.costs,
             })
 
     execution.fills = recording_fills  # type: ignore[method-assign]

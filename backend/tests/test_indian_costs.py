@@ -30,10 +30,10 @@ def test_sell_cnc_small_turnover():
 
 
 def test_buy_mis_small_turnover():
-    # MIS: no STT on buy side.
-    # total = 3.0+0+0.297+0.01+1.5+0.59526 = 5.40226 -> 5.40
+    # MIS: no STT on buy side; intraday stamp duty is 0.003% (delivery's is 0.015%).
+    # total = 3.0+0+0.297+0.01+0.3+0.59526 = 4.20226 -> 4.20
     cost = calculate_indian_costs(price=100.0, quantity=100.0, side=Side.BUY, product="MIS")
-    assert cost == pytest.approx(5.40, abs=0.01)
+    assert cost == pytest.approx(4.20, abs=0.01)
 
 
 def test_sell_mis_small_turnover():

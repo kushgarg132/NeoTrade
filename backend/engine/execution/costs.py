@@ -29,7 +29,8 @@ _STT_DELIVERY_PCT = 0.001
 _STT_INTRADAY_SELL_PCT = 0.00025
 _EXCHANGE_TXN_PCT = 0.0000297
 _SEBI_CHARGE_PER_CRORE = 10.0
-_STAMP_DUTY_BUY_PCT = 0.00015
+_STAMP_DUTY_BUY_PCT = 0.00015          # delivery
+_STAMP_DUTY_INTRADAY_BUY_PCT = 0.00003  # intraday
 _GST_PCT = 0.18
 
 
@@ -53,7 +54,8 @@ def calculate_indian_costs(
 
     exchange_txn_charges = turnover * _EXCHANGE_TXN_PCT
     sebi_charges = turnover * _SEBI_CHARGE_PER_CRORE / 1e7
-    stamp_duty = turnover * _STAMP_DUTY_BUY_PCT if is_buy else 0.0
+    stamp_rate = _STAMP_DUTY_INTRADAY_BUY_PCT if product == "MIS" else _STAMP_DUTY_BUY_PCT
+    stamp_duty = turnover * stamp_rate if is_buy else 0.0
     gst = _GST_PCT * (brokerage + exchange_txn_charges + sebi_charges)
 
     total = brokerage + stt + exchange_txn_charges + sebi_charges + stamp_duty + gst

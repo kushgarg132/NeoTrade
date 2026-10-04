@@ -16,7 +16,11 @@ from backend.engine.execution.options_costs import calculate_options_costs
 
 
 class SimulatedExecutionClient:
-    def __init__(self) -> None:
+    def __init__(self, slippage_bps: float = 0.0) -> None:
+        # Backtests pass a slippage: a real market order pays the spread and
+        # some impact, always against the trader. Paper trading keeps 0 --
+        # it already fills at a live mark.
+        self.slippage_bps = slippage_bps
         self._last_price: dict[str, float] = {}
         self._last_timestamp: dict = {}
         self._pending_fills: list[Fill] = []
@@ -46,6 +50,8 @@ class SimulatedExecutionClient:
                 f"No current bar known for {order.symbol!r}; on_bar() must run before submit()"
             )
 
+        if self.slippage_bps:
+            price *= 1 + (self.slippage_bps if order.side.value == "BUY" else -self.slippage_bps) / 10_000
         costs = (
             calculate_options_costs(price, order.quantity, order.side) if order.contract is not None
             else calculate_indian_costs(price, order.quantity, order.side, order.product)

@@ -14,7 +14,7 @@ from backend.components.shared.models import PriceCandle
 from backend.core.clock import SimClock
 from backend.core.models import Intent, Side
 from backend.data.feeds.historical import HistoricalFeed
-from backend.engine.backtest import run_backtest
+from backend.engine.backtest import BACKTEST_SLIPPAGE_BPS, run_backtest
 from backend.engine.execution.simulated import SimulatedExecutionClient
 from backend.engine.portfolio import Portfolio
 from backend.engine.protocols import StrategySpec
@@ -109,7 +109,8 @@ async def test_backtest_result_shows_exactly_one_trade():
     # risk_pct=0.85% of the default 1,000,000 account / risk_per_share=10
     # (entry 100 - stop_hint 90) = 850 whole shares. See runner.size_intents.
     assert trade["quantity"] == 850.0
-    assert trade["price"] == candles[0].close  # filled at the first bar's close
+    # Filled at the first bar's close plus the backtest's adverse slippage.
+    assert trade["price"] == pytest.approx(candles[0].close * (1 + BACKTEST_SLIPPAGE_BPS / 10_000))
 
 
 @pytest.mark.asyncio
@@ -166,3 +167,27 @@ async def test_runner_calls_poll_once_on_an_execution_client_that_has_it():
     )
 
     assert execution.poll_once_calls == len(candles)
+
+
+async def test_slippage_moves_fills_against_the_trader():
+    from backend.core.models import Bar, Order
+
+    execution = SimulatedExecutionClient(slippage_bps=10)
+    execution.mark(SYMBOL, 100.0, datetime(2024, 1, 1, tzinfo=timezone.utc))
+    for side in (Side.BUY, Side.SELL):
+        await execution.submit(Order(id=side.value, symbol=SYMBOL, side=side, quantity=1,
+                                     order_type="MARKET", limit_price=None, product="CNC"))
+    fills = {f.side: f.price for f in [f async for f in execution.fills()]}
+    assert fills == {Side.BUY: pytest.approx(100.1), Side.SELL: pytest.approx(99.9)}
+
+
+async def test_backtest_totals_are_net_of_costs():
+    result = await run_backtest(
+        strategies=[_FirstBarBuyStrategy(SYMBOL, TIMEFRAME)], provider=_FakeProvider(_candles()),
+        instruments=[_instrument()], start=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        end=datetime(2024, 1, 10, tzinfo=timezone.utc), timeframe=TIMEFRAME,
+    )
+    # Only an opening buy: nothing realized, but its charges are a real loss.
+    assert result.trades and result.trades[0]["costs"] > 0
+    assert result.total_pnl == pytest.approx(-sum(t["costs"] for t in result.trades))
+    assert result.trades[0]["net_pnl"] == pytest.approx(-result.trades[0]["costs"])
