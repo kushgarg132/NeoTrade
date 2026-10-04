@@ -157,6 +157,14 @@ async def _call(method: str, body: dict, token: Optional[str]) -> Optional[dict]
         return None
 
 
+async def set_commands(commands: list[dict], token: Optional[str] = None) -> bool:
+    """Set the bot's "/" menu. Narrower scopes win in Telegram clients, so
+    clear the private/group menus another app may have left behind."""
+    for scope in ("all_private_chats", "all_group_chats"):
+        await _call("deleteMyCommands", {"scope": {"type": scope}}, token)
+    return await _call("setMyCommands", {"commands": commands}, token) is not None
+
+
 async def chat_action(chat_id: int, token: Optional[str] = None) -> None:
     """Shows "typing…" in the chat for ~5 seconds."""
     await _call("sendChatAction", {"chat_id": chat_id, "action": "typing"}, token)

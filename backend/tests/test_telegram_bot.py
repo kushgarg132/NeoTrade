@@ -16,8 +16,11 @@ async def test_poll_only_answers_a_chat_linked_to_that_bot(monkeypatch):
     ]))
     reply = AsyncMock()
     monkeypatch.setattr(telegram_bot, "_reply", reply)
+    menu = AsyncMock(return_value=True)
+    monkeypatch.setattr(telegram_bot.telegram, "set_commands", menu)
 
     assert await telegram_bot.poll_once(db, redis) == 1
+    menu.assert_awaited_once_with(telegram_bot.COMMANDS, "secret-token")
     reply.assert_awaited_once_with(db, redis, "alice", 42, "secret-token", "How am I doing?")
     # One per-bot worker lock plus one offset for the whole batch, committed
     # before any slow AI reply so another worker cannot re-fetch it.
@@ -149,6 +152,7 @@ async def test_start_code_is_stashed_for_settings_link_flow(monkeypatch):
     monkeypatch.setattr(telegram_bot.telegram, "updates", AsyncMock(return_value=[
         {"update_id": 1, "message": {"chat": {"id": 77}, "text": "/start abc123"}},
     ]))
+    monkeypatch.setattr(telegram_bot.telegram, "set_commands", AsyncMock(return_value=True))
 
     assert await telegram_bot.poll_once(db, redis) == 0
     redis.set.assert_any_await(telegram_bot.telegram.start_key("abc123"), "77", ex=telegram_bot.START_SECONDS)
@@ -188,3 +192,28 @@ def test_on_off_setting_accepts_a_coerced_one():
     # The tool schema Union[float, bool, str] turns a JSON 1 into 1.0.
     assert _setting("guardrails_enabled", 1.0) is True
     assert _setting("guardrails_enabled", 0.0) is False
+
+
+async def test_shortcut_command_asks_the_ai_and_new_clears_memory(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = AsyncMock()
+    redis.get.return_value = None
+    asked = []
+
+    async def stream(_db, _redis, _user, text, *_rest):
+        asked.append(text)
+        yield {"type": "content", "data": "Up 2%."}
+
+    monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
+    _fake_bot(monkeypatch)
+    send = AsyncMock(return_value=True)
+    monkeypatch.setattr(telegram_bot.telegram, "send", send)
+
+    await telegram_bot._reply(db, redis, "alice", 42, "tok", "/portfolio@NeoBot INFY")
+    assert asked == ["How is my portfolio doing? Focus on: INFY"]
+
+    await telegram_bot._reply(db, redis, "alice", 42, "tok", "/new")
+    redis.delete.assert_awaited_once_with(telegram_bot.HISTORY_PREFIX + "alice")
+
+    await telegram_bot._reply(db, redis, "alice", 42, "tok", "/codex")
+    assert "/portfolio — Portfolio summary" in send.await_args.args[1]

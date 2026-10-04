@@ -41,6 +41,24 @@ TYPING_SECONDS = 4  # fallback when drafts are unavailable: "typing…" lasts ~5
 MESSAGE_LIMIT = 2800  # answer text per message; leaves room for the steps under 4096
 STEPS_SHOWN = 8
 CURSOR = " ▍"
+# The bot's command menu (setMyCommands). Shortcuts are asked of the AI as
+# these questions, so they get the same tools, steps and Confirm cards.
+SHORTCUTS = {
+    "portfolio": ("How is my portfolio doing?", "Portfolio summary"),
+    "proposals": ("What proposals are pending for me?", "Pending proposals"),
+    "engine": ("What is my paper engine doing today?", "Paper engine status"),
+    "limits": ("Show my limits and guardrails.", "Limits and guardrails"),
+    "journal": ("Summarise my recent journal.", "Recent journal"),
+}
+COMMANDS = [{"command": name, "description": label} for name, (_, label) in SHORTCUTS.items()] + [
+    {"command": "new", "description": "Start a fresh conversation"},
+    {"command": "help", "description": "What I can do"},
+]
+HELP = ("Ask NeoTrade anything about your portfolio, journal, proposals, paper engine or limits. "
+        "I can prepare actions, but nothing changes until you tap Confirm.\n\n"
+        + "\n".join(f"/{c['command']} — {c['description']}" for c in COMMANDS))
+_menus_set: set[Optional[str]] = set()  # bots whose menu this process already replaced
+
 # Rendered into the chat prompt's page note, so the model points at the buttons here, not the app.
 TELEGRAM_CONTEXT = {"page": "Telegram chat (action cards appear right here with Confirm and Cancel buttons)"}
 
@@ -82,13 +100,19 @@ def _buttons(action: dict) -> list[list[dict]]:
 
 
 async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], text: str) -> None:
-    if text.strip() == "/help" or text.startswith("/start"):
-        await telegram.send(chat_id, "Ask NeoTrade about your portfolio, journal, proposals, paper engine, or limits. "
-                            "I can prepare actions, but nothing changes until you tap Confirm.", token)
-        return
     if text.startswith("/"):
-        await telegram.send(chat_id, "Use /help or send a question for your NeoTrade assistant.", token)
-        return
+        word, _, args = text[1:].partition(" ")
+        command = word.split("@")[0].lower()  # "/portfolio@MyBot" in groups
+        if command in SHORTCUTS:
+            text = SHORTCUTS[command][0] + (f" Focus on: {args.strip()}" if args.strip() else "")
+        elif command == "new":
+            if redis is not None:
+                await redis.delete(HISTORY_PREFIX + user_id)
+            await telegram.send(chat_id, "Fresh start: I've forgotten our earlier messages.", token)
+            return
+        else:  # /help, /start, and anything unknown
+            await telegram.send(chat_id, HELP, token)
+            return
 
     history = await _history(redis, user_id)
     # `text` is the model's output since its last tool call: what it wrote
@@ -255,6 +279,10 @@ async def _poll_bot(db, redis, token: Optional[str], chats: dict) -> int:
     handled = 0
     key = _offset_key(token)
     lock_key, lock_owner = _lock_key(token), str(uuid.uuid4())
+    if token not in _menus_set:
+        # Replace whatever menu the bot had (e.g. another app's) with ours.
+        if await telegram.set_commands(COMMANDS, token):
+            _menus_set.add(token)
     if redis is not None:
         # One worker per bot: concurrent getUpdates calls get 409 Conflict.
         acquired = await redis.set(lock_key, lock_owner, nx=True, ex=LOCK_SECONDS)
