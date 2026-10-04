@@ -183,15 +183,30 @@ async def test_memory_card_saves_only_on_confirm(env):
     from backend.profile.store import ProfileStore
 
     db = env["db"]
-    card = await _propose(db, "propose_memory", {"text": "Saving for a house"})
+    card = await _propose(db, "propose_memory", {"facts": ["Saving for a house"]})
     assert card["kind"] == "memory" and card["summary"] == "Remember: Saving for a house"
     assert (await ProfileStore(db).get("alice"))["memories"] == []
-    for bad in ("   ", "x" * 201):
-        out = await _tools(db)["propose_memory"].ainvoke({"text": bad})
+    for bad in (["   "], ["x" * 201], []):
+        out = await _tools(db)["propose_memory"].ainvoke({"facts": bad})
         assert not out.startswith("ACTION_CARD:")
     result = await confirm(db, None, None, "alice", card["id"])
     assert result["status"] == "CONFIRMED"
     memories = (await ProfileStore(db).get("alice"))["memories"]
     assert [(m["text"], m["source"]) for m in memories] == [("Saving for a house", "chat")]
-    again = await _tools(db)["propose_memory"].ainvoke({"text": "saving for a house"})
+    again = await _tools(db)["propose_memory"].ainvoke({"facts": ["saving for a house"]})
     assert "already" in again
+
+
+async def test_several_facts_are_one_card_and_all_saved(env):
+    from backend.profile.store import ProfileStore
+
+    db = env["db"]
+    await ProfileStore(db).add_memory("alice", "Monthly SIP budget is ₹15,000", "chat")
+    card = await _propose(db, "propose_memory", {"facts": [
+        "Monthly SIP budget is ₹15,000", "No debt or gold investments", "No big expenses planned", "No debt or gold investments",
+    ]})
+    # Already-saved and repeated facts are dropped from the one card.
+    assert card["summary"] == "Remember:\n• No debt or gold investments\n• No big expenses planned"
+    result = await confirm(db, None, None, "alice", card["id"])
+    assert result["result"] == "Saved 2 things to your profile memory."
+    assert len((await ProfileStore(db).get("alice"))["memories"]) == 3

@@ -242,21 +242,24 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
                           f"{side} {quantity} {params['symbol']} · {kind} · market · ~₹{price * quantity:,.0f} on {venue}",
                           venue, second_tap=venue == "live")
 
-    async def propose_memory(text: str) -> str:
+    async def propose_memory(facts: list[str]) -> str:
         from backend.profile.models import MAX_MEMORIES, MAX_MEMORY_CHARS
         from backend.profile.store import ProfileStore, _norm
 
-        text = " ".join((text or "").split())
-        if not text:
-            return "There is nothing to remember."
-        if len(text) > MAX_MEMORY_CHARS:
-            return f"A memory can be at most {MAX_MEMORY_CHARS} characters; shorten it."
-        memories = (await ProfileStore(db).get(user_id))["memories"]
-        if any(_norm(m["text"]) == _norm(text) for m in memories):
-            return "That is already in the trader's profile memory."
-        if len(memories) >= MAX_MEMORIES:
-            return f"The profile memory is full ({MAX_MEMORIES}); the trader can delete one on the Profile page."
-        return await card("memory", {"text": text}, f"Remember: {text}")
+        saved = {_norm(m["text"]) for m in (await ProfileStore(db).get(user_id))["memories"]}
+        new: list[str] = []
+        for fact in facts or []:
+            text = " ".join((fact or "").split())
+            if len(text) > MAX_MEMORY_CHARS:
+                return f"A memory can be at most {MAX_MEMORY_CHARS} characters; shorten: {text[:40]}…"
+            if text and _norm(text) not in saved and _norm(text) not in {_norm(n) for n in new}:
+                new.append(text)
+        if not new:
+            return "That is already in the trader's profile memory." if facts else "There is nothing to remember."
+        if len(saved) + len(new) > MAX_MEMORIES:
+            return f"The profile memory is full ({MAX_MEMORIES}); the trader can delete some on the Profile page."
+        summary = f"Remember: {new[0]}" if len(new) == 1 else "Remember:\n" + "\n".join(f"• {t}" for t in new)
+        return await card("memory", {"facts": new}, summary)
 
     def tool(fn, description):
         return StructuredTool.from_function(coroutine=fn, name=fn.__name__, description=description)
@@ -269,8 +272,8 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         tool(propose_setting, "Change one of the user's limits or switches: " + ", ".join(SETTINGS) + "." + note),
         tool(propose_order, "Place a market order for an NSE stock: side BUY or SELL, whole quantity, product CNC "
                             "(delivery) or MIS (intraday), venue paper or live. Live is real money." + note),
-        tool(propose_memory, "Save a lasting fact or preference the trader shared (goal, situation, dislike) to "
-                             "their profile memory." + note),
+        tool(propose_memory, "Save lasting facts or preferences the trader shared (goals, situation, dislikes) "
+                             "to their profile memory -- pass ALL of them in one call, as one card." + note),
     ]
 
 
@@ -352,11 +355,15 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
         from backend.profile.models import MemoryRefused
         from backend.profile.store import ProfileStore
 
-        try:
-            await ProfileStore(db).add_memory(user_id, params["text"], "chat")
-        except MemoryRefused as exc:
-            raise ActionRefused(str(exc))
-        return "Saved to your profile memory."
+        saved = 0
+        for fact in params.get("facts") or [params["text"]]:  # "text": cards made before batching
+            try:
+                await ProfileStore(db).add_memory(user_id, fact, "chat")
+                saved += 1
+            except MemoryRefused as exc:
+                if "full" in str(exc):
+                    raise ActionRefused(str(exc))
+        return "Saved to your profile memory." if saved == 1 else f"Saved {saved} things to your profile memory."
 
     if kind == "setting":
         value = _setting(params["name"], params["value"])

@@ -337,19 +337,28 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
         return
     if command not in {"confirm", "cancel"} or not action_id:
         return
+    done = False
     try:
         if command == "cancel":
             changed = await ChatActionStore(db).cancel(user_id, action_id)
             result = "Cancelled." if changed else "That action can no longer be cancelled."
         else:
             result = (await confirm(db, redis, get_credential_store(), user_id, action_id))["result"]
+            done = True
     except ActionRefused as exc:
         result = str(exc)
     except Exception:
         logger.exception("telegram action failed for user %s", user_id)
         result = "NeoTrade could not complete that action. Please check the app and try again."
     await telegram.answer_callback(callback_id, result[:180], token)
-    await telegram.send(chat_id, result, token)
+    card = callback.get("message") or {}
+    if card.get("message_id"):
+        # The card shows its outcome and loses its buttons -- no extra message.
+        await telegram.edit_html(chat_id, card["message_id"],
+                                 f"{html.escape(card.get('text') or '', quote=False)}\n\n{'✅' if done else '✖'} "
+                                 f"{html.escape(result, quote=False)}", token)
+    else:
+        await telegram.send(chat_id, result, token)
 
 
 async def _ask(db, redis, user_id: str, chat_id: int, token: Optional[str], callback: dict, index: str) -> None:

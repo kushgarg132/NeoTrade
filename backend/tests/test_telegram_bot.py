@@ -142,11 +142,17 @@ async def test_callback_uses_existing_confirm_path(monkeypatch):
     monkeypatch.setattr(telegram_bot.telegram, "answer_callback", acknowledge)
     monkeypatch.setattr(telegram_bot.telegram, "send", send)
 
-    await telegram_bot._callback(db, None, "alice", 42, "token", {"id": "cb1", "data": "nt:confirm:a1"})
+    edit = AsyncMock()
+    monkeypatch.setattr(telegram_bot.telegram, "edit_html", edit)
+
+    await telegram_bot._callback(db, None, "alice", 42, "token", {
+        "id": "cb1", "data": "nt:confirm:a1", "message": {"message_id": 7, "text": "Buy 10 INFY on paper"}})
 
     assert confirmed.await_args.args[3:5] == ("alice", "a1")
     acknowledge.assert_awaited_once_with("cb1", "Paper BUY INFY filled.", "token")
-    send.assert_awaited_once_with(42, "Paper BUY INFY filled.", "token")
+    # The card itself shows the outcome and loses its buttons; no extra message.
+    edit.assert_awaited_once_with(42, 7, "Buy 10 INFY on paper\n\n✅ Paper BUY INFY filled.", "token")
+    send.assert_not_awaited()
 
 
 async def test_start_code_is_stashed_for_settings_link_flow(monkeypatch):
