@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 
 from backend.learning.adapt import _closed_trades, _state, load_rules
 from backend.learning.attribution import attribute
+from backend.learning.retune import current_params
 from backend.llm import llm_service
 from backend.prompts import render
 
@@ -25,7 +26,12 @@ async def snapshot(db, user_id: str, nifty: list, now: datetime) -> dict:
     changes = await db["learning_changes"].find(
         {"user_id": user_id, "at": {"$gte": now - timedelta(days=CHANGES_DAYS)}}, {"_id": 0, "user_id": 0},
     ).sort("at", -1).to_list(50)
+    running = await current_params(db)
+    latest = {}
+    async for doc in db["strategy_retunes"].find({}, {"_id": 0, "trial_sharpes": 0, "train": 0}).sort("at", 1):
+        latest[doc["strategy"]] = {**doc, "running": running.get(doc["strategy"])}
     return {
+        "retunes": sorted(latest.values(), key=lambda d: d["strategy"]),
         "rules": {"paused": sorted(rules.paused), "floors": rules.floors,
                   "skip_regimes": rules.skip_regimes, "regime_today": rules.regime},
         "changes": changes,

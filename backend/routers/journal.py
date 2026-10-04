@@ -3,6 +3,8 @@ with a daily P&L calendar and their own notes and tags. Everything here is
 the user's own data about their own trading: nothing is a recommendation.
 """
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -148,6 +150,16 @@ async def set_round_trip_note(
     tags = sorted({t.strip().lower() for t in body.tags if t.strip()})
     await store.set_note(user.id, round_trip_id, body.note.strip(), tags)
     return {"note": body.note.strip(), "tags": tags}
+
+
+@router.get("/learning")
+async def get_learning(user: User = Depends(get_current_user), nifty: list = Depends(get_nifty)):
+    """What the paper engine learned from this user's closed paper trades
+    (backend/learning): rules it follows now, changes it made, every setup's
+    record, and each strategy's latest monthly re-tune."""
+    from backend.learning.report import snapshot
+
+    return await snapshot(db.db, user.id, nifty, datetime.now(timezone.utc))
 
 
 @router.get("/beta-metrics")

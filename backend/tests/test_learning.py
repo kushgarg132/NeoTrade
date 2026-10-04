@@ -211,3 +211,43 @@ async def test_the_weekly_note_is_the_models_explanation_when_it_answers(db, mon
     text = await report.weekly_text(db, "alice", _nifty(), NOW)
     assert text.endswith("What lost money: vwap.")
     assert "vwap / overall: n 30" in llm.call_args.args[0]
+
+
+def test_the_journal_learning_endpoint_shows_rules_changes_setups_and_retunes(monkeypatch):
+    import asyncio
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from backend.auth.dependency import get_current_user
+    from backend.auth.models import User
+    from backend.routers import journal as journal_router
+
+    mock_db = AsyncMongoMockClient()["test_db"]
+    monkeypatch.setattr(journal_router.db, "db", mock_db)
+
+    async def setup():
+        await _insert(mock_db, [_trade(-100.0)] * 30)
+        await _insert(mock_db, [_trade(-100.0, strategy="orb")] * 30, user_id="bob")
+        await learn(mock_db, "alice", _nifty(), datetime.now(timezone.utc))
+        await mock_db["strategy_retunes"].insert_many([
+            {"strategy": "macd_crossover", "at": NOW - timedelta(days=40), "accepted": True,
+             "params": {"stop_pct": 0.05}, "current": {"stop_pct": 0.03}, "reason": "won", "trial_sharpes": [0.1]},
+            {"strategy": "macd_crossover", "at": NOW, "accepted": False,
+             "params": {"stop_pct": 0.02}, "current": {"stop_pct": 0.05}, "reason": "deflated Sharpe 0.40",
+             "trial_sharpes": [0.2]},
+        ])
+    asyncio.run(setup())
+    app = FastAPI()
+    app.include_router(journal_router.router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = lambda: User(
+        id="alice", google_sub="g", email="a@x.io", name="A", created_at=NOW)
+    app.dependency_overrides[journal_router.get_nifty] = _nifty
+
+    body = TestClient(app).get("/api/v1/journal/learning").json()
+    assert body["rules"]["paused"] == ["vwap"]
+    assert [c["rule"] for c in body["changes"]] == ["pause"]
+    assert {g["strategy"] for g in body["groups"]} == {"vwap"}  # never bob's
+    [retune] = body["retunes"]
+    assert retune["strategy"] == "macd_crossover" and retune["reason"] == "deflated Sharpe 0.40"
+    assert retune["running"] == {"stop_pct": 0.05} and "trial_sharpes" not in retune
