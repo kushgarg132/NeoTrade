@@ -135,3 +135,9 @@ async def test_zero_close_and_zero_volume_give_none(wired, monkeypatch):
 
     assert t["returns"]["1y"] is None
     assert t["volume_ratio"] is None
+
+
+async def test_quick_analysis_carries_flags(wired):
+    result = await quick_module.quick_analysis("RELIANCE")
+
+    assert any(flag["code"] == "trend" for flag in result.flags)

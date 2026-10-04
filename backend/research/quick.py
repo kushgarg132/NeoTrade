@@ -26,6 +26,7 @@ from backend.data.providers.yfinance_provider import YFinanceProvider
 from backend.database import get_database
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.resolve import resolve_symbol
+from backend.research.flags import stock_flags
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class QuickAnalysis(BaseModel):
     price_data: List[Dict[str, Any]]
     technical_analysis: Dict[str, Any]
     peers: List[str] = []
+    flags: List[Dict[str, Any]] = []
 
 
 def _last(series: pd.Series):
@@ -132,10 +134,13 @@ async def quick_analysis(query: str) -> QuickAnalysis:
         _provider.history(instrument, interval="1d", period="1y"),
     )
 
+    company = company_info.model_dump(mode="json")
+    technicals = _compute_technicals(candles)
     return QuickAnalysis(
         symbol=symbol,
-        company_info=company_info.model_dump(mode="json"),
+        company_info=company,
         price_data=[c.model_dump(mode="json") for c in candles],
-        technical_analysis=_compute_technicals(candles),
+        technical_analysis=technicals,
         peers=resolved.get("peers", []),
+        flags=stock_flags(technicals, company),
     )
