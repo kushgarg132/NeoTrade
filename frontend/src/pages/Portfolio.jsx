@@ -13,6 +13,7 @@ import Layout from '../components/Layout';
 import PaperShell from '../components/paper/PaperShell';
 import { paperPositions } from '../utils/books';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
+import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
 import { useTopic } from '../hooks/useStream';
 import {
@@ -20,6 +21,7 @@ import {
   formatQuantity,
   formatNoteDate,
   formatPercent,
+  formatClock,
 } from '../utils/formatters';
 
 /**
@@ -47,6 +49,7 @@ const Portfolio = () => {
   const [positions, setPositions] = useState({});
   const [trades, setTrades] = useState([]);
   const [pnl, setPnl] = useState(null);
+  const [fills, setFills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -55,8 +58,10 @@ const Portfolio = () => {
       api.get(endpoints.trading.positions('paper')),
       api.get(endpoints.trading.trades('CLOSED', 'paper')),
       api.get(endpoints.analytics.pnl('paper')),
+      api.get(endpoints.trading.fills('paper')),
     ])
-      .then(([positionsRes, tradesRes, pnlRes]) => {
+      .then(([positionsRes, tradesRes, pnlRes, fillsRes]) => {
+        setFills(fillsRes.data);
         setPositions(positionsRes.data);
         setTrades(tradesRes.data);
         setPnl(pnlRes.data);
@@ -86,6 +91,7 @@ const Portfolio = () => {
   }, [trades]);
 
   const open = Object.values(positions);
+  const recentFills = [...fills].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 25);
   const realisedTotal = curve.length ? curve[curve.length - 1].cumulative : 0;
 
   if (loading) {
@@ -202,6 +208,46 @@ const Portfolio = () => {
                 </NetLine>
               )}
             </>
+          )}
+        </Sheet>
+
+        <Sheet title="Executions" meta={`${fills.length} fills`}>
+          {recentFills.length === 0 ? (
+            <Empty title="No executions yet" detail="Fills appear here as orders are filled." />
+          ) : (
+            <Statement
+              columns={[
+                { key: 'scrip', label: 'Scrip' },
+                { key: 'time', label: 'Time' },
+                { key: 'side', label: 'Side' },
+                { key: 'qty', label: 'Qty', align: 'right' },
+                { key: 'price', label: 'Price', align: 'right' },
+                { key: 'costs', label: 'Charges', align: 'right' },
+              ]}
+            >
+              {recentFills.map((fill) => (
+                <Row key={`${fill.order_id}-${fill.timestamp}`}>
+                  <Cell>
+                    <Scrip symbol={fill.symbol} />
+                  </Cell>
+                  <Cell className="doc-meta normal-case">{formatClock(fill.timestamp)}</Cell>
+                  <Cell>
+                    <Badge variant={fill.side === 'BUY' ? 'success' : 'destructive'}>
+                      {fill.side}
+                    </Badge>
+                  </Cell>
+                  <Cell align="right" mono>
+                    {formatQuantity(fill.quantity)}
+                  </Cell>
+                  <Cell align="right" mono>
+                    {formatCurrency(fill.price)}
+                  </Cell>
+                  <Cell align="right" mono className="text-[var(--ink-faint)]">
+                    {formatCurrency(fill.costs)}
+                  </Cell>
+                </Row>
+              ))}
+            </Statement>
           )}
         </Sheet>
 

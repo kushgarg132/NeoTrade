@@ -18,8 +18,7 @@ import { usePendingCount } from '../../context/pendingContext';
 const PAPER_TABS = [
   { path: '/ai/practice', label: 'Overview', end: true },
   { path: '/ai/practice/decisions', label: 'Decisions', short: 'Decide', counter: true },
-  { path: '/ai/practice/holdings', label: 'Holdings', short: 'Book' },
-  { path: '/ai/practice/engine', label: 'Engine' },
+  { path: '/ai/practice/book', label: 'Book' },
   { path: '/ai/practice/settings', label: 'Settings', short: 'Setup' },
 ];
 
@@ -39,7 +38,7 @@ const PaperShell = ({ children }) => {
           </p>
         </div>
         <nav
-          className="grid grid-cols-5 border-t border-dashed border-[var(--stamp)]"
+          className="grid grid-cols-4 border-t border-dashed border-[var(--stamp)]"
           aria-label="Paper trading"
         >
           {PAPER_TABS.map((tab) => (
@@ -57,7 +56,7 @@ const PaperShell = ({ children }) => {
                 )
               }
             >
-              {/* A phone fits five tabs only on the short names. */}
+              {/* A phone fits the tabs only on the short names. */}
               <span className="sm:hidden">{tab.short || tab.label}</span>
               <span className="hidden sm:inline">{tab.label}</span>
               {tab.counter && pending > 0 && (

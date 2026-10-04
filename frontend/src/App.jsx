@@ -10,7 +10,6 @@ const Watchlist = lazy(() => import('./pages/Watchlist'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
 const Journal = lazy(() => import('./pages/Journal'));
 const MyPortfolio = lazy(() => import('./pages/MyPortfolio'));
-const Trading = lazy(() => import('./pages/Trading'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AiLimits = lazy(() => import('./pages/AiLimits'));
@@ -97,8 +96,9 @@ const App = () => {
       <Route path="/ai/limits" element={gated(<AiLimits />)} />
       <Route path="/ai/practice" element={gated(<PaperOverview />)} />
       <Route path="/ai/practice/decisions" element={gated(<Suggestions />)} />
-      <Route path="/ai/practice/holdings" element={gated(<Portfolio />)} />
-      <Route path="/ai/practice/engine" element={gated(<Trading />)} />
+      <Route path="/ai/practice/book" element={gated(<Portfolio />)} />
+      <Route path="/ai/practice/holdings" element={<Moved to="/ai/practice/book" />} />
+      <Route path="/ai/practice/engine" element={<Moved to="/ai/practice" />} />
       <Route path="/ai/practice/settings" element={gated(<PaperSettings />)} />
       {/* Research */}
       <Route path="/research" element={gated(<Dashboard />)} />
@@ -117,11 +117,11 @@ const App = () => {
       <Route path="/options" element={<Moved to="/research/options" />} />
       <Route path="/paper" element={<Moved to="/ai/practice" />} />
       <Route path="/paper/decisions" element={<Moved to="/ai/practice/decisions" />} />
-      <Route path="/paper/holdings" element={<Moved to="/ai/practice/holdings" />} />
-      <Route path="/paper/engine" element={<Moved to="/ai/practice/engine" />} />
+      <Route path="/paper/holdings" element={<Moved to="/ai/practice/book" />} />
+      <Route path="/paper/engine" element={<Moved to="/ai/practice" />} />
       <Route path="/paper/settings" element={<Moved to="/ai/practice/settings" />} />
       <Route path="/suggestions" element={<Moved to="/ai/practice/decisions" />} />
-      <Route path="/trading" element={<Moved to="/ai/practice/engine" />} />
+      <Route path="/trading" element={<Moved to="/ai/practice" />} />
       <Route path="*" element={gated(<NotFound />)} />
     </Routes>
   );
