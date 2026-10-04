@@ -191,3 +191,42 @@ async def test_backtest_totals_are_net_of_costs():
     assert result.trades and result.trades[0]["costs"] > 0
     assert result.total_pnl == pytest.approx(-sum(t["costs"] for t in result.trades))
     assert result.trades[0]["net_pnl"] == pytest.approx(-result.trades[0]["costs"])
+
+
+class _BuyWithLevels(_FirstBarBuyStrategy):
+    def __init__(self, stop: float, target: float) -> None:
+        super().__init__(SYMBOL, TIMEFRAME)
+        self._levels = (stop, target)
+
+    def on_bar(self, ctx, bar) -> None:
+        if self._fired:
+            return
+        self._fired = True
+        stop, target = self._levels
+        ctx.submit(Intent(symbol=SYMBOL, side=Side.BUY, strength=1.0, reason_codes=["t"],
+                          stop_hint=stop, target_hint=target))
+
+
+async def _levels_backtest(closes: list[float], stop: float, target: float):
+    base = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    candles = [PriceCandle(symbol=SYMBOL, timestamp=base + timedelta(days=i), open=c, high=c, low=c,
+                           close=c, volume=1000.0) for i, c in enumerate(closes)]
+    return await run_backtest(
+        strategies=[_BuyWithLevels(stop, target)], provider=_FakeProvider(candles),
+        instruments=[_instrument()], start=candles[0].timestamp, end=candles[-1].timestamp,
+        timeframe=TIMEFRAME,
+    )
+
+
+async def test_a_long_term_buy_is_sold_at_the_close_that_crosses_its_target():
+    result = await _levels_backtest([100, 101, 102, 104, 106, 108], stop=90.0, target=103.0)
+    sides = [(t["side"], t["timestamp"][:10]) for t in result.trades]
+    assert sides == [("BUY", "2024-01-01"), ("SELL", "2024-01-04")]  # 104 >= 103, sold once
+    assert result.trades[1]["gross_pnl"] > 0
+
+
+async def test_a_long_term_buy_is_sold_at_the_close_that_breaks_its_stop():
+    result = await _levels_backtest([100, 98, 95, 89, 85], stop=90.0, target=120.0)
+    assert [t["side"] for t in result.trades] == ["BUY", "SELL"]
+    assert result.trades[1]["price"] == pytest.approx(89 * (1 - BACKTEST_SLIPPAGE_BPS / 10_000))
+    assert result.trades[1]["gross_pnl"] < 0

@@ -3,10 +3,12 @@ through the shared runner.run() loop, then reports through the existing
 (until now referenced nowhere) `BacktestResult` model.
 """
 
+import uuid
 from datetime import datetime
 
 from backend.components.shared.models import BacktestResult
 from backend.core.clock import SimClock
+from backend.core.models import Order, Side
 from backend.data.feeds.historical import HistoricalFeed
 from backend.data.protocols import MarketDataProvider
 from backend.engine.execution.simulated import SimulatedExecutionClient
@@ -16,6 +18,7 @@ from backend.engine.protocols import Strategy
 from backend.engine.runner import run
 from backend.instruments.models import Instrument
 from backend.options.backtest import ModelOptions
+from backend.suggestions.exits import breach
 
 # Adverse slippage per side on every backtest fill (spread + impact).
 BACKTEST_SLIPPAGE_BPS = 10.0
@@ -42,6 +45,34 @@ async def run_backtest(
     bar_timestamps: list[datetime] = []
     original_feed_iter = feed.__aiter__
 
+    # A long-term buy is held until a close crosses its stop or target and
+    # is then sold at that close, as paper does (backend/suggestions/exits.py).
+    # Without this nothing ever sells it and its P&L never shows.
+    levels: dict[str, tuple] = {}
+    original_submit = execution.submit
+
+    async def submit_noting_levels(order: Order) -> str:
+        context = order.context or {}
+        if order.product == "CNC" and order.side == Side.BUY and context.get("stop") is not None:
+            levels[order.symbol] = (context["stop"], context.get("target"))
+        return await original_submit(order)
+
+    execution.submit = submit_noting_levels  # type: ignore[method-assign]
+
+    async def exit_on_levels(bar) -> None:
+        symbol = feed.symbol_for_token.get(bar.instrument_token)
+        position = portfolio.positions.get(symbol)
+        if symbol not in levels or position is None or position.quantity <= 0:
+            return
+        if breach(bar.close, *levels[symbol]) is None:
+            return
+        del levels[symbol]
+        execution.mark(symbol, bar.close, bar.timestamp)
+        await original_submit(Order(
+            id=str(uuid.uuid4()), symbol=symbol, side=Side.SELL, quantity=position.quantity,
+            order_type="MARKET", limit_price=None, product="CNC",
+        ))
+
     async def timestamped_bars():
         # BacktestResult.start_date/end_date report the *actual* span of
         # candles a data provider returned, not the range the caller asked
@@ -51,6 +82,7 @@ async def run_backtest(
         # really ran (see docs/ROADMAP.md Phase 4).
         async for bar in original_feed_iter():
             bar_timestamps.append(bar.timestamp)
+            await exit_on_levels(bar)
             if model_options is not None:
                 model_options.observe(feed.symbol_for_token[bar.instrument_token], bar)
             yield bar
