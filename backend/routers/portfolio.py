@@ -7,6 +7,8 @@ facts and reasons, with a SELL shown as "review first", and no action plan. Show
 every user needs SEBI Research Analyst registration (PRODUCT.md).
 """
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.app_settings import AppSettingsStore
@@ -42,11 +44,21 @@ async def verdicts_visible_to(user: User) -> bool:
 
 
 @router.get("")
-async def get_portfolio(user: User = Depends(get_current_user)):
-    """The last analysed snapshot, or 404 before the first refresh."""
+async def get_portfolio(user: User = Depends(get_current_user), account: Literal["all", "ai", "mine"] = "all"):
+    """The last analysed snapshot, or 404 before the first refresh. With
+    `account`, just that account's holdings (backend/brokers/roles.py)."""
     snapshot = await latest_snapshot(db.db, user.id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="No portfolio analysed yet")
+    if account != "all":
+        from backend.brokers.roles import brokers_for
+        from backend.journal.store import JournalStore
+        from backend.portfolio.service import _nifty, scorecard_for
+        from backend.prefs import PrefsStore
+
+        roles = (await PrefsStore(db.db).get(user.id)).get("broker_roles") or {}
+        snapshot = scorecard_for(snapshot, brokers_for(roles, account), await JournalStore(db.db).list_trades(user.id),
+                                 await _nifty())
     return present(snapshot, await verdicts_visible_to(user))
 
 

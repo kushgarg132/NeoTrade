@@ -277,7 +277,17 @@ async def _weekly_mirrors(db) -> int:
             first = min(t["traded_at"] for t in trades)
             bench = mirror.benchmark(costs["net_pnl"], (await PrefsStore(db).get(user_id))["account_size"],
                                      first.date(), max(d for d, _ in nifty), nifty) if nifty else None
-            sent += bool(await notify(db, user_id, mirror.text(costs, bench)))
+            text = mirror.text(costs, bench)
+            prefs = await PrefsStore(db).get(user_id)
+            roles = prefs.get("broker_roles") or {}
+            if "ai" in roles.values() and "mine" in roles.values():
+                from backend.journal.accounts import ai_vs_me
+                month = ai_vs_me(trades, roles, {"ai": prefs["autopilot_capital"], "mine": prefs["account_size"]}, nifty)
+                if month:
+                    last = month[-1]
+                    text += (f"\nThis month — AI account ₹{last['ai']['net_pnl']:+,.0f}, "
+                             f"your account ₹{last['mine']['net_pnl']:+,.0f} (after charges).")
+            sent += bool(await notify(db, user_id, text))
         except Exception as exc:
             logger.warning("weekly mirror failed for %s: %s", user_id, exc)
     return sent

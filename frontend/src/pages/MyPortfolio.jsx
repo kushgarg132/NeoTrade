@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, RefreshCw } from 'lucide-react';
 import Layout from '../components/Layout';
+import { AccountSwitch, useAccount } from '../components/common/AccountSwitch';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, Scrip, Stamp, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
 import Markdown from '../components/common/Markdown';
@@ -315,20 +316,26 @@ const MyPortfolio = () => {
   const [open, setOpen] = useState(null);
   const toggle = (key) => setOpen((current) => (current === key ? null : key));
 
-  useEffect(() => {
+  const accountState = useAccount();
+  const { account } = accountState;
+  const loadSnapshot = () =>
     api
-      .get(endpoints.portfolio.get)
+      .get(endpoints.portfolio.get, { params: { account } })
       .then((res) => setSnapshot(res.data))
       .catch(() => setSnapshot(null))
       .finally(() => setLoading(false));
-  }, []);
+  useEffect(() => {
+    loadSnapshot();
+  }, [account]);
 
   const refresh = async () => {
     setBusy(true);
     setFailure(null);
     try {
       const res = await api.post(endpoints.portfolio.refresh);
-      setSnapshot(res.data);
+      // The refresh returns every account; show the chosen one.
+      if (account === 'all') setSnapshot(res.data);
+      else await loadSnapshot();
     } catch (err) {
       setFailure(err?.response?.data?.detail || 'Could not read your holdings');
     } finally {
@@ -361,6 +368,7 @@ const MyPortfolio = () => {
   return (
     <Layout>
       <div className="private space-y-3 sm:space-y-4">
+        <AccountSwitch {...accountState} />
         <Sheet
           title="Portfolio"
           meta={snapshot ? `${formatDateTime(snapshot.at)}${brokers ? ` · ${brokers}` : ''}` : null}

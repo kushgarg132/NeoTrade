@@ -84,10 +84,17 @@ def _json(value) -> str:
 
 
 def read_tools(db, redis, user_id: str) -> list:
-    async def get_portfolio(symbol: Optional[str] = None) -> str:
+    async def get_portfolio(symbol: Optional[str] = None, account: Literal["all", "ai", "mine"] = "all") -> str:
         snap = await latest_snapshot(db, user_id)
         if not snap:
             return "No portfolio has been analysed yet. The user can tap Analyse now on the Portfolio page."
+        if account != "all":
+            from backend.brokers.roles import brokers_for
+            from backend.portfolio.service import _nifty, scorecard_for
+
+            roles = (await PrefsStore(db).get(user_id)).get("broker_roles") or {}
+            snap = scorecard_for(snap, brokers_for(roles, account), await JournalStore(db).list_trades(user_id),
+                                 await _nifty())
         keep = ("symbol", "kind", "sector", "quantity", "avg_price", "value", "pnl", "pnl_pct", "weight_pct",
                 "verdict", "reason_codes", "score", "note", "nifty_pnl_pct")
         holdings = snap.get("holdings", [])
@@ -97,16 +104,20 @@ def read_tools(db, redis, user_id: str) -> list:
                 return f"{symbol} is not among the user's holdings."
             return _json({**{k: match[0].get(k) for k in keep}, "health": match[0].get("health")})
         return _json({
-            "as_of": snap["at"], "totals": snap.get("totals"), "benchmark": snap.get("benchmark"),
+            "account": account, "as_of": snap["at"], "totals": snap.get("totals"), "benchmark": snap.get("benchmark"),
             "concentration": snap.get("concentration"), "plan": snap.get("plan"),
             "sell_or_trim": plan_names(snap.get("plan"), "sell"), "add": plan_names(snap.get("plan"), "add"),
             "holdings": [{k: h.get(k) for k in keep if k != "note"} for h in holdings[:MAX_HOLDINGS]],
         })
 
-    async def get_journal(period: Literal["today", "week", "month", "all"] = "month", symbol: Optional[str] = None) -> str:
+    async def get_journal(period: Literal["today", "week", "month", "all"] = "month", symbol: Optional[str] = None,
+                          account: Literal["all", "ai", "mine"] = "all") -> str:
         from backend.journal import mirror
+        from backend.journal.accounts import brokers_of, filter_trades
 
-        trades = await JournalStore(db).list_trades(user_id)
+        prefs = await PrefsStore(db).get(user_id)
+        trades = filter_trades(await JournalStore(db).list_trades(user_id),
+                               brokers_of(prefs.get("broker_roles") or {}, account))
         trips = build_round_trips(trades)
         all_time = mirror.costs(trades, trips, (await PrefsStore(db).get(user_id))["account_size"])
         today = datetime.now(timezone.utc).astimezone(IST).date()
@@ -118,7 +129,7 @@ def read_tools(db, redis, user_id: str) -> list:
         closed = [t for t in trips if t.get("pnl") is not None]
         keep = ("symbol", "kind", "direction", "quantity", "entry_price", "exit_price", "pnl", "day", "tags", "note")
         return _json({
-            "period": period, "closed": len(closed), "pnl_gross": round(sum(t["pnl"] for t in closed), 2),
+            "account": account, "period": period, "closed": len(closed), "pnl_gross": round(sum(t["pnl"] for t in closed), 2),
             "wins": sum(t["pnl"] > 0 for t in closed), "by_day": daily_pnl(trips)[-31:],
             "round_trips": [{k: t.get(k) for k in keep} for t in trips[-MAX_TRIPS:]],
             "patterns": build_insights(trips)[:5],
@@ -211,10 +222,12 @@ def read_tools(db, redis, user_id: str) -> list:
     own = [
         StructuredTool.from_function(coroutine=get_portfolio, name="get_portfolio", description=(
             "The user's long-term holdings from their brokers: totals, each holding's value, gain, weight, rule "
-            "verdict (SELL/HOLD/ADD) and reasons, the AI action plan, sector mix. Pass symbol for one holding in full.")),
+            "verdict (SELL/HOLD/ADD) and reasons, the AI action plan, sector mix. Pass symbol for one holding in full; "
+            "account all, ai (the AI account) or mine (the trader's own).")),
         StructuredTool.from_function(coroutine=get_journal, name="get_journal", description=(
             "The user's real broker trades as round trips: gross P&L by day, recent trips, habit patterns, and "
-            "all-time estimated charges, P&L after charges and yearly trade rate. "
+            "all-time estimated charges, P&L after charges and yearly trade rate. account is all, ai (the AI "
+            "account the autopilot trades) or mine (the trader's own). "
             "period is today, week, month or all; symbol narrows to one scrip.")),
         StructuredTool.from_function(coroutine=get_learning, name="get_learning", description=(
             "What the paper engine learned from its own closed trades: rules it follows now (paused strategies, "

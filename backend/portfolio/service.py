@@ -204,6 +204,23 @@ async def add_candidates(db, user_id: str, held: set, now: datetime | None = Non
     return list(best.values())[:MAX_CANDIDATES]
 
 
+def scorecard_for(snapshot: dict, brokers: set[str], trades: list[dict], nifty: list) -> dict:
+    """One account's view of a snapshot: the scorecard re-run on that
+    account's holdings and trades only. The full review's per-holding
+    verdicts and sectors carry over by symbol (no new AI call)."""
+    from backend.portfolio.scorecard import build_scorecard
+
+    holdings = [Holding(**h) for h in snapshot.get("raw_holdings", []) if h.get("broker") in brokers]
+    full = {r["symbol"]: r for r in snapshot.get("holdings", [])}
+    sectors = {s: r.get("sector") for s, r in full.items()}
+    card = build_scorecard(holdings, [t for t in trades if t.get("broker") in brokers], nifty, sectors, {})
+    for row in card["holdings"]:
+        for key in ("verdict", "reason_codes", "health", "score", "note", "previous_verdict"):
+            if key in full.get(row["symbol"], {}):
+                row[key] = full[row["symbol"]][key]
+    return {**snapshot, **card, "brokers": sorted(brokers), "account_view": True}
+
+
 async def latest_snapshot(db, user_id: str) -> dict | None:
     docs = await db["portfolio_snapshots"].find({"user_id": user_id}).sort("at", -1).limit(1).to_list(length=1)
     if not docs:

@@ -5,6 +5,8 @@ the user's own data about their own trading: nothing is a recommendation.
 
 from datetime import datetime, timezone
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -53,13 +55,17 @@ async def get_journal(
     user: User = Depends(get_current_user), store: JournalStore = Depends(get_journal_store),
     credentials: BrokerCredentialStore = Depends(get_credential_store),
     nifty: list = Depends(get_nifty),
+    account: Literal["all", "ai", "mine"] = "all",
 ):
+    from backend.journal.accounts import brokers_of, filter_trades
     from backend.prefs import PrefsStore
 
     await record_open(db.db, user.id)
-    trades = await store.list_trades(user.id)
+    prefs = await PrefsStore(db.db).get(user.id)
+    # One account (backend/brokers/roles.py) or all of them.
+    trades = filter_trades(await store.list_trades(user.id), brokers_of(prefs.get("broker_roles") or {}, account))
     trips = build_round_trips(trades)
-    capital = (await PrefsStore(db.db).get(user.id))["account_size"]
+    capital = prefs["autopilot_capital"] if account == "ai" else prefs["account_size"]
     cost_mirror = mirror.costs(trades, trips, capital)
     first = min((t["traded_at"] for t in trades), default=None)
     benchmark = mirror.benchmark(
@@ -71,6 +77,7 @@ async def get_journal(
     trips.reverse()  # newest first for the list view
     closed = [t for t in trips if t["pnl"] is not None]
     return {
+        "account": account,
         "round_trips": trips,
         "calendar": daily_pnl(trips),
         "insights": build_insights(trips),
@@ -86,6 +93,21 @@ async def get_journal(
         # What charges took, how often they trade, and the Nifty over the same days.
         "mirror": {"costs": cost_mirror, "benchmark": benchmark},
     }
+
+
+@router.get("/ai-vs-me")
+async def ai_vs_me(
+    user: User = Depends(get_current_user), store: JournalStore = Depends(get_journal_store),
+    nifty: list = Depends(get_nifty),
+):
+    """Per month: the AI account's results against the user's own, net of
+    estimated charges, each against the Nifty."""
+    from backend.journal.accounts import ai_vs_me as compare
+    from backend.prefs import PrefsStore
+
+    prefs = await PrefsStore(db.db).get(user.id)
+    return compare(await store.list_trades(user.id), prefs.get("broker_roles") or {},
+                   {"ai": prefs["autopilot_capital"], "mine": prefs["account_size"]}, nifty)
 
 
 def _by_kind(closed: list[dict]) -> dict:

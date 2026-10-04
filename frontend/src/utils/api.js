@@ -187,6 +187,7 @@ export const endpoints = {
   },
   journal: {
     get: '/journal',
+    aiVsMe: '/journal/ai-vs-me',
     sync: '/journal/sync',
     importConsole: '/journal/import/zerodha-console',
     importUpstox: '/journal/import/upstox-history',
