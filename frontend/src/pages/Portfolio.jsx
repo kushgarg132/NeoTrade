@@ -58,10 +58,8 @@ const Portfolio = () => {
       api.get(endpoints.trading.positions('paper')),
       api.get(endpoints.trading.trades('CLOSED', 'paper')),
       api.get(endpoints.analytics.pnl('paper')),
-      api.get(endpoints.trading.fills('paper')),
     ])
-      .then(([positionsRes, tradesRes, pnlRes, fillsRes]) => {
-        setFills(fillsRes.data);
+      .then(([positionsRes, tradesRes, pnlRes]) => {
         setPositions(positionsRes.data);
         setTrades(tradesRes.data);
         setPnl(pnlRes.data);
@@ -69,6 +67,11 @@ const Portfolio = () => {
       })
       .catch((err) => setError(err?.response?.data?.detail || 'Could not load the book'))
       .finally(() => setLoading(false));
+    // Executions fail on their own: a slow fills query must not blank the book.
+    api
+      .get(endpoints.trading.fills('paper'))
+      .then((res) => setFills(res.data))
+      .catch(() => {});
   };
 
   useEffect(load, []);

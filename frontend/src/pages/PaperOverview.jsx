@@ -48,17 +48,18 @@ const PaperOverview = () => {
       .catch((err) => setTradesError(err?.response?.data?.detail || 'Could not reach the ledger'))
       .finally(() => setTradesLoading(false));
 
-  const loadPnl = () =>
+  // Today's P&L sits in "Now", above the book filter: it is always the whole
+  // paper book, never one engine's share picked in the collapsed record.
+  useEffect(() => {
     api
-      .get(endpoints.analytics.pnl('paper', mode))
+      .get(endpoints.analytics.pnl('paper'))
       .then((res) => setPnl(res.data))
       .catch(() => setPnl(null))
       .finally(() => setPnlLoading(false));
+  }, []);
 
   useEffect(() => {
-    setPnlLoading(true);
     setTradesLoading(true);
-    loadPnl();
     loadTrades();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
@@ -71,11 +72,7 @@ const PaperOverview = () => {
   }, []);
 
   // The pushed figures are the whole book; one engine's share is refetched.
-  useTopic('pnl', (message) => {
-    if (!message.data?.paper) return;
-    if (mode) loadPnl();
-    else setPnl(message.data.paper);
-  });
+  useTopic('pnl', (message) => message.data?.paper && setPnl(message.data.paper));
   useTopic('trades', loadTrades);
   useTopic('suggestions', (message) => {
     if (message.event === 'created') setPending((list) => [message.data, ...list]);

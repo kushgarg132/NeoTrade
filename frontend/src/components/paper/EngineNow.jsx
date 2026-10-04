@@ -49,7 +49,6 @@ const EngineNow = () => {
       .then(([pendingRes, openRes]) => setLongterm({ pending: pendingRes.data.length, open: openRes.data.length }))
       .catch(() => {});
 
-
   useEffect(() => {
     loadRuns();
     loadKillSwitch();
