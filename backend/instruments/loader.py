@@ -70,10 +70,15 @@ async def refresh_from_free_public_sources(master: InstrumentMaster) -> int:
             logger.info(f"Free NSE/BSE instrument refresh skipped -- last ran {age} ago.")
             return 0
 
-    from backend.instruments.free_source import BseEquityListSource, NseEquityListSource
+    from backend.instruments.free_source import NSE_ETF_CSV_URL, BseEquityListSource, NseEquityListSource
 
     total = 0
-    for label, source in (("NSE", NseEquityListSource()), ("BSE", BseEquityListSource())):
+    sources = (
+        ("NSE", NseEquityListSource()),
+        ("NSE ETF", NseEquityListSource(NSE_ETF_CSV_URL)),
+        ("BSE", BseEquityListSource()),
+    )
+    for label, source in sources:
         try:
             total += await refresh_instruments(source, master)
         except Exception as e:

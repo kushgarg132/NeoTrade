@@ -6,6 +6,7 @@ a paid session) numeric ids."""
 import httpx
 
 from backend.instruments.free_source import (
+    NSE_ETF_CSV_URL,
     BseEquityListSource,
     NseEquityListSource,
     _synthetic_token,
@@ -46,6 +47,26 @@ async def test_nse_source_maps_rows_and_skips_blank_symbols(monkeypatch):
     assert inst.name == "Reliance Industries Limited"
     assert inst.isin == "INE002A01018"
     assert inst.instrument_token == _synthetic_token("NSE", "RELIANCE")
+
+
+_NSE_ETF_CSV = (
+    "Symbol,Underlying Asset,SecurityName,DateofListing,MarketLot,ISINNumber,FaceValue,ETF Underlying,Underlying Key\n"
+    "SILVERBEES,Silver,NIPINDETFSILVERBEES,01-Feb-22,1,INF204KC1402,1,COMMODITY,Silver\n"
+)
+
+
+async def test_nse_source_also_parses_etf_list_headers(monkeypatch):
+    async def fake_get(self, url, **kwargs):
+        assert url == NSE_ETF_CSV_URL
+        return _FakeResponse(text=_NSE_ETF_CSV)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    [inst] = await NseEquityListSource(NSE_ETF_CSV_URL).fetch()
+
+    assert (inst.exchange, inst.tradingsymbol) == ("NSE", "SILVERBEES")
+    assert inst.name == "NIPINDETFSILVERBEES"
+    assert inst.isin == "INF204KC1402"
 
 
 _BSE_JSON = [

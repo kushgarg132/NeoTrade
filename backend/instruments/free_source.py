@@ -38,6 +38,8 @@ _BROWSER_HEADERS = {
 }
 
 NSE_EQUITY_CSV_URL = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
+# EQUITY_L.csv omits ETFs (SILVERBEES, LIQUIDBEES, ...); NSE lists them separately.
+NSE_ETF_CSV_URL = "https://nsearchives.nseindia.com/content/equities/eq_etfseclist.csv"
 BSE_EQUITY_LIST_URL = (
     "https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w"
     "?Group=&Scripcode=&industry=&segment=Equity&status=Active"
@@ -55,7 +57,9 @@ def _synthetic_token(exchange: str, tradingsymbol: str) -> int:
 
 class NseEquityListSource:
     """NSE's own bundled full equity list (SYMBOL, NAME, ISIN, ...) -- a
-    public CSV NSE's own website downloads, no API key or login required."""
+    public CSV NSE's own website downloads, no API key or login required.
+    Also parses NSE's ETF list (NSE_ETF_CSV_URL), which names the same
+    columns Symbol / SecurityName / ISINNumber."""
 
     def __init__(self, url: str = NSE_EQUITY_CSV_URL):
         self.url = url
@@ -71,20 +75,20 @@ class NseEquityListSource:
         instruments = []
         for raw_row in csv.DictReader(io.StringIO(resp.text)):
             row = {(key or "").strip(): value for key, value in raw_row.items()}
-            symbol = (row.get("SYMBOL") or "").strip()
+            symbol = (row.get("SYMBOL") or row.get("Symbol") or "").strip()
             if not symbol:
                 continue
             instruments.append(Instrument(
                 exchange="NSE",
                 tradingsymbol=symbol,
-                name=(row.get("NAME OF COMPANY") or symbol).strip(),
+                name=(row.get("NAME OF COMPANY") or row.get("SecurityName") or symbol).strip(),
                 instrument_token=_synthetic_token("NSE", symbol),
                 exchange_token=_synthetic_token("NSE", symbol),
                 instrument_type="EQ",
                 segment="NSE",
                 lot_size=1,
                 tick_size=0.05,
-                isin=(row.get("ISIN NUMBER") or "").strip() or None,
+                isin=(row.get("ISIN NUMBER") or row.get("ISINNumber") or "").strip() or None,
             ))
         return instruments
 
