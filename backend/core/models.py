@@ -104,6 +104,10 @@ class Order(BaseModel):
     # The proposal an approved order executes; the trade it opens carries it
     # so an exit can find that proposal's stop and target.
     suggestion_id: Optional[str] = None
+    # The signal that produced the order: strength, reason_codes and the
+    # composite score. Copied onto the trade it opens, so closed trades can
+    # be judged by setup (backend/learning). None for orders no signal made.
+    context: Optional[dict] = None
     # The listed F&O contract for an option order (its NFO row from the
     # instrument master); None for every equity order. Brokers that can
     # place option orders read the contract off it; any other broker

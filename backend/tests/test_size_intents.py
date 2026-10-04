@@ -311,3 +311,19 @@ async def test_option_flavored_intent_produces_an_order_with_a_synced_contract()
     assert proposal.option_contract["strike"] == strike
     assert proposal.option_contract["option_type"] == "PE"
     assert proposal.entry == proposal.option_contract["premium_estimate"]
+
+
+@pytest.mark.asyncio
+async def test_order_carries_the_signal_that_opened_it():
+    intent = Intent(
+        symbol="RELIANCE", side=Side.BUY, strength=0.7,
+        reason_codes=["breakout", "volume"], stop_hint=90.0,
+    )
+    orders = await size_intents(
+        [intent], Portfolio(), _FakeCtx({"RELIANCE": 100.0}), {}, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=1_000_000.0,
+    )
+    context = orders[0].context
+    assert context["strength"] == 0.7
+    assert context["reason_codes"] == ["breakout", "volume"]
+    assert set(context["score"]) == {"rule", "ai", "final"}

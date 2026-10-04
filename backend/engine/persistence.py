@@ -169,6 +169,8 @@ class LedgerStore:
             # Which strategy's signal opened it, for the per-strategy
             # scorecard. None for an approved proposal or a pre-tag row.
             "strategy": (order or {}).get("strategy_name"),
+            # The signal behind it (Order.context), for backend/learning.
+            "context": (order or {}).get("context"),
             # A trade is paper or live for its whole life: the fill that
             # opened it decides, and closing fills never change it.
             "venue": fill.venue,

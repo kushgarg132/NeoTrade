@@ -48,3 +48,17 @@ async def test_equity_suggestions_are_unaffected(ledger):
     }
     order = await execute_suggestion(suggestion, ledger, price=100.0, now=NOW)
     assert order.product == "CNC"
+
+
+@pytest.mark.asyncio
+async def test_the_trade_remembers_why_it_was_taken(ledger):
+    suggestion = {
+        "id": "s3", "symbol": "RELIANCE", "side": "BUY", "mode": "LONGTERM",
+        "quantity": 10.0, "option_contract": None, "strength": 0.6,
+        "reason_codes": ["macd_cross"], "score": {"rule": 0.6, "ai": 0.1, "final": 0.6},
+    }
+    await execute_suggestion(suggestion, ledger, price=100.0, now=NOW)
+    trade = await ledger.trades.find_one({"symbol": "RELIANCE"})
+    assert trade["context"] == {
+        "strength": 0.6, "reason_codes": ["macd_cross"], "score": {"rule": 0.6, "ai": 0.1, "final": 0.6},
+    }

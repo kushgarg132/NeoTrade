@@ -25,6 +25,16 @@ from backend.scoring.composite import CompositeScore, score_intent
 logger = logging.getLogger(__name__)
 
 
+def entry_context(intent: Intent, scored: CompositeScore) -> dict:
+    """What the trade an order opens should remember about its signal --
+    the same fields a suggestion stores (backend/suggestions/store.py)."""
+    return {
+        "strength": intent.strength,
+        "reason_codes": list(intent.reason_codes),
+        "score": {"rule": scored.rule_score, "ai": scored.ai_score, "final": scored.final},
+    }
+
+
 @dataclass(frozen=True)
 class Proposal:
     """A sized order plus the reasoning that produced it.
@@ -141,6 +151,7 @@ async def size_intents(
             result.order.strategy_name = (
                 owning_strategy.spec.name if owning_strategy is not None else None
             )
+            result.order.context = entry_context(intent, scored)
             option_contract = {
                 "strike": result.contract.strike,
                 "expiry": result.contract.expiry.isoformat() if result.contract.expiry else None,
@@ -208,6 +219,7 @@ async def size_intents(
             limit_price=None,
             product=product,
             strategy_name=owning_strategy.spec.name if owning_strategy is not None else None,
+            context=entry_context(intent, scored),
         )
 
         if order_sink is not None:

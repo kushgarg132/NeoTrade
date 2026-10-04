@@ -42,6 +42,7 @@ async def execute_suggestion(
         id=str(uuid.uuid4()), symbol=suggestion["symbol"], side=side, quantity=quantity,
         order_type="MARKET", limit_price=None, product=product,
         strategy_name=strategy_name or suggestion.get("strategy"), suggestion_id=suggestion.get("id"),
+        context={k: suggestion[k] for k in ("strength", "reason_codes", "score") if k in suggestion} or None,
     )
     return await fill_on_paper(ledger, order, price, now, is_option=is_option)
 
