@@ -170,10 +170,20 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
     if await InstrumentMaster(db).get("NSE", symbol) is None:
         raise ActionRefused(f"{symbol} is not an NSE stock this app knows.")
     price = await _mark_price(symbol)
+    limit = params.get("limit_price") if params.get("order_type", "MARKET") == "LIMIT" else None
+    if params.get("order_type", "MARKET") == "LIMIT":
+        if not limit or limit <= 0 or abs(limit - price) > 0.2 * price:
+            raise ActionRefused(
+                f"Limit ₹{limit or 0:,.2f} is more than 20% from the price ₹{price:,.2f}; check the number."
+            )
+    basis = limit or price
     cap = (await PrefsStore(db).get(user_id))["per_trade_cap"]
-    if price * quantity > cap:
-        raise ActionRefused(f"₹{price * quantity:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
+    if basis * quantity > cap:
+        raise ActionRefused(f"₹{basis * quantity:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
+    delivery_sell = params["side"] == "SELL" and params.get("product", "CNC") == "CNC"
     if params["venue"] != "live":
+        if delivery_sell:
+            _refuse_oversell(symbol, quantity, await _held_on_paper(db, user_id, symbol))
         return price, None
     now = _now()
     if not in_session(now):
@@ -183,7 +193,21 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
     adapter = await _active_broker(user_id, credentials)
     if adapter is None:
         raise ActionRefused("No broker is connected. Log in to your broker in Settings first.")
+    if delivery_sell:
+        from backend.chat.account_actions import _held
+
+        _refuse_oversell(symbol, quantity, (await _held(adapter, symbol))[0])
     return price, adapter
+
+
+async def _held_on_paper(db, user_id: str, symbol: str) -> int:
+    position = (await LedgerStore(db, user_id=user_id).get_open_positions()).get(symbol)
+    return int(position.quantity) if position is not None and position.quantity > 0 else 0
+
+
+def _refuse_oversell(symbol: str, quantity: int, held: int) -> None:
+    if quantity > held:
+        raise ActionRefused(f"You hold {held} {symbol}; a delivery sell can't be more than that.")
 
 
 # ---------------------------------------------------------------------------
@@ -431,6 +455,13 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
     if kind == "order":
         price, adapter = await _order_checks(db, user_id, params, credentials)
         product, side = params["product"], params["side"]
+        if adapter is None and params.get("order_type") == "LIMIT":
+            from backend.engine import paper_orders
+
+            placed = await paper_orders.place(db, user_id, params, price, _now())
+            if placed["status"] == "FILLED":
+                return f"Paper {side} {params['quantity']} {params['symbol']} filled at ₹{placed['fill_price']:,.2f}."
+            return f"Paper limit ₹{params['limit_price']:,.2f} is open until 15:30; it fills if the price gets there."
         if adapter is None:
             order = await execute_suggestion(
                 {"symbol": params["symbol"], "side": side, "quantity": params["quantity"],
@@ -438,9 +469,14 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
                 ledger, price, strategy_name="chat",
             )
             return f"Paper {side} {params['quantity']} {params['symbol']} filled at ₹{price:,.2f}."
+        order_type = params.get("order_type", "MARKET")
         order = Order(id=str(uuid.uuid4()), symbol=params["symbol"], side=Side(side), quantity=params["quantity"],
-                      order_type="MARKET", product=product, strategy_name="chat")
+                      order_type=order_type, limit_price=params.get("limit_price"), product=product,
+                      strategy_name="chat")
         _, status, filled = await execute_live_order(order, ledger, adapter, LiveOrderStore(db), "chat", action["message"])
+        if order_type == "LIMIT" and status != "FILLED":
+            return (f"Resting at your broker: limit ₹{params['limit_price']:,.2f}, {filled:g} of "
+                    f"{params['quantity']} filled. It lasts until 15:30.")
         return f"Sent to your broker: {status.lower()}, {filled:g} of {params['quantity']} filled."
 
     if kind in ("exit", "cancel_order", "modify_order", "stop_loss"):

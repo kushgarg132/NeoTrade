@@ -11,7 +11,7 @@ from mongomock_motor import AsyncMongoMockClient
 
 from backend.chat import actions
 from backend.chat.actions import ActionRefused, ChatActionStore, action_tools, confirm
-from backend.core.models import BrokerOrderStatus
+from backend.core.models import BrokerOrderStatus, Holding
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument
 from backend.prefs import PrefsStore
@@ -31,6 +31,12 @@ class _Broker:
 
     async def get_order_status(self, broker_order_id):
         return BrokerOrderStatus(broker_order_id=broker_order_id, status="FILLED", filled_quantity=10, average_price=1501.0)
+
+    async def get_positions(self):
+        return {}
+
+    async def get_holdings(self):
+        return [Holding(symbol="INFY", quantity=5, avg_price=1400.0, broker="upstox")]
 
 
 @pytest.fixture
@@ -210,3 +216,78 @@ async def test_several_facts_are_one_card_and_all_saved(env):
     result = await confirm(db, None, None, "alice", card["id"])
     assert result["result"] == "Saved 2 things to your profile memory."
     assert len((await ProfileStore(db).get("alice"))["memories"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# Order ticket: LIMIT, the ±20% band and the delivery-oversell guard.
+# ---------------------------------------------------------------------------
+
+def _order(**over):
+    params = {"symbol": "INFY", "side": "BUY", "quantity": 2, "product": "CNC", "venue": "paper"}
+    params.update(over)
+    return params
+
+
+async def _card(db, params):
+    return await ChatActionStore(db).propose(
+        "alice", "order", params, "ticket", params["venue"], params["venue"] == "live", "order ticket",
+    )
+
+
+@pytest.mark.parametrize("limit", [1801.0, 1199.0])
+async def test_limit_outside_band_is_refused(env, limit):
+    with pytest.raises(ActionRefused, match="more than 20% from the price"):
+        await actions._order_checks(env["db"], "alice", _order(order_type="LIMIT", limit_price=limit), None)
+
+
+async def test_cap_uses_limit_price(env):
+    await actions._order_checks(env["db"], "alice", _order(order_type="LIMIT", limit_price=1250.0, quantity=16), None)
+    with pytest.raises(ActionRefused, match="per-trade cap"):
+        await actions._order_checks(env["db"], "alice", _order(quantity=16), None)
+
+
+async def test_cnc_paper_sell_over_held_is_refused(env):
+    from backend.engine.persistence import LedgerStore
+    from backend.suggestions.service import execute_suggestion
+
+    await execute_suggestion({"symbol": "INFY", "side": "BUY", "quantity": 3, "mode": "LONGTERM"},
+                             LedgerStore(env["db"], user_id="alice"), 1500.0)
+    await actions._order_checks(env["db"], "alice", _order(side="SELL", quantity=3), None)
+    with pytest.raises(ActionRefused, match="You hold 3 INFY; a delivery sell can't be more than that."):
+        await actions._order_checks(env["db"], "alice", _order(side="SELL", quantity=4), None)
+
+
+async def test_mis_sell_is_not_capped_by_holdings(env):
+    await actions._order_checks(env["db"], "alice", _order(side="SELL", quantity=5, product="MIS"), None)
+
+
+async def test_cnc_live_sell_over_held_is_refused(env):
+    await actions._order_checks(env["db"], "alice", _order(side="SELL", quantity=5, venue="live"), None)
+    with pytest.raises(ActionRefused, match="You hold 5 INFY"):
+        await actions._order_checks(env["db"], "alice", _order(side="SELL", quantity=6, venue="live"), None)
+
+
+async def test_live_limit_reaches_broker_as_limit(env):
+    card = await _card(env["db"], _order(venue="live", order_type="LIMIT", limit_price=1490.0))
+    await confirm(env["db"], None, None, "alice", card["id"], second_tap=True)
+    placed = env["broker"].placed[0]
+    assert (placed.order_type, placed.limit_price) == ("LIMIT", 1490.0)
+
+
+async def test_live_limit_resting_copy(env, monkeypatch):
+    from backend.suggestions import service
+
+    async def resting(broker_order_id):
+        return BrokerOrderStatus(broker_order_id=broker_order_id, status="ACKNOWLEDGED", filled_quantity=0, average_price=0.0)
+
+    monkeypatch.setattr(env["broker"], "get_order_status", resting)
+    monkeypatch.setattr(service, "LIVE_FILL_CHECKS", 1)
+    card = await _card(env["db"], _order(venue="live", order_type="LIMIT", limit_price=1490.0))
+    done = await confirm(env["db"], None, None, "alice", card["id"], second_tap=True)
+    assert done["result"].startswith("Resting at your broker: limit ₹1,490.00, 0 of 2 filled.")
+
+
+async def test_market_chat_card_unchanged(env):
+    card = await _card(env["db"], _order())
+    done = await confirm(env["db"], None, None, "alice", card["id"])
+    assert done["result"] == "Paper BUY 2 INFY filled at ₹1,500.00."
