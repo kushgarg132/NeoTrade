@@ -165,6 +165,12 @@ async def set_commands(commands: list[dict], token: Optional[str] = None) -> boo
     return await _call("setMyCommands", {"commands": commands}, token) is not None
 
 
+async def clear_buttons(chat_id: int, message_id: int, token: Optional[str] = None) -> None:
+    """Remove a message's inline buttons, leaving its text."""
+    await _call("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": message_id,
+                                           "reply_markup": {"inline_keyboard": []}}, token)
+
+
 async def chat_action(chat_id: int, token: Optional[str] = None) -> None:
     """Shows "typing…" in the chat for ~5 seconds."""
     await _call("sendChatAction", {"chat_id": chat_id, "action": "typing"}, token)

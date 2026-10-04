@@ -35,6 +35,7 @@ HISTORY_TURNS = 10  # user + assistant messages kept, so "yes, do it" has contex
 HISTORY_SECONDS = 6 * 60 * 60
 START_SECONDS = 15 * 60  # matches the Settings link code's lifetime
 SUGGEST_PREFIX = "telegram:ai:suggest:"
+SUGGEST_LAST_PREFIX = "telegram:ai:suggest-last:"  # message carrying the live suggestion buttons
 DRAFT_SECONDS = 0.5  # how often the live draft is redrawn
 DRAFT_KEEPALIVE = 10  # a draft expires after ~30s; resend it while tools are slow
 TYPING_SECONDS = 4  # fallback when drafts are unavailable: "typing…" lasts ~5s
@@ -99,7 +100,18 @@ def _buttons(action: dict) -> list[list[dict]]:
     ]]
 
 
+async def _clear_suggestions(redis, user_id: str, chat_id: int, token: Optional[str]) -> None:
+    """Suggestions answer the last reply only; drop them once the user moves on."""
+    if redis is None:
+        return
+    message_id = _as_text(await redis.get(SUGGEST_LAST_PREFIX + user_id))
+    if message_id:
+        await redis.delete(SUGGEST_LAST_PREFIX + user_id)
+        await telegram.clear_buttons(chat_id, int(message_id), token)
+
+
 async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], text: str) -> None:
+    await _clear_suggestions(redis, user_id, chat_id, token)
     if text.startswith("/"):
         word, _, args = text[1:].partition(" ")
         command = word.split("@")[0].lower()  # "/portfolio@MyBot" in groups
@@ -169,6 +181,7 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
             message_id = await telegram.send_html(chat_id, body, token, markup if i == len(parts) - 1 else None)
         if suggestions and message_id is not None and redis is not None:
             await redis.set(f"{SUGGEST_PREFIX}{user_id}:{message_id}", json.dumps(suggestions), ex=HISTORY_SECONDS)
+            await redis.set(SUGGEST_LAST_PREFIX + user_id, str(message_id), ex=HISTORY_SECONDS)
     for card in cards:
         await telegram.send_buttons(chat_id, card["summary"], _buttons(card), token)
 

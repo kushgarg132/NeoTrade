@@ -164,7 +164,7 @@ async def test_reply_passes_and_saves_conversation_history(monkeypatch):
     db = AsyncMongoMockClient()["test_db"]
     redis = AsyncMock()
     earlier = [{"role": "user", "content": "Any proposals?"}, {"role": "assistant", "content": "One: buy INFY."}]
-    redis.get.return_value = json.dumps(earlier)
+    redis.get.side_effect = lambda key: json.dumps(earlier) if key.startswith(telegram_bot.HISTORY_PREFIX) else None
     seen = {}
 
     async def stream(_db, _redis, _user, _text, history, _context):
@@ -217,3 +217,24 @@ async def test_shortcut_command_asks_the_ai_and_new_clears_memory(monkeypatch):
 
     await telegram_bot._reply(db, redis, "alice", 42, "tok", "/codex")
     assert "/portfolio — Portfolio summary" in send.await_args.args[1]
+
+
+async def test_new_message_removes_the_previous_suggestions(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = AsyncMock()
+    redis.get.side_effect = lambda key: "101" if key == telegram_bot.SUGGEST_LAST_PREFIX + "alice" else None
+
+    async def stream(*_args):
+        yield {"type": "content", "data": "Sure."}
+        yield {"type": "suggestions", "data": ["And INFY?"]}
+
+    monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
+    sent, _ = _fake_bot(monkeypatch)
+    clear = AsyncMock()
+    monkeypatch.setattr(telegram_bot.telegram, "clear_buttons", clear)
+
+    await telegram_bot._reply(db, redis, "alice", 42, "tok", "Something else")
+
+    clear.assert_awaited_once_with(42, 101, "tok")
+    # The new reply's buttons become the ones to clear next time.
+    redis.set.assert_any_await(telegram_bot.SUGGEST_LAST_PREFIX + "alice", "101", ex=telegram_bot.HISTORY_SECONDS)
