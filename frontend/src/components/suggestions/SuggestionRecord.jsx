@@ -201,7 +201,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
         <Conviction score={suggestion.score} detailed={why} />
       </div>
 
-      {(suggestion.reason_codes?.length > 0 || suggestion.ai_thesis || suggestion.option_contract) && (
+      {(
         <button
           type="button"
           onClick={() => setWhy((value) => !value)}
@@ -280,7 +280,13 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
               <Button
                 variant="danger"
                 size="sm"
-                onClick={() => (confirmLive ? act('live') : setConfirmLive(true))}
+                onClick={() => {
+                  if (confirmLive) return act('live');
+                  // The second tap sends real money: show the risk, premium and
+                  // margin (all under Why) before it.
+                  setWhy(true);
+                  setConfirmLive(true);
+                }}
                 disabled={busy !== null}
                 aria-label={`Approve ${suggestion.symbol} with real money on your account`}
               >

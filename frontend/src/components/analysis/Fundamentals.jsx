@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react';
 import React from 'react';
 import { Sheet } from '../doc/Doc';
 import { formatCompactNumber, formatCurrency, formatPercent } from '../../utils/formatters';
@@ -52,14 +53,19 @@ const Fundamentals = ({ company: c, currency }) => {
   ].filter(([, rows]) => rows.some(([, value]) => value !== null));
 
   if (!groups.length) return null;
+  const wide = typeof window !== 'undefined' && window.matchMedia?.('(min-width: 768px)').matches;
   return (
     <Sheet title="Fundamentals">
       <div className="grid gap-4 md:grid-cols-3">
         {groups.map(([title, rows], i) => (
-          <details key={title} className="min-w-0 group" open={i === 0}>
+          // Phone: the first group open, the rest folded. Desktop has the room: all open.
+          <details key={title} className="min-w-0 group" open={i === 0 || wide}>
             <summary className="field-label mb-1 cursor-pointer list-none flex items-center justify-between min-h-11 md:min-h-0">
               {title}
-              <span className="doc-meta md:hidden" aria-hidden="true">{rows.length}</span>
+              <span className="doc-meta inline-flex items-center gap-1" aria-hidden="true">
+                {rows.length}
+                <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
+              </span>
             </summary>
             {/* Two figures a line: label over value, in a 2-column grid. */}
             <dl className="grid grid-cols-2 gap-x-4">
