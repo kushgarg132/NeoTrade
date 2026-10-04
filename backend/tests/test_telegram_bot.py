@@ -331,3 +331,8 @@ def test_a_wide_table_becomes_a_list_of_rows():
 
 def test_an_unfinished_table_mid_stream_is_left_as_text():
     assert telegram_bot.telegram.to_html("| Stock | P&L |") == "| Stock | P&amp;L |"
+
+
+def test_a_horizontal_rule_becomes_a_divider_not_dashes():
+    out = telegram_bot.telegram.to_html("Above\n\n---\n\nBelow\n- item")
+    assert "---" not in out and "──────" in out and "• item" in out

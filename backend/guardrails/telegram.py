@@ -178,6 +178,7 @@ def to_html(md: str) -> str:
 
         text = html.escape(_TABLE.sub(stash, part), quote=False)
         text = re.sub(r"^#{1,6}\s+(.+)$", lambda m: f"<b>{m[1].replace('**', '')}</b>", text, flags=re.M)
+        text = re.sub(r"^\s*([-*_])(\s*\1){2,}\s*$", "──────────", text, flags=re.M)  # horizontal rule
         text = re.sub(r"^(\s*)[-*]\s+", r"\1• ", text, flags=re.M)
         text = _inline(text)
         out.append(re.sub(r"\x00(\d+)\x00", lambda m: tables[int(m[1])], text))
