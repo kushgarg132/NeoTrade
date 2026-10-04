@@ -46,7 +46,9 @@ async def find_chat(code: str, token: Optional[str] = None) -> Optional[int]:
     # ponytail: scans the last 100 pending updates; a busy bot needs a webhook instead
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(_url("getUpdates", token), params={"allowed_updates": '["message"]'})
-        resp.raise_for_status()
+    if resp.status_code == 409:
+        return None  # the AI poller holds this bot; it stashes Start codes instead
+    resp.raise_for_status()
     for update in reversed(resp.json().get("result") or []):
         message = update.get("message") or {}
         if (message.get("text") or "").strip() == f"/start {code}":
@@ -54,17 +56,18 @@ async def find_chat(code: str, token: Optional[str] = None) -> Optional[int]:
     return None
 
 
-async def updates(offset: Optional[int] = None, token: Optional[str] = None) -> list[dict]:
+async def updates(offset: Optional[int] = None, token: Optional[str] = None, wait: int = 0) -> list[dict]:
     """Read a bot's pending updates without logging its token.
 
     Long polling is deliberately used instead of a public webhook: a user can
     bring their own BotFather bot, whose webhook configuration NeoTrade does
     not own.  Callers persist the next offset after handling each batch.
     """
-    params = {"allowed_updates": '["message","callback_query"]'}
+    params = {"allowed_updates": '["message","callback_query"]', "timeout": wait}
     if offset is not None:
         params["offset"] = offset
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    # `wait` > 0 is a long poll: Telegram answers as soon as an update arrives.
+    async with httpx.AsyncClient(timeout=wait + 10.0) as client:
         resp = await client.get(_url("getUpdates", token), params=params)
         resp.raise_for_status()
     return resp.json().get("result") or []

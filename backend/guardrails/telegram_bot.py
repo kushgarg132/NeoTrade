@@ -25,10 +25,11 @@ from backend.llm import use_model
 from backend.prefs import PrefsStore
 
 logger = logging.getLogger(__name__)
-POLL_SECONDS = 3
+POLL_SECONDS = 0.5  # pause between polls; the long poll itself does the waiting
+LONG_POLL_SECONDS = 25  # Telegram holds getUpdates open until a message arrives
 OFFSET_PREFIX = "telegram:ai:offset:"
 LOCK_PREFIX = "telegram:ai:poll-lock:"
-LOCK_SECONDS = 30
+LOCK_SECONDS = 60  # must outlast one long poll
 HISTORY_PREFIX = "telegram:ai:history:"
 HISTORY_TURNS = 10  # user + assistant messages kept, so "yes, do it" has context
 HISTORY_SECONDS = 6 * 60 * 60
@@ -244,49 +245,55 @@ async def _ask(db, redis, user_id: str, chat_id: int, token: Optional[str], call
 
 
 async def poll_once(db, redis) -> int:
-    """Process pending updates for every linked bot once. Returns update count."""
+    """Long-poll every linked bot once, concurrently, so a quiet bot never
+    delays another. Returns how many updates were handled."""
+    routes = await GuardrailStore(db).telegram_routes()
+    return sum(await asyncio.gather(*(_poll_bot(db, redis, token, chats) for token, chats in routes)))
+
+
+async def _poll_bot(db, redis, token: Optional[str], chats: dict) -> int:
     handled = 0
-    for token, chats in await GuardrailStore(db).telegram_routes():
-        key = _offset_key(token)
-        lock_key, lock_owner = _lock_key(token), str(uuid.uuid4())
-        if redis is not None:
-            acquired = await redis.set(lock_key, lock_owner, nx=True, ex=LOCK_SECONDS)
-            if not acquired:
-                continue
+    key = _offset_key(token)
+    lock_key, lock_owner = _lock_key(token), str(uuid.uuid4())
+    if redis is not None:
+        # One worker per bot: concurrent getUpdates calls get 409 Conflict.
+        acquired = await redis.set(lock_key, lock_owner, nx=True, ex=LOCK_SECONDS)
+        if not acquired:
+            return 0
+    try:
+        raw_offset = await redis.get(key) if redis is not None else None
+        offset = int(raw_offset) if raw_offset is not None else None
         try:
-            raw_offset = await redis.get(key) if redis is not None else None
-            offset = int(raw_offset) if raw_offset is not None else None
-            try:
-                updates = await telegram.updates(offset, token)
-            except Exception:
-                logger.exception("telegram polling failed")
+            updates = await telegram.updates(offset, token, LONG_POLL_SECONDS)
+        except Exception:
+            logger.exception("telegram polling failed")
+            return 0
+        # Commit the whole batch before the slow AI replies: if the lock
+        # expires mid-batch, another worker must not fetch it again.
+        ids = [u["update_id"] for u in updates if u.get("update_id") is not None]
+        if ids and redis is not None:
+            await redis.set(key, str(max(ids) + 1))
+        for update in updates:
+            message = update.get("message")
+            callback = update.get("callback_query")
+            chat_id = (message or {}).get("chat", {}).get("id") or (callback or {}).get("message", {}).get("chat", {}).get("id")
+            text = (message or {}).get("text") or ""
+            if text.startswith("/start ") and redis is not None:
+                # Consumed updates are gone from getUpdates; keep the
+                # Settings link flow working for a (re)linked chat.
+                await redis.set(telegram.start_key(text[7:].strip()), str(chat_id), ex=START_SECONDS)
+            user_id = chats.get(chat_id)
+            if user_id is None:
                 continue
-            # Commit the whole batch before the slow AI replies: if the lock
-            # expires mid-batch, another worker must not fetch it again.
-            ids = [u["update_id"] for u in updates if u.get("update_id") is not None]
-            if ids and redis is not None:
-                await redis.set(key, str(max(ids) + 1))
-            for update in updates:
-                message = update.get("message")
-                callback = update.get("callback_query")
-                chat_id = (message or {}).get("chat", {}).get("id") or (callback or {}).get("message", {}).get("chat", {}).get("id")
-                text = (message or {}).get("text") or ""
-                if text.startswith("/start ") and redis is not None:
-                    # Consumed updates are gone from getUpdates; keep the
-                    # Settings link flow working for a (re)linked chat.
-                    await redis.set(telegram.start_key(text[7:].strip()), str(chat_id), ex=START_SECONDS)
-                user_id = chats.get(chat_id)
-                if user_id is None:
-                    continue
-                handled += 1
-                if message:
-                    await _reply(db, redis, user_id, chat_id, token, text)
-                elif callback:
-                    await _callback(db, redis, user_id, chat_id, token, callback)
-        finally:
-            # Do not delete another worker's lock if ours expired mid-request.
-            if redis is not None and _as_text(await redis.get(lock_key)) == lock_owner:
-                await redis.delete(lock_key)
+            handled += 1
+            if message:
+                await _reply(db, redis, user_id, chat_id, token, text)
+            elif callback:
+                await _callback(db, redis, user_id, chat_id, token, callback)
+    finally:
+        # Do not delete another worker's lock if ours expired mid-request.
+        if redis is not None and _as_text(await redis.get(lock_key)) == lock_owner:
+            await redis.delete(lock_key)
     return handled
 
 
