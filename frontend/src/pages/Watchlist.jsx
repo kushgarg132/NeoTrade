@@ -61,7 +61,7 @@ const Watchlist = () => {
               <Row
                 key={stock.symbol}
                 className="group cursor-pointer hover:bg-[var(--paper-sunk)]"
-                onClick={() => navigate('/', { state: { symbol: stock.symbol } })}
+                onClick={() => navigate('/research', { state: { symbol: stock.symbol } })}
               >
                 <Cell>
                   <Scrip symbol={stock.symbol} />

@@ -121,7 +121,7 @@ const inMode = (path, venue, mode) => withParam(inBook(path, venue), 'mode', mod
 export const endpoints = {
   analyze: (symbol) => `/agents/analyze/${symbol}`,
   quickAnalyze: (symbol) => `/agents/quick-analyze/${symbol}`,
-  scanner: '/scanner/bullish',
+  scanner: '/scanner',
   stockInfo: (symbol) => `/stock_info/${symbol}`,
   marketIndices: '/market/indices',
   trendingStocks: '/market/trending',

@@ -4,7 +4,7 @@ import { ScanLine, Loader2, ArrowRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
 import { RESEARCH_TABS } from '../components/layout/sections';
-import { Sheet, Statement, Row, Cell, Empty, Ruling, Field, Scrip } from '../components/doc/Doc';
+import { Sheet, Statement, Row, Cell, Empty, Ruling, Field, Scrip, Tabs } from '../components/doc/Doc';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
@@ -12,15 +12,26 @@ import { formatCurrency, formatSignedPercent } from '../utils/formatters';
 import { cn } from '../utils/cn';
 
 /**
- * The bullish scan: a one-off sweep of the universe, reported as findings.
- * These are leads, not proposals — a proposal carries sizing and a stop and
- * lives on the decisions page.
+ * The scan: the user's universe swept for two named setups -- a breakout and a
+ * pullback in an uptrend -- on completed daily bars. Stops come from ATR,
+ * targets are 2R. These are leads, not proposals — a proposal carries sizing
+ * and lives on the decisions page.
  */
+
+const SETUP_LABEL = { breakout: 'Breakout', pullback: 'Pullback' };
+
+const Change = ({ value }) => (
+  <span className={cn('figure-md text-sm', value >= 0 ? 'text-up' : 'text-down')}>
+    {formatSignedPercent(value)}
+  </span>
+);
+
 const ScannerPage = () => {
-  const [results, setResults] = useState(null);
-  const [scanTime, setScanTime] = useState(null);
+  const [scan, setScan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [showSkipped, setShowSkipped] = useState(false);
   const navigate = useNavigate();
 
   const run = async () => {
@@ -28,8 +39,7 @@ const ScannerPage = () => {
     setError(null);
     try {
       const response = await api.get(endpoints.scanner);
-      setResults(response.data.bullish_picks);
-      setScanTime(response.data.scan_time);
+      setScan(response.data);
     } catch (err) {
       setError(err?.response?.data?.detail || 'The scanner is unreachable.');
     } finally {
@@ -37,13 +47,28 @@ const ScannerPage = () => {
     }
   };
 
+  const open = (symbol) => navigate('/research', { state: { symbol } });
+  const findings = scan?.findings ?? [];
+  const shown = filter === 'all' ? findings : findings.filter((f) => f.setup === filter);
+  const count = (setup) => findings.filter((f) => f.setup === setup).length;
+
+  const meta = scan
+    ? [
+        scan.as_of &&
+          `As of ${new Date(scan.as_of).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} close`,
+        `run ${new Date(scan.scan_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : undefined;
+
   return (
     <Layout>
       <div className="space-y-4">
         <SectionTabs tabs={RESEARCH_TABS} label="Research" />
         <Sheet
           title="Scanner"
-          meta={scanTime ? `Last run ${new Date(scanTime).toLocaleTimeString('en-IN')}` : undefined}
+          meta={meta}
           actions={
             <Button variant="primary" size="sm" onClick={run} disabled={loading}>
               {loading ? (
@@ -56,9 +81,31 @@ const ScannerPage = () => {
           }
         >
           <p className="text-sm text-[var(--ink-soft)]">
-            Sweeps the NIFTY universe for bullish technical setups. Findings are leads to
-            enquire on — sized proposals with a stop arrive on the decisions page instead.
+            Sweeps your universe{scan ? ` (${scan.scanned} scrips)` : ''} for breakouts and
+            pullbacks in an uptrend, on completed daily bars. Findings are leads to enquire on —
+            sized proposals with a stop arrive on the decisions page instead.
           </p>
+          {scan?.skipped?.length > 0 && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setShowSkipped((v) => !v)}
+                aria-expanded={showSkipped}
+                className="doc-meta normal-case underline decoration-dotted min-h-11 sm:min-h-0"
+              >
+                Skipped {scan.skipped.length}: no data or under 200 bars
+              </button>
+              {showSkipped && (
+                <ul className="mt-1 doc-meta normal-case">
+                  {scan.skipped.map((s) => (
+                    <li key={s.symbol}>
+                      {s.symbol} — {s.reason}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           {error && (
             <p
               role="alert"
@@ -73,47 +120,53 @@ const ScannerPage = () => {
           <Sheet title="Scanning">
             <Ruling rows={5} />
           </Sheet>
-        ) : results === null ? (
+        ) : scan === null ? (
           <Sheet>
             <Empty
               title="No scan run yet"
-              detail="Run a scan to see what the technical filters are picking up right now."
+              detail="Run a scan to see which scrips in your universe are breaking out or pulling back in an uptrend."
             />
           </Sheet>
-        ) : results.length === 0 ? (
+        ) : findings.length === 0 ? (
           <Sheet>
-            <Empty title="Nothing bullish" detail="No scrip in the universe met the filters." />
+            <Empty
+              title="Nothing set up"
+              detail="No scrip in your universe is breaking out or pulling back in an uptrend right now."
+            />
           </Sheet>
         ) : (
-          <Sheet title="Findings" meta={`${results.length}`}>
+          <Sheet title="Findings" meta={`${findings.length}`}>
+            <Tabs
+              tabs={[
+                { id: 'all', label: 'All', count: findings.length },
+                { id: 'breakout', label: 'Breakout', count: count('breakout') },
+                { id: 'pullback', label: 'Pullback', count: count('pullback') },
+              ]}
+              active={filter}
+              onSelect={setFilter}
+              label="Filter findings by setup"
+              className="static z-auto mb-2"
+            />
+
             {/* Phone: stacked findings with their reasons. */}
             <ul className="sm:hidden">
-              {results.map((pick) => (
+              {shown.map((pick) => (
                 <li key={pick.symbol} className="py-3 border-b border-[var(--rule)] last:border-b-0">
-                  <button
-                    type="button"
-                    onClick={() => navigate('/', { state: { symbol: pick.symbol } })}
-                    className="w-full text-left"
-                  >
+                  <button type="button" onClick={() => open(pick.symbol)} className="w-full text-left">
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="figure-md text-sm">{pick.symbol}</span>
-                      <span
-                        className={cn(
-                          'figure-md text-sm',
-                          pick.change_percent >= 0 ? 'text-up' : 'text-down'
-                        )}
-                      >
-                        {formatSignedPercent(pick.change_percent)}
+                      <span className="inline-flex items-baseline gap-2">
+                        <span className="figure-md text-sm">{pick.symbol}</span>
+                        <Badge variant="secondary">{SETUP_LABEL[pick.setup]}</Badge>
                       </span>
+                      <Change value={pick.change_pct} />
                     </div>
-                    <div className="mt-2 grid grid-cols-3 gap-3">
-                      <Field label="Last" value={formatCurrency(pick.current_price)} />
-                      <Field label="Target" value={formatCurrency(pick.target_price)} tone="up" />
-                      <Field label="Stop" value={formatCurrency(pick.stop_loss)} tone="down" />
+                    <div className="mt-2 grid grid-cols-4 gap-3">
+                      <Field label="Last" value={formatCurrency(pick.close)} />
+                      <Field label={`Stop ${pick.risk_pct}%`} value={formatCurrency(pick.stop)} tone="down" />
+                      <Field label="Target 2R" value={formatCurrency(pick.target)} tone="up" />
+                      <Field label="3M" value={formatSignedPercent(pick.return_3m)} />
                     </div>
-                    {pick.reasons?.length > 0 && (
-                      <p className="mt-2 doc-meta normal-case">{pick.reasons.join(' · ')}</p>
-                    )}
+                    <p className="mt-2 doc-meta normal-case">{pick.reasons.join(' · ')}</p>
                   </button>
                 </li>
               ))}
@@ -125,45 +178,42 @@ const ScannerPage = () => {
                   { key: 'scrip', label: 'Scrip' },
                   { key: 'last', label: 'Last', align: 'right' },
                   { key: 'change', label: 'Change', align: 'right' },
-                  { key: 'target', label: 'Target', align: 'right' },
                   { key: 'stop', label: 'Stop', align: 'right' },
-                  { key: 'conf', label: 'Confidence', align: 'right' },
+                  { key: 'target', label: 'Target (2R)', align: 'right' },
+                  { key: 'r3m', label: '3M', align: 'right' },
                 ]}
               >
-                {results.map((pick) => (
+                {shown.map((pick) => (
                   <Row
                     key={pick.symbol}
                     className="group cursor-pointer hover:bg-[var(--paper-sunk)]"
-                    onClick={() => navigate('/', { state: { symbol: pick.symbol } })}
+                    onClick={() => open(pick.symbol)}
                   >
                     <Cell>
-                      <Scrip symbol={pick.symbol} />
-                      <span className="block doc-meta normal-case truncate max-w-[18rem]">
-                        {pick.reasons?.join(' · ')}
+                      <span className="inline-flex items-baseline gap-2">
+                        <Scrip symbol={pick.symbol} />
+                        <Badge variant="secondary">{SETUP_LABEL[pick.setup]}</Badge>
+                      </span>
+                      <span className="block doc-meta normal-case truncate max-w-[22rem]">
+                        {pick.reasons.join(' · ')}
                       </span>
                     </Cell>
                     <Cell align="right" mono>
-                      {formatCurrency(pick.current_price)}
+                      {formatCurrency(pick.close)}
                     </Cell>
                     <Cell align="right">
-                      <span
-                        className={cn(
-                          'figure-md text-sm',
-                          pick.change_percent >= 0 ? 'text-up' : 'text-down'
-                        )}
-                      >
-                        {formatSignedPercent(pick.change_percent)}
-                      </span>
-                    </Cell>
-                    <Cell align="right" mono className="text-up">
-                      {formatCurrency(pick.target_price)}
+                      <Change value={pick.change_pct} />
                     </Cell>
                     <Cell align="right" mono className="text-down">
-                      {formatCurrency(pick.stop_loss)}
+                      {formatCurrency(pick.stop)}
+                      <span className="block doc-meta">{pick.risk_pct}%</span>
+                    </Cell>
+                    <Cell align="right" mono className="text-up">
+                      {formatCurrency(pick.target)}
                     </Cell>
                     <Cell align="right">
                       <span className="inline-flex items-center gap-2">
-                        <Badge variant="secondary">{pick.confidence}%</Badge>
+                        <Change value={pick.return_3m} />
                         <ArrowRight
                           className="w-4 h-4 text-[var(--ink-faint)] group-hover:text-[var(--stamp)] transition-colors"
                           aria-hidden="true"

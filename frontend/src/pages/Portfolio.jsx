@@ -184,7 +184,7 @@ const Portfolio = () => {
                   <Row
                     key={position.symbol}
                     className="cursor-pointer hover:bg-[var(--paper-sunk)]"
-                    onClick={() => navigate('/', { state: { symbol: position.symbol } })}
+                    onClick={() => navigate('/research', { state: { symbol: position.symbol } })}
                   >
                     <Cell>
                       <Scrip symbol={position.symbol} />

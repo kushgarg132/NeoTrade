@@ -97,7 +97,7 @@ const Market = () => {
                 key={item.symbol || item.name}
                 item={item}
                 index
-                onClick={() => navigate('/', { state: { index: item.symbol } })}
+                onClick={() => navigate('/research', { state: { index: item.symbol } })}
               />
             ))}
           </Statement>
@@ -122,7 +122,7 @@ const Market = () => {
               <Quote
                 key={item.symbol}
                 item={item}
-                onClick={() => navigate('/', { state: { symbol: bareSymbol(item.symbol) } })}
+                onClick={() => navigate('/research', { state: { symbol: bareSymbol(item.symbol) } })}
               />
             ))}
           </Statement>
