@@ -6,6 +6,7 @@ import api, { endpoints } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import { promotionGaps } from '../../utils/promotion';
 
 /**
  * The engine's standing instructions: how large it may trade, what the daily
@@ -18,28 +19,6 @@ const SWITCH =
   'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors';
 
 const SIZING = ['account_size', 'max_exposure', 'per_trade_cap'];
-
-const GAP = {
-  days: (c) => `${c.need - c.have} more paper days`,
-  trades: (c) => `${c.need - c.have} more trades`,
-  net: () => 'a net profit',
-  profit_factor: (c) => `profit factor ${c.need} (now ${c.have ?? '–'})`,
-  max_drawdown_pct: (c) => `drawdown under ${c.need}% (now ${c.have}%)`,
-};
-
-// What a strategy still lacks before its live switch sends real orders.
-function promotionGaps(row) {
-  const last = row.backtest;
-  const gaps = row.backtest_passed
-    ? []
-    : [
-        last
-          ? `a passing backtest (last: ${last.trades} trades over ${last.days} days, profit factor ${last.profit_factor.toFixed(2)})`
-          : 'a passing backtest (none run yet)',
-      ];
-  for (const check of row.paper.checks) if (!check.ok) gaps.push(GAP[check.rule](check));
-  return gaps.join(', ');
-}
 
 const EngineSettings = () => {
   const [prefs, setPrefs] = useState(null);
