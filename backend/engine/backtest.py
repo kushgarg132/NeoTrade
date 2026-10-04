@@ -3,6 +3,8 @@ through the shared runner.run() loop, then reports through the existing
 (until now referenced nowhere) `BacktestResult` model.
 """
 
+import logging
+import time
 import uuid
 from datetime import datetime
 
@@ -19,6 +21,9 @@ from backend.engine.runner import run
 from backend.instruments.models import Instrument
 from backend.options.backtest import ModelOptions
 from backend.suggestions.exits import breach
+
+logger = logging.getLogger(__name__)
+PROGRESS_EVERY = 20_000  # bars between progress log lines
 
 # Adverse slippage per side on every backtest fill (spread + impact).
 BACKTEST_SLIPPAGE_BPS = 10.0
@@ -38,6 +43,9 @@ async def run_backtest(
     """`model_options` prices option contracts for an options strategy
     (backend/options/backtest.py); without it an option intent never sizes."""
     feed = HistoricalFeed(provider, instruments, start, end, timeframe)
+    names = ",".join(s.spec.name for s in strategies)
+    began = time.monotonic()
+    logger.info("backtest %s: %d instruments, %s..%s, %s", names, len(instruments), start, end, timeframe)
     execution = SimulatedExecutionClient(slippage_bps=BACKTEST_SLIPPAGE_BPS)
     portfolio = Portfolio()
     clock = SimClock()
@@ -82,6 +90,9 @@ async def run_backtest(
         # really ran (see docs/ROADMAP.md Phase 4).
         async for bar in original_feed_iter():
             bar_timestamps.append(bar.timestamp)
+            if len(bar_timestamps) % PROGRESS_EVERY == 0:
+                logger.info("backtest %s: %d bars, at %s, %d fills, %.0fs",
+                            names, len(bar_timestamps), bar.timestamp, len(trades), time.monotonic() - began)
             await exit_on_levels(bar)
             if model_options is not None:
                 model_options.observe(feed.symbol_for_token[bar.instrument_token], bar)
@@ -132,6 +143,8 @@ async def run_backtest(
         premium_source=model_options,
     )
 
+    logger.info("backtest %s: done, %d bars, %d fills, %.0fs", names, len(bar_timestamps), len(trades),
+                time.monotonic() - began)
     actual_start = min(bar_timestamps) if bar_timestamps else start
     actual_end = max(bar_timestamps) if bar_timestamps else start
 

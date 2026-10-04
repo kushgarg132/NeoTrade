@@ -15,6 +15,7 @@ yfinance API aren't exercised here since tests use a fake provider.
 """
 
 import asyncio
+import time
 import logging
 from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
@@ -74,7 +75,13 @@ class HistoricalFeed:
 
     async def __aiter__(self) -> AsyncIterator[Bar]:
         semaphore = asyncio.Semaphore(_MAX_CONCURRENT_FETCHES)
+        began = time.monotonic()
         fetched = await asyncio.gather(*(self._candles(i, semaphore) for i in self._instruments))
+        logger.info(
+            "historical feed: %d/%d symbols with data, %d candles, %s, in %.1fs",
+            sum(1 for _, c in fetched if c), len(fetched), sum(len(c) for _, c in fetched),
+            self._timeframe, time.monotonic() - began,
+        )
 
         bars: list[Bar] = []
         for instrument, candles in fetched:
