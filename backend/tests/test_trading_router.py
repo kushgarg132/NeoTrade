@@ -498,7 +498,7 @@ def test_a_strategy_toggled_live_routes_live_only_after_passing_the_gate(monkeyp
 
     fresh_db = AsyncMongoMockClient()["test_db"]
     names = ["technical_breakout", "mean_reversion", "macd_crossover"]
-    asyncio.run(PrefsStore(fresh_db).update(_USER.id, {"live_strategies": names}))
+    asyncio.run(PrefsStore(fresh_db).update(_USER.id, {"live_strategies": names, "broker_roles": {"kite": "ai"}}))
     asyncio.run(BacktestGateStore(fresh_db).record("mean_reversion", BacktestResult(
         symbol="RELIANCE", start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
         end_date=datetime(2026, 1, 2, tzinfo=timezone.utc),
@@ -637,7 +637,8 @@ async def _seed_gate_and_prefs(fake_db, live_strategies):
             total_trades=40, win_rate=0.55, profit_factor=1.5, total_pnl=50_000.0,
             max_drawdown=0.10, sharpe_ratio=1.2, trades=[],
         ))
-    await PrefsStore(fake_db.db).update(_USER.id, {"live_strategies": live_strategies})
+    # Live orders trade only the AI account (backend/brokers/roles.py).
+    await PrefsStore(fake_db.db).update(_USER.id, {"live_strategies": live_strategies, "broker_roles": {"kite": "ai"}})
     await _seed_paper_record(fake_db, "technical_breakout")
 
 
@@ -672,7 +673,7 @@ def test_start_routes_a_toggled_live_strategy_and_reconciles_positions(monkeypat
 
     broker_position = Position(symbol="RELIANCE", quantity=5.0, avg_price=2400.0)
     monkeypatch.setattr(
-        trading, "get_active_broker_adapter",
+        trading, "ai_broker_adapter",
         AsyncMock(return_value=_LiveAdapter(BrokerSessionState.ACTIVE, {"RELIANCE": broker_position})),
     )
 
@@ -739,7 +740,7 @@ def test_start_reconciliation_only_merges_symbols_owned_by_live_strategies(monke
         "TCS": Position(symbol="TCS", quantity=3.0, avg_price=3500.0),  # e.g. a manual trade
     }
     monkeypatch.setattr(
-        trading, "get_active_broker_adapter",
+        trading, "ai_broker_adapter",
         AsyncMock(return_value=_LiveAdapter(BrokerSessionState.ACTIVE, broker_positions)),
     )
 
@@ -772,7 +773,7 @@ def test_start_falls_back_to_paper_when_broker_session_is_not_active(monkeypatch
     monkeypatch.setattr(trading, "InstrumentMaster", _FakeMaster)
     monkeypatch.setattr(trading, "YFinanceProvider", _ForeverQuoteProvider)
     monkeypatch.setattr(trading, "db", fake_db)
-    monkeypatch.setattr(trading, "get_active_broker_adapter", AsyncMock(return_value=None))
+    monkeypatch.setattr(trading, "ai_broker_adapter", AsyncMock(return_value=None))
 
     seen = {}
 
@@ -803,7 +804,7 @@ def test_start_keeps_a_toggled_strategy_on_paper_without_a_paper_record(monkeypa
     monkeypatch.setattr(trading, "YFinanceProvider", _ForeverQuoteProvider)
     monkeypatch.setattr(trading, "db", fake_db)
     monkeypatch.setattr(
-        trading, "get_active_broker_adapter",
+        trading, "ai_broker_adapter",
         AsyncMock(return_value=_LiveAdapter(BrokerSessionState.ACTIVE, {})),
     )
     seen = {}

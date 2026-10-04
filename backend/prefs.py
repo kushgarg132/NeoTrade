@@ -39,6 +39,16 @@ DEFAULTS = {
     # The factor portfolio's own paper allocation (backend/factor/paper.py),
     # apart from account_size: it needs ~₹3 lakh to hold its names in whole shares.
     "factor_paper_capital": 300_000.0,
+    # Which connected broker is for what (backend/brokers/roles.py):
+    # {"kite": "ai", "upstox": "mine"}. Orders route by role, never by fallback.
+    "broker_roles": {},
+    # The fenced autopilot on the "ai" account (backend/autopilot/).
+    "autopilot_enabled": False,
+    "autopilot_live": False,
+    "autopilot_capital": 25_000.0,
+    "autopilot_per_trade_cap": 5_000.0,
+    "autopilot_max_trades_per_day": 5,
+    "autopilot_daily_loss_limit": 1_000.0,
     # Start an intraday / long-term paper run by itself every trading day at
     # the open (backend/engine/autorun.py). Paper only; off until turned on.
     "auto_paper_intraday": False,

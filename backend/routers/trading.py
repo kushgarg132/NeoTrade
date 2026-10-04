@@ -170,6 +170,17 @@ async def get_active_broker_adapter(user_id: str, credentials):
     return None
 
 
+async def ai_broker_adapter(user_id: str, credentials, roles: dict):
+    """The AI account's adapter if it is logged in, else None
+    (backend/brokers/roles.py). Live engine orders go nowhere else."""
+    from backend.brokers.roles import RoleUnavailable, adapter_for
+
+    try:
+        return await adapter_for(user_id, "ai", credentials, db.redis, roles=roles, get_adapter=get_broker_adapter)
+    except RoleUnavailable:
+        return None
+
+
 async def _cancel_local(run_id: str) -> bool:
     task = _RUNS.get(run_id)
     if task is None:
@@ -312,7 +323,9 @@ async def launch_run(
     records = await paper_records(db.db, user_id, [s.spec.name for s in eligible], account_size)
     eligible = [s for s in eligible if records[s.spec.name]["passed"]]
 
-    active_adapter = await get_active_broker_adapter(user_id, credentials)
+    # Engine orders trade only the AI account; without one logged in, every
+    # strategy stays on paper.
+    active_adapter = await ai_broker_adapter(user_id, credentials, prefs.get("broker_roles") or {})
     live_strategy_names = set(prefs["live_strategies"])
     eligible_names = {s.spec.name for s in eligible}
 

@@ -179,12 +179,15 @@ async def reject_suggestion(
 
 
 async def _options_broker(user_id: str):
-    """The user's first connected broker that can place option orders."""
-    for broker in BROKERS:
-        adapter = await get_broker_adapter(broker, user_id, get_credential_store(), db.redis)
-        if getattr(adapter, "supports_options", False) and await adapter.state() == BrokerSessionState.ACTIVE:
-            return adapter
-    return None
+    """The user's own account, if it can place option orders. An approval is
+    the user's decision, so it never trades the AI account."""
+    from backend.brokers.roles import RoleUnavailable, adapter_for
+
+    try:
+        adapter = await adapter_for(user_id, "mine", get_credential_store(), db.redis)
+    except RoleUnavailable:
+        return None
+    return adapter if getattr(adapter, "supports_options", False) else None
 
 
 def get_options_broker():

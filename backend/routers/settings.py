@@ -14,7 +14,7 @@ from typing import Literal, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.app_settings import AppSettingsStore
 from backend.auth.broker_credentials import (
@@ -62,6 +62,19 @@ class PreferencesPatch(BaseModel):
     auto_square_off: Optional[Literal["off", "preview", "live"]] = None
     auto_paper_intraday: Optional[bool] = None
     auto_paper_longterm: Optional[bool] = None
+    broker_roles: Optional[dict[str, str]] = None
+    autopilot_enabled: Optional[bool] = None
+    autopilot_live: Optional[bool] = None
+    autopilot_capital: Optional[float] = Field(default=None, ge=0)
+    autopilot_per_trade_cap: Optional[float] = Field(default=None, ge=0)
+    autopilot_max_trades_per_day: Optional[int] = Field(default=None, ge=0, le=100)
+    autopilot_daily_loss_limit: Optional[float] = Field(default=None, ge=0)
+
+    @field_validator("broker_roles")
+    @classmethod
+    def _roles(cls, value):
+        from backend.brokers.roles import validate_roles
+        return validate_roles(value) if value is not None else value
 
 
 @router.get("/settings/preferences")
@@ -78,7 +91,11 @@ async def update_preferences(
     user: User = Depends(get_current_user),
     prefs: PrefsStore = Depends(get_prefs_store),
 ):
-    return await prefs.update(user.id, patch.model_dump(exclude_none=True))
+    fields = patch.model_dump(exclude_none=True)
+    # No AI account means nothing for the autopilot to trade: switch it off.
+    if "broker_roles" in fields and "ai" not in fields["broker_roles"].values():
+        fields["autopilot_enabled"] = False
+    return await prefs.update(user.id, fields)
 
 
 @router.get("/settings/strategies")

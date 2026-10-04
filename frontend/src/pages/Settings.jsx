@@ -48,6 +48,58 @@ const TextField = ({ id, label, ...props }) => (
   </div>
 );
 
+const ROLE_OPTIONS = [
+  ['ai', 'AI account', 'The autopilot trades it by itself, within its limits'],
+  ['mine', 'My account', 'You trade; the AI only proposes cards you confirm'],
+];
+
+/** Which account is for what (backend/brokers/roles.py). Orders route by
+    role and never fall back to the other account. */
+const BrokerRole = ({ broker }) => {
+  const [roles, setRoles] = useState(null);
+  const [note, setNote] = useState(null);
+  useEffect(() => {
+    api.get(endpoints.settings.preferences).then((res) => setRoles(res.data.broker_roles || {})).catch(() => setRoles({}));
+  }, []);
+  if (!roles) return null;
+  const choose = (role) => {
+    const next = { ...roles };
+    if (next[broker] === role) delete next[broker];
+    else next[broker] = role;
+    setNote(null);
+    api.put(endpoints.settings.preferences, { broker_roles: next })
+      .then((res) => setRoles(res.data.broker_roles || {}))
+      .catch((err) => {
+        const detail = err?.response?.data?.detail;
+        setNote(Array.isArray(detail) ? detail[0]?.msg?.replace('Value error, ', '') : detail || 'Could not save.');
+      });
+  };
+  return (
+    <div className="mt-3 pt-3 border-t border-[var(--rule)]">
+      <p className="field-label mb-1.5">This account is</p>
+      <div role="radiogroup" aria-label="Account role" className="grid grid-cols-2 gap-2">
+        {ROLE_OPTIONS.map(([role, label, hint]) => (
+          <button
+            key={role}
+            type="button"
+            role="radio"
+            aria-checked={roles[broker] === role}
+            onClick={() => choose(role)}
+            className={cn(
+              'text-left p-2.5 border transition-colors min-h-11',
+              roles[broker] === role ? 'border-[var(--stamp)] bg-[var(--stamp-soft)]' : 'border-[var(--rule-strong)] hover:border-[var(--ink)]',
+            )}
+          >
+            <span className="block text-sm font-semibold">{label}</span>
+            <span className="block doc-meta normal-case mt-0.5">{hint}</span>
+          </button>
+        ))}
+      </div>
+      {note && <p className="doc-meta normal-case text-[var(--loss)] mt-1.5">{note}</p>}
+    </div>
+  );
+};
+
 const BrokerSheet = () => {
   // A broker's redirect lands here: Upstox appends ?code=, Kite ?request_token=.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -228,6 +280,7 @@ const BrokerSheet = () => {
         Real orders go out only for a strategy you’ve set to live, or a guardrail square-off you’ve
         set to Live; everything else stays on paper.
       </p>
+      {state.state !== 'UNCONFIGURED' && <BrokerRole broker={broker} />}
 
       {state.state === 'UNCONFIGURED' ? (
         <div className="mt-4 space-y-3">

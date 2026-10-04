@@ -53,10 +53,15 @@ async def _mark_price(symbol: str) -> float:
 
 
 async def _active_broker(user_id: str, credentials):
+    """The user's own account: a card the user confirms trades there, never
+    on the AI account (backend/brokers/roles.py)."""
     from backend.auth.broker_credentials import get_credential_store
-    from backend.routers.trading import get_active_broker_adapter
+    from backend.brokers.roles import RoleUnavailable, adapter_for
 
-    return await get_active_broker_adapter(user_id, credentials or get_credential_store())
+    try:
+        return await adapter_for(user_id, "mine", credentials or get_credential_store())
+    except RoleUnavailable as exc:
+        raise ActionRefused(exc.reason)
 
 
 def _now() -> datetime:
