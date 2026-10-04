@@ -3,20 +3,29 @@ import { Building2, BookmarkPlus, Check, Loader2 } from 'lucide-react';
 import api, { endpoints } from '../utils/api';
 import { Badge } from './common/Badge';
 import { Button } from './common/Button';
-import { Sheet, Field, Statement, Row, Cell, Empty } from './doc/Doc';
+import { Sheet, Empty } from './doc/Doc';
 import {
   formatCurrency,
-  formatCompactNumber,
-  formatPercent,
   formatSignedPercent,
 } from '../utils/formatters';
 import { cn } from '../utils/cn';
 
 import TradingChart from './stock/TradingChart';
 import SentimentPanel from './analysis/SentimentPanel';
-import TechnicalPanel from './analysis/TechnicalPanel';
+import StockFlags from './analysis/StockFlags';
+import TradingLevels from './analysis/TradingLevels';
+import Fundamentals from './analysis/Fundamentals';
 import NewsFeed from './analysis/NewsFeed';
 import EventsList from './analysis/EventsList';
+
+/** Return windows the snapshot carries (backend/research/quick.py). */
+const RETURNS = [
+  ['1w', '1W'],
+  ['1m', '1M'],
+  ['3m', '3M'],
+  ['6m', '6M'],
+  ['1y', '1Y'],
+];
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -60,16 +69,6 @@ const AnalysisCard = ({ quick, ai, aiLoading, aiError, aiRequested, onOpenAiTab 
     }
   };
 
-  const schedule = [
-    ['Market cap', formatCompactNumber(company?.market_cap)],
-    ['Volume', formatCompactNumber(company?.volume)],
-    ['P/E', typeof company?.pe_ratio === 'number' ? company.pe_ratio.toFixed(2) : '—'],
-    ['PEG', company?.peg_ratio ?? '—'],
-    ['52-week high', formatCurrency(company?.week_52_high, currency)],
-    ['52-week low', formatCurrency(company?.week_52_low, currency)],
-    ['Revenue growth', formatPercent((company?.revenue_growth ?? 0) * 100)],
-    ['Return on equity', formatPercent((company?.return_on_equity ?? 0) * 100)],
-  ];
 
   return (
     <div className="space-y-4">
@@ -92,6 +91,7 @@ const AnalysisCard = ({ quick, ai, aiLoading, aiError, aiRequested, onOpenAiTab 
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="figure-md text-xl">{company?.symbol}</h2>
                 {company?.sector && <Badge variant="outline">{company.sector}</Badge>}
+                {company?.industry && <Badge variant="outline">{company.industry}</Badge>}
               </div>
               <p className="text-sm text-[var(--ink-soft)] truncate">{company?.name}</p>
             </div>
@@ -105,6 +105,9 @@ const AnalysisCard = ({ quick, ai, aiLoading, aiError, aiRequested, onOpenAiTab 
               {formatSignedPercent(change)}{' '}
               <span className="text-[var(--ink-faint)]">today</span>
             </p>
+            {company?.previous_close != null && (
+              <p className="doc-meta normal-case">prev close {formatCurrency(company.previous_close, currency)}</p>
+            )}
           </div>
         </div>
 
@@ -143,31 +146,25 @@ const AnalysisCard = ({ quick, ai, aiLoading, aiError, aiRequested, onOpenAiTab 
 
       {tab === 'overview' && (
         <div className="space-y-4">
+          <StockFlags flags={quick.flags} />
           <Sheet title="Price">
             <TradingChart data={quick.price_data} technicals={technicals} currency={currency} />
+            <dl className="mt-3 grid grid-cols-5 border-t border-[var(--rule)] pt-3" aria-label="Returns">
+              {RETURNS.map(([key, label]) => {
+                const value = technicals?.returns?.[key];
+                return (
+                  <div key={key} className="text-center">
+                    <dt className="field-label">{label}</dt>
+                    <dd className={cn('figure-md text-sm', value > 0 && 'text-up', value < 0 && 'text-down')}>
+                      {formatSignedPercent(value)}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
           </Sheet>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Sheet title="Schedule of particulars">
-              <Statement
-                columns={[
-                  { key: 'item', label: 'Particular' },
-                  { key: 'value', label: 'Value', align: 'right' },
-                ]}
-              >
-                {schedule.map(([label, value]) => (
-                  <Row key={label}>
-                    <Cell className="text-[var(--ink-soft)]">{label}</Cell>
-                    <Cell align="right" mono>
-                      {value}
-                    </Cell>
-                  </Row>
-                ))}
-              </Statement>
-            </Sheet>
-
-            <TechnicalPanel indicators={technicals} currency={currency} />
-          </div>
+          <TradingLevels t={technicals} currency={currency} />
+          <Fundamentals company={company} currency={currency} />
         </div>
       )}
 

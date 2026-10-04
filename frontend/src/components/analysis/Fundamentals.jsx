@@ -1,0 +1,76 @@
+import React from 'react';
+import { Sheet, Statement, Row, Cell } from '../doc/Doc';
+import { formatCompactNumber, formatCurrency, formatPercent } from '../../utils/formatters';
+
+const isNum = (value) => typeof value === 'number' && Number.isFinite(value);
+const ratio = (value) => (isNum(value) ? value.toFixed(2) : null);
+const pct = (fraction) => (isNum(fraction) ? formatPercent(fraction * 100) : null);
+const money = (value, currency) =>
+  isNum(value) ? `${value < 0 ? '−' : ''}${currency === 'INR' ? '₹' : '$'}${formatCompactNumber(Math.abs(value))}` : null;
+
+/**
+ * Whether the business is worth owning: valuation, profitability, and growth
+ * and balance sheet. A missing figure prints "—"; a group with nothing in it
+ * is left out (an ETF has no margins).
+ */
+const Fundamentals = ({ company: c, currency }) => {
+  const net = isNum(c?.total_cash) && isNum(c?.total_debt) ? c.total_cash - c.total_debt : null;
+  const groups = [
+    [
+      'Valuation',
+      [
+        ['Market cap', money(c?.market_cap, currency)],
+        ['P/E', ratio(c?.pe_ratio)],
+        ['PEG', ratio(c?.peg_ratio)],
+        ['Price / book', ratio(c?.price_to_book)],
+        ['EPS (trailing)', isNum(c?.trailing_eps) ? formatCurrency(c.trailing_eps, currency) : null],
+        ['EPS (forward)', isNum(c?.forward_eps) ? formatCurrency(c.forward_eps, currency) : null],
+        ['Dividend yield', pct(c?.dividend_yield)],
+      ],
+    ],
+    [
+      'Profitability',
+      [
+        ['Return on equity', pct(c?.return_on_equity)],
+        ['Return on assets', pct(c?.return_on_assets)],
+        ['Operating margin', pct(c?.operating_margins)],
+        ['Gross margin', pct(c?.gross_margins)],
+      ],
+    ],
+    [
+      'Growth & balance sheet',
+      [
+        ['Revenue', money(c?.total_revenue, currency)],
+        ['Revenue growth', pct(c?.revenue_growth)],
+        ['EBITDA', money(c?.ebitda, currency)],
+        ['Total debt', money(c?.total_debt, currency)],
+        ['Total cash', money(c?.total_cash, currency)],
+        [net === null || net >= 0 ? 'Net cash' : 'Net debt', money(net === null ? null : Math.abs(net), currency)],
+        ['Beta', ratio(c?.beta)],
+      ],
+    ],
+  ].filter(([, rows]) => rows.some(([, value]) => value !== null));
+
+  if (!groups.length) return null;
+  return (
+    <Sheet title="Fundamentals">
+      <div className="grid gap-4 md:grid-cols-3">
+        {groups.map(([title, rows]) => (
+          <div key={title} className="min-w-0">
+            <p className="field-label mb-1">{title}</p>
+            <Statement columns={[{ key: 'item', label: 'Item' }, { key: 'value', label: 'Value', align: 'right' }]}>
+              {rows.map(([label, value]) => (
+                <Row key={label}>
+                  <Cell className="text-[var(--ink-soft)]">{label}</Cell>
+                  <Cell align="right" mono>{value ?? '—'}</Cell>
+                </Row>
+              ))}
+            </Statement>
+          </div>
+        ))}
+      </div>
+    </Sheet>
+  );
+};
+
+export default Fundamentals;
