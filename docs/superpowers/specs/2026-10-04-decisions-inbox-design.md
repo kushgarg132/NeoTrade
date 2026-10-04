@@ -34,6 +34,9 @@ Option proposals: unchanged. Equity proposals, in order:
 1. PENDING check (existing), kill switch (existing).
 2. `in_session(now)` else 409 `"The market is closed; live orders go only between 09:15 and
    15:30 IST on weekdays."`
+2b. SELL proposals are refused (409 `"This proposal exits a paper position; approve it on
+   paper. Sell your own shares from Mine → Holdings."`): an equity SELL exits a paper position,
+   and sent live it would sell the user's own shares (review finding, 2026-10-04).
 3. Mine adapter: new dependency `get_mine_broker()` returning `async (user_id) -> adapter | None`
    via `adapter_for(user_id, "mine", get_credential_store(), db.redis)` (`RoleUnavailable` →
    None). None → 409 `"Connect your broker and set it as My account in Settings to approve with

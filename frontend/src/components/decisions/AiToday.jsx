@@ -43,10 +43,15 @@ const AiToday = () => {
               <span className="doc-meta shrink-0">
                 {new Date(row.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
               </span>
-              <span className={cn('flex-1 min-w-0 truncate', row.status !== 'FILLED' && 'text-[var(--ink-soft)]')}>
-                {row.status === 'FILLED' ? (row.side === 'SELL' ? 'Sold' : 'Bought') : `Refused ${row.side?.toLowerCase() || ''}`}{' '}
+              <span className={cn('flex-1 min-w-0 truncate', !['FILLED', 'SENT'].includes(row.status) && 'text-[var(--ink-soft)]')}>
+                {row.status === 'FILLED'
+                  ? row.side === 'SELL' ? 'Sold' : 'Bought'
+                  : row.status === 'SENT'
+                    ? `Sent ${row.side === 'SELL' ? 'sell' : 'buy'}`
+                    : `Refused ${row.side?.toLowerCase() || ''}`}{' '}
                 {row.quantity} {row.symbol}
-                {row.status !== 'FILLED' && row.reason ? ` · ${row.reason}` : ''}
+                {row.status === 'SENT' ? ' · with the broker, not filled yet' : ''}
+                {row.status !== 'FILLED' && row.status !== 'SENT' && row.reason ? ` · ${row.reason}` : ''}
               </span>
             </li>
           ))}

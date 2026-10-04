@@ -104,11 +104,17 @@ async def execute_live_order(
     as a live fill at the broker's own average price. Shared by an option
     proposal approved live and an order confirmed from the chat."""
     broker_order_id = await adapter.place_order(order)
-    await ledger.record_order(order)
-    await orders.record_submitted(
-        order_id=order.id, broker_order_id=broker_order_id, user_id=ledger.user_id,
-        strategy_name=strategy_name, symbol=order.symbol, side=order.side, reason=reason,
-    )
+    # From here the broker has the order: a failed write below must not read
+    # as "not placed" -- the caller would re-arm the button and a second tap
+    # would send a second real order. Log it loudly and carry on.
+    try:
+        await ledger.record_order(order)
+        await orders.record_submitted(
+            order_id=order.id, broker_order_id=broker_order_id, user_id=ledger.user_id,
+            strategy_name=strategy_name, symbol=order.symbol, side=order.side, reason=reason,
+        )
+    except Exception as exc:
+        logger.error("live order %s placed as %s but not recorded: %s", order.id, broker_order_id, exc)
 
     status = None
     for check in range(LIVE_FILL_CHECKS):
@@ -123,10 +129,14 @@ async def execute_live_order(
     if status is None:
         return order, "SUBMITTED", 0.0
 
-    await orders.update_status(order.id, status.status, status.filled_quantity, status.average_price)
-    if status.filled_quantity > 0:
-        await _book(ledger, Fill(
-            order_id=order.id, symbol=order.symbol, side=order.side, quantity=status.filled_quantity,
-            price=status.average_price, timestamp=datetime.now(timezone.utc), costs=0.0, venue="live",
-        ))
+    try:
+        await orders.update_status(order.id, status.status, status.filled_quantity, status.average_price)
+        if status.filled_quantity > 0:
+            await _book(ledger, Fill(
+                order_id=order.id, symbol=order.symbol, side=order.side, quantity=status.filled_quantity,
+                price=status.average_price, timestamp=datetime.now(timezone.utc), costs=0.0, venue="live",
+            ))
+    except Exception as exc:
+        logger.error("live order %s (%s) filled %s but not booked: %s",
+                     order.id, broker_order_id, status.filled_quantity, exc)
     return order, status.status, status.filled_quantity

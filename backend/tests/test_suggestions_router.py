@@ -404,3 +404,44 @@ def test_equity_approve_live_twice_places_one_order(mine_client, store):
     assert _approve_live(mine_client, suggestion).status_code == 200
     assert _approve_live(mine_client, suggestion).status_code == 409
     assert len(broker.placed) == 1
+
+
+def test_equity_sell_cannot_be_approved_with_real_money(mine_client, store, mongo):
+    """A SELL proposal exits a paper position; approved live it would sell the
+    user's own shares, which the paper position never bought."""
+    import asyncio
+
+    broker = _FakeMine()
+    _with_mine(mine_client, broker)
+    suggestion = asyncio.run(_seed(store))
+    asyncio.run(mongo["suggestions"].update_one({"id": suggestion["id"]}, {"$set": {"side": "SELL"}}))
+    resp = _approve_live(mine_client, suggestion)
+    assert resp.status_code == 409 and "paper position" in resp.json()["detail"]
+    assert broker.placed == []
+
+
+def test_equity_broker_error_goes_back_to_pending(mine_client, store, ledger):
+    import asyncio
+    _with_mine(mine_client, _FakeMine(fail="insufficient margin"))
+    suggestion = asyncio.run(_seed(store))
+    resp = _approve_live(mine_client, suggestion)
+    assert resp.status_code == 502 and "insufficient margin" in resp.json()["detail"]
+    assert asyncio.run(store.get("alice", suggestion["id"]))["status"] == "PENDING"
+
+
+def test_bookkeeping_failure_after_the_broker_took_it_is_not_pending(mine_client, store, ledger, monkeypatch):
+    """Once place_order returned, a failed ledger write must not re-arm the
+    button: a second tap would send a second real order."""
+    import asyncio
+    broker = _FakeMine()
+    _with_mine(mine_client, broker)
+
+    async def broken(order):
+        raise RuntimeError("mongo timeout")
+
+    monkeypatch.setattr(ledger, "record_order", broken)
+    suggestion = asyncio.run(_seed(store))
+    resp = _approve_live(mine_client, suggestion)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] in ("EXECUTED", "SENT")
+    assert len(broker.placed) == 1
