@@ -106,9 +106,9 @@ export const Money = ({ value, className, percent = false, size = 'md' }) => {
  */
 const ColumnsContext = createContext(null);
 
-export const Statement = ({ columns, children, className }) => (
+export const Statement = ({ columns, children, className, inline = false }) => (
   <div className={cn('sm:overflow-x-auto sm:-mx-4 sm:px-4', className)}>
-    <table className="statement w-full border-collapse text-sm">
+    <table className={cn('statement w-full border-collapse text-sm', inline && 'statement-inline')}>
       <thead>
         <tr className="border-b border-[var(--rule-strong)]">
           {columns.map((column) => (

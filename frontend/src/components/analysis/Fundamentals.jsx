@@ -58,7 +58,7 @@ const Fundamentals = ({ company: c, currency }) => {
         {groups.map(([title, rows]) => (
           <div key={title} className="min-w-0">
             <p className="field-label mb-1">{title}</p>
-            <Statement columns={[{ key: 'item', label: 'Item' }, { key: 'value', label: 'Value', align: 'right' }]}>
+            <Statement inline columns={[{ key: 'item', label: 'Item' }, { key: 'value', label: 'Value', align: 'right' }]}>
               {rows.map(([label, value]) => (
                 <Row key={label}>
                   <Cell className="text-[var(--ink-soft)]">{label}</Cell>

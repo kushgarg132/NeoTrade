@@ -279,6 +279,28 @@
     justify-self: end;
     align-self: end;
   }
+  /* An inline statement (a few short columns) keeps each row on one line:
+     the first cell takes the room and truncates, the figures sit right. */
+  .statement.statement-inline tr {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+  .statement.statement-inline td:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .statement.statement-inline td:not(:first-child) {
+    flex: 0 0 auto;
+    text-align: right;
+  }
+  .statement.statement-inline td::before {
+    content: none !important;
+  }
 }
 
 /* The net rule: a contract note closes its totals with a double rule. */

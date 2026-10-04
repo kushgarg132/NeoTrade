@@ -72,7 +72,9 @@ const Market = () => {
     };
   }, []);
 
-  const quotes = [...(data.indices || []), ...(data.global || [])];
+  // Indian indices first; the world ones one tap away.
+  const [world, setWorld] = useState(false);
+  const quotes = [...(data.indices || []), ...(world ? data.global || [] : [])];
   const quotesLoading = data.indices === null && data.global === null;
   const done = Object.values(data).every((value) => value !== null);
   if (done && quotes.length === 0 && data.trending.length === 0 && data.news.length === 0) return null;
@@ -87,6 +89,7 @@ const Market = () => {
       {quotes.length > 0 && (
         <Sheet title="Indices" meta={formatNoteDate()}>
           <Statement
+            inline
             columns={[
               { key: 'name', label: 'Index' },
               { key: 'value', label: 'Level', align: 'right' },
@@ -102,6 +105,16 @@ const Market = () => {
               />
             ))}
           </Statement>
+          {data.global?.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setWorld((value) => !value)}
+              aria-expanded={world}
+              className="mt-1 field-label text-[var(--stamp)] hover:underline min-h-11 sm:min-h-0"
+            >
+              {world ? 'India only' : `World › ${data.global.length}`}
+            </button>
+          )}
         </Sheet>
       )}
 
@@ -113,6 +126,7 @@ const Market = () => {
       {data.trending?.length > 0 && (
         <Sheet title="Movers" meta="NIFTY 50">
           <Statement
+            inline
             columns={[
               { key: 'name', label: 'Scrip' },
               { key: 'value', label: 'Last', align: 'right' },

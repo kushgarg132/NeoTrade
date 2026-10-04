@@ -63,6 +63,7 @@ const TradingLevels = ({ t, currency }) => {
       <p className="field-label mb-1.5">52-week range</p>
       <RangeBar low={t?.low_52w} high={t?.high_52w} price={price} currency={currency} />
       <Statement
+        inline
         className="mt-3"
         columns={[
           { key: 'item', label: 'Level' },
