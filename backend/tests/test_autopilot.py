@@ -20,7 +20,7 @@ PREFS = {"autopilot_enabled": True, "autopilot_live": False, "autopilot_capital"
 
 
 def _state(**kw):
-    base = dict(deployed=0.0, entries_today=0, open_symbols=set(), kill_tripped=False, session_ok=True)
+    base = dict(deployed=0.0, entries_today=0, held={}, kill_tripped=False, session_ok=True)
     return FenceState(**{**base, **kw})
 
 
@@ -38,8 +38,12 @@ def _order(symbol="INFY", side=Side.BUY, qty=1, product="CNC", source="chat"):
     (_order(product="NRML"), 100.0, _state(), "NSE equity"),
     (_order(), 100.0, _state(kill_tripped=True), "loss limit"),
     (_order(), 100.0, _state(session_ok=False), "market"),
-    (_order(), 100.0, _state(open_symbols={"INFY"}), "already holding"),
-    (_order(side=Side.SELL, qty=50), 1000.0, _state(open_symbols={"INFY"}, deployed=25_000.0, entries_today=5), None),
+    (_order(), 100.0, _state(held={"INFY": (5, "CNC")}), "already holding"),
+    (_order(side=Side.SELL, qty=50), 1000.0, _state(held={"INFY": (50, "CNC")}, deployed=25_000.0, entries_today=5), None),
+    # C1: no overselling, no shorts by product mismatch, no negative quantities.
+    (_order(side=Side.SELL, qty=1000, product="MIS"), 1000.0, _state(held={"INFY": (5, "CNC")}), "holds"),
+    (_order(side=Side.SELL, qty=6), 1000.0, _state(held={"INFY": (5, "CNC")}), "holds"),
+    (_order(qty=-10), 100.0, _state(), "quantity"),
 ])
 def test_fence_limits(order, price, state, refusal):
     result = fence.check(order, price, state, PREFS)
@@ -80,7 +84,7 @@ async def test_submit_paper_fills_logs_and_notifies(world):
     await _prefs(db)
     result = await service.submit(db, None, "alice", _order(qty=2), now=OPEN)
     assert result["status"] == "FILLED"
-    trades = await db["paper_trades"].find({"user_id": "alice"}).to_list(None)
+    trades = await db["paper_trades"].find({"user_id": "alice:autopilot"}).to_list(None)
     assert len(trades) == 1 and trades[0]["strategy"] == "autopilot:chat"
     assert await db["autopilot_log"].count_documents({"user_id": "alice", "status": "FILLED"}) == 1
     assert sent and sent[0].startswith("🤖 AI bought 2 INFY")
@@ -122,7 +126,7 @@ async def test_stop_button_disables_once(world):
 async def test_daily_loss_trips_the_kill_switch(world):
     db, _ = world
     await _prefs(db)
-    await db["paper_trades"].insert_one({"user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
+    await db["paper_trades"].insert_one({"user_id": "alice:autopilot", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
                                          "strategy": "autopilot:chat", "realized_pnl": -1001.0, "venue": "paper",
                                          "exit_at": OPEN.replace(hour=10)})
     result = await service.submit(db, None, "alice", _order(), now=OPEN)
@@ -188,3 +192,60 @@ async def test_live_mode_places_on_the_ai_adapter_only(world, monkeypatch):
     assert result["status"] == "FILLED" and result["mode"] == "live"
     assert calls == [(kite, "CNC", "autopilot:chat")]
     assert sent[0].startswith("🤖 AI bought 2 INFY on the AI account at")
+
+
+
+async def test_parallel_orders_cannot_exceed_capital_or_trades(world, monkeypatch):
+    import asyncio
+
+    db, _ = world
+    await _prefs(db)
+    symbols = ["INFY", "TCS", "HDFCBANK", "ICICIBANK", "SBIN", "ITC"]
+    results = await asyncio.gather(*(service.submit(db, None, "alice", _order(symbol=s, qty=5), now=OPEN)
+                                     for s in symbols))  # 6 x ₹5,000 vs ₹25,000 capital, 5 trades/day
+    assert sum(r["status"] == "FILLED" for r in results) == 5
+
+
+async def test_a_sent_but_unfilled_live_order_still_counts(world, monkeypatch):
+    db, _ = world
+    await _prefs(db)
+    await db["autopilot_log"].insert_one({"user_id": "alice", "at": OPEN.replace(hour=10), "status": "SENT",
+                                          "side": "BUY", "symbol": "INFY", "quantity": 5, "price": 1000.0,
+                                          "product": "CNC", "source": "chat", "reason": "x"})
+    again = await service.submit(db, None, "alice", _order(symbol="INFY", qty=1), now=OPEN)
+    assert again["status"] == "REFUSED" and "already holding" in again["reason"]
+
+
+async def test_autopilot_trades_live_in_their_own_ledger(world):
+    db, _ = world
+    await _prefs(db)
+    await service.submit(db, None, "alice", _order(qty=2), now=OPEN)
+    assert await db["paper_trades"].count_documents({"user_id": "alice:autopilot"}) == 1
+    assert await db["paper_trades"].count_documents({"user_id": "alice"}) == 0
+
+
+async def test_venue_must_match_the_autopilot_mode(world, monkeypatch):
+    from backend.chat import actions
+    from backend.instruments.master import InstrumentMaster
+    from backend.instruments.models import Instrument
+
+    db, _ = world
+    await _prefs(db, autopilot_live=True)
+    await InstrumentMaster(db).upsert_many([Instrument(
+        exchange="NSE", tradingsymbol="INFY", name="INFOSYS", instrument_token=1, exchange_token=1,
+        instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)])
+    tools = {t.name: t for t in actions.action_tools(db, None, "alice", "buy")}
+    out = await tools["propose_order"].ainvoke({"symbol": "INFY", "side": "BUY", "quantity": 1, "account": "ai"})
+    assert "live" in out.lower() and await db["autopilot_log"].count_documents({}) == 0
+
+
+async def test_autopilot_exits_hit_stop_through_the_fence(world, monkeypatch):
+    db, sent = world
+    await _prefs(db)
+    await db["suggestions"].insert_one({"id": "s1", "user_id": "alice", "symbol": "INFY", "stop": 1100.0,
+                                        "target": 1300.0})
+    await service.submit(db, None, "alice", _order(qty=2, source="engine"), now=OPEN, suggestion_id="s1")
+    closed = await service.check_exits(db, None, "alice", now=OPEN)  # mark 1000 <= stop 1100
+    assert [c["symbol"] for c in closed] == ["INFY"]
+    open_left = await db["paper_trades"].count_documents({"user_id": "alice:autopilot", "status": "OPEN"})
+    assert open_left == 0

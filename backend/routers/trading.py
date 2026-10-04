@@ -325,7 +325,12 @@ async def launch_run(
 
     # Engine orders trade only the AI account; without one logged in, every
     # strategy stays on paper.
-    active_adapter = await ai_broker_adapter(user_id, credentials, prefs.get("broker_roles") or {})
+    active_adapter = (
+        await ai_broker_adapter(user_id, credentials, prefs.get("broker_roles") or {})
+        # The autopilot's switch and live mode govern everything trading the
+        # AI account, so its stop button stops engine live orders too.
+        if prefs.get("autopilot_enabled") and prefs.get("autopilot_live") else None
+    )
     live_strategy_names = set(prefs["live_strategies"])
     eligible_names = {s.spec.name for s in eligible}
 

@@ -241,8 +241,14 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
                   "product": product, "venue": venue}
         if account == "ai":
             # The AI account is the autopilot's: no card -- it goes through the
-            # fence and runs (or is refused) now (backend/autopilot/).
+            # fence and runs (or is refused) now (backend/autopilot/). The venue
+            # must match its mode, so "paper" can never become a real order.
             from backend.autopilot.service import AutopilotOrder, submit
+
+            live_mode = bool((await PrefsStore(db).get(user_id)).get("autopilot_live"))
+            if (venue == "live") != live_mode:
+                return (f"The AI account's autopilot is in {'live' if live_mode else 'paper'} mode; "
+                        f"use venue='{'live' if live_mode else 'paper'}' for it.")
 
             result = await submit(db, redis, user_id, AutopilotOrder(
                 symbol=params["symbol"], side=Side(side), quantity=int(quantity), product=product,

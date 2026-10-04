@@ -498,7 +498,7 @@ def test_a_strategy_toggled_live_routes_live_only_after_passing_the_gate(monkeyp
 
     fresh_db = AsyncMongoMockClient()["test_db"]
     names = ["technical_breakout", "mean_reversion", "macd_crossover"]
-    asyncio.run(PrefsStore(fresh_db).update(_USER.id, {"live_strategies": names, "broker_roles": {"kite": "ai"}}))
+    asyncio.run(PrefsStore(fresh_db).update(_USER.id, {"live_strategies": names, "broker_roles": {"kite": "ai"}, "autopilot_enabled": True, "autopilot_live": True}))
     asyncio.run(BacktestGateStore(fresh_db).record("mean_reversion", BacktestResult(
         symbol="RELIANCE", start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
         end_date=datetime(2026, 1, 2, tzinfo=timezone.utc),
@@ -625,7 +625,7 @@ def _fresh_fake_db():
     return type("_Db", (), {"db": AsyncMongoMockClient()["test_db"], "redis": None})()
 
 
-async def _seed_gate_and_prefs(fake_db, live_strategies):
+async def _seed_gate_and_prefs(fake_db, live_strategies, autopilot=True):
     from backend.components.shared.models import BacktestResult
     from backend.prefs import PrefsStore
     from backend.risk.backtest_gate import BacktestGateStore
@@ -638,7 +638,10 @@ async def _seed_gate_and_prefs(fake_db, live_strategies):
             max_drawdown=0.10, sharpe_ratio=1.2, trades=[],
         ))
     # Live orders trade only the AI account (backend/brokers/roles.py).
-    await PrefsStore(fake_db.db).update(_USER.id, {"live_strategies": live_strategies, "broker_roles": {"kite": "ai"}})
+    # Engine live orders on it also need the autopilot on and live, so one stop
+    # button and one live switch govern everything trading the AI account.
+    await PrefsStore(fake_db.db).update(_USER.id, {"live_strategies": live_strategies, "broker_roles": {"kite": "ai"},
+                                                   "autopilot_enabled": autopilot, "autopilot_live": autopilot})
     await _seed_paper_record(fake_db, "technical_breakout")
 
 
@@ -839,3 +842,31 @@ async def test_progress_is_throttled_but_never_drops_the_end_of_a_cycle(monkeypa
     for bars in range(1, 7):
         await report({"bars": bars, "signals": 0, "orders": 0, "last_symbol": "X", "last_bar_at": None})
     assert saved == [1, 3, 6]
+
+
+def test_engine_live_orders_stay_on_paper_while_the_autopilot_is_off(monkeypatch):
+    from backend.brokers.protocol import BrokerSessionState
+
+    fake_db = _fresh_fake_db()
+    monkeypatch.setattr(trading, "InstrumentMaster", _FakeMaster)
+    monkeypatch.setattr(trading, "YFinanceProvider", _ForeverQuoteProvider)
+    monkeypatch.setattr(trading, "db", fake_db)
+    monkeypatch.setattr(trading, "ai_broker_adapter",
+                        AsyncMock(return_value=_LiveAdapter(BrokerSessionState.ACTIVE, {})))
+    seen = {}
+
+    async def _spying_run(**kwargs):
+        seen["execution"] = kwargs["execution"]
+
+    monkeypatch.setattr(trading, "run", _spying_run)
+
+    async def _scenario():
+        await _seed_gate_and_prefs(fake_db, ["technical_breakout"], autopilot=False)
+        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=0.01)
+        await trading.start_trading(req, user=_USER, runs=RunStore(fake_db.db))
+        for _ in range(5):
+            await asyncio.sleep(0)
+
+    asyncio.run(_scenario())
+    live = getattr(seen["execution"], "_live_by_strategy", {})
+    assert "technical_breakout" not in live

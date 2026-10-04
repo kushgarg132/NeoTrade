@@ -281,8 +281,10 @@ async def test_with_the_autopilot_on_engine_proposals_go_to_it(world, longterm, 
 
     submitted = []
 
-    async def submit(db, redis, user_id, order, now=None):
+    async def submit(db, redis, user_id, order, now=None, suggestion_id=None, quiet=False):
         submitted.append((order.symbol, order.source))
+        assert quiet and suggestion_id == order.symbol  # one summary note; exits can find the proposal
+        assert order.quantity == 10  # resized: min(10, per_trade_cap // entry 55) = 10
         return {"status": "FILLED", "price": 55.0} if order.symbol == "SJVN" else {"status": "REFUSED", "reason": "cap"}
 
     monkeypatch.setattr(service, "submit", submit)

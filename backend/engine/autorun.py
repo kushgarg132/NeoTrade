@@ -206,6 +206,9 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         closed = await check_exits(db, user_id, now=now)
         if closed:
             await notify(db, user_id, exits_text(closed))
+        if (await PrefsStore(db).get(user_id)).get("autopilot_enabled"):
+            from backend.autopilot.service import check_exits as autopilot_exits
+            await autopilot_exits(db, redis, user_id, now=now)
 
     if local.time() >= MORNING and await redis.set(f"longterm:{user_id}:{day}:morning", _TOKEN, nx=True, px=86_400_000):
         did = True
@@ -242,23 +245,37 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
 
 async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dict], now: datetime) -> list[dict]:
     """Hands pending stock proposals to the autopilot (backend/autopilot/),
-    best score first; returns the ones it did not take."""
+    best score first, resized to its per-trade cap, with one summary note;
+    returns the ones it did not take."""
     from backend.autopilot import service
     from backend.core.models import Side
+    from backend.suggestions.notify import notify
 
-    left = []
+    cap = (await PrefsStore(db).get(user_id))["autopilot_per_trade_cap"]
+    left, bought, refused = [], [], []
     for s in sorted(pending, key=lambda s: (s.get("score") or {}).get("final") or 0.0, reverse=True):
-        if s.get("option_contract"):
+        entry = s.get("entry_ref") or 0
+        quantity = min(int(s["quantity"]), int(cap // entry)) if entry > 0 else 0
+        if s.get("option_contract") or quantity < 1:
             left.append(s)
             continue
         result = await service.submit(db, redis, user_id, service.AutopilotOrder(
-            symbol=s["symbol"], side=Side(s["side"]), quantity=int(s["quantity"]), product="CNC",
+            symbol=s["symbol"], side=Side(s["side"]), quantity=quantity, product="CNC",
             source="engine", reason=f"Engine proposal ({s.get('strategy') or 'scan'}): {', '.join(s.get('reason_codes') or [])}"),
-            now=now)
+            now=now, suggestion_id=s["id"], quiet=True)
         if result["status"] in ("FILLED", "SENT"):
             await store.decide(user_id, s["id"], status="EXECUTED", reason="autopilot", now=now)
+            bought.append(f"{s['symbol']} ×{quantity}")
         else:
+            refused.append(f"{s['symbol']} ({result.get('reason')})")
             left.append(s)
+    if bought or refused:
+        lines = ["🤖 Autopilot, morning pass on the AI account:"]
+        if bought:
+            lines.append("Bought: " + ", ".join(bought))
+        if refused:
+            lines.append("Refused: " + "; ".join(refused[:5]) + (" …" if len(refused) > 5 else ""))
+        await notify(db, user_id, "\n".join(lines))
     return left
 
 

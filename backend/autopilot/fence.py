@@ -17,7 +17,7 @@ PRODUCTS = {"CNC", "MIS"}
 class FenceState:
     deployed: float                # rupees in open autopilot positions, at mark
     entries_today: int
-    open_symbols: set = field(default_factory=set)
+    held: dict = field(default_factory=dict)  # symbol -> (quantity, product) the autopilot holds
     kill_tripped: bool = False
     session_ok: bool = True
 
@@ -36,14 +36,22 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
         return "The market is closed."
     if order.product not in PRODUCTS:
         return "The autopilot trades NSE equity only (CNC or MIS)."
+    if order.quantity <= 0:
+        return "The quantity must be a whole number above zero."
     if order.side == Side.SELL:
-        return None if order.symbol in state.open_symbols else "The autopilot does not short sell."
+        # Only what the autopilot holds, in the product it holds it: never a short.
+        quantity, product = state.held.get(order.symbol, (0, None))
+        if quantity <= 0:
+            return "The autopilot does not short sell."
+        if order.quantity > quantity or order.product != product:
+            return f"The autopilot holds {quantity:g} {order.symbol} ({product}); it can sell at most that."
+        return None
     notional = price * order.quantity
     if state.kill_tripped:
         return "The daily loss limit was hit: no new entries today."
     if order.symbol not in universe():
         return f"{order.symbol} is outside the autopilot's universe (Nifty 200)."
-    if order.symbol in state.open_symbols:
+    if order.symbol in state.held:
         return f"The autopilot is already holding {order.symbol}."
     if notional > prefs["autopilot_per_trade_cap"] + 1e-6:
         return f"₹{notional:,.0f} is over the per-trade cap of ₹{prefs['autopilot_per_trade_cap']:,.0f}."

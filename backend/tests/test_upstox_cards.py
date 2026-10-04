@@ -144,3 +144,15 @@ async def test_upstox_place_order_sends_sl_m_fields(monkeypatch):
                   product="CNC")
     assert await adapter.place_order(order) == "U1"
     assert sent["order_type"] == "SL-M" and sent["trigger_price"] == 1400.0
+
+
+
+async def test_exit_of_a_todays_delivery_buy_keeps_cnc(env):
+    db, mine = env["db"], env["mine"]
+    mine.holdings = []
+    mine.positions = {"INFY": Position(symbol="INFY", quantity=10, avg_price=1500.0, product="CNC")}
+    card = await _card(db, "propose_exit", {"symbol": "INFY"})
+    await confirm(db, None, None, "alice", card["id"])
+    await confirm(db, None, None, "alice", card["id"], second_tap=True)
+    (kind, order), = mine.calls
+    assert order.product == "CNC"  # selling MIS would open an intraday short
