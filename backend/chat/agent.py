@@ -1,7 +1,8 @@
 """The chat agent: a ReAct agent over the user's read tools and propose-only
 action tools, with the day snapshot and current page in its system prompt.
 Streams thinking, content, and -- when an action tool prepared a card --
-an action event the widget draws as a Confirm card."""
+an action event the widget draws as a Confirm card. `step` events carry each
+tool call's input and completion for clients that show the work (Telegram)."""
 
 import json
 import logging
@@ -72,9 +73,14 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
     try:
         async for event in agent.astream_events({"messages": messages}, version="v1"):
             kind = event["event"]
+            name = event.get("name", "")
+            label = TOOL_LABELS.get(name, f"Using {name}")
             if kind == "on_tool_start":
-                yield {"type": "thinking", "data": TOOL_LABELS.get(event["name"], f"Using {event['name']}") + "…"}
+                yield {"type": "thinking", "data": label + "…"}
+                yield {"type": "step", "data": {"id": event.get("run_id"), "phase": "start", "label": label,
+                                                "input": event["data"].get("input")}}
             elif kind == "on_tool_end":
+                yield {"type": "step", "data": {"id": event.get("run_id"), "phase": "end", "label": label}}
                 output = event["data"].get("output")
                 text = getattr(output, "content", output)
                 if isinstance(text, str) and text.startswith(CARD_PREFIX):

@@ -8,8 +8,10 @@ or less-restricted trading path.
 
 import asyncio
 import hashlib
+import html
 import json
 import logging
+import random
 import time
 import uuid
 from typing import Optional
@@ -19,6 +21,8 @@ from backend.chat import agent
 from backend.chat.actions import ActionRefused, ChatActionStore, confirm
 from backend.guardrails import telegram
 from backend.guardrails.store import GuardrailStore
+from backend.llm import use_model
+from backend.prefs import PrefsStore
 
 logger = logging.getLogger(__name__)
 POLL_SECONDS = 3
@@ -30,9 +34,11 @@ HISTORY_TURNS = 10  # user + assistant messages kept, so "yes, do it" has contex
 HISTORY_SECONDS = 6 * 60 * 60
 START_SECONDS = 15 * 60  # matches the Settings link code's lifetime
 SUGGEST_PREFIX = "telegram:ai:suggest:"
-EDIT_SECONDS = 1.0  # stream by editing at most this often; Telegram rate-limits edits
-TYPING_SECONDS = 4  # "typing…" lasts ~5s, so refresh it a little sooner
-MESSAGE_LIMIT = 3500  # under Telegram's 4096 cap, leaving room for HTML tags
+DRAFT_SECONDS = 0.5  # how often the live draft is redrawn
+DRAFT_KEEPALIVE = 10  # a draft expires after ~30s; resend it while tools are slow
+TYPING_SECONDS = 4  # fallback when drafts are unavailable: "typing…" lasts ~5s
+MESSAGE_LIMIT = 2800  # answer text per message; leaves room for the steps under 4096
+STEPS_SHOWN = 8
 CURSOR = " ▍"
 
 
@@ -82,67 +88,120 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
         return
 
     history = await _history(redis, user_id)
-    typing = asyncio.create_task(_keep_typing(chat_id, token))
-    chunks, cards, suggestions = [], [], []
-    message_id, shown, offset, last_edit = None, "", 0, 0.0
-
-    async def show(md: str, markup: Optional[dict] = None) -> None:
-        # One message grows by edits; a too-long answer continues in a new one.
-        nonlocal message_id, shown
-        if md == shown and markup is None:
-            return
-        if message_id is None:
-            message_id = await telegram.send_rich(chat_id, md, token, markup)
-        else:
-            await telegram.edit_rich(chat_id, message_id, md, token, markup)
-        shown = md
-
+    # `text` is the model's output since its last tool call: what it wrote
+    # before calling a tool is its reasoning, what it writes last is the answer.
+    state = {"steps": [], "text": ""}
+    cards, suggestions, failed = [], [], False
+    stop = asyncio.Event()
+    renderer = asyncio.create_task(_render(chat_id, token, state, stop))
     try:
-        async for event in agent.stream_chat(db, redis, user_id, text, history, {"page": "telegram"}):
-            if event["type"] == "thinking" and not chunks:
-                await show(f"_{event['data']}_")
-            elif event["type"] == "content":
-                chunks.append(event["data"])
-                answer = "".join(chunks)
-                while len(answer) - offset > MESSAGE_LIMIT:
-                    cut = answer.rfind("\n", offset, offset + MESSAGE_LIMIT)
-                    cut = cut if cut > offset else offset + MESSAGE_LIMIT
-                    await show(answer[offset:cut].strip())
-                    message_id, shown, offset = None, "", cut
-                if time.monotonic() - last_edit >= EDIT_SECONDS:
-                    await show(answer[offset:].strip() + CURSOR)
-                    last_edit = time.monotonic()
-            elif event["type"] == "action":
-                cards.append(event["data"])
-            elif event["type"] == "suggestions":
-                suggestions = event["data"]
+        prefs = await PrefsStore(db).get(user_id)
+        with use_model(prefs.get("omniroute_model")):
+            async for event in agent.stream_chat(db, redis, user_id, text, history, {"page": "telegram"}):
+                kind, data = event["type"], event["data"]
+                if kind == "step" and data["phase"] == "start":
+                    if state["text"].strip():
+                        state["steps"].append({"think": state["text"].strip()})
+                    state["text"] = ""
+                    state["steps"].append({"id": data["id"], "label": data["label"],
+                                           "input": data.get("input"), "done": False})
+                elif kind == "step":
+                    for step in state["steps"]:
+                        if step.get("id") == data["id"]:
+                            step["done"] = True
+                elif kind == "content":
+                    state["text"] += data
+                elif kind == "action":
+                    cards.append(data)
+                elif kind == "suggestions":
+                    suggestions = data
     except Exception:
         logger.exception("telegram chat failed for user %s", user_id)
-        await show("NeoTrade could not answer that right now. Please try again shortly.")
-        return
+        failed = True
+        state["text"] = "NeoTrade could not answer that right now. Please try again shortly."
     finally:
-        typing.cancel()
+        stop.set()
+        await asyncio.gather(renderer, return_exceptions=True)
 
-    answer = "".join(chunks).strip()
-    if answer:
+    answer = state["text"].strip()
+    if answer and not failed:
         await _remember(redis, user_id, history, text, answer)
+    if not answer and not cards:
+        answer = "NeoTrade could not prepare a response. Please try again."
+    if answer:
         # Suggested next questions: buttons under the final answer. Tapping one
         # asks it (see _callback); the questions live in Redis by message.
         markup = {"inline_keyboard": [[{"text": q[:64], "callback_data": f"nt:ask:{i}"}]
                                       for i, q in enumerate(suggestions)]} if suggestions else None
-        await show("".join(chunks)[offset:].strip(), markup)
+        parts, steps, message_id = _split(answer), _steps_html(state["steps"]), None
+        for i, part in enumerate(parts):
+            body = telegram.to_html(part)
+            if i == 0 and steps:
+                # The work stays in the final message, collapsed.
+                body = f"<blockquote expandable>{steps}</blockquote>\n{body}"
+            message_id = await telegram.send_html(chat_id, body, token, markup if i == len(parts) - 1 else None)
         if suggestions and message_id is not None and redis is not None:
             await redis.set(f"{SUGGEST_PREFIX}{user_id}:{message_id}", json.dumps(suggestions), ex=HISTORY_SECONDS)
-    elif not cards:
-        await show("NeoTrade could not prepare a response. Please try again.")
     for card in cards:
         await telegram.send_buttons(chat_id, card["summary"], _buttons(card), token)
 
 
-async def _keep_typing(chat_id: int, token: Optional[str]) -> None:
-    while True:
-        await telegram.chat_action(chat_id, token)
-        await asyncio.sleep(TYPING_SECONDS)
+def _split(text: str) -> list[str]:
+    parts = []
+    while len(text) > MESSAGE_LIMIT:
+        cut = text.rfind("\n", 0, MESSAGE_LIMIT)
+        cut = cut if cut > 0 else MESSAGE_LIMIT
+        parts.append(text[:cut].strip())
+        text = text[cut:].strip()
+    return parts + [text]
+
+
+def _args(value) -> str:
+    if isinstance(value, dict):
+        value = ", ".join(f"{k}={v}" for k, v in value.items() if v not in (None, "", [], {}))
+    return str(value or "")[:60]
+
+
+def _steps_html(steps: list[dict]) -> str:
+    lines = []
+    for step in steps[-STEPS_SHOWN:]:
+        if "think" in step:
+            thought = step["think"]
+            lines.append(f"💭 <i>{html.escape(thought[:150] + ('…' if len(thought) > 150 else ''))}</i>")
+        else:
+            args = _args(step["input"])
+            lines.append(f"{'✅' if step['done'] else '⏳'} {html.escape(step['label'])}"
+                         + (f" <code>{html.escape(args)}</code>" if args else ""))
+    return "\n".join(lines)
+
+
+def _draft_html(state: dict) -> str:
+    text = state["text"].strip()[-MESSAGE_LIMIT:]
+    body = telegram.to_html(text) + CURSOR if text else ""
+    return "\n\n".join(p for p in (_steps_html(state["steps"]), body) if p)
+
+
+async def _render(chat_id: int, token: Optional[str], state: dict, stop: asyncio.Event) -> None:
+    """Redraw the live draft from `state` until `stop`; Telegram animates the
+    changes. Drafts work only in private chats (positive ids); otherwise, or if
+    the API refuses, fall back to the "typing…" status."""
+    draft_id = random.randint(1, 2**31 - 1)
+    drafts = chat_id > 0
+    shown, shown_at = None, 0.0
+    while not stop.is_set():
+        now = time.monotonic()
+        if drafts:
+            current = _draft_html(state)
+            if current != shown or now - shown_at > DRAFT_KEEPALIVE:
+                drafts = await telegram.draft(chat_id, draft_id, current, token)
+                shown, shown_at = current, now
+        elif now - shown_at > TYPING_SECONDS:
+            await telegram.chat_action(chat_id, token)
+            shown_at = now
+        try:
+            await asyncio.wait_for(stop.wait(), DRAFT_SECONDS)
+        except asyncio.TimeoutError:
+            pass
 
 
 async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str], callback: dict) -> None:

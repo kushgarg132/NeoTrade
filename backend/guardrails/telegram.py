@@ -159,24 +159,35 @@ async def chat_action(chat_id: int, token: Optional[str] = None) -> None:
     await _call("sendChatAction", {"chat_id": chat_id, "action": "typing"}, token)
 
 
-async def _rich(method: str, body: dict, md: str, token: Optional[str]) -> Optional[dict]:
-    """Send or edit as formatted HTML, falling back to the raw text."""
-    data = await _call(method, {**body, "text": to_html(md), "parse_mode": "HTML"}, token)
-    return data or await _call(method, {**body, "text": md}, token)
+def _plain(markup: str) -> str:
+    return html.unescape(re.sub(r"<[^>]+>", "", markup))
+
+
+async def _html_or_plain(method: str, body: dict, text: str, token: Optional[str]) -> Optional[dict]:
+    """Send as HTML; if Telegram rejects the markup, the same text without tags."""
+    data = await _call(method, {**body, "text": text, "parse_mode": "HTML"}, token)
+    return data or await _call(method, {**body, "text": _plain(text)}, token)
+
+
+async def send_html(chat_id: int, text: str, token: Optional[str] = None,
+                    reply_markup: Optional[dict] = None) -> Optional[int]:
+    """Send Telegram HTML; the new message's id, or None."""
+    body = {"chat_id": chat_id, **({"reply_markup": reply_markup} if reply_markup else {})}
+    data = await _html_or_plain("sendMessage", body, text, token)
+    return data["result"]["message_id"] if data else None
 
 
 async def send_rich(chat_id: int, md: str, token: Optional[str] = None,
                     reply_markup: Optional[dict] = None) -> Optional[int]:
-    """Send formatted markdown; the new message's id, for later edits."""
-    body = {"chat_id": chat_id, **({"reply_markup": reply_markup} if reply_markup else {})}
-    data = await _rich("sendMessage", body, md, token)
-    return data["result"]["message_id"] if data else None
+    return await send_html(chat_id, to_html(md), token, reply_markup)
 
 
-async def edit_rich(chat_id: int, message_id: int, md: str, token: Optional[str] = None,
-                    reply_markup: Optional[dict] = None) -> None:
-    body = {"chat_id": chat_id, "message_id": message_id, **({"reply_markup": reply_markup} if reply_markup else {})}
-    await _rich("editMessageText", body, md, token)
+async def draft(chat_id: int, draft_id: int, text: str, token: Optional[str] = None) -> bool:
+    """Stream a live, animated preview (Bot API sendMessageDraft, private chats
+    only). It is ephemeral: it lasts ~30s and the next sendMessage replaces it.
+    Empty text shows Telegram's own "Thinking…" placeholder."""
+    body = {"chat_id": chat_id, "draft_id": draft_id}
+    return await _html_or_plain("sendMessageDraft", body, text, token) is not None
 
 
 async def alert(db, user_id: str, text: str) -> bool:

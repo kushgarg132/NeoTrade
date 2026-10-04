@@ -27,45 +27,58 @@ async def test_poll_only_answers_a_chat_linked_to_that_bot(monkeypatch):
 
 
 def _fake_bot(monkeypatch):
-    sent, edits = [], []
+    sent, drafts = [], []
 
-    async def send_rich(chat_id, md, token=None, markup=None):
-        sent.append((md, markup))
+    async def send_html(chat_id, text, token=None, markup=None):
+        sent.append((text, markup))
         return 100 + len(sent)
 
-    async def edit_rich(chat_id, message_id, md, token=None, markup=None):
-        edits.append((message_id, md, markup))
+    async def draft(chat_id, draft_id, text, token=None):
+        drafts.append(text)
+        return True
 
-    monkeypatch.setattr(telegram_bot.telegram, "send_rich", send_rich)
-    monkeypatch.setattr(telegram_bot.telegram, "edit_rich", edit_rich)
+    monkeypatch.setattr(telegram_bot.telegram, "send_html", send_html)
+    monkeypatch.setattr(telegram_bot.telegram, "draft", draft)
     monkeypatch.setattr(telegram_bot.telegram, "chat_action", AsyncMock())
-    return sent, edits
+    monkeypatch.setattr(telegram_bot.PrefsStore, "get", AsyncMock(return_value={}))
+    return sent, drafts
 
 
-async def test_telegram_reply_streams_edits_then_cards_and_suggestions(monkeypatch):
+async def test_telegram_reply_shows_work_then_answer_cards_and_suggestions(monkeypatch):
+    import asyncio
+
     db = AsyncMongoMockClient()["test_db"]
     redis = AsyncMock()
     redis.get.return_value = None
+    monkeypatch.setattr(telegram_bot, "DRAFT_SECONDS", 0.01)
 
     async def stream(*_args):
-        yield {"type": "thinking", "data": "Checking the paper engine…"}
-        yield {"type": "content", "data": "Your paper engine "}
-        yield {"type": "content", "data": "is stopped."}
+        yield {"type": "content", "data": "Let me check the engine."}
+        yield {"type": "step", "data": {"id": "r1", "phase": "start", "label": "Checking the paper engine",
+                                        "input": {"mode": "intraday"}}}
+        await asyncio.sleep(0.05)  # let the live draft redraw mid-tool
+        yield {"type": "step", "data": {"id": "r1", "phase": "end", "label": "Checking the paper engine"}}
+        yield {"type": "content", "data": "Your paper engine is **stopped**."}
         yield {"type": "action", "data": {"id": "a1", "summary": "Start an intraday paper run"}}
         yield {"type": "suggestions", "data": ["How did it do today?"]}
 
     monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
-    sent, edits = _fake_bot(monkeypatch)
+    sent, drafts = _fake_bot(monkeypatch)
     buttons = AsyncMock(return_value=True)
     monkeypatch.setattr(telegram_bot.telegram, "send_buttons", buttons)
 
     await telegram_bot._reply(db, redis, "alice", 42, "token", "Start the paper engine")
 
-    # One message: the thinking label, then live edits, then the final text with suggestion buttons.
-    assert sent == [("_Checking the paper engine…_", None)]
-    assert edits[0] == (101, "Your paper engine" + telegram_bot.CURSOR, None)
-    assert edits[-1] == (101, "Your paper engine is stopped.", {
-        "inline_keyboard": [[{"text": "How did it do today?", "callback_data": "nt:ask:0"}]]})
+    # The live draft showed the reasoning and the running tool with its input.
+    assert any("💭 <i>Let me check the engine.</i>" in d and "⏳ Checking the paper engine <code>mode=intraday</code>" in d
+               for d in drafts)
+    # The final message keeps the work, collapsed, above the formatted answer.
+    assert sent == [(
+        "<blockquote expandable>💭 <i>Let me check the engine.</i>\n"
+        "✅ Checking the paper engine <code>mode=intraday</code></blockquote>\n"
+        "Your paper engine is <b>stopped</b>.",
+        {"inline_keyboard": [[{"text": "How did it do today?", "callback_data": "nt:ask:0"}]]},
+    )]
     redis.set.assert_any_await(f"{telegram_bot.SUGGEST_PREFIX}alice:101", '["How did it do today?"]',
                                ex=telegram_bot.HISTORY_SECONDS)
     buttons.assert_awaited_once_with(42, "Start an intraday paper run", [
@@ -76,20 +89,17 @@ async def test_telegram_reply_streams_edits_then_cards_and_suggestions(monkeypat
 
 async def test_long_answer_continues_in_a_new_message(monkeypatch):
     db = AsyncMongoMockClient()["test_db"]
-    line = "x" * 99 + "\n"
 
     async def stream(*_args):
         for _ in range(40):  # 4000 chars, over MESSAGE_LIMIT
-            yield {"type": "content", "data": line}
+            yield {"type": "content", "data": "x" * 99 + "\n"}
 
     monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
-    sent, edits = _fake_bot(monkeypatch)
+    sent, _ = _fake_bot(monkeypatch)
 
     await telegram_bot._reply(db, None, "alice", 42, "token", "Explain everything")
 
-    assert len(sent) == 2
-    finals = [md for _, md, _ in edits if not md.endswith(telegram_bot.CURSOR)]
-    assert all(len(md) <= telegram_bot.MESSAGE_LIMIT for md in finals)
+    assert len(sent) == 2 and all(len(text) <= telegram_bot.MESSAGE_LIMIT for text, _ in sent)
 
 
 async def test_tapped_suggestion_is_asked(monkeypatch):
