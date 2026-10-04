@@ -24,7 +24,7 @@ def _fake_master(meta_doc=None):
     meta.update_one = AsyncMock()
     master = MagicMock()
     master.collection.database.__getitem__.return_value = meta
-    master.upsert_many = AsyncMock(side_effect=[3, 2])
+    master.upsert_many = AsyncMock(side_effect=[3, 1, 2])  # NSE, NSE ETF, BSE
     return master, meta
 
 
@@ -62,7 +62,10 @@ async def test_never_raises_and_returns_zero_on_any_failure():
 
 
 async def test_free_sources_sum_counts_from_both_exchanges(monkeypatch):
-    class _FakeNse:
+    class _FakeNse:  # also stands in for the NSE ETF list (constructed with its URL)
+        def __init__(self, url=None):
+            pass
+
         async def fetch(self):
             return ["nse-stub"] * 3
 
@@ -77,12 +80,15 @@ async def test_free_sources_sum_counts_from_both_exchanges(monkeypatch):
 
     result = await loader.refresh_from_free_public_sources(master)
 
-    assert result == 5
+    assert result == 6
     meta.update_one.assert_awaited_once()  # marker recorded so the next run can skip
 
 
 async def test_free_sources_one_exchange_failing_does_not_stop_the_other(monkeypatch):
-    class _FakeNse:
+    class _FakeNse:  # also stands in for the NSE ETF list (constructed with its URL)
+        def __init__(self, url=None):
+            pass
+
         async def fetch(self):
             raise RuntimeError("NSE blocked this IP")
 
@@ -116,7 +122,10 @@ async def test_free_sources_skip_when_refreshed_recently(monkeypatch):
 
 
 async def test_free_sources_refresh_again_once_the_marker_is_stale(monkeypatch):
-    class _FakeNse:
+    class _FakeNse:  # also stands in for the NSE ETF list (constructed with its URL)
+        def __init__(self, url=None):
+            pass
+
         async def fetch(self):
             return ["nse-stub"]
 
@@ -134,5 +143,5 @@ async def test_free_sources_refresh_again_once_the_marker_is_stale(monkeypatch):
 
     result = await loader.refresh_from_free_public_sources(master)
 
-    assert result == 2
+    assert result == 3
     meta.update_one.assert_awaited_once()
