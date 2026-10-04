@@ -880,3 +880,15 @@ Statistics decide, the LLM explains. Plan: `/home/ubuntu/.claude-second/plans/jo
 - Not done: intraday re-tune from Kite history. Known weakness: the model sees paper trades
   that overlap the test year, so its ideas are not fully out of sample — the Deflated Sharpe
   counting each idea is the guard.
+- Intraday re-test under the honest backtester (2026-10-04: net of charges, 10 bps slippage,
+  stop/target exits; yfinance 5m, 56 days, 80 of 83 symbols). All lose before charges too:
+
+  | Strategy | Trades | Win | PF (net) | Max DD | Sharpe | Gross | Charges | Net |
+  |---|---|---|---|---|---|---|---|---|
+  | volume_surge | 365 | 0.36 | 0.73 | 14.6% | −5.90 | −₹89,063 | ₹26,909 | −₹1,15,972 |
+  | vwap_reversion | 125 | 0.38 | 0.80 | 20.7% | −2.31 | −₹1,35,376 | ₹19,188 | −₹1,54,563 |
+  | orb_breakout | 174 | 0.29 | 0.63 | 28.1% | −3.95 | −₹2,07,665 | ₹22,379 | −₹2,30,044 |
+  | rsi_momentum_scalp | 82 | 0.28 | 0.73 | 21.5% | −2.45 | −₹1,60,846 | ₹13,223 | −₹1,74,070 |
+
+  Intraday stays experimental. The runner is slow (~125 bars/s, ~30 min per strategy over
+  235k candles): strategies recompute indicators per bar.
