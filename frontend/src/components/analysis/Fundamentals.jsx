@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sheet, Statement, Row, Cell } from '../doc/Doc';
+import { Sheet } from '../doc/Doc';
 import { formatCompactNumber, formatCurrency, formatPercent } from '../../utils/formatters';
 
 const isNum = (value) => typeof value === 'number' && Number.isFinite(value);
@@ -58,14 +58,15 @@ const Fundamentals = ({ company: c, currency }) => {
         {groups.map(([title, rows]) => (
           <div key={title} className="min-w-0">
             <p className="field-label mb-1">{title}</p>
-            <Statement inline columns={[{ key: 'item', label: 'Item' }, { key: 'value', label: 'Value', align: 'right' }]}>
+            {/* Two figures a line: label over value, in a 2-column grid. */}
+            <dl className="grid grid-cols-2 gap-x-4">
               {rows.map(([label, value]) => (
-                <Row key={label}>
-                  <Cell className="text-[var(--ink-soft)]">{label}</Cell>
-                  <Cell align="right" mono>{value ?? '—'}</Cell>
-                </Row>
+                <div key={label} className="py-1.5 border-b border-[var(--rule)] min-w-0">
+                  <dt className="doc-meta normal-case truncate">{label}</dt>
+                  <dd className="figure-md text-sm">{value ?? '—'}</dd>
+                </div>
               ))}
-            </Statement>
+            </dl>
           </div>
         ))}
       </div>

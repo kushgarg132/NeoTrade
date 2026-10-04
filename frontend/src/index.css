@@ -301,6 +301,9 @@
   .statement.statement-inline td::before {
     content: none !important;
   }
+  .statement.statement-inline td.phone-hide {
+    display: none;
+  }
 }
 
 /* The net rule: a contract note closes its totals with a double rule. */

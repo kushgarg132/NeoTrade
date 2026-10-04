@@ -16,6 +16,7 @@ import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } fro
 import { Badge } from '../components/common/Badge';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
+import { cn } from '../utils/cn';
 import { stockPath } from '../utils/stocks';
 import { useTopic } from '../hooks/useStream';
 import {
@@ -288,6 +289,7 @@ const Portfolio = () => {
             <Empty title="No executions yet" detail="Fills appear here as orders are filled." />
           ) : (
             <Statement
+              inline
               columns={[
                 { key: 'scrip', label: 'Scrip' },
                 { key: 'time', label: 'Time' },
@@ -301,9 +303,14 @@ const Portfolio = () => {
                 <Row key={`${fill.order_id}-${fill.timestamp}`}>
                   <Cell>
                     <Scrip symbol={fill.symbol} />
+                    {/* Phone: side and time ride along with the scrip on one line. */}
+                    <span className={cn('sm:hidden ml-2 text-xs figure-md', fill.side === 'BUY' ? 'text-up' : 'text-down')}>
+                      {fill.side}
+                    </span>
+                    <span className="sm:hidden ml-2 doc-meta">{formatClock(fill.timestamp)}</span>
                   </Cell>
-                  <Cell className="doc-meta normal-case">{formatClock(fill.timestamp)}</Cell>
-                  <Cell>
+                  <Cell className="doc-meta normal-case phone-hide">{formatClock(fill.timestamp)}</Cell>
+                  <Cell className="phone-hide">
                     <Badge variant={fill.side === 'BUY' ? 'success' : 'destructive'}>
                       {fill.side}
                     </Badge>
@@ -314,7 +321,7 @@ const Portfolio = () => {
                   <Cell align="right" mono>
                     {formatCurrency(fill.price)}
                   </Cell>
-                  <Cell align="right" mono className="text-[var(--ink-faint)]">
+                  <Cell align="right" mono className="text-[var(--ink-faint)] phone-hide">
                     {formatCurrency(fill.costs)}
                   </Cell>
                 </Row>

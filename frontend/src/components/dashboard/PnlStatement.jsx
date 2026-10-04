@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Sheet, Money, NetLine, Ruling } from '../doc/Doc';
 import { formatCurrency, formatPercent, formatQuantity, formatNoteDate } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
@@ -22,6 +22,7 @@ const Line = ({ label, children, muted }) => (
 );
 
 const PnlStatement = ({ pnl, loading }) => {
+  const [period, setPeriod] = useState('today');
   if (loading || !pnl) {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
@@ -40,7 +41,25 @@ const PnlStatement = ({ pnl, loading }) => {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Sheet title="Today" meta={formatNoteDate()}>
+      {/* A phone shows one period at a time; wider screens show both. */}
+      <div className="sm:hidden flex border border-[var(--rule-strong)]" role="radiogroup" aria-label="Period">
+        {[['today', 'Today'], ['month', 'Month to date']].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={period === id}
+            onClick={() => setPeriod(id)}
+            className={cn(
+              'flex-1 min-h-11 text-xs font-semibold uppercase tracking-[0.08em]',
+              period === id ? 'bg-[var(--ink)] text-[var(--paper)]' : 'text-[var(--ink-soft)]'
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <Sheet title="Today" meta={formatNoteDate()} className={cn(period !== 'today' && 'max-sm:hidden')}>
         <Line label="Realised">
           <Money value={today.realized} />
         </Line>
@@ -65,7 +84,7 @@ const PnlStatement = ({ pnl, loading }) => {
         </NetLine>
       </Sheet>
 
-      <Sheet title="Month to date">
+      <Sheet title="Month to date" className={cn(period !== 'month' && 'max-sm:hidden')}>
         <Line label="Realised">
           <Money value={month.realized} />
         </Line>

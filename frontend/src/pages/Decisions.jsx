@@ -38,6 +38,7 @@ const ACCOUNTS = [
 const Decisions = () => {
   const [account, setAccount] = useState('all');
   const [hasMine, setHasMine] = useState(true);
+  const [showAll, setShowAll] = useState(false);
   const [mode, setMode] = useState('LONGTERM');
   const [showDecided, setShowDecided] = useState(false);
   const [items, setItems] = useState([]);
@@ -231,7 +232,7 @@ const Decisions = () => {
           </Sheet>
         ) : (
           <div className="space-y-2 sm:space-y-3">
-            {visible.map((suggestion) => (
+            {(showAll ? visible : visible.slice(0, 5)).map((suggestion) => (
               <SuggestionRecord
                 key={suggestion.id}
                 suggestion={suggestion}
@@ -241,6 +242,16 @@ const Decisions = () => {
                 hasMine={hasMine}
               />
             ))}
+            {visible.length > 5 && (
+              <button
+                type="button"
+                onClick={() => setShowAll((value) => !value)}
+                aria-expanded={showAll}
+                className="w-full sheet py-3 field-label text-[var(--stamp)] hover:bg-[var(--paper-sunk)]"
+              >
+                {showAll ? 'Show first 5' : `Show ${visible.length - 5} more`}
+              </button>
+            )}
           </div>
         )}
         </>

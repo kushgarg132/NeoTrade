@@ -7,7 +7,7 @@ import { cn } from '../../utils/cn';
  */
 
 // A hint longer than this is folded to one line; a tap shows all of it.
-const HINT_FOLD = 60;
+const HINT_FOLD = 30;
 
 const Hint = ({ text }) => {
   const [open, setOpen] = useState(false);

@@ -246,67 +246,59 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
       )}
 
       {!decided && (
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => act('reject')}
-            disabled={busy !== null}
-            aria-label={`Decline ${suggestion.symbol}`}
-          >
-            {busy === 'reject' ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-            Decline
-          </Button>
-          <Button
-            variant="approve"
-            onClick={() => act('approve')}
-            disabled={busy !== null}
-            aria-label={`Approve ${suggestion.symbol} and place the paper order`}
-            title={canGoLive ? 'Fills on paper' : undefined}
-          >
-            {busy === 'approve' ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Check className="w-4 h-4" />
-            )}
-            {canGoLive ? 'Approve on paper' : 'Approve'}
-          </Button>
-          {canGoLive && (
-            <div className="col-span-2">
-              {confirmLive && (
-                <p className="mb-2 text-sm text-[var(--loss)]" role="alert">
-                  Real money: {suggestion.side === 'SELL' ? 'sells' : 'buys'}{' '}
-                  {formatQuantity(suggestion.quantity)} {suggestion.option_contract ? 'units' : 'shares'} of{' '}
-                  {suggestion.symbol} at market on your account. Tap again to send.
-                </p>
-              )}
-              {!hasMine ? (
-                <p className="doc-meta normal-case">
-                  <Link to="/settings?tab=accounts" className="underline">
-                    Connect your broker and set it as My account in Settings
-                  </Link>{' '}
-                  to approve with real money.
-                </p>
-              ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {confirmLive && (
-                  <Button variant="secondary" onClick={() => setConfirmLive(false)} disabled={busy !== null}>
-                    Cancel
-                  </Button>
-                )}
-                <Button
-                  variant="danger"
-                  className={confirmLive ? '' : 'col-span-2'}
-                  onClick={() => (confirmLive ? act('live') : setConfirmLive(true))}
-                  disabled={busy !== null}
-                  aria-label={`Send ${suggestion.symbol} to your broker as a real order`}
-                >
-                  {busy === 'live' && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {confirmLive ? 'Send real order' : 'Approve with real money'}
-                </Button>
-              </div>
-              )}
-            </div>
+        <div className="mt-2">
+          {confirmLive && (
+            <p className="mb-2 text-sm text-[var(--loss)]" role="alert">
+              Real money: {suggestion.side === 'SELL' ? 'sells' : 'buys'}{' '}
+              {formatQuantity(suggestion.quantity)} {suggestion.option_contract ? 'units' : 'shares'} of{' '}
+              {suggestion.symbol} at market on your account. Tap again to send.
+            </p>
           )}
+          {/* One row of three: decline, paper, real money (two taps). */}
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => (confirmLive ? setConfirmLive(false) : act('reject'))}
+              disabled={busy !== null}
+              aria-label={confirmLive ? 'Cancel the real order' : `Decline ${suggestion.symbol}`}
+            >
+              {busy === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+              {confirmLive ? 'Cancel' : 'Decline'}
+            </Button>
+            <Button
+              variant="approve"
+              size="sm"
+              onClick={() => act('approve')}
+              disabled={busy !== null || confirmLive}
+              aria-label={`Approve ${suggestion.symbol} on paper`}
+            >
+              {busy === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              Paper
+            </Button>
+            {canGoLive && hasMine ? (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => (confirmLive ? act('live') : setConfirmLive(true))}
+                disabled={busy !== null}
+                aria-label={`Approve ${suggestion.symbol} with real money on your account`}
+              >
+                {busy === 'live' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {confirmLive ? 'Send real order' : 'Real money'}
+              </Button>
+            ) : canGoLive ? (
+              <Link
+                to="/settings?tab=accounts"
+                className="doc-meta normal-case underline self-center text-center"
+                aria-label="Connect your broker and set it as My account in Settings to approve with real money"
+              >
+                Connect broker
+              </Link>
+            ) : (
+              <span />
+            )}
+          </div>
         </div>
       )}
 

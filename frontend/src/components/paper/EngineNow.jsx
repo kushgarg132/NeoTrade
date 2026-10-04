@@ -20,6 +20,8 @@ import { formatClock, formatTimeAgo } from '../../utils/formatters';
 const EngineNow = ({ prefs }) => {
   const [runs, setRuns] = useState([]);
   const [universeSymbols, setUniverseSymbols] = useState([]);
+  const [runSettings, setRunSettings] = useState(false);
+  const [aboutLongterm, setAboutLongterm] = useState(false);
   const [accountSize, setAccountSize] = useState(1_000_000);
   const [maxExposure, setMaxExposure] = useState(1_000_000);
   const [busy, setBusy] = useState(false);
@@ -185,7 +187,17 @@ const EngineNow = ({ prefs }) => {
             </div>
           ))}
           {!intradayActive && (
-            <div className={cn(running.length > 0 && 'mt-4')}>
+            <button
+              type="button"
+              onClick={() => setRunSettings((value) => !value)}
+              aria-expanded={runSettings}
+              className={cn('field-label text-[var(--stamp)] hover:underline min-h-11 sm:min-h-0', running.length > 0 && 'mt-3')}
+            >
+              {runSettings ? 'Hide run settings' : `Run settings · ${universeSymbols.length || 'default'} scrip, ₹${Number(accountSize || 0).toLocaleString('en-IN')}`}
+            </button>
+          )}
+          {!intradayActive && (runSettings || startError) && (
+            <div className="mt-2">
               <TradingControlBar
                 universeSymbols={universeSymbols}
                 onUniverseChange={setUniverseSymbols}
@@ -210,14 +222,22 @@ const EngineNow = ({ prefs }) => {
             </Button>
           }
         >
-          <p className="text-sm text-[var(--ink)]">
+          <p className={cn('text-sm text-[var(--ink)]', !aboutLongterm && 'line-clamp-2')}>
             Scans a year of daily prices after each close (16:00 IST) and files what it finds under{' '}
             <Link to="/decisions" className="underline underline-offset-2">Decisions</Link>.
             {prefs?.auto_paper_longterm
               ? ' At 09:20 on the first trading day of each month the factor portfolio rebalances on paper; in session, approved positions are sold at their stop or target, checked every 15 minutes.'
               : ' Turn on the daily long-term engine in Settings to close approved positions at their stop or target.'}
           </p>
-          <p className="mt-2 doc-meta normal-case">
+          <button
+            type="button"
+            onClick={() => setAboutLongterm((value) => !value)}
+            aria-expanded={aboutLongterm}
+            className="field-label text-[var(--stamp)] hover:underline min-h-9"
+          >
+            {aboutLongterm ? 'Less' : 'More'}
+          </button>
+          <p className="mt-1 doc-meta normal-case">
             {longterm.pending} waiting for your decision · {longterm.open} open long-term position{longterm.open === 1 ? '' : 's'}
           </p>
           {scan && scan !== 'starting' && <p className="mt-2 text-sm text-[var(--ink-soft)]">{scan}</p>}
