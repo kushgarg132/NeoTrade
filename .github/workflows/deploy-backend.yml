@@ -1,65 +1,37 @@
 name: Deploy backend
 
-# Runs on the self-hosted runner living on the same Oracle Cloud VM that hosts
-# the backend, so these jobs never check the repo out themselves -- they
-# operate on the persistent deploy clone at /home/ubuntu/deploys/NeoTrade
-# (which already has the real .env in place, since it's gitignored).
-#
-# Gated on ci.yml's "CI" workflow via workflow_run rather than a shared `needs:`
-# in one file -- CI's own concurrency group cancels a stale run the moment a
-# newer push lands, and merging this job into that workflow would let a new
-# push cancel a deploy mid-`docker compose build`, leaving the backend
-# container in a broken half-built state. Kept as its own workflow so its
-# `cancel-in-progress: false` below still holds: a deploy, once started,
-# always runs to completion.
+# Thin caller: the steps live in kushgarg132/ci-workflows (deploy-backend.yml),
+# shared by every backend on the VM. It operates on the deploy clone at
+# /home/ubuntu/deploys/NeoTrade (real .env there, gitignored) and skips when
+# nothing matching `paths` changed. Run manually with force=true to rebuild
+# regardless.
 on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      force:
+        type: boolean
+        default: false
 
+# Never cancel a deploy mid-`docker compose build`.
 concurrency:
   group: deploy-backend
   cancel-in-progress: false
 
 jobs:
-  check:
-    name: Check whether backend changed
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
-    runs-on: [self-hosted, neotrade]
-    outputs:
-      should_deploy: ${{ steps.check.outputs.should_deploy }}
-    steps:
-      - name: Fast-forward deploy clone and diff against what's currently running
-        id: check
-        run: |
-          set -euo pipefail
-          cd /home/ubuntu/deploys/NeoTrade
-          PREV_SHA=$(git rev-parse HEAD)
-          git fetch origin main
-          NEW_SHA=$(git rev-parse origin/main)
-          git reset --hard "$NEW_SHA"
-
-          if [ "$PREV_SHA" = "$NEW_SHA" ]; then
-            echo "Deploy clone already at $NEW_SHA -- nothing new."
-            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$PREV_SHA" "$NEW_SHA" | grep -qE '^(backend/|docker-compose\.yml$)'; then
-            echo "backend/docker-compose.yml changed between $PREV_SHA and $NEW_SHA."
-            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No backend/docker-compose.yml changes between $PREV_SHA and $NEW_SHA."
-            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
-          fi
-
   deploy:
-    name: Rebuild and restart backend
-    needs: check
-    if: needs.check.outputs.should_deploy == 'true'
-    runs-on: [self-hosted, neotrade]
-    steps:
-      - name: Rebuild backend container
-        run: |
-          set -euo pipefail
-          cd /home/ubuntu/deploys/NeoTrade
-          docker compose up -d --build backend
-          docker image prune -f
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    uses: kushgarg132/ci-workflows/.github/workflows/deploy-backend.yml@main
+    with:
+      runner: neotrade
+      deploy_dir: /home/ubuntu/deploys/NeoTrade
+      branch: main
+      sha: ${{ github.event.workflow_run.head_sha || github.sha }}
+      force: ${{ inputs.force == true }}
+      health_url: http://127.0.0.1:8000/
+      container: neotrade-backend
