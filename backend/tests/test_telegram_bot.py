@@ -349,3 +349,8 @@ def test_short_suggestions_pair_up_two_per_row():
     assert [[b["text"] for b in row] for row in rows] == [
         ["📊 vs Nifty?", "🎯 Set risk level"], ["🔍 Which proposals fit my plan best?"]]
     assert [b["callback_data"] for row in rows for b in row] == ["nt:ask:0", "nt:ask:1", "nt:ask:2"]
+
+
+def test_draft_says_thinking_before_the_first_words():
+    assert telegram_bot._draft_html({"steps": [], "text": ""}) == "💭 <i>Thinking…</i>"
+    assert "Thinking" not in telegram_bot._draft_html({"steps": [], "text": "Hello"})

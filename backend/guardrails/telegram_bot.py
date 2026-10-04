@@ -316,7 +316,8 @@ def _steps_html(steps: list[dict]) -> str:
 def _draft_html(state: dict) -> str:
     text = state["text"].strip()[-MESSAGE_LIMIT:]
     body = telegram.to_html(text) + CURSOR if text else ""
-    return "\n\n".join(p for p in (_steps_html(state["steps"]), body) if p)
+    # Before the first words or tool step, say so instead of an empty bubble.
+    return "\n\n".join(p for p in (_steps_html(state["steps"]), body) if p) or "💭 <i>Thinking…</i>"
 
 
 async def _render(chat_id: int, token: Optional[str], state: dict, stop: asyncio.Event) -> None:
