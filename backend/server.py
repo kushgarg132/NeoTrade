@@ -168,6 +168,8 @@ from backend.routers import settings as settings_router
 app.include_router(settings_router.router, prefix=settings.API_PREFIX, tags=["Settings"], dependencies=[Depends(get_current_user)])
 from backend.routers import profile as profile_router
 app.include_router(profile_router.router, prefix=settings.API_PREFIX, tags=["Profile"], dependencies=[Depends(get_current_user)])
+from backend.routers import today as today_router
+app.include_router(today_router.router, prefix=settings.API_PREFIX, tags=["Today"], dependencies=[Depends(get_current_user)])
 
 from backend.routers import market_data
 from backend.routers import options as options_router
