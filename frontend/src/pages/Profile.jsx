@@ -109,16 +109,25 @@ const ChipInput = ({ id, label, hint, value = [], onChange, placeholder }) => {
   );
 };
 
+const LIST_FIELDS = new Set(['styles', 'favour', 'avoid']);
+const empty = (field) => (LIST_FIELDS.has(field) ? [] : '');
+/** The value as the server stores it: trimmed text, absent when blank. */
+const normal = (field, value) => {
+  if (LIST_FIELDS.has(field)) return JSON.stringify(value || []);
+  return typeof value === 'string' ? value.trim() : value ?? '';
+};
+const draftFrom = (fields, profile) => Object.fromEntries(fields.map((f) => [f, profile[f] ?? empty(f)]));
+
 /** A sheet whose fields save together with one button. */
 const FormSheet = ({ title, meta, fields, profile, onSaved, children }) => {
-  const [draft, setDraft] = useState(() => Object.fromEntries(fields.map((f) => [f, profile[f] ?? ''])));
+  const [draft, setDraft] = useState(() => draftFrom(fields, profile));
   const [state, setState] = useState(null);
-  const dirty = fields.some((f) => JSON.stringify(draft[f] ?? '') !== JSON.stringify(profile[f] ?? ''));
+  const dirty = fields.some((f) => normal(f, draft[f]) !== normal(f, profile[f]));
   const save = () => {
     setState({ busy: true });
-    const body = Object.fromEntries(fields.map((f) => [f, draft[f] ?? '']));
+    const body = Object.fromEntries(fields.map((f) => [f, draft[f] ?? empty(f)]));
     api.put(endpoints.profile.get, body)
-      .then((res) => { onSaved(res.data); setState({ saved: true }); })
+      .then((res) => { onSaved(res.data); setDraft(draftFrom(fields, res.data)); setState({ saved: true }); })
       .catch((err) => {
         const detail = err?.response?.data?.detail;
         setState({ error: Array.isArray(detail) ? 'Some fields are too long or invalid.' : detail || 'Could not save.' });

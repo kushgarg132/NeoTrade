@@ -34,6 +34,12 @@ class ProfileUpdate(BaseModel):
     def _strip(cls, value):
         return value.strip() if isinstance(value, str) else value
 
+    @field_validator("styles", "favour", "avoid", mode="before")
+    @classmethod
+    def _blank_list(cls, value):
+        # A blank string from a form means "clear this list", same as [].
+        return [] if isinstance(value, str) and not value.strip() else value
+
     @field_validator("styles")
     @classmethod
     def _unique(cls, value):

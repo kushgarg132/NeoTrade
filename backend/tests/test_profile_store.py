@@ -58,3 +58,8 @@ async def test_users_are_isolated(store):
     assert await store.get("bob") == {"memories": []}
     assert await store.delete_memory("bob", memory["id"]) is False
     assert len((await store.get("alice"))["memories"]) == 1
+
+
+def test_blank_string_clears_a_list_field():
+    # The page sends "" for a list field the user never set; that means "clear", not a 422.
+    assert ProfileUpdate(styles="", favour="", avoid=None).fields() == {"styles": [], "favour": [], "avoid": None}
