@@ -26,6 +26,7 @@ def build_default_strategies(
     quality_scores: Optional[dict[str, float]] = None,
     analyst_verdicts: Optional[dict[str, dict]] = None,
     option_universe: Optional[list[str]] = None,
+    params: Optional[dict[str, dict]] = None,
 ) -> list[Strategy]:
     """`universe` defaults to `indian_stocks.ALL_SCAN_STOCKS` (the existing
     NSE mid/small-cap symbol list already used elsewhere in this codebase),
@@ -65,15 +66,18 @@ def build_default_strategies(
     """
     universe = list(universe) if universe is not None else list(ALL_SCAN_STOCKS)
     symbol_for_token = symbol_for_token or {}
+    # `params` is each strategy's last accepted re-tune, by strategy name
+    # (backend/learning/retune.py); missing names keep their defaults.
+    params = params or {}
 
     strategies: list[Strategy] = [
-        TechnicalBreakoutStrategy(universe, symbol_for_token),
-        MeanReversionStrategy(universe, symbol_for_token),
-        MACDCrossoverStrategy(universe, symbol_for_token),
-        VolumeSurgeStrategy(universe, symbol_for_token),
-        VWAPReversionStrategy(universe, symbol_for_token),
-        ORBStrategy(universe, symbol_for_token),
-        RSIMomentumScalpStrategy(universe, symbol_for_token),
+        TechnicalBreakoutStrategy(universe, symbol_for_token, params.get("technical_breakout")),
+        MeanReversionStrategy(universe, symbol_for_token, params.get("mean_reversion")),
+        MACDCrossoverStrategy(universe, symbol_for_token, params.get("macd_crossover")),
+        VolumeSurgeStrategy(universe, symbol_for_token, params.get("volume_surge")),
+        VWAPReversionStrategy(universe, symbol_for_token, params.get("vwap_reversion")),
+        ORBStrategy(universe, symbol_for_token, params.get("orb_breakout")),
+        RSIMomentumScalpStrategy(universe, symbol_for_token, params.get("rsi_momentum_scalp")),
         CashSecuredPutStrategy(universe, symbol_for_token),
     ]
     if quality_universe is not None and quality_scores is not None:

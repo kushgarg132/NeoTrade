@@ -40,9 +40,17 @@ class TokenResolvingStrategy:
     a real run's feed already knows about.
     """
 
-    def __init__(self, universe: list[str], symbol_for_token: dict[int, str]) -> None:
+    # A strategy's tunable thresholds and the variants the monthly re-tune
+    # (backend/learning/retune.py) may try. `params` overrides the defaults
+    # with the last accepted re-tune.
+    PARAMS: dict = {}
+    GRID: dict[str, list] = {}
+
+    def __init__(self, universe: list[str], symbol_for_token: dict[int, str],
+                 params: dict | None = None) -> None:
         self._universe = universe
         self._symbol_for_token = symbol_for_token
+        self.p = {**self.PARAMS, **{k: v for k, v in (params or {}).items() if k in self.PARAMS}}
 
     def symbol_for(self, bar: Bar) -> Optional[str]:
         symbol = self._symbol_for_token.get(bar.instrument_token)

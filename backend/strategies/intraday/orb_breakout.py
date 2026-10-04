@@ -23,8 +23,11 @@ OPENING_RANGE_MINUTES = 15
 
 
 class ORBStrategy(TokenResolvingStrategy):
-    def __init__(self, universe: list[str], symbol_for_token: dict[int, str]) -> None:
-        super().__init__(universe, symbol_for_token)
+    PARAMS = {"range_minutes": OPENING_RANGE_MINUTES, "volume_mult": 1.5}
+    GRID = {"range_minutes": [15, 30], "volume_mult": [1.0, 1.5, 2.0]}
+
+    def __init__(self, universe: list[str], symbol_for_token: dict[int, str], params: dict | None = None) -> None:
+        super().__init__(universe, symbol_for_token, params)
         self.spec = StrategySpec(
             name="orb_breakout", mode="INTRADAY", timeframe="5m",
             warmup_bars=4, universe=universe,
@@ -44,7 +47,7 @@ class ORBStrategy(TokenResolvingStrategy):
         if len(session_bars) < self.spec.warmup_bars:
             return None
 
-        range_end = session_bars[0].timestamp + timedelta(minutes=OPENING_RANGE_MINUTES)
+        range_end = session_bars[0].timestamp + timedelta(minutes=self.p["range_minutes"])
         range_bars = [b for b in session_bars if b.timestamp < range_end]
         breakout_bars = [b for b in session_bars if b.timestamp >= range_end]
         if not range_bars or not breakout_bars:
@@ -57,7 +60,7 @@ class ORBStrategy(TokenResolvingStrategy):
         current = breakout_bars[-1]
         # tuned from > avg_range_volume (218 trades/59d backtest, PF 0.93 --
         # net loser, too many marginal whipsaw breakouts) -- see spec memlog
-        if current.volume <= 1.5 * avg_range_volume:
+        if current.volume <= self.p["volume_mult"] * avg_range_volume:
             return None
 
         df = Indicators.calculate_all(bars_to_dataframe(session_bars))

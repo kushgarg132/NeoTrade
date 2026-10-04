@@ -23,8 +23,11 @@ DEVIATION_THRESHOLD = 0.006  # ponytail: 0.6%, tuned down from an initial 1.5% t
 
 
 class VWAPReversionStrategy(TokenResolvingStrategy):
-    def __init__(self, universe: list[str], symbol_for_token: dict[int, str]) -> None:
-        super().__init__(universe, symbol_for_token)
+    PARAMS = {"deviation": DEVIATION_THRESHOLD}
+    GRID = {"deviation": [0.004, 0.006, 0.008, 0.012]}
+
+    def __init__(self, universe: list[str], symbol_for_token: dict[int, str], params: dict | None = None) -> None:
+        super().__init__(universe, symbol_for_token, params)
         self.spec = StrategySpec(
             name="vwap_reversion", mode="INTRADAY", timeframe="5m",
             warmup_bars=2, universe=universe,
@@ -54,14 +57,14 @@ class VWAPReversionStrategy(TokenResolvingStrategy):
         reverting_up = curr_close > prev_close
         reverting_down = curr_close < prev_close
 
-        if prev_dev <= -DEVIATION_THRESHOLD and reverting_up:
+        if prev_dev <= -self.p["deviation"] and reverting_up:
             ctx.submit(Intent(
                 symbol=symbol, side=Side.BUY, strength=0.6,
                 reason_codes=["vwap_reversion"],
                 stop_hint=curr_close - atr,
                 target_hint=curr_vwap,
             ))
-        elif prev_dev >= DEVIATION_THRESHOLD and reverting_down:
+        elif prev_dev >= self.p["deviation"] and reverting_down:
             ctx.submit(Intent(
                 symbol=symbol, side=Side.SELL, strength=0.6,
                 reason_codes=["vwap_reversion"],

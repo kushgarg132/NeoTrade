@@ -15,8 +15,11 @@ from backend.strategies.strength import graded, ramp, sma
 
 
 class TechnicalBreakoutStrategy(TokenResolvingStrategy):
-    def __init__(self, universe: list[str], symbol_for_token: dict[int, str]) -> None:
-        super().__init__(universe, symbol_for_token)
+    PARAMS = {"volume_mult": 1.5, "target_r": 2.0}
+    GRID = {"volume_mult": [1.5, 2.0], "target_r": [1.5, 2.0, 3.0]}
+
+    def __init__(self, universe: list[str], symbol_for_token: dict[int, str], params: dict | None = None) -> None:
+        super().__init__(universe, symbol_for_token, params)
         self.spec = StrategySpec(
             name="technical_breakout", mode="LONGTERM", timeframe="1d",
             warmup_bars=50, universe=universe,
@@ -51,13 +54,13 @@ class TechnicalBreakoutStrategy(TokenResolvingStrategy):
         if not resistance or not (prev_close < resistance and current_price > resistance):
             return
         avg_vol = df["volume"].rolling(20).mean().iloc[-1]
-        if df["volume"].iloc[-1] <= 1.5 * avg_vol:
+        if df["volume"].iloc[-1] <= self.p["volume_mult"] * avg_vol:
             return
 
         sma_200 = sma([b.close for b in ctx.history(symbol, 200)], 200)
         strength = graded(
             0.55, 0.95,
-            ramp(df["volume"].iloc[-1] / avg_vol, 1.5, 3.0),
+            ramp(df["volume"].iloc[-1] / avg_vol, self.p["volume_mult"], 2 * self.p["volume_mult"]),
             ramp((current_price - resistance) / df["atr_14"].iloc[-1], 0.0, 1.0),
             ramp(None if sma_200 is None else current_price - sma_200, 0.0, 0.0),
         )
@@ -65,5 +68,5 @@ class TechnicalBreakoutStrategy(TokenResolvingStrategy):
             symbol=symbol, side=Side.BUY, strength=strength,
             reason_codes=["breakout_above_resistance_with_volume"],
             stop_hint=resistance * 0.98,  # stop below the breakout level
-            target_hint=current_price + (current_price - resistance) * 2,  # 2R target
+            target_hint=current_price + (current_price - resistance) * self.p["target_r"],
         ))

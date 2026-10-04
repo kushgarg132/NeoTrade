@@ -21,8 +21,11 @@ from backend.strategies.strength import graded, ramp, sma
 
 
 class MeanReversionStrategy(TokenResolvingStrategy):
-    def __init__(self, universe: list[str], symbol_for_token: dict[int, str]) -> None:
-        super().__init__(universe, symbol_for_token)
+    PARAMS = {"rsi_max": 30.0, "target_pct": 0.05}
+    GRID = {"rsi_max": [25.0, 30.0, 35.0], "target_pct": [0.05, 0.08]}
+
+    def __init__(self, universe: list[str], symbol_for_token: dict[int, str], params: dict | None = None) -> None:
+        super().__init__(universe, symbol_for_token, params)
         self.spec = StrategySpec(
             name="mean_reversion", mode="LONGTERM", timeframe="1d",
             warmup_bars=50, universe=universe,
@@ -43,13 +46,13 @@ class MeanReversionStrategy(TokenResolvingStrategy):
         lower_band = df["bb_lower"].iloc[-1]
 
         # Buy condition: RSI oversold AND price below the lower Bollinger band.
-        if not (rsi < 30 and current_price < lower_band):
+        if not (rsi < self.p["rsi_max"] and current_price < lower_band):
             return
 
         sma_200 = sma([b.close for b in ctx.history(symbol, 200)], 200)
         strength = graded(
             0.5, 0.9,
-            ramp(30 - rsi, 0.0, 15.0),
+            ramp(self.p["rsi_max"] - rsi, 0.0, 15.0),
             ramp((lower_band - current_price) / df["atr_14"].iloc[-1], 0.0, 1.0),
             ramp(None if sma_200 is None else current_price - sma_200, 0.0, 0.0),
         )
@@ -57,5 +60,5 @@ class MeanReversionStrategy(TokenResolvingStrategy):
             symbol=symbol, side=Side.BUY, strength=strength,
             reason_codes=["oversold_rsi_below_lower_band"],
             stop_hint=current_price * 0.95,
-            target_hint=current_price * 1.05,
+            target_hint=current_price * (1 + self.p["target_pct"]),
         ))

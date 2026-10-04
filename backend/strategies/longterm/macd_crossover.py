@@ -13,8 +13,11 @@ from backend.strategies.strength import graded, ramp, sma
 
 
 class MACDCrossoverStrategy(TokenResolvingStrategy):
-    def __init__(self, universe: list[str], symbol_for_token: dict[int, str]) -> None:
-        super().__init__(universe, symbol_for_token)
+    PARAMS = {"stop_pct": 0.03, "target_pct": 0.06}
+    GRID = {"stop_pct": [0.02, 0.03, 0.05], "target_pct": [0.06, 0.10]}
+
+    def __init__(self, universe: list[str], symbol_for_token: dict[int, str], params: dict | None = None) -> None:
+        super().__init__(universe, symbol_for_token, params)
         self.spec = StrategySpec(
             name="macd_crossover", mode="LONGTERM", timeframe="1d",
             warmup_bars=30, universe=universe,
@@ -49,8 +52,8 @@ class MACDCrossoverStrategy(TokenResolvingStrategy):
             ctx.submit(Intent(
                 symbol=symbol, side=Side.BUY, strength=strength,
                 reason_codes=["macd_bullish_crossover"],
-                stop_hint=current_price * 0.97,
-                target_hint=current_price * 1.06,
+                stop_hint=current_price * (1 - self.p["stop_pct"]),
+                target_hint=current_price * (1 + self.p["target_pct"]),
             ))
         elif prev_hist > 0 and curr_hist < 0:
             strength = graded(
@@ -62,6 +65,6 @@ class MACDCrossoverStrategy(TokenResolvingStrategy):
             ctx.submit(Intent(
                 symbol=symbol, side=Side.SELL, strength=strength,
                 reason_codes=["macd_bearish_crossover"],
-                stop_hint=current_price * 1.03,
-                target_hint=current_price * 0.94,
+                stop_hint=current_price * (1 + self.p["stop_pct"]),
+                target_hint=current_price * (1 - self.p["target_pct"]),
             ))

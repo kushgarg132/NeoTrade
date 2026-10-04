@@ -20,8 +20,11 @@ from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
 
 
 class VolumeSurgeStrategy(TokenResolvingStrategy):
-    def __init__(self, universe: list[str], symbol_for_token: dict[int, str]) -> None:
-        super().__init__(universe, symbol_for_token)
+    PARAMS = {"volume_mult": 3.0}
+    GRID = {"volume_mult": [2.0, 3.0, 4.0, 5.0]}
+
+    def __init__(self, universe: list[str], symbol_for_token: dict[int, str], params: dict | None = None) -> None:
+        super().__init__(universe, symbol_for_token, params)
         self.spec = StrategySpec(
             name="volume_surge", mode="INTRADAY", timeframe="5m",
             warmup_bars=20, universe=universe,
@@ -41,7 +44,7 @@ class VolumeSurgeStrategy(TokenResolvingStrategy):
         current_vol = df["volume"].iloc[-1]
         current_price = df["close"].iloc[-1]
 
-        if current_vol <= 3 * avg_vol:
+        if current_vol <= self.p["volume_mult"] * avg_vol:
             return
 
         if df["close"].iloc[-1] > df["open"].iloc[-1]:

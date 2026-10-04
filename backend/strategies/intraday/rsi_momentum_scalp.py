@@ -13,13 +13,15 @@ from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
 
 RSI_BULL_THRESHOLD = 60.0
-RSI_BEAR_THRESHOLD = 40.0
 MIN_RSI_JUMP = 5.0  # ponytail: filters slow drifts over the line -- 6 trades/25% win/PF 0.20 as-tuned before this, see spec memlog
 
 
 class RSIMomentumScalpStrategy(TokenResolvingStrategy):
-    def __init__(self, universe: list[str], symbol_for_token: dict[int, str]) -> None:
-        super().__init__(universe, symbol_for_token)
+    PARAMS = {"bull": RSI_BULL_THRESHOLD, "min_jump": MIN_RSI_JUMP}
+    GRID = {"bull": [60.0, 65.0], "min_jump": [3.0, 5.0, 8.0]}
+
+    def __init__(self, universe: list[str], symbol_for_token: dict[int, str], params: dict | None = None) -> None:
+        super().__init__(universe, symbol_for_token, params)
         self.spec = StrategySpec(
             name="rsi_momentum_scalp", mode="INTRADAY", timeframe="5m",
             warmup_bars=20, universe=universe,
@@ -43,14 +45,15 @@ class RSIMomentumScalpStrategy(TokenResolvingStrategy):
 
         rsi_jump = curr_rsi - prev_rsi
 
-        if prev_rsi <= RSI_BULL_THRESHOLD < curr_rsi and rsi_jump >= MIN_RSI_JUMP and curr_price > curr_ema9:
+        bull, bear, jump = self.p["bull"], 100 - self.p["bull"], self.p["min_jump"]
+        if prev_rsi <= bull < curr_rsi and rsi_jump >= jump and curr_price > curr_ema9:
             ctx.submit(Intent(
                 symbol=symbol, side=Side.BUY, strength=0.55,
                 reason_codes=["rsi_momentum_scalp"],
                 stop_hint=curr_price - atr,
                 target_hint=curr_price + 2 * atr,
             ))
-        elif prev_rsi >= RSI_BEAR_THRESHOLD > curr_rsi and -rsi_jump >= MIN_RSI_JUMP and curr_price < curr_ema9:
+        elif prev_rsi >= bear > curr_rsi and -rsi_jump >= jump and curr_price < curr_ema9:
             ctx.submit(Intent(
                 symbol=symbol, side=Side.SELL, strength=0.55,
                 reason_codes=["rsi_momentum_scalp"],
