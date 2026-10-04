@@ -166,6 +166,8 @@ from backend.routers import agents
 app.include_router(agents.router, prefix=f"{settings.API_PREFIX}/agents", tags=["Agents"], dependencies=[Depends(get_current_user)])
 from backend.routers import chat_actions
 app.include_router(chat_actions.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
+from backend.routers import orders
+app.include_router(orders.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
 
 from backend.routers import settings as settings_router
 app.include_router(settings_router.router, prefix=settings.API_PREFIX, tags=["Settings"], dependencies=[Depends(get_current_user)])

@@ -16,6 +16,7 @@ from typing import Awaitable, Callable
 
 from pymongo import ReturnDocument
 
+from backend.core.clock import SystemClock
 from backend.core.models import Order, Side
 from backend.engine.autorun import in_session
 from backend.engine.persistence import LedgerStore
@@ -139,7 +140,7 @@ async def _loop(db) -> None:
 
     while True:
         try:
-            await sweep(db, _mark_price, datetime.now(IST))
+            await sweep(db, _mark_price, SystemClock().now())
         except Exception as exc:
             logger.exception("paper order sweep failed: %s", exc)
         await asyncio.sleep(INTERVAL_SECONDS)
