@@ -159,3 +159,32 @@ async def test_chat_order_for_the_ai_account_goes_through_the_autopilot(world, m
     out = await tools["propose_order"].ainvoke({"symbol": "INFY", "side": "BUY", "quantity": 2, "account": "ai"})
     assert not out.startswith("ACTION_CARD:") and "bought 2 INFY" in out
     assert await db["paper_trades"].count_documents({"strategy": "autopilot:chat"}) == 1
+
+
+async def test_live_mode_places_on_the_ai_adapter_only(world, monkeypatch):
+    from backend.brokers.protocol import BrokerSessionState
+
+    db, sent = world
+    await _prefs(db, autopilot_live=True)
+    calls = []
+
+    class _Kite:
+        async def state(self):
+            return BrokerSessionState.ACTIVE
+
+    kite = _Kite()
+
+    async def ai_only(user_id, role, credentials, redis=None, roles=None, get_adapter=None):
+        assert role == "ai"
+        return kite
+
+    async def live(order, ledger, adapter, orders, strategy_name="", reason=None):
+        calls.append((adapter, order.product, order.strategy_name))
+        return order, "COMPLETE", float(order.quantity)
+
+    monkeypatch.setattr(service, "adapter_for", ai_only)
+    monkeypatch.setattr("backend.suggestions.service.execute_live_order", live)
+    result = await service.submit(db, None, "alice", _order(qty=2), now=OPEN)
+    assert result["status"] == "FILLED" and result["mode"] == "live"
+    assert calls == [(kite, "CNC", "autopilot:chat")]
+    assert sent[0].startswith("🤖 AI bought 2 INFY on the AI account at")

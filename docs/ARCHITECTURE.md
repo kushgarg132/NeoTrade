@@ -183,7 +183,15 @@ list, and `$where`/`$function` are refused. Each message also carries the trader
 (`format_profile`: Google name or `display_name`, trading profile, preferences, AI instructions,
 memories) from `user_profiles` (`backend/profile/`, edited at `/profile`); the prompt treats it as
 context that never overrides the confirm rules, and `propose_memory` cards add memories only on
-Confirm. The same agent answers the user's linked Telegram
+Confirm. Each connected broker can have a role (`prefs.broker_roles`, `backend/brokers/roles.py`):
+`ai` (one at most) or `mine`. Orders route by role and never fall back: engine live orders and the
+autopilot use only `ai`; chat cards (orders, and `backend/chat/account_actions.py` exit / cancel /
+modify / stop-loss) only `mine`. `backend/autopilot/` runs AI chat orders and, when enabled, the
+09:20 engine proposals on the `ai` account without a tap -- only after `fence.check` (capital,
+per-trade cap, trades/day, own daily-loss trip, shared kill switch, Nifty 200, NSE equity, market
+hours; exits never blocked) -- paper unless `autopilot_live`, logged to `autopilot_log` and sent to
+Telegram with a stop button. Portfolio, journal and chat tools take `account=all|ai|mine`;
+`/journal/ai-vs-me` compares the two monthly. The same agent answers the user's linked Telegram
 chat (`backend/guardrails/telegram_bot.py`): one worker per bot long-polls `getUpdates` under a
 Redis lock, streams the reply with `sendMessageDraft` (reasoning and tool steps live, kept
 collapsed in the final message), sends cards with Confirm/Cancel buttons that go through the

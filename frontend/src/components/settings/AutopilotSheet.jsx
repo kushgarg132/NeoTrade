@@ -18,6 +18,7 @@ const AutopilotSheet = () => {
   const [draft, setDraft] = useState({});
   const [log, setLog] = useState([]);
   const [note, setNote] = useState(null);
+  const [confirmLive, setConfirmLive] = useState(null); // typed text while arming live
 
   useEffect(() => {
     api.get(endpoints.settings.preferences).then((res) => {
@@ -63,6 +64,31 @@ const AutopilotSheet = () => {
         >
           {prefs.autopilot_enabled ? 'On' : 'Off'}
         </button>
+      </Row>
+      <Row label="Mode" hint="Live sends real orders to the AI account's broker.">
+        {prefs.autopilot_live ? (
+          <button type="button" onClick={() => save({ autopilot_live: false })}
+            className="h-11 sm:h-8 px-4 text-xs border border-[var(--loss)] text-[var(--loss)]">
+            Live · switch to paper
+          </button>
+        ) : confirmLive === null ? (
+          <button type="button" disabled={!aiBroker} onClick={() => setConfirmLive('')}
+            className="h-11 sm:h-8 px-4 text-xs border border-[var(--rule-strong)] disabled:opacity-40">
+            Paper · go live…
+          </button>
+        ) : (
+          <span className="flex items-center gap-2">
+            <input autoFocus value={confirmLive} onChange={(e) => setConfirmLive(e.target.value)}
+              placeholder="Type LIVE" aria-label="Type LIVE to confirm real orders"
+              className="w-24 bg-transparent border-b border-[var(--loss)] py-1 text-sm focus:outline-none" />
+            <button type="button" disabled={confirmLive !== 'LIVE'}
+              onClick={() => save({ autopilot_live: true }).then(() => setConfirmLive(null))}
+              className="h-11 sm:h-8 px-3 text-xs bg-[var(--loss)] text-[var(--paper)] disabled:opacity-40">
+              Go live
+            </button>
+            <button type="button" onClick={() => setConfirmLive(null)} className="text-xs text-[var(--ink-faint)]">Cancel</button>
+          </span>
+        )}
       </Row>
       {LIMITS.map(([key, label, hint]) => (
         <Row key={key} label={label} hint={hint}>

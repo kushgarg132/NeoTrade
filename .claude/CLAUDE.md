@@ -38,6 +38,12 @@ code disagree, the code is right — fix the document in the same commit.
 - The daily loss kill-switch (`backend/risk/kill_switch.py`) and the backtest gate
   (`backend/risk/backtest_gate.py`) are enforced in code, not by discipline. Do not add a
   code path that routes around either.
+- **The AI account's autopilot is the one exception to the backtest gate and to "model output
+  never places an order".**
+  Exception (user-approved 2026-10-04): `backend/autopilot/` may place orders without a user tap
+  on the broker whose role is `ai` (`backend/brokers/roles.py`) only, after `autopilot/fence.check`
+  passes; the kill switch still applies, and nothing may route an AI order to the user's own
+  (`mine`) account. See `docs/superpowers/specs/2026-10-04-dual-broker-accounts-design.md`.
 
 ## Deployment
 

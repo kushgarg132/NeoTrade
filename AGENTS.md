@@ -16,6 +16,10 @@ information and alerts only, AI analysis, or confirmable trading actions.
 - Never expose, commit, print, or place bot tokens, broker credentials, or API secrets in source.
 - All user data must remain scoped to the authenticated NeoTrade user.
 - A message or model output may propose an action but must not place an order directly.
+  Exception (user-approved 2026-10-04): `backend/autopilot/` may place orders without a user tap
+  on the broker whose role is `ai` (`backend/brokers/roles.py`) only, after `autopilot/fence.check`
+  passes; the kill switch still applies, and nothing may route an AI order to the user's own
+  (`mine`) account. See `docs/superpowers/specs/2026-10-04-dual-broker-accounts-design.md`.
 - Re-check all risk controls, broker state, and current market conditions at confirmation time.
 - Live orders require an explicit second confirmation; do not weaken this flow for Telegram.
 

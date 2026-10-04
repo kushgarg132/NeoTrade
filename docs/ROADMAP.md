@@ -892,3 +892,13 @@ Statistics decide, the LLM explains. Plan: `/home/ubuntu/.claude-second/plans/jo
 
   Intraday stays experimental. The runner is slow (~125 bars/s, ~30 min per strategy over
   235k candles): strategies recompute indicators per bar.
+
+### 2026-10-04 — two broker accounts: AI autopilot (Kite) and the user's own (Upstox)
+
+Roles per broker, role-based routing with no fallback, per-account analysis (portfolio,
+journal, chat, AI-vs-you monthly), AI-proposed exit/cancel/modify/stop-loss cards on the user's
+account, and a fenced autopilot on the AI account (paper by default; live behind a typed
+confirmation). The autopilot is a documented, user-approved exception to the backtest gate and
+to "model output never places an order" (AGENTS.md, .claude/CLAUDE.md). Spec and plan in
+`docs/superpowers/`. Setup: Kite Connect app; static IP 161.118.167.148 whitelisted with Zerodha
+and Upstox; daily logins (09:00 reminder).
