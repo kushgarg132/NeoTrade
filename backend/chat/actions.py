@@ -105,6 +105,13 @@ class ChatActionStore:
     async def get(self, user_id: str, action_id: str) -> Optional[dict]:
         return await self.collection.find_one({"id": action_id, "user_id": user_id}, {"_id": 0})
 
+    async def pending(self, user_id: str) -> list[dict]:
+        cursor = self.collection.find(
+            {"user_id": user_id, "status": "PROPOSED", "expires_at": {"$gt": _now()}},
+            {"_id": 0, "id": 1, "kind": 1, "summary": 1, "venue": 1, "needs_second_tap": 1, "expires_at": 1},
+        ).sort("created_at", -1)
+        return await cursor.to_list(length=50)
+
     async def claim(self, user_id: str, action_id: str) -> Optional[dict]:
         doc = await self.collection.find_one_and_update(
             {"id": action_id, "user_id": user_id, "status": "PROPOSED", "expires_at": {"$gt": _now()}},

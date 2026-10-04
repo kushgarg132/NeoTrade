@@ -348,3 +348,24 @@ async def test_equity_approve_card_live_reaches_mine(env, monkeypatch):
     done = await confirm(env["db"], None, None, "alice", card["id"], second_tap=True)
     assert done["status"] == "CONFIRMED"
     assert env["broker"].placed[0].symbol == "INFY"
+
+
+async def test_pending_cards_are_the_callers_unexpired_proposals(env, monkeypatch):
+    from backend.auth.dependency import get_current_user
+    from backend.routers import chat_actions
+
+    store = ChatActionStore(env["db"])
+    fresh = await store.propose("alice", "order", {}, "fresh", "paper", False, "m")
+    stale = await store.propose("alice", "order", {}, "stale", "paper", False, "m")
+    done = await store.propose("alice", "order", {}, "done", "paper", False, "m")
+    await store.propose("bob", "order", {}, "bob's", "paper", False, "m")
+    await env["db"]["chat_actions"].update_one({"id": stale["id"]}, {"$set": {"expires_at": OPEN - timedelta(minutes=1)}})
+    await store.set_status(done["id"], "CONFIRMED")
+
+    monkeypatch.setattr(chat_actions, "_db", lambda: env["db"])
+    app = FastAPI()
+    app.include_router(chat_actions.router)
+    app.dependency_overrides[get_current_user] = lambda: type("U", (), {"id": "alice"})()
+    body = TestClient(app).get("/chat/actions/pending").json()
+    assert [c["id"] for c in body] == [fresh["id"]]
+    assert set(body[0]) == {"id", "kind", "summary", "venue", "needs_second_tap", "expires_at"}

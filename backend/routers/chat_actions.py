@@ -21,6 +21,12 @@ class ConfirmRequest(BaseModel):
     second_tap: bool = False
 
 
+@router.get("/pending")
+async def pending_actions(user: User = Depends(get_current_user)):
+    """Cards waiting for the user's Confirm, for the decisions page."""
+    return await ChatActionStore(_db()).pending(user.id)
+
+
 @router.post("/{action_id}/confirm")
 async def confirm_action(
     action_id: str, body: ConfirmRequest = ConfirmRequest(),
