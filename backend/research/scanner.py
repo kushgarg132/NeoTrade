@@ -12,10 +12,12 @@ Target is 2R for both. A stock matching both is reported once, as a breakout.
 `find_setups` is pure (no I/O); findings are leads, not advice.
 """
 
+import asyncio
 from datetime import date, datetime, time
 from typing import Literal, Optional
 
 import pandas as pd
+import yfinance as yf
 from pydantic import BaseModel
 
 from backend.components.quant.indicators import Indicators
@@ -100,6 +102,32 @@ def _pullback(df: pd.DataFrame, sma20, sma50, sma200, rsi, atr: float):
         f"Dipped to the {days}-day average {_rupees(level)}",
         f"RSI {rsi.iloc[-1]:.0f}, turning up",
     ]
+
+
+def _download(symbols: list[str]) -> dict[str, pd.DataFrame]:
+    raw = yf.download(
+        [f"{s}.NS" for s in symbols], period="1y", interval="1d", group_by="ticker",
+        auto_adjust=True, threads=True, progress=False,
+    )
+    frames = {}
+    for symbol in symbols:
+        if isinstance(raw.columns, pd.MultiIndex):
+            if f"{symbol}.NS" not in raw.columns.get_level_values(0):
+                continue
+            df = raw[f"{symbol}.NS"]
+        elif len(symbols) == 1:
+            df = raw
+        else:
+            continue
+        df = df.rename(columns=str.lower).dropna(how="all")
+        if not df.empty:
+            frames[symbol] = df
+    return frames
+
+
+async def fetch_daily(symbols: list[str]) -> dict[str, pd.DataFrame]:
+    """One batched download for the whole universe, off the event loop."""
+    return await asyncio.to_thread(_download, symbols)
 
 
 def find_setups(frames: dict[str, pd.DataFrame], symbols: list[str], now: datetime) -> ScanResult:

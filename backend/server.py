@@ -43,7 +43,7 @@ from backend.components.analyst import news, sentiment, events
 from backend.components.quant import price, trend, support, volume
 from backend.components.risk import risk
 from backend.components.master import stock_info
-from backend.mcp_tools import stock_scanner
+from backend.routers import scanner
 
 
 app = FastAPI(
@@ -155,7 +155,7 @@ app.include_router(trend.router, prefix=settings.API_PREFIX, tags=["Technical An
 app.include_router(volume.router, prefix=settings.API_PREFIX, tags=["Technical Analysis"], dependencies=[Depends(get_current_user)])
 app.include_router(risk.router, prefix=settings.API_PREFIX, tags=["Risk"], dependencies=[Depends(get_current_user)])
 app.include_router(stock_info.router, prefix=settings.API_PREFIX, tags=["Market Data"], dependencies=[Depends(get_current_user)])
-app.include_router(stock_scanner.router, prefix=settings.API_PREFIX, tags=["Scanner"], dependencies=[Depends(get_current_user)])
+app.include_router(scanner.router, prefix=settings.API_PREFIX, tags=["Scanner"], dependencies=[Depends(get_current_user)])
 
 # Agents Router
 from backend.routers import agents
