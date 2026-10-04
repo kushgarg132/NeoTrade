@@ -19,6 +19,7 @@ def _closes(*values):
 @pytest.fixture
 def client(monkeypatch):
     market_cache._local.clear()
+    market_data._quote_cache.clear()
     monkeypatch.setattr(market_cache, "_redis", lambda: None)
     app = FastAPI()
     app.include_router(market_data.router)
@@ -83,3 +84,16 @@ def test_cached_set_still_follows_each_requests_order(client):
     first = [q["symbol"] for q in http.get("/market/quotes", params={"symbols": "ITC,INFY"}).json()]
     second = [q["symbol"] for q in http.get("/market/quotes", params={"symbols": "INFY,ITC"}).json()]
     assert (first, second) == (["ITC", "INFY"], ["INFY", "ITC"])
+
+
+def test_quotes_older_than_the_ttl_are_fetched_again(client, monkeypatch):
+    """Typeahead sets rarely repeat within a minute: an old set must not come
+    back with days-old prices."""
+    http, use, calls = client
+    use(_closes(100.0, 101.0))
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(market_data.time, "monotonic", lambda: clock["t"])
+    http.get("/market/quotes", params={"symbols": "ITC"})
+    clock["t"] += market_data.QUOTES_TTL + 1
+    http.get("/market/quotes", params={"symbols": "ITC"})
+    assert len(calls) == 2

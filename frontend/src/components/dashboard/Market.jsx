@@ -14,7 +14,7 @@ import { stockPath } from '../../utils/stocks';
 /** An index name that opens its detail on the statement, the way a scrip does. */
 const IndexName = ({ item }) => (
   <Link
-    to="/"
+    to="/research"
     state={{ index: item.symbol }}
     onClick={(event) => event.stopPropagation()}
     className="text-sm underline decoration-[var(--rule)] decoration-1 underline-offset-[3px] hover:decoration-[var(--stamp)] hover:text-[var(--stamp)] transition-colors"

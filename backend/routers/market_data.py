@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 import yfinance as yf
 import logging
 import asyncio
+import time
 
 from backend.market_cache import cached
 
@@ -214,6 +215,11 @@ async def get_index_analysis(ticker: str):
 
 
 _MAX_QUOTES = 8
+# Suggestion prices expire hard, unlike the stale-while-revalidate feeds:
+# typeahead sets rarely repeat within a minute, so a served-at-any-age entry
+# would show days-old prices. Per worker, in memory, bounded.
+_quote_cache: Dict[str, tuple] = {}
+_QUOTE_CACHE_MAX = 500
 
 
 def _quotes_sync(symbols: List[str]) -> List[Dict[str, Any]]:
@@ -247,8 +253,14 @@ async def get_quotes(symbols: str):
     wanted = list(dict.fromkeys(s.strip().upper().removesuffix(".NS") for s in symbols.split(",") if s.strip()))
     if not wanted or len(wanted) > _MAX_QUOTES:
         raise HTTPException(status_code=422, detail=f"Ask for 1 to {_MAX_QUOTES} symbols.")
-    key_set = sorted(wanted)
-    quotes = await cached("quotes:" + ",".join(key_set), QUOTES_TTL,
-                          lambda: asyncio.to_thread(_quotes_sync, key_set))
+    key = ",".join(sorted(wanted))
+    hit = _quote_cache.get(key)
+    if hit is not None and time.monotonic() - hit[0] < QUOTES_TTL:
+        quotes = hit[1]
+    else:
+        quotes = await asyncio.to_thread(_quotes_sync, sorted(wanted))
+        if len(_quote_cache) >= _QUOTE_CACHE_MAX:
+            _quote_cache.clear()  # ponytail: wholesale reset, an LRU if hit rates ever matter
+        _quote_cache[key] = (time.monotonic(), quotes)
     by_symbol = {q["symbol"]: q for q in quotes}
     return [by_symbol[s] for s in wanted if s in by_symbol]

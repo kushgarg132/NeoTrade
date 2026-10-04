@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Loader2, X } from 'lucide-react';
 import Layout from '../components/Layout';
@@ -131,6 +131,10 @@ const Dashboard = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
   const [aiRequested, setAiRequested] = useState(false);
+  // The symbol on screen now: an analysis that lands for an earlier one is dropped.
+  const symbolRef = useRef(symbol);
+  symbolRef.current = symbol;
+  const aiRequest = useRef(null);
 
   const closeIndex = () => {
     setIndexTicker(null);
@@ -161,6 +165,7 @@ const Dashboard = () => {
     setQuick(null);
     setAi(null);
     setAiError(null);
+    setAiLoading(false);
     setAiRequested(false);
 
     const request = stream.request('quick_analyze', { symbol }, (message) => {
@@ -182,6 +187,9 @@ const Dashboard = () => {
     }
     return () => {
       current = false;
+      request.cancel();
+      aiRequest.current?.cancel();
+      aiRequest.current = null;
     };
   }, [symbol]);
 
@@ -190,8 +198,11 @@ const Dashboard = () => {
     setAiRequested(true);
     setAiLoading(true);
     setAiError(null);
+    const asked = symbol;
+    const stillHere = () => symbolRef.current === asked;
 
     const request = stream.request('analyze', { symbol }, (message) => {
+      if (!stillHere()) return;
       if (message.event === 'report') {
         setAi(message.data);
         setAiLoading(false);
@@ -201,12 +212,13 @@ const Dashboard = () => {
       }
     });
 
+    aiRequest.current = request;
     if (!request.ok) {
       api
         .post(endpoints.analyze(symbol))
-        .then((res) => setAi(res.data))
-        .catch((err) => setAiError(err?.response?.data?.detail || 'Analysis failed'))
-        .finally(() => setAiLoading(false));
+        .then((res) => stillHere() && setAi(res.data))
+        .catch((err) => stillHere() && setAiError(err?.response?.data?.detail || 'Analysis failed'))
+        .finally(() => stillHere() && setAiLoading(false));
     }
   };
 
