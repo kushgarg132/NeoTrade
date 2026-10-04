@@ -178,3 +178,36 @@ async def test_the_daily_pass_learns_for_every_user_with_paper_trades(db, monkey
     await _insert(db, [_trade(-100.0)] * 30)
     await _insert(db, [_trade(-100.0)] * 30, user_id="bob")
     assert await scheduler._learn(db, NOW) == 2
+
+
+@pytest.mark.asyncio
+async def test_the_weekly_note_says_nothing_without_trades(db):
+    from backend.learning.report import weekly_text
+    assert await weekly_text(db, "alice", _nifty(), NOW) is None
+
+
+@pytest.mark.asyncio
+async def test_the_weekly_note_falls_back_to_the_figures_when_no_model_answers(db, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from backend.learning import report
+
+    await _insert(db, [_trade(-100.0)] * 30)
+    await learn(db, "alice", _nifty(), NOW)
+    monkeypatch.setattr(report.llm_service, "get_completion", AsyncMock(return_value=""))
+    text = await report.weekly_text(db, "alice", _nifty(), NOW)
+    assert "Paused: vwap" in text and "vwap: pause False → True" in text and "net ₹-3,000" in text
+
+
+@pytest.mark.asyncio
+async def test_the_weekly_note_is_the_models_explanation_when_it_answers(db, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from backend.learning import report
+
+    await _insert(db, [_trade(-100.0)] * 30)
+    llm = AsyncMock(return_value="What lost money: vwap.")
+    monkeypatch.setattr(report.llm_service, "get_completion", llm)
+    text = await report.weekly_text(db, "alice", _nifty(), NOW)
+    assert text.endswith("What lost money: vwap.")
+    assert "vwap / overall: n 30" in llm.call_args.args[0]

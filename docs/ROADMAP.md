@@ -837,3 +837,24 @@ backtested), and the backtester itself was flattering them. Plan:
   LIQUIDBEES orders for the risk-off sleeve (no instrument-master mark today).
 - Journal mirror (`backend/journal/mirror.py`): estimated charges, P&L after them, trades/yr
   vs SEBI's 500 line, return vs Nifty — Journal calendar tab, AI `get_journal`, Friday Telegram.
+
+### 2026-10-04 — learning loop: the paper engine learns from its own closed trades
+
+Statistics decide, the LLM explains. Plan: `/home/ubuntu/.claude-second/plans/jolly-pondering-peach.md`.
+
+- Every order now carries `context` (strength, reason_codes, composite score), copied onto the
+  trade it opens. Older trades borrow it from their approved suggestion.
+- `backend/learning/attribution.py`: closed paper trades net of charges, per strategy, grouped
+  by reason code, Nifty regime at entry (vs 200-DMA) and strength bucket; ≥10 trades per
+  group; expectancy also shrunk toward 0 (10 pseudo-trades) so small lucky groups don't count.
+- `backend/learning/adapt.py`, nightly in the daily pass (`scheduler._learn`): **pause** a
+  strategy losing (shrunk < 0, PF < 1) over ≥30 trades — it resumes only on a newer passing
+  backtest gate result and is then judged from that day; **raise its own strength floor** by
+  ≤0.05 a night (cap 0.8) while weak signals lose and stronger ones don't; **skip a losing
+  regime**. `size_intents` applies them to entries only, never exits. Every change goes to
+  `learning_changes` (before, after, evidence); current rules in `learning_state`.
+- `backend/learning/report.py`: Friday Telegram note (prompt `learning_review.md`, standard
+  tier, figures-only fallback) and the chat tool `get_learning`.
+- Not done: monthly parameter re-tune (strategies have no parameter grids yet — add one per
+  strategy, then re-fit walk-forward with Deflated Sharpe like `factor/validate.py`); a
+  Journal UI tab; LLM-suggested hypotheses queued for the backtest gate.

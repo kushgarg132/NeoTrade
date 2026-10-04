@@ -23,6 +23,8 @@ PROMPTS = {
                          "holdings": "- HDFCBANK (STOCK): reason codes: overweight",
                          "candidates": "- TCS: score 0.62, reasons quality_momentum"},
     "chat_followups": {"question": "Is the engine running?", "answer": "Yes, 166 bars scanned."},
+    "learning_review": {"rules": "Paused: vwap", "changes": "vwap: pause False → True",
+                        "groups": "vwap / overall: n 30, net ₹-3,000"},
 }
 
 

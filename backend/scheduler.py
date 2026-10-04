@@ -233,9 +233,12 @@ async def close_expired_option_positions(
 
 async def _learn(db, now: datetime) -> int:
     """Each user with paper trades: judge them by setup and update the rules
-    their next runs follow (backend/learning/adapt.py)."""
+    their next runs follow (backend/learning/adapt.py). Fridays, also send
+    what it learned (backend/learning/report.py)."""
     from backend.learning.adapt import learn
+    from backend.learning.report import weekly_text
     from backend.portfolio.service import _nifty
+    from backend.suggestions.notify import notify
 
     users = await db["paper_trades"].distinct("user_id")
     nifty = await _nifty() if users else []
@@ -243,6 +246,8 @@ async def _learn(db, now: datetime) -> int:
     for user_id in users:
         try:
             total += len(await learn(db, user_id, nifty, now))
+            if now.astimezone(IST).weekday() == 4 and (text := await weekly_text(db, user_id, nifty, now)):
+                await notify(db, user_id, text)
         except Exception as exc:
             logger.warning("learning pass failed for %s: %s", user_id, exc)
     return total

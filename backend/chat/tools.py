@@ -126,6 +126,12 @@ def read_tools(db, redis, user_id: str) -> list:
             "costs_all_time": all_time,
         })
 
+    async def get_learning() -> str:
+        from backend.learning.report import snapshot
+        from backend.portfolio.service import _nifty
+
+        return _json(await snapshot(db, user_id, await _nifty(), datetime.now(timezone.utc)))
+
     async def get_paper() -> str:
         from backend.risk.backtest_gate import BacktestGateStore
         from backend.risk.paper_gate import paper_records
@@ -210,6 +216,10 @@ def read_tools(db, redis, user_id: str) -> list:
             "The user's real broker trades as round trips: gross P&L by day, recent trips, habit patterns, and "
             "all-time estimated charges, P&L after charges and yearly trade rate. "
             "period is today, week, month or all; symbol narrows to one scrip.")),
+        StructuredTool.from_function(coroutine=get_learning, name="get_learning", description=(
+            "What the paper engine learned from its own closed trades: rules it follows now (paused strategies, "
+            "per-strategy strength floors, skipped Nifty regimes), changes it made in the last 30 days with the "
+            "evidence, and the worst setups by net P&L. Use for why the engine lost money or what it changed.")),
         StructuredTool.from_function(coroutine=get_paper, name="get_paper", description=(
             "The paper-trading engine: net scorecard per strategy, open paper positions, running engine runs, "
             "the daily auto-run switch, the kill switch, and how far each strategy is from going live.")),
