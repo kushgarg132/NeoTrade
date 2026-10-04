@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
+import MoneyBadge from '../components/common/MoneyBadge';
 import SectionTabs from '../components/layout/SectionTabs';
 import { AI_TABS } from '../components/layout/sections';
 import { Sheet, Ruling, Money } from '../components/doc/Doc';
@@ -27,7 +28,7 @@ const AiOverview = () => {
             <p className="doc-meta normal-case">Couldn’t load the autopilot.</p>
           ) : (
             <>
-              <p className="text-sm"><span className="badge-ai">AI</span> {formatCurrency(ap.deployed)} of {formatCurrency(ap.capital)} deployed</p>
+              <p className="text-sm"><MoneyBadge kind="ai" /> {formatCurrency(ap.deployed)} of {formatCurrency(ap.capital)} deployed</p>
               <div className="h-1.5 mt-2 bg-[var(--paper-sunk)]" aria-hidden="true">
                 <div className="h-full" style={{ width: `${used}%`, background: 'var(--ai)' }} />
               </div>

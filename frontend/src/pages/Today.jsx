@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Check, Circle } from 'lucide-react';
 import Layout from '../components/Layout';
+import MoneyBadge from '../components/common/MoneyBadge';
 import { Sheet, Ruling, Money } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
@@ -110,18 +111,20 @@ const NeedsYou = ({ items }) => (
   </Sheet>
 );
 
-const PnlSplit = ({ pnl, market }) => (
-  <Sheet title="Today" meta={market?.open ? 'live' : `Market closed · as of ${formatDateTime(market?.as_of)}`}>
+const PnlSplit = ({ pnl, market, loadedAt, now }) => (
+  <Sheet title="Today" meta={market?.open
+    ? `updated ${Math.max(0, Math.round((now - loadedAt) / 1000))}s ago`
+    : `Market closed · as of ${formatDateTime(market?.as_of)}`}>
     {pnl === null ? (
       <p className="doc-meta normal-case">Couldn’t load today’s P&amp;L.</p>
     ) : (
       <div className="grid grid-cols-2 gap-3">
         <Link to="/mine/trades" className="block p-2 -m-2 hover:bg-[var(--paper-sunk)]">
-          <p className="field-label mb-1"><span className="badge-mine">Mine</span> · closed, gross</p>
+          <p className="field-label mb-1"><MoneyBadge kind="mine" /> · closed, gross</p>
           <Money value={pnl.mine} size="lg" />
         </Link>
         <Link to="/ai" className="block p-2 -m-2 hover:bg-[var(--paper-sunk)]">
-          <p className="field-label mb-1"><span className="badge-ai">AI</span> · closed</p>
+          <p className="field-label mb-1"><MoneyBadge kind="ai" /> · closed</p>
           <Money value={pnl.ai} size="lg" />
         </Link>
       </div>
@@ -159,9 +162,15 @@ const Today = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [autopilotOn, setAutopilotOn] = useState(false);
+  const [loadedAt, setLoadedAt] = useState(Date.now());
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(tick);
+  }, []);
 
   const load = () => {
-    api.get(endpoints.today).then((res) => { setData(res.data); setAutopilotOn(res.data.live_armed?.autopilot || false); })
+    api.get(endpoints.today).then((res) => { setData(res.data); setLoadedAt(Date.now()); setNow(Date.now()); })
       .catch((err) => setError(err?.response?.data?.detail || 'Could not load today.'));
     api.get(endpoints.settings.preferences).then((res) => setAutopilotOn(!!res.data.autopilot_enabled)).catch(() => {});
   };
@@ -187,7 +196,7 @@ const Today = () => {
         <StatusStrip data={data} />
         <SetupChecklist setup={data.setup} />
         <NeedsYou items={data.needs_you || []} />
-        <PnlSplit pnl={data.pnl_today} market={data.market} />
+        <PnlSplit pnl={data.pnl_today} market={data.market} loadedAt={loadedAt} now={now} />
         <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />
         <Link to="/research" className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)]">
           <span className="text-sm"><span className="field-label">Markets</span> · NIFTY, BANK NIFTY, movers and news</span>

@@ -79,7 +79,7 @@
     /* Rubber-stamp ink. The one colour of authority: pending states, the
        conviction cap, the seal. Never decorative. */
     --stamp: #3a32a0;
-    --ai: #7a2fb0;
+    --ai: #0f6e6e;
     --stamp-soft: #ecebf8;
 
     /* Printed ink, not screen neon. */
@@ -109,7 +109,7 @@
     --rule-strong: #6f6f60;
 
     --stamp: #8b81ff;
-    --ai: #c79bf2;
+    --ai: #5fc9c0;
     --stamp-soft: #23224a;
 
     --gain: #5fbb8c;

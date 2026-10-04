@@ -29,6 +29,9 @@ colors:
   stamp-soft:
     light: "#ecebf8"
     dark: "#23224a"
+  ai:
+    light: "#0f6e6e"
+    dark: "#5fc9c0"
   gain:
     light: "#12694a"
     dark: "#5fbb8c"
@@ -136,6 +139,12 @@ of an actual ledger stamp, not saturated success/error UI colours.
 - **Stamp Violet** (`#3a32a0`, dark `#8b81ff`): the one authority colour. Used only for the AI
   conviction-cap mark, the live-feed dot, pending-decision affordances, and the rubber stamp
   itself. Never used for a button that isn't a live-data or decision action.
+
+### Ownership
+- **AI Teal** (`#0f6e6e`, dark `#5fc9c0`): marks money that belongs to the AI account (the
+  autopilot's broker), in the `.badge-ai` label and the capital bar. An ownership marker, never an
+  authority or action colour. Its siblings: `.badge-mine` (ink, solid) and `.badge-paper` (stamp,
+  dashed) — every P&L figure carries one, so whose money it is never has to be inferred.
 
 ### Neutral
 - **Paper** (`#f4f4f1`, dark `#14150f`): the sheet ground.
