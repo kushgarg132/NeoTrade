@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { promotionGaps, readiness } from './promotion.js';
+import { promotionGaps, readiness, shortStatus } from './promotion.js';
 
 const ok = (rule) => ({ rule, ok: true, need: 1, have: 1 });
 
@@ -46,4 +46,26 @@ test('readiness: live switch on but not yet eligible says it still trades paper'
   const row = { eligible: false, backtest_passed: true, backtest: null,
     paper: { checks: [{ rule: 'days', ok: false, need: 20, have: 15 }] } };
   assert.equal(readiness(row, true), 'Live switch on, still trading paper. Needs 5 more paper days.');
+});
+
+const pending = (over = {}) => ({
+  eligible: false,
+  backtest_passed: false,
+  backtest: null,
+  paper: { checks: [{ rule: 'days', ok: false, have: 3, need: 20 }, { rule: 'trades', ok: false, have: 12, need: 30 }] },
+  ...over,
+});
+
+test('shortStatus: no record yet', () => {
+  assert.equal(shortStatus(undefined), 'no paper record yet');
+});
+
+test('shortStatus: ready when eligible', () => {
+  assert.equal(shortStatus(pending({ eligible: true })), 'ready');
+});
+
+test('shortStatus: backtest never run, failed or passed, then days and trades', () => {
+  assert.equal(shortStatus(pending()), 'backtest – · 3/20 days · 12/30 trades');
+  assert.equal(shortStatus(pending({ backtest: { trades: 5 } })), 'backtest ✗ · 3/20 days · 12/30 trades');
+  assert.equal(shortStatus(pending({ backtest_passed: true })), 'backtest ✓ · 3/20 days · 12/30 trades');
 });

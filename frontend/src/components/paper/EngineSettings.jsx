@@ -6,7 +6,8 @@ import api, { endpoints } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
-import { promotionGaps } from '../../utils/promotion';
+import { promotionGaps, shortStatus } from '../../utils/promotion';
+import StrategyRow, { GO_LIVE_RULE } from './StrategyRow';
 
 /**
  * The engine's standing instructions: how large it may trade, what the daily
@@ -27,6 +28,7 @@ const EngineSettings = () => {
   const [strategyNames, setStrategyNames] = useState([]);
   const [promotion, setPromotion] = useState({});
   const [backtesting, setBacktesting] = useState({});
+  const [openStrategy, setOpenStrategy] = useState(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
@@ -181,11 +183,8 @@ const EngineSettings = () => {
 
       {strategyNames.length > 0 && (
         <Sheet title="Strategies" meta={`${(prefs.live_strategies || []).length} live`}>
-          <p className="doc-meta normal-case pb-3 border-b border-[var(--rule)]">
-            Every strategy trades paper unless you switch it live. Switching live sends real
-            orders only once the strategy has passed its backtest and earned it here on paper:
-            20 trading days, 30 trades, net profit after charges, profit factor 1.3, and no fall
-            deeper than 5% of your account. Until then it keeps trading paper.
+          <p className="doc-meta normal-case pb-2 border-b border-[var(--rule)]">
+            Every strategy trades paper unless you switch it live. {GO_LIVE_RULE} Until then it keeps trading paper.
           </p>
           {strategyNames.map((name) => {
             const isLive = (prefs.live_strategies || []).includes(name);
@@ -196,12 +195,15 @@ const EngineSettings = () => {
               hint = `${isLive ? 'Switched live, still on paper. ' : ''}Needs ${gaps}.`;
             }
             return (
-              <Row
+              <StrategyRow
                 key={name}
-                label={name}
-                hint={
+                name={name}
+                status={isLive ? `live · ${shortStatus(promotion[name])}` : shortStatus(promotion[name])}
+                open={openStrategy === name}
+                onToggle={() => setOpenStrategy((current) => (current === name ? null : name))}
+                detail={hint}
+                extra={
                   <>
-                    {hint}
                     {isAdmin && (
                       <>
                         {' '}
@@ -239,7 +241,7 @@ const EngineSettings = () => {
                 >
                   {isLive ? 'Live' : 'Paper'}
                 </button>
-              </Row>
+              </StrategyRow>
             );
           })}
         </Sheet>

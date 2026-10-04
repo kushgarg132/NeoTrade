@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Sheet, Ruling } from '../doc/Doc';
-import { Row } from '../settings/Fields';
+import StrategyRow, { GO_LIVE_RULE } from './StrategyRow';
 import api, { endpoints } from '../../utils/api';
 import { useTopic } from '../../hooks/useStream';
-import { readiness } from '../../utils/promotion';
+import { readiness, shortStatus } from '../../utils/promotion';
 
 /**
  * Is it working: per strategy, whether it has earned real money yet and,
@@ -17,6 +17,7 @@ const StrategyReadiness = ({ liveStrategies }) => {
   const [namesError, setNamesError] = useState(false);
   const [promotion, setPromotion] = useState(null);
   const [promotionError, setPromotionError] = useState(false);
+  const [open, setOpen] = useState(null);
 
   const loadPromotion = () =>
     api
@@ -37,10 +38,11 @@ const StrategyReadiness = ({ liveStrategies }) => {
 
   useTopic('trades', loadPromotion);
 
-  const hint = (name) => {
+  const detail = (name) => {
     if (promotion) return readiness(promotion[name], liveStrategies.includes(name));
     return promotionError ? undefined : '…';
   };
+  const status = (name) => (promotion ? shortStatus(promotion[name]) : promotionError ? '' : '…');
 
   return (
     <Sheet
@@ -60,7 +62,19 @@ const StrategyReadiness = ({ liveStrategies }) => {
       ) : !names ? (
         <Ruling rows={3} />
       ) : (
-        names.map((name) => <Row key={name} label={name} hint={hint(name)} />)
+        <>
+          <p className="doc-meta normal-case pb-2 border-b border-[var(--rule)]">{GO_LIVE_RULE}</p>
+          {names.map((name) => (
+            <StrategyRow
+              key={name}
+              name={name}
+              status={status(name)}
+              detail={detail(name)}
+              open={open === name}
+              onToggle={() => setOpen((current) => (current === name ? null : name))}
+            />
+          ))}
+        </>
       )}
     </Sheet>
   );
