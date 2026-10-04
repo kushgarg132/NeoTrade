@@ -301,3 +301,34 @@ async def test_auto_approve_stays_inside_the_account_best_score_first(world, lon
     # TOP and MID are capped at ₹2,000 each (20 shares), NEXT takes the last ₹2,000; LOW no longer fits.
     assert {s: trades[s]["quantity"] for s in trades} == {"TOP": 20, "MID": 20, "NEXT": 20}
     assert by_symbol["LOW"]["status"] == "PENDING"
+
+
+@pytest.mark.asyncio
+async def test_auto_approve_skips_dust_left_by_the_cap(world, longterm, monkeypatch):
+    import backend.marks as marks
+    from backend.suggestions.store import SuggestionStore
+
+    async def mark_prices(db, symbols):
+        return {s: 100.0 for s in symbols}
+
+    monkeypatch.setattr(marks, "mark_prices", mark_prices)
+    await world.db["user_prefs"].insert_one({
+        "user_id": "alice", "auto_paper_longterm": True,
+        "account_size": 2100.0, "max_exposure": 1_000_000.0, "per_trade_cap": 2000.0,
+    })
+    world.redis.data["scheduler:last_pass"] = "2026-09-25"
+    store = SuggestionStore(world.db)
+    now = datetime(2026, 9, 28, 9, 21, tzinfo=IST)
+    for symbol, score in (("TOP", 0.9), ("DUST", 0.5)):
+        await store.collection.insert_one({
+            "id": symbol, "user_id": "alice", "mode": "LONGTERM", "symbol": symbol, "side": "BUY",
+            "quantity": 20, "entry_ref": 100.0, "stop": 90.0, "target": 120.0, "option_contract": None,
+            "score": {"final": score}, "strategy": "test", "status": "PENDING", "created_at": now,
+            "expires_at": datetime(2026, 10, 9, tzinfo=IST),
+        })
+
+    await _tick(world, now)
+
+    # TOP takes ₹2,000; the ₹100 left would buy 1 of DUST's 20 shares -- not worth a position.
+    by_symbol = {s["symbol"]: s for s in await store.list("alice", limit=10)}
+    assert by_symbol["TOP"]["status"] == "EXECUTED" and by_symbol["DUST"]["status"] == "PENDING"

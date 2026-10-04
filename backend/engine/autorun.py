@@ -50,6 +50,7 @@ MODES = {"INTRADAY": "auto_paper_intraday"}
 LONGTERM_PREF = "auto_paper_longterm"
 EXIT_CHECK_MINUTES = 15
 MORNING = time(9, 20)
+MIN_FILL_FRACTION = 0.25  # an auto-approval cut below this share of its size is skipped
 
 # This process's identity for key ownership, and the auto runs it drives.
 _TOKEN = str(uuid.uuid4())
@@ -249,8 +250,10 @@ async def _auto_approve(db, store, user_id: str, pending: list[dict], now: datet
         price = marks.get(suggestion["symbol"])
         if not price:
             continue
-        quantity = int(min(suggestion["quantity"], prefs["per_trade_cap"] // price, room // price))
-        if quantity < 1:
+        intended = int(min(suggestion["quantity"], prefs["per_trade_cap"] // price))
+        quantity = int(min(intended, room // price))
+        # Whatever room is left must buy a real position, not a share or two of dust.
+        if quantity < 1 or quantity < MIN_FILL_FRACTION * intended:
             continue
         try:
             order = await execute_suggestion({**suggestion, "quantity": quantity}, ledger, price, now=now)
