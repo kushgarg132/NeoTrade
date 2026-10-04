@@ -354,3 +354,22 @@ def test_short_suggestions_pair_up_two_per_row():
 def test_draft_says_thinking_before_the_first_words():
     assert telegram_bot._draft_html({"steps": [], "text": ""}) == "💭 <i>Thinking…</i>"
     assert "Thinking" not in telegram_bot._draft_html({"steps": [], "text": "Hello"})
+
+
+async def test_telegram_calls_share_one_keep_alive_client(monkeypatch):
+    import httpx
+
+    from backend.guardrails import telegram
+
+    made = []
+
+    def new_client():
+        made.append(1)
+        return httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"ok": True})))
+
+    monkeypatch.setattr(telegram, "_new_client", new_client)
+    monkeypatch.setattr(telegram, "_CLIENTS", __import__("weakref").WeakKeyDictionary())
+    await telegram.answer_callback("c1", "", "tok")
+    await telegram.chat_action(42, "tok")
+    await telegram.answer_callback("c2", "", "tok")
+    assert len(made) == 1  # no new TLS handshake per call

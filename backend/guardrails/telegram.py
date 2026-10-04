@@ -10,8 +10,10 @@ Bot API used (https://core.telegram.org/bots/api): getMe, getUpdates,
 sendMessage -- all GET/POST on https://api.telegram.org/bot<token>/<method>.
 """
 
+import asyncio
 import html
 import logging
+import weakref
 import re
 from typing import Optional
 
@@ -26,13 +28,47 @@ def configured() -> bool:
     return bool(settings.TELEGRAM_BOT_TOKEN)
 
 
+_CLIENTS: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()  # event loop -> client
+
+
+def _new_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(limits=httpx.Limits(max_keepalive_connections=10, keepalive_expiry=60))
+
+
+class _http:
+    """`async with _http(timeout=...) as client`: borrows this worker's shared
+    keep-alive client instead of opening a new HTTPS connection per call
+    (each new one cost ~0.5s: taps, drafts and edits all felt it). The
+    client is never closed here; one per event loop."""
+
+    def __init__(self, timeout: float = 10.0):
+        self.timeout = timeout
+
+    async def __aenter__(self):
+        loop = asyncio.get_running_loop()
+        client = _CLIENTS.get(loop)
+        if client is None or client.is_closed:
+            client = _CLIENTS[loop] = _new_client()
+        self.client = client
+        return self
+
+    async def __aexit__(self, *exc) -> bool:
+        return False
+
+    async def get(self, url, **kwargs):
+        return await self.client.get(url, timeout=self.timeout, **kwargs)
+
+    async def post(self, url, **kwargs):
+        return await self.client.post(url, timeout=self.timeout, **kwargs)
+
+
 def _url(method: str, token: Optional[str] = None) -> str:
     return f"https://api.telegram.org/bot{token or settings.TELEGRAM_BOT_TOKEN}/{method}"
 
 
 async def bot_username(token: Optional[str] = None) -> str:
     """Also how a pasted token is validated: Telegram rejects a bad one."""
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with _http(timeout=10.0) as client:
         resp = await client.get(_url("getMe", token))
         resp.raise_for_status()
     return resp.json()["result"]["username"]
@@ -44,7 +80,7 @@ def start_key(code: str) -> str:
 
 async def find_chat(code: str, token: Optional[str] = None) -> Optional[int]:
     # ponytail: scans the last 100 pending updates; a busy bot needs a webhook instead
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with _http(timeout=10.0) as client:
         resp = await client.get(_url("getUpdates", token), params={"allowed_updates": '["message"]'})
     if resp.status_code == 409:
         return None  # the AI poller holds this bot; it stashes Start codes instead
@@ -67,7 +103,7 @@ async def updates(offset: Optional[int] = None, token: Optional[str] = None, wai
     if offset is not None:
         params["offset"] = offset
     # `wait` > 0 is a long poll: Telegram answers as soon as an update arrives.
-    async with httpx.AsyncClient(timeout=wait + 10.0) as client:
+    async with _http(timeout=wait + 10.0) as client:
         resp = await client.get(_url("getUpdates", token), params=params)
         resp.raise_for_status()
     return resp.json().get("result") or []
@@ -78,7 +114,7 @@ async def send(chat_id: int, text: str, token: Optional[str] = None, reply_marku
     if not (token or configured()):
         return False
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with _http(timeout=10.0) as client:
             body = {"chat_id": chat_id, "text": text}
             if reply_markup:
                 body["reply_markup"] = reply_markup
@@ -95,7 +131,7 @@ async def send_buttons(chat_id: int, text: str, buttons: list[list[dict]], token
     if not (token or configured()):
         return False
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with _http(timeout=10.0) as client:
             resp = await client.post(_url("sendMessage", token), json={
                 "chat_id": chat_id, "text": text,
                 "reply_markup": {"inline_keyboard": buttons},
@@ -110,7 +146,7 @@ async def send_buttons(chat_id: int, text: str, buttons: list[list[dict]], token
 async def answer_callback(callback_id: str, text: str, token: Optional[str] = None) -> None:
     """Dismiss Telegram's button spinner; errors are non-fatal."""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with _http(timeout=10.0) as client:
             await client.post(_url("answerCallbackQuery", token), json={"callback_query_id": callback_id, "text": text})
     except Exception as exc:
         logger.warning("telegram callback acknowledgement failed: %s", exc)
@@ -188,7 +224,7 @@ def to_html(md: str) -> str:
 async def _call(method: str, body: dict, token: Optional[str]) -> Optional[dict]:
     """POST a Bot API method; the response, or None on any failure (logged)."""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with _http(timeout=10.0) as client:
             resp = await client.post(_url(method, token), json=body)
         data = resp.json()
         if not data.get("ok"):
