@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, Loader2, Check, ExternalLink, Unplug, ArrowRight } from 'lucide-react';
+import { Search, Loader2, Check, ExternalLink, Unplug, ArrowRight, ChevronDown } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Sheet, Empty, Ruling, Stamp, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
@@ -465,7 +465,7 @@ const ModelChooser = ({ catalog, models, onPick, onClose }) => {
 };
 
 /** One model choice: pick it step by step, test it, save it. */
-const ModelRow = ({ label, hint, value, fallback, models, catalog, onSave, clearable }) => {
+const ModelRow = ({ label, hint, value, fallback, models, catalog, onSave, clearable, expanded, onToggle }) => {
   const [selected, setSelected] = useState(value || '');
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(null);
@@ -503,10 +503,31 @@ const ModelRow = ({ label, hint, value, fallback, models, catalog, onSave, clear
     }
   };
 
+  // Collapsed: one line -- the tier and the model it runs on. Tap to open.
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={false}
+        className="w-full py-3 min-h-11 flex items-center gap-3 border-b border-[var(--rule)] last:border-b-0 text-left hover:bg-[var(--paper-sunk)] transition-colors"
+      >
+        <span className="field-label text-[var(--ink)] w-20 shrink-0">{label}</span>
+        <span className={cn('flex-1 min-w-0 truncate text-sm', selected ? 'figure-md' : 'text-[var(--ink-faint)]')}>
+          {selected || (clearable ? `Fallback: ${fallback}` : 'No model')}
+        </span>
+        <ChevronDown className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" aria-hidden="true" />
+      </button>
+    );
+  }
+
   return (
     <div className="py-3 border-b border-[var(--rule)] last:border-b-0">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="field-label text-[var(--ink)]">{label}</span>
+        <button type="button" onClick={onToggle} aria-expanded className="flex items-center gap-1.5 field-label text-[var(--ink)]">
+          {label}
+          <ChevronDown className="w-4 h-4 rotate-180 text-[var(--ink-faint)]" aria-hidden="true" />
+        </button>
         {clearable && value && (
           <button type="button" onClick={() => save(null)} disabled={busy !== null} className="field-label text-[var(--stamp)] hover:underline">
             Use fallback
@@ -572,6 +593,8 @@ const ModelSheet = () => {
   const [tiers, setTiers] = useState({});
   const [catalog, setCatalog] = useState([]);
   const [loadError, setLoadError] = useState('');
+  const [openRow, setOpenRow] = useState(null); // at most one tier open at a time
+  const toggle = (id) => () => setOpenRow((current) => (current === id ? null : id));
 
   useEffect(() => {
     let cancelled = false;
@@ -627,6 +650,8 @@ const ModelSheet = () => {
               catalog={catalog}
               onSave={saveTier(row.id)}
               clearable
+              expanded={openRow === row.id}
+              onToggle={toggle(row.id)}
             />
           ))}
           <ModelRow
@@ -637,6 +662,8 @@ const ModelSheet = () => {
             models={models}
             catalog={catalog}
             onSave={saveFallback}
+            expanded={openRow === 'fallback'}
+            onToggle={toggle('fallback')}
           />
         </>
       )}
