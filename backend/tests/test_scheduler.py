@@ -20,6 +20,13 @@ from backend.prefs import PrefsStore
 from backend.suggestions.store import SuggestionStore
 
 
+@pytest.fixture(autouse=True)
+def _no_retune_process(monkeypatch):
+    """The daily pass starts the monthly re-tune as a real subprocess."""
+    from backend.learning import retune
+    monkeypatch.setattr(retune, "spawn", AsyncMock())
+
+
 @pytest.fixture
 def mongo():
     return AsyncMongoMockClient()["test_db"]

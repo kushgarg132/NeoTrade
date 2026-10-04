@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from backend.learning.retune import current_params
 from backend.learning.adapt import load_rules
 from backend.ai.analyst_verdict import get_cached_verdict
 from backend.core.clock import SimClock
@@ -132,6 +133,7 @@ async def scan_universe(
             quality_universe=list(quality_scores) if quality_scores else None,
             quality_scores=quality_scores or None,
             analyst_verdicts=analyst_verdicts or None,
+            params=await current_params(db),
         )
         if s.spec.mode == "LONGTERM"
     ]

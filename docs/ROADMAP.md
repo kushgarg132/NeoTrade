@@ -855,6 +855,17 @@ Statistics decide, the LLM explains. Plan: `/home/ubuntu/.claude-second/plans/jo
   `learning_changes` (before, after, evidence); current rules in `learning_state`.
 - `backend/learning/report.py`: Friday Telegram note (prompt `learning_review.md`, standard
   tier, figures-only fallback) and the chat tool `get_learning`.
-- Not done: monthly parameter re-tune (strategies have no parameter grids yet — add one per
-  strategy, then re-fit walk-forward with Deflated Sharpe like `factor/validate.py`); a
-  Journal UI tab; LLM-suggested hypotheses queued for the backtest gate.
+- Monthly re-tune (`backend/learning/retune.py`): each strategy declares `PARAMS` and a small
+  `GRID` (`strategies/base.py`). The first daily pass of a month starts
+  `nice python -m backend.learning.retune` as its own process. Per daily-bar strategy, over the
+  last 3 years: every variant is backtested on the first 2 years, the best by net Sharpe
+  (≥20 trades) is re-run with the current params on the last year (300 days warmup, only
+  trades after the split count). It replaces the current params only if it makes money
+  there, beats them, and its Deflated Sharpe ≥0.95 counting every variant ever tried for that
+  strategy. Every attempt goes to `strategy_retunes`; the latest accepted one is what runs,
+  scans and gate backtests use. Intraday strategies are not re-tuned: yfinance's ~60 days of
+  5-minute bars leave too short a test window to pass (needs a year of Kite history).
+- Backtester fix found on the way: long-term buys are now sold at the close that crosses
+  their stop or target (as paper does). Before, nothing sold them and their P&L never showed.
+- Not done: a Journal UI tab; LLM-suggested hypotheses queued for the backtest gate;
+  intraday re-tune from Kite history.

@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from backend import broadcast
+from backend.learning.retune import current_params
 from backend.learning.adapt import load_rules
 from backend.auth.broker_credentials import get_credential_store
 from backend.auth.dependency import get_current_user, require_admin
@@ -296,6 +297,7 @@ async def launch_run(
         s for s in build_default_strategies(
             universe=[i.tradingsymbol for i in instruments], symbol_for_token=symbol_for_token,
             option_universe=[i.tradingsymbol for i in option_instruments],
+            params=await current_params(db.db),
         )
         if s.spec.mode == mode
     ]

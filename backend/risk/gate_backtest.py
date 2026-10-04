@@ -11,6 +11,7 @@ the synced NFO contracts.
 import logging
 from datetime import datetime, timedelta
 
+from backend.learning.retune import current_params
 from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
 from backend.components.shared.models import BacktestResult
 from backend.engine.backtest import run_backtest
@@ -46,6 +47,7 @@ async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> 
         s for s in build_default_strategies(
             universe=universe, symbol_for_token=symbol_for_token,
             option_universe=universe if options else None,
+            params=await current_params(db),
         )
         if s.spec.name == strategy_name
     ]

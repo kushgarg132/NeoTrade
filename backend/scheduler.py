@@ -87,6 +87,12 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
 
     journal_imported = await _sync_journals(db, redis)
     learning_changes = await _learn(db, now)
+    # Monthly, in its own process: re-tune strategy thresholds (backend/learning/retune.py).
+    from backend.learning.retune import start_if_due
+    try:
+        await start_if_due(db, now)
+    except Exception as exc:
+        logger.warning("could not start the monthly re-tune: %s", exc)
 
     # Weekly portfolio review: Friday's pass, after the journal sync, while
     # that day's broker sessions are still valid.
