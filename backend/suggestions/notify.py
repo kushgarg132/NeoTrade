@@ -1,19 +1,13 @@
 """Telegram messages about the long-term engine: new proposals, the morning
-digest, and automatic exits. Same bot and per-user chat link as the
-guardrail alerts (backend/guardrails/telegram.py); best effort, and a no-op
-for a user who never linked Telegram."""
+digest, and automatic exits. Same bot and chat as the guardrail alerts
+(backend/guardrails/telegram.py:alert); best effort, and a no-op for a user
+who never linked Telegram."""
 
 from backend.guardrails import telegram
-from backend.guardrails.store import GuardrailStore
 
 
 async def notify(db, user_id: str, text: str) -> bool:
-    if not telegram.configured():
-        return False
-    chat_id = await GuardrailStore(db).telegram_chat(user_id)
-    if chat_id is None:
-        return False
-    return await telegram.send(chat_id, text)
+    return await telegram.alert(db, user_id, text)
 
 
 def _money(value) -> str:

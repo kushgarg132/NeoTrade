@@ -63,7 +63,7 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
     trips = [t for t in build_round_trips(trades) if t["opened_at"] >= start_of_day]
 
     store = GuardrailStore(db)
-    chat_id = await store.telegram_chat(user_id)
+    channel = await store.telegram_channel(user_id)
     fresh = []
     # Lot sizes for today's options trades, from the broker's NFO dump.
     master = InstrumentMaster(db)
@@ -81,19 +81,20 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
         if breach["rule"] == "daily_loss":
             await KillSwitchStore(db).trip(user_id, day, reason="guardrail: daily loss limit",
                                            equity=synced["day_pnl"])
-        await _alert(user_id, chat_id, breach)
+        await _alert(user_id, channel, breach)
         if breach["rule"] == "daily_loss" and prefs.get("auto_square_off", "off") in ("preview", "live"):
             for i, alert in enumerate(await square_off(redis, credentials, prefs)):
                 event = {"key": f"square_off:{i}", "rule": "square_off", **alert}
                 await store.record(user_id, day, event)
-                await _alert(user_id, chat_id, event)
+                await _alert(user_id, channel, event)
     return fresh
 
 
-async def _alert(user_id: str, chat_id, event: dict) -> None:
+async def _alert(user_id: str, channel, event: dict) -> None:
     await hub.publish(user_id, "guardrails", "breach", event)
-    if chat_id:
-        await telegram.send(chat_id, f"NeoTrade: {event['title']}\n{event['detail']}")
+    if channel:
+        token, chat_id = channel
+        await telegram.send(chat_id, f"NeoTrade: {event['title']}\n{event['detail']}", token)
 
 
 async def square_off(redis, credentials, prefs: dict) -> list[dict]:

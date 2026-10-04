@@ -89,6 +89,7 @@ async def test_check_user_alerts_once_and_trips_the_kill_switch(monkeypatch):
     monkeypatch.setattr(monitor.hub, "publish", publish)
     send = AsyncMock(return_value=True)
     monkeypatch.setattr(monitor.telegram, "send", send)
+    monkeypatch.setattr(monitor.telegram, "configured", lambda: True)  # the server bot
     await GuardrailStore(db).set_telegram_chat("alice", 42)
 
     prefs = {**PREFS, "user_id": "alice", "max_trades_per_day": 0}
@@ -136,3 +137,34 @@ async def test_run_tick_only_checks_opted_in_users(monkeypatch):
     assert await monitor.run_tick(db, redis, now=_ist(10, 0)) == 1
     assert check.await_args.args[3]["user_id"] == "alice"
     assert await monitor.run_tick(db, redis, now=_ist(16, 0)) == 0  # after the session
+
+
+async def test_a_users_own_bot_is_stored_encrypted_and_used_for_their_alerts(monkeypatch):
+    from cryptography.fernet import Fernet
+    from backend.guardrails import store as store_module, telegram
+
+    key = Fernet(Fernet.generate_key())
+    monkeypatch.setattr(store_module, "fernet_from_settings", lambda: key)
+    monkeypatch.setattr(telegram, "configured", lambda: False)  # no server bot at all
+    sent = []
+
+    async def send(chat_id, text, token=None):
+        sent.append((chat_id, token))
+        return True
+    monkeypatch.setattr(telegram, "send", send)
+
+    db = AsyncMongoMockClient()["test_db"]
+    store = GuardrailStore(db)
+    assert await telegram.alert(db, "alice", "x") is False  # nothing linked, no bot
+
+    await store.set_telegram_bot("alice", "123456:ABCdef_ghi-jkl", "alice_alerts_bot")
+    raw = await db["alert_channels"].find_one({"_id": "alice"})
+    assert "ABCdef" not in raw["telegram_bot_token"]  # encrypted at rest
+    await store.set_telegram_chat("alice", 77)
+
+    assert await telegram.alert(db, "alice", "hello") is True
+    assert sent == [(77, "123456:ABCdef_ghi-jkl")]
+    assert (await store.telegram_bot("alice"))["username"] == "alice_alerts_bot"
+
+    await store.set_telegram_bot("alice", "999999:Other_bot_token")  # a new bot unlinks the old chat
+    assert await store.telegram_chat("alice") is None

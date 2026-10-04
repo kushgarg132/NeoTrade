@@ -168,7 +168,8 @@ async def test_weekly_review_alerts_only_on_a_worse_verdict(monkeypatch):
     monkeypatch.setattr(service, "stock_health", AsyncMock(
         side_effect=lambda db, rows, closes, now: {r["symbol"]: _health(close=90, sma200=100) for r in rows}))
     sent = []
-    monkeypatch.setattr("backend.guardrails.telegram.send", AsyncMock(side_effect=lambda chat, text: sent.append((chat, text))))
+    monkeypatch.setattr("backend.guardrails.telegram.send", AsyncMock(side_effect=lambda chat, text, token=None: sent.append((chat, text))))
+    monkeypatch.setattr("backend.guardrails.telegram.configured", lambda: True)  # the server bot
     monkeypatch.setattr(hub, "publish", AsyncMock())
     monkeypatch.setattr("backend.auth.broker_credentials.fernet_from_settings", lambda: None)
 

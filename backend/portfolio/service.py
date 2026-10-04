@@ -220,7 +220,6 @@ async def weekly_reviews(db, redis) -> int:
     from backend.app_settings import AppSettingsStore
     from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
     from backend.guardrails import telegram
-    from backend.guardrails.store import GuardrailStore
     from backend.portfolio.rules import worsened
     from backend.ws.hub import hub
 
@@ -246,6 +245,5 @@ async def weekly_reviews(db, redis) -> int:
             lines.append(f"{r['symbol']}: {label} -- {reasons}")
         text = "NeoTrade weekly portfolio review\n" + "\n".join(lines)
         await hub.publish(user_id, "portfolio", "worsened", {"symbols": [r["symbol"] for r in worse]})
-        if chat_id := await GuardrailStore(db).telegram_chat(user_id):
-            await telegram.send(chat_id, text)
+        await telegram.alert(db, user_id, text)
     return reviewed

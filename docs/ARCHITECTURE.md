@@ -296,7 +296,11 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   `backend/suggestions/exits.py:check_exits`, which sells an approved long-term paper long
   at its proposal's stop or target. From 09:20 it re-runs the scan once if the 16:00 pass
   was missed, then sends a Telegram digest of pending proposals
-  (`backend/suggestions/notify.py`, same bot and chat link as guardrail alerts). A scan only
+  (`backend/suggestions/notify.py` -> `backend/guardrails/telegram.py:alert`, the one path
+  every Telegram alert takes: the user's own bot if they added one (`PUT
+  /guardrails/telegram/bot`, token checked with `getMe` and stored Fernet-encrypted in
+  `alert_channels` with the broker-credential key, never returned), else the server's
+  `TELEGRAM_BOT_TOKEN` bot, to the chat they linked; changing bots unlinks the chat). A scan only
   proposes an equity SELL for a held long, capped at the held quantity (`SuggestionSink.held`):
   a delivery account cannot short. Proposals store their `strategy`, and an approved order
   carries it plus `suggestion_id` onto the trade.
