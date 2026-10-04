@@ -125,6 +125,7 @@ export const endpoints = {
   stockInfo: (symbol) => `/stock_info/${symbol}`,
   marketIndices: '/market/indices',
   trendingStocks: '/market/trending',
+  marketQuotes: (symbols) => `/market/quotes?symbols=${encodeURIComponent(symbols.join(','))}`,
   // The backend derives the owner from the session token; there is no user
   // id in these paths any more.
   watchlist: {

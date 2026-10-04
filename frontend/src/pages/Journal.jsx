@@ -5,6 +5,9 @@ import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
 import { MINE_TABS } from '../components/layout/sections';
 import GuardrailAlerts from '../components/journal/GuardrailAlerts';
+import BrokerPnl from '../components/dashboard/BrokerPnl';
+import TradeLedger from '../components/dashboard/TradeLedger';
+import { useTopic } from '../hooks/useStream';
 import MonthGrid from '../components/journal/MonthGrid';
 import LearningSheet from '../components/journal/LearningSheet';
 import { monthKey, shiftMonth, monthLabel, todayIst } from '../utils/months';
@@ -170,6 +173,21 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
     load();
   }, [account]);
 
+  // Real orders a live strategy placed; Mine → Trades only, and only when
+  // one exists, since most accounts never switch a strategy live.
+  const [liveTrades, setLiveTrades] = useState([]);
+  const loadLiveTrades = () =>
+    view === 'habits'
+      ? Promise.resolve()
+      : api
+          .get(endpoints.trading.trades(null, 'live'))
+          .then((res) => setLiveTrades(res.data))
+          .catch(() => setLiveTrades([]));
+  useEffect(() => {
+    loadLiveTrades();
+  }, [view]);
+  useTopic('trades', loadLiveTrades);
+
   const run = (request, describe) => {
     setBusy(true);
     setMessage(null);
@@ -288,6 +306,10 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
           </Link>
         )}
         <GuardrailAlerts />
+        {view !== 'habits' && <BrokerPnl journal={data} loading={!data && !error} error={error} />}
+        {view !== 'habits' && liveTrades.length > 0 && (
+          <TradeLedger title="Live engine orders" trades={liveTrades} loading={false} error={null} />
+        )}
 
         {data && (
           <Tabs

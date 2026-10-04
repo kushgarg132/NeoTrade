@@ -4,6 +4,7 @@ import { Sheet, Statement, Row, Cell, Ruling, Scrip } from '../doc/Doc';
 import api, { endpoints } from '../../utils/api';
 import { formatSignedPercent, formatNoteDate, formatTimeAgo, bareSymbol, formatLevel } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import { stockPath } from '../../utils/stocks';
 
 /**
  * Market context, printed as one appendix rather than four competing widgets:
@@ -122,7 +123,7 @@ const Market = () => {
               <Quote
                 key={item.symbol}
                 item={item}
-                onClick={() => navigate('/research', { state: { symbol: bareSymbol(item.symbol) } })}
+                onClick={() => navigate(stockPath(item.symbol))}
               />
             ))}
           </Statement>

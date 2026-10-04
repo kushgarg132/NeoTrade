@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Search, Loader2 } from 'lucide-react';
 import api, { endpoints } from '../../utils/api';
 import { cn } from '../../utils/cn';
+import { formatCurrency, formatSignedPercent } from '../../utils/formatters';
 
 /**
  * Instrument lookup against the NSE master. Typeahead rather than blind
@@ -17,6 +18,8 @@ const SmartSearch = ({ onSearch, isLoading, className }) => {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [searching, setSearching] = useState(false);
+  const [quotes, setQuotes] = useState({});
+  const quoteRequest = useRef(0);
   const boxRef = useRef(null);
 
   useEffect(() => {
@@ -30,8 +33,22 @@ const SmartSearch = ({ onSearch, isLoading, className }) => {
     const handle = setTimeout(async () => {
       try {
         const res = await api.get(endpoints.trading.instruments(term));
-        setMatches(res.data.slice(0, 7));
+        const top = res.data.slice(0, 7);
+        setMatches(top);
         setActive(0);
+        // Prices fill in when they arrive; typing never waits on them, and
+        // a slower answer for an older query is dropped.
+        const request = ++quoteRequest.current;
+        if (top.length) {
+          api
+            .get(endpoints.marketQuotes(top.map((m) => m.tradingsymbol)))
+            .then((q) => {
+              if (request === quoteRequest.current) {
+                setQuotes(Object.fromEntries(q.data.map((row) => [row.symbol, row])));
+              }
+            })
+            .catch(() => {});
+        }
       } catch {
         setMatches([]);
       } finally {
@@ -131,10 +148,23 @@ const SmartSearch = ({ onSearch, isLoading, className }) => {
                     index === active ? 'bg-[var(--stamp-soft)]' : 'bg-transparent'
                   )}
                 >
-                  <span className="figure-md text-sm">{match.tradingsymbol}</span>
-                  <span className="text-xs text-[var(--ink-soft)] truncate text-right">
+                  <span className="figure-md text-sm shrink-0">{match.tradingsymbol}</span>
+                  <span className="text-xs text-[var(--ink-soft)] truncate text-right flex-1 min-w-0">
                     {match.name}
                   </span>
+                  {quotes[match.tradingsymbol] && (
+                    <span className="shrink-0 text-right">
+                      <span className="figure-md text-xs block">{formatCurrency(quotes[match.tradingsymbol].price)}</span>
+                      <span
+                        className={cn(
+                          'figure-md text-[0.625rem] block',
+                          quotes[match.tradingsymbol].change_pct >= 0 ? 'text-up' : 'text-down'
+                        )}
+                      >
+                        {formatSignedPercent(quotes[match.tradingsymbol].change_pct)}
+                      </span>
+                    </span>
+                  )}
                 </button>
               </li>
             ))

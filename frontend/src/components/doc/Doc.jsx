@@ -2,6 +2,7 @@ import React, { Children, cloneElement, createContext, isValidElement, useContex
 import { Link } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { formatSigned, formatSignedPercent, bareSymbol } from '../../utils/formatters';
+import { stockPath } from '../../utils/stocks';
 
 /**
  * The contract note's building blocks. Everything in the app is assembled from
@@ -41,8 +42,7 @@ export const Scrip = ({ symbol: raw, children, className }) => {
   }
   return (
     <Link
-      to="/"
-      state={{ symbol }}
+      to={stockPath(symbol)}
       onClick={(event) => event.stopPropagation()}
       className={cn(
         'figure-md underline decoration-[var(--rule)] decoration-1 underline-offset-[3px]',

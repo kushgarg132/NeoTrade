@@ -16,6 +16,7 @@ import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } fro
 import { Badge } from '../components/common/Badge';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
+import { stockPath } from '../utils/stocks';
 import { useTopic } from '../hooks/useStream';
 import {
   formatCurrency,
@@ -203,7 +204,7 @@ const Portfolio = () => {
                   <Row
                     key={position.symbol}
                     className="cursor-pointer hover:bg-[var(--paper-sunk)]"
-                    onClick={() => navigate('/research', { state: { symbol: position.symbol } })}
+                    onClick={() => navigate(stockPath(position.symbol))}
                   >
                     <Cell>
                       <Scrip symbol={position.symbol} />

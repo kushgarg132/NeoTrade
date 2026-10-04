@@ -10,6 +10,7 @@ import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatSignedPercent } from '../utils/formatters';
 import { cn } from '../utils/cn';
+import { stockPath } from '../utils/stocks';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 
 /**
@@ -49,7 +50,7 @@ const ScannerPage = () => {
     }
   };
 
-  const open = (symbol) => navigate('/research', { state: { symbol } });
+  const open = (symbol) => navigate(stockPath(symbol));
   const findings = scan?.findings ?? [];
   const shown = filter === 'all' ? findings : findings.filter((f) => f.setup === filter);
   const count = (setup) => findings.filter((f) => f.setup === setup).length;

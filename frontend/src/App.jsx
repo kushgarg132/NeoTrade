@@ -113,6 +113,7 @@ const App = () => {
       <Route path="/ai/practice/settings" element={gated(<PaperSettings />)} />
       {/* Research */}
       <Route path="/research" element={gated(<Dashboard />)} />
+      <Route path="/research/stock/:symbol" element={gated(<Dashboard />)} />
       <Route path="/research/watchlist" element={gated(<Watchlist />)} />
       <Route path="/research/scanner" element={gated(<ScannerPage />)} />
       <Route path="/research/options" element={gated(<OptionChain />)} />

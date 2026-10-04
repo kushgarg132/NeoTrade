@@ -9,6 +9,7 @@ import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatSignedPercent } from '../utils/formatters';
 import { cn } from '../utils/cn';
+import { stockPath } from '../utils/stocks';
 
 const Watchlist = () => {
   const [rows, setRows] = useState([]);
@@ -63,7 +64,7 @@ const Watchlist = () => {
               <Row
                 key={stock.symbol}
                 className="group cursor-pointer hover:bg-[var(--paper-sunk)]"
-                onClick={() => navigate('/research', { state: { symbol: stock.symbol } })}
+                onClick={() => navigate(stockPath(stock.symbol))}
               >
                 <Cell>
                   <Scrip symbol={stock.symbol} />
