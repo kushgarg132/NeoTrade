@@ -169,34 +169,39 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
       </header>
 
       {suggestion.option_contract ? (
-        <OptionTerms contract={suggestion.option_contract} quantity={suggestion.quantity} />
+        why ? (
+          <OptionTerms contract={suggestion.option_contract} quantity={suggestion.quantity} />
+        ) : (
+          <p className="mt-2 py-1.5 border-y border-[var(--rule)] figure-md text-xs flex flex-wrap gap-x-3">
+            <span>Strike {formatCurrency(suggestion.option_contract.strike)}</span>
+            <span>
+              Expiry{' '}
+              {suggestion.option_contract.expiry ? formatNoteDate(new Date(suggestion.option_contract.expiry)) : '—'}
+            </span>
+          </p>
+        )
       ) : (
-      <>
-      <div className="mt-3 grid grid-cols-3 gap-3 py-2 border-y border-[var(--rule)]">
-        <Field label="Entry ref" value={formatCurrency(suggestion.entry_ref)} />
-        <Field label="Stop" value={formatCurrency(suggestion.stop)} tone="down" />
-        <Field label="Target" value={formatCurrency(suggestion.target)} tone="up" />
-      </div>
-
-      <div className="mt-2 flex items-baseline justify-between gap-4">
-        <span className="field-label">Risk / reward</span>
-        <span className="figure-md text-sm">
-          {ratio ? `1 : ${ratio.toFixed(2)}` : '—'}
-          <span className="text-[var(--ink-faint)]">
-            {' '}
-            (risk <Money value={-Math.abs(risk * suggestion.quantity)} />)
-          </span>
-        </span>
-      </div>
-
-      </>
+        // Entry, stop, target and reward on one line; the risk in rupees is
+        // under Why with the rest of the reasoning.
+        <p className="mt-2 py-1.5 border-y border-[var(--rule)] figure-md text-xs flex flex-wrap gap-x-3 gap-y-0.5">
+          <span>Entry {formatCurrency(suggestion.entry_ref)}</span>
+          <span className="text-down">Stop {formatCurrency(suggestion.stop)}</span>
+          <span className="text-up">Target {formatCurrency(suggestion.target)}</span>
+          <span className="text-[var(--ink-soft)]">{ratio ? `1:${ratio.toFixed(1)}` : '—'}</span>
+        </p>
       )}
 
-      <div className="mt-3">
+      {why && !suggestion.option_contract && (
+        <p className="mt-2 doc-meta normal-case">
+          Risk <Money value={-Math.abs(risk * suggestion.quantity)} /> if the stop is hit.
+        </p>
+      )}
+
+      <div className="mt-2">
         <Conviction score={suggestion.score} detailed={why} />
       </div>
 
-      {(suggestion.reason_codes?.length > 0 || suggestion.ai_thesis) && (
+      {(suggestion.reason_codes?.length > 0 || suggestion.ai_thesis || suggestion.option_contract) && (
         <button
           type="button"
           onClick={() => setWhy((value) => !value)}
@@ -206,6 +211,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
           Why
           {suggestion.reason_codes?.length > 0 && ` · ${suggestion.reason_codes.length} ground${suggestion.reason_codes.length === 1 ? '' : 's'}`}
           {suggestion.ai_thesis && ' · thesis'}
+          {suggestion.option_contract && ' · contract'}
           <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', why && 'rotate-180')} aria-hidden="true" />
         </button>
       )}
@@ -240,7 +246,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
       )}
 
       {!decided && (
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-2 grid grid-cols-2 gap-2">
           <Button
             variant="secondary"
             onClick={() => act('reject')}
@@ -265,7 +271,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
             {canGoLive ? 'Approve on paper' : 'Approve'}
           </Button>
           {canGoLive && (
-            <div className="col-span-2 border-t border-[var(--rule)] pt-3 mt-1">
+            <div className="col-span-2">
               {confirmLive && (
                 <p className="mb-2 text-sm text-[var(--loss)]" role="alert">
                   Real money: {suggestion.side === 'SELL' ? 'sells' : 'buys'}{' '}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronDown } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
 import { MINE_TABS } from '../components/layout/sections';
@@ -8,6 +8,7 @@ import { AccountSwitch, useAccount } from '../components/common/AccountSwitch';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, Scrip, Stamp, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
 import Markdown from '../components/common/Markdown';
+import { cn } from '../utils/cn';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatQuantity, formatPercent, formatDateTime } from '../utils/formatters';
@@ -182,6 +183,63 @@ const Concentration = ({ concentration, count }) => (
     )}
   </Sheet>
 );
+
+/**
+ * The action plan folded by its `### ` headings (Improve the mix, Sell or
+ * trim, Add): the first group open, the rest one tap away. A plan without
+ * headings is clamped with Show all instead.
+ */
+const PlanGroups = ({ plan }) => {
+  const groups = plan
+    .split(/^### /m)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const [title, ...rest] = chunk.split('\n');
+      const body = rest.join('\n').trim();
+      return { title: title.trim(), body, count: (body.match(/^\s*[-*] /gm) || []).length };
+    });
+  const [open, setOpen] = useState(0);
+  const [all, setAll] = useState(false);
+
+  if (!/^### /m.test(plan)) {
+    return (
+      <div>
+        <div className={cn('text-sm leading-relaxed', !all && 'line-clamp-[12]')}>
+          <Markdown>{plan}</Markdown>
+        </div>
+        <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all} className="mt-2 field-label text-[var(--stamp)] hover:underline min-h-11 sm:min-h-0">
+          {all ? 'Show less' : 'Show all'}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="divide-y divide-[var(--rule)]">
+      {groups.map((group, i) => (
+        <div key={group.title}>
+          <button
+            type="button"
+            onClick={() => setOpen((current) => (current === i ? null : i))}
+            aria-expanded={open === i}
+            className="w-full flex items-center justify-between gap-3 py-2.5 text-left min-h-11"
+          >
+            <span className="field-label">{group.title}</span>
+            <span className="inline-flex items-center gap-2 doc-meta">
+              {group.count > 0 && group.count}
+              <ChevronDown className={cn('w-4 h-4 transition-transform', open === i && 'rotate-180')} aria-hidden="true" />
+            </span>
+          </button>
+          {open === i && (
+            <div className="pb-3 text-sm leading-relaxed">
+              <Markdown>{group.body}</Markdown>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 /** Sell or add to an equity holding from the user's own account. */
 const TradeButtons = ({ row, onTrade }) =>
@@ -462,9 +520,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
               {tab === 'plan' &&
                 (snapshot.plan ? (
                   <Sheet title="Action plan" meta="AI write-up">
-                    <div className="text-sm leading-relaxed">
-                      <Markdown>{snapshot.plan}</Markdown>
-                    </div>
+                    <PlanGroups plan={snapshot.plan} />
                     <p className="doc-meta normal-case pt-3 mt-3 border-t border-[var(--rule)]">
                       Rules and an AI write-up, not a registered adviser's advice.
                     </p>

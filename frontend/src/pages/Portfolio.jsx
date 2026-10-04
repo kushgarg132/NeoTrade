@@ -55,6 +55,7 @@ const Portfolio = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [ticket, setTicket] = useState(null);
+  const [allFills, setAllFills] = useState(false);
   const [openOrders, setOpenOrders] = useState([]);
 
   const load = () => {
@@ -113,7 +114,9 @@ const Portfolio = () => {
   }, [trades]);
 
   const open = Object.values(positions);
-  const recentFills = [...fills].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 25);
+  const sortedFills = [...fills].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 25);
+  // Latest 10 by default: the full list was most of the page on a phone.
+  const recentFills = allFills ? sortedFills : sortedFills.slice(0, 10);
   const realisedTotal = curve.length ? curve[curve.length - 1].cumulative : 0;
 
   if (loading) {
@@ -317,6 +320,16 @@ const Portfolio = () => {
                 </Row>
               ))}
             </Statement>
+          )}
+                  {sortedFills.length > 10 && (
+            <button
+              type="button"
+              onClick={() => setAllFills((value) => !value)}
+              aria-expanded={allFills}
+              className="mt-2 field-label text-[var(--stamp)] hover:underline min-h-11 sm:min-h-0"
+            >
+              {allFills ? 'Show latest 10' : `Show all ${sortedFills.length}`}
+            </button>
           )}
         </Sheet>
 
