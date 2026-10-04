@@ -237,6 +237,8 @@ def test_the_journal_learning_endpoint_shows_rules_changes_setups_and_retunes(mo
              "params": {"stop_pct": 0.02}, "current": {"stop_pct": 0.05}, "reason": "deflated Sharpe 0.40",
              "trial_sharpes": [0.2]},
         ])
+        await mock_db["strategy_hypotheses"].insert_one({"id": "h1", "strategy": "macd_crossover", "status": "queued",
+                                                         "params": {"stop_pct": 0.04}, "rationale": "r", "created_at": NOW})
     asyncio.run(setup())
     app = FastAPI()
     app.include_router(journal_router.router, prefix="/api/v1")
@@ -251,3 +253,4 @@ def test_the_journal_learning_endpoint_shows_rules_changes_setups_and_retunes(mo
     [retune] = body["retunes"]
     assert retune["strategy"] == "macd_crossover" and retune["reason"] == "deflated Sharpe 0.40"
     assert retune["running"] == {"stop_pct": 0.05} and "trial_sharpes" not in retune
+    assert [h["status"] for h in body["hypotheses"]] == ["queued"]

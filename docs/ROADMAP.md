@@ -867,5 +867,16 @@ Statistics decide, the LLM explains. Plan: `/home/ubuntu/.claude-second/plans/jo
   5-minute bars leave too short a test window to pass (needs a year of Kite history).
 - Backtester fix found on the way: long-term buys are now sold at the close that crosses
   their stop or target (as paper does). Before, nothing sold them and their P&L never showed.
-- Not done: a Journal UI tab; LLM-suggested hypotheses queued for the backtest gate;
-  intraday re-tune from Kite history.
+- LLM hypotheses (`backend/learning/hypotheses.py`, prompt `strategy_hypotheses.md`, deep
+  tier): at the start of each monthly re-tune the model sees each daily strategy's current
+  thresholds and grid, the last re-tune's in-sample results and every user's worst paper
+  setups, and may suggest up to 3 new threshold values. Only known keys of re-tunable
+  strategies, numbers within ¼×–4× of what runs now, not already in the grid. Each is queued
+  in `strategy_hypotheses` and, in the same run, tested exactly like a grid variant (unseen
+  year, must make money and beat what runs, Deflated Sharpe counting every variant and idea
+  ever tried). The model never changes anything itself. Shown in Journal → Engine learning.
+- Journal → Engine learning tab (`GET /journal/learning`): rules, changes, setups, re-tunes,
+  hypotheses.
+- Not done: intraday re-tune from Kite history. Known weakness: the model sees paper trades
+  that overlap the test year, so its ideas are not fully out of sample — the Deflated Sharpe
+  counting each idea is the guard.

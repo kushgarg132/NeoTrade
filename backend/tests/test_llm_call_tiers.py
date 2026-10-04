@@ -14,6 +14,7 @@ EXPECTED = {
     "research/index_move.py": ["standard"],
     "portfolio/review.py": ["deep"],
     "learning/report.py": ["standard"],
+    "learning/hypotheses.py": ["deep"],
     "chat/agent.py": ["fast", "deep"],                   # follow-up chips; the reply
 }
 

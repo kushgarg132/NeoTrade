@@ -30,8 +30,10 @@ async def snapshot(db, user_id: str, nifty: list, now: datetime) -> dict:
     latest = {}
     async for doc in db["strategy_retunes"].find({}, {"_id": 0, "trial_sharpes": 0, "train": 0}).sort("at", 1):
         latest[doc["strategy"]] = {**doc, "running": running.get(doc["strategy"])}
+    ideas = await db["strategy_hypotheses"].find({}, {"_id": 0}).sort("created_at", -1).to_list(10)
     return {
         "retunes": sorted(latest.values(), key=lambda d: d["strategy"]),
+        "hypotheses": ideas,
         "rules": {"paused": sorted(rules.paused), "floors": rules.floors,
                   "skip_regimes": rules.skip_regimes, "regime_today": rules.regime},
         "changes": changes,

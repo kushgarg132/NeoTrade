@@ -70,14 +70,15 @@ def _at(trade: dict) -> datetime:
 
 
 async def retune_strategy(strategy, backtest, current: dict, start: datetime, split: datetime,
-                          end: datetime, past_trials: list[float]) -> dict:
+                          end: datetime, past_trials: list[float], candidates: list[dict] | None = None) -> dict:
     """`strategy` gives spec.name, spec.timeframe and GRID;
-    `backtest(params, start, end)` returns a BacktestResult. Returns the
-    record to store; `accepted` says whether `params` should run."""
+    `backtest(params, start, end)` returns a BacktestResult. `candidates`
+    replaces the grid (a queued hypothesis, backend/learning/hypotheses.py).
+    Returns the record to store; `accepted` says whether `params` should run."""
     doc = {"strategy": strategy.spec.name, "current": current, "accepted": False}
 
     train = []
-    for params in variants(strategy.GRID):
+    for params in candidates if candidates is not None else variants(strategy.GRID):
         result = await backtest(params, start, split)
         returns = _daily(result.trades, start, split)
         train.append((params, returns, result.trades))
@@ -138,6 +139,7 @@ async def run_all(db, provider, now: datetime) -> list[dict]:
     from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
     from backend.engine.backtest import run_backtest
     from backend.instruments.master import InstrumentMaster
+    from backend.learning.hypotheses import test_queued
     from backend.strategies.registry import build_default_strategies
 
     master = InstrumentMaster(db)
@@ -170,6 +172,11 @@ async def run_all(db, provider, now: datetime) -> list[dict]:
         await db["strategy_retunes"].insert_one(dict(doc))
         logger.info("re-tune %s: %s (%s)", name, "accepted" if doc["accepted"] else "kept", doc["reason"])
         docs.append(doc)
+
+        # Then the LLM's queued ideas for it, against whatever runs now.
+        running = doc["params"] if doc["accepted"] else strategy.p
+        past += doc.get("trial_sharpes", [])
+        docs += await test_queued(db, strategy, backtest, running, start, split, now, past, now)
     return docs
 
 
@@ -192,8 +199,15 @@ async def _main() -> None:
     from backend.data.providers.yfinance_provider import YFinanceProvider
     from backend.database import db
 
+    from backend.learning.hypotheses import propose
+    from backend.strategies.registry import build_default_strategies
+
     await db.connect_to_database()
-    for doc in await run_all(db.db, YFinanceProvider(), datetime.now(timezone.utc)):
+    now = datetime.now(timezone.utc)
+    strategies = {s.spec.name: s for s in build_default_strategies(params=await current_params(db.db))}
+    for h in await propose(db.db, strategies, now):
+        print("hypothesis queued:", h["strategy"], h["params"], "-", h["rationale"], flush=True)
+    for doc in await run_all(db.db, YFinanceProvider(), now):
         print(doc["strategy"], "accepted" if doc["accepted"] else "kept", "-", doc["reason"], flush=True)
 
 

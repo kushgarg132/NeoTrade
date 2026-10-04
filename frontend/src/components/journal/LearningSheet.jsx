@@ -25,6 +25,12 @@ const setup = (row) =>
         ? `strength ${row.group}`
         : name(row.group);
 
+const IDEA_STATUS = {
+  queued: 'waiting for this month\'s test',
+  accepted: 'won on unseen data, now running',
+  rejected: 'did not hold up on unseen data',
+};
+
 const params = (p) =>
   p
     ? Object.entries(p)
@@ -176,6 +182,25 @@ export const LearningView = ({ data }) => {
       )}
 
       <Sheet title="Monthly re-tune" meta="Daily strategies, last 3 years">
+        {data.hypotheses?.length > 0 && (
+          <div className="mb-4">
+            <p className="field-label mb-1">AI ideas, tested before use</p>
+            <ul>
+              {data.hypotheses.map((h) => (
+                <li key={h.id} className="py-2 border-b border-[var(--rule)] last:border-b-0">
+                  <p className="text-sm text-[var(--ink)]">
+                    <span className="capitalize">{name(h.strategy)}</span> · {params(h.params)} ·{' '}
+                    {IDEA_STATUS[h.status] || h.status}
+                  </p>
+                  <p className="doc-meta normal-case mt-1">
+                    {h.rationale}
+                    {h.reason && ` · ${h.reason}`}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {data.retunes.length === 0 ? (
           <Empty
             title="Not re-tuned yet"

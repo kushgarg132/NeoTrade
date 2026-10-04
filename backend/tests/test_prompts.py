@@ -25,6 +25,8 @@ PROMPTS = {
     "chat_followups": {"question": "Is the engine running?", "answer": "Yes, 166 bars scanned."},
     "learning_review": {"rules": "Paused: vwap", "changes": "vwap: pause False → True",
                         "groups": "vwap / overall: n 30, net ₹-3,000"},
+    "strategy_hypotheses": {"strategies": "macd_crossover: runs {'stop_pct': 0.03}", "retunes": "none yet",
+                            "setups": "none yet"},
 }
 
 

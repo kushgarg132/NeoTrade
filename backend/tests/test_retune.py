@@ -162,8 +162,11 @@ async def test_run_all_retunes_the_daily_strategies_on_real_backtests(monkeypatc
         async def quote(self, instrument):
             return {}
 
+    await db["strategy_hypotheses"].insert_one({"id": "h1", "strategy": "macd_crossover", "status": "queued",
+                                                "params": {"stop_pct": 0.04, "target_pct": 0.06}})
     docs = await retune.run_all(db, _Provider(), now)
-    assert sorted(d["strategy"] for d in docs) == ["macd_crossover", "mean_reversion", "technical_breakout"]
+    assert sorted(d["strategy"] for d in docs if "source" not in d) == ["macd_crossover", "mean_reversion", "technical_breakout"]
+    assert (await db["strategy_hypotheses"].find_one({"id": "h1"}))["status"] == "rejected"
     assert all(not d["accepted"] and not d["reason"].startswith("failed") for d in docs)
-    assert await db["strategy_retunes"].count_documents({}) == 3
+    assert await db["strategy_retunes"].count_documents({}) == 4
     assert len(fetches) == len(set(fetches))  # memoised: each period fetched once
