@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from backend.learning.adapt import load_rules
 from backend.ai.analyst_verdict import get_cached_verdict
 from backend.core.clock import SimClock
 from backend.core.models import Bar
@@ -170,6 +171,7 @@ async def scan_universe(
         premium_source=await live_premium_source(
             db, user_id, BrokerCredentialStore(db, fernet_from_settings()), redis,
         ),
+        learned=await load_rules(db, user_id),
     )
 
     created = [

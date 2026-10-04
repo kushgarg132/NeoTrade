@@ -18,6 +18,7 @@ from backend.engine.portfolio import Portfolio
 from backend.engine.protocols import DataFeed, ExecutionClient, Strategy, StrategyContext
 from backend.engine.session import IST, is_past_square_off_time
 from backend.instruments.master import InstrumentMaster
+from backend.learning.adapt import LearnedRules
 from backend.options.sizing import size_option_intent
 from backend.risk.kill_switch import should_trip
 from backend.scoring.composite import CompositeScore, score_intent
@@ -33,6 +34,18 @@ def entry_context(intent: Intent, scored: CompositeScore) -> dict:
         "reason_codes": list(intent.reason_codes),
         "score": {"rule": scored.rule_score, "ai": scored.ai_score, "final": scored.final},
     }
+
+
+def _opens(intent: Intent, portfolio: Portfolio, mode: str) -> bool:
+    """Whether `intent` adds risk rather than closing it. An option always
+    opens; a long-term equity sell is always an exit (CNC cannot short)."""
+    if intent.option_flavor is not None:
+        return True
+    pos = portfolio.positions.get(intent.symbol)
+    held = pos.quantity if pos else 0.0
+    if intent.side == Side.BUY:
+        return held >= 0
+    return mode == "INTRADAY" and held <= 0
 
 
 @dataclass(frozen=True)
@@ -79,6 +92,7 @@ async def size_intents(
     master: Optional[InstrumentMaster] = None,
     premium_source=None,
     option_legs: Optional[dict[str, dict]] = None,
+    learned: Optional[LearnedRules] = None,
 ) -> list[Order]:
     """Scores each Intent (backend.scoring.composite.score_intent, which
     caps AI's influence at AI_CAP regardless of what's passed here), then
@@ -126,6 +140,15 @@ async def size_intents(
 
         owning_strategy = owner_by_symbol.get(intent.symbol)
         mode = owning_strategy.spec.mode if owning_strategy is not None else "LONGTERM"
+
+        # What this user's own paper record taught (backend/learning/adapt.py).
+        # Exits are never held back: only a signal that opens risk is judged.
+        if learned is not None and _opens(intent, portfolio, mode):
+            why = learned.blocks(owning_strategy.spec.name if owning_strategy is not None else None,
+                                 intent.strength)
+            if why:
+                logger.info("skipping intent for %s: %s", intent.symbol, why)
+                continue
 
         # The kill-switch is about auto-executed risk. A tripped switch
         # blocks new INTRADAY orders (the ones that go straight to
@@ -320,6 +343,7 @@ async def run(
     master: Optional[InstrumentMaster] = None,
     premium_source=None,
     on_progress: Optional[Callable[[dict], Awaitable[None]]] = None,
+    learned: Optional[LearnedRules] = None,
 ) -> None:
     """`symbol_for_token` is not in the plan's pseudocode signature; it's
     needed because `Bar` identifies instruments by `instrument_token` while
@@ -410,7 +434,7 @@ async def run(
         orders = await size_intents(
             intents, portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,
             order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
-            master=master, premium_source=premium_source, option_legs=option_legs,
+            master=master, premium_source=premium_source, option_legs=option_legs, learned=learned,
         )
         orders.extend(_square_off_orders(symbol, bar.timestamp, portfolio, owner_by_symbol))
         orders.extend(await _option_exit_orders(symbol, bar, portfolio, option_legs, premium_source))

@@ -327,3 +327,25 @@ async def test_order_carries_the_signal_that_opened_it():
     assert context["strength"] == 0.7
     assert context["reason_codes"] == ["breakout", "volume"]
     assert set(context["score"]) == {"rule", "ai", "final"}
+
+
+@pytest.mark.asyncio
+async def test_learned_rules_hold_back_a_paused_strategys_entry_but_never_its_exit():
+    from backend.learning.adapt import LearnedRules
+
+    owner = {"RELIANCE": _FakeStrategy("INTRADAY", name="vwap")}
+    learned = LearnedRules(paused={"vwap"})
+    buy = Intent(symbol="RELIANCE", side=Side.BUY, strength=0.9, reason_codes=["x"], stop_hint=90.0)
+    assert await size_intents(
+        [buy], Portfolio(), _FakeCtx({"RELIANCE": 100.0}), owner, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=1_000_000.0, learned=learned,
+    ) == []
+
+    held = Portfolio()
+    held.positions["RELIANCE"] = Position(symbol="RELIANCE", quantity=10.0, avg_price=100.0)
+    sell = Intent(symbol="RELIANCE", side=Side.SELL, strength=0.9, reason_codes=["x"], stop_hint=110.0)
+    orders = await size_intents(
+        [sell], held, _FakeCtx({"RELIANCE": 100.0}), owner, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=1_000_000.0, learned=learned,
+    )
+    assert len(orders) == 1

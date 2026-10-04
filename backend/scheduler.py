@@ -86,6 +86,7 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
             await notify(db, user_id, proposals_text(created, f"{len(created)} new long-term proposal(s) from today's close:"))
 
     journal_imported = await _sync_journals(db, redis)
+    learning_changes = await _learn(db, now)
 
     # Weekly portfolio review: Friday's pass, after the journal sync, while
     # that day's broker sessions are still valid.
@@ -111,6 +112,7 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         "verdicts_refreshed": verdicts_refreshed,
         "users": scanned_users, "created": created_total,
         "journal_imported": journal_imported, "portfolios_reviewed": portfolios,
+        "learning_changes": learning_changes,
     }
 
 
@@ -227,6 +229,23 @@ async def close_expired_option_positions(
             closed += 1
 
     return closed
+
+
+async def _learn(db, now: datetime) -> int:
+    """Each user with paper trades: judge them by setup and update the rules
+    their next runs follow (backend/learning/adapt.py)."""
+    from backend.learning.adapt import learn
+    from backend.portfolio.service import _nifty
+
+    users = await db["paper_trades"].distinct("user_id")
+    nifty = await _nifty() if users else []
+    total = 0
+    for user_id in users:
+        try:
+            total += len(await learn(db, user_id, nifty, now))
+        except Exception as exc:
+            logger.warning("learning pass failed for %s: %s", user_id, exc)
+    return total
 
 
 async def _weekly_mirrors(db) -> int:

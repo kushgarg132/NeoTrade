@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from backend import broadcast
+from backend.learning.adapt import load_rules
 from backend.auth.broker_credentials import get_credential_store
 from backend.auth.dependency import get_current_user, require_admin
 from backend.auth.models import User
@@ -365,6 +366,7 @@ async def launch_run(
         kill_switch_store=KillSwitchStore(db.db),
         master=master if premium_source is not None else None, premium_source=premium_source,
         on_progress=progress_reporter(user_id, run_id, runs, cycle=len(instruments)),
+        learned=await load_rules(db.db, user_id),
     )
     await runs.create(
         run_id=run_id, user_id=user_id, mode=mode,
