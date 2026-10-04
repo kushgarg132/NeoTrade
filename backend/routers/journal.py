@@ -12,6 +12,7 @@ from backend.auth.models import User
 from backend.database import db
 from backend.journal.beta import beta_metrics, record_open
 from backend.journal.console_csv import parse_console_tradebook
+from backend.journal import mirror
 from backend.journal.insights import build_insights
 from backend.journal.roundtrips import build_round_trips, daily_pnl
 from backend.journal.store import JournalStore
@@ -20,6 +21,12 @@ from backend.journal.sync import connected_brokers, import_upstox_history, sync_
 router = APIRouter(prefix="/journal", tags=["Journal"])
 
 MAX_CSV_BYTES = 10 * 1024 * 1024
+
+
+async def get_nifty() -> list:
+    """[(date, close)] for the benchmark mirror, cached in portfolio.service."""
+    from backend.portfolio.service import _nifty
+    return await _nifty()
 
 
 def get_journal_store() -> JournalStore:
@@ -43,9 +50,19 @@ class NoteRequest(BaseModel):
 async def get_journal(
     user: User = Depends(get_current_user), store: JournalStore = Depends(get_journal_store),
     credentials: BrokerCredentialStore = Depends(get_credential_store),
+    nifty: list = Depends(get_nifty),
 ):
+    from backend.prefs import PrefsStore
+
     await record_open(db.db, user.id)
-    trips = build_round_trips(await store.list_trades(user.id))
+    trades = await store.list_trades(user.id)
+    trips = build_round_trips(trades)
+    capital = (await PrefsStore(db.db).get(user.id))["account_size"]
+    cost_mirror = mirror.costs(trades, trips, capital)
+    first = min((t["traded_at"] for t in trades), default=None)
+    benchmark = mirror.benchmark(
+        cost_mirror["net_pnl"], capital, first.date(), max(d for d, _ in nifty), nifty,
+    ) if first and nifty else None
     notes = await store.notes_for(user.id)
     for trip in trips:
         trip.update(notes.get(trip["id"], {"note": "", "tags": []}))
@@ -64,6 +81,8 @@ async def get_journal(
             "wins": sum(t["pnl"] > 0 for t in closed),
             "by_kind": _by_kind(closed),
         },
+        # What charges took, how often they trade, and the Nifty over the same days.
+        "mirror": {"costs": cost_mirror, "benchmark": benchmark},
     }
 
 

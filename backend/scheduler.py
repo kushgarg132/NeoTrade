@@ -91,6 +91,7 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
     # that day's broker sessions are still valid.
     portfolios = 0
     if now.astimezone(IST).weekday() == 4:
+        await _weekly_mirrors(db)
         from backend.portfolio.service import weekly_reviews
         try:
             portfolios = await weekly_reviews(db, redis)
@@ -226,6 +227,30 @@ async def close_expired_option_positions(
             closed += 1
 
     return closed
+
+
+async def _weekly_mirrors(db) -> int:
+    """Friday: each user with journal trades gets what charges took and how
+    they compare with the Nifty (backend/journal/mirror.py)."""
+    from backend.journal import mirror
+    from backend.journal.roundtrips import build_round_trips
+    from backend.journal.store import JournalStore
+    from backend.portfolio.service import _nifty
+    from backend.suggestions.notify import notify
+
+    sent = 0
+    nifty = await _nifty()
+    for user_id in await db["journal_trades"].distinct("user_id"):
+        try:
+            trades = await JournalStore(db).list_trades(user_id)
+            costs = mirror.costs(trades, build_round_trips(trades), (await PrefsStore(db).get(user_id))["account_size"])
+            first = min(t["traded_at"] for t in trades)
+            bench = mirror.benchmark(costs["net_pnl"], (await PrefsStore(db).get(user_id))["account_size"],
+                                     first.date(), max(d for d, _ in nifty), nifty) if nifty else None
+            sent += bool(await notify(db, user_id, mirror.text(costs, bench)))
+        except Exception as exc:
+            logger.warning("weekly mirror failed for %s: %s", user_id, exc)
+    return sent
 
 
 async def _refresh_analyst_verdicts(redis) -> int:

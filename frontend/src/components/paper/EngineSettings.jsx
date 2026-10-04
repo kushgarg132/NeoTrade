@@ -137,8 +137,8 @@ const EngineSettings = () => {
       >
         {switchRow(
           'auto_paper_intraday',
-          'Paper-trade intraday every session',
-          'Starts an intraday paper run at 09:15 IST each weekday and stops it at 15:30, with positions squared off at 15:15. It restarts itself after an interruption; stop it on the Engine tab and it stays off for the rest of that day.'
+          'Paper-trade intraday every session (experimental)',
+          'Experimental: the intraday strategies lose money after charges in every backtest so far, so this is for watching them, not for results. Starts an intraday paper run at 09:15 IST each weekday and stops it at 15:30, with positions squared off at 15:15. It restarts itself after an interruption; stop it on the Engine tab and it stays off for the rest of that day.'
         )}
         {switchRow(
           'auto_paper_longterm',

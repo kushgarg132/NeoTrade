@@ -90,6 +90,50 @@ const NoteEditor = ({ trip, onSaved }) => {
   );
 };
 
+const pct = (x) => `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(1)}%`;
+
+/** What charges took, how often they trade, and the Nifty over the same days.
+    Charges are estimated: broker trade books do not include them. */
+const MirrorSheet = ({ mirror }) => {
+  const c = mirror?.costs;
+  if (!c || !c.fills) return null;
+  const b = mirror.benchmark;
+  return (
+    <Sheet title="Charges & benchmark" meta="All time, estimated charges">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="field-label mb-1">P&amp;L before charges</p>
+          <Money value={c.gross_pnl} />
+        </div>
+        <div>
+          <p className="field-label mb-1">After ~{formatCurrency(c.charges)} charges</p>
+          <Money value={c.net_pnl} />
+        </div>
+        <div>
+          <p className="field-label mb-1">Trades per year</p>
+          <span className={`figure-md text-base ${c.heavy_trader ? 'text-down' : ''}`}>
+            {formatQuantity(c.trades_per_year)}
+          </span>
+        </div>
+        {b && (
+          <div>
+            <p className="field-label mb-1">You vs Nifty</p>
+            <span className="figure-md text-base">
+              {pct(b.your_return)} <span className="text-[var(--ink-faint)]">vs</span> {pct(b.nifty_return)}
+            </span>
+          </div>
+        )}
+      </div>
+      <p className="doc-meta normal-case mt-3">
+        {c.heavy_trader
+          ? `SEBI found 80% of intraday traders with more than 500 trades a year lost money. You're on pace for ${formatQuantity(c.trades_per_year)}.`
+          : 'Fewer trades means fewer charges: SEBI found 80% of intraday traders with more than 500 trades a year lost money.'}
+        {b && ` Return on your account size since ${b.start}, against simply holding the Nifty.`}
+      </p>
+    </Sheet>
+  );
+};
+
 const Journal = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -326,6 +370,8 @@ const Journal = () => {
           )}
         </Sheet>
         )}
+
+        {!empty && tab === 'calendar' && <MirrorSheet mirror={data?.mirror} />}
 
         {!empty && tab === 'patterns' && (
           <Sheet title="Your patterns" meta="Your own trades, gross">

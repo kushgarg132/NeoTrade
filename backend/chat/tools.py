@@ -104,7 +104,11 @@ def read_tools(db, redis, user_id: str) -> list:
         })
 
     async def get_journal(period: Literal["today", "week", "month", "all"] = "month", symbol: Optional[str] = None) -> str:
-        trips = build_round_trips(await JournalStore(db).list_trades(user_id))
+        from backend.journal import mirror
+
+        trades = await JournalStore(db).list_trades(user_id)
+        trips = build_round_trips(trades)
+        all_time = mirror.costs(trades, trips, (await PrefsStore(db).get(user_id))["account_size"])
         today = datetime.now(timezone.utc).astimezone(IST).date()
         since = {"today": today, "week": today - timedelta(days=7), "month": today.replace(day=1)}.get(period)
         if since:
@@ -118,6 +122,8 @@ def read_tools(db, redis, user_id: str) -> list:
             "wins": sum(t["pnl"] > 0 for t in closed), "by_day": daily_pnl(trips)[-31:],
             "round_trips": [{k: t.get(k) for k in keep} for t in trips[-MAX_TRIPS:]],
             "patterns": build_insights(trips)[:5],
+            # All-time, estimated: charges taken, P&L after them, trade rate vs SEBI's 500/yr line.
+            "costs_all_time": all_time,
         })
 
     async def get_paper() -> str:
@@ -201,7 +207,8 @@ def read_tools(db, redis, user_id: str) -> list:
             "The user's long-term holdings from their brokers: totals, each holding's value, gain, weight, rule "
             "verdict (SELL/HOLD/ADD) and reasons, the AI action plan, sector mix. Pass symbol for one holding in full.")),
         StructuredTool.from_function(coroutine=get_journal, name="get_journal", description=(
-            "The user's real broker trades as round trips: gross P&L by day, recent trips, and habit patterns. "
+            "The user's real broker trades as round trips: gross P&L by day, recent trips, habit patterns, and "
+            "all-time estimated charges, P&L after charges and yearly trade rate. "
             "period is today, week, month or all; symbol narrows to one scrip.")),
         StructuredTool.from_function(coroutine=get_paper, name="get_paper", description=(
             "The paper-trading engine: net scorecard per strategy, open paper positions, running engine runs, "
