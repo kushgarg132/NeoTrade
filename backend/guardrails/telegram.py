@@ -36,6 +36,10 @@ async def bot_username(token: Optional[str] = None) -> str:
     return resp.json()["result"]["username"]
 
 
+def start_key(code: str) -> str:
+    return f"telegram:start:{code}"
+
+
 async def find_chat(code: str, token: Optional[str] = None) -> Optional[int]:
     # ponytail: scans the last 100 pending updates; a busy bot needs a webhook instead
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -64,13 +68,16 @@ async def updates(offset: Optional[int] = None, token: Optional[str] = None) -> 
     return resp.json().get("result") or []
 
 
-async def send(chat_id: int, text: str, token: Optional[str] = None) -> bool:
+async def send(chat_id: int, text: str, token: Optional[str] = None, reply_markup: Optional[dict] = None) -> bool:
     """Best effort: a failed alert is logged, never raised into the monitor."""
     if not (token or configured()):
         return False
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(_url("sendMessage", token), json={"chat_id": chat_id, "text": text})
+            body = {"chat_id": chat_id, "text": text}
+            if reply_markup:
+                body["reply_markup"] = reply_markup
+            resp = await client.post(_url("sendMessage", token), json=body)
             resp.raise_for_status()
         return True
     except Exception as exc:

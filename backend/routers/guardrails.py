@@ -99,7 +99,10 @@ async def telegram_verify(
     code = await db.redis.get(_link_key(user.id))
     if not code:
         raise HTTPException(status_code=410, detail="The link expired. Start again.")
-    chat_id = await telegram.find_chat(code, token)
+    # The AI poller consumes updates of a bot with a linked chat, so it
+    # stashes Start codes; otherwise read the bot's pending updates.
+    stashed = await db.redis.get(telegram.start_key(code))
+    chat_id = int(stashed) if stashed else await telegram.find_chat(code, token)
     if chat_id is None:
         raise HTTPException(status_code=404, detail="No Start message from you yet. Tap Start in Telegram, then check again.")
     await store.set_telegram_chat(user.id, chat_id)

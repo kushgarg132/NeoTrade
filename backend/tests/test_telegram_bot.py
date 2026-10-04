@@ -19,8 +19,10 @@ async def test_poll_only_answers_a_chat_linked_to_that_bot(monkeypatch):
 
     assert await telegram_bot.poll_once(db, redis) == 1
     reply.assert_awaited_once_with(db, redis, "alice", 42, "secret-token", "How am I doing?")
-    # One per-bot worker lock plus one persisted offset for each update.
-    assert redis.set.await_count == 3
+    # One per-bot worker lock plus one offset for the whole batch, committed
+    # before any slow AI reply so another worker cannot re-fetch it.
+    assert redis.set.await_count == 2
+    redis.set.assert_any_await(telegram_bot._offset_key("secret-token"), "7")
     assert "secret-token" not in telegram_bot._offset_key("secret-token")
 
 
@@ -30,6 +32,7 @@ async def test_telegram_reply_sends_ai_text_and_confirmable_cards(monkeypatch):
     async def stream(*_args):
         yield {"type": "content", "data": "Your paper engine is stopped."}
         yield {"type": "action", "data": {"id": "a1", "summary": "Start an intraday paper run"}}
+        yield {"type": "suggestions", "data": ["How did it do today?"]}
 
     monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
     send = AsyncMock(return_value=True)
@@ -39,7 +42,8 @@ async def test_telegram_reply_sends_ai_text_and_confirmable_cards(monkeypatch):
 
     await telegram_bot._reply(db, None, "alice", 42, "token", "Start the paper engine")
 
-    send.assert_awaited_once_with(42, "Your paper engine is stopped.", "token")
+    send.assert_awaited_once_with(42, "Your paper engine is stopped.", "token", {
+        "keyboard": [[{"text": "How did it do today?"}]], "one_time_keyboard": True, "resize_keyboard": True})
     buttons.assert_awaited_once_with(42, "Start an intraday paper run", [
         [{"text": "Confirm", "callback_data": "nt:confirm:a1"},
          {"text": "Cancel", "callback_data": "nt:cancel:a1"}],
@@ -60,3 +64,39 @@ async def test_callback_uses_existing_confirm_path(monkeypatch):
     assert confirmed.await_args.args[3:5] == ("alice", "a1")
     acknowledge.assert_awaited_once_with("cb1", "Paper BUY INFY filled.", "token")
     send.assert_awaited_once_with(42, "Paper BUY INFY filled.", "token")
+
+
+async def test_start_code_is_stashed_for_settings_link_flow(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = AsyncMock()
+    redis.get.return_value = None
+    monkeypatch.setattr(telegram_bot.GuardrailStore, "telegram_routes", AsyncMock(return_value=[("tok", {42: "alice"})]))
+    monkeypatch.setattr(telegram_bot.telegram, "updates", AsyncMock(return_value=[
+        {"update_id": 1, "message": {"chat": {"id": 77}, "text": "/start abc123"}},
+    ]))
+
+    assert await telegram_bot.poll_once(db, redis) == 0
+    redis.set.assert_any_await(telegram_bot.telegram.start_key("abc123"), "77", ex=telegram_bot.START_SECONDS)
+
+
+async def test_reply_passes_and_saves_conversation_history(monkeypatch):
+    import json
+
+    db = AsyncMongoMockClient()["test_db"]
+    redis = AsyncMock()
+    earlier = [{"role": "user", "content": "Any proposals?"}, {"role": "assistant", "content": "One: buy INFY."}]
+    redis.get.return_value = json.dumps(earlier)
+    seen = {}
+
+    async def stream(_db, _redis, _user, _text, history, _context):
+        seen["history"] = history
+        yield {"type": "content", "data": "Prepared."}
+
+    monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
+    monkeypatch.setattr(telegram_bot.telegram, "send", AsyncMock(return_value=True))
+
+    await telegram_bot._reply(db, redis, "alice", 42, "tok", "Yes, approve it")
+
+    assert seen == {"history": earlier}
+    saved = json.loads(redis.set.await_args.args[1])
+    assert saved[-2:] == [{"role": "user", "content": "Yes, approve it"}, {"role": "assistant", "content": "Prepared."}]
