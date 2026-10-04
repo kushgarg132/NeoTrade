@@ -107,6 +107,24 @@ async def build_snapshot(db, redis, user_id: str, now: Optional[datetime] = None
     return snapshot
 
 
+PROFILE_KEYS = ("experience", "risk_appetite", "styles", "horizon", "goals", "favour", "avoid", "constraints",
+                "about_me", "answer_style")
+
+
+def format_profile(name: str, profile: dict) -> str:
+    """The trader's profile as compact lines: set fields only, name first."""
+    parts = [f"name={profile.get('display_name') or name}"]
+    for key in PROFILE_KEYS:
+        value = profile.get(key)
+        if value:
+            parts.append(f"{key}=" + (", ".join(value) if isinstance(value, list) else str(value)))
+    lines = ["; ".join(parts)]
+    if profile.get("memories"):
+        lines.append("memories:")
+        lines += [f"- {m['text']} ({m['created_at']:%Y-%m-%d})" for m in profile["memories"]]
+    return "\n".join(lines)
+
+
 def format_snapshot(snapshot: dict) -> str:
     """One line per section, compact enough to ride with every message."""
     lines = []

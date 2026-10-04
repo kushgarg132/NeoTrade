@@ -12,9 +12,11 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 
 from backend.chat.actions import CARD_PREFIX, action_tools
-from backend.chat.context import build_snapshot, format_snapshot
+from backend.auth.store import UserStore
+from backend.chat.context import build_snapshot, format_profile, format_snapshot
 from backend.chat.tools import read_tools
 from backend.llm import llm_service
+from backend.profile.store import ProfileStore
 from backend.prompts import render
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ TOOL_LABELS = {
     "get_portfolio": "Reading your portfolio", "get_journal": "Reading your journal",
     "get_paper": "Checking the paper engine", "get_decisions": "Reading your proposals",
     "get_limits": "Reading your limits", "explain_index": "Explaining the index",
-    "query_my_data": "Looking through your data",
+    "query_my_data": "Looking through your data", "propose_memory": "Preparing a memory",
     "propose_approve": "Preparing an approval", "propose_decline": "Preparing a decline",
     "propose_paper_run": "Preparing a paper-run change", "propose_setting": "Preparing a settings change",
     "propose_order": "Preparing an order",
@@ -59,6 +61,16 @@ async def suggest_followups(question: str, answer: str) -> list[str]:
         return []
 
 
+async def _profile(db, user_id: str) -> str:
+    """Never fails the answer: an unreadable profile is reported as such."""
+    try:
+        user = await UserStore(db).get_by_id(user_id)
+        return format_profile(user.name if user else "the trader", await ProfileStore(db).get(user_id))
+    except Exception as exc:
+        logger.warning("chat profile unavailable for %s: %s", user_id, exc)
+        return "profile: unavailable"
+
+
 async def stream_chat(db, redis, user_id: str, message: str, history: list, context: dict) -> AsyncIterator[dict]:
     llm = await llm_service.get_llm(tier="deep")
     if not llm:
@@ -66,7 +78,8 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
         return
 
     snapshot = await build_snapshot(db, redis, user_id)
-    system, page_note = render("chat", snapshot=format_snapshot(snapshot), page=(context or {}).get("page") or "unknown")
+    system, page_note = render("chat", snapshot=format_snapshot(snapshot), profile=await _profile(db, user_id),
+                               page=(context or {}).get("page") or "unknown")
     if (context or {}).get("symbol"):
         page_note += f" (looking at {context['symbol']})"
     messages = [SystemMessage(content=f"{system}\n\n{page_note}")]

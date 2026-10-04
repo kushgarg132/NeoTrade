@@ -487,6 +487,14 @@ reasoning and tool steps, Confirm/Cancel buttons, follow-up buttons, `/portfolio
 agent (web and Telegram) read any of the user's own collections on an allowlist, never secrets or
 another user's rows. See ARCHITECTURE.md.
 
+### 2026-10-04 — profile and AI personalisation
+
+`/profile` shows the Google identity and stores a trading profile, preferences, custom
+instructions and up to 50 memories in `user_profiles`. Every chat message (web and Telegram)
+carries it, so the assistant addresses the trader by name and fits answers to them; it offers
+`Remember: …` cards for lasting facts, saved only on Confirm. Spec and plan in
+`docs/superpowers/`. Not done: profile in portfolio review/research prompts.
+
 ---
 
 ## Phase 6 — Revive the long-term agent engine — **done 2026-09-11**

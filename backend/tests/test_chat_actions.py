@@ -177,3 +177,21 @@ async def test_confirm_route_maps_refusal_to_409(env, monkeypatch):
     app.dependency_overrides[chat_actions.get_credential_store] = lambda: None
     resp = TestClient(app).post("/api/v1/chat/actions/missing/confirm", json={})
     assert resp.status_code == 409
+
+
+async def test_memory_card_saves_only_on_confirm(env):
+    from backend.profile.store import ProfileStore
+
+    db = env["db"]
+    card = await _propose(db, "propose_memory", {"text": "Saving for a house"})
+    assert card["kind"] == "memory" and card["summary"] == "Remember: Saving for a house"
+    assert (await ProfileStore(db).get("alice"))["memories"] == []
+    for bad in ("   ", "x" * 201):
+        out = await _tools(db)["propose_memory"].ainvoke({"text": bad})
+        assert not out.startswith("ACTION_CARD:")
+    result = await confirm(db, None, None, "alice", card["id"])
+    assert result["status"] == "CONFIRMED"
+    memories = (await ProfileStore(db).get("alice"))["memories"]
+    assert [(m["text"], m["source"]) for m in memories] == [("Saving for a house", "chat")]
+    again = await _tools(db)["propose_memory"].ainvoke({"text": "saving for a house"})
+    assert "already" in again

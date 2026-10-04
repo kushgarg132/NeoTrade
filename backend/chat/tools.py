@@ -48,6 +48,7 @@ USER_DATA = {
     "guardrail_events": "guardrail breaches by day",
     "user_prefs": "all of the user's settings and switches",
     "watchlist": "the user's watchlist symbols",
+    "user_profiles": "the user's profile: trading profile, preferences, AI instructions and memories",
 }
 SHARED_DATA = {
     "stock_health": "per-symbol health scores the portfolio rules use",

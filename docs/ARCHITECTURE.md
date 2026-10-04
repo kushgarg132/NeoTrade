@@ -179,7 +179,11 @@ per-message day snapshot (`context.py`) in `prompts/chat.md`, read tools bound t
 `get_*` tools, `query_my_data` reads any collection on its allowlist (`USER_DATA`, always ANDed
 with the caller's `user_id`; `SHARED_DATA` for market reference data); secrets
 (`broker_credentials`, `alert_channels`, `refresh_tokens`, `users`, `app_settings`) are off the
-list, and `$where`/`$function` are refused. The same agent answers the user's linked Telegram
+list, and `$where`/`$function` are refused. Each message also carries the trader's profile
+(`format_profile`: Google name or `display_name`, trading profile, preferences, AI instructions,
+memories) from `user_profiles` (`backend/profile/`, edited at `/profile`); the prompt treats it as
+context that never overrides the confirm rules, and `propose_memory` cards add memories only on
+Confirm. The same agent answers the user's linked Telegram
 chat (`backend/guardrails/telegram_bot.py`): one worker per bot long-polls `getUpdates` under a
 Redis lock, streams the reply with `sendMessageDraft` (reasoning and tool steps live, kept
 collapsed in the final message), sends cards with Confirm/Cancel buttons that go through the
