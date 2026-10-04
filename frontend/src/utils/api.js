@@ -175,6 +175,7 @@ export const endpoints = {
     link: '/guardrails/telegram/link',
     verify: '/guardrails/telegram/verify',
     telegram: '/guardrails/telegram',
+    telegramBot: '/guardrails/telegram/bot',
   },
   portfolio: {
     get: '/portfolio',
