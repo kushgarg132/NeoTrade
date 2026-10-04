@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import Layout from '../components/Layout';
+import SectionTabs from '../components/layout/SectionTabs';
+import { RESEARCH_TABS } from '../components/layout/sections';
 import { Sheet, Field, Empty, Ruling } from '../components/doc/Doc';
 import { Button } from '../components/common/Button';
 import api, { endpoints } from '../utils/api';
@@ -85,6 +87,7 @@ const OptionChain = () => {
   return (
     <Layout>
       <div className="space-y-4">
+        <SectionTabs tabs={RESEARCH_TABS} label="Research" />
         <Sheet
           title="Option chain"
           meta="Live · Upstox"

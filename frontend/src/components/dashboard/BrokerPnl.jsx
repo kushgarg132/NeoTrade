@@ -43,7 +43,7 @@ const BrokerPnl = ({ journal, loading, error }) => {
           title={`${names} connected`}
           detail="No trades imported yet. Each trading day's trades import after the market closes. For Upstox, Import Upstox history in the journal brings in the past year."
           action={
-            <Link to="/journal" className="field-label text-[var(--stamp)] hover:underline">
+            <Link to="/mine/trades" className="field-label text-[var(--stamp)] hover:underline">
               Open the journal
             </Link>
           }
@@ -62,7 +62,7 @@ const BrokerPnl = ({ journal, loading, error }) => {
             'Connect your broker in Settings and your real trades import into the journal on their own. The figures here come from there.'
           }
           action={
-            <Link to={error ? '/journal' : '/settings'} className="field-label text-[var(--stamp)] hover:underline">
+            <Link to={error ? '/mine/trades' : '/settings'} className="field-label text-[var(--stamp)] hover:underline">
               {error ? 'Open the journal' : 'Connect a broker'}
             </Link>
           }

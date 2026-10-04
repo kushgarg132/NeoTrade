@@ -67,7 +67,7 @@ const Scorecard = ({ mode }) => {
           title="No closed paper trades yet"
           detail="Turn on the daily auto-run and the engine paper-trades every session by itself. Each closed trade lands here, net of charges."
           action={
-            <Link to="/paper/settings" className="field-label text-[var(--stamp)] hover:underline">
+            <Link to="/ai/practice/settings" className="field-label text-[var(--stamp)] hover:underline">
               Turn on auto-run
             </Link>
           }

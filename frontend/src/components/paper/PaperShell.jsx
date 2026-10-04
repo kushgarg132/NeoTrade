@@ -1,5 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import SectionTabs from '../layout/SectionTabs';
+import { AI_TABS } from '../layout/sections';
 import { cn } from '../../utils/cn';
 import { usePendingCount } from '../../context/pendingContext';
 
@@ -14,11 +16,11 @@ import { usePendingCount } from '../../context/pendingContext';
  */
 
 const PAPER_TABS = [
-  { path: '/paper', label: 'Overview', end: true },
-  { path: '/paper/decisions', label: 'Decisions', short: 'Decide', counter: true },
-  { path: '/paper/holdings', label: 'Holdings', short: 'Book' },
-  { path: '/paper/engine', label: 'Engine' },
-  { path: '/paper/settings', label: 'Settings', short: 'Setup' },
+  { path: '/ai/practice', label: 'Overview', end: true },
+  { path: '/ai/practice/decisions', label: 'Decisions', short: 'Decide', counter: true },
+  { path: '/ai/practice/holdings', label: 'Holdings', short: 'Book' },
+  { path: '/ai/practice/engine', label: 'Engine' },
+  { path: '/ai/practice/settings', label: 'Settings', short: 'Setup' },
 ];
 
 const PaperShell = ({ children }) => {
@@ -26,6 +28,7 @@ const PaperShell = ({ children }) => {
 
   return (
     <div className="private space-y-3 sm:space-y-4">
+      <SectionTabs tabs={AI_TABS} label="AI account" />
       <div className="border-2 border-dashed border-[var(--stamp)] bg-[var(--stamp-soft)]">
         <div className="flex items-baseline justify-between gap-3 px-3 py-1.5 sm:px-4 sm:pt-2.5 sm:pb-2">
           <p className="font-[family-name:var(--font-narrow)] text-xs font-bold uppercase tracking-[0.16em] text-[var(--stamp)]">

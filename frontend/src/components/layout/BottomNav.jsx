@@ -1,26 +1,30 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '../../utils/cn';
-import { SECTIONS } from './sections';
+import { SECTIONS, sectionActive } from './sections';
 
 /**
  * The phone's primary navigation. Thumb-reachable, five destinations, safe-area
  * aware — the app is used one-handed during the session, and a hamburger that
  * hides the decisions queue behind a tap is the wrong affordance for that.
  */
-const BottomNav = ({ pendingCount = 0 }) => (
+const BottomNav = ({ pendingCount = 0 }) => {
+  const { pathname } = useLocation();
+  return (
   <nav
     className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-[var(--rule-strong)] bg-[var(--paper)]"
     style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     aria-label="Sections"
   >
     <ul className="grid grid-cols-5">
-      {SECTIONS.filter((item) => item.primary).map((item) => (
+      {SECTIONS.filter((item) => item.primary).map((item) => {
+        const isActive = sectionActive(item, pathname);
+        return (
         <li key={item.path}>
           <NavLink
             to={item.path}
             end={item.path === '/'}
-            className={({ isActive }) =>
+            className={() =>
               cn(
                 'relative flex flex-col items-center justify-center gap-0.5 py-1.5 min-h-12 transition-colors',
                 'font-[family-name:var(--font-narrow)] text-[0.625rem] font-semibold uppercase tracking-[0.1em]',
@@ -28,7 +32,7 @@ const BottomNav = ({ pendingCount = 0 }) => (
               )
             }
           >
-            {({ isActive }) => (
+            {() => (
               <>
                 {isActive && (
                   <span
@@ -49,9 +53,11 @@ const BottomNav = ({ pendingCount = 0 }) => (
             )}
           </NavLink>
         </li>
-      ))}
+        );
+      })}
     </ul>
   </nav>
-);
+  );
+};
 
 export default BottomNav;

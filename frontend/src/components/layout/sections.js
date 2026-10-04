@@ -1,30 +1,39 @@
-import {
-  FileText,
-  Stamp,
-  ScanLine,
-  Layers,
-  BookMarked,
-  NotebookPen,
-  PieChart,
-  Network,
-  Settings,
-} from 'lucide-react';
+import { Sun, Wallet, Bot, Search, Settings } from 'lucide-react';
 
 /**
- * The sections of the note, shared by the desktop index and the phone's bottom
- * bar. `primary` marks the five that are thumb-reachable on a phone; the rest are
- * listed at the top of Settings, which the phone labels More.
+ * The five sections, shared by the desktop index and the phone's bottom bar,
+ * laid out around the trader's day: Today (what needs me), Mine (my own
+ * account), AI (the AI account and practice), Research, More (setup).
+ * `match` lists the path prefixes a section owns, so its tab stays lit on
+ * every page inside it.
  */
 export const SECTIONS = [
-  { icon: FileText, label: 'Statement', short: 'Note', path: '/', primary: true },
-  { icon: NotebookPen, label: 'Journal', path: '/journal', primary: true },
-  { icon: PieChart, label: 'Portfolio', path: '/portfolio', primary: true },
-  { icon: BookMarked, label: 'Watchlist', short: 'Watch', path: '/watchlist' },
-  { icon: ScanLine, label: 'Scanner', path: '/scanner' },
-  { icon: Layers, label: 'Option chain', path: '/options' },
-  // Everything the engine does with practice money lives under one section,
-  // apart from the real-money pages above it.
-  { icon: Stamp, label: 'Paper trading', short: 'Paper', path: '/paper', primary: true, counter: true, divider: true },
-  { icon: Network, label: 'Architecture', path: '/system' },
-  { icon: Settings, label: 'Settings', short: 'More', path: '/settings', primary: true },
+  { icon: Sun, label: 'Today', path: '/', match: ['/'], exact: true, primary: true },
+  { icon: Wallet, label: 'Mine', path: '/mine/holdings', match: ['/mine'], primary: true },
+  { icon: Bot, label: 'AI', path: '/ai', match: ['/ai'], primary: true, counter: true },
+  { icon: Search, label: 'Research', path: '/research', match: ['/research'], primary: true },
+  { icon: Settings, label: 'More', path: '/settings', match: ['/settings', '/profile'], primary: true },
+];
+
+export const sectionActive = (item, pathname) =>
+  item.exact ? pathname === '/' : item.match.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+
+export const MINE_TABS = [
+  { to: '/mine/holdings', label: 'Holdings' },
+  { to: '/mine/trades', label: 'Trades' },
+  { to: '/mine/habits', label: 'Habits' },
+];
+
+export const AI_TABS = [
+  { to: '/ai', label: 'Overview', end: true },
+  { to: '/ai/activity', label: 'Activity' },
+  { to: '/ai/practice', label: 'Practice' },
+  { to: '/ai/limits', label: 'Limits' },
+];
+
+export const RESEARCH_TABS = [
+  { to: '/research', label: 'Search', end: true },
+  { to: '/research/watchlist', label: 'Watchlist' },
+  { to: '/research/scanner', label: 'Scanner' },
+  { to: '/research/options', label: 'Options' },
 ];

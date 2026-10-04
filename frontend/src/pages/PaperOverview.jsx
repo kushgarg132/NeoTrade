@@ -84,7 +84,7 @@ const PaperOverview = () => {
       <PaperShell>
         {pending.length > 0 && (
           <Link
-            to="/paper/decisions"
+            to="/ai/practice/decisions"
             className="block sheet px-4 py-3.5 border-[var(--stamp)] hover:bg-[var(--stamp-soft)] transition-colors"
           >
             <div className="flex items-center justify-between gap-4">

@@ -35,7 +35,7 @@ const PortfolioGlance = ({ snapshot, loading }) => {
   }
   if (!snapshot) {
     return (
-      <Link to="/portfolio" className="sheet flex items-center justify-between gap-3 px-3 py-3 sm:px-4 hover:bg-[var(--paper-sunk)]">
+      <Link to="/mine/holdings" className="sheet flex items-center justify-between gap-3 px-3 py-3 sm:px-4 hover:bg-[var(--paper-sunk)]">
         <span>
           <span className="field-label text-[var(--ink)] block">Portfolio</span>
           <span className="text-sm text-[var(--ink-soft)]">Read your holdings from your broker</span>
@@ -47,7 +47,7 @@ const PortfolioGlance = ({ snapshot, loading }) => {
   const sell = planNames(snapshot.plan, 'sell');
   const add = planNames(snapshot.plan, 'add');
   return (
-    <Link to="/portfolio" className="private sheet block hover:bg-[var(--paper-sunk)] transition-colors" aria-label="Open the portfolio">
+    <Link to="/mine/holdings" className="private sheet block hover:bg-[var(--paper-sunk)] transition-colors" aria-label="Open the portfolio">
       <div className="flex items-center justify-between gap-3 px-3 py-2 sm:px-4 border-b border-[var(--rule)] bg-[var(--paper-sunk)]">
         <span className="field-label text-[var(--ink)]">Portfolio</span>
         <ArrowRight className="w-4 h-4 text-[var(--stamp)]" aria-hidden="true" />

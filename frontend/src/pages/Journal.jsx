@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, RefreshCw, Upload, History } from 'lucide-react';
 import Layout from '../components/Layout';
+import SectionTabs from '../components/layout/SectionTabs';
+import { MINE_TABS } from '../components/layout/sections';
 import GuardrailAlerts from '../components/journal/GuardrailAlerts';
 import MonthGrid from '../components/journal/MonthGrid';
 import LearningSheet from '../components/journal/LearningSheet';
@@ -160,17 +162,18 @@ const AiVsMeSheet = () => {
   );
 };
 
-const Journal = () => {
+const Journal = ({ view = 'trades', lockedAccount = null }) => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [month, setMonth] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [openTrip, setOpenTrip] = useState(null);
-  const [tab, setTab] = useTab(['calendar', 'trades', 'patterns', 'learning']);
+  // Mine → Trades shows the calendar and trades; Mine → Habits the patterns.
+  const [tab, setTab] = useTab(view === 'habits' ? ['patterns', 'learning'] : ['calendar', 'trades']);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const fileInput = useRef(null);
-  const accountState = useAccount();
+  const accountState = useAccount(lockedAccount);
   const { account } = accountState;
   const load = () =>
     api
@@ -300,21 +303,18 @@ const Journal = () => {
   return (
     <Layout>
       <div className="private space-y-3 sm:space-y-4">
-        <AccountSwitch {...accountState} />
+        {lockedAccount ? <SectionTabs tabs={MINE_TABS} label="My account" /> : <AccountSwitch {...accountState} />}
         <GuardrailAlerts />
 
         {data && (
           <Tabs
-            tabs={[
-              { id: 'calendar', label: 'Calendar' },
-              ...(empty
-                ? []
-                : [
-                    { id: 'trades', label: selectedDay ? `Trades · ${selectedDay.slice(5)}` : 'Trades' },
-                    { id: 'patterns', label: 'Patterns' },
-                  ]),
+            tabs={view === 'habits' ? [
+              { id: 'patterns', label: 'Patterns & charges' },
               // The paper engine's own record: there even before any broker trades.
               { id: 'learning', label: 'Engine learning' },
+            ] : [
+              { id: 'calendar', label: 'Calendar' },
+              ...(empty ? [] : [{ id: 'trades', label: selectedDay ? `Trades · ${selectedDay.slice(5)}` : 'Trades' }]),
             ]}
             active={tab}
             onSelect={setTab}
@@ -406,7 +406,7 @@ const Journal = () => {
         </Sheet>
         )}
 
-        {!empty && tab === 'calendar' && <MirrorSheet mirror={data?.mirror} />}
+        {!empty && tab === 'patterns' && <MirrorSheet mirror={data?.mirror} />}
         {!empty && tab === 'calendar' && accountState.hasBoth && <AiVsMeSheet />}
 
         {tab === 'learning' && <LearningSheet />}

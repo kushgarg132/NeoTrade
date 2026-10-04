@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect } from 'react';
-import { Routes, Route, Link, Navigate } from 'react-router-dom';
+import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const PaperOverview = lazy(() => import('./pages/PaperOverview'));
 const PaperSettings = lazy(() => import('./pages/PaperSettings'));
@@ -13,6 +13,7 @@ const MyPortfolio = lazy(() => import('./pages/MyPortfolio'));
 const Trading = lazy(() => import('./pages/Trading'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Profile = lazy(() => import('./pages/Profile'));
+const AiLimits = lazy(() => import('./pages/AiLimits'));
 import Login from './pages/Login';
 const SystemArchitecturePage = lazy(() => import('./pages/SystemArchitecturePage'));
 import RequireAuth from './components/RequireAuth';
@@ -37,6 +38,19 @@ const NotFound = () => (
     </Sheet>
   </Layout>
 );
+
+/** A page that moved: same query string, new path. */
+const Moved = ({ to }) => {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
+};
+
+/** /journal?tab=patterns|learning now lives under Mine → Habits. */
+const JournalMoved = () => {
+  const { search } = useLocation();
+  const tab = new URLSearchParams(search).get('tab');
+  return <Navigate to={`${['patterns', 'learning'].includes(tab) ? '/mine/habits' : '/mine/trades'}${search}`} replace />;
+};
 
 const App = () => {
   const { user } = useAuth();
@@ -67,23 +81,43 @@ const App = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* Today */}
       <Route path="/" element={gated(<Dashboard />)} />
-      <Route path="/paper" element={gated(<PaperOverview />)} />
-      <Route path="/paper/decisions" element={gated(<Suggestions />)} />
-      <Route path="/paper/holdings" element={gated(<Portfolio />)} />
-      <Route path="/paper/engine" element={gated(<Trading />)} />
-      <Route path="/paper/settings" element={gated(<PaperSettings />)} />
-      {/* The engine's pages moved under /paper; old links and bookmarks follow. */}
-      <Route path="/suggestions" element={<Navigate to="/paper/decisions" replace />} />
-      <Route path="/portfolio" element={gated(<MyPortfolio />)} />
-      <Route path="/trading" element={<Navigate to="/paper/engine" replace />} />
-      <Route path="/scanner" element={gated(<ScannerPage />)} />
-      <Route path="/options" element={gated(<OptionChain />)} />
-      <Route path="/watchlist" element={gated(<Watchlist />)} />
-      <Route path="/journal" element={gated(<Journal />)} />
+      {/* Mine: the user's own account */}
+      <Route path="/mine" element={<Navigate to="/mine/holdings" replace />} />
+      <Route path="/mine/holdings" element={gated(<MyPortfolio lockedAccount="mine" />)} />
+      <Route path="/mine/trades" element={gated(<Journal view="trades" lockedAccount="mine" />)} />
+      <Route path="/mine/habits" element={gated(<Journal view="habits" lockedAccount="mine" />)} />
+      {/* AI: the AI account, its autopilot, and practice (paper) */}
+      <Route path="/ai" element={<Navigate to="/ai/practice" replace />} />
+      <Route path="/ai/limits" element={gated(<AiLimits />)} />
+      <Route path="/ai/practice" element={gated(<PaperOverview />)} />
+      <Route path="/ai/practice/decisions" element={gated(<Suggestions />)} />
+      <Route path="/ai/practice/holdings" element={gated(<Portfolio />)} />
+      <Route path="/ai/practice/engine" element={gated(<Trading />)} />
+      <Route path="/ai/practice/settings" element={gated(<PaperSettings />)} />
+      {/* Research */}
+      <Route path="/research" element={gated(<Dashboard />)} />
+      <Route path="/research/watchlist" element={gated(<Watchlist />)} />
+      <Route path="/research/scanner" element={gated(<ScannerPage />)} />
+      <Route path="/research/options" element={gated(<OptionChain />)} />
+      {/* More */}
       <Route path="/settings" element={gated(<Settings />)} />
       <Route path="/profile" element={gated(<Profile />)} />
       <Route path="/system" element={gated(<SystemArchitecturePage />)} />
+      {/* Old links and bookmarks follow the move, query string included. */}
+      <Route path="/portfolio" element={<Moved to="/mine/holdings" />} />
+      <Route path="/journal" element={<JournalMoved />} />
+      <Route path="/watchlist" element={<Moved to="/research/watchlist" />} />
+      <Route path="/scanner" element={<Moved to="/research/scanner" />} />
+      <Route path="/options" element={<Moved to="/research/options" />} />
+      <Route path="/paper" element={<Moved to="/ai/practice" />} />
+      <Route path="/paper/decisions" element={<Moved to="/ai/practice/decisions" />} />
+      <Route path="/paper/holdings" element={<Moved to="/ai/practice/holdings" />} />
+      <Route path="/paper/engine" element={<Moved to="/ai/practice/engine" />} />
+      <Route path="/paper/settings" element={<Moved to="/ai/practice/settings" />} />
+      <Route path="/suggestions" element={<Moved to="/ai/practice/decisions" />} />
+      <Route path="/trading" element={<Moved to="/ai/practice/engine" />} />
       <Route path="*" element={gated(<NotFound />)} />
     </Routes>
   );

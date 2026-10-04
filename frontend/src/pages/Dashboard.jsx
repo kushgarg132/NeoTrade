@@ -11,6 +11,8 @@ import IndexCard from '../components/dashboard/IndexCard';
 import IndexAnalysis from '../components/dashboard/IndexAnalysis';
 import { bareSymbol } from '../utils/formatters';
 import Market from '../components/dashboard/Market';
+import SectionTabs from '../components/layout/SectionTabs';
+import { RESEARCH_TABS } from '../components/layout/sections';
 import AnalysisCard from '../components/AnalysisCard';
 import { Sheet, Empty, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
@@ -178,6 +180,7 @@ const Dashboard = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4">
+        {location.pathname.startsWith('/research') && <SectionTabs tabs={RESEARCH_TABS} label="Research" />}
         {!quick && !quickLoading && !indexTicker && (
           <>
             <GuardrailAlerts />

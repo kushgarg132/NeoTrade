@@ -21,9 +21,9 @@ const OPENING = {
 
 /** Questions worth one tap, by the page the user is on. */
 const SUGGESTED = [
-  ['/portfolio', ['What should I trim?', 'Explain my biggest risk', 'What does the plan say to add?']],
-  ['/journal', ['How did I do this month?', "What's my costliest habit?"]],
-  ['/paper', ['Is the engine running?', 'Which proposal is strongest?', 'How far is any strategy from going live?']],
+  ['/mine/holdings', ['What should I trim?', 'Explain my biggest risk', 'What does the plan say to add?']],
+  ['/mine', ['How did I do this month?', "What's my costliest habit?"]],
+  ['/ai', ['Is the engine running?', 'Which proposal is strongest?', 'How far is any strategy from going live?']],
   ['/settings', ['What are my limits?', 'Did any guardrail trip today?']],
   ['/profile', ['What do you remember about me?', 'Does my portfolio fit my risk appetite?']],
   ['/', ['How am I doing today?', 'Anything waiting for me?', 'Why did NIFTY move today?']],

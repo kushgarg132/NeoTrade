@@ -13,7 +13,7 @@ const read = () => {
 
 /** Which account a page shows: both, the AI's, or the user's own
     (backend/brokers/roles.py). Remembered per viewer; hidden until roles are set. */
-export const useAccount = () => {
+export const useAccount = (locked = null) => {
   const [account, setAccountState] = useState(read);
   const [roles, setRoles] = useState(null);
   useEffect(() => {
@@ -28,6 +28,10 @@ export const useAccount = () => {
     }
   };
   const hasBoth = roles && Object.values(roles).includes('ai') && Object.values(roles).includes('mine');
+  if (locked) {
+    const hasRole = roles && Object.values(roles).includes(locked);
+    return { account: hasRole ? locked : 'all', setAccount, roles, hasBoth: false, locked, hasRole };
+  }
   return { account: hasBoth ? account : 'all', setAccount, roles, hasBoth };
 };
 

@@ -1,13 +1,14 @@
 import React from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
-import { SECTIONS } from './sections';
+import { SECTIONS, sectionActive } from './sections';
 import { Avatar } from '../common/Avatar';
 
 const Sidebar = ({ pendingCount = 0 }) => {
   const { user, logout } = useAuth();
+  const { pathname } = useLocation();
 
   return (
     <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-56 flex-col border-r border-[var(--rule-strong)] bg-[var(--paper-sunk)] z-30">
@@ -19,14 +20,16 @@ const Sidebar = ({ pendingCount = 0 }) => {
       </div>
 
       <nav className="flex-1 py-2 overflow-y-auto" aria-label="Sections">
-        {SECTIONS.map((item) => (
+        {SECTIONS.map((item) => {
+          const isActive = sectionActive(item, pathname);
+          return (
           <React.Fragment key={item.path}>
           {/* The tear between the real-money pages and the practice book. */}
           {item.divider && <div className="perforated mx-5 my-2" aria-hidden="true" />}
           <NavLink
             to={item.path}
             end={item.path === '/'}
-            className={({ isActive }) =>
+            className={() =>
               cn(
                 'flex items-center gap-3 px-5 py-2.5 border-l-2 transition-colors',
                 'font-[family-name:var(--font-narrow)] text-xs font-semibold uppercase tracking-[0.11em]',
@@ -45,7 +48,8 @@ const Sidebar = ({ pendingCount = 0 }) => {
             )}
           </NavLink>
           </React.Fragment>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="border-t border-[var(--rule-strong)] px-5 py-3 flex items-center gap-3">

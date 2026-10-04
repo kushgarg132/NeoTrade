@@ -4,7 +4,6 @@ import { Search, Loader2, Check, ExternalLink, Unplug, ArrowRight, ChevronDown }
 import Layout from '../components/Layout';
 import { Sheet, Empty, Ruling, Stamp, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
-import { SECTIONS } from '../components/layout/sections';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
@@ -13,7 +12,6 @@ import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
 import { formatQuantity, formatDateTime } from '../utils/formatters';
 import { Avatar } from '../components/common/Avatar';
-import AutopilotSheet from '../components/settings/AutopilotSheet';
 
 /**
  * Standing instructions for the real account: who the broker is, the limits
@@ -1258,27 +1256,6 @@ const BetaSheet = () => {
 };
 
 /** Sections the phone's bottom bar has no room for; "More" lands here. */
-const MoreSections = () => (
-  <nav aria-label="More sections" className="sheet lg:hidden">
-    <ul className="grid grid-cols-2">
-      {SECTIONS.filter((item) => !item.primary).map((item, index) => (
-        <li
-          key={item.path}
-          className={cn(index % 2 === 0 && 'border-r border-[var(--rule)]', index > 1 && 'border-t border-[var(--rule)]')}
-        >
-          <Link
-            to={item.path}
-            className="flex items-center gap-2 px-3 min-h-11 field-label text-[var(--ink)] hover:bg-[var(--paper-sunk)]"
-          >
-            <item.icon className="w-4 h-4 text-[var(--ink-soft)]" strokeWidth={1.75} />
-            {item.label}
-          </Link>
-        </li>
-      ))}
-    </ul>
-  </nav>
-);
-
 /** The way in to Profile from the phone, where Settings is the "More" tab. */
 const ProfileRow = () => {
   const { user } = useAuth();
@@ -1298,14 +1275,22 @@ const ProfileRow = () => {
   );
 };
 
+const LEGACY_TABS = { broker: 'accounts', guardrails: 'safety', portfolio: 'safety' };
+
 const Settings = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const [params, setParams] = useSearchParams();
+  // Old links (?tab=broker, guardrails, portfolio) land on the regrouped tabs.
+  useEffect(() => {
+    const legacy = LEGACY_TABS[params.get('tab')];
+    if (legacy) setParams({ tab: legacy }, { replace: true });
+  }, [params, setParams]);
   const tabs = [
-    { id: 'broker', label: 'Broker' },
-    { id: 'guardrails', label: 'Limits' },
-    { id: 'portfolio', label: 'Review' },
+    { id: 'accounts', label: 'Accounts' },
+    { id: 'safety', label: 'Safety' },
     { id: 'ai', label: 'AI' },
+    { id: 'about', label: 'About' },
     ...(isAdmin ? [{ id: 'beta', label: 'Beta' }] : []),
   ];
   const [tab, setTab] = useTab(tabs.map((t) => t.id));
@@ -1313,28 +1298,37 @@ const Settings = () => {
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
         <ProfileRow />
-        <MoreSections />
-        <Link
-          to="/paper/settings"
-          className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 border-dashed border-[var(--stamp)] hover:bg-[var(--stamp-soft)] transition-colors"
-        >
-          <span className="min-w-0 text-sm text-[var(--ink-soft)]">
-            <span className="field-label text-[var(--stamp)]">Engine settings</span> are in Paper trading
-          </span>
-          <ArrowRight className="w-4 h-4 shrink-0 text-[var(--stamp)]" />
-        </Link>
         <div>
           <Tabs tabs={tabs} active={tab} onSelect={setTab} label="Settings sections" />
-          <div className="pt-3 sm:pt-4">
-            {tab === 'broker' && <BrokerSheet />}
-            {tab === 'guardrails' && <GuardrailsSheet />}
-            {tab === 'portfolio' && <PortfolioSheet isAdmin={isAdmin} />}
+          <div className="pt-3 sm:pt-4 space-y-3 sm:space-y-4">
+            {tab === 'accounts' && <BrokerSheet />}
+            {tab === 'safety' && (
+              <>
+                <GuardrailsSheet />
+                <PortfolioSheet isAdmin={isAdmin} />
+              </>
+            )}
             {tab === 'ai' && (
               <>
                 <ModelSheet />
-                <AutopilotSheet />
+                <Link
+                  to="/ai/limits"
+                  className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors"
+                >
+                  <span className="text-sm"><span className="field-label">Autopilot</span> switch and limits are under AI → Limits</span>
+                  <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
+                </Link>
                 {isAdmin && <UsageSheet />}
               </>
+            )}
+            {tab === 'about' && (
+              <Link
+                to="/system"
+                className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors"
+              >
+                <span className="text-sm"><span className="field-label">How NeoTrade works</span> — a live view of the system</span>
+                <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
+              </Link>
             )}
             {tab === 'beta' && isAdmin && <BetaSheet />}
           </div>

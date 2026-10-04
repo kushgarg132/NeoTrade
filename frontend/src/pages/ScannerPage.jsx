@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ScanLine, Loader2, ArrowRight } from 'lucide-react';
 import Layout from '../components/Layout';
+import SectionTabs from '../components/layout/SectionTabs';
+import { RESEARCH_TABS } from '../components/layout/sections';
 import { Sheet, Statement, Row, Cell, Empty, Ruling, Field, Scrip } from '../components/doc/Doc';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
@@ -38,6 +40,7 @@ const ScannerPage = () => {
   return (
     <Layout>
       <div className="space-y-4">
+        <SectionTabs tabs={RESEARCH_TABS} label="Research" />
         <Sheet
           title="Scanner"
           meta={scanTime ? `Last run ${new Date(scanTime).toLocaleTimeString('en-IN')}` : undefined}

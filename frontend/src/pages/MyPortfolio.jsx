@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, RefreshCw } from 'lucide-react';
 import Layout from '../components/Layout';
+import SectionTabs from '../components/layout/SectionTabs';
+import { MINE_TABS } from '../components/layout/sections';
 import { AccountSwitch, useAccount } from '../components/common/AccountSwitch';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, Scrip, Stamp, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
@@ -123,7 +125,7 @@ const Benchmark = ({ benchmark }) => {
     return (
       <p className="doc-meta normal-case">
         No NIFTY comparison yet: it needs your buy dates.{' '}
-        <Link to="/journal" className="text-[var(--stamp)] underline">
+        <Link to="/mine/trades" className="text-[var(--stamp)] underline">
           Import them in Journal
         </Link>
         .
@@ -308,7 +310,7 @@ const Holdings = (props) => (
   </>
 );
 
-const MyPortfolio = () => {
+const MyPortfolio = ({ lockedAccount = null }) => {
   const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -316,7 +318,7 @@ const MyPortfolio = () => {
   const [open, setOpen] = useState(null);
   const toggle = (key) => setOpen((current) => (current === key ? null : key));
 
-  const accountState = useAccount();
+  const accountState = useAccount(lockedAccount);
   const { account } = accountState;
   const loadSnapshot = () =>
     api
@@ -368,7 +370,7 @@ const MyPortfolio = () => {
   return (
     <Layout>
       <div className="private space-y-3 sm:space-y-4">
-        <AccountSwitch {...accountState} />
+        {lockedAccount ? <SectionTabs tabs={MINE_TABS} label="My account" /> : <AccountSwitch {...accountState} />}
         <Sheet
           title="Portfolio"
           meta={snapshot ? `${formatDateTime(snapshot.at)}${brokers ? ` · ${brokers}` : ''}` : null}
