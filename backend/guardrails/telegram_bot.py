@@ -390,11 +390,13 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
 
 async def _ask(db, redis, user_id: str, chat_id: int, token: Optional[str], callback: dict, index: str) -> None:
     """A tapped suggestion: echo it, then answer it like a typed message."""
+    began = time.monotonic()
     message_id = (callback.get("message") or {}).get("message_id")
     raw = await redis.get(f"{SUGGEST_PREFIX}{user_id}:{message_id}") if redis is not None else None
     questions = json.loads(raw) if raw else []
     question = questions[int(index)] if index.isdigit() and int(index) < len(questions) else None
     await telegram.answer_callback(callback.get("id", ""), "" if question else "That suggestion expired.", token)
+    logger.info("telegram suggestion tap acknowledged in %.2fs", time.monotonic() - began)
     if question:
         await telegram.send_rich(chat_id, f"» _{question}_", token)
         await _reply(db, redis, user_id, chat_id, token, question)
@@ -428,6 +430,11 @@ async def _poll_bot(db, redis, token: Optional[str], chats: dict) -> int:
         except Exception:
             logger.exception("telegram polling failed")
             return 0
+        for update in updates:
+            sent_at = ((update.get("message") or {}).get("date"))
+            logger.info("telegram update %s: %s%s", update.get("update_id"),
+                        "message" if update.get("message") else "callback" if update.get("callback_query") else "other",
+                        f", {time.time() - sent_at:.1f}s after it was sent" if sent_at else "")
         # Commit the whole batch before the slow AI replies: if the lock
         # expires mid-batch, another worker must not fetch it again.
         ids = [u["update_id"] for u in updates if u.get("update_id") is not None]
