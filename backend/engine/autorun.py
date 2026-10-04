@@ -10,7 +10,8 @@ bars, which a live feed cannot supply, so their ideas come from the
 history-backed scan (backend/suggestions/scan.py, daily at 16:00 in
 backend/scheduler.py). During the session this switch instead closes approved
 long-term positions at their stop or target every 15 minutes
-(backend/suggestions/exits.py), and from 09:20 sends the morning digest --
+(backend/suggestions/exits.py), and from 09:20 buys every pending long-term
+stock proposal on paper at its live mark and sends the morning digest --
 re-running the scan first if the 16:00 pass was missed.
 
 Which worker owns a user's run: a Redis key `autorun:{user_id}` holding that
@@ -209,11 +210,47 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
                 db, user_id=user_id, universe=prefs["universe"], account_size=prefs["account_size"],
                 max_exposure=prefs["max_exposure"], source="scheduler", redis=redis, now=now,
             )
-        pending = await SuggestionStore(db).list(user_id, mode="LONGTERM", status="PENDING", limit=100)
+        store = SuggestionStore(db)
+        await store.expire_stale(now=now)
+        pending = await store.list(user_id, mode="LONGTERM", status="PENDING", limit=100)
+        approved = await _auto_approve(db, store, user_id, pending, now)
+        if approved:
+            await notify(db, user_id, proposals_text(approved, f"Good morning: bought {len(approved)} long-term proposal(s) on paper."))
+        pending = [s for s in pending if s not in approved]
         if pending:
             pending.sort(key=lambda s: s["expires_at"])
             await notify(db, user_id, proposals_text(pending, f"Good morning: {len(pending)} long-term proposal(s) waiting."))
     return did
+
+
+async def _auto_approve(db, store, user_id: str, pending: list[dict], now: datetime) -> list[dict]:
+    """Approves each pending long-term stock proposal on paper at its live
+    mark, as the Approve button does. Options, and any symbol without a
+    mark, are left pending for the user."""
+    from backend.engine.persistence import LedgerStore
+    from backend.marks import mark_prices
+    from backend.suggestions.service import execute_suggestion
+    from backend.ws.publish import publisher_for
+
+    stocks = [s for s in pending if not s.get("option_contract")]
+    if not stocks:
+        return []
+    marks = await mark_prices(db, {s["symbol"] for s in stocks})
+    ledger = LedgerStore(db, user_id=user_id, on_change=publisher_for(user_id))
+    approved = []
+    for suggestion in stocks:
+        price = marks.get(suggestion["symbol"])
+        if not price:
+            continue
+        try:
+            order = await execute_suggestion(suggestion, ledger, price, now=now)
+        except Exception as exc:
+            logger.exception("auto-approve of %s failed: %s", suggestion["id"], exc)
+            continue
+        if await store.decide(user_id, suggestion["id"], status="EXECUTED", reason="auto-approved", order_id=order.id, now=now) is None:
+            logger.warning("suggestion %s was decided concurrently after order %s", suggestion["id"], order.id)
+        approved.append(suggestion)
+    return approved
 
 
 async def autorun_loop(db, redis) -> None:

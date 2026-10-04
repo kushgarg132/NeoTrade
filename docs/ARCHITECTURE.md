@@ -307,7 +307,9 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   calls `_longterm_pass`. Every 15 minutes in session it calls
   `backend/suggestions/exits.py:check_exits`, which sells an approved long-term paper long
   at its proposal's stop or target. From 09:20 it re-runs the scan once if the 16:00 pass
-  was missed, then sends a Telegram digest of pending proposals
+  was missed, buys every pending long-term stock proposal on paper at its live mark
+  (`autorun._auto_approve`; options and symbols with no mark stay pending), then sends a
+  Telegram digest of what it bought and what still waits
   (`backend/suggestions/notify.py` -> `backend/guardrails/telegram.py:alert`, the one path
   every Telegram alert takes: the user's own bot if they added one (`PUT
   /guardrails/telegram/bot`, token checked with `getMe` and stored Fernet-encrypted in

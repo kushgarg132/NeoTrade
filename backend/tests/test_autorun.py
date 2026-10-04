@@ -232,3 +232,34 @@ async def test_a_missed_close_scan_is_caught_up_at_the_open(world, longterm):
     await _tick(world, datetime(2026, 9, 28, 9, 21, tzinfo=IST))
     await _tick(world, datetime(2026, 9, 28, 11, 0, tzinfo=IST))
     assert longterm["scans"] == ["scheduler"]  # once a day
+
+
+@pytest.mark.asyncio
+async def test_pending_long_term_stock_proposals_are_bought_on_paper_at_the_open(world, longterm, monkeypatch):
+    import backend.marks as marks
+    from backend.suggestions.store import SuggestionStore
+
+    async def mark_prices(db, symbols):
+        return {"SJVN": 55.0}  # no mark for NHPC
+
+    monkeypatch.setattr(marks, "mark_prices", mark_prices)
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True})
+    world.redis.data["scheduler:last_pass"] = "2026-09-25"
+    store = SuggestionStore(world.db)
+    now = datetime(2026, 9, 28, 9, 21, tzinfo=IST)
+    for symbol in ("SJVN", "NHPC"):
+        await store.collection.insert_one({
+            "id": symbol, "user_id": "alice", "mode": "LONGTERM", "symbol": symbol, "side": "BUY",
+            "quantity": 10, "entry_ref": 55.0, "stop": 50.0, "target": 65.0, "option_contract": None,
+            "strategy": "test", "status": "PENDING", "created_at": now, "expires_at": datetime(2026, 10, 9, tzinfo=IST),
+        })
+
+    await _tick(world, now)
+    await _tick(world, datetime(2026, 9, 28, 9, 40, tzinfo=IST))
+
+    by_symbol = {s["symbol"]: s for s in await store.list("alice", limit=10)}
+    assert by_symbol["SJVN"]["status"] == "EXECUTED"
+    assert by_symbol["NHPC"]["status"] == "PENDING"  # no mark: left for the user
+    trades = await world.db["paper_trades"].find({"user_id": "alice", "symbol": "SJVN"}).to_list(None)
+    assert len(trades) == 1 and trades[0]["status"] == "OPEN"
+    assert any("bought 1" in text for text in longterm["sent"])

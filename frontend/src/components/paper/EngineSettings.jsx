@@ -143,7 +143,7 @@ const EngineSettings = () => {
         {switchRow(
           'auto_paper_longterm',
           'Run the long-term engine every session',
-          'Each weekday: sells an approved long-term position on paper once it reaches its stop or target (checked every 15 minutes in session), and at 09:20 sends a Telegram digest of proposals waiting for you. New proposals come from the scan after every close (16:00 IST); nothing is bought until you approve it.'
+          'Each weekday: sells an approved long-term position on paper once it reaches its stop or target (checked every 15 minutes in session), and at 09:20 buys every pending long-term stock proposal on paper at the live price, then sends a Telegram digest. New proposals come from the scan after every close (16:00 IST); option proposals still wait for your approval.'
         )}
         <p className="pt-3 doc-meta normal-case">
           Paper only: a strategy you switched live trades real money only once it has passed its
