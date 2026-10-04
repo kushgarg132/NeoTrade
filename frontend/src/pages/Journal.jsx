@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, RefreshCw, Upload, History } from 'lucide-re
 import Layout from '../components/Layout';
 import GuardrailAlerts from '../components/journal/GuardrailAlerts';
 import MonthGrid from '../components/journal/MonthGrid';
+import LearningSheet from '../components/journal/LearningSheet';
 import { monthKey, shiftMonth, monthLabel, todayIst } from '../utils/months';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
@@ -140,7 +141,7 @@ const Journal = () => {
   const [month, setMonth] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [openTrip, setOpenTrip] = useState(null);
-  const [tab, setTab] = useTab(['calendar', 'trades', 'patterns']);
+  const [tab, setTab] = useTab(['calendar', 'trades', 'patterns', 'learning']);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const fileInput = useRef(null);
@@ -274,12 +275,18 @@ const Journal = () => {
       <div className="private space-y-3 sm:space-y-4">
         <GuardrailAlerts />
 
-        {!empty && (
+        {data && (
           <Tabs
             tabs={[
               { id: 'calendar', label: 'Calendar' },
-              { id: 'trades', label: selectedDay ? `Trades · ${selectedDay.slice(5)}` : 'Trades' },
-              { id: 'patterns', label: 'Patterns' },
+              ...(empty
+                ? []
+                : [
+                    { id: 'trades', label: selectedDay ? `Trades · ${selectedDay.slice(5)}` : 'Trades' },
+                    { id: 'patterns', label: 'Patterns' },
+                  ]),
+              // The paper engine's own record: there even before any broker trades.
+              { id: 'learning', label: 'Engine learning' },
             ]}
             active={tab}
             onSelect={setTab}
@@ -287,7 +294,7 @@ const Journal = () => {
           />
         )}
 
-        {(empty || tab === 'calendar') && (
+        {(tab === 'calendar' || (empty && tab !== 'learning')) && (
         <Sheet
           title="Journal"
           meta={summary ? `${summary.trips} closed` : undefined}
@@ -372,6 +379,8 @@ const Journal = () => {
         )}
 
         {!empty && tab === 'calendar' && <MirrorSheet mirror={data?.mirror} />}
+
+        {tab === 'learning' && <LearningSheet />}
 
         {!empty && tab === 'patterns' && (
           <Sheet title="Your patterns" meta="Your own trades, gross">

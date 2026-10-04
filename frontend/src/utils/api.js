@@ -192,6 +192,7 @@ export const endpoints = {
     importUpstox: '/journal/import/upstox-history',
     note: (id) => `/journal/round-trips/${encodeURIComponent(id)}/note`,
     betaMetrics: '/journal/beta-metrics',
+    learning: '/journal/learning',
   },
   broker: {
     list: '/broker/list',
