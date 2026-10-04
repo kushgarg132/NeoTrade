@@ -25,5 +25,5 @@ export function promotionGaps(row) {
 export function readiness(row, isLive) {
   if (!row) return 'No paper record yet.';
   if (row.eligible) return `Ready for real money · live switch ${isLive ? 'on' : 'off'}`;
-  return `Paper only. Needs ${promotionGaps(row)}.`;
+  return `${isLive ? 'Live switch on, still trading paper' : 'Paper only'}. Needs ${promotionGaps(row)}.`;
 }

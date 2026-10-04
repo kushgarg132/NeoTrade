@@ -14,8 +14,10 @@ import { formatClock, formatTimeAgo } from '../../utils/formatters';
  * What the strategy engine is doing now: the live-mode warning, the intraday
  * run (start, stop, progress) and the long-term engine (daily scan, pending
  * and open counts). Moved from the old Engine page onto the Practice overview.
+ * `prefs` is the user's preferences, fetched once by the overview (null until
+ * loaded or when the fetch failed).
  */
-const EngineNow = () => {
+const EngineNow = ({ prefs }) => {
   const [runs, setRuns] = useState([]);
   const [universeSymbols, setUniverseSymbols] = useState([]);
   const [accountSize, setAccountSize] = useState(1_000_000);
@@ -23,8 +25,6 @@ const EngineNow = () => {
   const [busy, setBusy] = useState(false);
   const [startError, setStartError] = useState(null);
   const [killSwitch, setKillSwitch] = useState(null);
-  const [liveStrategies, setLiveStrategies] = useState([]);
-  const [prefs, setPrefs] = useState(null);
   const [longterm, setLongterm] = useState({ pending: 0, open: 0 });
   const [scan, setScan] = useState(null);
   const [stopping, setStopping] = useState(null);
@@ -53,14 +53,6 @@ const EngineNow = () => {
     loadRuns();
     loadKillSwitch();
     loadLongterm();
-    // Which strategies trade real money when a run starts here.
-    api
-      .get(endpoints.settings.preferences)
-      .then((res) => {
-        setPrefs(res.data);
-        setLiveStrategies(res.data.live_strategies || []);
-      })
-      .catch(() => setLiveStrategies([]));
   }, []);
 
   useTopic('runs', (message) => {
@@ -128,6 +120,9 @@ const EngineNow = () => {
       setScan(err?.response?.data?.detail || 'Could not start the scan.');
     }
   };
+
+  // Which strategies trade real money when a run starts here.
+  const liveStrategies = prefs?.live_strategies || [];
 
   return (
     <>

@@ -37,6 +37,9 @@ const PaperOverview = () => {
   const [pending, setPending] = useState([]);
   // Seeded once from the link; picking "All" (which clears ?book) must not close it.
   const [recordOpen, setRecordOpen] = useState(params.has('book'));
+  // Fetched once here and handed to both the engine and readiness sheets, so
+  // they can never disagree on which strategies are live.
+  const [prefs, setPrefs] = useState(null);
 
   const loadTrades = () =>
     api
@@ -59,10 +62,19 @@ const PaperOverview = () => {
   }, []);
 
   useEffect(() => {
+    api
+      .get(endpoints.settings.preferences)
+      .then((res) => setPrefs(res.data))
+      .catch(() => setPrefs(null));
+  }, []);
+
+  // The record loads only once opened: a closed section costs nothing.
+  useEffect(() => {
+    if (!recordOpen) return;
     setTradesLoading(true);
     loadTrades();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, recordOpen]);
 
   useEffect(() => {
     api
@@ -73,7 +85,7 @@ const PaperOverview = () => {
 
   // The pushed figures are the whole book; one engine's share is refetched.
   useTopic('pnl', (message) => message.data?.paper && setPnl(message.data.paper));
-  useTopic('trades', loadTrades);
+  useTopic('trades', () => recordOpen && loadTrades());
   useTopic('suggestions', (message) => {
     if (message.event === 'created') setPending((list) => [message.data, ...list]);
     if (message.event === 'decided') {
@@ -90,7 +102,7 @@ const PaperOverview = () => {
           <Link to="/ai" className="underline underline-offset-2 text-[var(--ink)]">AI Overview</Link>
         </p>
 
-        <EngineNow />
+        <EngineNow prefs={prefs} />
 
         <PnlStatement pnl={pnl} loading={pnlLoading} />
 
@@ -116,40 +128,42 @@ const PaperOverview = () => {
           </Link>
         )}
 
-        <StrategyReadiness />
+        <StrategyReadiness liveStrategies={prefs?.live_strategies || []} />
 
         {/* The full record, closed by default: a deep link that picks a
             book (?book=intraday) opens it on that book. */}
         <details open={recordOpen} onToggle={(event) => setRecordOpen(event.currentTarget.open)}>
           <summary className="sheet cursor-pointer px-4 py-3 field-label">Full track record</summary>
-          <div className="mt-3 sm:mt-4 space-y-3 sm:space-y-4">
-            <div className="grid grid-cols-3 border border-[var(--rule-strong)]" role="tablist" aria-label="Which engine">
-              {BOOKS.map((b) => (
-                <button
-                  key={b.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={b.key === book.key}
-                  onClick={() => setParams(b.key === 'all' ? {} : { book: b.key }, { replace: true })}
-                  className={cn(
-                    'min-h-11 field-label touch-manipulation',
-                    b.key === book.key ? 'bg-[var(--ink)] text-[var(--paper)]' : 'text-[var(--ink-soft)] hover:text-[var(--ink)]'
-                  )}
-                >
-                  {b.label}
-                </button>
-              ))}
+          {recordOpen && (
+            <div className="mt-3 sm:mt-4 space-y-3 sm:space-y-4">
+              <div className="grid grid-cols-3 border border-[var(--rule-strong)]" role="tablist" aria-label="Which engine">
+                {BOOKS.map((b) => (
+                  <button
+                    key={b.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={b.key === book.key}
+                    onClick={() => setParams(b.key === 'all' ? {} : { book: b.key }, { replace: true })}
+                    className={cn(
+                      'min-h-11 field-label touch-manipulation',
+                      b.key === book.key ? 'bg-[var(--ink)] text-[var(--paper)]' : 'text-[var(--ink-soft)] hover:text-[var(--ink)]'
+                    )}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+
+              <Scorecard mode={mode} />
+
+              <TradeLedger
+                title={mode ? `${book.label} trades` : 'Paper trades'}
+                trades={trades}
+                loading={tradesLoading}
+                error={tradesError}
+              />
             </div>
-
-            <Scorecard mode={mode} />
-
-            <TradeLedger
-              title={mode ? `${book.label} trades` : 'Paper trades'}
-              trades={trades}
-              loading={tradesLoading}
-              error={tradesError}
-            />
-          </div>
+          )}
         </details>
       </PaperShell>
     </Layout>

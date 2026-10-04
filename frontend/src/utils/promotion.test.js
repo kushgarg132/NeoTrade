@@ -41,3 +41,9 @@ test('readiness: not yet eligible names what it needs', () => {
 test('readiness: no promotion row yet', () => {
   assert.equal(readiness(undefined, false), 'No paper record yet.');
 });
+
+test('readiness: live switch on but not yet eligible says it still trades paper', () => {
+  const row = { eligible: false, backtest_passed: true, backtest: null,
+    paper: { checks: [{ rule: 'days', ok: false, need: 20, have: 15 }] } };
+  assert.equal(readiness(row, true), 'Live switch on, still trading paper. Needs 5 more paper days.');
+});
