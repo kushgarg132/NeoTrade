@@ -40,4 +40,22 @@ const StrategyRow = ({ name, status, detail, extra, open, onToggle, children }) 
   </div>
 );
 
+/** A strategy list folded to one line: how many are ready, and a toggle. */
+export const StrategyFold = ({ count, ready, live, open, onToggle }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    aria-expanded={open}
+    className="w-full flex items-center justify-between gap-3 py-2 text-left min-h-11"
+  >
+    <span className="text-sm">
+      {count} strategies · {ready} ready{live != null ? ` · ${live} live` : ''}
+    </span>
+    <span className="field-label text-[var(--stamp)] inline-flex items-center gap-1">
+      {open ? 'Hide' : 'Show'}
+      <ChevronDown className={cn('w-4 h-4 transition-transform', open && 'rotate-180')} aria-hidden="true" />
+    </span>
+  </button>
+);
+
 export default StrategyRow;

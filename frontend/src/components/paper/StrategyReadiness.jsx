@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Sheet, Ruling } from '../doc/Doc';
-import StrategyRow, { GO_LIVE_RULE } from './StrategyRow';
+import StrategyRow, { GO_LIVE_RULE, StrategyFold } from './StrategyRow';
 import api, { endpoints } from '../../utils/api';
 import { useTopic } from '../../hooks/useStream';
 import { readiness, shortStatus } from '../../utils/promotion';
@@ -18,6 +18,7 @@ const StrategyReadiness = ({ liveStrategies }) => {
   const [promotion, setPromotion] = useState(null);
   const [promotionError, setPromotionError] = useState(false);
   const [open, setOpen] = useState(null);
+  const [listOpen, setListOpen] = useState(false);
 
   const loadPromotion = () =>
     api
@@ -63,8 +64,14 @@ const StrategyReadiness = ({ liveStrategies }) => {
         <Ruling rows={3} />
       ) : (
         <>
-          <p className="doc-meta normal-case pb-2 border-b border-[var(--rule)]">{GO_LIVE_RULE}</p>
-          {names.map((name) => (
+          <StrategyFold
+            count={names.length}
+            ready={promotion ? names.filter((n) => promotion[n]?.eligible).length : 0}
+            open={listOpen}
+            onToggle={() => setListOpen((value) => !value)}
+          />
+          {listOpen && <p className="doc-meta normal-case py-2 border-y border-[var(--rule)]">{GO_LIVE_RULE}</p>}
+          {listOpen && names.map((name) => (
             <StrategyRow
               key={name}
               name={name}

@@ -55,9 +55,12 @@ const Fundamentals = ({ company: c, currency }) => {
   return (
     <Sheet title="Fundamentals">
       <div className="grid gap-4 md:grid-cols-3">
-        {groups.map(([title, rows]) => (
-          <div key={title} className="min-w-0">
-            <p className="field-label mb-1">{title}</p>
+        {groups.map(([title, rows], i) => (
+          <details key={title} className="min-w-0 group" open={i === 0}>
+            <summary className="field-label mb-1 cursor-pointer list-none flex items-center justify-between min-h-11 md:min-h-0">
+              {title}
+              <span className="doc-meta md:hidden" aria-hidden="true">{rows.length}</span>
+            </summary>
             {/* Two figures a line: label over value, in a 2-column grid. */}
             <dl className="grid grid-cols-2 gap-x-4">
               {rows.map(([label, value]) => (
@@ -67,7 +70,7 @@ const Fundamentals = ({ company: c, currency }) => {
                 </div>
               ))}
             </dl>
-          </div>
+          </details>
         ))}
       </div>
     </Sheet>

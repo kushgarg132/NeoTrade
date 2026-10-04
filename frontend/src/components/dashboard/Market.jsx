@@ -74,6 +74,7 @@ const Market = () => {
 
   // Indian indices first; the world ones one tap away.
   const [world, setWorld] = useState(false);
+  const [allNews, setAllNews] = useState(false);
   const quotes = [...(data.indices || []), ...(world ? data.global || [] : [])];
   const quotesLoading = data.indices === null && data.global === null;
   const done = Object.values(data).every((value) => value !== null);
@@ -147,7 +148,7 @@ const Market = () => {
       {data.news?.length > 0 && (
         <Sheet title="Headlines" className="lg:col-span-2">
           <ul>
-            {data.news.slice(0, 6).map((article, index) => (
+            {data.news.slice(0, allNews ? 6 : 3).map((article, index) => (
               <li key={article.url || index} className="border-b border-[var(--rule)] last:border-b-0">
                 <a
                   href={article.url}
@@ -163,6 +164,16 @@ const Market = () => {
               </li>
             ))}
           </ul>
+          {data.news.length > 3 && (
+            <button
+              type="button"
+              onClick={() => setAllNews((value) => !value)}
+              aria-expanded={allNews}
+              className="mt-1 field-label text-[var(--stamp)] hover:underline min-h-11 sm:min-h-0"
+            >
+              {allNews ? 'Fewer headlines' : 'More headlines'}
+            </button>
+          )}
         </Sheet>
       )}
     </div>

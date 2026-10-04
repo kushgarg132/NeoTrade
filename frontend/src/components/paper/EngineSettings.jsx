@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 import { promotionGaps, shortStatus } from '../../utils/promotion';
-import StrategyRow, { GO_LIVE_RULE } from './StrategyRow';
+import StrategyRow, { GO_LIVE_RULE, StrategyFold } from './StrategyRow';
 
 /**
  * The engine's standing instructions: how large it may trade, what the daily
@@ -29,6 +29,7 @@ const EngineSettings = () => {
   const [promotion, setPromotion] = useState({});
   const [backtesting, setBacktesting] = useState({});
   const [openStrategy, setOpenStrategy] = useState(null);
+  const [strategiesOpen, setStrategiesOpen] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
@@ -183,10 +184,19 @@ const EngineSettings = () => {
 
       {strategyNames.length > 0 && (
         <Sheet title="Strategies" meta={`${(prefs.live_strategies || []).length} live`}>
-          <p className="doc-meta normal-case pb-2 border-b border-[var(--rule)]">
-            Every strategy trades paper unless you switch it live. {GO_LIVE_RULE} Until then it keeps trading paper.
-          </p>
-          {strategyNames.map((name) => {
+          <StrategyFold
+            count={strategyNames.length}
+            ready={strategyNames.filter((n) => promotion[n]?.eligible).length}
+            live={(prefs.live_strategies || []).length}
+            open={strategiesOpen}
+            onToggle={() => setStrategiesOpen((value) => !value)}
+          />
+          {strategiesOpen && (
+            <p className="doc-meta normal-case py-2 border-y border-[var(--rule)]">
+              Every strategy trades paper unless you switch it live. {GO_LIVE_RULE} Until then it keeps trading paper.
+            </p>
+          )}
+          {strategiesOpen && strategyNames.map((name) => {
             const isLive = (prefs.live_strategies || []).includes(name);
             const earned = promotion[name]?.eligible;
             let hint = isLive ? 'Trading with real orders.' : 'Paper only.';

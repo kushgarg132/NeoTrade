@@ -232,7 +232,7 @@ const Decisions = () => {
           </Sheet>
         ) : (
           <div className="space-y-2 sm:space-y-3">
-            {(showAll ? visible : visible.slice(0, 5)).map((suggestion) => (
+            {(showAll ? visible : visible.slice(0, 3)).map((suggestion) => (
               <SuggestionRecord
                 key={suggestion.id}
                 suggestion={suggestion}
@@ -242,14 +242,14 @@ const Decisions = () => {
                 hasMine={hasMine}
               />
             ))}
-            {visible.length > 5 && (
+            {visible.length > 3 && (
               <button
                 type="button"
                 onClick={() => setShowAll((value) => !value)}
                 aria-expanded={showAll}
                 className="w-full sheet py-3 field-label text-[var(--stamp)] hover:bg-[var(--paper-sunk)]"
               >
-                {showAll ? 'Show first 5' : `Show ${visible.length - 5} more`}
+                {showAll ? 'Show first 3' : `Show ${visible.length - 3} more`}
               </button>
             )}
           </div>
