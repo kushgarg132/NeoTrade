@@ -94,3 +94,44 @@ async def test_resolving_a_stock_makes_no_llm_call_unless_peers_are_asked_for():
         assert (await search.resolve_company_query("reliance"))["peers"] == []
         peers.assert_not_awaited()
         assert (await search.resolve_company_query("reliance", with_peers=True))["peers"] == ["TCS"]
+
+
+TECH_KEYS = {
+    "rsi", "sma_50", "sma_200", "atr", "price", "ema_20", "macd", "macd_signal", "bb_upper", "bb_lower",
+    "support", "resistance", "trend", "returns", "volume_ratio", "high_52w", "low_52w",
+}
+
+
+async def test_quick_analysis_returns_full_technicals(wired):
+    t = (await quick_module.quick_analysis("RELIANCE")).technical_analysis
+
+    assert TECH_KEYS <= set(t)
+    assert t["price"] == 2259.0
+    assert t["returns"]["1w"] == pytest.approx((2259 / 2254 - 1) * 100)
+    assert t["returns"]["1y"] == pytest.approx((2259 / 2000 - 1) * 100)
+    assert t["trend"] == "up"
+    assert t["volume_ratio"] == pytest.approx(1.0)
+    assert t["high_52w"] == 2264.0
+    assert t["low_52w"] == 1995.0
+
+
+async def test_short_history_leaves_long_values_none(wired, monkeypatch):
+    monkeypatch.setattr(quick_module._provider, "history", AsyncMock(return_value=wired[:30]))
+
+    t = (await quick_module.quick_analysis("RELIANCE")).technical_analysis
+
+    assert t["sma_200"] is None
+    assert t["returns"]["6m"] is None
+    assert t["trend"] == "choppy"
+    assert t["returns"]["1w"] is not None
+
+
+async def test_zero_close_and_zero_volume_give_none(wired, monkeypatch):
+    candles = [c.model_copy(update={"volume": 0}) for c in wired]
+    candles[0] = candles[0].model_copy(update={"close": 0.0})
+    monkeypatch.setattr(quick_module._provider, "history", AsyncMock(return_value=candles))
+
+    t = (await quick_module.quick_analysis("RELIANCE")).technical_analysis
+
+    assert t["returns"]["1y"] is None
+    assert t["volume_ratio"] is None
