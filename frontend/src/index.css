@@ -79,6 +79,7 @@
     /* Rubber-stamp ink. The one colour of authority: pending states, the
        conviction cap, the seal. Never decorative. */
     --stamp: #3a32a0;
+    --ai: #7a2fb0;
     --stamp-soft: #ecebf8;
 
     /* Printed ink, not screen neon. */
@@ -108,6 +109,7 @@
     --rule-strong: #6f6f60;
 
     --stamp: #8b81ff;
+    --ai: #c79bf2;
     --stamp-soft: #23224a;
 
     --gain: #5fbb8c;
@@ -389,3 +391,11 @@ html[data-private="on"] .private :is(.figure-md, .figure-lg) {
   filter: blur(0.4em);
   user-select: none;
 }
+
+/* Whose money a number is: the user's own (Mine), the AI account's (AI), practice (Paper). */
+.badge-mine, .badge-ai, .badge-paper {
+  display: inline-block; padding: 0 0.3em; border: 1px solid currentColor; line-height: 1.35;
+}
+.badge-mine { color: var(--ink); }
+.badge-ai { color: var(--ai); }
+.badge-paper { color: var(--stamp); border-style: dashed; }

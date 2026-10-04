@@ -170,6 +170,7 @@ export const endpoints = {
     pnl: (venue, mode) => inMode('/analytics/pnl', venue, mode),
     scorecard: (venue, mode) => inMode('/analytics/scorecard', venue, mode),
   },
+  today: '/today',
   profile: {
     get: '/profile',
     memories: '/profile/memories',

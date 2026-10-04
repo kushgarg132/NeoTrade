@@ -14,6 +14,7 @@ const Trading = lazy(() => import('./pages/Trading'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AiLimits = lazy(() => import('./pages/AiLimits'));
+const Today = lazy(() => import('./pages/Today'));
 import Login from './pages/Login';
 const SystemArchitecturePage = lazy(() => import('./pages/SystemArchitecturePage'));
 import RequireAuth from './components/RequireAuth';
@@ -82,7 +83,7 @@ const App = () => {
     <Routes>
       <Route path="/login" element={<Login />} />
       {/* Today */}
-      <Route path="/" element={gated(<Dashboard />)} />
+      <Route path="/" element={gated(<Today />)} />
       {/* Mine: the user's own account */}
       <Route path="/mine" element={<Navigate to="/mine/holdings" replace />} />
       <Route path="/mine/holdings" element={gated(<MyPortfolio lockedAccount="mine" />)} />
