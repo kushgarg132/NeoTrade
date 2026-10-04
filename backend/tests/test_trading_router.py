@@ -823,3 +823,18 @@ def test_start_keeps_a_toggled_strategy_on_paper_without_a_paper_record(monkeypa
     asyncio.run(_scenario())
 
     assert isinstance(seen["execution"], trading.SimulatedExecutionClient)
+
+
+@pytest.mark.asyncio
+async def test_progress_is_throttled_but_never_drops_the_end_of_a_cycle(monkeypatch):
+    saved = []
+
+    class _Runs:
+        async def set_progress(self, run_id, progress):
+            saved.append(progress["bars"])
+
+    monkeypatch.setattr(trading.hub, "publish", AsyncMock())
+    report = trading.progress_reporter("alice", "r1", _Runs(), cycle=3)
+    for bars in range(1, 7):
+        await report({"bars": bars, "signals": 0, "orders": 0, "last_symbol": "X", "last_bar_at": None})
+    assert saved == [1, 3, 6]

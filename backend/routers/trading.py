@@ -225,16 +225,19 @@ class StopRequest(BaseModel):
 PROGRESS_EVERY_SECONDS = 2.0
 
 
-def progress_reporter(user_id: str, run_id: str, runs: RunStore):
+def progress_reporter(user_id: str, run_id: str, runs: RunStore, cycle: int = 0):
     """The runner reports after every bar; a poll cycle over the default
     universe is ~80 bars in a burst, so this saves and publishes at most one
-    update every PROGRESS_EVERY_SECONDS rather than one per bar."""
+    update every PROGRESS_EVERY_SECONDS rather than one per bar -- plus one
+    whenever a full `cycle` of bars completes, so the end of a burst is never
+    the update that got throttled away."""
     last_sent = 0.0
 
     async def report(progress: dict) -> None:
         nonlocal last_sent
         now = time.monotonic()
-        if now - last_sent < PROGRESS_EVERY_SECONDS:
+        cycle_done = cycle > 0 and progress["bars"] % cycle == 0
+        if now - last_sent < PROGRESS_EVERY_SECONDS and not cycle_done:
             return
         last_sent = now
         # ISO strings, not datetimes: the Redis broadcast path is plain json.dumps.
@@ -361,7 +364,7 @@ async def launch_run(
         per_trade_cap=prefs["per_trade_cap"], daily_loss_limit=prefs["daily_loss_limit"],
         kill_switch_store=KillSwitchStore(db.db),
         master=master if premium_source is not None else None, premium_source=premium_source,
-        on_progress=progress_reporter(user_id, run_id, runs),
+        on_progress=progress_reporter(user_id, run_id, runs, cycle=len(instruments)),
     )
     await runs.create(
         run_id=run_id, user_id=user_id, mode=mode,
