@@ -113,7 +113,7 @@ const SmartSearch = ({ onSearch, isLoading, className }) => {
         <ul
           id="instrument-matches"
           role="listbox"
-          className="absolute z-20 left-0 right-0 mt-px sheet max-h-72 overflow-y-auto"
+          className="absolute z-[35] left-0 right-0 mt-px sheet max-h-72 overflow-y-auto"
         >
           {matches.length === 0 ? (
             <li className="px-3 py-3 text-sm text-[var(--ink-soft)]">

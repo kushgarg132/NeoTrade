@@ -68,7 +68,7 @@ const TradingControlBar = ({
         </div>
 
         {matches.length > 0 && (
-          <ul className="absolute z-10 left-0 right-0 mt-px sheet max-h-56 overflow-y-auto">
+          <ul className="absolute z-[35] left-0 right-0 mt-px sheet max-h-56 overflow-y-auto">
             {matches.map((match) => (
               <li key={match.instrument_token}>
                 <button
