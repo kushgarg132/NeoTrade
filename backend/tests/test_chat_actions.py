@@ -291,3 +291,17 @@ async def test_market_chat_card_unchanged(env):
     card = await _card(env["db"], _order())
     done = await confirm(env["db"], None, None, "alice", card["id"])
     assert done["result"] == "Paper BUY 2 INFY filled at ₹1,500.00."
+
+
+async def test_paper_limit_card_rests_then_fills(env):
+    from backend.engine import paper_orders
+
+    card = await _card(env["db"], _order(order_type="LIMIT", limit_price=1490.0))
+    done = await confirm(env["db"], None, None, "alice", card["id"])
+    assert done["result"] == "Paper limit ₹1,490.00 is open until 15:30; it fills if the price gets there."
+
+    async def mark(symbol):
+        return 1489.0
+
+    assert await paper_orders.sweep(env["db"], mark, OPEN) == 1
+    assert (await env["db"]["paper_orders"].find_one({"user_id": "alice"}))["status"] == "FILLED"
