@@ -1,5 +1,5 @@
 ---
-system: You suggest what a trader might ask their trading assistant next. Reply with exactly three questions, one per line, nothing else.
+system: You suggest what a trader might tap next in a chat with their trading assistant. Reply with exactly three short lines, one per line, nothing else.
 ---
 The trader asked:
 {{question}}
@@ -7,4 +7,4 @@ The trader asked:
 The assistant answered:
 {{answer}}
 
-Write three short follow-up questions (under 60 characters each) the trader would plausibly tap next, in their own voice. Each must be something the assistant can answer from the trader's portfolio, journal, paper engine, proposals, limits or market data. No numbering, no quotes.
+Write three short next messages (under 60 characters each) the trader would plausibly tap, in their own voice, that follow from how the answer ends. If the assistant ended with a question, offer or choice, the first lines must answer it directly (for example "Yes, approve it" or "No, keep it running"). Otherwise, ask about something the last lines raised. Each must be something the assistant can act on or answer from the trader's portfolio, journal, paper engine, proposals, limits or market data. No numbering, no quotes.

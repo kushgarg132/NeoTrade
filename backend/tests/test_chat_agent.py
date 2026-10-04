@@ -1,6 +1,8 @@
 """The chat agent: the user's snapshot and page ride in the system prompt,
 and an action tool's card comes out as its own event."""
 
+from unittest.mock import AsyncMock
+
 from langchain_core.messages import SystemMessage
 from mongomock_motor import AsyncMongoMockClient
 
@@ -50,17 +52,43 @@ async def test_system_prompt_carries_snapshot_and_page(monkeypatch):
     assert seen["snapshot_user"] == "alice"
 
 
-async def test_a_finished_reply_ends_with_follow_up_questions(monkeypatch):
+async def test_a_finished_reply_ends_with_follow_up_suggestions(monkeypatch):
     async def fake_completion(prompt, system_prompt, tier=None):
         assert tier == "fast" and "Card ready." in prompt
-        return "1. Why SJVN?\n- What else is pending?\nnot a question\n\"How much is at risk?\"\nOne more?"
+        return "Here are three:\n1. Yes, approve it\n- What else is pending?\n\"How much is at risk?\"\nOne more?"
 
     monkeypatch.setattr(agent.llm_service, "get_completion", fake_completion)
     events = await _run(monkeypatch, {})
+    # Direct replies to the assistant's offer count, not just questions.
     assert events[-1] == {
         "type": "suggestions",
-        "data": ["Why SJVN?", "What else is pending?", "How much is at risk?"],
+        "data": ["Yes, approve it", "What else is pending?", "How much is at risk?"],
     }
+
+
+async def test_follow_ups_see_only_the_reply_after_the_last_tool(monkeypatch):
+    seen = {}
+
+    class _Narrating(_FakeAgent):
+        async def astream_events(self, payload, version):
+            chunk = lambda text: {"event": "on_chat_model_stream", "data": {"chunk": type("C", (), {"content": text})()}}
+            yield chunk("Let me look that up.")
+            yield {"event": "on_tool_start", "name": "get_portfolio", "data": {}}
+            yield {"event": "on_tool_end", "name": "get_portfolio", "data": {"output": "{}"}}
+            yield chunk("SJVN is your top holding. Approve it?")
+
+    async def fake_completion(prompt, system_prompt, tier=None):
+        seen["prompt"] = prompt
+        return "Yes, approve it"
+
+    monkeypatch.setattr(agent.llm_service, "get_completion", fake_completion)
+    monkeypatch.setattr(agent.llm_service, "get_llm", AsyncMock(return_value=object()))
+    monkeypatch.setattr(agent, "build_snapshot", AsyncMock(return_value={"market": {"session_open": False}}))
+    monkeypatch.setattr(agent, "create_react_agent", lambda llm, tools: _Narrating(seen))
+    db = AsyncMongoMockClient()["test_db"]
+    [e async for e in agent.stream_chat(db, None, "alice", "approve sjvn", [], {})]
+
+    assert "Approve it?" in seen["prompt"] and "Let me look that up." not in seen["prompt"]
 
 
 async def test_a_follow_up_failure_still_leaves_the_reply(monkeypatch):

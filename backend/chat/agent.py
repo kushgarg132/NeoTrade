@@ -33,10 +33,11 @@ def _text(content) -> str:
 
 
 def _questions(text: str) -> list[str]:
-    """Up to three one-line questions from the model's reply, with any list
-    numbering or bullets it added anyway stripped off."""
+    """Up to three one-line suggestions from the model's reply, with any list
+    numbering or bullets it added anyway stripped off. Replies ("Yes, approve
+    it") count as much as questions; a preamble line ending in ':' does not."""
     lines = (line.strip().lstrip("-*•0123456789.) ").strip().strip('"') for line in text.splitlines())
-    return [line for line in lines if line.endswith("?") and len(line) <= 90][:3]
+    return [line for line in lines if line and not line.endswith(":") and len(line) <= 90][:3]
 
 
 async def suggest_followups(question: str, answer: str) -> list[str]:
@@ -44,7 +45,11 @@ async def suggest_followups(question: str, answer: str) -> list[str]:
     never a broken reply."""
     try:
         system, prompt = render("chat_followups", question=question, answer=answer[-2000:])
-        return _questions(await llm_service.get_completion(prompt, system_prompt=system, tier="fast"))
+        reply = await llm_service.get_completion(prompt, system_prompt=system, tier="fast")
+        # get_completion reports failure in-band; never show that as a chip.
+        if not reply or reply == "LLM_DISABLED" or reply.startswith("Error generating response"):
+            return []
+        return _questions(reply)
     except Exception as exc:
         logger.warning("chat follow-ups failed: %s", exc)
         return []
@@ -76,6 +81,7 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
             name = event.get("name", "")
             label = TOOL_LABELS.get(name, f"Using {name}")
             if kind == "on_tool_start":
+                answer = ""  # text before a tool call is narration; follow-ups track the final reply
                 yield {"type": "thinking", "data": label + "…"}
                 yield {"type": "step", "data": {"id": event.get("run_id"), "phase": "start", "label": label,
                                                 "input": event["data"].get("input")}}
