@@ -48,6 +48,22 @@ async def find_chat(code: str, token: Optional[str] = None) -> Optional[int]:
     return None
 
 
+async def updates(offset: Optional[int] = None, token: Optional[str] = None) -> list[dict]:
+    """Read a bot's pending updates without logging its token.
+
+    Long polling is deliberately used instead of a public webhook: a user can
+    bring their own BotFather bot, whose webhook configuration NeoTrade does
+    not own.  Callers persist the next offset after handling each batch.
+    """
+    params = {"allowed_updates": '["message","callback_query"]'}
+    if offset is not None:
+        params["offset"] = offset
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        resp = await client.get(_url("getUpdates", token), params=params)
+        resp.raise_for_status()
+    return resp.json().get("result") or []
+
+
 async def send(chat_id: int, text: str, token: Optional[str] = None) -> bool:
     """Best effort: a failed alert is logged, never raised into the monitor."""
     if not (token or configured()):
@@ -60,6 +76,32 @@ async def send(chat_id: int, text: str, token: Optional[str] = None) -> bool:
     except Exception as exc:
         logger.warning("telegram send failed: %s", exc)
         return False
+
+
+async def send_buttons(chat_id: int, text: str, buttons: list[list[dict]], token: Optional[str] = None) -> bool:
+    """Send a proposal card. Callback data carries only an opaque action id."""
+    if not (token or configured()):
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(_url("sendMessage", token), json={
+                "chat_id": chat_id, "text": text,
+                "reply_markup": {"inline_keyboard": buttons},
+            })
+            resp.raise_for_status()
+        return True
+    except Exception as exc:
+        logger.warning("telegram button send failed: %s", exc)
+        return False
+
+
+async def answer_callback(callback_id: str, text: str, token: Optional[str] = None) -> None:
+    """Dismiss Telegram's button spinner; errors are non-fatal."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(_url("answerCallbackQuery", token), json={"callback_query_id": callback_id, "text": text})
+    except Exception as exc:
+        logger.warning("telegram callback acknowledgement failed: %s", exc)
 
 
 async def alert(db, user_id: str, text: str) -> bool:

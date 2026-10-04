@@ -19,6 +19,7 @@ from backend.prefs import PrefsStore
 from backend.journal.store import JournalStore
 from backend.guardrails.store import GuardrailStore
 from backend.guardrails import monitor as guardrail_monitor
+from backend.guardrails import telegram_bot
 from backend.engine import autorun
 from backend import broadcast
 from backend import scheduler
@@ -109,6 +110,9 @@ async def startup_db_client():
     ws_pump.start(db.db)
     # The user's own limits, checked against their broker once a minute in session.
     guardrail_monitor.start(db.db, db.redis)
+    # Linked Telegram chats are an authenticated client of the same AI and
+    # proposal flow as the web widget; this is inbound polling, not a webhook.
+    telegram_bot.start(db.db, db.redis)
 
     # An asyncio.Task cannot outlive the process that created it, so any run
     # still marked RUNNING belongs to a previous life of this container.

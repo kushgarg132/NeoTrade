@@ -19,6 +19,7 @@ class GuardrailStore:
 
     async def ensure_indexes(self) -> None:
         await self.events.create_index([("user_id", 1), ("day", 1)])
+        await self.channels.create_index("telegram_chat_id")
 
     async def record(self, user_id: str, day: date, breach: dict) -> bool:
         """True only the first time this breach is seen that day."""
@@ -78,3 +79,22 @@ class GuardrailStore:
         if bot is None and not telegram.configured():
             return None
         return (bot["token"] if bot else None, chat_id)
+
+    async def telegram_routes(self) -> list[tuple[Optional[str], dict[int, str]]]:
+        """Return linked chats grouped by the bot that owns their updates.
+
+        Tokens are decrypted only in-process and never returned to an HTTP
+        client or written to Redis/logs.  A shared deployment bot is denoted
+        by ``None``; a user's own bot only routes its own linked chat.
+        """
+        from backend.guardrails import telegram
+
+        routes: dict[Optional[str], dict[int, str]] = {}
+        async for channel in self.channels.find({"telegram_chat_id": {"$ne": None}}):
+            user_id, chat_id = channel["_id"], channel["telegram_chat_id"]
+            bot = await self.telegram_bot(user_id)
+            token = bot["token"] if bot else None
+            if token is None and not telegram.configured():
+                continue
+            routes.setdefault(token, {})[chat_id] = user_id
+        return list(routes.items())
