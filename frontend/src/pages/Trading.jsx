@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Square, Loader2 } from 'lucide-react';
+import { Play, Square, Loader2, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PaperShell from '../components/paper/PaperShell';
@@ -9,6 +9,7 @@ import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } fro
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
+import { cn } from '../utils/cn';
 import { useTopic } from '../hooks/useStream';
 import {
   formatCurrency,
@@ -29,7 +30,6 @@ const Trading = () => {
   const [runs, setRuns] = useState([]);
   const [positions, setPositions] = useState({});
   const [fills, setFills] = useState([]);
-  const [mode, setMode] = useState('LONGTERM');
   const [universeSymbols, setUniverseSymbols] = useState([]);
   const [accountSize, setAccountSize] = useState(1_000_000);
   const [maxExposure, setMaxExposure] = useState(1_000_000);
@@ -38,6 +38,10 @@ const Trading = () => {
   const [loading, setLoading] = useState(true);
   const [killSwitch, setKillSwitch] = useState(null);
   const [liveStrategies, setLiveStrategies] = useState([]);
+  const [prefs, setPrefs] = useState(null);
+  const [longterm, setLongterm] = useState({ pending: 0, open: 0 });
+  const [scan, setScan] = useState(null);
+  const [stopping, setStopping] = useState(null);
 
   const loadKillSwitch = () =>
     api
@@ -51,6 +55,14 @@ const Trading = () => {
       .then((res) => setRuns(res.data))
       .catch(() => setRuns([]));
 
+  const loadLongterm = () =>
+    Promise.all([
+      api.get(endpoints.suggestions.list({ status: 'PENDING', mode: 'LONGTERM' })),
+      api.get(endpoints.trading.trades('OPEN', 'paper', 'LONGTERM')),
+    ])
+      .then(([pendingRes, openRes]) => setLongterm({ pending: pendingRes.data.length, open: openRes.data.length }))
+      .catch(() => {});
+
   const loadLedger = () =>
     Promise.all([api.get(endpoints.trading.positions('paper')), api.get(endpoints.trading.fills('paper'))])
       .then(([positionsRes, fillsRes]) => {
@@ -60,11 +72,14 @@ const Trading = () => {
       .catch(() => {});
 
   useEffect(() => {
-    Promise.all([loadRuns(), loadLedger(), loadKillSwitch()]).finally(() => setLoading(false));
+    Promise.all([loadRuns(), loadLedger(), loadKillSwitch(), loadLongterm()]).finally(() => setLoading(false));
     // Which strategies trade real money when a run starts here.
     api
       .get(endpoints.settings.preferences)
-      .then((res) => setLiveStrategies(res.data.live_strategies || []))
+      .then((res) => {
+        setPrefs(res.data);
+        setLiveStrategies(res.data.live_strategies || []);
+      })
       .catch(() => setLiveStrategies([]));
   }, []);
 
@@ -82,16 +97,23 @@ const Trading = () => {
   useTopic('trades', () => {
     loadLedger();
     loadKillSwitch();
+    loadLongterm();
   });
+  useTopic('suggestions', loadLongterm);
 
-  const active = runs.find((run) => run.status === 'RUNNING');
+  // Intraday and any leftover long-term run can be live at once; each gets
+  // its own line and its own Stop.
+  const running = runs.filter((run) => run.status === 'RUNNING');
+  const intradayActive = running.some((run) => run.mode === 'INTRADAY');
+  // Newest first from the server: a crash is said out loud, not shown as "Idle".
+  const crashed = running.length === 0 && runs[0]?.status === 'ERROR' ? runs[0] : null;
 
   const start = async () => {
     setBusy(true);
     setStartError(null);
     try {
       await api.post(endpoints.trading.start, {
-        mode,
+        mode: 'INTRADAY',
         universe: universeSymbols.length > 0 ? universeSymbols : undefined,
         account_size: accountSize,
         max_exposure: maxExposure,
@@ -104,19 +126,28 @@ const Trading = () => {
     }
   };
 
-  const stop = async () => {
-    if (!active) return;
-    setBusy(true);
+  const stop = async (run) => {
+    setStopping(run.run_id);
     setStartError(null);
     try {
-      await api.post(endpoints.trading.stop, { run_id: active.run_id });
+      await api.post(endpoints.trading.stop, { run_id: run.run_id });
     } catch (err) {
       if (err.response?.status !== 404) {
         setStartError(err.response?.data?.detail || 'Could not stop the run.');
       }
     } finally {
       await loadRuns();
-      setBusy(false);
+      setStopping(null);
+    }
+  };
+
+  const scanNow = async () => {
+    setScan('starting');
+    try {
+      const res = await api.post(endpoints.suggestions.scan, {});
+      setScan(`Scanning ${res.data.symbols} scrip. New proposals land under Decisions in a few minutes.`);
+    } catch (err) {
+      setScan(err?.response?.data?.detail || 'Could not start the scan.');
     }
   };
 
@@ -143,15 +174,10 @@ const Trading = () => {
           </div>
         )}
         <Sheet
-          title="Engine"
-          meta={active ? `Running since ${formatTimeAgo(active.started_at)}` : 'Idle'}
+          title="Intraday engine"
+          meta={running.length ? `${running.length} running` : 'Idle'}
           actions={
-            active ? (
-              <Button variant="danger" size="sm" onClick={stop} disabled={busy}>
-                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
-                Stop
-              </Button>
-            ) : (
+            !intradayActive && (
               <Button variant="primary" size="sm" onClick={start} disabled={busy}>
                 {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
                 Start
@@ -167,47 +193,68 @@ const Trading = () => {
               </span>
             </div>
           )}
-          {active ? (
-            <div className="flex flex-wrap items-center gap-3">
+          {crashed && (
+            <p className="mb-3 text-sm text-[var(--loss)]" role="alert">
+              Last run stopped {formatTimeAgo(crashed.stopped_at)}: {crashed.error}
+            </p>
+          )}
+          {running.map((run) => (
+            <div key={run.run_id} className="flex flex-wrap items-center gap-3 py-2 border-b border-[var(--rule)] last:border-b-0">
               <Badge variant="success">Running</Badge>
-              <Badge variant="secondary">{active.mode === 'INTRADAY' ? 'Intraday' : 'Long term'}</Badge>
-              {active.params?.origin === 'auto' && <Badge variant="outline">Auto-run</Badge>}
+              <Badge variant="secondary">{run.mode === 'INTRADAY' ? 'Intraday' : 'Long term'}</Badge>
+              {run.params?.origin === 'auto' && <Badge variant="outline">Auto-run</Badge>}
               <span className="doc-meta normal-case">
-                {active.universe.length} scrip · run {active.run_id.slice(0, 8)}
+                since {formatTimeAgo(run.started_at)} · {run.universe.length} scrip · run {run.run_id.slice(0, 8)}
+                {run.params?.feed && ` · ${run.params.feed}`}
               </span>
+              <Button variant="danger" size="sm" className="ml-auto" onClick={() => stop(run)} disabled={stopping === run.run_id}>
+                {stopping === run.run_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+                Stop
+              </Button>
               <span className="doc-meta normal-case w-full">
-                {active.progress
-                  ? `${active.progress.bars} bars scanned · ${active.progress.signals} signals · ${active.progress.orders} orders · last ${active.progress.last_symbol ?? 'bar'} at ${formatClock(active.progress.updated_at)}`
+                {run.progress
+                  ? `${run.progress.bars} bars scanned · ${run.progress.signals} signals · ${run.progress.orders} orders · last ${run.progress.last_symbol ?? 'bar'} at ${formatClock(run.progress.updated_at)}`
                   : 'Waiting for the first bar…'}
               </span>
-              {active.mode === 'LONGTERM' && (
-                <p className="w-full text-sm text-[var(--ink-soft)]">
-                  Long-term signals from this run file as proposals for your decision rather
-                  than executing.
-                </p>
-              )}
             </div>
-          ) : (
-            <TradingControlBar
-              mode={mode}
-              onModeChange={setMode}
-              universeSymbols={universeSymbols}
-              onUniverseChange={setUniverseSymbols}
-              accountSize={accountSize}
-              onAccountSizeChange={setAccountSize}
-              maxExposure={maxExposure}
-              onMaxExposureChange={setMaxExposure}
-              isActive={false}
-              onStart={start}
-              onStop={stop}
-              busy={busy}
-              startError={startError}
-            />
+          ))}
+          {!intradayActive && (
+            <div className={cn(running.length > 0 && 'mt-4')}>
+              <TradingControlBar
+                universeSymbols={universeSymbols}
+                onUniverseChange={setUniverseSymbols}
+                accountSize={accountSize}
+                onAccountSizeChange={setAccountSize}
+                maxExposure={maxExposure}
+                onMaxExposureChange={setMaxExposure}
+                startError={startError}
+              />
+            </div>
           )}
+          {startError && intradayActive && <p className="mt-3 text-sm text-[var(--loss)]">{startError}</p>}
+        </Sheet>
 
-          {startError && active && (
-            <p className="mt-3 text-sm text-[var(--loss)]">{startError}</p>
-          )}
+        <Sheet
+          title="Long-term engine"
+          meta={prefs ? (prefs.auto_paper_longterm ? 'On' : 'Off') : undefined}
+          actions={
+            <Button variant="secondary" size="sm" onClick={scanNow} disabled={scan === 'starting'}>
+              {scan === 'starting' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+              Scan now
+            </Button>
+          }
+        >
+          <p className="text-sm text-[var(--ink)]">
+            Scans a year of daily prices after each close (16:00 IST) and files what it finds under{' '}
+            <Link to="/paper/decisions" className="underline underline-offset-2">Decisions</Link>.
+            {prefs?.auto_paper_longterm
+              ? ' In session, approved positions are sold at their stop or target, checked every 15 minutes.'
+              : ' Turn on the daily long-term engine in Settings to close approved positions at their stop or target.'}
+          </p>
+          <p className="mt-2 doc-meta normal-case">
+            {longterm.pending} waiting for your decision · {longterm.open} open long-term position{longterm.open === 1 ? '' : 's'}
+          </p>
+          {scan && scan !== 'starting' && <p className="mt-2 text-sm text-[var(--ink-soft)]">{scan}</p>}
         </Sheet>
 
         <Sheet title="Positions" meta={`${openPositions.length} open`}>

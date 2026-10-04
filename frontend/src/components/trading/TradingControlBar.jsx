@@ -2,21 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { Badge } from '../common/Badge';
 import api, { endpoints } from '../../utils/api';
-import { cn } from '../../utils/cn';
 
-const MODES = [
-  { id: 'LONGTERM', label: 'Long term', note: 'Signals file as proposals for your decision.' },
-  { id: 'INTRADAY', label: 'Intraday', note: 'Signals execute without approval.' },
-];
 
 /**
- * The run's standing instructions, filled in before it starts. The mode note
- * is shown rather than documented, because the difference between the two —
- * whether a signal asks you first — is the whole point of the choice.
+ * An intraday run's standing instructions, filled in before it starts.
+ * Long-term ideas come from the daily scan, not a run, so there is no
+ * horizon to choose here.
  */
 const TradingControlBar = ({
-  mode,
-  onModeChange,
   universeSymbols,
   onUniverseChange,
   accountSize,
@@ -51,32 +44,9 @@ const TradingControlBar = ({
     setMatches([]);
   };
 
-  const selected = MODES.find((item) => item.id === mode);
-
   return (
     <div className="space-y-5">
-      <div>
-        <p className="field-label mb-2">Horizon</p>
-        <div className="flex border border-[var(--rule-strong)] w-full sm:w-auto sm:inline-flex">
-          {MODES.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onModeChange(item.id)}
-              aria-pressed={mode === item.id}
-              className={cn(
-                'flex-1 sm:flex-none min-h-11 sm:min-h-0 px-4 py-2 font-[family-name:var(--font-narrow)] text-xs font-semibold uppercase tracking-[0.11em] transition-colors',
-                mode === item.id
-                  ? 'bg-[var(--ink)] text-[var(--paper)]'
-                  : 'text-[var(--ink-soft)] hover:text-[var(--ink)]'
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <p className="doc-meta normal-case mt-1.5">{selected?.note}</p>
-      </div>
+      <p className="doc-meta normal-case">Intraday · signals execute without approval, squared off by 15:15.</p>
 
       <div className="relative">
         <label htmlFor="universe-search" className="field-label block mb-1.5">
