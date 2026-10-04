@@ -211,3 +211,44 @@ async def get_index_analysis(ticker: str):
         return await explain_index_move(ticker, name)
     except ExplanationUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+_MAX_QUOTES = 8
+
+
+def _quotes_sync(symbols: List[str]) -> List[Dict[str, Any]]:
+    """Last price and day change for a few NSE symbols, one batched download."""
+    import pandas as pd
+
+    raw = yf.download([f"{s}.NS" for s in symbols], period="5d", interval="1d", group_by="ticker",
+                      progress=False, threads=True)
+    quotes = []
+    for symbol in symbols:
+        if isinstance(raw.columns, pd.MultiIndex):
+            if f"{symbol}.NS" not in raw.columns.get_level_values(0):
+                continue
+            frame = raw[f"{symbol}.NS"]
+        elif len(symbols) == 1 and "Close" in raw.columns:
+            frame = raw
+        else:
+            continue
+        closes = frame["Close"].dropna()
+        if len(closes) < 2:
+            continue
+        price, prev = float(closes.iloc[-1]), float(closes.iloc[-2])
+        quotes.append({"symbol": symbol, "price": round(price, 2),
+                       "change_pct": round((price - prev) / prev * 100, 2) if prev else 0.0})
+    return quotes
+
+
+@router.get("/market/quotes")
+async def get_quotes(symbols: str):
+    """Prices for the search suggestions: up to 8 symbols, cached per set."""
+    wanted = list(dict.fromkeys(s.strip().upper().removesuffix(".NS") for s in symbols.split(",") if s.strip()))
+    if not wanted or len(wanted) > _MAX_QUOTES:
+        raise HTTPException(status_code=422, detail=f"Ask for 1 to {_MAX_QUOTES} symbols.")
+    key_set = sorted(wanted)
+    quotes = await cached("quotes:" + ",".join(key_set), QUOTES_TTL,
+                          lambda: asyncio.to_thread(_quotes_sync, key_set))
+    by_symbol = {q["symbol"]: q for q in quotes}
+    return [by_symbol[s] for s in wanted if s in by_symbol]
