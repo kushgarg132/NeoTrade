@@ -479,6 +479,14 @@ and every check again (ad-hoc live orders: NSE equity market, active broker, mar
 clear, per-trade cap, second tap). Spec and plan in `docs/superpowers/`. Not done: server-side
 history, F&O/limit orders from chat; ad-hoc paper orders are not gated by the kill switch.
 
+### 2026-10-04 — the assistant on Telegram, over all of the user's data
+
+The linked Telegram bot is a second client of the same agent: live draft streaming with visible
+reasoning and tool steps, Confirm/Cancel buttons, follow-up buttons, `/portfolio` `/proposals`
+`/engine` `/limits` `/journal` `/new` `/help`, and 10 turns of memory. `query_my_data` lets the
+agent (web and Telegram) read any of the user's own collections on an allowlist, never secrets or
+another user's rows. See ARCHITECTURE.md.
+
 ---
 
 ## Phase 6 — Revive the long-term agent engine — **done 2026-09-11**

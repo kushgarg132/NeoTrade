@@ -16,7 +16,7 @@ import { cn } from '../utils/cn';
 const OPENING = {
   role: 'assistant',
   content:
-    "Ask about your portfolio, your trades, the engine or a stock. I read your own account, and anything I would change waits for your Confirm.",
+    "Ask about anything in your account (portfolio and its history, real and paper trades, engine runs, proposals, settings, watchlist) or a stock. I read only your own data, and anything I would change waits for your Confirm.",
 };
 
 /** Questions worth one tap, by the page the user is on. */

@@ -55,7 +55,8 @@ COMMANDS = [{"command": name, "description": label} for name, (_, label) in SHOR
     {"command": "new", "description": "Start a fresh conversation"},
     {"command": "help", "description": "What I can do"},
 ]
-HELP = ("Ask NeoTrade anything about your portfolio, journal, proposals, paper engine or limits. "
+HELP = ("Ask NeoTrade anything about your account -- portfolio and its history, real and paper trades, engine runs, "
+        "proposals, settings, watchlist -- or about a stock. "
         "I can prepare actions, but nothing changes until you tap Confirm.\n\n"
         + "\n".join(f"/{c['command']} — {c['description']}" for c in COMMANDS))
 _menus_set: set[Optional[str]] = set()  # bots whose menu this process already replaced

@@ -175,7 +175,15 @@ survives is `ResearchAgent` (`backend/research/graph.py:58-159`), whose graph is
 `ResearchReport` with no BUY/SELL/HOLD, plus `AnalystAgent`. The chat lives in `backend/chat/` (2026-10-04): a
 per-message day snapshot (`context.py`) in `prompts/chat.md`, read tools bound to the caller's `user_id`
 (`tools.py`), and propose-only action tools whose records in `chat_actions` run only through
-`POST /chat/actions/{id}/confirm`, which re-checks everything (`actions.py`). Since
+`POST /chat/actions/{id}/confirm`, which re-checks everything (`actions.py`). Besides the fixed
+`get_*` tools, `query_my_data` reads any collection on its allowlist (`USER_DATA`, always ANDed
+with the caller's `user_id`; `SHARED_DATA` for market reference data); secrets
+(`broker_credentials`, `alert_channels`, `refresh_tokens`, `users`, `app_settings`) are off the
+list, and `$where`/`$function` are refused. The same agent answers the user's linked Telegram
+chat (`backend/guardrails/telegram_bot.py`): one worker per bot long-polls `getUpdates` under a
+Redis lock, streams the reply with `sendMessageDraft` (reasoning and tool steps live, kept
+collapsed in the final message), sends cards with Confirm/Cancel buttons that go through the
+same confirm path, offers follow-ups as buttons, and keeps the last 10 turns in Redis. Since
 2026-09-26 the analyst makes two LLM calls per stock (`prompts/score_news.md`, then
 `prompts/research_report.md`, which also writes the thesis), so `synthesize` makes none.
 
