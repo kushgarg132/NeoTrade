@@ -256,14 +256,29 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
         await finish()
 
 
+PAIR_MAX_CHARS = 20  # two buttons share a row only if both labels fit half a phone's width
+
+
+def _suggestion_rows(suggestions: list[str]) -> list[list[dict]]:
+    """Short labels two to a row, long ones on their own -- compact, nothing cut off."""
+    rows: list[list[dict]] = []
+    for i, q in enumerate(suggestions):
+        button = {"text": q[:64], "callback_data": f"nt:ask:{i}"}
+        last = rows[-1] if rows else None
+        if last and len(last) == 1 and len(q) <= PAIR_MAX_CHARS and len(last[0]["text"]) <= PAIR_MAX_CHARS:
+            last.append(button)
+        else:
+            rows.append([button])
+    return rows
+
+
 async def _attach_suggestions(redis, user_id: str, chat_id: int, token: Optional[str],
                               message_id: int, suggestions: list[str]) -> None:
     """Suggested next questions arrive after the answer: add them as buttons
     under it. Tapping one asks it (see _callback); they live in Redis by message."""
     if not suggestions:
         return
-    await telegram.set_buttons(chat_id, message_id, [[{"text": q[:64], "callback_data": f"nt:ask:{i}"}]
-                                                     for i, q in enumerate(suggestions)], token)
+    await telegram.set_buttons(chat_id, message_id, _suggestion_rows(suggestions), token)
     if redis is not None:
         await redis.set(f"{SUGGEST_PREFIX}{user_id}:{message_id}", json.dumps(suggestions), ex=HISTORY_SECONDS)
         await redis.set(SUGGEST_LAST_PREFIX + user_id, str(message_id), ex=HISTORY_SECONDS)

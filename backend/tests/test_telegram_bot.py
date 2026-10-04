@@ -342,3 +342,10 @@ def test_an_unfinished_table_mid_stream_is_left_as_text():
 def test_a_horizontal_rule_becomes_a_divider_not_dashes():
     out = telegram_bot.telegram.to_html("Above\n\n---\n\nBelow\n- item")
     assert "---" not in out and "──────" in out and "• item" in out
+
+
+def test_short_suggestions_pair_up_two_per_row():
+    rows = telegram_bot._suggestion_rows(["📊 vs Nifty?", "🎯 Set risk level", "🔍 Which proposals fit my plan best?"])
+    assert [[b["text"] for b in row] for row in rows] == [
+        ["📊 vs Nifty?", "🎯 Set risk level"], ["🔍 Which proposals fit my plan best?"]]
+    assert [b["callback_data"] for row in rows for b in row] == ["nt:ask:0", "nt:ask:1", "nt:ask:2"]
