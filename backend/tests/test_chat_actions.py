@@ -332,3 +332,19 @@ async def test_live_limit_rejected_is_not_reported_resting(env, monkeypatch, sta
     done = await confirm(env["db"], None, None, "alice", card["id"], second_tap=True)
     assert done["result"].startswith(f"Your broker {status.lower()} the limit order")
     assert "Resting" not in done["result"]
+
+
+async def test_equity_approve_card_live_reaches_mine(env, monkeypatch):
+    from backend.routers import suggestions as routes
+
+    async def mine(user_id):
+        return env["broker"]
+
+    monkeypatch.setattr(routes, "_mine_broker", mine)
+    monkeypatch.setattr(routes, "_now", lambda: OPEN)
+    monkeypatch.setattr(routes, "db", type("_Db", (), {"db": env["db"], "redis": None})())
+    card = await _propose(env["db"], "propose_approve", {"suggestion_id": "s-alice", "live": True})
+    assert card["needs_second_tap"] is True
+    done = await confirm(env["db"], None, None, "alice", card["id"], second_tap=True)
+    assert done["status"] == "CONFIRMED"
+    assert env["broker"].placed[0].symbol == "INFY"

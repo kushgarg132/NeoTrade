@@ -22,6 +22,7 @@ information and alerts only, AI analysis, or confirmable trading actions.
   (`mine`) account. See `docs/superpowers/specs/2026-10-04-dual-broker-accounts-design.md`.
 - Re-check all risk controls, broker state, and current market conditions at confirmation time.
 - Live orders require an explicit second confirmation; do not weaken this flow for Telegram.
+- Approving a proposal "with real money" (`/suggestions/{id}/approve-live`, option or equity) places the order on the user's own (`mine`) account only, never `ai`; the page asks for two taps and chat cards need the second tap.
 
 ## Relevant design already in the repository
 

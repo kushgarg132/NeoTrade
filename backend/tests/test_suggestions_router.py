@@ -291,9 +291,6 @@ def test_approve_live_needs_an_option_a_broker_and_no_kill_switch(live_client, s
     from backend.risk.kill_switch import KillSwitchStore
 
     _with_broker(live_client, None)
-    equity = asyncio.run(_seed(store))
-    assert live_client.post(f"/api/v1/suggestions/{equity['id']}/approve-live").status_code == 400
-
     option = asyncio.run(_seed(store, proposal=_option_proposal()))
     resp = live_client.post(f"/api/v1/suggestions/{option['id']}/approve-live")
     assert resp.status_code == 409 and "Connect Kite or Upstox" in resp.json()["detail"]
@@ -305,3 +302,105 @@ def test_approve_live_needs_an_option_a_broker_and_no_kill_switch(live_client, s
     resp = live_client.post(f"/api/v1/suggestions/{option['id']}/approve-live")
     assert resp.status_code == 409 and "Daily loss limit" in resp.json()["detail"]
     assert broker.placed == []
+
+
+# --- approve live: an equity proposal on the user's own account -------------
+
+_OPEN = datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc)  # Monday 10:30 IST
+
+
+class _FakeMine(_FakeBroker):
+    async def get_order_status(self, broker_order_id):
+        from backend.core.models import BrokerOrderStatus
+        status = self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
+        filled = 10.0 if status == "FILLED" else 0.0
+        return BrokerOrderStatus(broker_order_id=broker_order_id, status=status,
+                                 filled_quantity=filled, average_price=105.5 if filled else 0.0)
+
+
+@pytest.fixture
+def mine_client(live_client, monkeypatch):
+    from backend.suggestions import service
+    monkeypatch.setattr(suggestions_router, "_now", lambda: _OPEN)
+    monkeypatch.setattr(service, "LIVE_FILL_CHECKS", 1)
+    return live_client
+
+
+def _with_mine(client, broker):
+    async def find(user_id):
+        return broker
+    client.app.dependency_overrides[suggestions_router.get_mine_broker] = lambda: find
+
+
+def _approve_live(client, suggestion):
+    return client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
+
+
+def test_equity_approve_live_places_a_market_order_on_mine(mine_client, store, ledger):
+    import asyncio
+    broker = _FakeMine()
+    _with_mine(mine_client, broker)
+    suggestion = asyncio.run(_seed(store))
+    resp = _approve_live(mine_client, suggestion)
+    assert resp.status_code == 200, resp.text
+    assert (resp.json()["status"], resp.json()["venue"]) == ("EXECUTED", "live")
+    (order,) = broker.placed
+    assert (order.order_type, order.product, order.quantity) == ("MARKET", "CNC", 10.0)
+
+
+def test_intraday_equity_approve_live_is_mis(mine_client, store):
+    import asyncio
+    broker = _FakeMine()
+    _with_mine(mine_client, broker)
+    suggestion = asyncio.run(_seed(store, proposal=_proposal(mode="INTRADAY")))
+    assert _approve_live(mine_client, suggestion).status_code == 200
+    assert broker.placed[0].product == "MIS"
+
+
+def test_equity_approve_live_not_filled_is_sent(mine_client, store):
+    import asyncio
+    _with_mine(mine_client, _FakeMine(statuses=("OPEN",)))
+    suggestion = asyncio.run(_seed(store))
+    assert _approve_live(mine_client, suggestion).json()["status"] == "SENT"
+
+
+def test_equity_approve_live_rejected_goes_back_to_pending(mine_client, store):
+    import asyncio
+    _with_mine(mine_client, _FakeMine(statuses=("REJECTED",)))
+    suggestion = asyncio.run(_seed(store))
+    body = _approve_live(mine_client, suggestion).json()
+    assert body["status"] == "PENDING" and body["reason"] == "Broker rejected the order"
+
+
+@pytest.mark.parametrize("why", ["closed", "cap", "kill", "no_mine"])
+def test_equity_approve_live_refusals_place_nothing(mine_client, store, mongo, monkeypatch, why):
+    import asyncio
+
+    from backend.engine.session import IST
+    from backend.prefs import PrefsStore
+    from backend.risk.kill_switch import KillSwitchStore
+
+    broker = _FakeMine()
+    _with_mine(mine_client, None if why == "no_mine" else broker)
+    if why == "closed":
+        monkeypatch.setattr(suggestions_router, "_now", lambda: datetime(2026, 10, 4, 5, 0, tzinfo=timezone.utc))
+    if why == "cap":
+        asyncio.run(PrefsStore(mongo).update("alice", {"per_trade_cap": 500.0}))
+    if why == "kill":
+        today = datetime.now(timezone.utc).astimezone(IST).date()
+        asyncio.run(KillSwitchStore(mongo).trip("alice", today, reason="test", equity=-1.0))
+    suggestion = asyncio.run(_seed(store))
+    resp = _approve_live(mine_client, suggestion)
+    assert resp.status_code == 409, resp.text
+    assert broker.placed == []
+    assert asyncio.run(store.get("alice", suggestion["id"]))["status"] == "PENDING"
+
+
+def test_equity_approve_live_twice_places_one_order(mine_client, store):
+    import asyncio
+    broker = _FakeMine()
+    _with_mine(mine_client, broker)
+    suggestion = asyncio.run(_seed(store))
+    assert _approve_live(mine_client, suggestion).status_code == 200
+    assert _approve_live(mine_client, suggestion).status_code == 409
+    assert len(broker.placed) == 1

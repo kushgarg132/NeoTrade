@@ -133,8 +133,6 @@ async def _pending_suggestion(db, user_id: str, suggestion_id: str, live: bool) 
     suggestion = await SuggestionStore(db).get(user_id, suggestion_id)
     if suggestion is None or suggestion["status"] != "PENDING":
         raise ActionRefused("No such pending proposal.")
-    if live and not suggestion.get("option_contract"):
-        raise ActionRefused("Only option proposals can be approved live; this one can be approved on paper.")
     return suggestion
 
 
@@ -346,7 +344,7 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
 
     note = " Only prepares a card; the user must tap Confirm before anything happens."
     return [
-        tool(propose_approve, "Approve a pending proposal by its id (from get_decisions); live=true only for option proposals." + note),
+        tool(propose_approve, "Approve a pending proposal by its id (from get_decisions); live=true sends it with real money to the trader's own account." + note),
         tool(propose_decline, "Decline a pending proposal by its id, with an optional reason." + note),
         tool(propose_paper_run, "Start or stop the user's intraday paper-trading run." + note),
         tool(propose_setting, "Change one of the user's limits or switches: " + ", ".join(SETTINGS) + "." + note),
@@ -417,6 +415,7 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
         if params.get("live"):
             done = await routes.approve_suggestion_live(
                 params["suggestion_id"], user=user, store=store, ledger=ledger, options_broker=routes._options_broker,
+                mine_broker=routes._mine_broker, mark_price=_mark_price,
             )
         else:
             done = await routes.approve_suggestion(

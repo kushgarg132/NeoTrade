@@ -7,6 +7,7 @@ app where a person causes a trade.
 """
 
 import asyncio
+import uuid
 import logging
 from datetime import datetime, timezone
 from typing import Literal, Optional
@@ -26,6 +27,7 @@ from backend.options.premiums import live_premium_source
 from backend.prefs import PrefsStore
 from backend.suggestions.scan import scan_universe
 from backend.brokers.protocol import BrokerSessionState
+from backend.core.models import Order, Side
 from backend.brokers.registry import BROKERS, get_broker_adapter
 from backend.engine.execution.live_order_store import LiveOrderStore
 from backend.engine.session import IST
@@ -195,6 +197,26 @@ def get_options_broker():
     return _options_broker
 
 
+async def _mine_broker(user_id: str):
+    """The user's own account for an equity approved with real money. Never
+    the AI account (backend/brokers/roles.py)."""
+    from backend.brokers.roles import RoleUnavailable, adapter_for
+
+    try:
+        return await adapter_for(user_id, "mine", get_credential_store(), db.redis)
+    except RoleUnavailable:
+        return None
+
+
+def get_mine_broker():
+    """Injected so tests can approve an equity live against a fake broker."""
+    return _mine_broker
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 @router.post("/{suggestion_id}/approve-live")
 async def approve_suggestion_live(
     suggestion_id: str,
@@ -202,21 +224,27 @@ async def approve_suggestion_live(
     store: SuggestionStore = Depends(get_suggestion_store),
     ledger: LedgerStore = Depends(get_ledger_store),
     options_broker=Depends(get_options_broker),
+    mine_broker=Depends(get_mine_broker),
+    mark_price=Depends(get_mark_price),
 ):
-    """Sends an option proposal to the user's broker as a real order. The
-    one path where a person's tap places real money, so: option proposals
-    only, a connected Kite or Upstox, not on a day the kill-switch tripped,
-    and claimed before the order goes out so a double tap cannot send two."""
+    """Sends a proposal to the user's own broker account as a real order --
+    a person's tap placing real money, so: never the AI account, not on a day
+    the kill-switch tripped, and claimed before the order goes out so a
+    double tap cannot send two. An option goes as a NRML order on a broker
+    that trades options; an equity goes as a MARKET order (CNC for a
+    long-term proposal, MIS for intraday) in market hours, within the
+    per-trade cap."""
     suggestion = await store.get(user.id, suggestion_id)
     if suggestion is None:
         raise HTTPException(status_code=404, detail="No such suggestion")
     if suggestion["status"] != "PENDING":
         raise HTTPException(status_code=409, detail=f"Suggestion already {suggestion['status'].lower()}")
-    if not suggestion.get("option_contract"):
-        raise HTTPException(status_code=400, detail="Only option proposals can be approved live")
-    today = datetime.now(timezone.utc).astimezone(IST).date()
+    now = _now()
+    today = now.astimezone(IST).date()
     if await KillSwitchStore(db.db).is_tripped(user.id, today):
         raise HTTPException(status_code=409, detail="Daily loss limit hit today: no new live orders")
+    if not suggestion.get("option_contract"):
+        return await _approve_equity_live(suggestion, user.id, store, ledger, mine_broker, mark_price, now)
     contract = await InstrumentMaster(db.db).get("NFO", suggestion["symbol"])
     if contract is None:
         raise HTTPException(status_code=400, detail=f"Unknown option contract {suggestion['symbol']!r}")
@@ -243,5 +271,48 @@ async def approve_suggestion_live(
         status, reason = "SENT", "Placed with your broker, not filled yet"
     return await store.settle(
         user.id, suggestion_id, status, reason=reason, order_id=order.id, venue="live",
+        filled_quantity=filled,
+    )
+
+
+async def _approve_equity_live(suggestion, user_id, store, ledger, mine_broker, mark_price, now) -> dict:
+    from backend.engine.autorun import in_session
+    from backend.suggestions.service import execute_live_order
+
+    if not in_session(now):
+        raise HTTPException(status_code=409, detail="The market is closed; live orders go only between 09:15 and 15:30 IST on weekdays.")
+    adapter = await mine_broker(user_id)
+    if adapter is None:
+        raise HTTPException(status_code=409, detail="Connect your broker and set it as My account in Settings to approve with real money.")
+    value = await mark_price(suggestion["symbol"]) * suggestion["quantity"]
+    cap = (await PrefsStore(db.db).get(user_id))["per_trade_cap"]
+    if value > cap:
+        raise HTTPException(status_code=409, detail=f"₹{value:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
+
+    if await store.decide(user_id, suggestion["id"], status="SENDING") is None:
+        raise HTTPException(status_code=409, detail="Suggestion was decided concurrently")
+    order = Order(
+        id=str(uuid.uuid4()), symbol=suggestion["symbol"], side=Side(suggestion["side"]),
+        quantity=suggestion["quantity"], order_type="MARKET",
+        product="CNC" if suggestion["mode"] == "LONGTERM" else "MIS",
+        strategy_name=suggestion.get("strategy"), suggestion_id=suggestion["id"],
+    )
+    try:
+        _, broker_status, filled = await execute_live_order(
+            order, ledger, adapter, LiveOrderStore(db.db), "approve", f"Approved proposal {suggestion['id']}",
+        )
+    except Exception as exc:
+        logger.warning("approve-live: equity order for %s not placed: %s", suggestion["id"], exc)
+        await store.settle(user_id, suggestion["id"], "PENDING", reason=f"Broker refused: {exc}")
+        raise HTTPException(status_code=502, detail=f"Your broker did not take the order: {exc}")
+
+    if filled > 0:
+        status, reason = "EXECUTED", None
+    elif broker_status in ("REJECTED", "CANCELLED"):
+        status, reason = "PENDING", f"Broker {broker_status.lower()} the order"
+    else:
+        status, reason = "SENT", "Placed with your broker, not filled yet"
+    return await store.settle(
+        user_id, suggestion["id"], status, reason=reason, order_id=order.id, venue="live",
         filled_quantity=filled,
     )
