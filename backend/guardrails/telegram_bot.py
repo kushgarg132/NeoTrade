@@ -67,7 +67,8 @@ HELP = ("Ask NeoTrade anything about your account -- portfolio and its history, 
 _menus_set: set[Optional[str]] = set()  # bots whose menu this process already replaced
 
 # Rendered into the chat prompt's page note, so the model points at the buttons here, not the app.
-TELEGRAM_CONTEXT = {"page": "Telegram chat (action cards appear right here with Confirm and Cancel buttons)"}
+TELEGRAM_CONTEXT = {"page": "Telegram chat on a phone (action cards appear right here with Confirm and Cancel "
+                            "buttons; prefer short bullet lists to tables, and keep any table to 2-3 short columns)"}
 
 
 def _offset_key(token: Optional[str]) -> str:

@@ -310,3 +310,24 @@ async def test_typing_is_sent_even_when_drafts_are_accepted(monkeypatch):
     await telegram_bot._reply(db, None, "alice", 42, "tok", "hello")
 
     telegram_bot.telegram.chat_action.assert_awaited_with(42, "tok")
+
+
+def test_a_narrow_table_becomes_an_aligned_monospace_block():
+    md = "Losers:\n\n| Stock | P&L |\n|---|---|\n| **TCS** | −2% |\n| INFY | +1.5% |\n\nDone."
+    out = telegram_bot.telegram.to_html(md)
+    assert "<pre>Stock  P&amp;L\nTCS    −2%\nINFY   +1.5%</pre>" in out
+    assert "|" not in out and out.startswith("Losers:") and out.endswith("Done.")
+
+
+def test_a_wide_table_becomes_a_list_of_rows():
+    md = ("| Stock | Weight | P&L % | Likely Drag |\n|---|---|---|---|\n"
+          "| **MID150BEES** | 25.2% | −1.97% | Largest holding, even a small dip hurts the most |\n"
+          "| GOLDBEES | 9.4% | −7.77% | Gold ETF pulled back meaningfully |")
+    out = telegram_bot.telegram.to_html(md)
+    assert "|" not in out and "<pre>" not in out
+    assert "<b>MID150BEES</b>\nWeight: 25.2%\nP&amp;L %: −1.97%\nLikely Drag: Largest holding" in out
+    assert "\n\n<b>GOLDBEES</b>\nWeight: 9.4%" in out
+
+
+def test_an_unfinished_table_mid_stream_is_left_as_text():
+    assert telegram_bot.telegram.to_html("| Stock | P&L |") == "| Stock | P&amp;L |"

@@ -116,6 +116,45 @@ async def answer_callback(callback_id: str, text: str, token: Optional[str] = No
         logger.warning("telegram callback acknowledgement failed: %s", exc)
 
 
+PRE_MAX_WIDTH = 34  # characters a phone shows on one monospace line
+_TABLE = re.compile(r"(?:^[ \t]*\|.*\|[ \t]*(?:\n|$))+", re.M)
+_SEPARATOR = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$")
+
+
+def _inline(text: str) -> str:
+    """Inline markdown on already-escaped text."""
+    text = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"(?<![\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![\w*])", r"<i>\1</i>", text)
+    text = re.sub(r"(?<!\w)_(?!\s)([^_\n]+?)(?<!\s)_(?!\w)", r"<i>\1</i>", text)
+    return re.sub(r"\[([^\]]+)\]\((https?://[^)\s\"]+)\)", r'<a href="\2">\1</a>', text)
+
+
+def _table(block: str) -> Optional[str]:
+    """Telegram has no tables. A narrow one becomes an aligned monospace
+    block; a wide one a list -- each row's first cell in bold, then one
+    "Header: value" line per column. None if `block` is not a table yet
+    (mid-stream, before the separator row arrives)."""
+    lines = [line.strip() for line in block.strip().splitlines()]
+    if len(lines) < 3 or not _SEPARATOR.match(lines[1]):
+        return None
+    rows = [[cell.strip() for cell in line.strip("|").split("|")] for line in [lines[0], *lines[2:]]]
+    header, body = rows[0], rows[1:]
+    plain = [[re.sub(r"[*_`]", "", cell) for cell in row] for row in rows]
+    widths = [max(len(row[i]) if i < len(row) else 0 for row in plain) for i in range(len(header))]
+    if sum(widths) + 2 * (len(widths) - 1) <= PRE_MAX_WIDTH:
+        text = "\n".join("  ".join(cell.ljust(w) for cell, w in zip(row, widths)).rstrip() for row in plain)
+        return f"<pre>{html.escape(text, quote=False)}</pre>"
+    cards = []
+    for row in body:
+        first = re.sub(r"\*\*(.+?)\*\*", r"\1", row[0]) if row else ""
+        lines_out = [f"<b>{_inline(html.escape(first, quote=False))}</b>"]
+        lines_out += [f"{html.escape(h, quote=False)}: {_inline(html.escape(v, quote=False))}"
+                      for h, v in zip(header[1:], row[1:]) if v]
+        cards.append("\n".join(lines_out))
+    return "\n\n".join(cards) + "\n"
+
+
 def to_html(md: str) -> str:
     """The model writes markdown; Telegram renders only a few HTML tags.
     Unclosed markers (mid-stream) stay literal until their pair arrives."""
@@ -128,15 +167,20 @@ def to_html(md: str) -> str:
             code = re.sub(r"^\w*\n", "", part[3:-3])  # drop the language tag
             out.append(f"<pre>{html.escape(code.strip(), quote=False)}</pre>")
             continue
-        text = html.escape(part, quote=False)
+        tables: list[str] = []
+
+        def stash(match):
+            rendered = _table(match.group(0))
+            if rendered is None:
+                return match.group(0)
+            tables.append(rendered)
+            return f"\x00{len(tables) - 1}\x00"
+
+        text = html.escape(_TABLE.sub(stash, part), quote=False)
         text = re.sub(r"^#{1,6}\s+(.+)$", lambda m: f"<b>{m[1].replace('**', '')}</b>", text, flags=re.M)
         text = re.sub(r"^(\s*)[-*]\s+", r"\1• ", text, flags=re.M)
-        text = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", text)
-        text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
-        text = re.sub(r"(?<![\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![\w*])", r"<i>\1</i>", text)
-        text = re.sub(r"(?<!\w)_(?!\s)([^_\n]+?)(?<!\s)_(?!\w)", r"<i>\1</i>", text)
-        text = re.sub(r"\[([^\]]+)\]\((https?://[^)\s\"]+)\)", r'<a href="\2">\1</a>', text)
-        out.append(text)
+        text = _inline(text)
+        out.append(re.sub(r"\x00(\d+)\x00", lambda m: tables[int(m[1])], text))
     return "".join(out)
 
 
