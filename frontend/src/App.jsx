@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect } from 'react';
-import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, Navigate, useLocation, useNavigationType } from 'react-router-dom';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const PaperOverview = lazy(() => import('./pages/PaperOverview'));
 const PaperSettings = lazy(() => import('./pages/PaperSettings'));
@@ -56,6 +56,16 @@ const JournalMoved = () => {
 
 const App = () => {
   const { user } = useAuth();
+  const { pathname } = useLocation();
+  const navigationType = useNavigationType();
+
+  // A tapped link opens the next page at its top, not at the scroll offset
+  // the last page was left at. Back/forward (POP) keeps the browser's own
+  // restoration. Keyed on the path only: a tab or filter change (?tab=,
+  // ?book=) stays where the reader is.
+  useEffect(() => {
+    if (navigationType !== 'POP') window.scrollTo(0, 0);
+  }, [pathname, navigationType]);
 
   // One socket for the whole session, opened once signed in and closed on the
   // way out so a logged-out tab never holds an authenticated connection.

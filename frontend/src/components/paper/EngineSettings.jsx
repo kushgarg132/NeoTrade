@@ -141,8 +141,8 @@ const EngineSettings = () => {
         >
           <span className="flex flex-col items-end gap-1">
             <span className="figure-md text-sm">{formatCurrency(prefs.daily_loss_limit)}</span>
-            <Link to="/settings" className="doc-meta normal-case text-[var(--stamp)] hover:underline">
-              Set in Guardrails
+            <Link to="/settings?tab=safety" className="doc-meta normal-case text-[var(--stamp)] hover:underline">
+              Set in Settings › Safety
             </Link>
           </span>
         </Row>
