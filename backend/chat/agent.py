@@ -48,6 +48,38 @@ def _questions(text: str) -> list[str]:
     return [line for line in lines if line and not line.endswith(":") and len(line) <= 90][:3]
 
 
+# The model appends its suggested next messages after this line, in the same
+# call as the answer (prompts/chat.md); the stream never shows it.
+NEXT_MARKER = "<<<NEXT>>>"
+
+
+class _Trailer:
+    """Splits the streamed reply from what follows NEXT_MARKER, holding back
+    any tail that could be the start of the marker until it is decided."""
+
+    def __init__(self):
+        self.held, self.trailer = "", None
+
+    def feed(self, text: str) -> str:
+        if self.trailer is not None:
+            self.trailer += text
+            return ""
+        self.held += text
+        if NEXT_MARKER in self.held:
+            before, _, after = self.held.partition(NEXT_MARKER)
+            self.held, self.trailer = "", after
+            return before
+        keep = max((n for n in range(1, len(NEXT_MARKER)) if self.held.endswith(NEXT_MARKER[:n])), default=0)
+        out, self.held = self.held[:len(self.held) - keep], self.held[len(self.held) - keep:]
+        return out
+
+    def flush(self) -> str:
+        """Text held back, released (a tool call or the end of the reply).
+        A marker seen before a tool call was premature: forget its trailer."""
+        out, self.held, self.trailer = self.held, "", None
+        return out
+
+
 async def suggest_followups(question: str, answer: str) -> list[str]:
     """Next questions worth one tap. Best-effort: any failure means no chips,
     never a broken reply."""
@@ -94,12 +126,16 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
 
     agent = create_react_agent(llm, read_tools(db, redis, user_id) + action_tools(db, redis, user_id, message))
     answer = ""
+    split = _Trailer()
+    suggestions: list[str] = []
     try:
         async for event in agent.astream_events({"messages": messages}, version="v1"):
             kind = event["event"]
             name = event.get("name", "")
             label = TOOL_LABELS.get(name, f"Using {name}")
             if kind == "on_tool_start":
+                if held := split.flush():
+                    yield {"type": "content", "data": held}
                 answer = ""  # text before a tool call is narration; follow-ups track the final reply
                 yield {"type": "thinking", "data": label + "…"}
                 yield {"type": "step", "data": {"id": event.get("run_id"), "phase": "start", "label": label,
@@ -111,7 +147,7 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
                 if isinstance(text, str) and text.startswith(CARD_PREFIX):
                     yield {"type": "action", "data": json.loads(text[len(CARD_PREFIX):])}
             elif kind == "on_chat_model_stream":
-                text = _text(event["data"]["chunk"].content)
+                text = split.feed(_text(event["data"]["chunk"].content))
                 if text:
                     answer += text
                     yield {"type": "content", "data": text}
@@ -120,8 +156,17 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
         yield {"type": "content", "data": f"Something went wrong answering that: {exc}"}
         return
 
+    if split.trailer is not None:
+        suggestions = _questions(split.trailer)
+    elif held := split.flush():
+        answer += held
+        yield {"type": "content", "data": held}
     # The reply is complete; clients may show it now rather than wait on the
-    # follow-up call below (Telegram sends its final message here).
+    # fallback call below (Telegram sends its final message here).
     yield {"type": "answer_end", "data": None}
-    if answer and (questions := await suggest_followups(message, answer)):
-        yield {"type": "suggestions", "data": questions}
+    # One call normally: the answer carried its suggestions. The separate
+    # follow-up call is only a fallback for when the model left them out.
+    if not suggestions and answer:
+        suggestions = await suggest_followups(message, answer)
+    if suggestions:
+        yield {"type": "suggestions", "data": suggestions}
