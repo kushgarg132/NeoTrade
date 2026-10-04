@@ -175,3 +175,16 @@ async def test_reply_passes_and_saves_conversation_history(monkeypatch):
     assert seen == {"history": earlier}
     saved = json.loads(redis.set.await_args_list[0].args[1])
     assert saved[-2:] == [{"role": "user", "content": "Yes, approve it"}, {"role": "assistant", "content": "Prepared."}]
+
+
+def test_reasoning_lines_render_markdown():
+    html = telegram_bot._steps_html([{"think": "Confirm via the **Confirm button**."}])
+    assert html == "💭 <i>Confirm via the <b>Confirm button</b>.</i>"
+
+
+def test_on_off_setting_accepts_a_coerced_one():
+    from backend.chat.actions import _setting
+
+    # The tool schema Union[float, bool, str] turns a JSON 1 into 1.0.
+    assert _setting("guardrails_enabled", 1.0) is True
+    assert _setting("guardrails_enabled", 0.0) is False

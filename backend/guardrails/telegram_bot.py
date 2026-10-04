@@ -40,6 +40,8 @@ TYPING_SECONDS = 4  # fallback when drafts are unavailable: "typing…" lasts ~5
 MESSAGE_LIMIT = 2800  # answer text per message; leaves room for the steps under 4096
 STEPS_SHOWN = 8
 CURSOR = " ▍"
+# Rendered into the chat prompt's page note, so the model points at the buttons here, not the app.
+TELEGRAM_CONTEXT = {"page": "Telegram chat (action cards appear right here with Confirm and Cancel buttons)"}
 
 
 def _offset_key(token: Optional[str]) -> str:
@@ -97,7 +99,7 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
     try:
         prefs = await PrefsStore(db).get(user_id)
         with use_model(prefs.get("omniroute_model")):
-            async for event in agent.stream_chat(db, redis, user_id, text, history, {"page": "telegram"}):
+            async for event in agent.stream_chat(db, redis, user_id, text, history, TELEGRAM_CONTEXT):
                 kind, data = event["type"], event["data"]
                 if kind == "step" and data["phase"] == "start":
                     if state["text"].strip():
@@ -167,7 +169,7 @@ def _steps_html(steps: list[dict]) -> str:
     for step in steps[-STEPS_SHOWN:]:
         if "think" in step:
             thought = step["think"]
-            lines.append(f"💭 <i>{html.escape(thought[:150] + ('…' if len(thought) > 150 else ''))}</i>")
+            lines.append(f"💭 <i>{telegram.to_html(thought[:150] + ('…' if len(thought) > 150 else ''))}</i>")
         else:
             args = _args(step["input"])
             lines.append(f"{'✅' if step['done'] else '⏳'} {html.escape(step['label'])}"

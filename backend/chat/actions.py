@@ -140,6 +140,8 @@ def _setting(name: str, value) -> object:
     if kind is bool:
         if isinstance(value, bool):
             return value
+        if isinstance(value, (int, float)) and value in (0, 1):
+            return bool(value)  # the tool schema coerces a JSON 1 to 1.0
         text = str(value).strip().lower()
         if text in ("true", "on", "yes", "1"):
             return True

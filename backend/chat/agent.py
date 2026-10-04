@@ -23,6 +23,9 @@ TOOL_LABELS = {
     "get_portfolio": "Reading your portfolio", "get_journal": "Reading your journal",
     "get_paper": "Checking the paper engine", "get_decisions": "Reading your proposals",
     "get_limits": "Reading your limits", "explain_index": "Explaining the index",
+    "propose_approve": "Preparing an approval", "propose_decline": "Preparing a decline",
+    "propose_paper_run": "Preparing a paper-run change", "propose_setting": "Preparing a settings change",
+    "propose_order": "Preparing an order",
 }
 
 
