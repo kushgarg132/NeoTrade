@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 import uuid
 from typing import Optional
 
@@ -28,6 +29,11 @@ HISTORY_PREFIX = "telegram:ai:history:"
 HISTORY_TURNS = 10  # user + assistant messages kept, so "yes, do it" has context
 HISTORY_SECONDS = 6 * 60 * 60
 START_SECONDS = 15 * 60  # matches the Settings link code's lifetime
+SUGGEST_PREFIX = "telegram:ai:suggest:"
+EDIT_SECONDS = 1.0  # stream by editing at most this often; Telegram rate-limits edits
+TYPING_SECONDS = 4  # "typing…" lasts ~5s, so refresh it a little sooner
+MESSAGE_LIMIT = 3500  # under Telegram's 4096 cap, leaving room for HTML tags
+CURSOR = " ▍"
 
 
 def _offset_key(token: Optional[str]) -> str:
@@ -75,38 +81,68 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
         await telegram.send(chat_id, "Use /help or send a question for your NeoTrade assistant.", token)
         return
 
-    chunks, cards, suggestions = [], [], []
     history = await _history(redis, user_id)
+    typing = asyncio.create_task(_keep_typing(chat_id, token))
+    chunks, cards, suggestions = [], [], []
+    message_id, shown, offset, last_edit = None, "", 0, 0.0
+
+    async def show(md: str, markup: Optional[dict] = None) -> None:
+        # One message grows by edits; a too-long answer continues in a new one.
+        nonlocal message_id, shown
+        if md == shown and markup is None:
+            return
+        if message_id is None:
+            message_id = await telegram.send_rich(chat_id, md, token, markup)
+        else:
+            await telegram.edit_rich(chat_id, message_id, md, token, markup)
+        shown = md
+
     try:
         async for event in agent.stream_chat(db, redis, user_id, text, history, {"page": "telegram"}):
-            if event["type"] == "content":
+            if event["type"] == "thinking" and not chunks:
+                await show(f"_{event['data']}_")
+            elif event["type"] == "content":
                 chunks.append(event["data"])
+                answer = "".join(chunks)
+                while len(answer) - offset > MESSAGE_LIMIT:
+                    cut = answer.rfind("\n", offset, offset + MESSAGE_LIMIT)
+                    cut = cut if cut > offset else offset + MESSAGE_LIMIT
+                    await show(answer[offset:cut].strip())
+                    message_id, shown, offset = None, "", cut
+                if time.monotonic() - last_edit >= EDIT_SECONDS:
+                    await show(answer[offset:].strip() + CURSOR)
+                    last_edit = time.monotonic()
             elif event["type"] == "action":
                 cards.append(event["data"])
             elif event["type"] == "suggestions":
                 suggestions = event["data"]
     except Exception:
         logger.exception("telegram chat failed for user %s", user_id)
-        await telegram.send(chat_id, "NeoTrade could not answer that right now. Please try again shortly.", token)
+        await show("NeoTrade could not answer that right now. Please try again shortly.")
         return
+    finally:
+        typing.cancel()
 
     answer = "".join(chunks).strip()
     if answer:
         await _remember(redis, user_id, history, text, answer)
-    if answer:
-        # Suggested next questions ride on the last chunk as a reply keyboard:
-        # tapping one sends it back as the user's next message.
-        keyboard = {"keyboard": [[{"text": q}] for q in suggestions],
-                    "one_time_keyboard": True, "resize_keyboard": True} if suggestions else None
-        # Telegram's message limit is 4096 Unicode characters.
-        starts = range(0, len(answer), 4000)
-        for start in starts:
-            await telegram.send(chat_id, answer[start:start + 4000], token,
-                                keyboard if start == starts[-1] else None)
+        # Suggested next questions: buttons under the final answer. Tapping one
+        # asks it (see _callback); the questions live in Redis by message.
+        markup = {"inline_keyboard": [[{"text": q[:64], "callback_data": f"nt:ask:{i}"}]
+                                      for i, q in enumerate(suggestions)]} if suggestions else None
+        await show("".join(chunks)[offset:].strip(), markup)
+        if suggestions and message_id is not None and redis is not None:
+            await redis.set(f"{SUGGEST_PREFIX}{user_id}:{message_id}", json.dumps(suggestions), ex=HISTORY_SECONDS)
     elif not cards:
-        await telegram.send(chat_id, "NeoTrade could not prepare a response. Please try again.", token)
+        await show("NeoTrade could not prepare a response. Please try again.")
     for card in cards:
         await telegram.send_buttons(chat_id, card["summary"], _buttons(card), token)
+
+
+async def _keep_typing(chat_id: int, token: Optional[str]) -> None:
+    while True:
+        await telegram.chat_action(chat_id, token)
+        await asyncio.sleep(TYPING_SECONDS)
 
 
 async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str], callback: dict) -> None:
@@ -114,6 +150,9 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
     callback_id = callback.get("id", "")
     _, _, action_id = data.partition("nt:")
     command, _, action_id = action_id.partition(":")
+    if command == "ask":
+        await _ask(db, redis, user_id, chat_id, token, callback, action_id)
+        return
     if command not in {"confirm", "cancel"} or not action_id:
         return
     try:
@@ -129,6 +168,18 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
         result = "NeoTrade could not complete that action. Please check the app and try again."
     await telegram.answer_callback(callback_id, result[:180], token)
     await telegram.send(chat_id, result, token)
+
+
+async def _ask(db, redis, user_id: str, chat_id: int, token: Optional[str], callback: dict, index: str) -> None:
+    """A tapped suggestion: echo it, then answer it like a typed message."""
+    message_id = (callback.get("message") or {}).get("message_id")
+    raw = await redis.get(f"{SUGGEST_PREFIX}{user_id}:{message_id}") if redis is not None else None
+    questions = json.loads(raw) if raw else []
+    question = questions[int(index)] if index.isdigit() and int(index) < len(questions) else None
+    await telegram.answer_callback(callback.get("id", ""), "" if question else "That suggestion expired.", token)
+    if question:
+        await telegram.send_rich(chat_id, f"» _{question}_", token)
+        await _reply(db, redis, user_id, chat_id, token, question)
 
 
 async def poll_once(db, redis) -> int:
