@@ -68,6 +68,18 @@ from backend.routers import auth as auth_router
 app.include_router(auth_router.router, prefix=settings.API_PREFIX, tags=["Auth"])
 
 # Database Events
+_BACKGROUND: set = set()  # strong refs, so a startup task is not garbage-collected
+
+
+async def _expand_instruments(master) -> None:
+    try:
+        free_count = await refresh_from_free_public_sources(master)
+        if free_count:
+            logger.info(f"Instrument master expanded from free NSE/BSE lists: {free_count} upserted.")
+    except Exception as exc:
+        logger.warning(f"free NSE/BSE instrument refresh failed: {exc}")
+
+
 @app.on_event("startup")
 async def startup_db_client():
     logger.info("Starting up NeoTrade API...")
@@ -87,9 +99,10 @@ async def startup_db_client():
     await RefreshTokenStore(db.db).ensure_indexes()
     count = await refresh_instruments(SeedFileSource(), master)
     logger.info(f"Instrument master seeded: {count} upserted.")
-    free_count = await refresh_from_free_public_sources(master)
-    if free_count:
-        logger.info(f"Instrument master expanded from free NSE/BSE lists: {free_count} upserted.")
+    # NSE/BSE list downloads plus thousands of upserts can take minutes; run
+    # them in the background so a deploy never waits on them (it was a ~4
+    # minute 502 whenever the 20-hour marker had expired).
+    _BACKGROUND.add(asyncio.create_task(_expand_instruments(master)))
     # No Kite refresh here any more: credentials are per-user, and at startup
     # there is no user in scope. It happens when someone connects their broker
     # (see routers/broker.py), which is also when a fresh daily token exists.
