@@ -14,6 +14,7 @@ import PaperShell from '../components/paper/PaperShell';
 import { paperPositions } from '../utils/books';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
 import { Badge } from '../components/common/Badge';
+import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
 import { useTopic } from '../hooks/useStream';
 import {
@@ -52,6 +53,8 @@ const Portfolio = () => {
   const [fills, setFills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [ticket, setTicket] = useState(null);
+  const [openOrders, setOpenOrders] = useState([]);
 
   const load = () => {
     Promise.all([
@@ -75,6 +78,21 @@ const Portfolio = () => {
   };
 
   useEffect(load, []);
+
+  const loadOpenOrders = () =>
+    api
+      .get(endpoints.orders.paper)
+      .then((res) => setOpenOrders(res.data))
+      .catch(() => {});
+
+  useEffect(() => {
+    loadOpenOrders();
+    const timer = setInterval(loadOpenOrders, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const cancelOpenOrder = (id) =>
+    api.post(endpoints.orders.cancelPaper(id)).finally(loadOpenOrders);
   useTopic('positions', (message) => setPositions(paperPositions(message.data)));
   useTopic('pnl', (message) => message.data?.paper && setPnl(message.data.paper));
   useTopic('trades', load);
@@ -178,6 +196,7 @@ const Portfolio = () => {
                   { key: 'avg', label: 'Avg cost', align: 'right' },
                   { key: 'value', label: 'Value', align: 'right' },
                   { key: 'unreal', label: 'Unrealised', align: 'right' },
+                  { key: 'trade', label: '', align: 'right' },
                 ]}
               >
                 {open.map((position) => (
@@ -201,6 +220,16 @@ const Portfolio = () => {
                     <Cell align="right">
                       <Money value={position.unrealized_pnl} />
                     </Cell>
+                    <Cell align="right">
+                      <span className="inline-flex gap-2">
+                        <TicketButton
+                          label="Sell"
+                          tone="loss"
+                          onClick={() => setTicket({ symbol: position.symbol, side: 'SELL' })}
+                        />
+                        <TicketButton label="Add" onClick={() => setTicket({ symbol: position.symbol })} />
+                      </span>
+                    </Cell>
                   </Row>
                 ))}
               </Statement>
@@ -213,6 +242,42 @@ const Portfolio = () => {
             </>
           )}
         </Sheet>
+
+        {openOrders.length > 0 && (
+          <Sheet title="Open orders" meta={`${openOrders.length}`}>
+            <Statement
+              columns={[
+                { key: 'scrip', label: 'Scrip' },
+                { key: 'side', label: 'Side' },
+                { key: 'qty', label: 'Qty', align: 'right' },
+                { key: 'limit', label: 'Limit', align: 'right' },
+                { key: 'placed', label: 'Placed', align: 'right' },
+                { key: 'cancel', label: '', align: 'right' },
+              ]}
+            >
+              {openOrders.map((order) => (
+                <Row key={order.id}>
+                  <Cell>
+                    <Scrip symbol={order.symbol} />
+                  </Cell>
+                  <Cell>{order.side === 'BUY' ? 'Buy' : 'Sell'}</Cell>
+                  <Cell align="right" mono>
+                    {formatQuantity(order.quantity)}
+                  </Cell>
+                  <Cell align="right" mono>
+                    {formatCurrency(order.limit_price)}
+                  </Cell>
+                  <Cell align="right" mono>
+                    {new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                  </Cell>
+                  <Cell align="right">
+                    <TicketButton label="Cancel" tone="loss" onClick={() => cancelOpenOrder(order.id)} />
+                  </Cell>
+                </Row>
+              ))}
+            </Statement>
+          </Sheet>
+        )}
 
         <Sheet title="Executions" meta={`${fills.length} fills`}>
           {recentFills.length === 0 ? (
@@ -279,6 +344,17 @@ const Portfolio = () => {
           </Sheet>
         )}
       </PaperShell>
+      {ticket && (
+        <OrderTicket
+          {...ticket}
+          venue="paper"
+          onClose={() => setTicket(null)}
+          onDone={() => {
+            load();
+            loadOpenOrders();
+          }}
+        />
+      )}
     </Layout>
   );
 };

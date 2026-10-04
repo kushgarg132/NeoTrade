@@ -11,6 +11,7 @@ import {
 import { cn } from '../utils/cn';
 
 import TradingChart from './stock/TradingChart';
+import OrderTicket from './trading/OrderTicket';
 import SentimentPanel from './analysis/SentimentPanel';
 import StockFlags from './analysis/StockFlags';
 import TradingLevels from './analysis/TradingLevels';
@@ -46,6 +47,7 @@ const AnalysisCard = ({ quick, ai, aiLoading, aiError, aiRequested, onOpenAiTab 
   const [watched, setWatched] = useState(false);
   const [watchError, setWatchError] = useState(null);
   const [failedLogoUrl, setFailedLogoUrl] = useState(null);
+  const [ticketSide, setTicketSide] = useState(null);
 
   if (!quick) return null;
 
@@ -113,11 +115,23 @@ const AnalysisCard = ({ quick, ai, aiLoading, aiError, aiRequested, onOpenAiTab 
 
         <div className="mt-4 pt-3 border-t border-[var(--rule)] flex items-center justify-between gap-3">
           <span className="doc-meta">Enquiry</span>
-          <Button variant="secondary" size="sm" onClick={addToWatchlist} disabled={watched}>
-            {watched ? <Check className="w-3.5 h-3.5" /> : <BookmarkPlus className="w-3.5 h-3.5" />}
-            {watched ? 'On watchlist' : 'Watch'}
-          </Button>
+          <span className="inline-flex items-center gap-2">
+            <Button variant="approve" size="sm" onClick={() => setTicketSide('BUY')}>Buy</Button>
+            <Button variant="danger" size="sm" onClick={() => setTicketSide('SELL')}>Sell</Button>
+            <Button variant="secondary" size="sm" onClick={addToWatchlist} disabled={watched}>
+              {watched ? <Check className="w-3.5 h-3.5" /> : <BookmarkPlus className="w-3.5 h-3.5" />}
+              {watched ? 'On watchlist' : 'Watch'}
+            </Button>
+          </span>
         </div>
+        {ticketSide && (
+          <OrderTicket
+            symbol={company?.symbol}
+            side={ticketSide}
+            lastPrice={company?.current_price}
+            onClose={() => setTicketSide(null)}
+          />
+        )}
         {watchError && <p className="mt-2 text-sm text-[var(--loss)]">{watchError}</p>}
       </Sheet>
 

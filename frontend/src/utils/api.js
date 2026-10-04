@@ -203,6 +203,11 @@ export const endpoints = {
     connect: (broker) => `/broker/${broker}/connect`,
     disconnect: (broker) => `/broker/${broker}/disconnect`,
   },
+  orders: {
+    propose: '/orders/propose',
+    paper: '/orders/paper',
+    cancelPaper: (id) => `/orders/paper/${encodeURIComponent(id)}/cancel`,
+  },
   chat: {
     confirm: (id) => `/chat/actions/${encodeURIComponent(id)}/confirm`,
     cancel: (id) => `/chat/actions/${encodeURIComponent(id)}/cancel`,

@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
 import { RESEARCH_TABS } from '../components/layout/sections';
 import { Sheet, Statement, Row, Cell, Empty, Ruling, Scrip } from '../components/doc/Doc';
+import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatSignedPercent } from '../utils/formatters';
 import { cn } from '../utils/cn';
@@ -13,6 +14,7 @@ const Watchlist = () => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [ticket, setTicket] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -84,6 +86,10 @@ const Watchlist = () => {
                 </Cell>
                 <Cell align="right">
                   <span className="inline-flex items-center gap-2">
+                    <TicketButton
+                      label="Buy"
+                      onClick={() => setTicket({ symbol: stock.symbol, lastPrice: stock.current_price })}
+                    />
                     <button
                       type="button"
                       onClick={(event) => remove(event, stock.symbol)}
@@ -104,6 +110,7 @@ const Watchlist = () => {
         )}
       </Sheet>
       </div>
+      {ticket && <OrderTicket {...ticket} onClose={() => setTicket(null)} />}
     </Layout>
   );
 };

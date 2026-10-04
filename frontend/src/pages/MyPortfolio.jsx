@@ -8,6 +8,7 @@ import { AccountSwitch, useAccount } from '../components/common/AccountSwitch';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, Scrip, Stamp, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
 import Markdown from '../components/common/Markdown';
+import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatQuantity, formatPercent, formatDateTime } from '../utils/formatters';
 
@@ -182,12 +183,21 @@ const Concentration = ({ concentration, count }) => (
   </Sheet>
 );
 
+/** Sell or add to an equity holding from the user's own account. */
+const TradeButtons = ({ row, onTrade }) =>
+  onTrade && row.kind !== 'MF' ? (
+    <span className="inline-flex gap-2">
+      <TicketButton label="Sell" tone="loss" onClick={() => onTrade({ symbol: row.symbol, side: 'SELL', lastPrice: row.last_price })} />
+      <TicketButton label="Add" onClick={() => onTrade({ symbol: row.symbol, lastPrice: row.last_price })} />
+    </span>
+  ) : null;
+
 /**
  * A phone's holdings: one line each -- name and weight, value and gain, the
  * verdict -- with everything else a tap away. The full statement is for
  * wider sheets.
  */
-const HoldingsList = ({ rows, open, onToggle }) => (
+const HoldingsList = ({ rows, open, onToggle, onTrade }) => (
   <ul className="sm:hidden -mx-3 divide-y divide-[var(--rule)]">
     {rows.map((row) => {
       const key = row.isin || row.symbol;
@@ -222,8 +232,9 @@ const HoldingsList = ({ rows, open, onToggle }) => (
                 <div><dt className="field-label">P&amp;L</dt><dd><Money value={row.pnl} size="sm" className="text-sm" /></dd></div>
               </dl>
               {row.kind !== 'MF' && (
-                <p className="pt-2">
+                <p className="pt-2 flex items-center justify-between gap-3">
                   <Scrip symbol={row.symbol}>Open {row.symbol}'s enquiry</Scrip>
+                  <TradeButtons row={row} onTrade={onTrade} />
                 </p>
               )}
               <Detail row={row} />
@@ -235,7 +246,7 @@ const HoldingsList = ({ rows, open, onToggle }) => (
   </ul>
 );
 
-const HoldingsTable = ({ rows, open, onToggle }) => (
+const HoldingsTable = ({ rows, open, onToggle, onTrade }) => (
   <div className="hidden sm:block">
   <Statement
     columns={[
@@ -293,6 +304,11 @@ const HoldingsTable = ({ rows, open, onToggle }) => (
       {open === (row.isin || row.symbol) && (
         <tr>
           <td colSpan={7}>
+            {onTrade && row.kind !== 'MF' && (
+              <div className="px-3 pt-2 flex justify-end">
+                <TradeButtons row={row} onTrade={onTrade} />
+              </div>
+            )}
             <Detail row={row} />
           </td>
         </tr>
@@ -316,6 +332,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState(null);
   const [open, setOpen] = useState(null);
+  const [ticket, setTicket] = useState(null);
   const toggle = (key) => setOpen((current) => (current === key ? null : key));
 
   const accountState = useAccount(lockedAccount);
@@ -475,7 +492,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
                           Holdings marked Review first have serious results on the review rules. What to do is your call.
                         </p>
                       )}
-                      <Holdings rows={stocks} open={open} onToggle={toggle} />
+                      <Holdings rows={stocks} open={open} onToggle={toggle} onTrade={account === 'mine' ? setTicket : null} />
                     </Sheet>
                   )}
                   {funds.length > 0 && (
@@ -504,6 +521,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
           </div>
         )}
       </div>
+      {ticket && <OrderTicket {...ticket} venue="mine" onClose={() => setTicket(null)} />}
     </Layout>
   );
 };

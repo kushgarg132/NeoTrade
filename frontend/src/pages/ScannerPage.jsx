@@ -10,6 +10,7 @@ import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatSignedPercent } from '../utils/formatters';
 import { cn } from '../utils/cn';
+import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 
 /**
  * The scan: the user's universe swept for two named setups -- a breakout and a
@@ -32,6 +33,7 @@ const ScannerPage = () => {
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
   const [showSkipped, setShowSkipped] = useState(false);
+  const [ticket, setTicket] = useState(null);
   const navigate = useNavigate();
 
   const run = async () => {
@@ -168,6 +170,9 @@ const ScannerPage = () => {
                     </div>
                     <p className="mt-2 doc-meta normal-case">{pick.reasons.join(' · ')}</p>
                   </button>
+                  <div className="mt-2">
+                    <TicketButton label="Buy" onClick={() => setTicket({ symbol: pick.symbol, lastPrice: pick.close })} />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -214,6 +219,7 @@ const ScannerPage = () => {
                     <Cell align="right">
                       <span className="inline-flex items-center gap-2">
                         <Change value={pick.return_3m} />
+                        <TicketButton label="Buy" onClick={() => setTicket({ symbol: pick.symbol, lastPrice: pick.close })} />
                         <ArrowRight
                           className="w-4 h-4 text-[var(--ink-faint)] group-hover:text-[var(--stamp)] transition-colors"
                           aria-hidden="true"
@@ -227,6 +233,7 @@ const ScannerPage = () => {
           </Sheet>
         )}
       </div>
+      {ticket && <OrderTicket {...ticket} onClose={() => setTicket(null)} />}
     </Layout>
   );
 };
