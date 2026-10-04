@@ -86,8 +86,10 @@ class Order(BaseModel):
     symbol: str
     side: Side
     quantity: float
-    order_type: Literal["MARKET", "LIMIT"]
+    order_type: Literal["MARKET", "LIMIT", "SL-M"]
     limit_price: Optional[float] = None
+    # Stop-loss market: becomes a market order once the price crosses this.
+    trigger_price: Optional[float] = None
     status: Literal["PENDING", "FILLED", "CANCELLED", "REJECTED"] = "PENDING"
     # CNC (delivery) vs MIS (intraday, margin) -- Task 6's Indian cost model
     # (backend/engine/execution/costs.py) selects STT/brokerage rates by

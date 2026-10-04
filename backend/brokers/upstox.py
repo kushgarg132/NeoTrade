@@ -101,6 +101,8 @@ _HISTORY_URL = "https://api.upstox.com/v2/historical-candle/{key}/{interval}/{to
 _SCRIP_URL = "https://assets.upstox.com/market-quote/instruments/exchange/{exchange}.json.gz"
 _PLACE_ORDER_URL = "https://api-hft.upstox.com/v2/order/place"
 _CANCEL_ORDER_URL = "https://api-hft.upstox.com/v2/order/cancel"
+_MODIFY_ORDER_URL = "https://api-hft.upstox.com/v2/order/modify"
+_ORDER_BOOK_URL = "https://api.upstox.com/v2/order/retrieve-all"
 _ORDER_DETAILS_URL = "https://api.upstox.com/v2/order/details"
 _POSITIONS_URL = "https://api.upstox.com/v2/portfolio/short-term-positions"
 _TRADES_URL = "https://api.upstox.com/v2/order/trades/get-trades-for-day"
@@ -390,9 +392,9 @@ class UpstoxAdapter:
                 "order_type": order.order_type,
                 "transaction_type": order.side.value,
                 "validity": "DAY",
-                "price": 0,
+                "price": order.limit_price or 0,
                 "instrument_token": instrument_key,
-                "trigger_price": 0,
+                "trigger_price": order.trigger_price or 0,
                 "disclosed_quantity": 0,
             }, headers=self._headers(token))
             resp.raise_for_status()
@@ -406,6 +408,35 @@ class UpstoxAdapter:
                 f"{_CANCEL_ORDER_URL}?order_id={broker_order_id}", headers=self._headers(token),
             )
             resp.raise_for_status()
+
+    async def modify_order(self, broker_order_id: str, quantity: Optional[int] = None, price: Optional[float] = None,
+                           trigger_price: Optional[float] = None) -> None:
+        current = next((o for o in await self.get_orders() if o["order_id"] == broker_order_id), None)
+        if current is None:
+            raise ValueError(f"No order {broker_order_id} at Upstox")
+        token = await self.get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.put(_MODIFY_ORDER_URL, json={
+                "order_id": broker_order_id, "validity": "DAY", "disclosed_quantity": 0,
+                "quantity": quantity or int(current["quantity"]),
+                "price": price if price is not None else current["price"],
+                "trigger_price": trigger_price if trigger_price is not None else current["trigger_price"],
+                "order_type": current.get("order_type") or ("LIMIT" if (price or current["price"]) else "MARKET"),
+            }, headers=self._headers(token))
+            resp.raise_for_status()
+
+    async def get_orders(self) -> list[dict]:
+        """Today's order book, normalised."""
+        token = await self.get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(_ORDER_BOOK_URL, headers=self._headers(token))
+            resp.raise_for_status()
+        return [{
+            "order_id": o.get("order_id"), "symbol": o.get("trading_symbol") or o.get("tradingsymbol"),
+            "side": o.get("transaction_type"), "quantity": float(o.get("quantity") or 0),
+            "price": float(o.get("price") or 0), "trigger_price": float(o.get("trigger_price") or 0),
+            "order_type": o.get("order_type"), "status": o.get("status"),
+        } for o in resp.json().get("data") or []]
 
     async def get_order_status(self, broker_order_id: str) -> BrokerOrderStatus:
         token = await self.get_access_token()

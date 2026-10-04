@@ -266,6 +266,33 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         summary = f"Remember: {new[0]}" if len(new) == 1 else "Remember:\n" + "\n".join(f"• {t}" for t in new)
         return await card("memory", {"facts": new}, summary)
 
+    async def _mine_card(build) -> str:
+        """A card on the user's own account; a refusal comes back as text."""
+        from backend.chat import account_actions as aa
+
+        try:
+            kind, params, summary = await build(await aa.mine_adapter(user_id, None))
+        except (aa._Refused, ActionRefused) as exc:
+            return str(exc)
+        return await card(kind, params, summary, venue="live", second_tap=True)
+
+    async def propose_exit(symbol: str, quantity: Optional[int] = None) -> str:
+        from backend.chat import account_actions as aa
+        return await _mine_card(lambda adapter: aa.propose_exit(adapter, symbol, quantity))
+
+    async def propose_cancel_order(order_id: str) -> str:
+        from backend.chat import account_actions as aa
+        return await _mine_card(lambda adapter: aa.propose_cancel(adapter, order_id))
+
+    async def propose_modify_order(order_id: str, price: Optional[float] = None, quantity: Optional[int] = None) -> str:
+        from backend.chat import account_actions as aa
+        return await _mine_card(lambda adapter: aa.propose_modify(adapter, order_id, price, quantity))
+
+    async def propose_stop_loss(symbol: str, trigger_price: float) -> str:
+        from backend.chat import account_actions as aa
+        last = await _mark_price(symbol.strip().upper().removesuffix(".NS"))
+        return await _mine_card(lambda adapter: aa.propose_stop(adapter, symbol, trigger_price, last))
+
     def tool(fn, description):
         return StructuredTool.from_function(coroutine=fn, name=fn.__name__, description=description)
 
@@ -277,6 +304,10 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         tool(propose_setting, "Change one of the user's limits or switches: " + ", ".join(SETTINGS) + "." + note),
         tool(propose_order, "Place a market order for an NSE stock: side BUY or SELL, whole quantity, product CNC "
                             "(delivery) or MIS (intraday), venue paper or live. Live is real money." + note),
+        tool(propose_exit, "Sell all (default) or part of a holding in the trader's OWN account at market." + note),
+        tool(propose_cancel_order, "Cancel an open order in the trader's own account, by its broker order id." + note),
+        tool(propose_modify_order, "Change the price and/or quantity of an open order in the trader's own account." + note),
+        tool(propose_stop_loss, "Add a stop-loss (SL-M) below the price on a holding in the trader's own account." + note),
         tool(propose_memory, "Save lasting facts or preferences the trader shared (goals, situation, dislikes) "
                              "to their profile memory -- pass ALL of them in one call, as one card." + note),
     ]
@@ -389,5 +420,17 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
                       order_type="MARKET", product=product, strategy_name="chat")
         _, status, filled = await execute_live_order(order, ledger, adapter, LiveOrderStore(db), "chat", action["message"])
         return f"Sent to your broker: {status.lower()}, {filled:g} of {params['quantity']} filled."
+
+    if kind in ("exit", "cancel_order", "modify_order", "stop_loss"):
+        # The user's own account only (backend/chat/account_actions.py).
+        from backend.chat import account_actions as aa
+
+        if not in_session(_now()):
+            raise ActionRefused("The market is closed; orders go only between 09:15 and 15:30 IST on weekdays.")
+        adapter = await aa.mine_adapter(user_id, credentials)
+        try:
+            return await aa.execute(adapter, kind, params)
+        except aa._Refused as exc:
+            raise ActionRefused(str(exc))
 
     raise ActionRefused(f"Unknown action {kind!r}.")

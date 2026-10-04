@@ -28,7 +28,9 @@ TOOL_LABELS = {
     "query_my_data": "Looking through your data", "propose_memory": "Preparing a memory",
     "propose_approve": "Preparing an approval", "propose_decline": "Preparing a decline",
     "propose_paper_run": "Preparing a paper-run change", "propose_setting": "Preparing a settings change",
-    "propose_order": "Preparing an order",
+    "propose_order": "Preparing an order", "propose_exit": "Preparing an exit",
+    "propose_cancel_order": "Preparing a cancellation", "propose_modify_order": "Preparing an order change",
+    "propose_stop_loss": "Preparing a stop-loss",
 }
 
 
