@@ -12,6 +12,7 @@ const Journal = lazy(() => import('./pages/Journal'));
 const MyPortfolio = lazy(() => import('./pages/MyPortfolio'));
 const Trading = lazy(() => import('./pages/Trading'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Profile = lazy(() => import('./pages/Profile'));
 import Login from './pages/Login';
 const SystemArchitecturePage = lazy(() => import('./pages/SystemArchitecturePage'));
 import RequireAuth from './components/RequireAuth';
@@ -81,6 +82,7 @@ const App = () => {
       <Route path="/watchlist" element={gated(<Watchlist />)} />
       <Route path="/journal" element={gated(<Journal />)} />
       <Route path="/settings" element={gated(<Settings />)} />
+      <Route path="/profile" element={gated(<Profile />)} />
       <Route path="/system" element={gated(<SystemArchitecturePage />)} />
       <Route path="*" element={gated(<NotFound />)} />
     </Routes>

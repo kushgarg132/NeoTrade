@@ -170,6 +170,10 @@ export const endpoints = {
     pnl: (venue, mode) => inMode('/analytics/pnl', venue, mode),
     scorecard: (venue, mode) => inMode('/analytics/scorecard', venue, mode),
   },
+  profile: {
+    get: '/profile',
+    memories: '/profile/memories',
+  },
   guardrails: {
     status: '/guardrails',
     link: '/guardrails/telegram/link',

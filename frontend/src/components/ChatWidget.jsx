@@ -25,6 +25,7 @@ const SUGGESTED = [
   ['/journal', ['How did I do this month?', "What's my costliest habit?"]],
   ['/paper', ['Is the engine running?', 'Which proposal is strongest?', 'How far is any strategy from going live?']],
   ['/settings', ['What are my limits?', 'Did any guardrail trip today?']],
+  ['/profile', ['What do you remember about me?', 'Does my portfolio fit my risk appetite?']],
   ['/', ['How am I doing today?', 'Anything waiting for me?', 'Why did NIFTY move today?']],
 ];
 // '/' is last, so it catches every page without its own list.

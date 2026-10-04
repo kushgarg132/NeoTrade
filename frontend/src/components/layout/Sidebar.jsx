@@ -1,9 +1,10 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
 import { SECTIONS } from './sections';
+import { Avatar } from '../common/Avatar';
 
 const Sidebar = ({ pendingCount = 0 }) => {
   const { user, logout } = useAuth();
@@ -48,10 +49,13 @@ const Sidebar = ({ pendingCount = 0 }) => {
       </nav>
 
       <div className="border-t border-[var(--rule-strong)] px-5 py-3 flex items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold truncate">{user?.name || 'Signed in'}</p>
-          <p className="doc-meta truncate normal-case">{user?.email}</p>
-        </div>
+        <Link to="/profile" className="flex-1 min-w-0 flex items-center gap-2.5 group" aria-label="Your profile">
+          <Avatar src={user?.picture} name={user?.name} size={32} />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold truncate group-hover:text-[var(--stamp)]">{user?.name || 'Signed in'}</p>
+            <p className="doc-meta truncate normal-case">{user?.email}</p>
+          </div>
+        </Link>
         <button
           type="button"
           onClick={logout}

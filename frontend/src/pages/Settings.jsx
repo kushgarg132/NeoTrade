@@ -12,6 +12,7 @@ import { cn } from '../utils/cn';
 import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
 import { formatQuantity, formatDateTime } from '../utils/formatters';
+import { Avatar } from '../components/common/Avatar';
 
 /**
  * Standing instructions for the real account: who the broker is, the limits
@@ -1197,6 +1198,25 @@ const MoreSections = () => (
   </nav>
 );
 
+/** The way in to Profile from the phone, where Settings is the "More" tab. */
+const ProfileRow = () => {
+  const { user } = useAuth();
+  const [displayName, setDisplayName] = useState(null);
+  useEffect(() => {
+    api.get(endpoints.profile.get).then((res) => setDisplayName(res.data.profile.display_name || null)).catch(() => {});
+  }, []);
+  return (
+    <Link to="/profile" className="flex items-center gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors">
+      <Avatar src={user?.picture} name={displayName || user?.name} size={40} />
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-semibold truncate">{displayName || user?.name || 'Your profile'}</span>
+        <span className="block doc-meta normal-case truncate">Profile, AI instructions and memory</span>
+      </span>
+      <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
+    </Link>
+  );
+};
+
 const Settings = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -1211,6 +1231,7 @@ const Settings = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
+        <ProfileRow />
         <MoreSections />
         <Link
           to="/paper/settings"
