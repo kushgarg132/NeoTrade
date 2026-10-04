@@ -263,3 +263,41 @@ async def test_pending_long_term_stock_proposals_are_bought_on_paper_at_the_open
     trades = await world.db["paper_trades"].find({"user_id": "alice", "symbol": "SJVN"}).to_list(None)
     assert len(trades) == 1 and trades[0]["status"] == "OPEN"
     assert any("bought 1" in text for text in longterm["sent"])
+
+
+@pytest.mark.asyncio
+async def test_auto_approve_stays_inside_the_account_best_score_first(world, longterm, monkeypatch):
+    import backend.marks as marks
+    from backend.suggestions.store import SuggestionStore
+
+    async def mark_prices(db, symbols):
+        return {s: 100.0 for s in symbols}
+
+    monkeypatch.setattr(marks, "mark_prices", mark_prices)
+    await world.db["user_prefs"].insert_one({
+        "user_id": "alice", "auto_paper_longterm": True,
+        "account_size": 10000.0, "max_exposure": 1_000_000.0, "per_trade_cap": 2000.0,
+    })
+    # Already holding ₹4,000 on paper: ₹6,000 of the account is left.
+    await world.db["paper_positions"].insert_one({
+        "user_id": "alice", "symbol": "HELD", "quantity": 40, "avg_price": 100.0, "venue": "paper",
+        "exchange": "NSE", "product": "CNC", "realized_pnl": 0.0, "unrealized_pnl": 0.0,
+    })
+    world.redis.data["scheduler:last_pass"] = "2026-09-25"
+    store = SuggestionStore(world.db)
+    now = datetime(2026, 9, 28, 9, 21, tzinfo=IST)
+    for symbol, score, qty in (("LOW", 0.5, 10), ("TOP", 0.9, 30), ("MID", 0.7, 25), ("NEXT", 0.6, 20)):
+        await store.collection.insert_one({
+            "id": symbol, "user_id": "alice", "mode": "LONGTERM", "symbol": symbol, "side": "BUY",
+            "quantity": qty, "entry_ref": 100.0, "stop": 90.0, "target": 120.0, "option_contract": None,
+            "score": {"final": score}, "strategy": "test", "status": "PENDING", "created_at": now,
+            "expires_at": datetime(2026, 10, 9, tzinfo=IST),
+        })
+
+    await _tick(world, now)
+
+    by_symbol = {s["symbol"]: s for s in await store.list("alice", limit=10)}
+    trades = {t["symbol"]: t for t in await world.db["paper_trades"].find({"user_id": "alice"}).to_list(None)}
+    # TOP and MID are capped at ₹2,000 each (20 shares), NEXT takes the last ₹2,000; LOW no longer fits.
+    assert {s: trades[s]["quantity"] for s in trades} == {"TOP": 20, "MID": 20, "NEXT": 20}
+    assert by_symbol["LOW"]["status"] == "PENDING"

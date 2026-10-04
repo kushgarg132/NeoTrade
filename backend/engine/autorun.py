@@ -224,9 +224,12 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
 
 
 async def _auto_approve(db, store, user_id: str, pending: list[dict], now: datetime) -> list[dict]:
-    """Approves each pending long-term stock proposal on paper at its live
-    mark, as the Approve button does. Options, and any symbol without a
-    mark, are left pending for the user."""
+    """Approves pending long-term stock proposals on paper at their live
+    mark, as the Approve button does -- best score first, and only while
+    they fit: each is cut to `per_trade_cap`, and the total (open paper
+    positions included) stays within min(account_size, max_exposure).
+    Options, symbols without a mark, and whatever no longer fits are left
+    pending for the user."""
     from backend.engine.persistence import LedgerStore
     from backend.marks import mark_prices
     from backend.suggestions.service import execute_suggestion
@@ -235,20 +238,28 @@ async def _auto_approve(db, store, user_id: str, pending: list[dict], now: datet
     stocks = [s for s in pending if not s.get("option_contract")]
     if not stocks:
         return []
+    stocks.sort(key=lambda s: (s.get("score") or {}).get("final") or 0.0, reverse=True)
     marks = await mark_prices(db, {s["symbol"] for s in stocks})
     ledger = LedgerStore(db, user_id=user_id, on_change=publisher_for(user_id))
+    prefs = await PrefsStore(db).get(user_id)
+    held = sum(abs(p.quantity) * p.avg_price for p in (await ledger.get_open_positions(venue="paper")).values())
+    room = min(prefs["account_size"], prefs["max_exposure"]) - held
     approved = []
     for suggestion in stocks:
         price = marks.get(suggestion["symbol"])
         if not price:
             continue
+        quantity = int(min(suggestion["quantity"], prefs["per_trade_cap"] // price, room // price))
+        if quantity < 1:
+            continue
         try:
-            order = await execute_suggestion(suggestion, ledger, price, now=now)
+            order = await execute_suggestion({**suggestion, "quantity": quantity}, ledger, price, now=now)
         except Exception as exc:
             logger.exception("auto-approve of %s failed: %s", suggestion["id"], exc)
             continue
         if await store.decide(user_id, suggestion["id"], status="EXECUTED", reason="auto-approved", order_id=order.id, now=now) is None:
             logger.warning("suggestion %s was decided concurrently after order %s", suggestion["id"], order.id)
+        room -= quantity * price
         approved.append(suggestion)
     return approved
 
