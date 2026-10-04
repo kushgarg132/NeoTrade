@@ -9,6 +9,7 @@ or less-restricted trading path.
 import asyncio
 import hashlib
 import logging
+import uuid
 from typing import Optional
 
 from backend.auth.broker_credentials import get_credential_store
@@ -20,12 +21,22 @@ from backend.guardrails.store import GuardrailStore
 logger = logging.getLogger(__name__)
 POLL_SECONDS = 3
 OFFSET_PREFIX = "telegram:ai:offset:"
+LOCK_PREFIX = "telegram:ai:poll-lock:"
+LOCK_SECONDS = 30
 
 
 def _offset_key(token: Optional[str]) -> str:
     # Redis stores a one-way identifier, never a bot token.
     identity = token or "deployment-bot"
     return OFFSET_PREFIX + hashlib.sha256(identity.encode()).hexdigest()
+
+
+def _lock_key(token: Optional[str]) -> str:
+    return LOCK_PREFIX + _offset_key(token).removeprefix(OFFSET_PREFIX)
+
+
+def _as_text(value) -> Optional[str]:
+    return value.decode() if isinstance(value, bytes) else value
 
 
 def _buttons(action: dict) -> list[list[dict]]:
@@ -95,28 +106,38 @@ async def poll_once(db, redis) -> int:
     handled = 0
     for token, chats in await GuardrailStore(db).telegram_routes():
         key = _offset_key(token)
-        raw_offset = await redis.get(key) if redis is not None else None
-        offset = int(raw_offset) if raw_offset is not None else None
-        try:
-            updates = await telegram.updates(offset, token)
-        except Exception:
-            logger.exception("telegram polling failed")
-            continue
-        for update in updates:
-            update_id = update.get("update_id")
-            if update_id is not None and redis is not None:
-                await redis.set(key, str(update_id + 1))
-            message = update.get("message")
-            callback = update.get("callback_query")
-            chat_id = (message or {}).get("chat", {}).get("id") or (callback or {}).get("message", {}).get("chat", {}).get("id")
-            user_id = chats.get(chat_id)
-            if user_id is None:
+        lock_key, lock_owner = _lock_key(token), str(uuid.uuid4())
+        if redis is not None:
+            acquired = await redis.set(lock_key, lock_owner, nx=True, ex=LOCK_SECONDS)
+            if not acquired:
                 continue
-            handled += 1
-            if message:
-                await _reply(db, redis, user_id, chat_id, token, message.get("text") or "")
-            elif callback:
-                await _callback(db, redis, user_id, chat_id, token, callback)
+        try:
+            raw_offset = await redis.get(key) if redis is not None else None
+            offset = int(raw_offset) if raw_offset is not None else None
+            try:
+                updates = await telegram.updates(offset, token)
+            except Exception:
+                logger.exception("telegram polling failed")
+                continue
+            for update in updates:
+                update_id = update.get("update_id")
+                if update_id is not None and redis is not None:
+                    await redis.set(key, str(update_id + 1))
+                message = update.get("message")
+                callback = update.get("callback_query")
+                chat_id = (message or {}).get("chat", {}).get("id") or (callback or {}).get("message", {}).get("chat", {}).get("id")
+                user_id = chats.get(chat_id)
+                if user_id is None:
+                    continue
+                handled += 1
+                if message:
+                    await _reply(db, redis, user_id, chat_id, token, message.get("text") or "")
+                elif callback:
+                    await _callback(db, redis, user_id, chat_id, token, callback)
+        finally:
+            # Do not delete another worker's lock if ours expired mid-request.
+            if redis is not None and _as_text(await redis.get(lock_key)) == lock_owner:
+                await redis.delete(lock_key)
     return handled
 
 

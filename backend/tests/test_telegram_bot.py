@@ -19,7 +19,8 @@ async def test_poll_only_answers_a_chat_linked_to_that_bot(monkeypatch):
 
     assert await telegram_bot.poll_once(db, redis) == 1
     reply.assert_awaited_once_with(db, redis, "alice", 42, "secret-token", "How am I doing?")
-    assert redis.set.await_count == 2
+    # One per-bot worker lock plus one persisted offset for each update.
+    assert redis.set.await_count == 3
     assert "secret-token" not in telegram_bot._offset_key("secret-token")
 
 
