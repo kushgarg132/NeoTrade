@@ -122,6 +122,10 @@ def _download(symbols: list[str]) -> dict[str, pd.DataFrame]:
         df = df.rename(columns=str.lower).dropna(how="all")
         if not df.empty:
             frames[symbol] = df
+    if symbols and not frames:
+        # yfinance swallows per-ticker errors; every ticker empty means the
+        # provider is down or rate-limiting, not that the universe is bare.
+        raise RuntimeError(f"no data for any of {len(symbols)} symbols")
     return frames
 
 

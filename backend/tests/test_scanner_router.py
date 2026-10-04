@@ -87,3 +87,13 @@ async def test_fetch_daily_drops_empty_symbol(monkeypatch):
     combined = pd.concat({"ITC.NS": good, "GONE.NS": gone}, axis=1)
     monkeypatch.setattr(scanner.yf, "download", lambda *a, **k: combined)
     assert set(await scanner.fetch_daily(["ITC", "GONE"])) == {"ITC"}
+
+
+async def test_fetch_daily_raises_when_every_symbol_comes_back_empty(monkeypatch):
+    # yfinance 1.x swallows per-ticker errors (outage, rate limit) and returns
+    # all-NaN columns -- a total outage must not read as "nothing set up".
+    gone = _ohlcv() * np.nan
+    combined = pd.concat({"ITC.NS": gone, "GONE.NS": gone}, axis=1)
+    monkeypatch.setattr(scanner.yf, "download", lambda *a, **k: combined)
+    with pytest.raises(RuntimeError):
+        await scanner.fetch_daily(["ITC", "GONE"])
