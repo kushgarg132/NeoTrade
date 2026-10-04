@@ -639,7 +639,7 @@ const ModelRow = ({ label, hint, value, fallback, models, catalog, onSave, clear
   );
 };
 
-const ModelSheet = () => {
+const ModelSheet = ({ isAdmin }) => {
   const [models, setModels] = useState([]);
   const [fallback, setFallback] = useState('');
   const [tiers, setTiers] = useState({});
@@ -650,18 +650,19 @@ const ModelSheet = () => {
 
   useEffect(() => {
     let cancelled = false;
+    // Only an admin can change the models, so only an admin needs the
+    // gateway's full list and catalog for the picker.
     Promise.all([
-      api.get(endpoints.settings.omnirouteModels),
       api.get(endpoints.settings.omnirouteModel),
       api.get(endpoints.settings.omnirouteTiers),
-      api.get(endpoints.settings.omnirouteCatalog),
+      ...(isAdmin ? [api.get(endpoints.settings.omnirouteModels), api.get(endpoints.settings.omnirouteCatalog)] : []),
     ])
-      .then(([modelsRes, currentRes, tiersRes, catalogRes]) => {
+      .then(([currentRes, tiersRes, modelsRes, catalogRes]) => {
         if (cancelled) return;
-        setModels(modelsRes.data);
         setFallback(currentRes.data.model);
         setTiers(tiersRes.data.tiers);
-        setCatalog(catalogRes.data);
+        if (modelsRes) setModels(modelsRes.data);
+        if (catalogRes) setCatalog(catalogRes.data);
       })
       .catch(() => {
         if (!cancelled) setLoadError('Could not reach the OmniRoute gateway.');
@@ -669,7 +670,7 @@ const ModelSheet = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAdmin]);
 
   const saveTier = (tier) => async (model) => {
     await api.post(endpoints.settings.omnirouteTiers, { tier, model });
@@ -680,6 +681,33 @@ const ModelSheet = () => {
     await api.post(endpoints.settings.omnirouteModel, { model });
     setFallback(model);
   };
+
+  // Deployment-wide: every user's requests run on these models, so the
+  // server only lets an admin change them. Everyone else sees them locked.
+  if (!isAdmin) {
+    return (
+      <Sheet title="Models" meta="Set by an admin">
+        {loadError ? (
+          <Empty title="Gateway unreachable" detail={loadError} />
+        ) : !fallback ? (
+          <Ruling rows={4} />
+        ) : (
+          <>
+            <p className="text-sm text-[var(--ink-soft)] pb-1">
+              The models are chosen by an admin for everyone using this app.
+            </p>
+            {[...TIER_ROWS, { id: 'fallback', label: 'Fallback', hint: 'Any task whose tier is not set' }].map((row) => (
+              <Row key={row.id} label={row.label} hint={row.hint}>
+                <span className="figure-md text-sm break-all">
+                  {row.id === 'fallback' ? fallback : tiers[row.id] || `Fallback (${fallback})`}
+                </span>
+              </Row>
+            ))}
+          </>
+        )}
+      </Sheet>
+    );
+  }
 
   return (
     <Sheet title="Models" meta={`${models.length} available`}>
@@ -1310,7 +1338,7 @@ const Settings = () => {
             )}
             {tab === 'ai' && (
               <>
-                <ModelSheet />
+                <ModelSheet isAdmin={isAdmin} />
                 <Link
                   to="/ai/limits"
                   className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors"
