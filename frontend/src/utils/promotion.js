@@ -19,3 +19,11 @@ export function promotionGaps(row) {
   for (const check of row.paper.checks) if (!check.ok) gaps.push(GAP[check.rule](check));
   return gaps.join(', ');
 }
+
+// One line on whether a strategy has earned real money yet. `row` is its
+// promotion row (undefined before it has any record); `isLive` is its switch.
+export function readiness(row, isLive) {
+  if (!row) return 'No paper record yet.';
+  if (row.eligible) return `Ready for real money · live switch ${isLive ? 'on' : 'off'}`;
+  return `Paper only. Needs ${promotionGaps(row)}.`;
+}

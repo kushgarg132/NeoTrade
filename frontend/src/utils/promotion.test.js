@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { promotionGaps } from './promotion.js';
+import { promotionGaps, readiness } from './promotion.js';
 
 const ok = (rule) => ({ rule, ok: true, need: 1, have: 1 });
 
@@ -25,4 +25,19 @@ test('null backtest profit factor does not throw', () => {
     paper: { checks: [] },
   };
   assert.equal(promotionGaps(row), 'a passing backtest (last: 0 trades over 365 days, profit factor –)');
+});
+
+test('readiness: eligible strategy says ready and its live switch', () => {
+  assert.equal(readiness({ eligible: true }, true), 'Ready for real money · live switch on');
+  assert.equal(readiness({ eligible: true }, false), 'Ready for real money · live switch off');
+});
+
+test('readiness: not yet eligible names what it needs', () => {
+  const row = { eligible: false, backtest_passed: true, backtest: null,
+    paper: { checks: [{ rule: 'trades', ok: false, need: 30, have: 18 }] } };
+  assert.equal(readiness(row, false), 'Paper only. Needs 12 more trades.');
+});
+
+test('readiness: no promotion row yet', () => {
+  assert.equal(readiness(undefined, false), 'No paper record yet.');
 });

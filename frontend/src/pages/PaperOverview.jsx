@@ -6,6 +6,8 @@ import PaperShell from '../components/paper/PaperShell';
 import PnlStatement from '../components/dashboard/PnlStatement';
 import TradeLedger from '../components/dashboard/TradeLedger';
 import Scorecard from '../components/paper/Scorecard';
+import EngineNow from '../components/paper/EngineNow';
+import StrategyReadiness from '../components/paper/StrategyReadiness';
 import api, { endpoints } from '../utils/api';
 import { useTopic } from '../hooks/useStream';
 import { cn } from '../utils/cn';
@@ -18,9 +20,10 @@ const BOOKS = [
 ];
 
 /**
- * The paper book at a glance: what practice money made today and this month,
- * what is waiting for a decision, and what the engine is holding. None of it
- * is the broker account -- that is the statement's job.
+ * Practice, in the order a trader asks: what this is (the strategy engine on
+ * practice money, not the autopilot), what it is doing now, and whether each
+ * strategy is working. The full track record sits last, closed. None of it is
+ * the broker account -- that is the statement's job.
  */
 const PaperOverview = () => {
   const [params, setParams] = useSearchParams();
@@ -32,6 +35,8 @@ const PaperOverview = () => {
   const [tradesLoading, setTradesLoading] = useState(true);
   const [tradesError, setTradesError] = useState(null);
   const [pending, setPending] = useState([]);
+  // Seeded once from the link; picking "All" (which clears ?book) must not close it.
+  const [recordOpen, setRecordOpen] = useState(params.has('book'));
 
   const loadTrades = () =>
     api
@@ -82,6 +87,16 @@ const PaperOverview = () => {
   return (
     <Layout>
       <PaperShell>
+        <p className="doc-meta normal-case">
+          The strategy engine trades practice money here. Its rules decide; AI adds at most 30% to a
+          trade&rsquo;s score. The AI autopilot is separate &rarr;{' '}
+          <Link to="/ai" className="underline underline-offset-2 text-[var(--ink)]">AI Overview</Link>
+        </p>
+
+        <EngineNow />
+
+        <PnlStatement pnl={pnl} loading={pnlLoading} />
+
         {pending.length > 0 && (
           <Link
             to="/ai/practice/decisions"
@@ -104,36 +119,41 @@ const PaperOverview = () => {
           </Link>
         )}
 
-        <div className="grid grid-cols-3 border border-[var(--rule-strong)]" role="tablist" aria-label="Which engine">
-          {BOOKS.map((b) => (
-            <button
-              key={b.key}
-              type="button"
-              role="tab"
-              aria-selected={b.key === book.key}
-              onClick={() => setParams(b.key === 'all' ? {} : { book: b.key }, { replace: true })}
-              className={cn(
-                'min-h-11 field-label touch-manipulation',
-                b.key === book.key ? 'bg-[var(--ink)] text-[var(--paper)]' : 'text-[var(--ink-soft)] hover:text-[var(--ink)]'
-              )}
-            >
-              {b.label}
-            </button>
-          ))}
-        </div>
+        <StrategyReadiness />
 
-        {/* The track record first: it is what decides whether a strategy
-            has earned real money. Today's live figures follow it. */}
-        <Scorecard mode={mode} />
+        {/* The full record, closed by default: a deep link that picks a
+            book (?book=intraday) opens it on that book. */}
+        <details open={recordOpen} onToggle={(event) => setRecordOpen(event.currentTarget.open)}>
+          <summary className="sheet cursor-pointer px-4 py-3 field-label">Full track record</summary>
+          <div className="mt-3 sm:mt-4 space-y-3 sm:space-y-4">
+            <div className="grid grid-cols-3 border border-[var(--rule-strong)]" role="tablist" aria-label="Which engine">
+              {BOOKS.map((b) => (
+                <button
+                  key={b.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={b.key === book.key}
+                  onClick={() => setParams(b.key === 'all' ? {} : { book: b.key }, { replace: true })}
+                  className={cn(
+                    'min-h-11 field-label touch-manipulation',
+                    b.key === book.key ? 'bg-[var(--ink)] text-[var(--paper)]' : 'text-[var(--ink-soft)] hover:text-[var(--ink)]'
+                  )}
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
 
-        <PnlStatement pnl={pnl} loading={pnlLoading} />
+            <Scorecard mode={mode} />
 
-        <TradeLedger
-          title={mode ? `${book.label} trades` : 'Paper trades'}
-          trades={trades}
-          loading={tradesLoading}
-          error={tradesError}
-        />
+            <TradeLedger
+              title={mode ? `${book.label} trades` : 'Paper trades'}
+              trades={trades}
+              loading={tradesLoading}
+              error={tradesError}
+            />
+          </div>
+        </details>
       </PaperShell>
     </Layout>
   );
