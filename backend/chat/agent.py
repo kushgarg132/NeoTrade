@@ -118,5 +118,8 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
         yield {"type": "content", "data": f"Something went wrong answering that: {exc}"}
         return
 
+    # The reply is complete; clients may show it now rather than wait on the
+    # follow-up call below (Telegram sends its final message here).
+    yield {"type": "answer_end", "data": None}
     if answer and (questions := await suggest_followups(message, answer)):
         yield {"type": "suggestions", "data": questions}

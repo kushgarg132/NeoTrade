@@ -40,7 +40,8 @@ async def _run(monkeypatch, seen):
 async def test_stream_turns_an_action_tool_result_into_an_action_event(monkeypatch):
     events = await _run(monkeypatch, {})
     assert {"type": "action", "data": {"id": "a1", "summary": "Approve SJVN"}} in events
-    assert events[-1] == {"type": "content", "data": "Card ready."}
+    # answer_end marks the reply complete before the follow-up call.
+    assert events[-2:] == [{"type": "content", "data": "Card ready."}, {"type": "answer_end", "data": None}]
 
 
 async def test_system_prompt_carries_snapshot_and_page(monkeypatch):
@@ -97,7 +98,7 @@ async def test_a_follow_up_failure_still_leaves_the_reply(monkeypatch):
 
     monkeypatch.setattr(agent.llm_service, "get_completion", broken)
     events = await _run(monkeypatch, {})
-    assert events[-1] == {"type": "content", "data": "Card ready."}
+    assert events[-2:] == [{"type": "content", "data": "Card ready."}, {"type": "answer_end", "data": None}]
 
 
 def test_format_profile_only_set_fields():

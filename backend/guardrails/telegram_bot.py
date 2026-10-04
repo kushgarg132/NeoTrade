@@ -196,9 +196,33 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
     # `text` is the model's output since its last tool call: what it wrote
     # before calling a tool is its reasoning, what it writes last is the answer.
     state = {"steps": [], "text": ""}
-    cards, suggestions, failed = [], [], False
+    cards, sent = [], {}
     stop = asyncio.Event()
     renderer = asyncio.create_task(_render(chat_id, token, state, stop))
+
+    async def finish(failed: bool = False) -> None:
+        """Stop the live draft and send the final answer and cards, once."""
+        if sent:
+            return
+        sent["done"] = True
+        stop.set()
+        await asyncio.gather(renderer, return_exceptions=True)
+        answer = state["text"].strip()
+        if answer and not failed:
+            await _remember(redis, user_id, history, text, answer)
+        if not answer and not cards:
+            answer = "NeoTrade could not prepare a response. Please try again."
+        if answer:
+            parts, steps = _split(answer), _steps_html(state["steps"])
+            for i, part in enumerate(parts):
+                body = telegram.to_html(part)
+                if i == 0 and steps:
+                    # The work stays in the final message, collapsed.
+                    body = f"<blockquote expandable>{steps}</blockquote>\n{body}"
+                sent["message_id"] = await telegram.send_html(chat_id, body, token)
+        for card in cards:
+            await telegram.send_buttons(chat_id, card["summary"], _buttons(card), token)
+
     try:
         prefs = await PrefsStore(db).get(user_id)
         with use_model(prefs.get("omniroute_model")):
@@ -218,38 +242,30 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
                     state["text"] += data
                 elif kind == "action":
                     cards.append(data)
-                elif kind == "suggestions":
-                    suggestions = data
+                elif kind == "answer_end":
+                    await finish()  # don't make the user wait for the follow-up call
+                elif kind == "suggestions" and sent.get("message_id") is not None:
+                    await _attach_suggestions(redis, user_id, chat_id, token, sent["message_id"], data)
     except Exception:
         logger.exception("telegram chat failed for user %s", user_id)
-        failed = True
-        state["text"] = "NeoTrade could not answer that right now. Please try again shortly."
+        if not sent:
+            state["text"] = "NeoTrade could not answer that right now. Please try again shortly."
+            await finish(failed=True)
     finally:
-        stop.set()
-        await asyncio.gather(renderer, return_exceptions=True)
+        await finish()
 
-    answer = state["text"].strip()
-    if answer and not failed:
-        await _remember(redis, user_id, history, text, answer)
-    if not answer and not cards:
-        answer = "NeoTrade could not prepare a response. Please try again."
-    if answer:
-        # Suggested next questions: buttons under the final answer. Tapping one
-        # asks it (see _callback); the questions live in Redis by message.
-        markup = {"inline_keyboard": [[{"text": q[:64], "callback_data": f"nt:ask:{i}"}]
-                                      for i, q in enumerate(suggestions)]} if suggestions else None
-        parts, steps, message_id = _split(answer), _steps_html(state["steps"]), None
-        for i, part in enumerate(parts):
-            body = telegram.to_html(part)
-            if i == 0 and steps:
-                # The work stays in the final message, collapsed.
-                body = f"<blockquote expandable>{steps}</blockquote>\n{body}"
-            message_id = await telegram.send_html(chat_id, body, token, markup if i == len(parts) - 1 else None)
-        if suggestions and message_id is not None and redis is not None:
-            await redis.set(f"{SUGGEST_PREFIX}{user_id}:{message_id}", json.dumps(suggestions), ex=HISTORY_SECONDS)
-            await redis.set(SUGGEST_LAST_PREFIX + user_id, str(message_id), ex=HISTORY_SECONDS)
-    for card in cards:
-        await telegram.send_buttons(chat_id, card["summary"], _buttons(card), token)
+
+async def _attach_suggestions(redis, user_id: str, chat_id: int, token: Optional[str],
+                              message_id: int, suggestions: list[str]) -> None:
+    """Suggested next questions arrive after the answer: add them as buttons
+    under it. Tapping one asks it (see _callback); they live in Redis by message."""
+    if not suggestions:
+        return
+    await telegram.set_buttons(chat_id, message_id, [[{"text": q[:64], "callback_data": f"nt:ask:{i}"}]
+                                                     for i, q in enumerate(suggestions)], token)
+    if redis is not None:
+        await redis.set(f"{SUGGEST_PREFIX}{user_id}:{message_id}", json.dumps(suggestions), ex=HISTORY_SECONDS)
+        await redis.set(SUGGEST_LAST_PREFIX + user_id, str(message_id), ex=HISTORY_SECONDS)
 
 
 def _split(text: str) -> list[str]:
@@ -289,21 +305,21 @@ def _draft_html(state: dict) -> str:
 
 async def _render(chat_id: int, token: Optional[str], state: dict, stop: asyncio.Event) -> None:
     """Redraw the live draft from `state` until `stop`; Telegram animates the
-    changes. Drafts work only in private chats (positive ids); otherwise, or if
-    the API refuses, fall back to the "typing…" status."""
+    changes. Drafts work only in private chats (positive ids), and some
+    Telegram apps accept but do not show them, so "typing…" is always sent too."""
     draft_id = random.randint(1, 2**31 - 1)
     drafts = chat_id > 0
-    shown, shown_at = None, 0.0
+    shown, shown_at, typed_at = None, 0.0, 0.0
     while not stop.is_set():
         now = time.monotonic()
+        if now - typed_at > TYPING_SECONDS:
+            await telegram.chat_action(chat_id, token)
+            typed_at = now
         if drafts:
             current = _draft_html(state)
             if current != shown or now - shown_at > DRAFT_KEEPALIVE:
                 drafts = await telegram.draft(chat_id, draft_id, current, token)
                 shown, shown_at = current, now
-        elif now - shown_at > TYPING_SECONDS:
-            await telegram.chat_action(chat_id, token)
-            shown_at = now
         try:
             await asyncio.wait_for(stop.wait(), DRAFT_SECONDS)
         except asyncio.TimeoutError:

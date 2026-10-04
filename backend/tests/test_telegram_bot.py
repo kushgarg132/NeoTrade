@@ -43,6 +43,7 @@ def _fake_bot(monkeypatch):
     monkeypatch.setattr(telegram_bot.telegram, "send_html", send_html)
     monkeypatch.setattr(telegram_bot.telegram, "draft", draft)
     monkeypatch.setattr(telegram_bot.telegram, "chat_action", AsyncMock())
+    monkeypatch.setattr(telegram_bot.telegram, "set_buttons", AsyncMock())
     monkeypatch.setattr(telegram_bot.PrefsStore, "get", AsyncMock(return_value={}))
     return sent, drafts
 
@@ -63,6 +64,7 @@ async def test_telegram_reply_shows_work_then_answer_cards_and_suggestions(monke
         yield {"type": "step", "data": {"id": "r1", "phase": "end", "label": "Checking the paper engine"}}
         yield {"type": "content", "data": "Your paper engine is **stopped**."}
         yield {"type": "action", "data": {"id": "a1", "summary": "Start an intraday paper run"}}
+        yield {"type": "answer_end", "data": None}
         yield {"type": "suggestions", "data": ["How did it do today?"]}
 
     monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
@@ -76,12 +78,15 @@ async def test_telegram_reply_shows_work_then_answer_cards_and_suggestions(monke
     assert any("💭 <i>Let me check the engine.</i>" in d and "⏳ Checking the paper engine <code>mode=intraday</code>" in d
                for d in drafts)
     # The final message keeps the work, collapsed, above the formatted answer.
+    # It goes out at answer_end; the suggestions are attached to it afterwards.
     assert sent == [(
         "<blockquote expandable>💭 <i>Let me check the engine.</i>\n"
         "✅ Checking the paper engine <code>mode=intraday</code></blockquote>\n"
         "Your paper engine is <b>stopped</b>.",
-        {"inline_keyboard": [[{"text": "How did it do today?", "callback_data": "nt:ask:0"}]]},
+        None,
     )]
+    telegram_bot.telegram.set_buttons.assert_awaited_once_with(
+        42, 101, [[{"text": "How did it do today?", "callback_data": "nt:ask:0"}]], "token")
     redis.set.assert_any_await(f"{telegram_bot.SUGGEST_PREFIX}alice:101", '["How did it do today?"]',
                                ex=telegram_bot.HISTORY_SECONDS)
     buttons.assert_awaited_once_with(42, "Start an intraday paper run", [
@@ -226,6 +231,7 @@ async def test_new_message_removes_the_previous_suggestions(monkeypatch):
 
     async def stream(*_args):
         yield {"type": "content", "data": "Sure."}
+        yield {"type": "answer_end", "data": None}
         yield {"type": "suggestions", "data": ["And INFY?"]}
 
     monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
@@ -285,3 +291,22 @@ async def test_usage_command_is_admin_only(monkeypatch):
     await telegram_bot._reply(db, None, "bob", 43, "tok", "/usage")
     plain.assert_awaited_once_with(43, "Usage is for administrators.", "tok")
     assert {"command": "usage", "description": "Gateway usage (admins)"} in telegram_bot.COMMANDS
+
+
+async def test_typing_is_sent_even_when_drafts_are_accepted(monkeypatch):
+    # Some Telegram apps accept drafts but never show them; "typing…" must still appear.
+    import asyncio
+
+    db = AsyncMongoMockClient()["test_db"]
+
+    async def stream(*_args):
+        await asyncio.sleep(0.05)
+        yield {"type": "content", "data": "Hi."}
+
+    monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
+    monkeypatch.setattr(telegram_bot, "DRAFT_SECONDS", 0.01)
+    _fake_bot(monkeypatch)
+
+    await telegram_bot._reply(db, None, "alice", 42, "tok", "hello")
+
+    telegram_bot.telegram.chat_action.assert_awaited_with(42, "tok")
