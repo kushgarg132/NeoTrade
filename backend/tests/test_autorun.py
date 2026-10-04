@@ -272,3 +272,49 @@ async def test_the_morning_pass_rebalances_the_factor_book_and_leaves_proposals_
     assert (await store.list("alice", limit=10))[0]["status"] == "PENDING"  # no auto-buy
     assert any("risk-off" in text for text in longterm["sent"])
     assert any("waiting" in text for text in longterm["sent"])
+
+
+@pytest.mark.asyncio
+async def test_with_the_autopilot_on_engine_proposals_go_to_it(world, longterm, monkeypatch):
+    from backend.autopilot import service
+    from backend.suggestions.store import SuggestionStore
+
+    submitted = []
+
+    async def submit(db, redis, user_id, order, now=None):
+        submitted.append((order.symbol, order.source))
+        return {"status": "FILLED", "price": 55.0} if order.symbol == "SJVN" else {"status": "REFUSED", "reason": "cap"}
+
+    monkeypatch.setattr(service, "submit", submit)
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True, "autopilot_enabled": True})
+    world.redis.data["scheduler:last_pass"] = "2026-09-25"
+    store = SuggestionStore(world.db)
+    now = datetime(2026, 9, 28, 9, 21, tzinfo=IST)
+    for symbol in ("SJVN", "NHPC"):
+        await store.collection.insert_one({
+            "id": symbol, "user_id": "alice", "mode": "LONGTERM", "symbol": symbol, "side": "BUY",
+            "quantity": 10, "entry_ref": 55.0, "stop": 50.0, "target": 65.0, "option_contract": None,
+            "strategy": "test", "status": "PENDING", "created_at": now, "expires_at": datetime(2026, 10, 9, tzinfo=IST),
+        })
+
+    await _tick(world, now)
+
+    assert sorted(submitted) == [("NHPC", "engine"), ("SJVN", "engine")]
+    by = {s["symbol"]: s["status"] for s in await store.list("alice", limit=10)}
+    assert by == {"SJVN": "EXECUTED", "NHPC": "PENDING"}  # refused ones wait for the user
+
+
+@pytest.mark.asyncio
+async def test_autopilot_login_reminder_once_before_the_open(world, longterm, monkeypatch):
+    from backend.brokers import roles
+
+    async def not_logged_in(user_id, role, credentials, redis=None, roles=None, get_adapter=None):
+        raise roles_mod.RoleUnavailable("ai", "The AI account (Kite) is not logged in today.")
+
+    roles_mod = roles
+    monkeypatch.setattr(autorun, "adapter_for", not_logged_in)
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "autopilot_enabled": True})
+    await _tick(world, datetime(2026, 9, 28, 9, 2, tzinfo=IST))
+    await _tick(world, datetime(2026, 9, 28, 9, 5, tzinfo=IST))
+    reminders = [t for t in longterm["sent"] if "not logged in" in t]
+    assert len(reminders) == 1 and "09:15" in reminders[0]

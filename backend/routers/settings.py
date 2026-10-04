@@ -98,6 +98,16 @@ async def update_preferences(
     return await prefs.update(user.id, fields)
 
 
+@router.get("/settings/autopilot/log")
+async def autopilot_log(user: User = Depends(get_current_user)):
+    """The autopilot's last 30 orders and refusals, newest first."""
+    from backend.database import db
+
+    rows = await db.db["autopilot_log"].find({"user_id": user.id}, {"_id": 0, "user_id": 0}) \
+        .sort("at", -1).limit(30).to_list(length=30)
+    return {"rows": rows}
+
+
 @router.get("/settings/strategies")
 async def list_strategies(user: User = Depends(get_current_user)):
     """Plain strategy-name list for the Settings page's live/paper toggles --

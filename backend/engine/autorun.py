@@ -33,6 +33,8 @@ import uuid
 from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 
+from backend.brokers.roles import RoleUnavailable, adapter_for
+
 from backend.core.clock import SystemClock
 from backend.engine.session import IST
 from backend.prefs import PrefsStore
@@ -124,6 +126,11 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
         for mode, pref in MODES.items()
         for doc in await db["user_prefs"].find({pref: True}).to_list(length=None)
     }
+
+    try:
+        await _autopilot_reminders(db, redis, now)
+    except Exception as exc:
+        logger.warning("autopilot reminders failed: %s", exc)
 
     if not in_session(now):
         for slot in list(_LOCAL):
@@ -220,14 +227,58 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
                 await notify(db, user_id, factor_paper.summary_text(summary))
             except Exception as exc:
                 logger.exception("factor rebalance failed for %s: %s", user_id, exc)
-        # Per-symbol proposals have no backtest evidence: they wait for the user.
+        # Per-symbol proposals have no backtest evidence: they wait for the
+        # user -- unless the user turned the autopilot on for its AI account.
         store = SuggestionStore(db)
         await store.expire_stale(now=now)
         pending = await store.list(user_id, mode="LONGTERM", status="PENDING", limit=100)
+        if (await PrefsStore(db).get(user_id)).get("autopilot_enabled"):
+            pending = await _autopilot_proposals(db, redis, store, user_id, pending, now)
         if pending:
             pending.sort(key=lambda s: s["expires_at"])
             await notify(db, user_id, proposals_text(pending, f"Good morning: {len(pending)} long-term proposal(s) waiting."))
     return did
+
+
+async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dict], now: datetime) -> list[dict]:
+    """Hands pending stock proposals to the autopilot (backend/autopilot/),
+    best score first; returns the ones it did not take."""
+    from backend.autopilot import service
+    from backend.core.models import Side
+
+    left = []
+    for s in sorted(pending, key=lambda s: (s.get("score") or {}).get("final") or 0.0, reverse=True):
+        if s.get("option_contract"):
+            left.append(s)
+            continue
+        result = await service.submit(db, redis, user_id, service.AutopilotOrder(
+            symbol=s["symbol"], side=Side(s["side"]), quantity=int(s["quantity"]), product="CNC",
+            source="engine", reason=f"Engine proposal ({s.get('strategy') or 'scan'}): {', '.join(s.get('reason_codes') or [])}"),
+            now=now)
+        if result["status"] in ("FILLED", "SENT"):
+            await store.decide(user_id, s["id"], status="EXECUTED", reason="autopilot", now=now)
+        else:
+            left.append(s)
+    return left
+
+
+async def _autopilot_reminders(db, redis, now: datetime) -> None:
+    """09:00-09:15 IST on weekdays: remind once if the autopilot is on but
+    the AI account is not logged in -- otherwise it cannot trade that day."""
+    from backend.auth.broker_credentials import get_credential_store
+    from backend.suggestions.notify import notify
+
+    local = now.astimezone(IST)
+    if local.weekday() >= 5 or not (time(9, 0) <= local.time() < SESSION_OPEN):
+        return
+    for doc in await db["user_prefs"].find({"autopilot_enabled": True}).to_list(length=None):
+        user_id = doc["user_id"]
+        if not await redis.set(f"autopilot:remind:{user_id}:{local.date()}", _TOKEN, nx=True, px=86_400_000):
+            continue
+        try:
+            await adapter_for(user_id, "ai", get_credential_store(), redis)
+        except RoleUnavailable as exc:
+            await notify(db, user_id, f"🤖 {exc.reason} Log in before 09:15 or the autopilot can't trade today.")
 
 
 async def autorun_loop(db, redis) -> None:

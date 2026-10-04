@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
 import { formatQuantity, formatDateTime } from '../utils/formatters';
 import { Avatar } from '../components/common/Avatar';
+import AutopilotSheet from '../components/settings/AutopilotSheet';
 
 /**
  * Standing instructions for the real account: who the broker is, the limits
@@ -1331,6 +1332,7 @@ const Settings = () => {
             {tab === 'ai' && (
               <>
                 <ModelSheet />
+                <AutopilotSheet />
                 {isAdmin && <UsageSheet />}
               </>
             )}

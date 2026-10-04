@@ -235,9 +235,23 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
     async def propose_order(
         symbol: str, side: Literal["BUY", "SELL"], quantity: int,
         product: Literal["CNC", "MIS"] = "CNC", venue: Literal["paper", "live"] = "paper",
+        account: Literal["mine", "ai"] = "mine",
     ) -> str:
         params = {"symbol": symbol.strip().upper().removesuffix(".NS"), "side": side, "quantity": quantity,
                   "product": product, "venue": venue}
+        if account == "ai":
+            # The AI account is the autopilot's: no card -- it goes through the
+            # fence and runs (or is refused) now (backend/autopilot/).
+            from backend.autopilot.service import AutopilotOrder, submit
+
+            result = await submit(db, redis, user_id, AutopilotOrder(
+                symbol=params["symbol"], side=Side(side), quantity=int(quantity), product=product,
+                source="chat", reason=f"From chat: {message[:160]}"))
+            if result["status"] in ("FILLED", "SENT"):
+                verb = "bought" if side == "BUY" else "sold"
+                return (f"Autopilot {verb} {quantity} {params['symbol']} on the AI account "
+                        f"({result.get('mode')}) at ₹{result.get('price', 0):,.2f}.")
+            return f"The autopilot did not place it: {result.get('reason')}"
         try:
             price, _ = await _order_checks(db, user_id, params, None)
         except ActionRefused as exc:
@@ -303,7 +317,9 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         tool(propose_paper_run, "Start or stop the user's intraday paper-trading run." + note),
         tool(propose_setting, "Change one of the user's limits or switches: " + ", ".join(SETTINGS) + "." + note),
         tool(propose_order, "Place a market order for an NSE stock: side BUY or SELL, whole quantity, product CNC "
-                            "(delivery) or MIS (intraday), venue paper or live. Live is real money." + note),
+                            "(delivery) or MIS (intraday), venue paper or live. Live is real money. account mine "
+                            "(default; a card the trader confirms) or ai (the AI account: the autopilot runs it "
+                            "at once within its limits, no card)." + note),
         tool(propose_exit, "Sell all (default) or part of a holding in the trader's OWN account at market." + note),
         tool(propose_cancel_order, "Cancel an open order in the trader's own account, by its broker order id." + note),
         tool(propose_modify_order, "Change the price and/or quantity of an open order in the trader's own account." + note),

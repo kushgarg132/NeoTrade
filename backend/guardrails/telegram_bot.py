@@ -350,6 +350,17 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
     if command == "ask":
         await _ask(db, redis, user_id, chat_id, token, callback, action_id)
         return
+    if command == "autopilot" and action_id == "off":
+        from backend.autopilot.service import disable
+
+        stopped = await disable(db, user_id)
+        text = "🛑 Autopilot stopped." if stopped else "Autopilot is already off."
+        await telegram.answer_callback(callback_id, text, token)
+        card = callback.get("message") or {}
+        if stopped and card.get("message_id"):
+            await telegram.edit_html(chat_id, card["message_id"],
+                                     f"{html.escape(card.get('text') or '', quote=False)}\n\n{text}", token)
+        return
     if command not in {"confirm", "cancel"} or not action_id:
         return
     done = False

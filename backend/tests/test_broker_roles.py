@@ -72,3 +72,20 @@ def test_switching_kite_off_ai_disables_autopilot():
     client.put("/api/v1/settings/preferences", json={"broker_roles": {"kite": "ai"}, "autopilot_enabled": True})
     body = client.put("/api/v1/settings/preferences", json={"broker_roles": {"kite": "mine"}}).json()
     assert body["broker_roles"] == {"kite": "mine"} and body["autopilot_enabled"] is False
+
+
+def test_autopilot_log_endpoint_lists_newest_first(monkeypatch):
+    import asyncio
+    from datetime import timedelta
+
+    db = AsyncMongoMockClient()["test_db"]
+    from backend.database import db as global_db
+    monkeypatch.setattr(global_db, "db", db)
+    t0 = datetime(2026, 10, 6, 6, 0, tzinfo=timezone.utc)
+    asyncio.run(db["autopilot_log"].insert_many([
+        {"user_id": "alice", "at": t0, "symbol": "INFY", "status": "FILLED"},
+        {"user_id": "alice", "at": t0 + timedelta(minutes=5), "symbol": "TCS", "status": "REFUSED"},
+        {"user_id": "bob", "at": t0, "symbol": "SBIN", "status": "FILLED"},
+    ]))
+    rows = _client(db).get("/api/v1/settings/autopilot/log").json()["rows"]
+    assert [r["symbol"] for r in rows] == ["TCS", "INFY"]
