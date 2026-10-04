@@ -830,3 +830,10 @@ backtested), and the backtester itself was flattering them. Plan:
   auto-bought. Risk-off sleeve modelled as cash at a liquid-ETF yield (LIQUIDBEES has no mark).
 - Next: intraday experimental/off for new users; discipline mirrors (costs, benchmark,
   edge by setup); live only after 3 months of paper beating the benchmark.
+- Live (Phase E) is deliberately not wired for the factor portfolio. It goes live only when
+  all hold: `python -m backend.factor.report --save` passes; the paper book has run ≥3
+  months and beats the Nifty since it started (`book_return` > `nifty_return`, reported in
+  every monthly rebalance message); and the user opts in, starting small. Live needs real
+  LIQUIDBEES orders for the risk-off sleeve (no instrument-master mark today).
+- Journal mirror (`backend/journal/mirror.py`): estimated charges, P&L after them, trades/yr
+  vs SEBI's 500 line, return vs Nifty — Journal calendar tab, AI `get_journal`, Friday Telegram.

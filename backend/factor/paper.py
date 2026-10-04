@@ -79,13 +79,17 @@ async def rebalance(db, user_id: str, now: Optional[datetime] = None, marks_fn=m
     now = now or datetime.now(timezone.utc)
     store = FactorBookStore(db)
     prefs = await PrefsStore(db).get(user_id)
-    book = await store.get(user_id) or {"cash": float(prefs["factor_paper_capital"]), "shares": {}}
+    capital = float(prefs["factor_paper_capital"])
+    book = await store.get(user_id) or {"cash": capital, "shares": {}, "start_equity": capital}
     book.pop("_id", None)
     _accrue(book, now)
 
     closes, market = await asyncio.to_thread(load or _load)
     avoid = set((await ProfileStore(db).get(user_id)).get("avoid") or [])
     t = closes.index[-1]
+    nifty = float(market.dropna().iloc[-1])
+    book.setdefault("started_at", now)
+    book.setdefault("start_nifty", nifty)
     target, level = model.target_book(closes, market, t, set(book["shares"]), PARAMS, avoid=avoid)
 
     marks = await marks_fn(db, set(target.index) | set(book["shares"]))
@@ -124,7 +128,10 @@ async def rebalance(db, user_id: str, now: Optional[datetime] = None, marks_fn=m
     held_value = sum(q * marks.get(s, 0.0) for s, q in book["shares"].items())
     summary = {"date": now.isoformat(), "exposure": round(level, 3), "decided_on": str(t.date()),
                "bought": bought, "sold": sold, "equity": round(book["cash"] + held_value, 2),
-               "invested": round(held_value, 2)}
+               "invested": round(held_value, 2),
+               # The live gate's yardstick: the book vs holding the Nifty since it started.
+               "book_return": (book["cash"] + held_value) / book.get("start_equity", capital) - 1,
+               "nifty_return": nifty / book["start_nifty"] - 1}
     book.update(last_rebalance=now, updated_at=now, last_summary=summary)
     await store.save(user_id, book)
     logger.info("factor rebalance for %s: exposure %.2f, %d buys, %d sells", user_id, level, len(bought), len(sold))
@@ -132,7 +139,8 @@ async def rebalance(db, user_id: str, now: Optional[datetime] = None, marks_fn=m
 
 
 def summary_text(summary: dict) -> str:
-    lines = [f"Monthly rebalance of your factor portfolio (paper) — equity ₹{summary['equity']:,.0f}."]
+    lines = [f"Monthly rebalance of your factor portfolio (paper) — equity ₹{summary['equity']:,.0f}, "
+             f"{summary.get('book_return', 0):+.1%} since it started vs Nifty {summary.get('nifty_return', 0):+.1%}."]
     if summary["exposure"] == 0:
         lines.append("The Nifty is below its 200-day average: the portfolio is in the risk-off sleeve (liquid ETF).")
     else:

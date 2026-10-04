@@ -60,3 +60,16 @@ async def test_a_downtrend_sells_everything_into_the_risk_off_sleeve():
     assert summary["exposure"] == 0 and summary["sold"] and book["shares"] == {}
     assert book["cash"] > 299_000  # idle cash accrued the risk-off yield for the month
     assert "risk-off" in paper.summary_text(summary)
+
+
+async def test_the_book_tracks_itself_against_the_nifty_since_it_started():
+    db = AsyncMongoMockClient()["test_db"]
+    await paper.rebalance(db, "alice", now=NOW, marks_fn=_marks, load=_load())
+    book = await paper.FactorBookStore(db).get("alice")
+    assert book["started_at"] == NOW.replace(tzinfo=None) or book["started_at"] == NOW
+    assert book["start_equity"] == 300_000 and book["start_nifty"] > 0
+
+    later = datetime(2026, 11, 2, 3, 50, tzinfo=timezone.utc)
+    summary = await paper.rebalance(db, "alice", now=later, marks_fn=_marks, load=_load())
+    assert "book_return" in summary and "nifty_return" in summary
+    assert "vs Nifty" in paper.summary_text(summary)
