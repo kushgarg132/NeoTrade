@@ -9,7 +9,7 @@ and the deployment model lives in Mongo behind an admin check.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
 import httpx
@@ -105,6 +105,9 @@ async def autopilot_log(user: User = Depends(get_current_user)):
 
     rows = await db.db["autopilot_log"].find({"user_id": user.id}, {"_id": 0, "user_id": 0}) \
         .sort("at", -1).limit(30).to_list(length=30)
+    for row in rows:  # Mongo hands back naive UTC; say so to the browser
+        if row.get("at") is not None and row["at"].tzinfo is None:
+            row["at"] = row["at"].replace(tzinfo=timezone.utc)
     return {"rows": rows}
 
 

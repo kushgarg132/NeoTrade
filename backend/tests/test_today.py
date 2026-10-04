@@ -13,6 +13,9 @@ from backend.auth.models import User
 from backend.routers import today as today_router
 
 NOW = datetime.now(timezone.utc)
+# Today's IST midnight: trades placed just after it are "today" at any hour the suite runs.
+from backend.engine.session import IST  # noqa: E402
+DAY = datetime.combine(NOW.astimezone(IST).date(), datetime.min.time(), tzinfo=IST)
 
 
 def _client(monkeypatch, states=None, broken=False):
@@ -76,11 +79,11 @@ def test_pnl_today_splits_mine_and_ai(monkeypatch):
     _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"kite": "ai", "upstox": "mine"}}],
           journal_trades=[
               {"_id": "t1", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "INFY",
-               "side": "BUY", "quantity": 10, "price": 100.0, "traded_at": NOW - timedelta(minutes=30)},
+               "side": "BUY", "quantity": 10, "price": 100.0, "traded_at": DAY + timedelta(minutes=1)},
               {"_id": "t2", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "INFY",
-               "side": "SELL", "quantity": 10, "price": 110.0, "traded_at": NOW - timedelta(minutes=5)}],
+               "side": "SELL", "quantity": 10, "price": 110.0, "traded_at": DAY + timedelta(minutes=2)}],
           paper_trades=[{"user_id": "alice:autopilot", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
-                         "realized_pnl": -50.0, "exit_at": NOW - timedelta(minutes=1), "venue": "paper"}])
+                         "realized_pnl": -50.0, "exit_at": DAY + timedelta(minutes=3), "venue": "paper"}])
     assert client.get("/api/v1/today").json()["pnl_today"] == {"mine": 100.0, "ai": -50.0}
 
 
@@ -99,3 +102,37 @@ def test_autopilot_summary_counts_open_positions_against_capital(monkeypatch):
                          "entry_price": 1500.0, "venue": "paper"}])
     summary = client.get("/api/v1/today").json()["autopilot"]
     assert summary == {"enabled": True, "live": False, "capital": 25000.0, "deployed": 4500.0}
+
+
+def test_selling_a_position_bought_before_today_counts_its_pnl(monkeypatch):
+    client, db = _client(monkeypatch)
+    _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"upstox": "mine"}}], journal_trades=[
+        {"_id": "y1", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "RELIANCE",
+         "side": "BUY", "quantity": 10, "price": 90.0, "traded_at": DAY - timedelta(days=2)},
+        {"_id": "t1", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "RELIANCE",
+         "side": "SELL", "quantity": 10, "price": 100.0, "traded_at": DAY + timedelta(minutes=1)}])
+    assert client.get("/api/v1/today").json()["pnl_today"]["mine"] == 100.0
+
+
+def test_activity_times_carry_their_timezone(monkeypatch):
+    client, db = _client(monkeypatch)
+    _seed(db, autopilot_log=[{"user_id": "alice", "at": datetime(2026, 10, 5, 4, 0), "status": "FILLED",
+                              "side": "BUY", "symbol": "INFY", "quantity": 1}])
+    at = client.get("/api/v1/today").json()["ai_activity"][0]["at"]
+    assert at.endswith("+00:00") or at.endswith("Z")
+
+
+def test_broker_states_are_cached_between_polls(monkeypatch):
+    calls = []
+    client, db = _client(monkeypatch)
+
+    async def counting(user_id, brokers):
+        calls.append(1)
+        return {b: "ACTIVE" for b in brokers}
+
+    client.app.dependency_overrides[today_router.get_broker_states] = lambda: counting
+    monkeypatch.setattr(today_router, "_STATE_CACHE", {})
+    _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"kite": "ai"}}])
+    client.get("/api/v1/today")
+    client.get("/api/v1/today")
+    assert len(calls) == 1

@@ -5,6 +5,7 @@ computed on its own; one that fails comes back null with its error, and
 the rest still render."""
 
 import logging
+import time as clock
 from datetime import datetime, time, timezone
 from typing import Optional
 
@@ -19,6 +20,8 @@ router = APIRouter(prefix="/today", tags=["Today"])
 logger = logging.getLogger(__name__)
 NAMES = {"kite": "Kite", "upstox": "Upstox", "angel_one": "Angel One"}
 MAX_PROPOSALS = 5
+STATE_TTL = 60  # seconds a broker-session check is reused: Today polls every minute
+_STATE_CACHE: dict = {}  # user_id -> (checked_at, roles tuple, {role: info})
 
 
 async def _default_broker_states(user_id: str, brokers: list[str]) -> dict[str, str]:
@@ -42,8 +45,16 @@ def _aware(value: Optional[datetime]) -> Optional[datetime]:
 
 
 async def _accounts(roles: dict, user_id: str, broker_states) -> dict:
+    """Each role's broker session. Checking one can call the broker (Kite's
+    profile endpoint), so a result is reused for STATE_TTL seconds."""
+    key = tuple(sorted(roles.items()))
+    cached = _STATE_CACHE.get(user_id)
+    if cached and cached[1] == key and clock.monotonic() - cached[0] < STATE_TTL:
+        return cached[2]
     states = await broker_states(user_id, sorted(roles))
-    return {role: {"broker": broker, "state": states.get(broker)} for broker, role in roles.items()}
+    accounts = {role: {"broker": broker, "state": states.get(broker)} for broker, role in roles.items()}
+    _STATE_CACHE[user_id] = (clock.monotonic(), key, accounts)
+    return accounts
 
 
 async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict], now: datetime) -> list[dict]:
@@ -82,9 +93,12 @@ async def _pnl_today(user_id: str, roles: dict, now: datetime) -> dict:
 
     day_start = datetime.combine(now.astimezone(IST).date(), time(0, 0), tzinfo=IST)
     mine_brokers = brokers_for(roles, "mine")
-    trades = [t for t in await JournalStore(db.db).list_trades(user_id, since=day_start)
+    # Round trips over the whole history (a position bought before today and
+    # sold today is today's P&L), kept if they closed today.
+    trades = [t for t in await JournalStore(db.db).list_trades(user_id)
               if not mine_brokers or t.get("broker") in mine_brokers]
-    mine = sum(t["pnl"] for t in build_round_trips(trades) if t.get("pnl") is not None)
+    mine = sum(t["pnl"] for t in build_round_trips(trades)
+               if t.get("pnl") is not None and (_aware(t.get("closed_at")) or day_start) >= day_start)
     ai = 0.0
     async for t in db.db["paper_trades"].find({"user_id": ledger_user(user_id)}):
         if t.get("status") == "CLOSED" and (_aware(t.get("exit_at")) or day_start) >= day_start:
@@ -147,6 +161,8 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
     kill = {"tripped": bool(tripped), "reason": (tripped or {}).get("reason")} if "kill_switch" not in errors else None
     log = await part("ai_activity", db.db["autopilot_log"].find({"user_id": user.id}, {"_id": 0, "user_id": 0})
                      .sort("at", -1).limit(5).to_list(length=5))
+    for row in log or []:
+        row["at"] = _aware(row.get("at"))  # Mongo hands back naive UTC; say so to the browser
     return {
         "market": {"open": in_session(now), "as_of": now},
         "accounts": accounts,
