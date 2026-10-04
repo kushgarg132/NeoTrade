@@ -15,7 +15,12 @@ import { cn } from '../../utils/cn';
  * in Today's "Needs you".
  */
 
-const Segmented = ({ label, options, value, onChange, disabled = {} }) => (
+const detailText = (err, fallback) => {
+  const detail = err?.response?.data?.detail;
+  return typeof detail === 'string' ? detail : fallback;
+};
+
+const Segmented = ({ label, options, value, onChange, disabled = {}, locked = false }) => (
   <div role="radiogroup" aria-label={label} className="flex border border-[var(--rule-strong)]">
     {options.map((option) => {
       const selected = option.id === value;
@@ -25,7 +30,7 @@ const Segmented = ({ label, options, value, onChange, disabled = {} }) => (
           type="button"
           role="radio"
           aria-checked={selected}
-          disabled={disabled[option.id]}
+          disabled={locked || disabled[option.id]}
           onClick={() => onChange(option.id)}
           className={cn(
             'flex-1 min-h-11 sm:min-h-9 px-2 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
@@ -57,6 +62,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
   const [error, setError] = useState(null);
   const cardRef = useRef(null);
   cardRef.current = result ? null : card;
+  const requestRef = useRef(0);
 
   useEffect(() => {
     api
@@ -73,10 +79,18 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
   }, []);
 
   // A reviewed card the user walked away from is cancelled, never left live.
-  const close = () => {
+  const cancelCard = () => {
     if (cardRef.current) api.post(endpoints.chat.cancel(cardRef.current.id)).catch(() => {});
+    cardRef.current = null;
+  };
+
+  const close = () => {
+    cancelCard();
     onClose();
   };
+
+  // Unmounted any other way (Back, a route change): the card still goes.
+  useEffect(() => cancelCard, []);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -108,6 +122,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
   const valid = qty > 0 && (orderType === 'MARKET' || limit > 0);
 
   const edit = (setter) => (value) => {
+    requestRef.current += 1; // a Review still in flight is now for old values
     setter(value);
     if (card) api.post(endpoints.chat.cancel(card.id)).catch(() => {});
     setCard(null);
@@ -116,6 +131,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
   };
 
   const review = async () => {
+    const request = ++requestRef.current;
     setBusy(true);
     setError(null);
     try {
@@ -123,9 +139,13 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
         symbol, side, quantity: qty, product, order_type: orderType,
         limit_price: orderType === 'LIMIT' ? limit : null, venue: venue === 'mine' ? 'live' : 'paper',
       });
+      if (request !== requestRef.current) {
+        api.post(endpoints.chat.cancel(res.data.id)).catch(() => {});
+        return;
+      }
       setCard(res.data);
     } catch (err) {
-      setError(err?.response?.data?.detail?.toString?.() || 'Could not check this order.');
+      if (request === requestRef.current) setError(detailText(err, 'Could not check this order.'));
     } finally {
       setBusy(false);
     }
@@ -143,7 +163,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
         onDone?.();
       }
     } catch (err) {
-      setError(err?.response?.data?.detail || 'The order was not placed.');
+      setError(detailText(err, 'The order was not placed.'));
       setCard(null);
       setNeedsSecondTap(false);
     } finally {
@@ -187,6 +207,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
               label="Side"
               value={side}
               onChange={edit(setSide)}
+              locked={busy}
               options={[
                 { id: 'BUY', label: 'Buy', selectedClass: 'bg-[var(--gain)] text-white' },
                 { id: 'SELL', label: 'Sell', selectedClass: 'bg-[var(--loss)] text-[var(--paper)]' },
@@ -196,6 +217,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
               label="Account"
               value={venue}
               onChange={edit(setVenue)}
+              locked={busy}
               disabled={{ mine: !hasMine }}
               options={[
                 { id: 'paper', label: 'Paper' },
@@ -214,6 +236,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
               label="Product"
               value={product}
               onChange={edit(setProduct)}
+              locked={busy}
               options={[
                 { id: 'CNC', label: 'Delivery' },
                 { id: 'MIS', label: 'Intraday' },
@@ -223,6 +246,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
               label="Order type"
               value={orderType}
               onChange={edit(setOrderType)}
+              locked={busy}
               options={[
                 { id: 'MARKET', label: 'Market' },
                 { id: 'LIMIT', label: 'Limit' },
@@ -239,6 +263,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
                   step="1"
                   value={quantity}
                   onChange={(e) => edit(setQuantity)(e.target.value)}
+                  disabled={busy}
                   className="w-full bg-transparent border-0 border-b-2 border-[var(--rule-strong)] focus:border-[var(--stamp)] focus:ring-0 py-2 figure-md"
                 />
               </label>
@@ -252,6 +277,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
                     step="0.05"
                     value={limitPrice}
                     onChange={(e) => edit(setLimitPrice)(e.target.value)}
+                    disabled={busy}
                     className="w-full bg-transparent border-0 border-b-2 border-[var(--rule-strong)] focus:border-[var(--stamp)] focus:ring-0 py-2 figure-md"
                   />
                 </label>

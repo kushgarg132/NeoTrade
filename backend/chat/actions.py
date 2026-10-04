@@ -193,6 +193,10 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
     adapter = await _active_broker(user_id, credentials)
     if adapter is None:
         raise ActionRefused("No broker is connected. Log in to your broker in Settings first.")
+    if params.get("order_type") == "LIMIT" and not getattr(adapter, "SUPPORTS_LIMIT", False):
+        # Only adapters that send the limit price may take one; another would
+        # turn it into a market order (or reject it).
+        raise ActionRefused("Limit orders on your account need Upstox; place a market order or use Paper.")
     if delivery_sell:
         from backend.chat.account_actions import _held
 
@@ -474,6 +478,9 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
                       order_type=order_type, limit_price=params.get("limit_price"), product=product,
                       strategy_name="chat")
         _, status, filled = await execute_live_order(order, ledger, adapter, LiveOrderStore(db), "chat", action["message"])
+        if order_type == "LIMIT" and status in ("REJECTED", "CANCELLED"):
+            return (f"Your broker {status.lower()} the limit order; {filled:g} of "
+                    f"{params['quantity']} filled.")
         if order_type == "LIMIT" and status != "FILLED":
             return (f"Resting at your broker: limit ₹{params['limit_price']:,.2f}, {filled:g} of "
                     f"{params['quantity']} filled. It lasts until 15:30.")

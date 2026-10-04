@@ -97,3 +97,8 @@ async def test_paper_orders_list_and_cancel(env):
 async def test_cannot_cancel_other_users_paper_order(env):
     placed = await paper_orders.place(env["db"], "bob", _body(symbol="INFY"), 1500.0, OPEN)
     assert env["client"].post(f"/orders/paper/{placed['id']}/cancel").status_code == 404
+
+
+def test_limit_price_is_rounded_to_the_tick(env):
+    card = env["client"].post("/orders/propose", json=_body(limit_price=1490.37)).json()
+    assert "limit ₹1,490.35" in card["summary"]

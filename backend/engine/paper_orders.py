@@ -2,8 +2,9 @@
 
 A limit that can fill now fills now; otherwise it rests in `paper_orders`
 until the mark crosses it (checked every minute in market hours) or the
-session ends at 15:30, like a broker DAY order. A fill is priced at the
-better of mark and limit (BUY min, SELL max) and booked through
+session ends at 15:30, like a broker DAY order. A limit that fills on
+placement is priced at the better of mark and limit (BUY min, SELL max); a
+resting one fills at its limit. Fills are booked through
 fill_on_paper, so charges match an engine fill. Each order is claimed
 atomically before it fills, so two sweeps can never fill it twice.
 """
@@ -46,8 +47,7 @@ async def _held(db, user_id: str, symbol: str) -> float:
     return position.quantity if position is not None else 0.0
 
 
-async def _fill(db, doc: dict, mark: float, now: datetime) -> float:
-    price = _fill_price(doc["side"], mark, doc["limit_price"])
+async def _fill(db, doc: dict, price: float, now: datetime) -> float:
     order = Order(
         id=doc["id"], symbol=doc["symbol"], side=Side(doc["side"]), quantity=doc["quantity"],
         order_type="LIMIT", limit_price=doc["limit_price"], product=doc["product"], strategy_name="ticket",
@@ -64,7 +64,8 @@ async def place(db, user_id: str, params: dict, mark: float, now: datetime) -> d
         "session_date": now.astimezone(IST).date().isoformat(),
     }
     if _crossed(doc["side"], mark, doc["limit_price"]):
-        doc.update(status="FILLED", filled_at=now, fill_price=await _fill(db, doc, mark, now))
+        price = _fill_price(doc["side"], mark, doc["limit_price"])
+        doc.update(status="FILLED", filled_at=now, fill_price=await _fill(db, doc, price, now))
     await _collection(db).insert_one(dict(doc))
     return doc
 
@@ -111,7 +112,9 @@ async def sweep(db, mark_price: Callable[[str], Awaitable[float]], now: datetime
             changed += 1
             continue
         try:
-            price = await _fill(db, doc, mark, now)
+            # A resting limit fills at its limit: the mark is sampled once a
+            # minute, so a fast move through it would flatter the paper book.
+            price = await _fill(db, doc, doc["limit_price"], now)
         except Exception as exc:
             logger.exception("paper order %s fill failed: %s", doc["id"], exc)
             await _collection(db).update_one({"id": doc["id"]}, {"$set": {"status": "OPEN"}})

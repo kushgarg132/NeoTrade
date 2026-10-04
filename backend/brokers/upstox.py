@@ -125,6 +125,8 @@ logger = logging.getLogger(__name__)
 
 
 class UpstoxAdapter:
+    # place_order sends order_type and limit_price through (backend/chat/actions.py checks this).
+    SUPPORTS_LIMIT = True
     def __init__(
         self, api_key: Optional[str], api_secret: Optional[str], redirect_uri: Optional[str],
         redis, user_id: str,

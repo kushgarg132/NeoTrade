@@ -64,6 +64,10 @@ Added to `_order_checks`, for both the ticket and chat cards:
   can't be more than that."` MIS sells are not capped (intraday short, as at the broker).
 
 `_execute` kind `order`:
+- Live LIMIT is refused unless the `mine` adapter sends the limit price
+  (`SUPPORTS_LIMIT`, Upstox today): `"Limit orders on your account need Upstox; place a market
+  order or use Paper."` Angel One's adapter hard-codes MARKET and Kite's omits the price.
+  The ticket rounds a limit to the ₹0.05 tick.
 - **live**: `Order(order_type=params["order_type"], limit_price=params.get("limit_price"), …)`
   through `execute_live_order` unchanged. Result copy: MARKET as today; LIMIT not filled within
   the status checks → `"Resting at your broker: limit ₹{p}, {filled} of {qty} filled. It lasts
@@ -84,7 +88,8 @@ created_at, filled_at?, fill_price?, session_date}` (`session_date` = IST date p
   limit)** and store as FILLED; else store OPEN.
 - `async sweep(db, mark_price, now) -> int` — for every OPEN order: if `now` (IST) is at or past
   15:30 or `session_date` < today → EXPIRED; else if the mark crossed the limit → fill via
-  `fill_on_paper` at the same price rule, FILLED. Claim each order atomically
+  `fill_on_paper` **at the limit** (the mark is sampled once a minute, so the better-of rule
+  would flatter the paper book on a fast move), FILLED. Claim each order atomically
   (`find_one_and_update` OPEN → FILLING) so a fill can never happen twice. Before filling a CNC
   sell, re-check holdings; if no longer held → CANCELLED with reason `"no longer held"`.
 - `async list_open(db, user_id) -> list[dict]`, `async cancel(db, user_id, order_id) -> bool`

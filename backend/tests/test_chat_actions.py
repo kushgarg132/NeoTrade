@@ -22,6 +22,8 @@ CLOSED = datetime(2026, 10, 4, 5, 0, tzinfo=timezone.utc)  # Sunday
 
 
 class _Broker:
+    SUPPORTS_LIMIT = True
+
     def __init__(self):
         self.placed = []
 
@@ -305,3 +307,28 @@ async def test_paper_limit_card_rests_then_fills(env):
 
     assert await paper_orders.sweep(env["db"], mark, OPEN) == 1
     assert (await env["db"]["paper_orders"].find_one({"user_id": "alice"}))["status"] == "FILLED"
+
+
+async def test_live_limit_refused_on_a_broker_without_limit_support(env, monkeypatch):
+    class _MarketOnly:
+        async def get_positions(self):
+            return {}
+
+    async def market_only(user_id, credentials):
+        return _MarketOnly()
+
+    monkeypatch.setattr(actions, "_active_broker", market_only)
+    with pytest.raises(ActionRefused, match="Limit orders on your account need Upstox"):
+        await actions._order_checks(env["db"], "alice", _order(venue="live", order_type="LIMIT", limit_price=1490.0), None)
+
+
+@pytest.mark.parametrize("status", ["REJECTED", "CANCELLED"])
+async def test_live_limit_rejected_is_not_reported_resting(env, monkeypatch, status):
+    async def refused(broker_order_id):
+        return BrokerOrderStatus(broker_order_id=broker_order_id, status=status, filled_quantity=0, average_price=0.0)
+
+    monkeypatch.setattr(env["broker"], "get_order_status", refused)
+    card = await _card(env["db"], _order(venue="live", order_type="LIMIT", limit_price=1490.0))
+    done = await confirm(env["db"], None, None, "alice", card["id"], second_tap=True)
+    assert done["result"].startswith(f"Your broker {status.lower()} the limit order")
+    assert "Resting" not in done["result"]

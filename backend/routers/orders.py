@@ -43,13 +43,15 @@ class TicketRequest(BaseModel):
 @router.post("/propose")
 async def propose(body: TicketRequest, user: User = Depends(get_current_user)):
     params = body.model_dump()
+    if body.limit_price is not None:
+        params["limit_price"] = round(round(body.limit_price / 0.05) * 0.05, 2)  # NSE equity tick
     params["symbol"] = body.symbol.strip().upper().removesuffix(".NS")
     try:
         price, _ = await _order_checks(_db(), user.id, params, None)
     except ActionRefused as exc:
         raise HTTPException(status_code=409, detail=str(exc))
-    basis = body.limit_price or price
-    how = f"limit ₹{body.limit_price:,.2f}" if body.order_type == "LIMIT" else "market"
+    basis = params["limit_price"] or price
+    how = f"limit ₹{params['limit_price']:,.2f}" if body.order_type == "LIMIT" else "market"
     summary = (
         f"{body.side} {body.quantity} {params['symbol']} · {'delivery' if body.product == 'CNC' else 'intraday'}"
         f" · {how} · ~₹{basis * body.quantity:,.0f} on {'paper' if body.venue == 'paper' else 'your account'}"

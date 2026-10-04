@@ -49,7 +49,7 @@ async def test_resting_buy_fills_on_cross(db):
     assert placed["status"] == "OPEN" and await _trades(db) == []
     assert await paper_orders.sweep(db, _marks(ITC=399.0), OPEN + timedelta(minutes=1)) == 1
     doc = await db["paper_orders"].find_one({"id": placed["id"]})
-    assert (doc["status"], doc["fill_price"]) == ("FILLED", 399.0)
+    assert (doc["status"], doc["fill_price"]) == ("FILLED", 400.0)  # a resting limit fills at its limit
     assert len(await _trades(db)) == 1
 
 
