@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, RefreshCw, Upload, History } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
@@ -134,30 +135,6 @@ const MirrorSheet = ({ mirror }) => {
           : 'Fewer trades means fewer charges: SEBI found 80% of intraday traders with more than 500 trades a year lost money.'}
         {b && ` Return on your account size since ${b.start}, against simply holding the Nifty.`}
       </p>
-    </Sheet>
-  );
-};
-
-/** The AI account against the user's own, month by month, after charges. */
-const AiVsMeSheet = () => {
-  const [rows, setRows] = useState(null);
-  useEffect(() => {
-    api.get(endpoints.journal.aiVsMe).then((res) => setRows(res.data)).catch(() => setRows([]));
-  }, []);
-  if (!rows || rows.length === 0) return null;
-  const ret = (x) => (x === null || x === undefined ? '—' : pct(x));
-  return (
-    <Sheet title="AI vs you" meta="Net of estimated charges">
-      <ul className="divide-y divide-[var(--rule)]">
-        {rows.slice(-6).reverse().map((r) => (
-          <li key={r.month} className="py-2 grid grid-cols-4 gap-2 items-baseline text-sm">
-            <span className="field-label">{r.month}</span>
-            <span><span className="doc-meta">AI </span><Money value={r.ai.net_pnl} size="sm" /></span>
-            <span><span className="doc-meta">You </span><Money value={r.mine.net_pnl} size="sm" /></span>
-            <span className="figure-md text-right">Nifty {ret(r.nifty_return)}</span>
-          </li>
-        ))}
-      </ul>
     </Sheet>
   );
 };
@@ -304,6 +281,12 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
     <Layout>
       <div className="private space-y-3 sm:space-y-4">
         {lockedAccount ? <SectionTabs tabs={MINE_TABS} label="My account" /> : <AccountSwitch {...accountState} />}
+        {lockedAccount && accountState.roles && !accountState.hasRole && (
+          <Link to="/settings?tab=accounts" className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 border-dashed hover:bg-[var(--paper-sunk)]">
+            <span className="text-sm">Showing every account. Set which broker is <span className="field-label">yours</span> in More → Accounts.</span>
+            <span className="field-label text-[var(--stamp)]">Set ›</span>
+          </Link>
+        )}
         <GuardrailAlerts />
 
         {data && (
@@ -407,7 +390,6 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
         )}
 
         {!empty && tab === 'patterns' && <MirrorSheet mirror={data?.mirror} />}
-        {!empty && tab === 'calendar' && accountState.hasBoth && <AiVsMeSheet />}
 
         {tab === 'learning' && <LearningSheet />}
 

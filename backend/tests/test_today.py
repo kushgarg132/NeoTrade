@@ -90,3 +90,12 @@ def test_a_failing_part_degrades_not_errors(monkeypatch):
     resp = client.get("/api/v1/today")
     assert resp.status_code == 200
     assert resp.json()["accounts"] is None and "accounts" in resp.json()["errors"]
+
+
+def test_autopilot_summary_counts_open_positions_against_capital(monkeypatch):
+    client, db = _client(monkeypatch)
+    _seed(db, user_prefs=[{"user_id": "alice", "autopilot_enabled": True, "autopilot_capital": 25000.0}],
+          paper_trades=[{"user_id": "alice:autopilot", "symbol": "INFY", "status": "OPEN", "quantity": 3,
+                         "entry_price": 1500.0, "venue": "paper"}])
+    summary = client.get("/api/v1/today").json()["autopilot"]
+    assert summary == {"enabled": True, "live": False, "capital": 25000.0, "deployed": 4500.0}

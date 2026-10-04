@@ -371,6 +371,12 @@ const MyPortfolio = ({ lockedAccount = null }) => {
     <Layout>
       <div className="private space-y-3 sm:space-y-4">
         {lockedAccount ? <SectionTabs tabs={MINE_TABS} label="My account" /> : <AccountSwitch {...accountState} />}
+        {lockedAccount && accountState.roles && !accountState.hasRole && (
+          <Link to="/settings?tab=accounts" className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 border-dashed hover:bg-[var(--paper-sunk)]">
+            <span className="text-sm">Showing every account. Set which broker is <span className="field-label">yours</span> in More → Accounts.</span>
+            <span className="field-label text-[var(--stamp)]">Set ›</span>
+          </Link>
+        )}
         <Sheet
           title="Portfolio"
           meta={snapshot ? `${formatDateTime(snapshot.at)}${brokers ? ` · ${brokers}` : ''}` : null}

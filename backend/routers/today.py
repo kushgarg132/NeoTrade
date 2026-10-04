@@ -111,6 +111,18 @@ async def _setup(user_id: str, prefs: dict) -> dict:
     return {"done": sum(r["done"] for r in rows), "total": len(rows), "steps": rows}
 
 
+async def _autopilot(user_id: str, prefs: dict) -> dict:
+    """The AI account's autopilot at a glance: switch, mode, and capital in use
+    (open positions at entry price -- no market call)."""
+    from backend.autopilot.service import ledger_user
+
+    deployed = 0.0
+    async for t in db.db["paper_trades"].find({"user_id": ledger_user(user_id), "status": "OPEN"}):
+        deployed += (t.get("quantity") or 0) * (t.get("entry_price") or 0)
+    return {"enabled": bool(prefs.get("autopilot_enabled")), "live": bool(prefs.get("autopilot_live")),
+            "capital": prefs.get("autopilot_capital"), "deployed": round(deployed, 2)}
+
+
 @router.get("")
 async def today(user: User = Depends(get_current_user), broker_states=Depends(get_broker_states)):
     from backend.engine.autorun import in_session
@@ -144,6 +156,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now)) or [],
         "pnl_today": await part("pnl_today", _pnl_today(user.id, roles, now)),
         "ai_activity": log,
+        "autopilot": await part("autopilot", _autopilot(user.id, prefs)),
         "setup": await part("setup", _setup(user.id, prefs)),
         "errors": errors,
     }

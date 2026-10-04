@@ -15,6 +15,8 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AiLimits = lazy(() => import('./pages/AiLimits'));
 const Today = lazy(() => import('./pages/Today'));
+const AiOverview = lazy(() => import('./pages/AiOverview'));
+const AiActivity = lazy(() => import('./pages/AiActivity'));
 import Login from './pages/Login';
 const SystemArchitecturePage = lazy(() => import('./pages/SystemArchitecturePage'));
 import RequireAuth from './components/RequireAuth';
@@ -90,7 +92,8 @@ const App = () => {
       <Route path="/mine/trades" element={gated(<Journal view="trades" lockedAccount="mine" />)} />
       <Route path="/mine/habits" element={gated(<Journal view="habits" lockedAccount="mine" />)} />
       {/* AI: the AI account, its autopilot, and practice (paper) */}
-      <Route path="/ai" element={<Navigate to="/ai/practice" replace />} />
+      <Route path="/ai" element={gated(<AiOverview />)} />
+      <Route path="/ai/activity" element={gated(<AiActivity />)} />
       <Route path="/ai/limits" element={gated(<AiLimits />)} />
       <Route path="/ai/practice" element={gated(<PaperOverview />)} />
       <Route path="/ai/practice/decisions" element={gated(<Suggestions />)} />
