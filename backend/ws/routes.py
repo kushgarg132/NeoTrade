@@ -173,7 +173,7 @@ async def _stream_quick_analysis(connection, symbol: str, req_id: str) -> None:
 
     try:
         snapshot = await quick_analysis(symbol)
-        connection.offer(_frame(topic, "report", snapshot.model_dump()))
+        connection.offer(_frame(topic, "report", snapshot.model_dump(mode="json")))  # NaN -> null
     except Exception as exc:
         logger.warning("quick analysis of %s failed: %s", symbol, exc)
         connection.offer(_frame(topic, "error", {"detail": str(exc)}))

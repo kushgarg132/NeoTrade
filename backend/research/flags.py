@@ -31,10 +31,11 @@ def stock_flags(technicals: dict, company: dict) -> list[dict]:
 
     if t.get("trend") in _TREND:
         flags.append(_flag("trend", *_TREND[t["trend"]]))
-    if price is not None and sma_200:
-        flags.append(_flag("vs_200", *(("Above 200-day avg", "up") if price >= sma_200 else ("Below 200-day avg", "down"))))
-    if sma_50 is not None and sma_200:
-        flags.append(_flag("cross", *(("Golden cross", "up") if sma_50 >= sma_200 else ("Death cross", "down"))))
+    # Equal values say nothing either way, so they raise no flag.
+    if price is not None and sma_200 and price != sma_200:
+        flags.append(_flag("vs_200", *(("Above 200-day avg", "up") if price > sma_200 else ("Below 200-day avg", "down"))))
+    if sma_50 is not None and sma_200 and sma_50 != sma_200:
+        flags.append(_flag("cross", *(("Golden cross", "up") if sma_50 > sma_200 else ("Death cross", "down"))))
     if rsi is not None and rsi > 70:
         flags.append(_flag("rsi", f"RSI {round(rsi)} · overbought", "down"))
     elif rsi is not None and rsi < 30:

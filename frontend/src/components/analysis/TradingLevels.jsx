@@ -67,7 +67,7 @@ const TradingLevels = ({ t, currency }) => {
         columns={[
           { key: 'item', label: 'Level' },
           { key: 'value', label: 'Value', align: 'right' },
-          { key: 'note', label: 'vs price', align: 'right' },
+          { key: 'note', label: 'Note', align: 'right' },
         ]}
       >
         {rows.map(([label, value, note]) => (
@@ -77,6 +77,7 @@ const TradingLevels = ({ t, currency }) => {
             <Cell
               align="right"
               mono
+              data-label={note ? undefined : ''}
               className={cn('text-[var(--ink-faint)]', note.startsWith('+') && 'text-up', note.startsWith('−') && 'text-down')}
             >
               {note}

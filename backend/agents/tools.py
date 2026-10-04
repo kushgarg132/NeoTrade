@@ -50,7 +50,7 @@ async def fetch_stock_info_tool(symbol: str) -> str:
         - Market Cap: {info.market_cap}
         - 52W High/Low: {info.week_52_high} / {info.week_52_low}
         - PE Ratio: {info.pe_ratio}
-        - Dividend Yield: {info.dividend_yield}
+        - Dividend Yield: {f'{info.dividend_yield * 100:.2f}%' if info.dividend_yield is not None else 'n/a'}
         """
     except Exception as e:
         logger.error(f"Error in fetch_stock_info_tool: {e}")

@@ -20,3 +20,12 @@ def test_favicon_url_accepts_a_bare_guessed_domain():
     assert _favicon_url("reliance.com") == (
         "https://www.google.com/s2/favicons?sz=128&domain=reliance.com"
     )
+
+
+def test_dividend_yield_arrives_in_percent_and_is_stored_as_a_fraction():
+    # yfinance 1.x reports dividendYield in percent (ITC.NS: 6.25), unlike its
+    # margins and ROE, which stay fractions.
+    from backend.components.master.stock_info import _dividend_fraction
+
+    assert _dividend_fraction({"dividendYield": 6.25}) == 0.0625
+    assert _dividend_fraction({}) is None

@@ -15,6 +15,13 @@ router = APIRouter()
 _provider = YFinanceProvider()
 
 
+def _dividend_fraction(info: dict):
+    """yfinance 1.x reports dividendYield in percent (ITC.NS: 6.25) while its
+    margins and ROE stay fractions; store it as a fraction like the rest."""
+    value = info.get("dividendYield")
+    return value / 100 if value is not None else None
+
+
 def _favicon_url(website_or_domain: str) -> str:
     """logo.clearbit.com's free logo API is dead (DNS no longer resolves --
     Clearbit shut it down after the HubSpot acquisition), so every logo_url
@@ -108,7 +115,7 @@ async def fetch_stock_info_logic(symbol: str) -> CompanyInfo:
         volume=info.get("regularMarketVolume") or info.get("volume"),
         avg_volume=info.get("averageVolume"),
         pe_ratio=info.get("trailingPE") or info.get("forwardPE"),
-        dividend_yield=info.get("dividendYield"),
+        dividend_yield=_dividend_fraction(info),
         beta=info.get("beta"),
         currency=info.get("currency", currency),
         logo_url=info.get("logo_url") or _favicon_url(

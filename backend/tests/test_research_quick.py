@@ -141,3 +141,32 @@ async def test_quick_analysis_carries_flags(wired):
     result = await quick_module.quick_analysis("RELIANCE")
 
     assert any(flag["code"] == "trend" for flag in result.flags)
+
+
+async def test_one_year_return_needs_a_year_of_history(wired, monkeypatch):
+    monkeypatch.setattr(quick_module._provider, "history", AsyncMock(return_value=wired[:40]))
+
+    t = (await quick_module.quick_analysis("RELIANCE")).technical_analysis
+
+    assert t["returns"]["1y"] is None
+
+
+def test_nan_last_close_leaves_no_nan_in_the_payload(wired):
+    import json, math
+
+    candles = list(wired)
+    candles[-1] = candles[-1].model_copy(update={"close": math.nan})
+
+    t = quick_module._compute_technicals(candles)
+
+    json.dumps(t, allow_nan=False)  # raises ValueError on any NaN/inf
+    assert t["price"] is None
+
+
+def test_trend_failure_leaves_trend_none(wired, monkeypatch):
+    def boom(df):
+        raise RuntimeError("detector broke")
+
+    monkeypatch.setattr(quick_module.TrendDetector, "detect_trend", boom)
+
+    assert quick_module._compute_technicals(wired)["trend"] is None

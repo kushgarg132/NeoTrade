@@ -172,7 +172,7 @@ def test_analysis_streams_back_on_its_own_topic(client, monkeypatch):
 
 def test_quick_analysis_streams_back_on_its_own_topic(client, monkeypatch):
     class _Snapshot:
-        def model_dump(self):
+        def model_dump(self, mode="python"):
             return {"symbol": "RELIANCE", "company_info": {"symbol": "RELIANCE"}}
 
     monkeypatch.setattr("backend.research.quick.quick_analysis", AsyncMock(return_value=_Snapshot()))

@@ -79,3 +79,9 @@ def test_order_follows_the_table():
         {"trailing_eps": -1},
     )
     assert [f["code"] for f in flags] == ["trend", "vs_200", "cross", "rsi", "volume", "loss"]
+
+
+def test_equal_averages_raise_no_cross_or_side():
+    flags = stock_flags({"price": 100, "sma_50": 100, "sma_200": 100}, {})
+    assert _flag(flags, "cross") is None
+    assert _flag(flags, "vs_200") is None

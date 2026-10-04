@@ -11,6 +11,7 @@ source of "opening a stock is slow". (A second source hid here until
 """
 
 import asyncio
+import math
 import logging
 from typing import Any, Dict, List
 
@@ -49,8 +50,16 @@ def _last(series: pd.Series):
     return float(value) if pd.notna(value) else None
 
 
-# Trading days back for each return; "1y" is the whole history.
+# Trading days back for each return. "1y" spans the whole history, and only
+# once it is about a year long: a 40-day-old listing has no 1-year return.
 _RETURN_WINDOWS = {"1w": 5, "1m": 21, "3m": 63, "6m": 126}
+_YEAR_BARS = 240
+
+
+def _finite(value):
+    """A plain float, or None for NaN/inf: JSON cannot carry either."""
+    value = float(value)
+    return value if math.isfinite(value) else None
 
 
 def _pct_change(close: pd.Series, bars: int):
@@ -58,16 +67,16 @@ def _pct_change(close: pd.Series, bars: int):
     or the base close is 0 (a bad tick would otherwise print infinity)."""
     if len(close) <= bars:
         return None
-    base = float(close.iloc[-1 - bars])
-    return (float(close.iloc[-1]) / base - 1) * 100 if base else None
+    base, last = _finite(close.iloc[-1 - bars]), _finite(close.iloc[-1])
+    return (last / base - 1) * 100 if base and last is not None else None
 
 
 def _volume_ratio(volume: pd.Series):
     """Last bar's volume against the mean of the 20 bars before it."""
     if len(volume) < 21:
         return None
-    mean = float(volume.iloc[-21:-1].mean())
-    return float(volume.iloc[-1]) / mean if mean else None
+    mean, last = _finite(volume.iloc[-21:-1].mean()), _finite(volume.iloc[-1])
+    return last / mean if mean and last is not None else None
 
 
 def _levels(df: pd.DataFrame, price: float):
@@ -79,12 +88,12 @@ def _levels(df: pd.DataFrame, price: float):
         return None, None
 
 
-def _trend(df: pd.DataFrame) -> str:
+def _trend(df: pd.DataFrame):
     try:
         return TrendDetector.detect_trend(Indicators.calculate_all(df)).value
     except Exception as e:
         logger.warning(f"Trend detection failed: {e}")
-        return "choppy"
+        return None
 
 
 def _compute_technicals(candles) -> Dict[str, Any]:
@@ -93,13 +102,13 @@ def _compute_technicals(candles) -> Dict[str, Any]:
 
     df = pd.DataFrame([c.model_dump() for c in candles])
     close, high, low = df["close"], df["high"], df["low"]
-    price = float(close.iloc[-1])
+    price = _finite(close.iloc[-1])
     macd, macd_signal, _ = Indicators.macd(close)
     bb_upper, bb_lower = Indicators.bollinger_bands(close)
-    support, resistance = _levels(df, price)
+    support, resistance = _levels(df, price) if price is not None else (None, None)
 
     returns = {key: _pct_change(close, bars) for key, bars in _RETURN_WINDOWS.items()}
-    returns["1y"] = _pct_change(close, len(close) - 1)
+    returns["1y"] = _pct_change(close, len(close) - 1) if len(close) >= _YEAR_BARS else None
 
     return {
         "rsi": _last(Indicators.rsi(close)),
@@ -117,8 +126,8 @@ def _compute_technicals(candles) -> Dict[str, Any]:
         "trend": _trend(df),
         "returns": returns,
         "volume_ratio": _volume_ratio(df["volume"]),
-        "high_52w": float(high.max()),
-        "low_52w": float(low.min()),
+        "high_52w": _finite(high.max()),
+        "low_52w": _finite(low.min()),
     }
 
 

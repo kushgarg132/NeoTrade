@@ -155,7 +155,7 @@ const AnalysisCard = ({ quick, ai, aiLoading, aiError, aiRequested, onOpenAiTab 
                 return (
                   <div key={key} className="text-center">
                     <dt className="field-label">{label}</dt>
-                    <dd className={cn('figure-md text-sm', value > 0 && 'text-up', value < 0 && 'text-down')}>
+                    <dd className={cn('figure-md text-xs sm:text-sm', value > 0 && 'text-up', value < 0 && 'text-down')}>
                       {formatSignedPercent(value)}
                     </dd>
                   </div>

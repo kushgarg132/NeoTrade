@@ -132,12 +132,13 @@ export const Statement = ({ columns, children, className }) => (
   </div>
 );
 
-/** Each cell learns its column's label, which the phone layout prints above it. */
+/** Each cell learns its column's label, which the phone layout prints above it.
+ *  A cell may pass its own `data-label` ("" for none) to override that. */
 export const Row = ({ children, className, ...props }) => {
   const columns = useContext(ColumnsContext);
   const cells = Children.toArray(children).map((child, index) =>
     isValidElement(child) && columns?.[index]
-      ? cloneElement(child, { 'data-label': columns[index].label })
+      ? cloneElement(child, { 'data-label': child.props['data-label'] ?? columns[index].label })
       : child
   );
   return (
