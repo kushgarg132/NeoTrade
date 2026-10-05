@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from backend.ai.sentiment import weighted_sentiment
 from backend.components.analyst.news import fetch_news_logic
 from backend.components.shared.models import FinancialEvent, NewsArticle
 from backend.llm import llm_service
@@ -40,7 +41,6 @@ logger = logging.getLogger(__name__)
 
 NEWS_LIMIT = 5
 CACHE_TTL_SECONDS = 4 * 60 * 60
-RECENCY_HALF_LIFE_DAYS = 30.0
 THESIS_MARKER = "===THESIS==="
 
 
@@ -101,16 +101,7 @@ async def _score_news(symbol: str, articles: List[NewsArticle]) -> Optional[_New
 
 
 def _weighted_sentiment(scored: List[tuple[NewsArticle, _ArticleScore]], now: datetime) -> float:
-    total = weight_sum = 0.0
-    for article, score in scored:
-        published = article.published_at
-        if published.tzinfo is None:
-            published = published.replace(tzinfo=timezone.utc)
-        age_days = max(0.0, (now - published).total_seconds() / 86400)
-        weight = max(score.impact, 1) ** 2 * 0.5 ** (age_days / RECENCY_HALF_LIFE_DAYS)
-        total += weight * score.score
-        weight_sum += weight
-    return total / weight_sum if weight_sum else 0.0
+    return weighted_sentiment(((a.published_at, s.score, s.impact) for a, s in scored), now) or 0.0
 
 
 def _split_report(text: str) -> tuple[str, str]:
@@ -118,6 +109,16 @@ def _split_report(text: str) -> tuple[str, str]:
         return "Unable to generate summary.", ""
     summary, _, thesis = text.partition(THESIS_MARKER)
     return summary.strip(), thesis.strip()
+
+
+async def _report(**values) -> tuple[str, str]:
+    """The research_report call: (summary, thesis)."""
+    system, prompt = render("research_report", **values)
+    try:
+        return _split_report(await llm_service.get_completion(prompt, system_prompt=system, tier="standard"))
+    except Exception as e:
+        logger.error(f"AnalystAgent LLM Error: {e}")
+        return "Unable to generate summary.", ""
 
 
 def _redis():
@@ -129,6 +130,11 @@ def _redis():
 class AnalystAgent:
     async def analyze(self, state: Dict[str, Any]) -> Dict[str, Any]:
         symbol = state["symbol"]
+        from backend.datalayer.analysis import from_layer
+
+        layered = await from_layer(symbol, self._cached, self._store_note)
+        if layered is not None:
+            return layered
         cached = await self._cached(symbol)
         if cached is not None:
             logger.info("AnalystAgent: cache hit for %s", symbol)
@@ -179,16 +185,10 @@ class AnalystAgent:
             f"- {a.title} ({s.sentiment.lower()}, impact {s.impact}): {(a.content or '')[:300]}"
             for a, s in relevant
         ) or "No relevant news found."
-        system, prompt = render(
-            "research_report", symbol=symbol, sentiment_score=f"{sentiment:.2f}",
-            relevant_count=len(relevant), news=news,
+        summary, thesis = await _report(
+            symbol=symbol, sentiment_score=f"{sentiment:.2f}", relevant_count=len(relevant), news=news,
             events=json.dumps([e.model_dump() for e in raw_events]),
         )
-        try:
-            summary, thesis = _split_report(await llm_service.get_completion(prompt, system_prompt=system, tier="standard"))
-        except Exception as e:
-            logger.error(f"AnalystAgent LLM Error: {e}")
-            summary, thesis = "Unable to generate summary.", ""
 
         label = "bullish" if sentiment > 0.15 else "bearish" if sentiment < -0.15 else "neutral"
         logger.info("AnalystAgent: %s sentiment %.2f from %d/%d relevant article(s)",
@@ -229,6 +229,17 @@ class AnalystAgent:
             await redis.set(f"analyst:{symbol}", json.dumps(output), ex=CACHE_TTL_SECONDS)
             # The engine and scan read this for the AI half of conviction.
             await redis.set(f"sentiment:{symbol}", output["sentiment_score"], ex=CACHE_TTL_SECONDS)
+        except Exception as exc:
+            logger.warning("analyst cache write failed for %s: %s", symbol, exc)
+
+    async def _store_note(self, symbol: str, output: Dict[str, Any]) -> None:
+        """The note only: for symbols the ingest worker follows, it owns
+        `sentiment:{symbol}`."""
+        redis = _redis()
+        if redis is None:
+            return
+        try:
+            await redis.set(f"analyst:{symbol}", json.dumps(output), ex=CACHE_TTL_SECONDS)
         except Exception as exc:
             logger.warning("analyst cache write failed for %s: %s", symbol, exc)
 

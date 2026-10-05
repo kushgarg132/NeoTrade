@@ -15,20 +15,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-class NewsFetchRequest(BaseModel):
-    symbols: List[str]
-    limit: int = 10
-
 class NewsFetchResponse(BaseModel):
     articles: List[NewsArticle]
-
-@router.post("/news/fetch", response_model=NewsFetchResponse)
-async def fetch_news(request: NewsFetchRequest):
-    """
-    Fetches news articles for the given symbols using yfinance.
-    """
-    articles = await fetch_news_logic(request.symbols, request.limit)
-    return NewsFetchResponse(articles=articles)
 
 # What an Indian trader checks before and during the session: the market
 # itself, then the macro that moves it. Google News' `when:1d` keeps each
@@ -86,107 +74,25 @@ async def fetch_market_news():
     return NewsFetchResponse(articles=await cached("news", MARKET_NEWS_TTL_SECONDS, fetch))
 
 async def fetch_news_logic(symbols: List[str], limit: int = 10) -> List[NewsArticle]:
-    """
-    Fetches news from Finnhub (Global), with Google News RSS as fallback.
-    """
+    """Recent news per symbol from Google News India. Used on demand for
+    symbols the ingest worker does not follow (backend/datalayer/news.py
+    covers the Nifty 200 and every held or watched name)."""
     logger.info(f"Fetching news for symbols: {symbols}, limit: {limit}")
     articles = []
-    
     for symbol in symbols:
-        # 1. Try Finnhub First (High Quality, Structured)
-        current_articles = await fetch_finnhub_news(symbol, limit=limit)
-        
-        # 2. If Finnhub fails or returns few results, try Google News
-        if len(current_articles) < 3:
-             # Determine region logic
-            region = "US"
-            lang = "en-US"
-            query_suffix = "stock news"
-            used_symbol = symbol
-            
-            if symbol.endswith(".NS") or symbol.endswith(".BO") or symbol == "NIFTY" or symbol == "SENSEX":
-                region = "IN"
-                lang = "en-IN"
-                query_suffix = "share price news"
-                
-            gn_query = f"{symbol} {query_suffix}"
-            gn_articles = await fetch_google_news(gn_query, region=region, lang=lang, limit=limit)
-            
-            # Merge and Deduplicate
-            seen_urls = {a.url for a in current_articles}
-            for a in gn_articles:
-                if a.url not in seen_urls:
-                    current_articles.append(a)
-                    seen_urls.add(a.url)
-        
-        # Sort and trim
-        current_articles.sort(key=lambda x: x.published_at, reverse=True)
-        articles.extend(current_articles[:limit])
-
+        bare = symbol.removesuffix(".NS").removesuffix(".BO")
+        current = await fetch_google_news(f"{bare} share price news", region="IN", lang="en-IN", limit=limit)
+        seen, unique = set(), []
+        for a in current:
+            if a.url not in seen:
+                seen.add(a.url)
+                unique.append(a)
+        unique.sort(key=lambda x: x.published_at, reverse=True)
+        articles.extend(unique[:limit])
     return articles
 
 import requests
 from bs4 import BeautifulSoup
-
-async def fetch_finnhub_news(symbol: str, limit: int = 10) -> List[NewsArticle]:
-    """
-    Fetches company news from Finnhub.
-    """
-    if not settings.FINNHUB_API_KEY:
-        logger.warning("Finnhub API Key not found. Skipping.")
-        return []
-        
-    # Clean symbol for specific exchanges if needed, but Finnhub handles many.
-    # Finnhub often likes US tickers without suffix, or specific format.
-    # For Indian stocks, Finnhub might expect "RELIANCE.NS".
-    
-    # Calculate date range (last 7 days)
-    end_date = datetime.now().strftime("%Y-%m-%d")
-    start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-    
-    url = "https://finnhub.io/api/v1/company-news"
-    params = {
-        "symbol": symbol,
-        "from": start_date,
-        "to": end_date,
-        "token": settings.FINNHUB_API_KEY
-    }
-    
-    try:
-        # requests blocks; on the event loop it would freeze every other
-        # request this single-worker process is serving for up to 10s.
-        response = await asyncio.to_thread(requests.get, url, params=params, timeout=10)
-        if response.status_code == 401 or response.status_code == 403:
-             logger.error("Finnhub API Key Invalid or Limit Reached.")
-             return []
-             
-        response.raise_for_status()
-        data = response.json() # List of dicts
-        
-        articles = []
-        for item in data[:limit]:
-            # Finnhub item: {category, datetime, headline, id, image, related, source, summary, url}
-            ts = item.get('datetime', 0)
-            try:
-                pub_time = datetime.fromtimestamp(ts)
-            except:
-                pub_time = datetime.now()
-                
-            articles.append(NewsArticle(
-                title=item.get('headline', 'No Title'),
-                url=item.get('url', ''),
-                source=item.get('source', 'Finnhub'),
-                published_at=pub_time,
-                content=item.get('summary', ''),
-                related_symbols=[symbol]
-            ))
-            
-        logger.info(f"Retrieved {len(articles)} articles from Finnhub for {symbol}")
-        return articles
-        
-    except Exception as e:
-        logger.error(f"Finnhub Fetch Failed: {e}")
-        return []
 
 async def fetch_google_news(query: str, region: str = "US", lang: str = "en-US", limit: int = 10) -> List[NewsArticle]:
     """

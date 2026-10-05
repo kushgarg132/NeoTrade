@@ -11,7 +11,8 @@ None as neutral (0.0).
 """
 
 import logging
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Iterable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -29,3 +30,24 @@ async def get_cached_sentiment(symbol: str, redis) -> Optional[float]:
         logger.warning("sentiment cache unavailable for %s: %s", symbol, exc)
         return None
     return float(val) if val is not None else None
+
+
+# 30-day half-life: news on Indian mid-caps arrives weeks apart, and a
+# 3-day one let a fresh puff piece outvote a two-month-old 23% profit drop
+# (see backend/components/analyst/agent.py).
+RECENCY_HALF_LIFE_DAYS = 30.0
+
+
+def weighted_sentiment(points: Iterable[tuple[datetime, float, float]], now: datetime) -> Optional[float]:
+    """Impact- and recency-weighted mean of (published_at, score -1..1,
+    impact 0..10) points: weight = impact**2 * 0.5**(age_days / 30), so one
+    major event outweighs several minor pieces. None with no points."""
+    total = weight_sum = 0.0
+    for published, score, impact in points:
+        if published.tzinfo is None:
+            published = published.replace(tzinfo=timezone.utc)
+        age_days = max(0.0, (now - published).total_seconds() / 86400)
+        weight = max(impact, 1) ** 2 * 0.5 ** (age_days / RECENCY_HALF_LIFE_DAYS)
+        total += weight * score
+        weight_sum += weight
+    return total / weight_sum if weight_sum else None

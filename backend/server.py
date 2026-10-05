@@ -40,7 +40,7 @@ from backend.instruments.loader import (
 
 # Setup Logging
 logger = setup_logging()
-from backend.components.analyst import news, sentiment, events
+from backend.components.analyst import news
 from backend.components.quant import price, trend, support, volume
 from backend.components.risk import risk
 from backend.components.master import stock_info
@@ -189,8 +189,6 @@ async def shutdown_db_client():
 
 # Include Routers
 app.include_router(news.router, prefix=settings.API_PREFIX, tags=["News"], dependencies=[Depends(get_current_user)])
-app.include_router(sentiment.router, prefix=settings.API_PREFIX, tags=["News"], dependencies=[Depends(get_current_user)])
-app.include_router(events.router, prefix=settings.API_PREFIX, tags=["Events"], dependencies=[Depends(get_current_user)])
 app.include_router(price.router, prefix=settings.API_PREFIX, tags=["Market Data"], dependencies=[Depends(get_current_user)])
 app.include_router(support.router, prefix=settings.API_PREFIX, tags=["Technical Analysis"], dependencies=[Depends(get_current_user)])
 app.include_router(trend.router, prefix=settings.API_PREFIX, tags=["Technical Analysis"], dependencies=[Depends(get_current_user)])

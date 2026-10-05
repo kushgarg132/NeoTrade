@@ -12,8 +12,8 @@ PROMPTS = {
     "model_test": {},
     "resolve_instrument": {"query": "tata motors", "candidates": '[{"tradingsymbol": "TATAMOTORS"}]'},
     "peers": {"name": "Reliance Industries", "symbol": "RELIANCE"},
-    "classify_events": {"text": "Q1 profit fell 23%"},
-    "article_sentiment": {"target": "SBIN", "relevance_target": "SBIN", "headline": "h", "content": "c"},
+    "triage_news": {"items": "[0] [GLOBAL] Brent jumps (Reuters)"},
+    "score_market_news": {"sectors": "Power, Realty", "items": "[0] (GLOBAL) Brent jumps"},
     "score_news": {"symbol": "SBIN", "articles": "[0] headline"},
     "research_report": {"symbol": "SBIN", "sentiment_score": "-0.20", "relevant_count": 3, "news": "n", "events": "[]"},
     "index_move": {"name": "NIFTY 50", "session_date": "2026-09-26", "session": "- Close 25,123.45",
@@ -45,8 +45,8 @@ def test_each_prompt_renders_with_no_placeholder_left(name):
 
 
 def test_json_examples_keep_their_single_braces():
-    _, prompt = render("article_sentiment", **PROMPTS["article_sentiment"])
-    assert '"is_relevant": true' in prompt
+    _, prompt = render("score_market_news", **PROMPTS["score_market_news"])
+    assert '"type": "market", "target": "INDIA"' in prompt
     assert prompt.count("{") == prompt.count("}")
 
 
