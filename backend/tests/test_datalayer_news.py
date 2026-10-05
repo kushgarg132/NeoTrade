@@ -33,6 +33,7 @@ class FakeRedis:
 
     async def incrby(self, key, n):
         self.data[key] = int(self.data.get(key, 0)) + n
+        return self.data[key]  # as real Redis does
 
     async def expire(self, key, seconds):
         pass

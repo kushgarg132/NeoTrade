@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # day (backend/datalayer/news.py, one call per 5-minute pass at most);
     # past it the backlog waits in Mongo.
     NEWS_LLM_CALLS_PER_DAY: int = 200
+    PLAN_LLM_CALLS_PER_DAY: int = 100  # game-plan builds + revisions, all users (backend/plan/)
 
     # Broker API credentials are per-user and encrypted in Mongo
     # (backend/auth/broker_credentials.py) -- there is deliberately no
