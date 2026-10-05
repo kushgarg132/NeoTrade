@@ -15,7 +15,10 @@ const Login = () => {
 
   // Where RequireAuth sent us from, query string included.
   const from = location.state?.from;
-  const returnTo = from ? `${from.pathname}${from.search || ''}` : '/';
+  // Or ?next= from a session that expired; same-site paths only ('//x' is another site).
+  const next = new URLSearchParams(location.search).get('next');
+  const safeNext = next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : null;
+  const returnTo = from ? `${from.pathname}${from.search || ''}` : safeNext || '/';
   const params = new URLSearchParams(from?.search || '');
   const brokerCode = params.get('code') || params.get('request_token');
 

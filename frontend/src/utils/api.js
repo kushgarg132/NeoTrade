@@ -75,7 +75,9 @@ export const refreshAccessToken = async () => {
 const hardLogout = () => {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   if (window.location.pathname !== '/login') {
-    window.location.assign('/login');
+    // Back to this page after signing in again (Login reads ?next=).
+    const here = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(`/login?next=${encodeURIComponent(here)}`);
   }
 };
 
