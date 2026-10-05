@@ -86,6 +86,7 @@ class PreferencesPatch(BaseModel):
     autopilot_max_trades_per_day: Optional[int] = Field(default=None, ge=0, le=100)
     autopilot_daily_loss_limit: Optional[float] = Field(default=None, ge=0)
     rebalance_targets: Optional[RebalanceTargets] = None
+    news_alerts: Optional[Literal["held", "held+watched", "all", "off"]] = None
 
     @field_validator("broker_roles")
     @classmethod

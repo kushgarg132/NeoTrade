@@ -280,6 +280,16 @@ regime, brief and the next 24h of high-impact events, and its tools `search_news
 news by query/symbol/sector/scope; on-demand Google only for an unfollowed symbol) and
 `get_market_backdrop` replace the uncached `fetch_news_tool`. `research/index_move.py` takes its
 headlines from the store (falls back to Google when empty) and peer indices from `macro:`.
+
+**Reactions** (`backend/datalayer/reactor.py`, `news_react` loop, 60s). Each SCORED `material` item
+scored in the last 30 min (published in the last 6h) is claimed once with `reacted_at` and alerted
+to users by their `news_alerts` pref (`held` default, `held+watched`, `all`, `off`): impacts >= 6 on
+a followed symbol or its sector, and a market impact >= 7 to anyone holding something. One alert per
+user+target an hour (`news:alerted:{user}:{target}` NX). An alert is a Telegram message
+(`suggestions/notify`) plus a `news`/`alert` socket event the app shows as a toast. The plan's
+`news:events` stream was not needed: the reactor reads Mongo in the same process. `GET /news/feed`
+(scope, mine, material, before) backs the Research › News page; `/today` carries `backdrop`
+(brief, regime, next 24h high-impact events) for Today's Markets card.
 Later loops land phase by phase per
 `docs/superpowers/plans/2026-10-05-market-news-datalayer.md`. Compose makes `backend` depend on
 `ingest` only so the shared deploy workflow's `up -d --build backend` also redeploys it.

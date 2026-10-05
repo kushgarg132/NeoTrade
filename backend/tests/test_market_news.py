@@ -67,3 +67,37 @@ def test_an_empty_answer_is_not_cached(monkeypatch):
     app.include_router(news.router, prefix="/api/v1")
     TestClient(app).get("/api/v1/news/market")
     assert "news" not in market_cache._local
+
+
+def test_news_feed_filters_to_the_users_names(monkeypatch):
+    import asyncio
+    from mongomock_motor import AsyncMongoMockClient
+    from backend.auth.dependency import get_current_user
+    from backend.auth.models import User
+    from backend.database import db as database
+
+    mongo = AsyncMongoMockClient()["test_db"]
+    monkeypatch.setattr(database, "db", mongo)
+    now = datetime.now(timezone.utc)
+
+    def item(_id, minutes, **extra):
+        return {"_id": _id, "title": _id, "status": "SCORED", "scope": "COMPANY", "symbols": [], "impacts": [],
+                "published_at": now - timedelta(minutes=minutes), **extra}
+
+    asyncio.run(mongo["news_items"].insert_many([
+        item("tcs", 1, symbols=["TCS"]), item("infy", 2, impacts=[{"type": "symbol", "target": "INFY"}]),
+        item("rbi", 3, scope="MACRO"), item("junk", 4, status="IRRELEVANT"),
+    ]))
+    asyncio.run(mongo["paper_positions"].insert_one({"user_id": "alice", "symbol": "TCS.NS", "quantity": 1}))
+    asyncio.run(mongo["watchlist"].insert_one({"user_id": "alice", "symbols": ["INFY"]}))
+
+    app = FastAPI()
+    app.include_router(news.router)
+    app.dependency_overrides[get_current_user] = lambda: User(id="alice", google_sub="g", email="a@x.io", name="A",
+                                                             created_at=now)
+    client = TestClient(app)
+    ids = lambda **params: [i["id"] for i in client.get("/news/feed", params=params).json()["items"]]
+    assert ids() == ["tcs", "infy", "rbi"]
+    assert ids(mine=True) == ["tcs", "infy"]
+    assert ids(scope="MACRO") == ["rbi"]
+    assert ids(limit=1) == ["tcs"]

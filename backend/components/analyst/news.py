@@ -1,12 +1,14 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import List
+from typing import List, Literal, Optional
 from datetime import datetime, timedelta, timezone
 import asyncio
 import logging
 import time
 from backend.configs.settings import settings
 
+from backend.auth.dependency import get_current_user
+from backend.auth.models import User
 from backend.market_cache import cached
 from backend.components.shared.models import NewsArticle
 import random
@@ -147,3 +149,44 @@ async def fetch_google_news(query: str, region: str = "US", lang: str = "en-US",
     except Exception as e:
         logger.error(f"Google News Fetch Failed: {e}")
         return []
+
+
+FEED_FIELDS = {"title": 1, "url": 1, "source": 1, "published_at": 1, "scope": 1, "themes": 1, "event": 1,
+               "impacts": 1, "symbols": 1, "material": 1, "status": 1}
+
+
+@router.get("/news/feed")
+async def news_feed(
+    scope: Optional[Literal["COMPANY", "SECTOR", "MARKET", "MACRO", "GLOBAL"]] = None,
+    mine: bool = False,
+    material: bool = False,
+    before: Optional[datetime] = None,
+    limit: int = Query(50, ge=1, le=100),
+    user: User = Depends(get_current_user),
+):
+    """The ingest worker's news store (backend/datalayer/news.py), newest
+    first: relevant items, scored or still waiting to be. `mine` keeps the
+    ones tagged with or moving a name the user holds or watches; `before`
+    pages back by published time."""
+    from backend.database import db
+    from backend.datalayer.news import COLLECTION, SCORED, TRIAGED
+    from backend.datalayer.prices import _bare
+
+    query: dict = {"status": SCORED if material else {"$in": [SCORED, TRIAGED]}}
+    if material:
+        query["material"] = True
+    if scope:
+        query["scope"] = scope
+    if before:
+        query["published_at"] = {"$lt": before}
+    if mine:
+        held = await db.db["paper_positions"].distinct("symbol", {"user_id": user.id, "quantity": {"$ne": 0}})
+        watched = await db.db["watchlist"].distinct("symbols", {"user_id": user.id})
+        names = sorted({_bare(s) for s in [*held, *watched] if s})
+        query["$or"] = [{"symbols": {"$in": names}}, {"impacts.target": {"$in": names}}]
+    items = await db.db[COLLECTION].find(query, FEED_FIELDS).sort("published_at", -1).limit(limit).to_list(length=limit)
+    for item in items:
+        item["id"] = item.pop("_id")
+        if item["published_at"].tzinfo is None:  # Mongo hands back naive UTC
+            item["published_at"] = item["published_at"].replace(tzinfo=timezone.utc)
+    return {"items": items}

@@ -141,6 +141,15 @@ async def _autopilot(user_id: str, prefs: dict) -> dict:
             "capital": prefs.get("autopilot_capital"), "deployed": round(deployed, 2)}
 
 
+async def _backdrop(now: datetime) -> dict:
+    """The ingest worker's market brief and risk regime, and the high-impact
+    events in the next day. Empty parts when the worker has not run."""
+    from backend.datalayer import market
+
+    events = await market.upcoming(db.db, hours=24, now=now)
+    return {**await market.backdrop(db.redis), "events": [{**e, "at": _aware(e["at"])} for e in events]}
+
+
 @router.get("")
 async def today(user: User = Depends(get_current_user), broker_states=Depends(get_broker_states)):
     from backend.engine.autorun import in_session
@@ -178,5 +187,6 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         "ai_activity": log,
         "autopilot": await part("autopilot", _autopilot(user.id, prefs)),
         "setup": await part("setup", _setup(user.id, prefs)),
+        "backdrop": await part("backdrop", _backdrop(now)),
         "errors": errors,
     }

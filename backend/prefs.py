@@ -60,6 +60,9 @@ DEFAULTS = {
     # against it.
     "portfolio_max_loss_pct": 25.0,
     "portfolio_max_weight_pct": 20.0,
+    # Who gets a news alert (backend/datalayer/reactor.py): "held",
+    # "held+watched", "all" or "off".
+    "news_alerts": "held",
 }
 
 EDITABLE = tuple(DEFAULTS)
