@@ -75,6 +75,10 @@ class Intent:
     # stop_hint/target_hint are levels on the underlying, and the runner
     # closes the option when the underlying reaches either.
     option_flavor: Optional[Literal["CSP", "LONG_CALL", "LONG_PUT"]] = None
+    # The strategy that emitted this intent, stamped by the context while that
+    # strategy's on_bar runs. None for intents made outside a run (tests,
+    # chat): sizing then falls back to the symbol's listed owner.
+    strategy: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not self.reason_codes:

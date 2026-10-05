@@ -12,6 +12,7 @@ from typing import Optional
 from backend.core.clock import Clock
 from backend.core.models import Bar, Intent, Position
 from backend.engine.portfolio import Portfolio
+from dataclasses import replace
 
 
 class SimpleStrategyContext:
@@ -40,6 +41,9 @@ class SimpleStrategyContext:
         self._symbol_for_token = symbol_for_token
         self._bars: dict[str, list[Bar]] = {}
         self._intents: list[Intent] = []
+        # Set by the runner around each strategy's on_bar, so every intent is
+        # stamped with the strategy that actually emitted it.
+        self.current_strategy: Optional[str] = None
 
     def update(self, bar: Bar) -> None:
         symbol = self._symbol_for_token.get(bar.instrument_token)
@@ -59,6 +63,8 @@ class SimpleStrategyContext:
         return self._portfolio.positions.get(symbol)
 
     def submit(self, intent: Intent) -> None:
+        if intent.strategy is None and self.current_strategy is not None:
+            intent = replace(intent, strategy=self.current_strategy)
         self._intents.append(intent)
 
     def drain_intents(self) -> list[Intent]:

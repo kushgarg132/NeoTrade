@@ -94,6 +94,8 @@ async def size_intents(
     premium_source=None,
     option_legs: Optional[dict[str, dict]] = None,
     learned: Optional[LearnedRules] = None,
+    strategies_by_name: Optional[dict[str, Strategy]] = None,
+    holders: Optional[dict[str, str]] = None,
 ) -> list[Order]:
     """Scores each Intent (backend.scoring.composite.score_intent, which
     caps AI's influence at AI_CAP regardless of what's passed here), then
@@ -139,8 +141,19 @@ async def size_intents(
         if scored is None:
             continue  # rule floor not met -- no trade, regardless of AI
 
-        owning_strategy = owner_by_symbol.get(intent.symbol)
+        # The strategy that emitted the intent owns it; the symbol's listed
+        # owner is only a fallback for intents made outside a run.
+        owning_strategy = (strategies_by_name or {}).get(intent.strategy) or owner_by_symbol.get(intent.symbol)
         mode = owning_strategy.spec.mode if owning_strategy is not None else "LONGTERM"
+
+        # One owner per open position: only the strategy that opened it may
+        # add to it or exit it; anyone else's signal waits until it is flat.
+        held_pos = portfolio.positions.get(intent.symbol)
+        holder = (holders or {}).get(intent.symbol)
+        if (holder is not None and intent.strategy is not None and holder != intent.strategy
+                and held_pos is not None and held_pos.quantity != 0):
+            logger.info("skipping intent for %s: held by %s, not %s", intent.symbol, holder, intent.strategy)
+            continue
 
         # What this user's own paper record taught (backend/learning/adapt.py).
         # Exits are never held back: only a signal that opens risk is judged.
@@ -393,6 +406,10 @@ async def run(
     owner_by_symbol = {
         symbol: strategy for strategy in strategies for symbol in strategy.spec.universe
     }
+    strategies_by_name = {strategy.spec.name: strategy for strategy in strategies}
+    # symbol -> name of the strategy whose fill opened the open position.
+    holders: dict[str, str] = {}
+    strategy_of_order: dict[str, str] = {}
 
     for strategy in strategies:
         strategy.on_start(ctx)
@@ -440,7 +457,11 @@ async def run(
         if symbol is not None:
             for strategy in strategies:
                 if symbol in strategy.spec.universe and bar.timeframe == strategy.spec.timeframe:
-                    strategy.on_bar(ctx, bar)
+                    ctx.current_strategy = strategy.spec.name
+                    try:
+                        strategy.on_bar(ctx, bar)
+                    finally:
+                        ctx.current_strategy = None
 
         intents = ctx.drain_intents()
         if bar.warmup:
@@ -452,8 +473,10 @@ async def run(
                 intents, portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,
                 order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
                 master=master, premium_source=premium_source, option_legs=option_legs, learned=learned,
+                strategies_by_name=strategies_by_name, holders=holders,
             )
-            orders.extend(_square_off_orders(symbol, bar.timestamp, portfolio, owner_by_symbol))
+            held_by = {**owner_by_symbol, **{s: strategies_by_name[h] for s, h in holders.items() if h in strategies_by_name}}
+            orders.extend(_square_off_orders(symbol, bar.timestamp, portfolio, held_by))
             orders.extend(await _option_exit_orders(symbol, bar, portfolio, option_legs, premium_source))
 
         for order in orders:
@@ -463,6 +486,8 @@ async def run(
                 execution.mark(order.symbol, option_legs[order.symbol]["mark"], bar.timestamp)
             if ledger is not None:
                 await ledger.record_order(order)
+            if order.strategy_name:
+                strategy_of_order[order.id] = order.strategy_name
             await execution.submit(order)
 
         # A live ExecutionClient (BrokerExecutionClient/RoutingExecutionClient,
@@ -481,7 +506,14 @@ async def run(
             portfolio.apply(fill)
             if ledger is not None:
                 await ledger.on_fill(fill, quantity_before, portfolio.positions[fill.symbol])
-            owning_strategy = owner_by_symbol.get(fill.symbol)
+            name = strategy_of_order.get(fill.order_id) or holders.get(fill.symbol)
+            after = portfolio.positions[fill.symbol].quantity
+            if after == 0:
+                holders.pop(fill.symbol, None)
+            elif quantity_before == 0 or (quantity_before > 0) != (after > 0):
+                if name is not None:
+                    holders[fill.symbol] = name  # opened (or flipped) by this strategy
+            owning_strategy = strategies_by_name.get(name) or owner_by_symbol.get(fill.symbol)
             if owning_strategy is not None:
                 owning_strategy.on_fill(ctx, fill)
 
