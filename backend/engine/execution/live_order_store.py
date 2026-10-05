@@ -39,7 +39,7 @@ class LiveOrderStore:
 
     async def record_submitted(
         self, order_id: str, broker_order_id: str, user_id: str, strategy_name: str, symbol: str, side: Side,
-        reason: str | None = None,
+        reason: str | None = None, role: str | None = None, ledger_user: str | None = None,
     ) -> None:
         await self.collection.insert_one({
             "_id": order_id,
@@ -55,6 +55,9 @@ class LiveOrderStore:
             "updated_at": _now(),
             # Why a person placed it, for orders not born of a strategy (chat).
             "reason": reason,
+            # Which broker (mine / ai) holds it and which ledger books its fills.
+            "role": role,
+            "ledger_user": ledger_user or user_id,
         })
 
     async def get_broker_order_id(self, order_id: str) -> Optional[str]:

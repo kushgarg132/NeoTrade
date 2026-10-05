@@ -182,7 +182,9 @@ async def test_live_mode_places_on_the_ai_adapter_only(world, monkeypatch):
         assert role == "ai"
         return kite
 
-    async def live(order, ledger, adapter, orders, strategy_name="", reason=None):
+    async def live(order, ledger, adapter, orders, strategy_name="", reason=None, role="mine", owner=None):
+        # The reconciler needs to know this order is on the AI broker, owned by the user.
+        assert (role, owner) == ("ai", "alice")
         calls.append((adapter, order.product, order.strategy_name))
         return order, "COMPLETE", float(order.quantity)
 

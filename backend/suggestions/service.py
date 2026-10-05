@@ -98,6 +98,7 @@ async def execute_option_suggestion_live(
 async def execute_live_order(
     order: Order, ledger: LedgerStore, adapter, orders: LiveOrderStore,
     strategy_name: str = "", reason: Optional[str] = None,
+    role: str = "mine", owner: Optional[str] = None,
 ) -> tuple[Order, str, float]:
     """Places `order` with the user's broker as a real MARKET order, checks
     its status for up to LIVE_FILL_CHECKS seconds, and books whatever filled
@@ -109,9 +110,12 @@ async def execute_live_order(
     # would send a second real order. Log it loudly and carry on.
     try:
         await ledger.record_order(order)
+        # role + ledger let the reconciler (engine/reconcile.py) ask this
+        # order's own broker later and book a late fill to the right ledger.
         await orders.record_submitted(
-            order_id=order.id, broker_order_id=broker_order_id, user_id=ledger.user_id,
+            order_id=order.id, broker_order_id=broker_order_id, user_id=owner or ledger.user_id,
             strategy_name=strategy_name, symbol=order.symbol, side=order.side, reason=reason,
+            role=role, ledger_user=ledger.user_id,
         )
     except Exception as exc:
         logger.error("live order %s placed as %s but not recorded: %s", order.id, broker_order_id, exc)

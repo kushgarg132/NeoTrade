@@ -138,6 +138,18 @@ async def cancel(db, user_id: str, order_id: str) -> bool:
     return result.modified_count == 1
 
 
+async def _adapter_for_role(user_id: str, role: str):
+    """The logged-in adapter for a user's `role` broker, or None."""
+    from backend.auth.broker_credentials import get_credential_store
+    from backend.brokers.roles import RoleUnavailable, adapter_for
+    from backend.database import db as database
+
+    try:
+        return await adapter_for(user_id, role, get_credential_store(), database.redis)
+    except RoleUnavailable:
+        return None
+
+
 async def _loop(db) -> None:
     from backend.chat.actions import _mark_price
 
@@ -148,6 +160,9 @@ async def _loop(db) -> None:
             # Rows a crash left between claim and settle (engine/stuck.py).
             from backend.engine.stuck import sweep_stuck
             await sweep_stuck(db, now)
+            # Live orders still open at the broker: book late fills (engine/reconcile.py).
+            from backend.engine.reconcile import reconcile
+            await reconcile(db, _adapter_for_role, now)
         except Exception as exc:
             logger.exception("paper order sweep failed: %s", exc)
         await asyncio.sleep(INTERVAL_SECONDS)
