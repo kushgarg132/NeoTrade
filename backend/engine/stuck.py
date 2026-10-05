@@ -47,14 +47,14 @@ async def sweep_stuck(db, now: datetime) -> int:
             logger.warning("stuck proposal %s settled as %s", s["id"], status)
             changed += 1
 
-    async for doc in db["paper_orders"].find({"status": "FILLING"}):
+    async for doc in db["paper_limit_orders"].find({"status": "FILLING"}):
         claimed = _aware(doc.get("claimed_at"))
         if claimed is not None and claimed > cutoff:
             continue
         fill = await db["paper_fills"].find_one({"order_id": doc["id"]})
         update = ({"status": "FILLED", "fill_price": fill.get("price"), "filled_at": fill.get("timestamp")}
                   if fill else {"status": "OPEN"})
-        result = await db["paper_orders"].update_one({"_id": doc["_id"], "status": "FILLING"}, {"$set": update})
+        result = await db["paper_limit_orders"].update_one({"_id": doc["_id"], "status": "FILLING"}, {"$set": update})
         if result.modified_count:
             logger.warning("stuck paper limit %s settled as %s", doc["id"], update["status"])
             changed += 1

@@ -48,7 +48,7 @@ async def test_resting_buy_fills_on_cross(db):
     placed = await paper_orders.place(db, "alice", _params(limit=400.0), 412.0, OPEN)
     assert placed["status"] == "OPEN" and await _trades(db) == []
     assert await paper_orders.sweep(db, _marks(ITC=399.0), OPEN + timedelta(minutes=1)) == 1
-    doc = await db["paper_orders"].find_one({"id": placed["id"]})
+    doc = await db["paper_limit_orders"].find_one({"id": placed["id"]})
     assert (doc["status"], doc["fill_price"]) == ("FILLED", 400.0)  # a resting limit fills at its limit
     assert len(await _trades(db)) == 1
 
@@ -56,19 +56,19 @@ async def test_resting_buy_fills_on_cross(db):
 async def test_no_fill_while_not_crossed(db):
     placed = await paper_orders.place(db, "alice", _params(limit=400.0), 412.0, OPEN)
     assert await paper_orders.sweep(db, _marks(ITC=401.0), OPEN) == 0
-    assert (await db["paper_orders"].find_one({"id": placed["id"]}))["status"] == "OPEN"
+    assert (await db["paper_limit_orders"].find_one({"id": placed["id"]}))["status"] == "OPEN"
 
 
 async def test_expires_at_close(db):
     placed = await paper_orders.place(db, "alice", _params(), 412.0, OPEN)
     await paper_orders.sweep(db, _marks(ITC=412.0), OPEN.replace(hour=15, minute=30))
-    assert (await db["paper_orders"].find_one({"id": placed["id"]}))["status"] == "EXPIRED"
+    assert (await db["paper_limit_orders"].find_one({"id": placed["id"]}))["status"] == "EXPIRED"
 
 
 async def test_expires_on_a_later_session(db):
     placed = await paper_orders.place(db, "alice", _params(), 412.0, OPEN - timedelta(days=1))
     await paper_orders.sweep(db, _marks(ITC=399.0), OPEN)
-    assert (await db["paper_orders"].find_one({"id": placed["id"]}))["status"] == "EXPIRED"
+    assert (await db["paper_limit_orders"].find_one({"id": placed["id"]}))["status"] == "EXPIRED"
     assert await _trades(db) == []
 
 
@@ -77,7 +77,7 @@ async def test_cancel_owner_only(db):
     assert await paper_orders.cancel(db, "bob", placed["id"]) is False
     assert await paper_orders.cancel(db, "alice", placed["id"]) is True
     await paper_orders.sweep(db, _marks(ITC=399.0), OPEN)
-    assert (await db["paper_orders"].find_one({"id": placed["id"]}))["status"] == "CANCELLED"
+    assert (await db["paper_limit_orders"].find_one({"id": placed["id"]}))["status"] == "CANCELLED"
     assert await _trades(db) == []
 
 
@@ -95,7 +95,7 @@ async def test_cnc_sell_no_longer_held_is_cancelled(db):
     assert placed["status"] == "OPEN"
     await execute_suggestion({"symbol": "ITC", "side": "SELL", "quantity": 3, "mode": "LONGTERM"}, ledger, 405.0)
     await paper_orders.sweep(db, _marks(ITC=421.0), OPEN)
-    doc = await db["paper_orders"].find_one({"id": placed["id"]})
+    doc = await db["paper_limit_orders"].find_one({"id": placed["id"]})
     assert (doc["status"], doc["reason"]) == ("CANCELLED", "no longer held")
 
 
@@ -111,3 +111,13 @@ async def test_list_open_is_per_user(db):
     await paper_orders.place(db, "bob", _params(), 412.0, OPEN)
     mine = await paper_orders.list_open(db, "alice")
     assert [o["user_id"] for o in mine] == ["alice"] and "_id" not in mine[0]
+
+
+async def test_a_resting_order_and_its_ledger_order_never_share_a_collection(db):
+    """fill_on_paper records the ledger order with the resting order's id; in
+    one collection that made two docs with one id, and status updates hit
+    whichever Mongo returned first."""
+    placed = await paper_orders.place(db, "alice", _params(limit=400.0), 412.0, OPEN)
+    await paper_orders.sweep(db, _marks(ITC=399.0), OPEN)
+    assert await db["paper_orders"].count_documents({"id": placed["id"]}) == 1          # the ledger's order
+    assert await db["paper_limit_orders"].count_documents({"id": placed["id"]}) == 1    # the resting order

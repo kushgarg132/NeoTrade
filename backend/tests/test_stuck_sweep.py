@@ -64,13 +64,13 @@ async def test_a_fresh_claim_is_left_alone(db):
 
 
 async def test_a_paper_limit_stuck_filling_is_settled_from_its_fill(db):
-    await db["paper_orders"].insert_many([
+    await db["paper_limit_orders"].insert_many([
         {"id": "L1", "user_id": "alice", "status": "FILLING", "limit_price": 400.0, "claimed_at": OLD},
         {"id": "L2", "user_id": "alice", "status": "FILLING", "limit_price": 400.0, "claimed_at": OLD},
     ])
     await db["paper_fills"].insert_one({"order_id": "L1", "user_id": "alice", "price": 399.5})
     await sweep_stuck(db, NOW)
-    l1 = await db["paper_orders"].find_one({"id": "L1", "status": {"$ne": "PENDING"}})
-    l2 = await db["paper_orders"].find_one({"id": "L2"})
+    l1 = await db["paper_limit_orders"].find_one({"id": "L1"})
+    l2 = await db["paper_limit_orders"].find_one({"id": "L2"})
     assert (l1["status"], l1["fill_price"]) == ("FILLED", 399.5)
     assert l2["status"] == "OPEN"

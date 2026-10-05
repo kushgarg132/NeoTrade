@@ -306,7 +306,7 @@ async def test_paper_limit_card_rests_then_fills(env):
         return 1489.0
 
     assert await paper_orders.sweep(env["db"], mark, OPEN) == 1
-    assert (await env["db"]["paper_orders"].find_one({"user_id": "alice"}))["status"] == "FILLED"
+    assert (await env["db"]["paper_limit_orders"].find_one({"user_id": "alice"}))["status"] == "FILLED"
 
 
 async def test_live_limit_refused_on_a_broker_without_limit_support(env, monkeypatch):

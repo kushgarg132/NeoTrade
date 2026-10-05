@@ -31,7 +31,7 @@ _CLOSE = time(15, 30)
 
 
 def _collection(db):
-    return db["paper_orders"]
+    return db["paper_limit_orders"]  # its own collection: the ledger records its order in paper_orders with the same id
 
 
 def _crossed(side: str, mark: float, limit: float) -> bool:

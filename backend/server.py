@@ -133,6 +133,17 @@ async def startup_db_client():
     from backend.chat.actions import ChatActionStore
     await ChatActionStore(db.db).ensure_indexes()
     await BrokerCredentialStore(db.db, fernet_from_settings()).ensure_indexes()
+    # The paper ledger and live orders had indexes defined but never created:
+    # nothing stopped duplicate (user, symbol) positions from concurrent upserts.
+    try:
+        from backend.engine.execution.live_order_store import LiveOrderStore
+        from backend.engine.persistence import LedgerStore
+
+        await LedgerStore(db.db, user_id="").ensure_indexes()
+        await LiveOrderStore(db.db).ensure_indexes()
+        await db.db["paper_limit_orders"].create_index([("user_id", 1), ("status", 1)])
+    except Exception as exc:
+        logger.error("ledger indexes not created: %s", exc)
     await AppSettingsStore(db.db).load_into_cache()
 
     # Post-close scan, sentiment refresh and suggestion expiry.
