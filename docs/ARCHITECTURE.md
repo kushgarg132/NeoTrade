@@ -225,6 +225,17 @@ threshold (`components/risk/agent.py:95-99`) — a *different* formula from the 
 30% cap. If the agents are revived (Phase 6), this formula must not come back with them;
 the revived chain emits `Intent` and is scored by `composite.py` like everything else.
 
+### 1.8a Ingest worker (data layer, Phase 14 in progress)
+
+`backend/datalayer/worker.py` runs in its own `ingest` container (same image, `command:
+python -m backend.datalayer.worker`, no port). One instance works at a time: it holds the Redis
+lock `ingest:leader` (`backend/locks.py`, token-checked, 30s TTL renewed every 10s) and exits
+when it loses it, so Docker restarts it as a waiter. Each loop in `LOOPS` writes
+`ingest:heartbeat:{name}` after every pass that did not raise; `GET /health` reports their ages.
+The loops themselves (quotes, macro, news, …) land phase by phase per
+`docs/superpowers/plans/2026-10-05-market-news-datalayer.md`. Compose makes `backend` depend on
+`ingest` only so the shared deploy workflow's `up -d --build backend` also redeploys it.
+
 ### 1.9 Known structural limits
 
 | Limit | Where | Consequence |

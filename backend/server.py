@@ -254,5 +254,19 @@ async def redirect_redoc():
 async def root():
     return {"message": "NeoTrade API is running"}
 
+
+@app.get("/health")
+async def health():
+    """Seconds since each ingest loop last finished a pass
+    (backend/datalayer/worker.py); `ingest` is empty when it is down."""
+    from backend.datalayer.worker import heartbeat_ages
+
+    try:
+        ingest = await heartbeat_ages(db.redis)
+    except Exception as exc:
+        logger.warning("health: heartbeat read failed: %s", exc)
+        ingest = None
+    return {"api": "ok", "ingest": ingest}
+
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=settings.SERVER_PORT, reload=True)

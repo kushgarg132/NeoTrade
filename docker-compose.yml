@@ -13,7 +13,12 @@ services:
       context: ./backend
     container_name: neotrade-backend
     restart: unless-stopped
-    environment:
+    # The deploy workflow only names `backend`; this makes the same
+    # `docker compose up -d --build backend` also (re)build and start ingest.
+    # The API does not need it to serve -- it fetches itself on a cache miss.
+    depends_on:
+      - ingest
+    environment: &backend-env
       MONGODB_URL: ${MONGODB_URL}
       DATABASE_NAME: ${DATABASE_NAME:-stock_investor_db}
       REDIS_URL: ${REDIS_URL}
@@ -29,6 +34,24 @@ services:
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    networks:
+      - default
+      - routineos_default
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Shared market/macro/news data layer (backend/datalayer/worker.py): same
+  # image, no port. One instance works at a time (Redis leader lock).
+  ingest:
+    build:
+      context: ./backend
+    container_name: neotrade-ingest
+    restart: unless-stopped
+    command: ["python", "-m", "backend.datalayer.worker"]
+    environment: *backend-env
     networks:
       - default
       - routineos_default
