@@ -94,6 +94,16 @@ from `news_items` to build the catalyst map per day where it exists. Scored hist
 2026-10-05, so these two stay paper-only (gate not yet passable) until the gate's minimum
 window of scored days exists; that is expected, not a bug.
 
+### As built (15.1, 2026-10-05)
+
+- The live catalog lives in `backend/learning/library.py`, not under `backend/strategies/`
+  (that package stays I/O-free).
+- `relative_strength_sector` is **peer-based**: it compares a stock with its Nifty 200 sector
+  peers in the same run. No sector-index feed is added, so section 3's "sector indices in the
+  universe" is dropped.
+- Until 15.2's plan exists, live runs get catalysts straight from
+  `backend/datalayer/catalysts.py:catalyst_map` (same shape the plan will supply).
+
 ## 2. Per-user game plan
 
 ### Store
@@ -161,8 +171,7 @@ cap, revisions stop and the current plan stands. Users without a plan get the fa
 
 - Reads the user's current plan (or builds the fallback).
 - `skip_day` → the auto-run does not start; Today shows the rationale.
-- Universe = user universe ∪ `add_symbols` ∪ the sector indices the relative-strength
-  strategy needs.
+- Universe = user universe ∪ `add_symbols`.
 - `build_default_strategies` gains `catalysts` and `sector_of` arguments.
 
 ### `PlanGate` (`backend/plan/gate.py`)

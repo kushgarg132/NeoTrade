@@ -410,6 +410,17 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   deploy; Mongo run status is not trusted for this because every worker's startup sweeps all
   RUNNING rows as orphaned. A run the user stops during the session is not restarted that
   day, and at most 5 auto runs start per day.
+- **Strategy library** (Phase 15.1) — every strategy class carries a static `CARD`
+  (`backend/strategies/card.py`: style, regimes it suits, conditions it needs, best/avoid,
+  typical hold). `backend/learning/library.py:catalog` joins the cards with one user's
+  record (backtest gate, paper gate, learned rules, attribution by Nifty trend and reason)
+  for `GET /strategies/library` and the chat tool `get_strategy_library`. Four
+  news-aware intraday strategies joined the default set: `gap_and_go` and `gap_fill_fade`
+  read a per-day catalyst map (`backend/datalayer/catalysts.py:catalyst_map`, material
+  symbol news between the previous close and the open) handed in at construction;
+  `trend_day_pullback` needs bars only; `relative_strength_sector` compares a stock with
+  its Nifty 200 sector peers in the same run (`news_sources.nifty200_sectors`), so no
+  index feed is needed. Live runs and the gate backtest pass both maps.
 - **Long-term engine** — not a live run: long-term strategies need months of daily bars,
   which a live feed never has, so their ideas come only from the history-backed scan
   (`backend/suggestions/scan.py`; 16:00 IST in `scheduler.py`, which records
