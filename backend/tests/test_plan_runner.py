@@ -56,7 +56,7 @@ def _source(by_bar):
     return source
 
 
-async def _run(by_bar, n=6, held=10.0, expand=None, live_holders=None, shadow_exit=None):
+async def _run(by_bar, n=6, held=10.0, expand=None, shadow_exit=None, holders="quiet"):
     portfolio = Portfolio()
     if held:
         portfolio.positions["TCS"] = Position(symbol="TCS", quantity=held, avg_price=100.0)
@@ -69,8 +69,8 @@ async def _run(by_bar, n=6, held=10.0, expand=None, live_holders=None, shadow_ex
         return await original(order)
     execution.submit = submit
     await run(strategies=[_Quiet()], feed=_Feed(n), execution=execution, portfolio=portfolio, clock=SimClock(),
-              symbol_for_token=dict(TOKENS), plan=PlanGate(_source(by_bar)), holders={"TCS": "quiet"},
-              expand=expand, live_holders=live_holders, shadow_exit=shadow_exit)
+              symbol_for_token=dict(TOKENS), plan=PlanGate(_source(by_bar)), holders={"TCS": holders},
+              expand=expand, shadow_exit=shadow_exit)
     return submitted, portfolio
 
 
@@ -78,7 +78,7 @@ async def test_plan_exit_closes_a_paper_position_once():
     v2 = _plan(2, exits=[{"symbol": "TCS", "reason": "guidance cut"}])
     orders, portfolio = await _run([(0, _plan(1)), (2, v2)])
     assert [(o.symbol, o.side.value, o.quantity, o.product) for o in orders] == [("TCS", "SELL", 10.0, "MIS")]
-    assert orders[0].strategy_name == "quiet" and portfolio.positions["TCS"].quantity == 0
+    assert portfolio.positions["TCS"].quantity == 0
 
 
 async def test_plan_exit_for_a_flat_symbol_does_nothing():
@@ -86,14 +86,27 @@ async def test_plan_exit_for_a_flat_symbol_does_nothing():
     assert orders == []
 
 
-async def test_plan_exit_on_a_live_position_is_only_shadowed():
+async def test_plan_exits_close_engine_positions_on_paper_and_offer_every_exit_to_the_shadow_log():
     shadowed = []
 
-    async def shadow(symbol, quantity, reason):
-        shadowed.append((symbol, quantity, reason))
-    orders, _ = await _run([(2, _plan(2, exits=[{"symbol": "TCS", "reason": "guidance cut"}]))],
-                           live_holders={"quiet"}, shadow_exit=shadow)
-    assert orders == [] and shadowed == [("TCS", 10.0, "guidance cut")]
+    async def shadow(symbol, reason):
+        shadowed.append((symbol, reason))
+    orders, _ = await _run([(2, _plan(2, exits=[{"symbol": "TCS", "reason": "guidance cut"},
+                                                {"symbol": "SBIN", "reason": "probe"}]))], shadow_exit=shadow)
+    assert [(o.symbol, o.strategy_name) for o in orders] == [("TCS", None)]  # paper route, never live
+    assert shadowed == [("TCS", "guidance cut"), ("SBIN", "probe")]
+
+
+async def test_plan_never_exits_a_position_no_strategy_holds():
+    portfolio_orders, _ = await _run([(2, _plan(2, exits=[{"symbol": "TCS", "reason": "x"}]))], holders="ticket")
+    assert portfolio_orders == []
+
+
+async def test_a_failing_shadow_write_does_not_stop_the_run():
+    async def shadow(symbol, reason):
+        raise RuntimeError("mongo down")
+    orders, _ = await _run([(2, _plan(2, exits=[{"symbol": "TCS", "reason": "x"}]))], shadow_exit=shadow)
+    assert [o.symbol for o in orders] == ["TCS"]
 
 
 async def test_added_symbol_is_expanded_once_and_backfilled_and_a_dropped_add_is_not_redone():

@@ -304,11 +304,18 @@ async def launch_run(
 
 
 def _plan_shadow_exit(user_id: str):
-    """A plan exit on a live position is logged, never sent (spec 15.3)."""
-    async def shadow(symbol: str, quantity: float, reason: str) -> None:
+    """A plan exit is never sent to the AI account: when that account
+    really holds the symbol, the would-be exit is logged in autopilot_shadow
+    (spec 15.3; live news exits wait for review)."""
+    from backend.autopilot.service import ledger_user
+
+    async def shadow(symbol: str, reason: str) -> None:
+        held = (await LedgerStore(db.db, user_id=ledger_user(user_id)).get_open_positions()).get(symbol)
+        if held is None or held.quantity == 0:
+            return
         await db.db["autopilot_shadow"].insert_one({
-            "user_id": user_id, "at": datetime.now(timezone.utc), "side": "EXIT", "symbol": symbol,
-            "quantity": quantity, "product": "MIS", "source": "plan", "reason": reason})
+            "user_id": user_id, "at": datetime.now(timezone.utc), "side": "SELL" if held.quantity > 0 else "BUY",
+            "symbol": symbol, "quantity": abs(held.quantity), "product": "MIS", "source": "plan", "reason": reason})
     return shadow
 
 
@@ -444,7 +451,6 @@ async def _launch_run(
         plan=PlanGate(redis_source(db.redis, user_id)) if mode == "INTRADAY" and db.redis is not None else None,
         expand=(make_expand(master, feed, YFinanceProvider(), strategies, symbol_for_token, today)
                 if mode == "INTRADAY" else None),
-        live_holders=set(live_by_strategy),
         shadow_exit=_plan_shadow_exit(user_id),
     )
     await runs.create(

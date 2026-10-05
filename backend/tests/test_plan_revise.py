@@ -113,3 +113,14 @@ async def test_loop_skips_fallback_plans_and_outside_session(mongo, monkeypatch)
     await _plan(mongo, redis, user="bob")
     assert await revise.loop(mongo, redis, now=NOW.replace(hour=16)) == 0
     assert called == []
+
+
+async def test_a_dropped_add_stays_in_scope_so_it_stays_gated(mongo):
+    redis = FakeRedis()
+    plan = await _plan(mongo, redis, add_symbols=["AXISBANK"])
+    plan["scope"] = ["AXISBANK", "INFY", "TCS"]
+
+    async def complete(system, prompt):
+        return json.dumps({"allow": [{"symbol": "TCS", "strategies": ["orb_breakout"]}], "add_symbols": []})
+    doc = await revise.revise_plan(mongo, redis, "alice", plan, [("regime_flip", "x")], NOW, complete)
+    assert "AXISBANK" in doc["scope"] and doc["add_symbols"] == []

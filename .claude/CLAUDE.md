@@ -51,8 +51,10 @@ code disagree, the code is right — fix the document in the same commit.
   `docs/superpowers/specs/2026-10-05-autopilot-news-design.md`.
 - **The AI game plan only tightens.** `backend/plan/` (built 08:45 IST per auto-intraday user)
   may drop opening intraday intents, shrink their risk (`risk_multiplier` 0.25–1.0), cap new
-  positions or skip the auto run; it never touches exits, conviction, caps or gates, and any
-  failure falls back to today's behaviour. See
+  positions or skip the auto run; it never blocks or shrinks an exit, never touches
+  conviction, caps or gates, and any failure falls back to today's behaviour. A revision may
+  close strategy-opened **paper** engine positions (never hand trades); on the AI account it
+  is only logged to `autopilot_shadow` (`source="plan"`). See
   `docs/superpowers/specs/2026-10-05-ai-game-plan-and-strategy-library-design.md`.
 
 ## Deployment

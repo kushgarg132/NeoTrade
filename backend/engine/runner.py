@@ -353,25 +353,27 @@ def _square_off_orders(
 
 
 async def _plan_exit_orders(exits: list[dict], portfolio: Portfolio, holders: dict[str, str],
-                            live_holders: set[str], shadow_exit) -> list[Order]:
-    """Closes what a plan revision says to exit. A position held by a
-    strategy routing live is only shadow-logged: real news exits wait for
-    review (docs/superpowers/specs/2026-10-05-autopilot-news-design.md)."""
+                            strategies_by_name: dict, shadow_exit) -> list[Order]:
+    """Closes what a plan revision says to exit, on paper: the engine's book
+    is paper (AI-account orders report no fills here), so an exit order
+    carries no strategy_name and can never route live. Only positions a
+    strategy opened are closed -- never one the user opened by hand. Every
+    exit is also offered to `shadow_exit`, which logs it against the AI
+    account's real positions (live news exits stay shadow-only)."""
     orders = []
     for exit_ in exits:
-        symbol = exit_.get("symbol")
+        symbol, reason = exit_.get("symbol"), exit_.get("reason", "")
+        if shadow_exit is not None:
+            try:
+                await shadow_exit(symbol, reason)
+            except Exception as exc:
+                logger.exception("could not shadow-log the plan exit of %s: %s", symbol, exc)
         position = portfolio.positions.get(symbol)
-        if position is None or position.quantity == 0:
-            continue
-        holder = holders.get(symbol)
-        if holder in live_holders:
-            if shadow_exit is not None:
-                await shadow_exit(symbol, abs(position.quantity), exit_.get("reason", ""))
+        if position is None or position.quantity == 0 or holders.get(symbol) not in strategies_by_name:
             continue
         orders.append(Order(
             id=str(uuid.uuid4()), symbol=symbol, side=Side.SELL if position.quantity > 0 else Side.BUY,
             quantity=abs(position.quantity), order_type="MARKET", limit_price=None, product="MIS",
-            strategy_name=holder,
         ))
     return orders
 
@@ -431,8 +433,7 @@ async def run(
     learned: Optional[LearnedRules] = None,
     plan=None,
     expand: Optional[Callable[[list[str]], Awaitable[list]]] = None,
-    live_holders: Optional[set[str]] = None,
-    shadow_exit: Optional[Callable[[str, float, str], Awaitable[None]]] = None,
+    shadow_exit: Optional[Callable[[str, str], Awaitable[None]]] = None,
 ) -> None:
     """`symbol_for_token` is not in the plan's pseudocode signature; it's
     needed because `Bar` identifies instruments by `instrument_token` while
@@ -551,7 +552,7 @@ async def run(
                         except Exception as exc:
                             logger.exception("could not add %s to the run: %s", new, exc)
                         owner_by_symbol = {s: st for st in strategies for s in st.spec.universe}
-                    plan_orders = await _plan_exit_orders(plan.exits, portfolio, holders, live_holders or set(),
+                    plan_orders = await _plan_exit_orders(plan.exits, portfolio, holders, strategies_by_name,
                                                           shadow_exit)
             orders = await size_intents(
                 intents, portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,

@@ -109,7 +109,9 @@ async def revise_plan(db, redis, user_id: str, plan: dict, reasons: list[tuple[s
         now=now.astimezone(IST).strftime("%a %d %b %Y %H:%M IST"),
         trigger="\n".join(f"- {text}" for _, text in reasons),
         regime=f"{regime.get('label', 'unknown')} ({regime.get('score', 0):+.2f})",
-        plan=json.dumps(current), positions=json.dumps(await _held(db, user_id)) or "{}",
+        # Only names the plan covers: never a long-term holding or a hand trade elsewhere.
+        plan=json.dumps(current),
+        positions=json.dumps({s: q for s, q in (await _held(db, user_id)).items() if s in set(plan.get("scope") or [])}),
         strategies=json.dumps(cards),
     )
     reply = (await complete(system, prompt) or "").strip()
@@ -123,6 +125,9 @@ async def revise_plan(db, redis, user_id: str, plan: dict, reasons: list[tuple[s
     except (ValueError, TypeError, OverflowError) as exc:
         logger.info("plan revision for %s: unreadable reply (%s), current plan stands", user_id, exc)
         return None
+    # Scope never shrinks within a day: a dropped add stays judged (and, no
+    # longer in allow, blocked) rather than falling outside the gate.
+    revised.scope = sorted(set(revised.scope) | scope)
     doc = await store.save(db, redis, user_id, day, revised, now)
     logger.info("plan revised for %s: v%d (%s)", user_id, doc["version"], reasons[0][0])
     return doc
