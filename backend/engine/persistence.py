@@ -13,7 +13,7 @@ database passed in, not constructed here).
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from backend.core.models import Fill, Order, Position, Venue
@@ -211,15 +211,25 @@ def venue_filter(venue: Optional[Venue]) -> dict:
     return {"venue": {"$ne": "live"}}
 
 
+def _utc(doc: dict) -> dict:
+    """Mongo hands back naive datetimes that are UTC. Marked as UTC here, so
+    the API sends them with an offset -- a bare "06:55" was read by the
+    browser as 06:55 IST, five and a half hours early."""
+    return {
+        key: value.replace(tzinfo=timezone.utc) if isinstance(value, datetime) and value.tzinfo is None else value
+        for key, value in doc.items()
+    }
+
+
 def _clean_id(doc: dict) -> dict:
-    doc = dict(doc)
+    doc = _utc(doc)
     doc.pop("_id", None)
     return doc
 
 
 def _clean(doc: dict) -> dict:
     """Strips the Mongo/ownership fields that aren't part of the core model."""
-    doc = dict(doc)
+    doc = _utc(doc)
     for field in ("_id", "user_id", "run_id"):
         doc.pop(field, None)
     return doc
