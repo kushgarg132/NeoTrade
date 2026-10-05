@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Optional
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel, ValidationError
 
 from backend.configs.settings import settings
@@ -109,15 +109,19 @@ async def run_with_tools(task: str, *, system: str, prompt: str, tools: list, ti
                 break
             messages.extend(await asyncio.gather(*(run_call(c) for c in calls)))
         if final is None:
-            final = await llm.ainvoke(messages + [HumanMessage(content=FINAL_TURN)])
+            # Still the tool-bound model: some providers reject tool history
+            # with no tools defined. Any further tool calls are ignored.
+            final = await bound.ainvoke(messages + [HumanMessage(content=FINAL_TURN)])
             result["rounds"] += 1
+            messages.append(final)
         text = _text(final)
         if schema is None:
             result["output"] = text
         else:
             parsed = _parse(schema, text)
             if parsed is None:
-                repair = await llm.ainvoke(messages + [AIMessage(content=text), HumanMessage(
+                # `messages` already ends with the reply being repaired.
+                repair = await bound.ainvoke(messages + [HumanMessage(
                     content=f"Return only valid JSON for this schema: {json.dumps(schema.model_json_schema())}")])
                 result["rounds"] += 1
                 parsed = _parse(schema, _text(repair))

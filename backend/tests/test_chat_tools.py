@@ -89,3 +89,17 @@ async def test_chat_and_facts_return_the_same_portfolio_and_news():
     chat_news = json.loads(await tools["search_news"].ainvoke({"symbol": "SJVN"}))
     fact_news = json.loads(json.dumps(strip(await market_facts.news(db, None, None, symbol="SJVN", hours=72)), default=str))
     assert chat_news["articles"] == fact_news["items"]
+
+
+async def test_chat_passes_fact_errors_through():
+    from unittest.mock import patch
+
+    db = AsyncMongoMockClient()["test_db"]
+    tools = _tools(db, "alice")
+
+    async def broken(*a, **k):
+        return {"as_of": "now", "source": "x", "error": "RuntimeError: db down"}
+    with patch("backend.chat.tools.market_facts.news", broken):
+        assert "db down" in await tools["search_news"].ainvoke({"scope": "MARKET"})
+    with patch("backend.chat.tools.user_facts.strategy_library", broken):
+        assert "db down" in await tools["get_strategy_library"].ainvoke({})

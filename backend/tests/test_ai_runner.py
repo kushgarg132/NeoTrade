@@ -103,3 +103,31 @@ async def test_kill_switch_uses_the_fallback(monkeypatch):
     llm = _Script()
     out = await runner.run_with_tools("t", system="s", prompt="p", tools=[], tier="fast", fallback=fallback, llm=llm)
     assert out["output"] == "single-call answer" and llm.seen == []
+
+
+class _StrictProvider(_Script):
+    """Rejects tool history unless tools are bound (Anthropic/Gemini behaviour)."""
+
+    def bind_tools(self, tools, **kw):
+        bound = _Script.__new__(_Script)
+        bound.replies, bound.seen, bound.bound = self.replies, self.seen, 1
+        return bound
+
+    async def ainvoke(self, messages, *a, **kw):
+        if any(getattr(m, "tool_calls", None) for m in messages):
+            raise RuntimeError("tool_use blocks without tools")
+        return await super().ainvoke(messages)
+
+
+async def test_forced_final_turn_keeps_tools_bound():
+    llm = _StrictProvider(_call("sentiment", {"symbol": "TCS"}), AIMessage(content="final from facts"))
+    out = await runner.run_with_tools("t", system="s", prompt="p", tools=await _sentiment_tools(), tier="fast",
+                                      max_rounds=1, llm=llm)
+    assert out["output"] == "final from facts" and out["used_fallback"] is False and out["facts"]
+
+
+async def test_repair_turn_never_repeats_the_assistant_message():
+    llm = _Script(AIMessage(content="not json"), AIMessage(content='{"verdict": "SELL", "score": 0.2}'))
+    await runner.run_with_tools("t", system="s", prompt="p", tools=[], tier="fast", schema=_Verdict, llm=llm)
+    roles = [type(m).__name__ for m in llm.seen[-1]]
+    assert all(not (a == b == "AIMessage") for a, b in zip(roles, roles[1:]))

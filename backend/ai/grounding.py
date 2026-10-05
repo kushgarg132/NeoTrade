@@ -4,8 +4,8 @@ A figure is a ₹ amount, a percentage, a decimal, or a bare integer of four
 or more digits (not a year). Dates, times, years, list markers, x/y scores
 and small bare counts ("3 names", "20 days") are not figures. A figure is
 supported when some number in the call's facts is within 0.5% of it, or --
-for a percentage -- within one unit of its last shown digit (2.3% matches
-2.347). Unsupported figures get one retry; whatever is still unsupported
+for a percentage -- within half a unit of its last shown digit (2.3% matches
+2.347; 2% does not match 2.9). Unsupported figures get one retry; whatever is still unsupported
 has its sentence dropped."""
 
 import re
@@ -65,7 +65,7 @@ def numbers_in(facts) -> list[float]:
 
 def _supported(value: float, decimals: int, percent: bool, numbers: list[float]) -> bool:
     for x in numbers:
-        if percent and abs(x - value) <= 10 ** (-decimals):
+        if percent and abs(x - value) <= 0.5 * 10 ** (-decimals):  # what rounding to the shown digit allows
             return True
         if abs(x - value) <= REL_TOLERANCE * max(abs(x), abs(value), 1e-9):
             return True
@@ -77,11 +77,25 @@ def unsupported(text: str, facts) -> list[str]:
     return [raw for raw, value, decimals, percent in figures(text) if not _supported(value, decimals, percent, numbers)]
 
 
+def _contains(sentence: str, token: str) -> bool:
+    """The token as a whole figure, not inside a longer one (2.3% is not in 12.3%)."""
+    return re.search(r"(?<![\w.,])" + re.escape(token) + r"(?![\w,]|\.\d)", sentence) is not None
+
+
 def strip_unsupported(text: str, tokens: list[str]) -> str:
+    """Drops each sentence holding an unsupported figure, line by line, so
+    lists and paragraphs survive; a list item left empty goes too."""
     if not tokens:
         return text
-    kept = [s for s in _SENTENCE.split(text) if not any(t in s for t in tokens)]
-    return " ".join(kept).strip()
+    lines = []
+    for line in text.split("\n"):
+        marker = _LIST_MARKER.match(line + " ")
+        prefix, body = ((line + " ")[:marker.end()], (line + " ")[marker.end():]) if marker else ("", line)
+        kept = [s for s in _SENTENCE.split(body.strip()) if s and not any(_contains(s, t) for t in tokens)]
+        if not kept and body.strip():
+            continue  # the whole line (or list item) was unsupported
+        lines.append((prefix + " ".join(kept)).rstrip() if kept else line)
+    return "\n".join(lines).strip()
 
 
 async def grounded(text: str, facts, retry: Optional[Callable[[list[str]], Awaitable[str]]]) -> tuple[str, bool]:

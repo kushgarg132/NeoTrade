@@ -49,3 +49,17 @@ async def test_game_plan_lists_versions(mongo):
     await store.save(mongo, redis, "alice", day, TradePlan(trigger="regime_flip", rationale=["b"]), now)
     out = await facts.game_plan(mongo, redis, "alice")
     assert [v["trigger"] for v in out["versions"]] == ["pre_open", "regime_flip"]
+
+
+async def test_portfolio_as_of_is_the_snapshot_time_not_now(mongo):
+    then = datetime(2026, 10, 1, 10, 0, tzinfo=timezone.utc)
+    await mongo["portfolio_snapshots"].insert_one({"user_id": "alice", "at": then, "holdings": [], "totals": {}})
+    out = await facts.portfolio(mongo, FakeRedis(), "alice")
+    assert str(out["as_of"]).startswith("2026-10-01")
+
+
+def test_user_tools_need_a_user():
+    from backend.ai.facts import as_tools
+
+    with pytest.raises(ValueError):
+        as_tools(None, None, None, ["portfolio"])

@@ -40,7 +40,8 @@ async def portfolio(db, redis, user_id, symbol: Optional[str] = None,
             return {"error": f"{symbol} is not among the user's holdings."}
         return {**{k: match[0].get(k) for k in HOLDING_KEYS}, "health": match[0].get("health")}
     return {
-        "account": account, "snapshot_at": snap["at"], "totals": snap.get("totals"), "benchmark": snap.get("benchmark"),
+        # as_of is when the portfolio was analysed, not when it was read: stale holdings must look stale.
+        "account": account, "as_of": snap["at"], "totals": snap.get("totals"), "benchmark": snap.get("benchmark"),
         "concentration": snap.get("concentration"), "plan": snap.get("plan"),
         "sell_or_trim": plan_names(snap.get("plan"), "sell"), "add": plan_names(snap.get("plan"), "add"),
         "holdings": [{k: h.get(k) for k in HOLDING_KEYS if k != "note"} for h in holdings[:MAX_HOLDINGS]],

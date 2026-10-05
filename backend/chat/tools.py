@@ -94,7 +94,8 @@ def read_tools(db, redis, user_id: str) -> list:
         return _json(await user_facts.learning(db, redis, user_id))
 
     async def get_strategy_library(mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None) -> str:
-        return _json((await user_facts.strategy_library(db, redis, user_id, mode=mode))["strategies"])
+        out = await user_facts.strategy_library(db, redis, user_id, mode=mode)
+        return _json(out.get("strategies", out))
 
     async def get_paper() -> str:
         from backend.risk.backtest_gate import BacktestGateStore
@@ -172,6 +173,8 @@ def read_tools(db, redis, user_id: str) -> list:
         found = await market_facts.news(db, redis, user_id, symbol=symbol, sector=sector, scope=scope, query=query,
                                          hours=max(1, min(days, 60)) * 24, material_only=material_only,
                                          limit=limit)
+        if "error" in found:
+            return _json(found)
         if not found.get("items") and symbol:
             # Not a followed stock (or nothing stored yet): search on demand.
             from backend.components.analyst.news import fetch_news_logic

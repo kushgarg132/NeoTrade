@@ -60,6 +60,9 @@ def as_tools(db, redis, user_id: Optional[str], names: list[str]) -> list[Struct
     tools = []
     for name in names:
         spec = FACTS[name]
+        if spec.user and not user_id:
+            # {"user_id": None} would match legacy rows with no owner.
+            raise ValueError(f"fact {name} needs a user")
         signature = inspect.signature(spec.fn)
         params = [p for n, p in signature.parameters.items() if n not in CONTEXT_PARAMS]
 

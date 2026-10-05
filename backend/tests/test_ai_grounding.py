@@ -36,3 +36,19 @@ async def test_retry_then_strip():
 async def test_grounded_text_passes_untouched():
     text, ok = await grounding.grounded("TCS last closed at ₹2,114.39.", FACTS, None)
     assert ok is True and text == "TCS last closed at ₹2,114.39."
+
+
+def test_strip_keeps_lines_and_list_structure():
+    text = "Summary:\n1. RELIANCE rose 9.9%.\n2. TCS last closed at ₹2,114.39.\n\nOverall fine."
+    out = grounding.strip_unsupported(text, ["9.9%"])
+    assert out == "Summary:\n2. TCS last closed at ₹2,114.39.\n\nOverall fine."
+
+
+def test_token_match_is_exact_not_substring():
+    assert grounding.strip_unsupported("Up 12.3% today. Down 2.3% later.", ["2.3%"]) == "Up 12.3% today."
+
+
+def test_percent_tolerance_is_half_a_unit_of_the_last_digit():
+    facts = [{"x": 2.9}]
+    assert grounding.unsupported("rose 2%", facts) == ["2%"]
+    assert grounding.unsupported("rose 3%", facts) == []
