@@ -60,12 +60,15 @@ const Rebalance = ({ snapshot, onTrade }) => {
 
   useEffect(() => {
     let stale = false;
-    api.get(endpoints.settings.preferences)
-      .then((res) => !stale && res.data?.rebalance_targets && setTargets({ ...DEFAULTS, ...res.data.rebalance_targets }))
-      .catch(() => {});
-    api.get(endpoints.portfolio.candidates)
-      .then((res) => !stale && setCandidates(res.data || []))
-      .catch(() => {});
+    Promise.allSettled([api.get(endpoints.settings.preferences), api.get(endpoints.portfolio.candidates)]).then(([prefs, cands]) => {
+      if (stale) return;
+      const list = cands.status === 'fulfilled' ? cands.value.data || [] : [];
+      setCandidates(list);
+      const saved = prefs.status === 'fulfilled' ? prefs.value.data?.rebalance_targets : null;
+      if (saved) setTargets({ ...DEFAULTS, ...saved });
+      // A saved conviction rule starts with the AI's picks ticked.
+      if (saved?.rule === 'conviction') setTicked(list.filter((c) => c.preselect).map((c) => c.symbol));
+    });
     return () => { stale = true; };
   }, []);
 
@@ -77,6 +80,10 @@ const Rebalance = ({ snapshot, onTrade }) => {
       else overrides[symbol] = Number(value);
       return { ...t, overrides };
     });
+  const chooseRule = (rule) => {
+    setTargets((t) => ({ ...t, rule }));
+    if (rule === 'conviction') setTicked(candidates.filter((c) => c.preselect).map((c) => c.symbol));
+  };
   const toggle = (symbol) => setTicked((list) => (list.includes(symbol) ? list.filter((s) => s !== symbol) : [...list, symbol]));
 
   const calculate = async () => {
@@ -115,13 +122,14 @@ const Rebalance = ({ snapshot, onTrade }) => {
             {[
               { id: 'cap', label: 'Caps' },
               { id: 'equal', label: 'Equal weight' },
+              ...(snapshot?.verdicts_visible ? [{ id: 'conviction', label: 'Conviction' }] : []),
             ].map((option) => (
               <button
                 key={option.id}
                 type="button"
                 role="radio"
                 aria-checked={targets.rule === option.id}
-                onClick={() => setTargets((t) => ({ ...t, rule: option.id }))}
+                onClick={() => chooseRule(option.id)}
                 className={cn(
                   'min-h-11 sm:min-h-0 px-3 py-1.5 text-sm border border-[var(--rule-strong)] -ml-px first:ml-0',
                   targets.rule === option.id ? 'bg-[var(--ink)] text-[var(--paper)]' : 'text-[var(--ink-soft)]'
@@ -132,7 +140,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
             ))}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {targets.rule === 'cap' && (
+            {targets.rule !== 'equal' && (
               <>
                 <NumberField label="Max per stock" suffix="%" value={targets.max_stock_pct}
                   onChange={(v) => setTargets((t) => ({ ...t, max_stock_pct: v }))} />
@@ -145,6 +153,9 @@ const Rebalance = ({ snapshot, onTrade }) => {
           <p className="doc-meta normal-case">
             New money buys what is under target first; sells cover only what is still over it.
             {targets.rule === 'cap' ? ' Caps keep your current weights and trim only what is above them.' : ''}
+            {targets.rule === 'conviction'
+              ? ' Conviction weights each stock by its review score: ADD gets more, SELL is sold. New names are the AI\'s top picks.'
+              : ''}
           </p>
 
           {stocks.length > 0 && (
@@ -170,7 +181,9 @@ const Rebalance = ({ snapshot, onTrade }) => {
                     <label className="inline-flex items-center gap-2 min-h-11 sm:min-h-0 px-2 py-1 border border-[var(--rule-strong)] cursor-pointer">
                       <input type="checkbox" checked={ticked.includes(c.symbol)} onChange={() => toggle(c.symbol)} />
                       <span className="figure-md text-sm">{c.symbol}</span>
-                      <Badge variant="secondary">{c.source === 'ai' ? 'AI pick' : 'Watchlist'}</Badge>
+                      <Badge variant="secondary">
+                        {c.source === 'ai' ? `AI pick${c.score != null ? ` · ${c.score.toFixed(2)}` : ''}` : 'Watchlist'}
+                      </Badge>
                     </label>
                   </li>
                 ))}
