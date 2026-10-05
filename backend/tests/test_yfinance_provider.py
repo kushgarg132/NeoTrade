@@ -90,3 +90,24 @@ def test_no_suffix_loop_in_price_and_stock_info_source():
         source = (_BACKEND_DIR / rel_path).read_text()
         assert '".NS", ".BO"' not in source
         assert "suffixes = [" not in source
+
+
+async def test_quote_skips_the_new_days_placeholder_row():
+    """After IST midnight yfinance adds today's daily row with NaN prices
+    (volume only); a quote built from it made every mark NaN and broke the
+    JSON of /trading/positions and /analytics/pnl."""
+    df = _fake_history_df()
+    df.loc[pd.Timestamp("2026-01-03")] = [float("nan")] * 4 + [95715]
+    with patch("backend.data.providers.yfinance_provider.yf.Ticker") as mock_ticker_cls:
+        mock_ticker_cls.return_value.history.return_value = df
+        quote = await YFinanceProvider().quote(_instrument())
+    assert quote["last_price"] == 102.0 and quote["close"] == 102.0 and quote["volume"] == 1100
+
+
+async def test_quote_with_only_placeholder_rows_raises():
+    df = pd.DataFrame({"Open": [float("nan")], "High": [float("nan")], "Low": [float("nan")],
+                       "Close": [float("nan")], "Volume": [10]}, index=pd.to_datetime(["2026-01-03"]))
+    with patch("backend.data.providers.yfinance_provider.yf.Ticker") as mock_ticker_cls:
+        mock_ticker_cls.return_value.history.return_value = df
+        with pytest.raises(ValueError):
+            await YFinanceProvider().quote(_instrument())

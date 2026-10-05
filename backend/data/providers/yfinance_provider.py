@@ -65,6 +65,9 @@ class YFinanceProvider:
         history pull rather than a separate .info network call."""
         ticker_symbol = self._ticker_symbol(instrument)
         df = await asyncio.to_thread(lambda: yf.Ticker(ticker_symbol).history(period="5d", interval="1d"))
+        # After IST midnight yfinance adds the new day's row with NaN prices
+        # (volume only) until it trades; the last real close is the quote.
+        df = df.dropna(subset=["Close"])
 
         if df.empty:
             raise ValueError(f"No quote data found for {ticker_symbol}")
