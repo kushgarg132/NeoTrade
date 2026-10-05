@@ -45,15 +45,16 @@ const Segmented = ({ label, options, value, onChange, disabled = {}, locked = fa
   </div>
 );
 
-const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 'paper', lastPrice, onClose, onDone }) => {
+const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 'paper', lastPrice, quantity: initialQuantity, limitPrice: initialLimit, onClose, onDone }) => {
   const titleId = useId();
   const dialogRef = useRef(null);
   const [side, setSide] = useState(initialSide);
   const [venue, setVenue] = useState(initialVenue);
   const [product, setProduct] = useState('CNC');
-  const [orderType, setOrderType] = useState('MARKET');
-  const [limitPrice, setLimitPrice] = useState(lastPrice ? String(lastPrice) : '');
-  const [quantity, setQuantity] = useState('1');
+  // A suggested trade arrives pre-filled: its quantity, and a limit at its price.
+  const [orderType, setOrderType] = useState(initialLimit ? 'LIMIT' : 'MARKET');
+  const [limitPrice, setLimitPrice] = useState(String(initialLimit ?? lastPrice ?? ''));
+  const [quantity, setQuantity] = useState(String(initialQuantity ?? 1));
   const [hasMine, setHasMine] = useState(null);
   const [card, setCard] = useState(null);
   const [needsSecondTap, setNeedsSecondTap] = useState(false);
