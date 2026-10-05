@@ -66,7 +66,7 @@ def world(monkeypatch):
         sent.append(text)
         return True
 
-    async def marks(db_, symbols):
+    async def marks(db_, symbols, **_):
         return {s: 1000.0 for s in symbols}
 
     monkeypatch.setattr(service, "_notify", notify)

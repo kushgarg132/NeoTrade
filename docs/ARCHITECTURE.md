@@ -230,9 +230,17 @@ the revived chain emits `Intent` and is scored by `composite.py` like everything
 `backend/datalayer/worker.py` runs in its own `ingest` container (same image, `command:
 python -m backend.datalayer.worker`, no port). One instance works at a time: it holds the Redis
 lock `ingest:leader` (`backend/locks.py`, token-checked, 30s TTL renewed every 10s) and exits
-when it loses it, so Docker restarts it as a waiter. Each loop in `LOOPS` writes
+when it loses it, so Docker restarts it as a waiter. Each loop (`_loops()`) writes
 `ingest:heartbeat:{name}` after every pass that did not raise; `GET /health` reports their ages.
-The loops themselves (quotes, macro, news, …) land phase by phase per
+Loops so far (`backend/datalayer/prices.py`): `quotes` writes `quote:{SYMBOL}` (`{ltp, prev_close,
+at}`) -- held and watched names every ~15s in session, the Nifty 200 every 5 min (10 min off
+session), one batched yfinance download each; `macro` writes `macro:{yf ticker}` every 60s for
+Indian and global indices, index futures, crude, gold, USD/INR, DXY and the US 10Y, plus one
+Mongo `macro_series` doc per ticker per IST day. `marks.mark_prices` reads `quote:` first (≤60s
+old by default; the autopilot's order price ≤20s, `ORDER_MAX_AGE_SECONDS`) and writes what it
+fetches back; `/market/indices` and `/market/global` read `macro:`. The confirm paths that price
+real orders (`routers/suggestions._live_mark_price`, `chat/actions._mark_price`) still always
+fetch live. Later loops (news, …) land phase by phase per
 `docs/superpowers/plans/2026-10-05-market-news-datalayer.md`. Compose makes `backend` depend on
 `ingest` only so the shared deploy workflow's `up -d --build backend` also redeploys it.
 

@@ -107,6 +107,14 @@ def _movers_sync() -> List[Dict[str, Any]]:
 
 
 async def _quotes(names_to_symbols: Dict[str, str]) -> List[Dict[str, Any]]:
+    # The ingest worker keeps these in Redis (backend/datalayer/prices.py);
+    # fetch here only when it is down or has not caught up.
+    from backend.database import db
+    from backend.datalayer.prices import macro_rows
+
+    rows = await macro_rows(db.redis, names_to_symbols)
+    if rows is not None:
+        return rows
     results = await asyncio.gather(*(fetch_ticker_data(sym, name) for name, sym in names_to_symbols.items()))
     return [r for r in results if r is not None]
 

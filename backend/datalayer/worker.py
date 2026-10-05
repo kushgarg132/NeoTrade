@@ -38,8 +38,13 @@ class Loop(NamedTuple):
     run: Callable[[object, object], Awaitable[None]]  # (db, redis)
 
 
-# Filled in by later phases (quotes, macro, news, ...).
-LOOPS: list[Loop] = []
+def _loops() -> list[Loop]:
+    from backend.datalayer import prices
+
+    return [
+        Loop("quotes", 15, prices.quotes),
+        Loop("macro", 60, prices.macro),
+    ]
 
 
 async def beat(redis, name: str) -> None:
@@ -71,7 +76,7 @@ async def _run_loop(db, redis, loop: Loop) -> None:
         await asyncio.sleep(loop.interval_seconds)
 
 
-async def run(db, redis, loops: list[Loop] = LOOPS) -> None:
+async def run(db, redis, loops: list[Loop]) -> None:
     """Waits for leadership, then runs every loop until leadership is lost."""
     token = None
     while token is None:
@@ -100,7 +105,7 @@ async def main() -> None:
 
     await db.connect_to_database()
     try:
-        await run(db.db, db.redis)
+        await run(db.db, db.redis, _loops())
     finally:
         await db.close_database_connection()
 

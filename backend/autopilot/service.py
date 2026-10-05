@@ -14,7 +14,7 @@ from backend.core.models import Order, Side
 from backend.engine.autorun import in_session
 from backend.engine.persistence import LedgerStore
 from backend.engine.session import IST
-from backend.marks import mark_prices
+from backend.marks import ORDER_MAX_AGE_SECONDS, mark_prices
 from backend.prefs import PrefsStore
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
     prefs = await PrefsStore(db).get(user_id)
     live = bool(prefs.get("autopilot_live"))
     mode = "live" if live else "paper"
-    price = (await mark_prices(db, {order.symbol})).get(order.symbol)
+    price = (await mark_prices(db, {order.symbol}, max_age_seconds=ORDER_MAX_AGE_SECONDS)).get(order.symbol)
     if not price:
         return await _record(db, user_id, order, "REFUSED", now, quiet, reason=f"No live price for {order.symbol}.")
     reason = fence.check(order, price, await _state(db, user_id, prefs, mode, now), prefs)
