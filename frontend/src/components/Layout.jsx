@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { X } from 'lucide-react';
 import Sidebar from './layout/Sidebar';
 import BottomNav from './layout/BottomNav';
 import Masthead from './layout/Masthead';
@@ -40,6 +42,17 @@ const Layout = ({ children }) => {
     if (message.data?.mode === 'LONGTERM') loadPending();
   });
 
+  // Material news on something the user holds (backend/datalayer/reactor.py):
+  // a toast for a while, wherever they are. The News page keeps the full list.
+  const [alerts, setAlerts] = useState([]);
+  const dismiss = (id) => setAlerts((list) => list.filter((a) => a.id !== id));
+  useTopic('news', (message) => {
+    const alert = message.data;
+    if (!alert?.id) return;
+    setAlerts((list) => [alert, ...list.filter((a) => a.id !== alert.id)].slice(0, 3));
+    setTimeout(() => dismiss(alert.id), 15_000);
+  });
+
   return (
     <PendingContext.Provider value={pending}>
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
@@ -50,6 +63,22 @@ const Layout = ({ children }) => {
         <main className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-8 py-3 sm:py-5 pb-24 lg:pb-12">
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
+      </div>
+
+      <div role="status" aria-live="polite" className="fixed z-50 right-3 bottom-20 lg:bottom-4 w-[min(22rem,calc(100vw-1.5rem))] space-y-2">
+        {alerts.map((alert) => (
+          <div key={alert.id} className="sheet px-3 py-2.5 shadow-lg flex gap-2 items-start bg-[var(--paper)]">
+            <Link to="/research/news" onClick={() => dismiss(alert.id)} className="flex-1 min-w-0 text-sm hover:text-[var(--stamp)]">
+              <span className="block font-semibold">{alert.event || alert.title}</span>
+              <span className="block doc-meta normal-case">
+                {(alert.hits || []).map((h) => `${h.target === 'INDIA' ? 'Market' : h.target} ${h.direction > 0 ? '↑' : '↓'} ${h.impact}/10`).join(' · ')}
+              </span>
+            </Link>
+            <button type="button" aria-label="Dismiss" onClick={() => dismiss(alert.id)} className="min-h-9 min-w-9 inline-flex items-center justify-center text-[var(--ink-faint)]">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
       </div>
 
       <BottomNav pendingCount={pending} />

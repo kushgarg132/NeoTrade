@@ -1195,6 +1195,35 @@ const GuardrailsSheet = () => {
             </Button>
           ))}
       </Row>
+      <Row
+        label="News alerts"
+        hint="Material news on the names you follow, as a toast here and on Telegram when linked. A market-wide shock reaches anyone holding something."
+      >
+        <div role="radiogroup" aria-label="News alerts" className="flex flex-wrap">
+          {[
+            ['held', 'Holdings'],
+            ['held+watched', '+ Watchlist'],
+            ['all', 'All'],
+            ['off', 'Off'],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={(prefs.news_alerts || 'held') === value}
+              onClick={() => value !== prefs.news_alerts && save({ news_alerts: value })}
+              className={cn(
+                'px-3 py-1 border -ml-px first:ml-0 font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
+                (prefs.news_alerts || 'held') === value
+                  ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
+                  : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Row>
       {note && <p className="doc-meta normal-case pt-2">{note}</p>}
     </Sheet>
   );

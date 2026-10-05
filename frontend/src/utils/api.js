@@ -149,6 +149,7 @@ export const endpoints = {
     chain: (underlying, expiry) => `/options/chain?underlying=${underlying}&expiry=${expiry}`,
   },
   marketNews: '/news/market',
+  newsFeed: '/news/feed',
   trading: {
     start: '/trading/start',
     stop: '/trading/stop',

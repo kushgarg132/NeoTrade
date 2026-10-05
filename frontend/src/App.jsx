@@ -14,6 +14,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AiLimits = lazy(() => import('./pages/AiLimits'));
 const Today = lazy(() => import('./pages/Today'));
+const News = lazy(() => import('./pages/News'));
 const AiOverview = lazy(() => import('./pages/AiOverview'));
 const AiActivity = lazy(() => import('./pages/AiActivity'));
 import Login from './pages/Login';
@@ -107,6 +108,7 @@ const App = () => {
       {/* Research */}
       <Route path="/research" element={gated(<Dashboard />)} />
       <Route path="/research/stock/:symbol" element={gated(<Dashboard />)} />
+      <Route path="/research/news" element={gated(<News />)} />
       <Route path="/research/watchlist" element={gated(<Watchlist />)} />
       <Route path="/research/scanner" element={gated(<ScannerPage />)} />
       <Route path="/research/options" element={gated(<OptionChain />)} />

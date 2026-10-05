@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Check, Circle } from 'lucide-react';
 import Layout from '../components/Layout';
+import Markdown from '../components/common/Markdown';
 import MoneyBadge from '../components/common/MoneyBadge';
 import StopAutopilot from '../components/common/StopAutopilot';
 import { Sheet, Ruling, Money } from '../components/doc/Doc';
@@ -169,6 +170,48 @@ const AiActivity = ({ rows, onStop, autopilotOn }) => (
   </Sheet>
 );
 
+const REGIME = {
+  risk_off: { label: 'Risk off', tone: 'bad' },
+  risk_on: { label: 'Risk on', tone: 'good' },
+  neutral: { label: 'Neutral', tone: 'neutral' },
+};
+
+/** The ingest worker's read of the market: regime, what drives it, the day's big events, and the brief. */
+const MarketBackdrop = ({ backdrop }) => {
+  const { regime, brief, events = [] } = backdrop || {};
+  if (!regime && !brief && !events.length) return null;
+  const shown = REGIME[regime?.label];
+  return (
+    <Sheet
+      title="Markets"
+      meta={regime ? `regime ${regime.score > 0 ? '+' : ''}${regime.score}` : undefined}
+      actions={<Link to="/research/news" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">News ›</Link>}
+    >
+      {regime && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {shown && <Chip tone={shown.tone}>{shown.label}</Chip>}
+          {(regime.drivers || []).map((d) => <Chip key={d}>{d}</Chip>)}
+        </div>
+      )}
+      {events.length > 0 && (
+        <ul className="mb-2 text-sm">
+          {events.slice(0, 4).map((e) => (
+            <li key={`${e.at}-${e.title}`} className="doc-meta normal-case">
+              {formatDateTime(e.at)} · {e.country} {e.title}{e.forecast ? ` · forecast ${e.forecast}` : ''}
+            </li>
+          ))}
+        </ul>
+      )}
+      {brief && (
+        <details>
+          <summary className="field-label cursor-pointer min-h-9 inline-flex items-center">Market brief</summary>
+          <Markdown className="text-sm text-[var(--ink-soft)]">{brief}</Markdown>
+        </details>
+      )}
+    </Sheet>
+  );
+};
+
 const Today = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -220,6 +263,7 @@ const Today = () => {
         <NeedsYou items={data.needs_you || []} />
         <PnlSplit pnl={data.pnl_today} aiMode={data.autopilot ? (data.autopilot.live ? 'live' : 'paper') : undefined} market={data.market} loadedAt={loadedAt} now={now} />
         <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />
+        <MarketBackdrop backdrop={data.backdrop} />
         <Link to="/research" className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)]">
           <span className="text-sm"><span className="field-label">Markets</span> · NIFTY, BANK NIFTY, movers and news</span>
           <ArrowRight className="w-4 h-4 text-[var(--ink-faint)]" />

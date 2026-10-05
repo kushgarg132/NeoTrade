@@ -41,6 +41,7 @@ export const PRACTICE_TABS = [
 
 export const RESEARCH_TABS = [
   { to: '/research', label: 'Search', end: true },
+  { to: '/research/news', label: 'News' },
   { to: '/research/watchlist', label: 'Watchlist' },
   { to: '/research/scanner', label: 'Scanner' },
   { to: '/research/options', label: 'Options' },
