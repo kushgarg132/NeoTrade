@@ -85,7 +85,7 @@ const NeedsYou = ({ items }) => (
     title="Needs you"
     meta={items.length ? String(items.length) : undefined}
     actions={
-      <Link to="/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
+      <Link to="/ai/practice/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
         All decisions ›
       </Link>
     }
