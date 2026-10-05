@@ -94,7 +94,7 @@ REBALANCE_PER_MINUTE = 10
 
 
 class RebalanceRequest(BaseModel):
-    new_money: float = Field(default=0, ge=0)
+    new_money: float = Field(default=0, ge=0, le=1e12, allow_inf_nan=False)
     candidates: list[str] = Field(default_factory=list, max_length=20)
     targets: Optional[RebalanceTargets] = None
 
@@ -124,7 +124,8 @@ async def _candidate_symbols(user: User, held: set[str]) -> list[tuple[str, str]
     found = [(s, "watchlist") for s in dict.fromkeys(watch.get("symbols") or []) if s not in held]
     if await verdicts_visible_to(user):
         seen = held | {s for s, _ in found}
-        cursor = db.db["suggestions"].find({"user_id": user.id, "status": "PENDING", "mode": "LONGTERM"}, {"symbol": 1})
+        cursor = db.db["suggestions"].find(
+            {"user_id": user.id, "status": "PENDING", "mode": "LONGTERM", "side": "BUY"}, {"symbol": 1})
         for doc in await cursor.to_list(length=200):
             if doc.get("symbol") and doc["symbol"] not in seen:
                 seen.add(doc["symbol"])

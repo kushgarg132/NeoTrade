@@ -591,7 +591,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
                   )}
                   {funds.length > 0 && (
                     <Sheet title="Funds & ETFs" meta={`${funds.length}`}>
-                      <Holdings rows={funds} open={open} onToggle={toggle} />
+                      <Holdings rows={funds} open={open} onToggle={toggle} onTrade={account === 'mine' ? setTicket : null} />
                     </Sheet>
                   )}
                 </div>

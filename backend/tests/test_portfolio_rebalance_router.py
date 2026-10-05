@@ -83,7 +83,7 @@ def test_too_many_candidates_rejected(mdb):
 async def test_candidates_hide_ai_picks_when_verdicts_hidden(mdb, monkeypatch):
     await _snapshot(mdb)
     await mdb["watchlist"].insert_one({"user_id": "alice", "symbols": ["W1", "A"]})
-    await mdb["suggestions"].insert_one({"user_id": "alice", "status": "PENDING", "mode": "LONGTERM", "symbol": "P1"})
+    await mdb["suggestions"].insert_one({"user_id": "alice", "status": "PENDING", "mode": "LONGTERM", "symbol": "P1", "side": "BUY"})
 
     async def closes(symbols):
         return {s: 50.0 for s in symbols}
@@ -137,3 +137,24 @@ async def test_rebalance_uses_only_my_account_when_roles_are_set(mdb):
     body = _client(_user()).post("/api/v1/portfolio/rebalance", json={"new_money": 0}).json()
     assert {t["symbol"] for t in body["trades"]} == {"MINE1", "MINE2"}
     assert body["total"] == pytest.approx(100_000)
+
+
+async def test_candidates_skip_ai_sell_suggestions(mdb, monkeypatch):
+    await _snapshot(mdb)
+    await mdb["suggestions"].insert_many([
+        {"user_id": "alice", "status": "PENDING", "mode": "LONGTERM", "symbol": "P1", "side": "BUY"},
+        {"user_id": "alice", "status": "PENDING", "mode": "LONGTERM", "symbol": "X1", "side": "SELL"}])
+
+    async def closes(symbols):
+        return {s: 50.0 for s in symbols}
+    monkeypatch.setattr(portfolio_router, "_closes", closes)
+    admin = _client(_user(role="admin")).get("/api/v1/portfolio/rebalance/candidates").json()
+    assert [c["symbol"] for c in admin] == ["P1"]
+
+
+@pytest.mark.parametrize("body", [
+    {"new_money": "Infinity"}, {"new_money": 1e13},
+    {"new_money": 0, "targets": {"rule": "cap", "max_stock_pct": "NaN"}},
+])
+def test_unbounded_numbers_rejected(mdb, body):
+    assert _client(_user()).post("/api/v1/portfolio/rebalance", json=body).status_code == 422

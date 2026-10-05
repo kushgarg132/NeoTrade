@@ -89,7 +89,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
       setResult(res.data);
     } catch (err) {
       const detail = err?.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : 'Those targets could not be used. Check that overrides add up to 100% or less.');
+      setError(typeof detail === 'string' ? detail : 'Those targets could not be used: caps must be above 0 and at most 100, and overrides add up to 100% or less.');
     } finally {
       setBusy(false);
     }
@@ -189,6 +189,12 @@ const Rebalance = ({ snapshot, onTrade }) => {
 
       {result && (
         <Sheet title="Trades" meta={`${trades.length} · cash left ${formatCurrency(result.cash_left)}`}>
+          {result.uninvested_pct > 0.5 && (
+            <p role="status" className="mb-2 text-sm border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2">
+              Your caps leave {formatPercent(result.uninvested_pct)} of the book uninvested: there are not enough
+              stocks or sectors to fill them. Raise the caps or use Equal weight to stay invested.
+            </p>
+          )}
           {result.stale_since && <p className="doc-meta normal-case pb-2">Prices from the last close: log in to your broker for live ones.</p>}
           {trades.length === 0 ? (
             <Empty title="Nothing to do" detail="Your holdings are already close to their targets." />

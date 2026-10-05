@@ -108,3 +108,10 @@ def test_sell_tax_loss_gives_no_tax():
 def test_weight_after_never_exceeds_100():
     out = plan_rebalance([h("A", 70_000), h("B", 30_000)], [], DEFAULT_TARGETS, 5_000, {}, TODAY)
     assert sum(t["weight_after"] for t in out["trades"]) <= 100 + 1e-6
+
+
+def test_plan_reports_the_share_caps_leave_uninvested():
+    rows = [h("A", 50_000, sector="X"), h("B", 30_000, sector="Y"), h("C", 20_000, sector="Z")]
+    out = plan_rebalance(rows, [], DEFAULT_TARGETS, 0, {}, TODAY)
+    assert out["uninvested_pct"] == pytest.approx(55.0)
+    assert plan_rebalance(rows, [], EQUAL, 0, {}, TODAY)["uninvested_pct"] == pytest.approx(0.0)

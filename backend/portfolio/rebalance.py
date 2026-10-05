@@ -195,8 +195,11 @@ def plan_rebalance(holdings: list[dict], candidates: list[dict], targets: dict, 
 
     trades = sorted(sells, key=lambda t: -t["value"]) + sorted(bought, key=lambda t: -t["value"])
     spent = sum(t["value"] + t["charges"] for t in bought)
+    # Caps that cannot all be filled (few names, one sector) leave the rest in
+    # cash: said out loud, so a rebalance never quietly sells a book to cash.
+    uninvested = max(0.0, 1 - sum(weights.values())) * 100 if weights else 0.0
     return {"total": round(total, 2), "cash_left": round(cash - spent, 2), "trades": trades,
-            "skipped": skipped, "excluded": excluded}
+            "skipped": skipped, "excluded": excluded, "uninvested_pct": round(uninvested, 2)}
 
 
 def suggest(row: dict, gap: float | None, total: float) -> dict | None:
