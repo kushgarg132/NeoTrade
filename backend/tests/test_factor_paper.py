@@ -75,3 +75,47 @@ async def test_the_book_tracks_itself_against_the_nifty_since_it_started():
     summary = await paper.rebalance(db, "alice", now=later, marks_fn=_marks, load=_load())
     assert "book_return" in summary and "nifty_return" in summary
     assert "vs Nifty" in paper.summary_text(summary)
+
+
+# Small account: 15-20 names x 10% on Rs 25,000 left Rs 1,250 a name, so
+# whole shares broke expensive stocks. Below Rs 2 lakh the book holds the top
+# 8 and skips a stock whose single share costs more than its slot.
+
+def _priced_load(prices):
+    def load():
+        idx = pd.bdate_range("2024-01-01", periods=400)
+        rng = np.random.default_rng(5)
+        closes = pd.DataFrame({
+            s: p * np.exp(np.cumsum((0.004 if p > 1000 else 0.001) + 0.005 * rng.standard_normal(400)))
+            for s, p in prices.items()
+        }, index=idx)
+        market = pd.Series(100 * np.exp(np.cumsum(np.full(400, 0.001))), index=idx)
+        return closes, market
+    return load
+
+
+async def test_a_small_book_holds_at_most_eight_names():
+    db = AsyncMongoMockClient()["test_db"]
+    await db["user_prefs"].insert_one({"user_id": "alice", "factor_paper_capital": 25_000.0})
+
+    async def marks(db, symbols):
+        return {s: 100.0 for s in symbols}
+
+    await paper.rebalance(db, "alice", now=NOW, marks_fn=marks, load=_load())
+    book = await paper.FactorBookStore(db).get("alice")
+    assert 0 < len(book["shares"]) <= paper.SMALL_TOP_N
+
+
+async def test_a_stock_dearer_than_its_slot_is_skipped():
+    db = AsyncMongoMockClient()["test_db"]
+    await db["user_prefs"].insert_one({"user_id": "alice", "factor_paper_capital": 25_000.0})
+    prices = {f"S{i}": 100.0 for i in range(12)} | {"PRICEY": 9_000.0}  # slot ~ Rs 3,125
+
+    async def marks(db, symbols):
+        return {s: (9_000.0 if s == "PRICEY" else 100.0) for s in symbols}
+
+    await paper.rebalance(db, "alice", now=NOW, marks_fn=marks, load=_priced_load(prices))
+    shares = (await paper.FactorBookStore(db).get("alice"))["shares"]
+    # PRICEY ranks first on momentum, but one share (Rs 9,000) is more than a
+    # slot: it is skipped and the next-ranked name takes its place.
+    assert "PRICEY" not in shares and len(shares) == paper.SMALL_TOP_N

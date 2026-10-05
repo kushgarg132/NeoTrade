@@ -28,12 +28,23 @@ from backend.factor.model import Params
 from backend.marks import mark_prices
 from backend.prefs import PrefsStore
 from backend.suggestions.service import fill_on_paper
+from dataclasses import replace
 
 logger = logging.getLogger(__name__)
 
 STRATEGY = "factor_momentum_lowvol"
 # The variant the walk-forward chose in most recent years (python -m backend.factor.report).
 PARAMS = Params(momentum_weight=1.0, top_n=15, buffer=25, target_vol=0.15)
+# Below this capital 15 names leave too little per name for whole shares:
+# hold the top 8 at equal weight, and skip a stock dearer than its slot.
+SMALL_ACCOUNT = 200_000
+SMALL_TOP_N = 8
+
+
+def params_for(capital: float) -> Params:
+    if capital >= SMALL_ACCOUNT:
+        return PARAMS
+    return replace(PARAMS, top_n=SMALL_TOP_N, buffer=SMALL_TOP_N + 4, weight_cap=1 / SMALL_TOP_N)
 
 
 def _load() -> tuple:
@@ -90,7 +101,15 @@ async def rebalance(db, user_id: str, now: Optional[datetime] = None, marks_fn=m
     nifty = float(market.dropna().iloc[-1])
     book.setdefault("started_at", now)
     book.setdefault("start_nifty", nifty)
-    target, level = model.target_book(closes, market, t, set(book["shares"]), PARAMS, avoid=avoid)
+    params = params_for(capital)
+    # A stock whose single share costs more than its slot can't be bought in
+    # whole shares: leave it out so the next-ranked name takes the slot. A
+    # current holding is never forced out this way.
+    last = closes.loc[t]
+    equity_estimate = book["cash"] + sum(q * float(last.get(s, 0.0) or 0.0) for s, q in book["shares"].items())
+    slot = equity_estimate / params.top_n
+    too_dear = {s for s, price in last.items() if price > slot and s not in book["shares"]}
+    target, level = model.target_book(closes, market, t, set(book["shares"]), params, avoid=avoid | too_dear)
 
     marks = await marks_fn(db, set(target.index) | set(book["shares"]))
     held_value = sum(q * marks.get(s, 0.0) for s, q in book["shares"].items())
