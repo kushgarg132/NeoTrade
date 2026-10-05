@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Sheet } from '../doc/Doc';
 import api, { endpoints } from '../../utils/api';
-import { useTopic } from '../../hooks/useStream';
+import { useReconnect, useTopic } from '../../hooks/useStream';
 
 /**
  * Today's guardrail alerts: the limits the user set for themselves, checked
@@ -10,12 +10,15 @@ import { useTopic } from '../../hooks/useStream';
 const GuardrailAlerts = () => {
   const [alerts, setAlerts] = useState([]);
 
-  useEffect(() => {
+  const load = () =>
     api
       .get(endpoints.guardrails.status)
       .then((res) => setAlerts(res.data.events || []))
       .catch(() => setAlerts([]));
+  useEffect(() => {
+    load();
   }, []);
+  useReconnect(load);
   useTopic('guardrails', (message) => setAlerts((current) => [...current, message.data]));
 
   if (alerts.length === 0) return null;

@@ -5,7 +5,7 @@ import Masthead from './layout/Masthead';
 import ChatWidget from './ChatWidget';
 import ErrorBoundary from './ErrorBoundary';
 import api, { endpoints } from '../utils/api';
-import { useTopic } from '../hooks/useStream';
+import { useReconnect, useTopic } from '../hooks/useStream';
 import { PendingContext } from '../context/pendingContext';
 
 /** The note's running number: stable per day, the way an issued note is. */
@@ -24,12 +24,15 @@ const noteNumber = () => {
 const Layout = ({ children }) => {
   const [pending, setPending] = useState(0);
 
-  useEffect(() => {
+  const loadPending = () =>
     api
       .get(endpoints.suggestions.list({ status: 'PENDING' }))
       .then((res) => setPending(res.data.length))
       .catch(() => setPending(0));
+  useEffect(() => {
+    loadPending();
   }, []);
+  useReconnect(loadPending);
 
   useTopic('suggestions', (message) => {
     if (message.event === 'created') setPending((count) => count + 1);

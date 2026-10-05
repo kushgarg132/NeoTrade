@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Sheet, Field, Money, NetLine, Statement, Row, Cell, Empty, Ruling } from '../doc/Doc';
 import MonthGrid from '../journal/MonthGrid';
 import api, { endpoints } from '../../utils/api';
-import { useTopic } from '../../hooks/useStream';
+import { useReconnect, useTopic } from '../../hooks/useStream';
 import { monthKey, shiftMonth, monthLabel, todayIst } from '../../utils/months';
 import { formatPercent, formatSignedPercent, formatCurrency, formatNoteDate } from '../../utils/formatters';
 
@@ -38,6 +38,7 @@ const Scorecard = ({ mode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
   useTopic('trades', load);
+  useReconnect(load);
 
   const byDay = useMemo(
     () => Object.fromEntries((card?.days || []).map((d) => [d.day, { pnl: d.pnl, trips: d.trades }])),

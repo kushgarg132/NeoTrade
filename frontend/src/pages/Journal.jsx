@@ -7,7 +7,7 @@ import { MINE_TABS } from '../components/layout/sections';
 import GuardrailAlerts from '../components/journal/GuardrailAlerts';
 import BrokerPnl from '../components/dashboard/BrokerPnl';
 import TradeLedger from '../components/dashboard/TradeLedger';
-import { useTopic } from '../hooks/useStream';
+import { useReconnect, useTopic } from '../hooks/useStream';
 import MonthGrid from '../components/journal/MonthGrid';
 import LearningSheet from '../components/journal/LearningSheet';
 import { monthKey, shiftMonth, monthLabel, todayIst } from '../utils/months';
@@ -187,6 +187,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
     loadLiveTrades();
   }, [view]);
   useTopic('trades', loadLiveTrades);
+  useReconnect(loadLiveTrades);
 
   const run = (request, describe) => {
     setBusy(true);

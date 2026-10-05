@@ -18,7 +18,7 @@ import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import { stockPath } from '../utils/stocks';
-import { useTopic } from '../hooks/useStream';
+import { useReconnect, useTopic } from '../hooks/useStream';
 import {
   formatCurrency,
   formatQuantity,
@@ -99,6 +99,10 @@ const Portfolio = () => {
   useTopic('positions', (message) => setPositions(paperPositions(message.data)));
   useTopic('pnl', (message) => message.data?.paper && setPnl(message.data.paper));
   useTopic('trades', load);
+  useReconnect(() => {
+    load();
+    loadOpenOrders();
+  });
 
   const curve = useMemo(() => {
     const closed = [...trades]

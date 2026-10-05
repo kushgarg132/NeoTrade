@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Sheet, Ruling } from '../doc/Doc';
 import StrategyRow, { GO_LIVE_RULE, StrategyFold } from './StrategyRow';
 import api, { endpoints } from '../../utils/api';
-import { useTopic } from '../../hooks/useStream';
+import { useReconnect, useTopic } from '../../hooks/useStream';
 import { readiness, shortStatus } from '../../utils/promotion';
 
 /**
@@ -38,6 +38,7 @@ const StrategyReadiness = ({ liveStrategies }) => {
   }, []);
 
   useTopic('trades', loadPromotion);
+  useReconnect(loadPromotion);
 
   const detail = (name) => {
     if (promotion) return readiness(promotion[name], liveStrategies.includes(name));

@@ -9,7 +9,7 @@ import WaitingCards from '../components/decisions/WaitingCards';
 import AiToday from '../components/decisions/AiToday';
 import { Button } from '../components/common/Button';
 import api, { endpoints } from '../utils/api';
-import { useTopic } from '../hooks/useStream';
+import { useReconnect, useTopic } from '../hooks/useStream';
 
 /**
  * The decisions inbox, for every account: engine proposals (approve on paper
@@ -62,6 +62,7 @@ const Decisions = () => {
       .catch(() => setHasMine(false));
   }, []);
 
+  useReconnect(load);
   useTopic('suggestions', (message) => {
     if (message.event === 'created') {
       setItems((list) => [message.data, ...list]);

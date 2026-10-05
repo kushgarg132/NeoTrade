@@ -7,7 +7,7 @@ import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import api, { endpoints } from '../../utils/api';
 import { cn } from '../../utils/cn';
-import { useTopic } from '../../hooks/useStream';
+import { useReconnect, useTopic } from '../../hooks/useStream';
 import { formatClock, formatTimeAgo } from '../../utils/formatters';
 
 /**
@@ -72,6 +72,11 @@ const EngineNow = ({ prefs }) => {
     loadLongterm();
   });
   useTopic('suggestions', loadLongterm);
+  useReconnect(() => {
+    loadRuns();
+    loadKillSwitch();
+    loadLongterm();
+  });
 
   // Intraday and any leftover long-term run can be live at once; each gets
   // its own line and its own Stop.

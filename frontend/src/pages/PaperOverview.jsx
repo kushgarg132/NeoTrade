@@ -9,7 +9,7 @@ import Scorecard from '../components/paper/Scorecard';
 import EngineNow from '../components/paper/EngineNow';
 import StrategyReadiness from '../components/paper/StrategyReadiness';
 import api, { endpoints } from '../utils/api';
-import { useTopic } from '../hooks/useStream';
+import { useReconnect, useTopic } from '../hooks/useStream';
 import { cn } from '../utils/cn';
 
 /** The whole paper book, or one engine's share of it. */
@@ -53,12 +53,14 @@ const PaperOverview = () => {
 
   // Today's P&L sits in "Now", above the book filter: it is always the whole
   // paper book, never one engine's share picked in the collapsed record.
-  useEffect(() => {
+  const loadPnl = () =>
     api
       .get(endpoints.analytics.pnl('paper'))
       .then((res) => setPnl(res.data))
       .catch(() => setPnl(null))
       .finally(() => setPnlLoading(false));
+  useEffect(() => {
+    loadPnl();
   }, []);
 
   useEffect(() => {
@@ -76,16 +78,23 @@ const PaperOverview = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, recordOpen]);
 
-  useEffect(() => {
+  const loadPending = () =>
     api
       .get(endpoints.suggestions.list({ status: 'PENDING' }))
       .then((res) => setPending(res.data))
       .catch(() => setPending([]));
+  useEffect(() => {
+    loadPending();
   }, []);
 
   // The pushed figures are the whole book; one engine's share is refetched.
   useTopic('pnl', (message) => message.data?.paper && setPnl(message.data.paper));
   useTopic('trades', () => recordOpen && loadTrades());
+  useReconnect(() => {
+    loadPnl();
+    loadPending();
+    if (recordOpen) loadTrades();
+  });
   useTopic('suggestions', (message) => {
     if (message.event === 'created') setPending((list) => [message.data, ...list]);
     if (message.event === 'decided') {

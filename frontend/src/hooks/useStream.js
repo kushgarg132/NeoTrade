@@ -17,6 +17,18 @@ export function useTopic(topic, handler) {
 }
 
 /**
+ * Re-fetch after the socket reconnects: pushes sent while it was down are
+ * gone, so a page that only listens would show stale figures as live.
+ */
+export function useReconnect(refetch) {
+  const latest = useRef(refetch);
+  useLayoutEffect(() => {
+    latest.current = refetch;
+  });
+  useEffect(() => stream.onReconnect(() => latest.current()), []);
+}
+
+/**
  * Whether what the user is reading is actually current.
  *
  * PRODUCT.md is explicit that a stale number presented as live is this app's
