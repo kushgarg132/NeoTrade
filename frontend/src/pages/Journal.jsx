@@ -13,7 +13,8 @@ import LearningSheet from '../components/journal/LearningSheet';
 import { monthKey, shiftMonth, monthLabel, todayIst } from '../utils/months';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
-import { AccountSwitch, useAccount } from '../components/common/AccountSwitch';
+import { AccountSwitch } from '../components/common/AccountSwitch';
+import { useAccount } from '../hooks/useAccount';
 import api, { endpoints } from '../utils/api';
 import {
   formatCurrency,
@@ -155,10 +156,12 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
   const fileInput = useRef(null);
   const accountState = useAccount(lockedAccount);
   const { account } = accountState;
-  const load = () =>
+  // `stale` is true once the account changed: a late reply for the old one is dropped.
+  const load = (stale = () => false) =>
     api
       .get(endpoints.journal.get, { params: { account } })
       .then((res) => {
+        if (stale()) return;
         setData(res.data);
         setError(null);
         setMonth((current) => {
@@ -170,7 +173,12 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
       .catch((err) => setError(err?.response?.data?.detail || 'Could not load the journal'));
 
   useEffect(() => {
-    load();
+    if (!account) return undefined;
+    let gone = false;
+    load(() => gone);
+    return () => {
+      gone = true;
+    };
   }, [account]);
 
   // Real orders a live strategy placed; Mine → Trades only, and only when

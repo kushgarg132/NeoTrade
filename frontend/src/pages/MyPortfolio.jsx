@@ -4,7 +4,8 @@ import { Loader2, RefreshCw, ChevronDown } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
 import { MINE_TABS } from '../components/layout/sections';
-import { AccountSwitch, useAccount } from '../components/common/AccountSwitch';
+import { AccountSwitch } from '../components/common/AccountSwitch';
+import { useAccount } from '../hooks/useAccount';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, Scrip, Stamp, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
 import Markdown from '../components/common/Markdown';
@@ -395,14 +396,20 @@ const MyPortfolio = ({ lockedAccount = null }) => {
 
   const accountState = useAccount(lockedAccount);
   const { account } = accountState;
-  const loadSnapshot = () =>
+  // `stale` is true once the account changed: a late reply for the old one is dropped.
+  const loadSnapshot = (stale = () => false) =>
     api
       .get(endpoints.portfolio.get, { params: { account } })
-      .then((res) => setSnapshot(res.data))
-      .catch(() => setSnapshot(null))
-      .finally(() => setLoading(false));
+      .then((res) => !stale() && setSnapshot(res.data))
+      .catch(() => !stale() && setSnapshot(null))
+      .finally(() => !stale() && setLoading(false));
   useEffect(() => {
-    loadSnapshot();
+    if (!account) return undefined;
+    let gone = false;
+    loadSnapshot(() => gone);
+    return () => {
+      gone = true;
+    };
   }, [account]);
 
   const refresh = async () => {
