@@ -95,3 +95,105 @@ def target_gaps(holdings: list[dict], targets: dict) -> tuple[dict[str, float], 
     weights = target_weights(names, targets, total)
     gaps = {n["symbol"]: weights.get(n["symbol"], 0.0) - (n["value"] / total if total else 0.0) for n in names}
     return gaps, total, excluded
+
+
+MAX_CHARGE_PCT = 1.0  # a trade whose charges exceed this share of its value is not worth making
+LONG_TERM_DAYS = 365
+STCG_RATE, LTCG_RATE = 0.20, 0.125
+
+
+def charges(side: str, quantity: float, price: float) -> float:
+    from backend.core.models import Side
+    from backend.engine.execution.costs import calculate_indian_costs
+
+    return calculate_indian_costs(price, quantity, Side(side), "CNC")
+
+
+def sell_tax(quantity: float, price: float, lots: list[tuple], today) -> dict:
+    """Gain on selling `quantity` at `price`, oldest journal lot first, split
+    short/long term. Quantity the journal cannot date is `unknown_qty`."""
+    left, short_gain, long_gain = float(quantity), 0.0, 0.0
+    for day, lot_qty, lot_price in lots:
+        if left <= EPS:
+            break
+        take = min(left, lot_qty)
+        gain = (price - lot_price) * take
+        if (today - day).days > LONG_TERM_DAYS:
+            long_gain += gain
+        else:
+            short_gain += gain
+        left -= take
+    unknown = max(0.0, left)
+    est = None if unknown >= quantity - EPS else STCG_RATE * max(short_gain, 0) + LTCG_RATE * max(long_gain, 0)
+    return {"short_gain": round(short_gain, 2), "long_gain": round(long_gain, 2),
+            "unknown_qty": unknown, "est_tax": round(est, 2) if est is not None else None}
+
+
+def plan_rebalance(holdings: list[dict], candidates: list[dict], targets: dict, new_money: float,
+                   lots: dict, today) -> dict:
+    names, excluded = universe(holdings)
+    held = {n["symbol"] for n in names}
+    for c in candidates:
+        if c["symbol"] not in held and c.get("price") and c["price"] > 0:
+            names.append({"symbol": c["symbol"], "kind": c.get("kind", "STOCK"), "sector": c.get("sector"),
+                          "quantity": 0.0, "price": float(c["price"]), "value": 0.0})
+    total = sum(n["value"] for n in names) + new_money
+    weights = target_weights(names, targets, total) if total > 0 else {}
+    skipped, sells, buys = [], [], []
+
+    def row(n, side, quantity):
+        value = quantity * n["price"]
+        after = n["value"] + (value if side == "BUY" else -value)
+        return {"symbol": n["symbol"], "side": side, "quantity": int(quantity), "price": n["price"], "value": round(value, 2),
+                "charges": charges(side, quantity, n["price"]),
+                "weight_now": n["value"] / total * 100, "weight_after": after / total * 100,
+                "target_weight": weights.get(n["symbol"], 0.0) * 100, "tax": None}
+
+    for n in names:
+        delta = weights.get(n["symbol"], 0.0) * total - n["value"]
+        if delta < 0:
+            quantity = min(int(-delta // n["price"]), int(n["quantity"]))
+            if quantity <= 0:
+                continue
+            trade = row(n, "SELL", quantity)
+            if trade["charges"] > trade["value"] * MAX_CHARGE_PCT / 100:
+                skipped.append({"symbol": n["symbol"], "reason": "charges above 1% of the trade"})
+                continue
+            trade["tax"] = sell_tax(quantity, n["price"], lots.get(n["symbol"], []), today)
+            sells.append(trade)
+        elif delta > 0:
+            quantity = int(delta // n["price"])
+            if quantity <= 0:
+                skipped.append({"symbol": n["symbol"], "reason": "one share costs more than its slot"})
+                continue
+            buys.append((n, quantity))
+
+    cash = new_money + sum(t["value"] - t["charges"] for t in sells)
+
+    def cost(plan):
+        return sum(q * n["price"] + charges("BUY", q, n["price"]) for n, q in plan if q > 0)
+
+    wanted = cost(buys)
+    if wanted > cash and wanted > 0:
+        factor = max(cash, 0) / wanted
+        buys = [(n, int(q * factor)) for n, q in buys]
+        while buys and cost(buys) > cash:  # charges are not linear: trim the largest buy a share at a time
+            i = max(range(len(buys)), key=lambda k: buys[k][1] * buys[k][0]["price"])
+            if buys[i][1] <= 0:
+                break
+            buys[i] = (buys[i][0], buys[i][1] - 1)
+
+    bought = []
+    for n, quantity in buys:
+        if quantity <= 0:
+            continue  # scaled to nothing: the cash went to the others
+        trade = row(n, "BUY", quantity)
+        if trade["charges"] > trade["value"] * MAX_CHARGE_PCT / 100:
+            skipped.append({"symbol": n["symbol"], "reason": "charges above 1% of the trade"})
+            continue
+        bought.append(trade)
+
+    trades = sorted(sells, key=lambda t: -t["value"]) + sorted(bought, key=lambda t: -t["value"])
+    spent = sum(t["value"] + t["charges"] for t in bought)
+    return {"total": round(total, 2), "cash_left": round(cash - spent, 2), "trades": trades,
+            "skipped": skipped, "excluded": excluded}
