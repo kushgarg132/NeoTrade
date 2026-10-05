@@ -57,19 +57,3 @@ async def fetch_price_history_logic(symbol: str, period: str = "1mo", interval: 
 
     logger.info(f"Price history fetch complete for {instrument.tradingsymbol}. Returning {len(candles)} candles")
     return candles, "yfinance"
-
-@router.get("/price_history/test")
-async def test_fetcher():
-    """Test endpoint to verify data source connectivity"""
-    import yfinance as yf
-    results = {}
-
-    # Test yfinance
-    try:
-        ticker = yf.Ticker("AAPL")
-        hist = ticker.history(period="1d")
-        results["yfinance"] = {"status": "ok", "symbol": "AAPL", "last_price": float(hist['Close'].iloc[-1])}
-    except Exception as e:
-        results["yfinance"] = {"status": "error", "detail": str(e)}
-
-    return results
