@@ -100,7 +100,9 @@ async def test_backtest_result_shows_exactly_one_trade():
         start=candles[0].timestamp, end=candles[-1].timestamp, timeframe=TIMEFRAME,
     )
 
-    assert result.total_trades == 1
+    # One opening fill and no close: zero completed round trips (a fill is
+    # not a trade), one recorded fill.
+    assert result.total_trades == 0
     assert len(result.trades) == 1
     trade = result.trades[0]
     assert trade["symbol"] == SYMBOL
@@ -109,8 +111,9 @@ async def test_backtest_result_shows_exactly_one_trade():
     # risk_pct=0.85% of the default 1,000,000 account / risk_per_share=10
     # (entry 100 - stop_hint 90) = 850 whole shares. See runner.size_intents.
     assert trade["quantity"] == 850.0
-    # Filled at the first bar's close plus the backtest's adverse slippage.
-    assert trade["price"] == pytest.approx(candles[0].close * (1 + BACKTEST_SLIPPAGE_BPS / 10_000))
+    # Filled at the NEXT bar's open (the signal bar is only known once it has
+    # closed) plus the backtest's adverse slippage.
+    assert trade["price"] == pytest.approx(candles[1].open * (1 + BACKTEST_SLIPPAGE_BPS / 10_000))
 
 
 @pytest.mark.asyncio
@@ -218,15 +221,17 @@ async def _levels_backtest(closes: list[float], stop: float, target: float):
     )
 
 
-async def test_a_long_term_buy_is_sold_at_the_close_that_crosses_its_target():
+async def test_a_long_term_buy_is_sold_at_its_target_when_a_bar_reaches_it():
     result = await _levels_backtest([100, 101, 102, 104, 106, 108], stop=90.0, target=103.0)
     sides = [(t["side"], t["timestamp"][:10]) for t in result.trades]
-    assert sides == [("BUY", "2024-01-01"), ("SELL", "2024-01-04")]  # 104 >= 103, sold once
+    # bought at day 2's open; day 4's high (104) reaches 103: sold once, at 103
+    assert sides == [("BUY", "2024-01-02"), ("SELL", "2024-01-04")]
+    assert result.trades[1]["price"] == pytest.approx(103 * (1 - BACKTEST_SLIPPAGE_BPS / 10_000))
     assert result.trades[1]["gross_pnl"] > 0
 
 
-async def test_a_long_term_buy_is_sold_at_the_close_that_breaks_its_stop():
+async def test_a_long_term_buy_is_sold_at_its_stop_when_a_bar_breaks_it():
     result = await _levels_backtest([100, 98, 95, 89, 85], stop=90.0, target=120.0)
     assert [t["side"] for t in result.trades] == ["BUY", "SELL"]
-    assert result.trades[1]["price"] == pytest.approx(89 * (1 - BACKTEST_SLIPPAGE_BPS / 10_000))
+    assert result.trades[1]["price"] == pytest.approx(90 * (1 - BACKTEST_SLIPPAGE_BPS / 10_000))  # the stop level
     assert result.trades[1]["gross_pnl"] < 0

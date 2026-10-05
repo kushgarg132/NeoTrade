@@ -26,6 +26,18 @@ logger = logging.getLogger(__name__)
 OPTIONS_STRATEGIES = {"orb_options"}
 
 
+async def backtest_account(db) -> dict:
+    """The account the gate and the retune test against: the admin's own
+    sizing (the gate is admin-triggered and shared), so backtests size like
+    the account that trades -- not an uncapped Rs 10 lakh one. Defaults when
+    there is no admin."""
+    from backend.prefs import PrefsStore
+
+    admin = await db["users"].find_one({"role": "admin"}, {"id": 1})
+    prefs = await PrefsStore(db).get(admin["id"] if admin else "__defaults__")
+    return {key: float(prefs[key]) for key in ("account_size", "max_exposure", "per_trade_cap")}
+
+
 async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> BacktestResult:
     master = InstrumentMaster(db)
     options = strategy_name in OPTIONS_STRATEGIES
@@ -58,6 +70,7 @@ async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> 
         strategies, provider, instruments, start=now - timedelta(days=365), end=now,
         timeframe=strategies[0].spec.timeframe,
         model_options=ModelOptions(lot_sizes) if options else None,
+        **await backtest_account(db),
     )
     await BacktestGateStore(db).record(strategy_name, result)
     logger.info(

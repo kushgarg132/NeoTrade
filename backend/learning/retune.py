@@ -148,6 +148,8 @@ async def run_all(db, provider, now: datetime) -> list[dict]:
     symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
     memo = _Memo(provider)
     accepted = await current_params(db)
+    from backend.risk.gate_backtest import backtest_account
+    account = await backtest_account(db)  # size like the account that trades
     docs = []
     for strategy in build_default_strategies(universe=universe, symbol_for_token=symbol_for_token, params=accepted):
         timeframe = strategy.spec.timeframe
@@ -157,7 +159,7 @@ async def run_all(db, provider, now: datetime) -> list[dict]:
 
         async def backtest(params, start, end, cls=cls, timeframe=timeframe):
             return await run_backtest([cls(universe, symbol_for_token, params)], memo, instruments,
-                                      start=start, end=end, timeframe=timeframe)
+                                      start=start, end=end, timeframe=timeframe, **account)
 
         start = now - timedelta(days=WINDOW_DAYS[timeframe])
         split = start + (now - start) * TRAIN_SHARE

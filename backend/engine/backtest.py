@@ -39,6 +39,7 @@ async def run_backtest(
     account_size: float = 1_000_000.0,
     max_exposure: float = 1_000_000.0,
     model_options: ModelOptions | None = None,
+    per_trade_cap: float | None = None,
 ) -> BacktestResult:
     """`model_options` prices option contracts for an options strategy
     (backend/options/backtest.py); without it an option intent never sizes."""
@@ -46,23 +47,26 @@ async def run_backtest(
     names = ",".join(s.spec.name for s in strategies)
     began = time.monotonic()
     logger.info("backtest %s: %d instruments, %s..%s, %s", names, len(instruments), start, end, timeframe)
-    execution = SimulatedExecutionClient(slippage_bps=BACKTEST_SLIPPAGE_BPS)
+    # Next-bar-open fills: the signal bar is only known once it has closed.
+    execution = SimulatedExecutionClient(slippage_bps=BACKTEST_SLIPPAGE_BPS, fill_on_next_open=True)
     portfolio = Portfolio()
     clock = SimClock()
 
     bar_timestamps: list[datetime] = []
     original_feed_iter = feed.__aiter__
 
-    # A long-term buy is held until a close crosses its stop or target and
-    # is then sold at that close, as paper does (backend/suggestions/exits.py).
-    # Without this nothing ever sells it and its P&L never shows.
+    # Every equity position opened with a stop/target exits when a later
+    # bar's low/high crosses it, at that level (the stop first when both
+    # cross -- the conservative reading of an OHLC bar). It used to cover
+    # long-term buys only, on the close, so intraday stops were never tested.
     levels: dict[str, tuple] = {}
     original_submit = execution.submit
 
     async def submit_noting_levels(order: Order) -> str:
         context = order.context or {}
-        if order.product == "CNC" and order.side == Side.BUY and context.get("stop") is not None:
-            levels[order.symbol] = (context["stop"], context.get("target"))
+        held = portfolio.positions.get(order.symbol)
+        if order.contract is None and context.get("stop") is not None and (held is None or held.quantity == 0):
+            levels[order.symbol] = (order.side, context["stop"], context.get("target"), order.product)
         return await original_submit(order)
 
     execution.submit = submit_noting_levels  # type: ignore[method-assign]
@@ -70,16 +74,21 @@ async def run_backtest(
     async def exit_on_levels(bar) -> None:
         symbol = feed.symbol_for_token.get(bar.instrument_token)
         position = portfolio.positions.get(symbol)
-        if symbol not in levels or position is None or position.quantity <= 0:
+        if symbol not in levels or position is None or position.quantity == 0:
             return
-        if breach(bar.close, *levels[symbol]) is None:
+        side, stop, target, product = levels[symbol]
+        long = position.quantity > 0
+        if long:
+            level = stop if bar.low <= stop else (target if target is not None and bar.high >= target else None)
+        else:
+            level = stop if bar.high >= stop else (target if target is not None and bar.low <= target else None)
+        if level is None:
             return
         del levels[symbol]
-        execution.mark(symbol, bar.close, bar.timestamp)
-        await original_submit(Order(
-            id=str(uuid.uuid4()), symbol=symbol, side=Side.SELL, quantity=position.quantity,
-            order_type="MARKET", limit_price=None, product="CNC",
-        ))
+        await execution.fill_now(Order(
+            id=str(uuid.uuid4()), symbol=symbol, side=Side.SELL if long else Side.BUY,
+            quantity=abs(position.quantity), order_type="MARKET", limit_price=None, product=product,
+        ), level, bar.timestamp)
 
     async def timestamped_bars():
         # BacktestResult.start_date/end_date report the *actual* span of
@@ -99,6 +108,10 @@ async def run_backtest(
             yield bar
 
     trades: list[dict] = []
+    # A round trip: from the fill that opens a position to the one that
+    # flattens it -- what "a trade" means; fills are not trades.
+    open_pnl: dict[str, float] = {}
+    round_trips: list[float] = []
     original_fills = execution.fills
 
     async def recording_fills():
@@ -113,6 +126,9 @@ async def run_backtest(
             yield fill  # runner calls portfolio.apply(fill) here
             post = portfolio.positions[fill.symbol]
             gross = post.realized_pnl - pre_realized
+            open_pnl[fill.symbol] = open_pnl.get(fill.symbol, 0.0) + gross - fill.costs
+            if post.quantity == 0:
+                round_trips.append(open_pnl.pop(fill.symbol))
             trades.append({
                 "order_id": fill.order_id,
                 "symbol": fill.symbol,
@@ -139,6 +155,7 @@ async def run_backtest(
         symbol_for_token=feed.symbol_for_token,
         account_size=account_size,
         max_exposure=max_exposure,
+        per_trade_cap=per_trade_cap,
         master=model_options,
         premium_source=model_options,
     )
@@ -148,14 +165,10 @@ async def run_backtest(
     actual_start = min(bar_timestamps) if bar_timestamps else start
     actual_end = max(bar_timestamps) if bar_timestamps else start
 
-    total_trades = len(trades)
+    total_trades = len(round_trips)
     total_pnl = sum(t["realized_pnl"] for t in trades)
     closed_trades = [t for t in trades if t["realized_pnl"] != 0.0]
-    win_rate = (
-        sum(1 for t in closed_trades if t["realized_pnl"] > 0) / len(closed_trades)
-        if closed_trades
-        else 0.0
-    )
+    win_rate = sum(1 for pnl in round_trips if pnl > 0) / len(round_trips) if round_trips else 0.0
     gross_profit = sum(t["realized_pnl"] for t in closed_trades if t["realized_pnl"] > 0)
     gross_loss = -sum(t["realized_pnl"] for t in closed_trades if t["realized_pnl"] < 0)
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else 0.0
