@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
 import { formatCurrency, formatQuantity, formatDateTime } from '../utils/formatters';
 import { Avatar } from '../components/common/Avatar';
+import { usePendingCount } from '../context/pendingContext';
 
 /**
  * Standing instructions for the real account: who the broker is, the limits
@@ -1349,6 +1350,25 @@ const ProfileRow = () => {
   );
 };
 
+/** Practice -- the strategy engine -- lives under More: its decisions, engine, book and setup. */
+const PracticeRow = () => {
+  const pending = usePendingCount();
+  return (
+    <Link to="/practice/decisions" className="flex items-center gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors">
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-semibold">
+          Practice
+          {pending > 0 && (
+            <span className="ml-1.5 figure-md px-1 text-[0.5625rem] leading-4 bg-[var(--stamp)] text-[var(--paper)]">{pending}</span>
+          )}
+        </span>
+        <span className="block doc-meta normal-case truncate">The strategy engine: decisions, engine, book and setup</span>
+      </span>
+      <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
+    </Link>
+  );
+};
+
 const LEGACY_TABS = { broker: 'accounts', guardrails: 'safety', portfolio: 'safety' };
 
 const Settings = () => {
@@ -1372,6 +1392,7 @@ const Settings = () => {
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
         <ProfileRow />
+        <PracticeRow />
         <div>
           <Tabs tabs={tabs} active={tab} onSelect={setTab} label="Settings sections" />
           <div className="pt-3 sm:pt-4 space-y-3 sm:space-y-4">
@@ -1386,10 +1407,10 @@ const Settings = () => {
               <>
                 <ModelSheet isAdmin={isAdmin} />
                 <Link
-                  to="/ai/limits"
+                  to="/ai/autopilot"
                   className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors"
                 >
-                  <span className="text-sm"><span className="field-label">Autopilot</span> switch and limits are under AI → Limits</span>
+                  <span className="text-sm"><span className="field-label">Autopilot</span> switch and limits are under AI → Autopilot</span>
                   <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
                 </Link>
                 {isAdmin && <UsageSheet />}

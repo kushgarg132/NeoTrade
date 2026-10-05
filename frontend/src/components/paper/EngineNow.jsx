@@ -223,13 +223,13 @@ const EngineNow = ({ prefs }) => {
           actions={
             <Button variant="secondary" size="sm" onClick={scanNow} disabled={scan === 'starting'}>
               {scan === 'starting' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-              Scan now
+              Long-term scan
             </Button>
           }
         >
           <p className={cn('text-sm text-[var(--ink)]', !aboutLongterm && 'line-clamp-2')}>
             Scans a year of daily prices after each close (16:00 IST) and files what it finds under{' '}
-            <Link to="/ai/decisions" className="underline underline-offset-2">Decisions</Link>.
+            <Link to="/practice/decisions" className="underline underline-offset-2">Decisions</Link>.
             {prefs?.auto_paper_longterm
               ? ' At 09:20 on the first trading day of each month the factor portfolio rebalances on paper; in session, approved positions are sold at their stop or target, checked every 15 minutes.'
               : ' Turn on the daily long-term engine in Settings to close approved positions at their stop or target.'}

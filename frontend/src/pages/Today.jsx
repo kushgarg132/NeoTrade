@@ -45,7 +45,7 @@ const StatusStrip = ({ data }) => {
       })}
       {(armed?.autopilot || armed?.strategies?.length > 0) && (
         // Goes where the armed thing is switched off: the autopilot under AI, strategies in Practice setup.
-        <Chip tone="bad" to={armed.autopilot ? '/ai/limits' : '/ai/practice/settings'}>
+        <Chip tone="bad" to={armed.autopilot ? '/ai/autopilot' : '/practice/setup'}>
           ▲ LIVE armed{armed.autopilot ? ' · autopilot' : ''}{armed.strategies?.length ? ` · ${armed.strategies.length} strateg${armed.strategies.length === 1 ? 'y' : 'ies'}` : ''}
         </Chip>
       )}
@@ -87,7 +87,7 @@ const NeedsYou = ({ items }) => (
     title="Needs you"
     meta={items.length ? String(items.length) : undefined}
     actions={
-      <Link to="/ai/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
+      <Link to="/practice/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
         All decisions ›
       </Link>
     }
@@ -121,7 +121,7 @@ const NeedsYou = ({ items }) => (
   </Sheet>
 );
 
-const PnlSplit = ({ pnl, market, loadedAt, now }) => (
+const PnlSplit = ({ pnl, aiMode, market, loadedAt, now }) => (
   <Sheet title="Today" meta={market?.open
     ? `updated ${Math.max(0, Math.round((now - loadedAt) / 1000))}s ago`
     : `Market closed · as of ${formatDateTime(market?.as_of)}`}>
@@ -134,7 +134,7 @@ const PnlSplit = ({ pnl, market, loadedAt, now }) => (
           <Money value={pnl.mine} size="lg" />
         </Link>
         <Link to="/ai" className="block p-2 -m-2 hover:bg-[var(--paper-sunk)]">
-          <p className="field-label mb-1"><MoneyBadge kind="ai" /> · closed</p>
+          <p className="field-label mb-1"><MoneyBadge kind="ai" mode={aiMode} /> · closed</p>
           <Money value={pnl.ai} size="lg" />
         </Link>
       </div>
@@ -218,7 +218,7 @@ const Today = () => {
         <StatusStrip data={data} />
         <SetupChecklist setup={data.setup} />
         <NeedsYou items={data.needs_you || []} />
-        <PnlSplit pnl={data.pnl_today} market={data.market} loadedAt={loadedAt} now={now} />
+        <PnlSplit pnl={data.pnl_today} aiMode={data.autopilot ? (data.autopilot.live ? 'live' : 'paper') : undefined} market={data.market} loadedAt={loadedAt} now={now} />
         <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />
         <Link to="/research" className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)]">
           <span className="text-sm"><span className="field-label">Markets</span> · NIFTY, BANK NIFTY, movers and news</span>

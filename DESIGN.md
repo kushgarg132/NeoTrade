@@ -312,16 +312,17 @@ system is static or a plain colour/opacity transition.
   Architecture) at its top on a phone.
 - **Hide amounts** (eye button in the masthead, `hooks/usePrivacy.js`): blurs every `figure-md` /
   `figure-lg` inside a `.private` region -- the user's own money: Portfolio, the statement's portfolio
-  glance and broker P&L, live engine orders, Journal, everything under Paper trading. Amounts and
+  glance and broker P&L, live engine orders, Journal, everything under Practice. Amounts and
   percentages both; market data, labels and stock names stay readable. Remembered per device on
   `<html data-private>`. New account surfaces go inside a `.private` region.
 - Both share one label voice: Field Label style, never body text.
-- **Real money and paper never share a page.** The sidebar tears (a `perforated` rule) between
-  the real-money sections and **Paper trading**. Everything under `/paper` prints inside
-  `PaperShell` (`components/paper/PaperShell.jsx`): a dashed stamp-violet band on `stamp-soft`
-  that reads "Paper trading · practice money, not your broker account", carrying the section's
-  own five tabs (Overview, Decisions, Holdings, Engine, Settings; Decide/Book/Setup on a phone,
-in tighter lettering so all five fit a 360px screen). The dashed
+- **Real money and practice never share a page.** Practice (the strategy engine, under More)
+  is one word for the engine's book; "paper" names the mode only. Practice's Engine, Book and
+  Setup pages print inside `PaperShell` (`components/paper/PaperShell.jsx`): the Practice tabs
+  (Decisions · Engine · Book · Setup, one row, from `PRACTICE_TABS` in
+  `components/layout/sections.js`) above a dashed stamp-violet band on `stamp-soft` that reads
+  "Practice · practice money, not your broker account". Decisions shares the tabs but not the
+  band, since an approval there can be real money. The dashed
   border is the specimen copy's mark — solid rules belong to the real statement.
 - **Track record** (`components/paper/Scorecard.jsx`) leads the Paper overview: eight fields
   (trading days, trades and win rate, profit factor, worst drawdown, best and worst day,

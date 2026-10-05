@@ -2,36 +2,26 @@ import React, { useEffect, useState } from 'react';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
-import { AI_TABS } from '../components/layout/sections';
+import { PRACTICE_TABS } from '../components/layout/sections';
 import SuggestionRecord from '../components/suggestions/SuggestionRecord';
-import { Sheet, Empty, Ruling, Tabs } from '../components/doc/Doc';
+import { Sheet, Empty, Ruling } from '../components/doc/Doc';
 import WaitingCards from '../components/decisions/WaitingCards';
-import AiToday from '../components/decisions/AiToday';
 import { Button } from '../components/common/Button';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 
 /**
- * The decisions inbox, for every account: engine proposals (approve on paper
- * or with real money on the user's own account), cards from the chat or the
- * order ticket that wait for a Confirm, and -- read only -- what the AI
- * account's autopilot did today. Nothing here can trade the AI account.
- *
+ * Practice -> Decisions: engine proposals (approve on paper or with real money
+ * on the user's own account) and cards from the chat or the order ticket that
+ * wait for a Confirm. Nothing here can trade the AI account; what its
+ * autopilot did lives under AI.
  *
  * Long-term proposals only: each waits for an explicit approve or decline.
  * Intraday signals execute themselves — nobody can approve a five-minute
  * breakout in time for it to still be one — so they are not listed here.
  */
 
-const ACCOUNTS = [
-  { id: 'all', label: 'All' },
-  { id: 'paper', label: 'Paper' },
-  { id: 'mine', label: 'Mine' },
-  { id: 'ai', label: 'AI' },
-];
-
 const Decisions = () => {
-  const [account, setAccount] = useState('all');
   // null until preferences load: no real-money button before we know.
   const [hasMine, setHasMine] = useState(null);
   const [showAll, setShowAll] = useState(false);
@@ -109,18 +99,9 @@ const Decisions = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4">
-        <SectionTabs tabs={AI_TABS} label="AI account" />
-        <Tabs
-          tabs={ACCOUNTS}
-          active={account}
-          onSelect={setAccount}
-          label="Which account"
-        />
+        <SectionTabs tabs={PRACTICE_TABS} label="Practice" />
+        <WaitingCards />
 
-        {account !== 'ai' && <WaitingCards venue={account === 'all' ? null : account === 'mine' ? 'live' : 'paper'} />}
-
-        {account !== 'ai' && (
-        <>
         <Sheet
           title="Proposals"
           meta={`${inMode.filter((i) => i.status === 'PENDING').length} awaiting`}
@@ -131,7 +112,7 @@ const Decisions = () => {
               ) : (
                 <RefreshCw className="w-3.5 h-3.5" />
               )}
-              <span className="hidden sm:inline">Scan now</span>
+              <span className="hidden sm:inline">Long-term scan</span>
               <span className="sm:hidden">Scan</span>
             </Button>
           }
@@ -215,10 +196,6 @@ const Decisions = () => {
             )}
           </div>
         )}
-        </>
-        )}
-
-        {(account === 'all' || account === 'ai') && <AiToday />}
       </div>
     </Layout>
   );

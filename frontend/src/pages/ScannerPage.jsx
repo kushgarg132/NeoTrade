@@ -70,7 +70,7 @@ const ScannerPage = () => {
       <div className="space-y-4">
         <SectionTabs tabs={RESEARCH_TABS} label="Research" />
         <Sheet
-          title="Scanner"
+          title="Bullish scan"
           meta={meta}
           actions={
             <Button variant="primary" size="sm" onClick={run} disabled={loading}>

@@ -51,7 +51,7 @@ const StrategyReadiness = ({ liveStrategies }) => {
       title="Is it working"
       meta="Paper record per strategy"
       actions={
-        <Link to="/ai/practice/settings" className="field-label text-[var(--stamp)] hover:underline">
+        <Link to="/practice/setup" className="field-label text-[var(--stamp)] hover:underline">
           Change in Settings ›
         </Link>
       }
