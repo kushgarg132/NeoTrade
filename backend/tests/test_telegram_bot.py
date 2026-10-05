@@ -155,6 +155,31 @@ async def test_callback_uses_existing_confirm_path(monkeypatch):
     send.assert_not_awaited()
 
 
+async def test_live_card_asks_for_a_second_tap_then_sends(monkeypatch):
+    """Real money takes two taps in Telegram too: the first re-arms the card
+    with a Send button, the second confirms with second_tap."""
+    db = AsyncMongoMockClient()["test_db"]
+    confirmed = AsyncMock(side_effect=[
+        {"status": "NEEDS_SECOND_TAP", "result": "Real money. Tap Confirm again to send it."},
+        {"status": "CONFIRMED", "result": "Live BUY INFY sent."},
+    ])
+    monkeypatch.setattr(telegram_bot, "confirm", confirmed)
+    monkeypatch.setattr(telegram_bot.telegram, "answer_callback", AsyncMock())
+    edit = AsyncMock()
+    monkeypatch.setattr(telegram_bot.telegram, "edit_html", edit)
+    card = {"message_id": 7, "text": "Buy 10 INFY with real money"}
+
+    await telegram_bot._callback(db, None, "alice", 42, "token", {"id": "cb1", "data": "nt:confirm:a1", "message": card})
+    assert confirmed.await_args_list[0].kwargs.get("second_tap", False) is False
+    text, markup = edit.await_args.args[2], edit.await_args.kwargs["reply_markup"]
+    assert "✅" not in text and "Real money" in text
+    assert markup["inline_keyboard"][0][0]["callback_data"] == "nt:confirm2:a1"
+
+    await telegram_bot._callback(db, None, "alice", 42, "token", {"id": "cb2", "data": "nt:confirm2:a1", "message": card})
+    assert confirmed.await_args_list[1].kwargs["second_tap"] is True
+    assert edit.await_args.args[2].endswith("✅ Live BUY INFY sent.")
+
+
 async def test_start_code_is_stashed_for_settings_link_flow(monkeypatch):
     db = AsyncMongoMockClient()["test_db"]
     redis = AsyncMock()

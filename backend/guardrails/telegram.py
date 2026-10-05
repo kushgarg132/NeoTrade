@@ -279,9 +279,11 @@ async def send_html(chat_id: int, text: str, token: Optional[str] = None,
     return data["result"]["message_id"] if data else None
 
 
-async def edit_html(chat_id: int, message_id: int, text: str, token: Optional[str] = None) -> None:
+async def edit_html(chat_id: int, message_id: int, text: str, token: Optional[str] = None,
+                    reply_markup: Optional[dict] = None) -> None:
     """Replace a message's text; with no reply_markup its buttons go too."""
-    await _html_or_plain("editMessageText", {"chat_id": chat_id, "message_id": message_id}, text, token)
+    body = {"chat_id": chat_id, "message_id": message_id, **({"reply_markup": reply_markup} if reply_markup else {})}
+    await _html_or_plain("editMessageText", body, text, token)
 
 
 async def send_rich(chat_id: int, md: str, token: Optional[str] = None,

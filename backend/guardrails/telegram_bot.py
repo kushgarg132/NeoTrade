@@ -362,15 +362,29 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
             await telegram.edit_html(chat_id, card["message_id"],
                                      f"{html.escape(card.get('text') or '', quote=False)}\n\n{text}", token)
         return
-    if command not in {"confirm", "cancel"} or not action_id:
+    if command not in {"confirm", "confirm2", "cancel"} or not action_id:
         return
     done = False
+    card = callback.get("message") or {}
     try:
         if command == "cancel":
             changed = await ChatActionStore(db).cancel(user_id, action_id)
             result = "Cancelled." if changed else "That action can no longer be cancelled."
         else:
-            result = (await confirm(db, redis, get_credential_store(), user_id, action_id))["result"]
+            outcome = await confirm(db, redis, get_credential_store(), user_id, action_id,
+                                    second_tap=command == "confirm2")
+            result = outcome["result"]
+            if outcome["status"] == "NEEDS_SECOND_TAP" and card.get("message_id"):
+                # Real money: the card re-arms with a Send button; that tap is the second.
+                await telegram.answer_callback(callback_id, result[:180], token)
+                await telegram.edit_html(
+                    chat_id, card["message_id"],
+                    f"{html.escape(card.get('text') or '', quote=False)}\n\n⚠️ Real money. Tap Send real order to place it.",
+                    token, reply_markup={"inline_keyboard": [[
+                        {"text": "Send real order", "callback_data": f"nt:confirm2:{action_id}"},
+                        {"text": "Cancel", "callback_data": f"nt:cancel:{action_id}"},
+                    ]]})
+                return
             done = True
     except ActionRefused as exc:
         result = str(exc)
@@ -378,7 +392,6 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
         logger.exception("telegram action failed for user %s", user_id)
         result = "NeoTrade could not complete that action. Please check the app and try again."
     await telegram.answer_callback(callback_id, result[:180], token)
-    card = callback.get("message") or {}
     if card.get("message_id"):
         # The card shows its outcome and loses its buttons -- no extra message.
         await telegram.edit_html(chat_id, card["message_id"],
