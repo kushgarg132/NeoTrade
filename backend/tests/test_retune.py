@@ -170,3 +170,16 @@ async def test_run_all_retunes_the_daily_strategies_on_real_backtests(monkeypatc
     assert all(not d["accepted"] and not d["reason"].startswith("failed") for d in docs)
     assert await db["strategy_retunes"].count_documents({}) == 4
     assert len(fetches) == len(set(fetches))  # memoised: each period fetched once
+
+
+def test_a_variant_keeps_the_strategys_news_and_sector_inputs():
+    from backend.learning.retune import variant
+    from backend.strategies.registry import build_default_strategies
+
+    catalysts, sectors, closes = {"2026-10-06": {"TCS": 0.5}}, {"TCS": "IT"}, {"2026-10-06": {"TCS": 3000.0}}
+    by_name = {s.spec.name: s for s in build_default_strategies(
+        universe=["TCS"], catalysts=catalysts, sector_of=sectors, prev_closes=closes)}
+    gap = variant(by_name["gap_and_go"], ["TCS"], {1: "TCS"}, {"gap_pct": 3.0})
+    assert gap.catalysts == catalysts and gap.prev_closes == closes and gap.p["gap_pct"] == 3.0
+    assert variant(by_name["relative_strength_sector"], ["TCS"], {1: "TCS"}, {}).sector_of == sectors
+    assert variant(by_name["orb_breakout"], ["TCS"], {1: "TCS"}, {"volume_mult": 2.0}).p["volume_mult"] == 2.0

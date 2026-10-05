@@ -100,7 +100,10 @@ window of scored days exists; that is expected, not a bug.
   (that package stays I/O-free).
 - `relative_strength_sector` is **peer-based**: it compares a stock with its Nifty 200 sector
   peers in the same run. No sector-index feed is added, so section 3's "sector indices in the
-  universe" is dropped.
+  universe" is dropped. Coverage: only Nifty 200 symbols with ≥ 3 sector peers in the run can
+  trade (about 32 of the 75 default names); the plan's added Nifty 200 names widen it.
+- Live feeds carry only today's bars, so the gap strategies also get the previous close
+  per day (`backend/datalayer/bars.py:prev_closes`, from `daily_bars`) at construction.
 - Until 15.2's plan exists, live runs get catalysts straight from
   `backend/datalayer/catalysts.py:catalyst_map` (same shape the plan will supply).
 

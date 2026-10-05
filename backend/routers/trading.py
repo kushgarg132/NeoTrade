@@ -62,6 +62,7 @@ from backend.options.resolver import FO_UNDERLYINGS
 from backend.strategies.registry import build_default_strategies
 from backend.suggestions.sink import SuggestionSink
 from backend.suggestions.store import SuggestionStore
+from backend.datalayer.bars import prev_closes
 from backend.datalayer.catalysts import catalyst_map
 from backend.datalayer.news_sources import nifty200_sectors
 
@@ -334,6 +335,10 @@ async def _launch_run(
             option_universe=[i.tradingsymbol for i in option_instruments],
             params=await current_params(db.db),
             catalysts=await catalyst_map(db.db, today, today) if mode == "INTRADAY" else None,
+            # Live feeds carry only today's bars, so the gap strategies get
+            # yesterday's close from the shared daily bars.
+            prev_closes=({today.isoformat(): await prev_closes(db.db, [i.tradingsymbol for i in instruments], today)}
+                         if mode == "INTRADAY" else None),
             sector_of=nifty200_sectors(),
         )
         if s.spec.mode == mode

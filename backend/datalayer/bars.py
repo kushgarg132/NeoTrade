@@ -133,6 +133,24 @@ async def read(
     return frames
 
 
+async def prev_closes(db, symbols: Iterable[str], day: date) -> dict[str, float]:
+    """symbol -> its last stored close before `day` (the gap strategies'
+    previous close: a live intraday feed only carries today's bars).
+    Adjusted closes: a dividend shifts them a little, which a gap
+    threshold of 1.5-2% absorbs."""
+    wanted = list(symbols)
+    if not wanted:
+        return {}
+    closes: dict[str, float] = {}
+    cursor = db[BARS].find(
+        {"symbol": {"$in": wanted}, "date": {"$lt": day.isoformat(), "$gte": (day - timedelta(days=10)).isoformat()}},
+        {"_id": 0, "symbol": 1, "close": 1},
+    ).sort("date", 1)
+    async for doc in cursor:
+        closes[doc["symbol"]] = float(doc["close"])
+    return closes
+
+
 async def nifty_closes(db, since: date) -> list[tuple[date, float]]:
     frame = (await read(db, [NIFTY], since)).get(NIFTY)
     if frame is None:

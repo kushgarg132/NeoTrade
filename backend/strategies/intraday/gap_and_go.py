@@ -9,7 +9,9 @@ from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy
 from backend.strategies.card import StrategyCard
-from backend.strategies.intraday.gaps import SESSION_LOOKBACK_BARS, gap_pct, opening_range, split_sessions
+from backend.strategies.intraday.gaps import (
+    SESSION_LOOKBACK_BARS, gap_pct, opening_range, previous_close, split_sessions,
+)
 
 
 class GapAndGoStrategy(TokenResolvingStrategy):
@@ -23,9 +25,11 @@ class GapAndGoStrategy(TokenResolvingStrategy):
     GRID = {"gap_pct": [1.5, 2.0, 3.0], "volume_mult": [1.0, 1.5, 2.0]}
 
     def __init__(self, universe: list[str], symbol_for_token: dict[int, str], params: dict | None = None,
-                 catalysts: dict[str, dict[str, float]] | None = None) -> None:
+                 catalysts: dict[str, dict[str, float]] | None = None,
+                 prev_closes: dict[str, dict[str, float]] | None = None) -> None:
         super().__init__(universe, symbol_for_token, params)
         self.catalysts = catalysts or {}
+        self.prev_closes = prev_closes or {}
         self.spec = StrategySpec(name="gap_and_go", mode="INTRADAY", timeframe="5m", warmup_bars=4, universe=universe)
 
     def on_bar(self, ctx, bar) -> None:
@@ -35,7 +39,8 @@ class GapAndGoStrategy(TokenResolvingStrategy):
 
     def signal(self, ctx, symbol: str) -> Optional[Intent]:
         today, prior = split_sessions(ctx.history(symbol, SESSION_LOOKBACK_BARS))
-        gap = gap_pct(today, prior)
+        prev_close = previous_close(today, prior, self.prev_closes, symbol)
+        gap = gap_pct(today, prev_close)
         if gap is None or len(today) < self.spec.warmup_bars:
             return None
         catalyst = self.catalysts.get(today[0].timestamp.date().isoformat(), {}).get(symbol)

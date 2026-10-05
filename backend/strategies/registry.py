@@ -33,6 +33,7 @@ def build_default_strategies(
     params: Optional[dict[str, dict]] = None,
     catalysts: Optional[dict[str, dict[str, float]]] = None,
     sector_of: Optional[dict[str, str]] = None,
+    prev_closes: Optional[dict[str, dict[str, float]]] = None,
 ) -> list[Strategy]:
     """`universe` defaults to `indian_stocks.ALL_SCAN_STOCKS` (the existing
     NSE mid/small-cap symbol list already used elsewhere in this codebase),
@@ -87,11 +88,14 @@ def build_default_strategies(
         CashSecuredPutStrategy(universe, symbol_for_token),
         # News-aware intraday strategies (Phase 15.1). `catalysts` is
         # backend/datalayer/catalysts.py's per-day map and `sector_of` the
-        # Nifty 200 sector of each symbol; without them gap_and_go and
+        # Nifty 200 sector of each symbol; `prev_closes` the previous close per
+        # day for feeds that carry only today's bars. Without them gap_and_go and
         # relative_strength_sector stay silent and gap_fill_fade treats
         # every gap as un-catalysed.
-        GapAndGoStrategy(universe, symbol_for_token, params.get("gap_and_go"), catalysts=catalysts),
-        GapFillFadeStrategy(universe, symbol_for_token, params.get("gap_fill_fade"), catalysts=catalysts),
+        GapAndGoStrategy(universe, symbol_for_token, params.get("gap_and_go"), catalysts=catalysts,
+                         prev_closes=prev_closes),
+        GapFillFadeStrategy(universe, symbol_for_token, params.get("gap_fill_fade"), catalysts=catalysts,
+                            prev_closes=prev_closes),
         TrendDayPullbackStrategy(universe, symbol_for_token, params.get("trend_day_pullback")),
         RelativeStrengthSectorStrategy(universe, symbol_for_token, params.get("relative_strength_sector"),
                                        sector_of=sector_of),

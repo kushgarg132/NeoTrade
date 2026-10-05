@@ -24,10 +24,22 @@ def split_sessions(history: list[Bar]) -> tuple[list[Bar], list[Bar]]:
     return current, [b for b in earlier if b.timestamp.date() == last]
 
 
-def gap_pct(today: list[Bar], prior: list[Bar]) -> Optional[float]:
-    if not today or not prior or not prior[-1].close:
+def previous_close(today: list[Bar], prior: list[Bar], prev_closes: dict[str, dict[str, float]],
+                   symbol: str) -> Optional[float]:
+    """The prior session's last close from the bars when history has it
+    (backtests), else from `prev_closes` ({date_iso: {symbol: close}},
+    handed in at construction): live feeds carry only today's bars."""
+    if prior:
+        return prior[-1].close
+    if not today:
         return None
-    return (today[0].open / prior[-1].close - 1) * 100
+    return prev_closes.get(today[0].timestamp.date().isoformat(), {}).get(symbol)
+
+
+def gap_pct(today: list[Bar], prev_close: Optional[float]) -> Optional[float]:
+    if not today or not prev_close:
+        return None
+    return (today[0].open / prev_close - 1) * 100
 
 
 def opening_range(today: list[Bar], minutes: int) -> tuple[list[Bar], list[Bar]]:

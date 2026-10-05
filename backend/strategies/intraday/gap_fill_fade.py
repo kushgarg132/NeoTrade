@@ -9,7 +9,9 @@ from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy
 from backend.strategies.card import StrategyCard
-from backend.strategies.intraday.gaps import SESSION_LOOKBACK_BARS, gap_pct, opening_range, split_sessions
+from backend.strategies.intraday.gaps import (
+    SESSION_LOOKBACK_BARS, gap_pct, opening_range, previous_close, split_sessions,
+)
 
 
 class GapFillFadeStrategy(TokenResolvingStrategy):
@@ -23,9 +25,11 @@ class GapFillFadeStrategy(TokenResolvingStrategy):
     GRID = {"gap_pct": [1.0, 1.5, 2.5]}
 
     def __init__(self, universe: list[str], symbol_for_token: dict[int, str], params: dict | None = None,
-                 catalysts: dict[str, dict[str, float]] | None = None) -> None:
+                 catalysts: dict[str, dict[str, float]] | None = None,
+                 prev_closes: dict[str, dict[str, float]] | None = None) -> None:
         super().__init__(universe, symbol_for_token, params)
         self.catalysts = catalysts or {}
+        self.prev_closes = prev_closes or {}
         self.spec = StrategySpec(name="gap_fill_fade", mode="INTRADAY", timeframe="5m", warmup_bars=4,
                                  universe=universe)
 
@@ -36,7 +40,8 @@ class GapFillFadeStrategy(TokenResolvingStrategy):
 
     def signal(self, ctx, symbol: str) -> Optional[Intent]:
         today, prior = split_sessions(ctx.history(symbol, SESSION_LOOKBACK_BARS))
-        gap = gap_pct(today, prior)
+        prev_close = previous_close(today, prior, self.prev_closes, symbol)
+        gap = gap_pct(today, prev_close)
         if gap is None or len(today) < self.spec.warmup_bars or abs(gap) < self.p["gap_pct"]:
             return None
         catalyst = self.catalysts.get(today[0].timestamp.date().isoformat(), {}).get(symbol) or 0.0
@@ -46,7 +51,7 @@ class GapFillFadeStrategy(TokenResolvingStrategy):
         if not range_bars or not after:
             return None
         high, low = max(b.high for b in range_bars), min(b.low for b in range_bars)
-        close, target = after[-1].close, prior[-1].close
+        close, target = after[-1].close, prev_close
         if gap > 0 and close < low and target < close:
             return Intent(symbol=symbol, side=Side.SELL, strength=0.6, reason_codes=["gap_fill_fade"],
                           stop_hint=high, target_hint=target)

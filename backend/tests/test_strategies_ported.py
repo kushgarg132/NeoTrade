@@ -489,7 +489,10 @@ def test_build_default_strategies_includes_analyst_verdict_when_provided():
 
 def test_new_strategies_get_catalysts_and_sectors():
     catalysts, sectors = {"2026-10-06": {"TCS": 0.5}}, {"TCS": "IT"}
-    by_name = {s.spec.name: s for s in build_default_strategies(universe=["TCS"], catalysts=catalysts, sector_of=sectors)}
+    closes = {"2026-10-06": {"TCS": 3000.0}}
+    by_name = {s.spec.name: s for s in build_default_strategies(
+        universe=["TCS"], catalysts=catalysts, sector_of=sectors, prev_closes=closes)}
+    assert by_name["gap_and_go"].prev_closes == closes and by_name["gap_fill_fade"].prev_closes == closes
     assert by_name["gap_and_go"].catalysts == catalysts and by_name["gap_fill_fade"].catalysts == catalysts
     assert by_name["relative_strength_sector"].sector_of == sectors
     assert "trend_day_pullback" in by_name

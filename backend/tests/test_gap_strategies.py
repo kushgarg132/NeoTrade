@@ -115,3 +115,13 @@ def test_gap_fill_fade_will_not_fade_a_gap_its_news_supports():
 
 def test_gap_fill_fade_silent_on_the_first_session_in_history():
     assert _run(_fade(), _failed_gap_up()) == []
+
+
+def test_gap_strategies_use_the_injected_previous_close_on_a_today_only_feed():
+    # Live feeds carry only today's bars; the previous close comes from daily_bars.
+    closes = {"2026-10-06": {SYMBOL: 100.0}}
+    go = GapAndGoStrategy([SYMBOL], {TOKEN: SYMBOL}, catalysts={"2026-10-06": {SYMBOL: 0.7}}, prev_closes=closes)
+    assert [i.side for i in _run(go, _up_day())] == [Side.BUY]
+    fade = GapFillFadeStrategy([SYMBOL], {TOKEN: SYMBOL}, prev_closes=closes)
+    intents = _run(fade, _failed_gap_up())
+    assert [i.side for i in intents] == [Side.SELL] and intents[0].target_hint == 100.0

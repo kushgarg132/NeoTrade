@@ -135,6 +135,18 @@ class _Memo:
         return await self._provider.quote(instrument)
 
 
+# Inputs some strategies get at construction (news catalysts, previous
+# closes, sector map); a re-tune variant must keep them or it tunes a
+# strategy that never fires, or a different one.
+INJECTED = ("catalysts", "prev_closes", "sector_of")
+
+
+def variant(strategy, universe: list[str], symbol_for_token: dict[int, str], params: dict):
+    """`strategy` rebuilt with `params`, keeping its injected inputs."""
+    kept = {k: getattr(strategy, k) for k in INJECTED if hasattr(strategy, k)}
+    return type(strategy)(universe, symbol_for_token, params, **kept)
+
+
 async def run_all(db, provider, now: datetime) -> list[dict]:
     from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
     from backend.engine.backtest import run_backtest
@@ -151,14 +163,19 @@ async def run_all(db, provider, now: datetime) -> list[dict]:
     from backend.risk.gate_backtest import backtest_account
     account = await backtest_account(db)  # size like the account that trades
     docs = []
-    for strategy in build_default_strategies(universe=universe, symbol_for_token=symbol_for_token, params=accepted):
+    from backend.datalayer.catalysts import catalyst_map
+    from backend.datalayer.news_sources import nifty200_sectors
+
+    catalysts = await catalyst_map(db, (now - timedelta(days=max(WINDOW_DAYS.values()))).date(), now.date())
+    for strategy in build_default_strategies(universe=universe, symbol_for_token=symbol_for_token, params=accepted,
+                                             catalysts=catalysts, sector_of=nifty200_sectors()):
         timeframe = strategy.spec.timeframe
         if not getattr(strategy, "GRID", None) or timeframe not in WINDOW_DAYS:
             continue
-        cls, name = type(strategy), strategy.spec.name
+        name = strategy.spec.name
 
-        async def backtest(params, start, end, cls=cls, timeframe=timeframe):
-            return await run_backtest([cls(universe, symbol_for_token, params)], memo, instruments,
+        async def backtest(params, start, end, strategy=strategy, timeframe=timeframe):
+            return await run_backtest([variant(strategy, universe, symbol_for_token, params)], memo, instruments,
                                       start=start, end=end, timeframe=timeframe, **account)
 
         start = now - timedelta(days=WINDOW_DAYS[timeframe])

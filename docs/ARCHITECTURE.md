@@ -420,7 +420,9 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   symbol news between the previous close and the open) handed in at construction;
   `trend_day_pullback` needs bars only; `relative_strength_sector` compares a stock with
   its Nifty 200 sector peers in the same run (`news_sources.nifty200_sectors`), so no
-  index feed is needed. Live runs and the gate backtest pass both maps.
+  index feed is needed (so only Nifty 200 names with ≥ 3 sector peers in the run trade it).
+  Live runs and the gate backtest pass both maps; live runs also pass yesterday's close
+  (`bars.prev_closes`), since live feeds carry only today's bars.
 - **Long-term engine** — not a live run: long-term strategies need months of daily bars,
   which a live feed never has, so their ideas come only from the history-backed scan
   (`backend/suggestions/scan.py`; 16:00 IST in `scheduler.py`, which records

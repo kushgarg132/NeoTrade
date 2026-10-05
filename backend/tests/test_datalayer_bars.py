@@ -168,3 +168,16 @@ async def test_store_fundamentals_fresh_and_stale(mongo):
     assert await store.snapshot(_instrument("AAA")) == snap
     assert await store.snapshot(_instrument("OLD")) == "fallback"
     assert fallback.calls == ["OLD"]
+
+
+async def test_prev_closes_returns_each_symbols_last_close_before_the_day():
+    from mongomock_motor import AsyncMongoMockClient
+
+    db = AsyncMongoMockClient()["prev_closes"]
+    await db[bars.BARS].insert_many([
+        {"symbol": "TCS", "date": "2026-10-02", "close": 3000.0},
+        {"symbol": "TCS", "date": "2026-10-05", "close": 3050.0},
+        {"symbol": "TCS", "date": "2026-10-06", "close": 3100.0},
+        {"symbol": "INFY", "date": "2026-10-03", "close": 1500.0},
+    ])
+    assert await bars.prev_closes(db, ["TCS", "INFY", "NONE"], date(2026, 10, 6)) == {"TCS": 3050.0, "INFY": 1500.0}
