@@ -23,7 +23,7 @@ _USER = User(
 
 @pytest.fixture
 def make_client(monkeypatch):
-    def _make(universe, frames=None, error=None):
+    def _make(universe, frames=None, error=None, stored=None):
         calls = []
 
         async def fake_fetch(symbols):
@@ -32,7 +32,11 @@ def make_client(monkeypatch):
                 raise error
             return frames or {}
 
+        async def store(universe):
+            return dict(stored or {})
+
         monkeypatch.setattr(scanner_router, "fetch_daily", fake_fetch)
+        monkeypatch.setattr(scanner_router, "_stored", store)
         app = FastAPI()
         app.include_router(scanner_router.router)
         app.dependency_overrides[get_current_user] = lambda: _USER
@@ -63,6 +67,20 @@ def test_download_failure_is_502(make_client):
     response = client.get("/scanner")
     assert response.status_code == 502
     assert "data provider" in response.json()["detail"]
+
+
+def test_store_hits_skip_the_download(make_client):
+    client, calls = make_client(["AAA", "BBB"], {"BBB": breakout_frame()}, stored={"AAA": breakout_frame()})
+    body = client.get("/scanner").json()
+    assert calls == [["BBB"]]
+    assert {f["symbol"] for f in body["findings"]} == {"AAA", "BBB"}
+
+
+def test_failed_download_still_scans_what_the_store_had(make_client):
+    client, _ = make_client(["AAA", "GONE"], error=RuntimeError("yahoo down"), stored={"AAA": breakout_frame()})
+    response = client.get("/scanner")
+    assert response.status_code == 200
+    assert response.json()["skipped"] == [{"symbol": "GONE", "reason": "no data"}]
 
 
 def _ohlcv(n=5):

@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-import time
+from datetime import timedelta
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends
@@ -12,6 +12,7 @@ from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.core.models import Venue
 from backend.database import db
+from backend.datalayer import bars
 from backend.engine.persistence import LedgerStore
 from backend.ws.publish import publisher_for
 from backend.marks import mark_prices
@@ -39,19 +40,16 @@ async def get_pnl(
 
 
 logger = logging.getLogger(__name__)
-_NIFTY_CACHE: dict = {"at": 0.0, "points": None}
-NIFTY_CACHE_SECONDS = 60 * 60
-
-
 async def _nifty_points():
-    """A year of NIFTY 50 closes, cached an hour: the benchmark only needs
-    daily closes, and every scorecard view would otherwise refetch them."""
+    """A year of NIFTY 50 closes from the daily_bars store; yfinance only
+    when the store has none."""
     from backend.routers.market_data import _fetch_index_detail_sync
 
-    if _NIFTY_CACHE["points"] is None or time.time() - _NIFTY_CACHE["at"] > NIFTY_CACHE_SECONDS:
-        detail = await asyncio.to_thread(_fetch_index_detail_sync, "^NSEI", "NIFTY 50")
-        _NIFTY_CACHE.update(at=time.time(), points=(detail or {}).get("points"))
-    return _NIFTY_CACHE["points"]
+    stored = await bars.nifty_closes(db.db, bars.today_ist() - timedelta(days=365))
+    if stored:
+        return [{"date": day.isoformat(), "close": close} for day, close in stored]
+    detail = await asyncio.to_thread(_fetch_index_detail_sync, "^NSEI", "NIFTY 50")
+    return (detail or {}).get("points")
 
 
 def nifty_return(points, first_day: str):

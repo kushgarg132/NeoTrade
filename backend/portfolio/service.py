@@ -1,8 +1,9 @@
 """Fetches everything the portfolio review needs and stores the result.
 
 Holdings come from each of the user's connected brokers; buy dates from
-their journal; NIFTY history, sectors, a year of daily closes and each
-stock's health from yfinance and the news. Each holding then gets a
+their journal; NIFTY history and a year of daily closes from the shared
+daily_bars store (yfinance for what it lacks); sectors and each stock's
+health from yfinance and the news. Each holding then gets a
 rule-scored verdict (rules.py) and the whole an AI write-up (review.py).
 Each run is saved to `portfolio_snapshots` (per user_id), so the next can
 say what changed. With no broker session (brokers' tokens expire
@@ -12,7 +13,6 @@ yfinance's latest closes, and the snapshot says so.
 
 import asyncio
 import logging
-import time
 from datetime import datetime, timedelta, timezone
 
 import yfinance as yf
@@ -20,6 +20,7 @@ import yfinance as yf
 from backend.ai.sentiment import get_cached_sentiment
 from backend.brokers.protocol import BrokerSessionState
 from backend.brokers.registry import BROKERS, get_broker_adapter
+from backend.datalayer import bars
 from backend.core.models import Holding
 from backend.journal.store import JournalStore
 from backend.portfolio.health import stock_health
@@ -31,8 +32,6 @@ from backend.prefs import PrefsStore
 logger = logging.getLogger(__name__)
 
 SECTOR_TTL = timedelta(days=30)
-_NIFTY: dict = {"at": 0.0, "points": []}
-NIFTY_CACHE_SECONDS = 60 * 60
 
 
 def _ticker(symbol: str, exchange: str | None) -> str:
@@ -46,13 +45,15 @@ def _nifty_sync() -> list:
     return [(index.date(), float(row["Close"])) for index, row in hist.iterrows()]
 
 
-async def _nifty() -> list:
-    if not _NIFTY["points"] or time.time() - _NIFTY["at"] > NIFTY_CACHE_SECONDS:
-        try:
-            _NIFTY.update(at=time.time(), points=await asyncio.to_thread(_nifty_sync))
-        except Exception as exc:
-            logger.warning("portfolio: NIFTY history unavailable: %s", exc)
-    return _NIFTY["points"]
+async def _nifty(db) -> list:
+    points = await bars.nifty_closes(db, bars.today_ist() - timedelta(days=3653))
+    if points:
+        return points
+    try:
+        return await asyncio.to_thread(_nifty_sync)
+    except Exception as exc:
+        logger.warning("portfolio: NIFTY history unavailable: %s", exc)
+        return []
 
 
 def _sector_sync(ticker: str):
@@ -96,6 +97,17 @@ def _daily_closes_sync(tickers: dict[str, str]) -> dict:
     return result
 
 
+async def _closes(db, listed: list[tuple[str, str]]) -> dict:
+    stored = await bars.read(db, [s for s, e in listed if e != "BSE"], bars.today_ist() - timedelta(days=365))
+    closes = {s: [(i.date(), float(c)) for i, c in f["close"].items()] for s, f in stored.items()}
+    rest = {s: _ticker(s, e) for s, e in listed if s not in closes}
+    try:
+        closes |= await asyncio.to_thread(_daily_closes_sync, rest)
+    except Exception as exc:
+        logger.warning("portfolio: daily closes unavailable: %s", exc)
+    return closes
+
+
 def _returns(closes: list[tuple]) -> dict:
     return {day: close / prev - 1 for (_, prev), (day, close) in zip(closes, closes[1:]) if prev}
 
@@ -125,11 +137,7 @@ async def refresh_portfolio(db, user_id: str, credentials, redis, analyse: bool 
         stale_since = previous.get("stale_since") or previous["at"]
 
     listed = sorted({(h.symbol, h.exchange) for h in holdings if h.kind != "MF"})
-    try:
-        closes = await asyncio.to_thread(_daily_closes_sync, {s: _ticker(s, e) for s, e in listed})
-    except Exception as exc:
-        logger.warning("portfolio: daily closes unavailable: %s", exc)
-        closes = {}
+    closes = await _closes(db, listed)
     if stale_since:
         holdings = [
             h.model_copy(update={"last_price": closes[h.symbol][-1][1], "close_price": closes[h.symbol][-2][1]})
@@ -140,7 +148,7 @@ async def refresh_portfolio(db, user_id: str, credentials, redis, analyse: bool 
     stocks = [(s, e) for s, e in listed if next(h for h in holdings if h.symbol == s).kind == "STOCK"]
     returns = {s: _returns(closes[s]) for s, _ in stocks if s in closes}
     trades = await JournalStore(db).list_trades(user_id)
-    card = build_scorecard(holdings, trades, await _nifty(), await _sectors(db, stocks), returns)
+    card = build_scorecard(holdings, trades, await _nifty(db), await _sectors(db, stocks), returns)
     if analyse and card["holdings"]:
         await _review(db, user_id, redis, card, closes, previous)
 

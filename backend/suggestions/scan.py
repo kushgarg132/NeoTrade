@@ -17,8 +17,7 @@ from backend.ai.analyst_verdict import get_cached_verdict
 from backend.core.clock import SimClock
 from backend.core.models import Bar
 from backend.data.feeds.historical import HistoricalFeed
-from backend.data.providers.cached import CachedFundamentals, CachedHistory
-from backend.data.providers.yfinance_provider import YFinanceProvider
+from backend.data.providers.store import StoreFundamentals, StoreHistoryProvider
 from backend.engine.execution.simulated import SimulatedExecutionClient
 from backend.engine.persistence import LedgerStore
 from backend.engine.portfolio import Portfolio
@@ -26,7 +25,6 @@ from backend.engine.runner import run
 from backend.instruments.master import InstrumentMaster
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
 from backend.options.premiums import live_premium_source
-from backend.screening.providers.yfinance_fundamentals import YFinanceFundamentalsProvider
 from backend.screening.universe import build_quality_universe
 from backend.strategies.registry import build_default_strategies
 from backend.suggestions.sink import SuggestionSink
@@ -115,7 +113,7 @@ async def scan_universe(
             if verdict is not None:
                 analyst_verdicts[symbol] = verdict
 
-    quality_scores = await build_quality_universe(instruments, CachedFundamentals(YFinanceFundamentalsProvider()))
+    quality_scores = await build_quality_universe(instruments, StoreFundamentals(db))
 
     if instruments and not quality_scores:
         logger.debug(
@@ -140,7 +138,7 @@ async def scan_universe(
     ]
 
     feed = HistoricalFeed(
-        CachedHistory(YFinanceProvider()), instruments, start=now - LOOKBACK, end=now, timeframe="1d", now=now,
+        StoreHistoryProvider(db), instruments, start=now - LOOKBACK, end=now, timeframe="1d", now=now,
     )
     bars = [bar async for bar in feed]
     if not bars:

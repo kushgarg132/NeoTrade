@@ -49,7 +49,7 @@ def wired(monkeypatch):
     monkeypatch.setattr(f"{MODULE}.InstrumentMaster", lambda db: object())
     monkeypatch.setattr(f"{MODULE}.fetch_stock_info_logic", AsyncMock(return_value=_company_info()))
     candles = _candles()
-    monkeypatch.setattr(quick_module._provider, "history", AsyncMock(return_value=candles))
+    monkeypatch.setattr(quick_module.StoreHistoryProvider, "history", AsyncMock(return_value=candles))
     return candles
 
 
@@ -74,7 +74,7 @@ async def test_quick_analysis_returns_price_data_and_technicals(wired):
 
 
 async def test_quick_analysis_handles_no_price_history(wired, monkeypatch):
-    monkeypatch.setattr(quick_module._provider, "history", AsyncMock(return_value=[]))
+    monkeypatch.setattr(quick_module.StoreHistoryProvider, "history", AsyncMock(return_value=[]))
 
     result = await quick_module.quick_analysis("RELIANCE")
 
@@ -116,7 +116,7 @@ async def test_quick_analysis_returns_full_technicals(wired):
 
 
 async def test_short_history_leaves_long_values_none(wired, monkeypatch):
-    monkeypatch.setattr(quick_module._provider, "history", AsyncMock(return_value=wired[:30]))
+    monkeypatch.setattr(quick_module.StoreHistoryProvider, "history", AsyncMock(return_value=wired[:30]))
 
     t = (await quick_module.quick_analysis("RELIANCE")).technical_analysis
 
@@ -129,7 +129,7 @@ async def test_short_history_leaves_long_values_none(wired, monkeypatch):
 async def test_zero_close_and_zero_volume_give_none(wired, monkeypatch):
     candles = [c.model_copy(update={"volume": 0}) for c in wired]
     candles[0] = candles[0].model_copy(update={"close": 0.0})
-    monkeypatch.setattr(quick_module._provider, "history", AsyncMock(return_value=candles))
+    monkeypatch.setattr(quick_module.StoreHistoryProvider, "history", AsyncMock(return_value=candles))
 
     t = (await quick_module.quick_analysis("RELIANCE")).technical_analysis
 
@@ -144,7 +144,7 @@ async def test_quick_analysis_carries_flags(wired):
 
 
 async def test_one_year_return_needs_a_year_of_history(wired, monkeypatch):
-    monkeypatch.setattr(quick_module._provider, "history", AsyncMock(return_value=wired[:40]))
+    monkeypatch.setattr(quick_module.StoreHistoryProvider, "history", AsyncMock(return_value=wired[:40]))
 
     t = (await quick_module.quick_analysis("RELIANCE")).technical_analysis
 

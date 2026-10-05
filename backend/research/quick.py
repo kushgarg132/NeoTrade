@@ -23,15 +23,13 @@ from backend.components.master.stock_info import fetch_stock_info_logic
 from backend.components.quant.indicators import Indicators
 from backend.components.quant.support import SupportResistance
 from backend.components.quant.trend import TrendDetector
-from backend.data.providers.yfinance_provider import YFinanceProvider
+from backend.data.providers.store import StoreHistoryProvider
 from backend.database import get_database
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.resolve import resolve_symbol
 from backend.research.flags import stock_flags
 
 logger = logging.getLogger(__name__)
-
-_provider = YFinanceProvider()
 
 
 class QuickAnalysis(BaseModel):
@@ -135,12 +133,12 @@ async def quick_analysis(query: str) -> QuickAnalysis:
     resolved = await resolve_company_query(query)
     symbol = resolved["symbol"]
 
-    master = InstrumentMaster(await get_database())
-    instrument = await resolve_symbol(symbol, master)
+    db = await get_database()
+    instrument = await resolve_symbol(symbol, InstrumentMaster(db))
 
     company_info, candles = await asyncio.gather(
         fetch_stock_info_logic(symbol),
-        _provider.history(instrument, interval="1d", period="1y"),
+        StoreHistoryProvider(db).history(instrument, interval="1d", period="1y"),
     )
 
     company = company_info.model_dump(mode="json")

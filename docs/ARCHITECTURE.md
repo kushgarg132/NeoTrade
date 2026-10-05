@@ -313,8 +313,18 @@ Redis `news:theme_weights`: per `scope|theme|direction sign`, 1 + 2·(1d hit rat
 0.5–1.5, from ≥ 20 outcomes in 180 days. `news.aggregate` scales each impact by its item's mean theme
 weight before the weighted mean, so it shifts influence between items, never the −1..1 range. The
 weekly job lives in the ingest worker rather than `scheduler._learn`, which is per user.
-Later loops land phase by phase per
-`docs/superpowers/plans/2026-10-05-market-news-datalayer.md`. Compose makes `backend` depend on
+
+**Daily bars and fundamentals** (`backend/datalayer/bars.py`). `bars` (15 min, works once a day
+after 15:45 IST, or at once on an empty store) writes Mongo `daily_bars` (unique `symbol+date`,
+adjusted OHLCV) for the Nifty 200, the default scan list, every saved scan universe, held and watched
+names: two years for a new symbol, the last month for a known one, everything again weekly (adjusted
+prices shift after splits and dividends), ten years of `^NSEI`. `fundamentals` (daily) writes one
+FundamentalSnapshot per symbol. Readers: `StoreHistoryProvider` / `StoreFundamentals`
+(`backend/data/providers/store.py`, used by `scan_universe` and `research/quick.py`), `GET /scanner`,
+portfolio closes and both NIFTY benchmark series. Each falls back to yfinance for an intraday
+interval, a non-NSE or uncovered symbol, a newest bar over 4 days old, or a period longer than the
+store holds. The store holds completed bars only, so in session the last bar is yesterday's.
+Plan: `docs/superpowers/plans/2026-10-05-market-news-datalayer.md`. Compose makes `backend` depend on
 `ingest` only so the shared deploy workflow's `up -d --build backend` also redeploys it.
 
 ### 1.9 Known structural limits

@@ -173,7 +173,7 @@ async def test_scan_records_one_suggestion_per_symbol_from_the_final_session(mon
     from backend.suggestions import scan as scan_module
 
     monkeypatch.setattr(scan_module, "InstrumentMaster", _FakeMaster)
-    monkeypatch.setattr(scan_module, "YFinanceProvider", _RisingHistoryProvider)
+    monkeypatch.setattr(scan_module, "StoreHistoryProvider", lambda db: _RisingHistoryProvider())
     monkeypatch.setattr(scan_module, "build_default_strategies", _only_always_buy)
     monkeypatch.setattr(scan_module, "build_quality_universe", AsyncMock(return_value={}))
 
@@ -208,7 +208,7 @@ async def test_scan_does_not_query_sentiment_for_warmup_bars(mongo, monkeypatch)
     from backend.suggestions import scan as scan_module
 
     monkeypatch.setattr(scan_module, "InstrumentMaster", _FakeMaster)
-    monkeypatch.setattr(scan_module, "YFinanceProvider", _RisingHistoryProvider)
+    monkeypatch.setattr(scan_module, "StoreHistoryProvider", lambda db: _RisingHistoryProvider())
     monkeypatch.setattr(scan_module, "build_default_strategies", _only_always_buy)
     monkeypatch.setattr(scan_module, "build_quality_universe", AsyncMock(return_value={}))
 
@@ -233,7 +233,7 @@ async def test_scan_with_no_resolvable_symbols_returns_nothing(mongo, monkeypatc
             return None
 
     monkeypatch.setattr(scan_module, "InstrumentMaster", _EmptyMaster)
-    monkeypatch.setattr(scan_module, "YFinanceProvider", _RisingHistoryProvider)
+    monkeypatch.setattr(scan_module, "StoreHistoryProvider", lambda db: _RisingHistoryProvider())
 
     assert await scan_universe(mongo, user_id="alice", universe=["NOSUCH"]) == []
 
@@ -254,7 +254,7 @@ async def test_scan_wires_analyst_verdicts_into_strategy_build(mongo, monkeypatc
         return [_AlwaysBuyStrategy(universe, symbol_for_token)]
 
     monkeypatch.setattr(scan_module, "InstrumentMaster", _FakeMaster)
-    monkeypatch.setattr(scan_module, "YFinanceProvider", _RisingHistoryProvider)
+    monkeypatch.setattr(scan_module, "StoreHistoryProvider", lambda db: _RisingHistoryProvider())
     monkeypatch.setattr(scan_module, "build_default_strategies", _spy_build)
     monkeypatch.setattr(scan_module, "build_quality_universe", AsyncMock(return_value={}))
 
@@ -285,7 +285,7 @@ async def test_scan_omits_symbols_with_no_cached_verdict(mongo, monkeypatch):
         return [_AlwaysBuyStrategy(universe, symbol_for_token)]
 
     monkeypatch.setattr(scan_module, "InstrumentMaster", _FakeMaster)
-    monkeypatch.setattr(scan_module, "YFinanceProvider", _RisingHistoryProvider)
+    monkeypatch.setattr(scan_module, "StoreHistoryProvider", lambda db: _RisingHistoryProvider())
     monkeypatch.setattr(scan_module, "build_default_strategies", _spy_build)
     monkeypatch.setattr(scan_module, "build_quality_universe", AsyncMock(return_value={}))
 
@@ -311,7 +311,7 @@ async def test_scan_skips_analyst_verdict_fetch_without_redis(mongo, monkeypatch
         return [_AlwaysBuyStrategy(universe, symbol_for_token)]
 
     monkeypatch.setattr(scan_module, "InstrumentMaster", _FakeMaster)
-    monkeypatch.setattr(scan_module, "YFinanceProvider", _RisingHistoryProvider)
+    monkeypatch.setattr(scan_module, "StoreHistoryProvider", lambda db: _RisingHistoryProvider())
     monkeypatch.setattr(scan_module, "build_default_strategies", _spy_build)
     monkeypatch.setattr(scan_module, "build_quality_universe", AsyncMock(return_value={}))
 
@@ -331,7 +331,7 @@ async def test_scan_wires_quality_universe_into_strategy_build(mongo, monkeypatc
         return [_AlwaysBuyStrategy(universe, symbol_for_token)]
 
     monkeypatch.setattr(scan_module, "InstrumentMaster", _FakeMaster)
-    monkeypatch.setattr(scan_module, "YFinanceProvider", _RisingHistoryProvider)
+    monkeypatch.setattr(scan_module, "StoreHistoryProvider", lambda db: _RisingHistoryProvider())
     monkeypatch.setattr(scan_module, "build_default_strategies", _spy_build)
     monkeypatch.setattr(scan_module, "build_quality_universe", AsyncMock(return_value={"RELIANCE": 0.8}))
 
