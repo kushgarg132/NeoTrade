@@ -130,6 +130,9 @@ async def revise_plan(db, redis, user_id: str, plan: dict, reasons: list[tuple[s
     revised.scope = sorted(set(revised.scope) | scope)
     doc = await store.save(db, redis, user_id, day, revised, now)
     logger.info("plan revised for %s: v%d (%s)", user_id, doc["version"], reasons[0][0])
+    from backend.plan.builder import _tell
+
+    await _tell(db, user_id, doc)
     return doc
 
 

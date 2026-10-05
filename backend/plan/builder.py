@@ -102,6 +102,15 @@ async def _context(db, redis, user_id: str, prefs: dict, universe: set[str], now
     }
 
 
+async def _tell(db, user_id: str, doc: dict) -> None:
+    from backend.plan import notify
+
+    try:
+        await notify.notify_plan(db, user_id, doc)
+    except Exception as exc:  # a message is never worth losing the plan over
+        logger.warning("game plan notify failed for %s: %s", user_id, exc)
+
+
 async def build_plan(db, redis, user_id: str, now: datetime, complete=None) -> dict:
     complete = complete or _llm
     today = now.astimezone(IST).date()
@@ -128,5 +137,7 @@ async def build_plan(db, redis, user_id: str, now: datetime, complete=None) -> d
         except ValueError as exc:
             reason = f"unreadable plan ({exc})"
             continue
-        return await store.save(db, redis, user_id, today, plan, now)
+        doc = await store.save(db, redis, user_id, today, plan, now)
+        await _tell(db, user_id, doc)
+        return doc
     return await fallback(reason)
