@@ -40,6 +40,7 @@ async def run_backtest(
     max_exposure: float = 1_000_000.0,
     model_options: ModelOptions | None = None,
     per_trade_cap: float | None = None,
+    plan=None,
 ) -> BacktestResult:
     """`model_options` prices option contracts for an options strategy
     (backend/options/backtest.py); without it an option intent never sizes."""
@@ -158,6 +159,7 @@ async def run_backtest(
         per_trade_cap=per_trade_cap,
         master=model_options,
         premium_source=model_options,
+        plan=plan,
     )
 
     logger.info("backtest %s: done, %d bars, %d fills, %.0fs", names, len(bar_timestamps), len(trades),

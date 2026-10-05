@@ -100,6 +100,7 @@ async def size_intents(
     learned: Optional[LearnedRules] = None,
     strategies_by_name: Optional[dict[str, Strategy]] = None,
     holders: Optional[dict[str, str]] = None,
+    plan=None,
 ) -> list[Order]:
     """Scores each Intent (backend.scoring.composite.score_intent, which
     caps AI's influence at AI_CAP regardless of what's passed here), then
@@ -168,6 +169,19 @@ async def size_intents(
                 logger.info("skipping intent for %s: %s", intent.symbol, why)
                 continue
 
+        # Today's game plan (backend/plan/gate.py): only tightens, only for
+        # intraday signals that open risk.
+        if plan is not None and mode == "INTRADAY" and _opens(intent, portfolio, mode):
+            held = portfolio.positions.get(intent.symbol)
+            why = plan.blocks(
+                owning_strategy.spec.name if owning_strategy is not None else intent.strategy, intent.symbol,
+                holding=held is not None and held.quantity != 0,
+                open_positions=sum(1 for p in portfolio.positions.values() if p.quantity != 0),
+            )
+            if why:
+                logger.info("skipping intent for %s: %s", intent.symbol, why)
+                continue
+
         # The kill-switch is about auto-executed risk. A tripped switch
         # blocks new INTRADAY orders (the ones that go straight to
         # execution) but not LONGTERM ones -- those stop at a
@@ -231,7 +245,7 @@ async def size_intents(
         entry = history[-1].close
         stop = intent.stop_hint
 
-        risk_pct = BASE_RISK_PCT * scored.final
+        risk_pct = BASE_RISK_PCT * scored.final * (plan.multiplier if plan is not None and mode == "INTRADAY" else 1.0)
         raw_size = RiskRules.calculate_position_size(account_size, risk_pct, entry, stop)
         # NSE cash equity delivery/intraday trades in whole shares only.
         size = float(int(raw_size))
@@ -389,6 +403,7 @@ async def run(
     on_progress: Optional[Callable[[dict], Awaitable[None]]] = None,
     holders: Optional[dict[str, str]] = None,
     learned: Optional[LearnedRules] = None,
+    plan=None,
 ) -> None:
     """`symbol_for_token` is not in the plan's pseudocode signature; it's
     needed because `Bar` identifies instruments by `instrument_token` while
@@ -490,10 +505,13 @@ async def run(
             # have seen it, but its price is hours old -- no order on it.
             intents, orders = [], []
         else:
+            if plan is not None:
+                await plan.refresh(bar.timestamp)
             orders = await size_intents(
                 intents, portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,
                 order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
                 master=master, premium_source=premium_source, option_legs=option_legs, learned=learned,
+                plan=plan,
                 strategies_by_name=strategies_by_name, holders=holders,
             )
             held_by = {**owner_by_symbol, **{s: strategies_by_name[h] for s, h in holders.items() if h in strategies_by_name}}
