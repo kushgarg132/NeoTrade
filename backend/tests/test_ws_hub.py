@@ -194,3 +194,36 @@ async def test_handle_broadcast_event_delivers_via_the_module_level_hub():
         assert not connection.queue.empty()
     finally:
         real_hub.disconnect(connection)
+
+
+@pytest.mark.asyncio
+async def test_an_event_carrying_a_datetime_still_broadcasts():
+    """Stores publish raw Mongo documents (created_at, expires_at...). json
+    could not encode them, so the publish failed, fell back to local delivery,
+    and the socket's send then died on the same datetime: updates stopped."""
+    from datetime import datetime, timezone
+
+    hub = Hub()
+    fake_redis = _FakeRedis()
+    hub.attach_redis(fake_redis)
+
+    await hub.publish("alice", "suggestions", "created",
+                      {"id": "s1", "created_at": datetime(2026, 10, 5, 6, 55, tzinfo=timezone.utc)})
+
+    assert fake_redis.published, "a datetime payload must not make the broadcast fail"
+
+
+@pytest.mark.asyncio
+async def test_a_locally_delivered_event_is_json_safe():
+    import json
+    from datetime import datetime, timezone
+
+    hub = Hub()
+    connection = hub.connect("alice")
+    connection.subscribe(["suggestions"])
+    await hub.publish("alice", "suggestions", "created",
+                      {"created_at": datetime(2026, 10, 5, 6, 55, tzinfo=timezone.utc)})
+
+    message = await asyncio.wait_for(connection.queue.get(), timeout=1)
+    json.dumps(message)  # what websocket.send_json does; raised TypeError before
+    assert message["data"]["created_at"].startswith("2026-10-05T06:55:00")

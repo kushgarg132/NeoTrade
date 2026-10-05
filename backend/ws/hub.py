@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from typing import Iterable
 
 from backend import broadcast
+from bson import ObjectId
+from fastapi.encoders import jsonable_encoder
 
 logger = logging.getLogger(__name__)
 
@@ -79,13 +81,16 @@ class Hub:
         self._connections.discard(connection)
 
     async def publish(self, user_id: str, topic: str, event: str, data) -> None:
-        message = {
+        # Encoded once here: stores publish raw Mongo documents (datetimes,
+        # ObjectIds) that neither the Redis broadcast nor send_json can encode,
+        # and a failed send killed that socket's pump without a word.
+        message = jsonable_encoder({
             "user_id": user_id,
             "topic": topic,
             "event": event,
             "data": data,
             "ts": datetime.now(timezone.utc).isoformat(),
-        }
+        }, custom_encoder={ObjectId: str})
         delivered_remotely = await broadcast.publish(self._redis, EVENTS_CHANNEL, message)
         if not delivered_remotely:
             # No redis attached, or it's attached but unreachable right now
