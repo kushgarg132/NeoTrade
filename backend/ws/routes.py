@@ -170,7 +170,8 @@ async def _stream_analysis(connection, symbol: str, req_id: str) -> None:
         connection.offer(_frame(topic, "report", report.model_dump()))
     except Exception as exc:
         logger.warning("analysis of %s failed: %s", symbol, exc)
-        connection.offer(_frame(topic, "error", {"detail": str(exc)}))
+        # Internals stay in the log; the reader gets a sentence.
+        connection.offer(_frame(topic, "error", {"detail": "The analysis failed; try again in a minute."}))
 
 
 async def _stream_quick_analysis(connection, symbol: str, req_id: str) -> None:
@@ -189,7 +190,7 @@ async def _stream_quick_analysis(connection, symbol: str, req_id: str) -> None:
         connection.offer(_frame(topic, "report", snapshot.model_dump(mode="json")))  # NaN -> null
     except Exception as exc:
         logger.warning("quick analysis of %s failed: %s", symbol, exc)
-        connection.offer(_frame(topic, "error", {"detail": str(exc)}))
+        connection.offer(_frame(topic, "error", {"detail": "The analysis failed; try again in a minute."}))
 
 
 async def _stream_chat(connection, message: str, history: list, req_id: str, context: dict | None = None) -> None:
@@ -213,4 +214,4 @@ async def _stream_chat(connection, message: str, history: list, req_id: str, con
             connection.offer(_frame(topic, "done", {}))
     except Exception as exc:
         logger.warning("chat stream failed: %s", exc)
-        connection.offer(_frame(topic, "error", {"detail": str(exc)}))
+        connection.offer(_frame(topic, "error", {"detail": "something went wrong on our side; try again in a minute."}))

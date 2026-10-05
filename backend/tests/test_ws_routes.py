@@ -202,7 +202,7 @@ def test_a_quick_analysis_failure_is_reported_on_the_topic(client, monkeypatch):
         failure = socket.receive_json()
         assert failure["topic"] == "quick_analysis:q2"
         assert failure["event"] == "error"
-        assert "provider down" in failure["data"]["detail"]
+        assert "provider down" not in failure["data"]["detail"]  # internals stay in the log
 
 
 def test_chat_streams_thinking_then_content_then_done(client, monkeypatch):
@@ -243,7 +243,7 @@ def test_an_analysis_failure_is_reported_on_the_topic(client, monkeypatch):
 
         failure = socket.receive_json()
         assert failure["event"] == "error"
-        assert "provider down" in failure["data"]["detail"]
+        assert "provider down" not in failure["data"]["detail"]  # internals stay in the log
 
 
 def test_analysis_uses_the_users_saved_model_preference(client, monkeypatch):

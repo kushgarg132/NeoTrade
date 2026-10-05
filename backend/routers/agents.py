@@ -20,7 +20,7 @@ async def quick_analyze_stock(symbol: str):
         return await quick_analysis(symbol)
     except Exception as e:
         logger.error(f"Error in quick analysis for {symbol}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="The analysis failed; try again in a minute.")
 
 class AnalyzeRequest(BaseModel):
     symbol: str
@@ -44,4 +44,4 @@ async def analyze_stock(symbol: str, request: AnalyzeRequest = None):
         return result
     except Exception as e:
         logger.error(f"Error analyzing {symbol}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="The analysis failed; try again in a minute.")
