@@ -87,53 +87,81 @@ async def may_revise(db, user_id: str, day: date, now: datetime) -> bool:
 
 
 async def revise_plan(db, redis, user_id: str, plan: dict, reasons: list[tuple[str, str]], now: datetime,
-                      complete=None) -> Optional[dict]:
+                      complete=None, llm=None) -> Optional[dict]:
     from backend.datalayer.news_sources import nifty200_sectors
     from backend.learning.library import _strategies
-    from backend.plan.builder import _llm
+    from backend.plan import builder
     from backend.prompts import render
 
-    complete = complete or _llm
     day = now.astimezone(IST).date()
-    if not await store.reserve_call(redis, day):
-        logger.info("plan revision for %s skipped: daily AI plan budget used up", user_id)
-        return None
     cards = [{"name": s.spec.name, **{k: getattr(type(s).CARD, k) for k in ("style", "regimes", "needs")}}
              for s in _strategies() if s.spec.mode == "INTRADAY"]
+    names = {c["name"] for c in cards}
     raw = await redis.get("market:regime")
     regime = json.loads(raw) if raw else {}
     current = {k: plan.get(k) for k in ("allow", "add_symbols", "risk_multiplier", "max_positions", "skip_day",
                                          "rationale")}
-    system, prompt = render(
-        "game_plan_revision",
+    scope, adds = set(plan.get("scope") or []), set(plan.get("add_symbols") or [])
+    values = dict(
         now=now.astimezone(IST).strftime("%a %d %b %Y %H:%M IST"),
         trigger="\n".join(f"- {text}" for _, text in reasons),
         regime=f"{regime.get('label', 'unknown')} ({regime.get('score', 0):+.2f})",
         # Only names the plan covers: never a long-term holding or a hand trade elsewhere.
         plan=json.dumps(current),
-        positions=json.dumps({s: q for s, q in (await _held(db, user_id)).items() if s in set(plan.get("scope") or [])}),
+        positions=json.dumps({s: q for s, q in (await _held(db, user_id)).items() if s in scope}),
         strategies=json.dumps(cards),
     )
-    reply = (await complete(system, prompt) or "").strip()
-    if not reply or reply == "LLM_DISABLED" or reply.startswith("Error generating response"):
-        logger.info("plan revision for %s: AI unavailable, current plan stands", user_id)
-        return None
-    scope, adds = set(plan.get("scope") or []), set(plan.get("add_symbols") or [])
-    try:
-        revised = validate(reply, trigger=reasons[0][0], strategies={c["name"] for c in cards},
-                           universe=scope - adds, nifty200=set(nifty200_sectors()))
-    except (ValueError, TypeError, OverflowError) as exc:
-        logger.info("plan revision for %s: unreadable reply (%s), current plan stands", user_id, exc)
-        return None
+
+    def checked(reply) -> Optional[object]:
+        try:
+            return validate(reply, trigger=reasons[0][0], strategies=names, universe=scope - adds,
+                            nifty200=set(nifty200_sectors()))
+        except (ValueError, TypeError, OverflowError) as exc:
+            logger.info("plan revision for %s: unreadable reply (%s)", user_id, exc)
+            return None
+
+    revised = None
+    if complete is None:  # production: facts through tools first, the single call as fallback
+        revised = await _revise_with_tools(db, redis, user_id, values, day, checked, llm)
+        complete = builder._llm
+    if revised is None:
+        if not await store.reserve_call(redis, day):
+            logger.info("plan revision for %s skipped: daily AI plan budget used up", user_id)
+            return None
+        system, prompt = render("game_plan_revision", **values)
+        reply = (await complete(system, prompt) or "").strip()
+        if not reply or reply == "LLM_DISABLED" or reply.startswith("Error generating response"):
+            logger.info("plan revision for %s: AI unavailable, current plan stands", user_id)
+            return None
+        revised = checked(reply)
+        if revised is None:
+            return None
     # Scope never shrinks within a day: a dropped add stays judged (and, no
     # longer in allow, blocked) rather than falling outside the gate.
     revised.scope = sorted(set(revised.scope) | scope)
     doc = await store.save(db, redis, user_id, day, revised, now)
     logger.info("plan revised for %s: v%d (%s)", user_id, doc["version"], reasons[0][0])
-    from backend.plan.builder import _tell
-
-    await _tell(db, user_id, doc)
+    await builder._tell(db, user_id, doc)
     return doc
+
+
+async def _revise_with_tools(db, redis, user_id: str, values: dict, day, checked, llm=None):
+    """The revised plan from the tool loop, or None to use the single call."""
+    from backend.ai.facts import as_tools
+    from backend.ai.runner import run_with_tools
+    from backend.plan.builder import PlanReply, _seed_values, ground_rationale
+    from backend.prompts import render
+
+    system, prompt = render("game_plan_revision_tools", **values)
+    tools = as_tools(db, redis, user_id, ["news", "price_summary", "positions"])
+    out = await run_with_tools("plan_revision", system=system, prompt=prompt, tools=tools, tier="deep",
+                               schema=PlanReply, llm=llm, reserve=lambda: store.reserve_call(redis, day))
+    if not isinstance(out["output"], PlanReply):
+        return None
+    revised = checked(out["output"].model_dump())
+    if revised is not None:
+        revised.rationale = ground_rationale(revised.rationale, out["facts"] + _seed_values(values))
+    return revised
 
 
 async def loop(db, redis, now: Optional[datetime] = None) -> int:

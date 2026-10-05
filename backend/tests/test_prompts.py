@@ -23,6 +23,8 @@ PROMPTS = {
                         "candidates": "c", "caps": "k"},
     "game_plan_revision": {"now": "Mon", "trigger": "t", "regime": "r", "plan": "p", "positions": "x",
                            "strategies": "s"},
+    "game_plan_revision_tools": {"now": "Mon", "trigger": "t", "regime": "r", "plan": "p", "positions": "x",
+                                 "strategies": "s"},
     "index_move": {"name": "NIFTY 50", "session_date": "2026-09-26", "session": "- Close 25,123.45",
                    "trend": "- Month +1.2%", "peers": "- SENSEX: -0.40%", "movers": "- HDFCBANK: -1.90%",
                    "headlines": "- RBI holds rates (ET)"},
