@@ -55,7 +55,7 @@ async def test_the_old_token_stops_working_once_rotated(store):
     raw = await store.issue("user-1")
     await store.rotate(raw)
 
-    assert await store.rotate(raw) is None
+    assert await store.rotate(raw, now=datetime.now(timezone.utc) + timedelta(minutes=1)) is None
 
 
 @pytest.mark.asyncio
@@ -91,8 +91,8 @@ async def test_reusing_a_rotated_away_token_revokes_the_whole_chain(store):
     _, second = await store.rotate(raw)
     _, third = await store.rotate(second)
 
-    # The attacker replays the first (dead) token.
-    result = await store.rotate(raw)
+    # The attacker replays the first (dead) token, well after the rotation.
+    result = await store.rotate(raw, now=datetime.now(timezone.utc) + timedelta(minutes=1))
 
     assert result is None
     # The legitimate, still-current token is dead too now.
@@ -127,3 +127,27 @@ async def test_revoke_all_kills_every_token_for_that_user_only(store):
 @pytest.mark.asyncio
 async def test_revoking_an_unknown_token_does_not_raise(store):
     await store.revoke("not-a-real-token")
+
+
+@pytest.mark.asyncio
+async def test_two_tabs_refreshing_at_once_both_stay_signed_in(store):
+    """Tabs share the refresh cookie and can refresh in the same instant. The
+    slower one presented a token the faster one had just rotated, which read
+    as a replay and logged every session out."""
+    import asyncio
+
+    raw = await store.issue("user-1")
+    first, second = await asyncio.gather(store.rotate(raw), store.rotate(raw))
+
+    assert first is not None and second is not None
+    assert first[1] != second[1]
+    assert await store.rotate(first[1]) is not None
+    assert await store.rotate(second[1]) is not None
+
+
+@pytest.mark.asyncio
+async def test_a_token_is_rotated_away_only_once(store):
+    raw = await store.issue("user-1")
+    await store.rotate(raw)
+    rotated = await store.collection.count_documents({"rotated": True})
+    assert rotated == 1

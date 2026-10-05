@@ -115,10 +115,16 @@ def test_refresh_with_a_garbage_cookie_is_unauthorized(client):
     assert resp.status_code == 401
 
 
-def test_reusing_a_rotated_away_cookie_is_refused(client):
+def test_reusing_a_rotated_away_cookie_is_refused(client, refresh_store):
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+
     login = _login(client)
     client.cookies.set(settings.REFRESH_COOKIE_NAME, login.cookies.get(settings.REFRESH_COOKIE_NAME))
     client.post("/api/v1/auth/refresh")  # rotates it away
+    # ...a minute ago: past the grace window two tabs get for a shared cookie.
+    asyncio.run(refresh_store.collection.update_many(
+        {"rotated": True}, {"$set": {"revoked_at": datetime.now(timezone.utc) - timedelta(minutes=1)}}))
 
     # The browser replays the original (now-dead) cookie.
     client.cookies.set(settings.REFRESH_COOKIE_NAME, login.cookies.get(settings.REFRESH_COOKIE_NAME))

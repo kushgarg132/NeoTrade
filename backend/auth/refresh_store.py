@@ -35,6 +35,10 @@ def _as_utc(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
+# Two tabs share the refresh cookie and may refresh in the same instant.
+ROTATION_GRACE = timedelta(seconds=10)
+
+
 class RefreshTokenStore:
     def __init__(self, db) -> None:
         # Deferred, matching UserStore: FastAPI constructs every route
@@ -74,28 +78,34 @@ class RefreshTokenStore:
         self, raw_token: str, now: Optional[datetime] = None
     ) -> Optional[tuple[str, str]]:
         now = now or datetime.now(timezone.utc)
-        doc = await self.collection.find_one({"token_hash": _hash(raw_token)})
-        if doc is None:
-            return None
-
-        if doc["revoked_at"] is not None:
-            if doc["rotated"]:
-                # This exact token already produced its successor once --
-                # presenting it again is a replay, not a logged-out client
-                # retrying. A token someone deliberately logged out of
-                # (revoked but not rotated) is expected to be dead and must
-                # not take a sibling session down with it.
-                await self.revoke_all(doc["user_id"])
-            return None
-
-        if _as_utc(doc["expires_at"]) <= now:
-            return None
-
-        new_raw = await self.issue(doc["user_id"], now=now)
-        await self.collection.update_one(
-            {"_id": doc["_id"]}, {"$set": {"revoked_at": now, "rotated": True}}
+        token_hash = _hash(raw_token)
+        # Claim atomically: two refreshes of one token can't both rotate it.
+        doc = await self.collection.find_one_and_update(
+            {"token_hash": token_hash, "revoked_at": None},
+            {"$set": {"revoked_at": now, "rotated": True}},
         )
-        return doc["user_id"], new_raw
+        if doc is not None:
+            if _as_utc(doc["expires_at"]) <= now:
+                return None
+            return doc["user_id"], await self.issue(doc["user_id"], now=now)
+
+        doc = await self.collection.find_one({"token_hash": token_hash})
+        if doc is None or doc["revoked_at"] is None:
+            return None
+        if not doc["rotated"]:
+            # Deliberately logged out: dead, and it must not take a sibling
+            # session down with it.
+            return None
+        if now - _as_utc(doc["revoked_at"]) <= ROTATION_GRACE:
+            # Another tab sharing the cookie refreshed a moment ago: give this
+            # tab its own session instead of treating it as a replay.
+            if _as_utc(doc["expires_at"]) <= now:
+                return None
+            return doc["user_id"], await self.issue(doc["user_id"], now=now)
+        # This exact token already produced its successor long ago --
+        # presenting it again is a replay of a stolen or superseded token.
+        await self.revoke_all(doc["user_id"])
+        return None
 
     async def revoke(self, raw_token: str) -> None:
         await self.collection.update_one(
