@@ -32,6 +32,9 @@ _SEBI_CHARGE_PER_CRORE = 10.0
 _STAMP_DUTY_BUY_PCT = 0.00015          # delivery
 _STAMP_DUTY_INTRADAY_BUY_PCT = 0.00003  # intraday
 _GST_PCT = 0.18
+# Depository charge per scrip on each day delivery shares leave the demat
+# account: Rs 13.50 + 18% GST (CDSL via Zerodha). Not on intraday.
+DP_CHARGE = 15.93
 
 
 def calculate_indian_costs(
@@ -58,5 +61,7 @@ def calculate_indian_costs(
     stamp_duty = turnover * stamp_rate if is_buy else 0.0
     gst = _GST_PCT * (brokerage + exchange_txn_charges + sebi_charges)
 
-    total = brokerage + stt + exchange_txn_charges + sebi_charges + stamp_duty + gst
+    dp = DP_CHARGE if product == "CNC" and not is_buy else 0.0
+
+    total = brokerage + stt + exchange_txn_charges + sebi_charges + stamp_duty + gst + dp
     return round(total, 2)

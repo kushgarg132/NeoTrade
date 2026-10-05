@@ -58,7 +58,9 @@ async def test_a_downtrend_sells_everything_into_the_risk_off_sleeve():
 
     book = await paper.FactorBookStore(db).get("alice")
     assert summary["exposure"] == 0 and summary["sold"] and book["shares"] == {}
-    assert book["cash"] > 299_000  # idle cash accrued the risk-off yield for the month
+    # idle cash accrued the risk-off yield for the month; every sell paid the
+    # Rs 15.93 DP charge on top of the other charges
+    assert book["cash"] > 298_800
     assert "risk-off" in paper.summary_text(summary)
 
 
