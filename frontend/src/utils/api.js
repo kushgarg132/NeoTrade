@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { detailToText } from './errors';
 
 // In production this must be same-origin (relative), not the backend's own
 // nip.io host: the refresh-token cookie is SameSite=None, which browsers
@@ -82,6 +83,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const { config, response } = error;
+    // Pages render `detail` as text; a 422's list of objects would crash them.
+    if (response?.data && typeof response.data === 'object' && 'detail' in response.data) {
+      response.data.detail = detailToText(response.data.detail);
+    }
     const status = response?.status;
     const isAuthFailure = status === 401 || status === 403;
     const eligibleForRefresh = config && !NO_REFRESH_PATHS.includes(config.url) && !config._retriedAfterRefresh;
