@@ -870,3 +870,27 @@ def test_engine_live_orders_stay_on_paper_while_the_autopilot_is_off(monkeypatch
     asyncio.run(_scenario())
     live = getattr(seen["execution"], "_live_by_strategy", {})
     assert "technical_breakout" not in live
+
+
+def test_a_second_run_of_the_same_mode_is_refused(monkeypatch):
+    """A double-tapped Start (or Start plus chat 'start') ran two runs of one
+    mode; each emitted the same signals, so every order went out twice."""
+    monkeypatch.setattr(trading, "InstrumentMaster", _FakeMaster)
+    monkeypatch.setattr(trading, "YFinanceProvider", _ForeverQuoteProvider)
+    monkeypatch.setattr(trading, "db", _FakeDb)
+    _no_active_broker_session(monkeypatch)
+
+    app = FastAPI()
+    app.include_router(trading.router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = lambda: _USER
+    app.dependency_overrides[trading.get_run_store] = lambda: RunStore(_FakeDb.db)
+    body = {"mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 0.01}
+
+    with TestClient(app) as test_client:
+        first = test_client.post("/api/v1/trading/start", json=body)
+        second = test_client.post("/api/v1/trading/start", json=body)
+        try:
+            assert first.status_code == 200
+            assert second.status_code == 409 and "already running" in second.json()["detail"]
+        finally:
+            test_client.post("/api/v1/trading/stop", json={"run_id": first.json()["run_id"]})

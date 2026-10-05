@@ -281,6 +281,24 @@ async def launch_run(
     decides only which of them may route live -- an unproven strategy still
     paper-trades, which is how it earns a track record at all. Routing live
     also needs that record to clear the paper gate (backend/risk/paper_gate.py)."""
+    # One run per mode: two would each emit the same signals and every order
+    # would go out twice. A short Redis lock covers two workers at once.
+    lock = f"launch:{user_id}:{mode}"
+    if db.redis is not None and not await db.redis.set(lock, "1", nx=True, ex=30):
+        raise HTTPException(status_code=409, detail=f"A {mode.lower()} run is already starting.")
+    try:
+        if any(r["mode"] == mode for r in await runs.list_active(user_id)):
+            raise HTTPException(status_code=409, detail=f"A {mode.lower()} run is already running; stop it first.")
+        return await _launch_run(user_id, mode, universe, poll_interval_seconds, runs, origin)
+    finally:
+        if db.redis is not None:
+            await db.redis.delete(lock)
+
+
+async def _launch_run(
+    user_id: str, mode: str, universe: Optional[list[str]], poll_interval_seconds: float,
+    runs: RunStore, origin: str,
+) -> str:
     master = InstrumentMaster(db.db)
     symbols = universe or list(ALL_SCAN_STOCKS)
     credentials = get_credential_store()
