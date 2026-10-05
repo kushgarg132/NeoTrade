@@ -368,3 +368,43 @@ async def test_learned_rules_hold_back_a_paused_strategys_entry_but_never_its_ex
         account_size=1_000_000.0, max_exposure=1_000_000.0, learned=learned,
     )
     assert len(orders) == 1
+
+
+# The per-trade cap is a ceiling on what one stock may hold, not per order:
+# repeat entries used to stack (BIOCON reached Rs 9,527 under a Rs 5,000 cap).
+
+def _held(symbol: str, quantity: float, avg_price: float) -> Portfolio:
+    portfolio = Portfolio()
+    portfolio.positions[symbol] = Position(symbol=symbol, quantity=quantity, avg_price=avg_price)
+    return portfolio
+
+
+@pytest.mark.asyncio
+async def test_per_trade_cap_counts_what_the_stock_already_holds():
+    intent = Intent(symbol="RELIANCE", side=Side.BUY, strength=1.0, reason_codes=["signal"], stop_hint=90.0)
+    orders = await size_intents(
+        [intent], _held("RELIANCE", 30.0, 100.0), _FakeCtx({"RELIANCE": 100.0}), {}, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=1_000_000.0, per_trade_cap=5_000.0,
+    )
+    assert [o.quantity for o in orders] == [20]  # 3,000 held + 20 x 100 = the 5,000 cap
+
+
+@pytest.mark.asyncio
+async def test_a_stock_already_at_the_cap_gets_no_new_entry():
+    intent = Intent(symbol="RELIANCE", side=Side.BUY, strength=1.0, reason_codes=["signal"], stop_hint=90.0)
+    orders = await size_intents(
+        [intent], _held("RELIANCE", 50.0, 100.0), _FakeCtx({"RELIANCE": 100.0}), {}, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=1_000_000.0, per_trade_cap=5_000.0,
+    )
+    assert orders == []
+
+
+@pytest.mark.asyncio
+async def test_the_cap_never_trims_an_exit():
+    intent = Intent(symbol="RELIANCE", side=Side.SELL, strength=1.0, reason_codes=["exit"], stop_hint=110.0)
+    orders = await size_intents(
+        [intent], _held("RELIANCE", 80.0, 100.0), _FakeCtx({"RELIANCE": 100.0}),
+        {"RELIANCE": _FakeStrategy("INTRADAY")}, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=1_000_000.0, per_trade_cap=5_000.0,
+    )
+    assert len(orders) == 1 and orders[0].quantity > 50  # risk-sized, not cut to 5,000 / 100

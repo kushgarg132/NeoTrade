@@ -221,19 +221,23 @@ async def size_intents(
         if size <= 0:
             continue
 
-        # Over the per-trade cap: trim to the shares that fit, as the
-        # long-term path does (autorun.py). Risk sizing with a tight intraday
-        # stop lands far above a small account's cap, and dropping the trade
-        # meant such an account never traded at all.
-        if per_trade_cap is not None and size * entry > per_trade_cap:
-            trimmed = float(int(per_trade_cap // entry))
-            logger.info(
-                "trimming %s from %g to %g shares: notional %.2f over per-trade cap %.2f",
-                intent.symbol, size, trimmed, size * entry, per_trade_cap,
-            )
-            size = trimmed
-            if size <= 0:
-                continue
+        # The per-trade cap bounds what one stock may hold: an entry is
+        # trimmed to the room left under it, as the long-term path trims
+        # (autorun.py), rather than dropped -- risk sizing with a tight
+        # intraday stop lands far above a small account's cap. An exit is
+        # never trimmed: the cap limits risk taken, not risk closed.
+        if per_trade_cap is not None and _opens(intent, portfolio, mode):
+            pos = portfolio.positions.get(intent.symbol)
+            room = per_trade_cap - (abs(pos.quantity * pos.avg_price) if pos else 0.0)
+            if size * entry > room:
+                trimmed = float(int(max(room, 0.0) // entry))
+                logger.info(
+                    "trimming %s from %g to %g shares: %.2f room left under the per-trade cap %.2f",
+                    intent.symbol, size, trimmed, max(room, 0.0), per_trade_cap,
+                )
+                size = trimmed
+                if size <= 0:
+                    continue
         notional = size * entry
         if not RiskRules.check_exposure_limit(current_exposure, max_exposure, notional):
             continue
