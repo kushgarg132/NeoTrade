@@ -159,6 +159,11 @@ async def _revise_with_tools(db, redis, user_id: str, values: dict, day, checked
     if not isinstance(out["output"], PlanReply):
         return None
     revised = checked(out["output"].model_dump())
+    # Exiting while allowing nothing new is a real revision; allowing nothing,
+    # exiting nothing and not skipping the day is an empty reply.
+    if revised is not None and not revised.allow and not revised.skip_day and not revised.exits:
+        logger.info("plan revision for %s: empty tool reply; unusable", user_id)
+        return None
     if revised is not None:
         revised.rationale = ground_rationale(revised.rationale, out["facts"] + _seed_values(values))
     return revised

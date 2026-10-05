@@ -63,7 +63,7 @@ async def test_stops_after_max_rounds_with_a_forced_answer():
 
 
 async def test_budget_cut_forces_the_final_answer():
-    grants = iter([True, False])
+    grants = iter([True, False, True])  # tool round, refused round, the final turn
 
     async def reserve():
         return next(grants, False)
@@ -131,3 +131,23 @@ async def test_repair_turn_never_repeats_the_assistant_message():
     await runner.run_with_tools("t", system="s", prompt="p", tools=[], tier="fast", schema=_Verdict, llm=llm)
     roles = [type(m).__name__ for m in llm.seen[-1]]
     assert all(not (a == b == "AIMessage") for a, b in zip(roles, roles[1:]))
+
+
+async def test_no_budget_means_no_model_call_at_all():
+    async def reserve():
+        return False
+    llm = _Script()
+    out = await runner.run_with_tools("t", system="s", prompt="p", tools=await _sentiment_tools(), tier="fast",
+                                      reserve=reserve, llm=llm)
+    assert out["output"] is None and llm.seen == []
+
+
+async def test_final_and_repair_turns_are_reserved():
+    grants = iter([True, False, False])  # tool round, refused round, refused final turn
+
+    async def reserve():
+        return next(grants, False)
+    llm = _Script(_call("sentiment", {"symbol": "TCS"}))
+    out = await runner.run_with_tools("t", system="s", prompt="p", tools=await _sentiment_tools(), tier="fast",
+                                      reserve=reserve, llm=llm)
+    assert out["output"] is None and len(llm.seen) == 1

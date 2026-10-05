@@ -52,9 +52,12 @@ behaviour does not change. Chat's action tools are untouched; the fact layer is 
 
 - Binds facts as LangChain tools (`MultiKeyChain.bind_tools`); loop: model → tool calls run
   concurrently → model, until a final answer or `max_rounds`.
-- Every model round reserves one call from `budget` (the plan budget for plan sites; else the
-  new `AI_TOOL_CALLS_PER_DAY`, default 300, Redis `ai:calls:<IST date>`). Budget spent or
-  `max_rounds` hit → one final no-tools turn answering from what it has.
+- Every model call reserves one call from `budget` (the plan budget for plan sites; else the
+  new `AI_TOOL_CALLS_PER_DAY`, default 300, Redis `ai:calls:<IST date>`) — tool rounds, the
+  final turn and the repair turn alike. `max_rounds` hit or the budget refusing a round → one
+  final turn answering from what it has, *if that turn can be reserved*; otherwise no answer
+  and the caller falls back (amended 2026-10-06, 16.2 review: an unbudgeted final turn let a
+  spent budget keep spending).
 - `schema` (pydantic): final answer validated, one repair retry.
 - Provider rejects tools, or anything raises → falls back once to the site's single-call prompt
   built from facts. A failure never leaves a feature empty.

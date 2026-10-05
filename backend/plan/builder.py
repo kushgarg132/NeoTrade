@@ -116,7 +116,7 @@ async def _tell(db, user_id: str, doc: dict) -> None:
 class PlanReply(BaseModel):
     """The tool loop's structured reply; validate() decides what of it stands."""
     model_config = ConfigDict(extra="ignore")
-    allow: list[dict] = []
+    allow: list[dict]  # required: an empty or schema-echo reply is unusable, not "block everything"
     add_symbols: list[str] = []
     risk_multiplier: float = 1.0
     max_positions: int = 10
@@ -162,6 +162,9 @@ async def _plan_with_tools(db, redis, user_id: str, ctx: dict, strategies: set[s
                         nifty200=set(nifty200_sectors()))
     except (ValueError, TypeError, OverflowError) as exc:
         logger.info("game plan for %s: tool reply rejected (%s)", user_id, exc)
+        return None
+    if not plan.allow and not plan.skip_day:
+        logger.info("game plan for %s: tool reply allows nothing without skipping the day; unusable", user_id)
         return None
     plan.rationale = ground_rationale(plan.rationale, out["facts"] + _seed_values(seed))
     return plan

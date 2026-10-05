@@ -1,6 +1,7 @@
 """The tool loop every tool-using AI feature shares: the model asks for
 facts (backend/ai/facts) as tools, gets them, and answers -- within
-`max_rounds`, inside a daily budget, with schema repair and a single-call
+`max_rounds`, inside a daily budget that every model call (the final and
+repair turns too) is charged to, with schema repair and a single-call
 fallback so a gateway that rejects tools never leaves a feature empty.
 `AI_TOOLS_ENABLED` off sends every caller down its fallback."""
 
@@ -109,6 +110,10 @@ async def run_with_tools(task: str, *, system: str, prompt: str, tools: list, ti
                 break
             messages.extend(await asyncio.gather(*(run_call(c) for c in calls)))
         if final is None:
+            # Every model call is budgeted, the final turn too: a spent budget means no answer.
+            if reserve is not None and not await reserve():
+                logger.info("ai %s: budget spent after %d round(s), no answer", task, result["rounds"])
+                return result
             # Still the tool-bound model: some providers reject tool history
             # with no tools defined. Any further tool calls are ignored.
             final = await bound.ainvoke(messages + [HumanMessage(content=FINAL_TURN)])
@@ -119,7 +124,7 @@ async def run_with_tools(task: str, *, system: str, prompt: str, tools: list, ti
             result["output"] = text
         else:
             parsed = _parse(schema, text)
-            if parsed is None:
+            if parsed is None and (reserve is None or await reserve()):
                 # `messages` already ends with the reply being repaired.
                 repair = await bound.ainvoke(messages + [HumanMessage(
                     content=f"Return only valid JSON for this schema: {json.dumps(schema.model_json_schema())}")])

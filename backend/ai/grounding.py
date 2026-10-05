@@ -52,8 +52,9 @@ def numbers_in(facts) -> list[float]:
             try:
                 found.append(abs(float(node.replace(",", ""))))
             except ValueError:
-                # Free text (a regime line, a headline): every number in it counts as data.
-                for m in _NUMBER.finditer(node):
+                # Free text (a regime line, a headline): its numbers count as data,
+                # its dates, times and list markers do not.
+                for m in _NUMBER.finditer(_LIST_MARKER.sub(" ", _DATE.sub(" ", node))):
                     try:
                         found.append(abs(float(m.group(2).replace(",", "").replace("−", "-"))))
                     except ValueError:

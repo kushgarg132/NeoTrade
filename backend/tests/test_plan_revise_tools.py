@@ -35,6 +35,19 @@ async def test_revision_uses_tools_and_keeps_exits():
 
 async def test_revision_without_positions_still_proceeds():
     mongo, redis, plan = await _setup(positions=False)
-    llm = _Script(_call("positions", {}), AIMessage(content=json.dumps({"skip_day": True, "rationale": ["Event risk."]})))
+    llm = _Script(_call("positions", {}), AIMessage(content=json.dumps({"allow": [], "skip_day": True, "rationale": ["Event risk."]})))
     doc = await revise.revise_plan(mongo, redis, "alice", plan, [("event_passed", "CPI")], NOW, llm=llm)
     assert doc["skip_day"] is True and doc["trigger"] == "event_passed"
+
+
+async def test_an_empty_revision_reply_keeps_the_current_plan(monkeypatch):
+    from backend.plan import builder
+
+    mongo, redis, plan = await _setup()
+
+    async def single(system, prompt):
+        return "not json"
+    monkeypatch.setattr(builder, "_llm", single)
+    llm = _Script(AIMessage(content=json.dumps({"allow": [], "rationale": ["Nothing to do."]})))
+    assert await revise.revise_plan(mongo, redis, "alice", plan, [("regime_flip", "x")], NOW, llm=llm) is None
+    assert (await store.current(redis, "alice", NOW.date()))["version"] == 1

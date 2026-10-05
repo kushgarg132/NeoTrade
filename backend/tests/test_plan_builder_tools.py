@@ -76,3 +76,29 @@ async def test_tools_off_uses_single_call(world, monkeypatch):
 def test_numbers_in_reads_numbers_inside_text():
     assert 0.1 in grounding.numbers_in(["neutral (+0.10): flat", {"x": "FII -1,200 cr"}])
     assert 1200.0 in grounding.numbers_in([{"x": "FII -1,200 cr"}])
+
+
+async def test_spent_budget_stops_the_tool_path_and_stores_the_fallback(world, monkeypatch):
+    mongo, redis = world
+    monkeypatch.setattr(store.settings, "PLAN_LLM_CALLS_PER_DAY", 0)
+    llm = _Script(AIMessage(content=_plan_json()))
+    doc = await builder.build_plan(mongo, redis, "alice", NOW, llm=llm)
+    assert llm.seen == [] and doc["trigger"] == "fallback"
+
+
+async def test_empty_or_schema_echo_reply_is_unusable(world, monkeypatch):
+    mongo, redis = world
+
+    async def single(system, prompt):
+        return "not json"
+    monkeypatch.setattr(builder, "_llm", single)
+    llm = _Script(AIMessage(content="{}"))
+    doc = await builder.build_plan(mongo, redis, "alice", NOW, llm=llm)
+    assert doc["trigger"] == "fallback"
+
+
+async def test_an_entirely_unsupported_rationale_is_stored_empty(world):
+    mongo, redis = world
+    llm = _Script(AIMessage(content=_plan_json(rationale=["Crude at $150.", "Brent up 9.9%."])))
+    doc = await builder.build_plan(mongo, redis, "alice", NOW, llm=llm)
+    assert doc["trigger"] == "pre_open" and doc["rationale"] == []

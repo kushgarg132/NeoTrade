@@ -56,3 +56,8 @@ def test_percent_tolerance_is_half_a_unit_of_the_last_digit():
 
 def test_dollar_and_rs_amounts_are_figures():
     assert grounding.unsupported("Crude at $150; stock at Rs. 450.", [{"x": 1.0}]) == ["$150", "Rs. 450"]
+
+
+def test_dates_and_times_in_facts_are_not_data():
+    facts = ["Tue 06 Oct 2026 08:46 IST", "- 14:30 US CPI"]
+    assert grounding.unsupported("Volatility may rise 30% after CPI; TCS could move 46%.", facts) == ["30%", "46%"]
