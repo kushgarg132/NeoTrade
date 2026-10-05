@@ -11,6 +11,8 @@ their own specs.
 1. Targets: a rule fills them, single stocks can be overridden.
 2. Money: optional new money is used first; sells cover only what is still over target.
 3. New names may be brought in from the watchlist and AI longterm picks, ticked by the user.
+4. Each holding row shows its AI verdict as a one-tap action with the quantity filled in. A SELL
+   verdict sells the whole holding. An ADD verdict buys up to the rebalance target.
 
 ## Safety
 
@@ -69,6 +71,22 @@ Mutual funds and unpriced holdings are excluded and listed in `excluded` with th
 ```
 Sells are listed first, then buys, each by value descending.
 
+### Row actions (`suggested` on each holding)
+
+`target_gaps(holdings, targets, sectors) -> {symbol: weight_gap}` holds the target maths from
+`plan_rebalance`, and `plan_rebalance` calls it, so there is one copy of that maths. There are
+no candidates and no new money.
+
+`GET /portfolio`, only when verdicts are visible, adds `suggested` to each STOCK or ETF row:
+- `SELL` verdict: `{"side": "SELL", "quantity": held quantity, "price": last price}`.
+- `ADD` verdict: buy `floor(gap × total / price)` shares. No cash scaling, because broker cash is
+  unknown. If that is 0 or less, it returns `{"at_target": true}` and no trade.
+- The 1% charges filter applies. A dropped trade gives `{"skipped": reason}`.
+- `HOLD`, `REVIEW`, `KEEP` and mutual funds: `suggested` is null.
+
+When verdicts are hidden, `present()` sets `suggested` to null on every row, alongside the
+existing masking.
+
 ### Prefs
 
 `rebalance_targets` (default):
@@ -106,6 +124,11 @@ It is validated in `routers/settings.py`:
     weight now → after, and tax on sells, with a **Trade** button that opens the pre-filled ticket.
   - Skipped and excluded rows are shown with their reasons.
   - A stale-price warning shows when `stale_since` is set.
+- **Holding rows** (phone list and desktop statement): when `suggested` has a trade, the verdict
+  stamp becomes a button, **SELL 12 · ₹4,320** or **BUY 5 · ₹1,850**. One tap opens `OrderTicket`
+  pre-filled (side, quantity, LIMIT at last price, venue Paper). Paper places on one confirm. Mine
+  keeps the second tap. `at_target` shows "at target" and `skipped` shows its reason; neither has
+  a button. The existing Sell / Add buttons stay for a manual size.
 - **Plan tab**: unchanged. The plan is a markdown write-up with no per-trade items, and each
   holding row already has Sell / Add buttons.
 
@@ -123,6 +146,8 @@ It is validated in `routers/settings.py`:
 - Undated lots are reported as `unknown_qty`.
 - Mutual funds and unpriced holdings are excluded.
 - `weight_after` sums to at most 100%.
+- Row actions: SELL suggests the full holding; ADD suggests the target gap; ADD at or above
+  target gives `at_target`; HOLD gives null; hidden verdicts null out `suggested`.
 - Router: AI candidates are hidden when verdicts are not visible; another user's snapshot is
   never read; no snapshot gives 409.
 - Frontend: `npm run build`, plus a vitest test that the ticket's pre-filled quantity and limit
