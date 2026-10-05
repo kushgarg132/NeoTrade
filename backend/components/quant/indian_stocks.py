@@ -3,29 +3,30 @@ List of Indian Small Cap and Mid Cap stocks for scanning.
 These stocks tend to show more movement than large caps.
 """
 
-# Nifty Midcap 50 sample stocks
+# Nifty Midcap 50 sample stocks.
+# 2026-10-05: dropped delisted/renamed names and anything under Rs 50 (wide spreads).
 MIDCAP_STOCKS = [
     "ASTRAL", "BALKRISIND", "BATAINDIA", "BHEL", "BIOCON",
     "CANFINHOME", "COFORGE", "COLPAL", "CONCOR", "CUMMINSIND",
     "DALBHARAT", "ESCORTS", "FEDERALBNK", "FORTIS", "GMRAIRPORT",
-    "GUJGASLTD", "HINDPETRO", "IDFCFIRSTB", "INDHOTEL", "INDUSTOWER",
+    "HINDPETRO", "IDFCFIRSTB", "INDHOTEL", "INDUSTOWER",
     "IRCTC", "JINDALSTEL", "JUBLFOOD", "LICHSGFIN", "LUPIN",
     "MFSL", "MPHASIS", "NATIONALUM", "NMDC", "OBEROIRLTY",
     "PAGEIND", "PETRONET", "PFC", "PIIND", "POLYCAB",
     "RAMCOCEM", "RECLTD", "SAIL", "TATACOMM", "TATAPOWER",
-    "TRIDENT", "VOLTAS", "ZEEL"
+    "VOLTAS", "ZEEL"
 ]
 
 # Small cap stocks with high volatility
 SMALLCAP_STOCKS = [
-    "ADANIPOWER", "ALOKINDS", "APOLLOTYRE", "ASHOKLEY", "AUROPHARMA",
-    "BALRAMCHIN", "BSOFT", "CANBK", "CENTRALBK", "CHAMBLFERT",
-    "COCHINSHIP", "DEEPAKNTR", "DELTACORP", "DISHTV", "EIDPARRY",
+    "ADANIPOWER", "APOLLOTYRE", "ASHOKLEY", "AUROPHARMA",
+    "BALRAMCHIN", "BSOFT", "CANBK", "CHAMBLFERT",
+    "COCHINSHIP", "DEEPAKNTR", "DELTACORP", "EIDPARRY",
     "EXIDEIND", "GAIL", "GLENMARK", "GNFC", "GRANULES",
-    "GSPL", "HFCL", "HINDZINC", "IDBI", "IEX",
+    "HFCL", "HINDZINC", "IDBI", "IEX",
     "NHPC", "NLCINDIA", "ORIENTELEC", "PNBHOUSING", "RBLBANK",
-    "RELAXO", "RVNL", "SJVN", "SUZLON", "TATAELXSI",
-    "TATAMTRDVR", "THERMAX", "TIINDIA", "TRENT", "ZYDUSLIFE"
+    "RELAXO", "RVNL", "SJVN", "TATAELXSI",
+    "THERMAX", "TIINDIA", "TRENT", "ZYDUSLIFE"
 ]
 
 # Combined list for scanning - focus on mid and small caps
