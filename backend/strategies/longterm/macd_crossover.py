@@ -10,9 +10,16 @@ from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
 from backend.strategies.strength import graded, ramp, sma
+from backend.strategies.card import StrategyCard
 
 
 class MACDCrossoverStrategy(TokenResolvingStrategy):
+    CARD = StrategyCard(
+        style="momentum", regimes=["risk_on", "neutral"], needs=["trend_day"],
+        best_when="A fresh MACD crossover starts a new daily trend.",
+        avoid_when="Flat, range-bound tape, where crossovers whipsaw.",
+        typical_hold_minutes=7500,
+    )
     PARAMS = {"stop_pct": 0.03, "target_pct": 0.06}
     GRID = {"stop_pct": [0.02, 0.03, 0.05], "target_pct": [0.06, 0.10]}
 

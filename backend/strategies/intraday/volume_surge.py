@@ -17,9 +17,16 @@ open/close/volume.
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
+from backend.strategies.card import StrategyCard
 
 
 class VolumeSurgeStrategy(TokenResolvingStrategy):
+    CARD = StrategyCard(
+        style="momentum", regimes=["risk_on", "neutral"], needs=["volume_spike"],
+        best_when="A bar prints several times normal volume with a decisive close.",
+        avoid_when="Low-liquidity names or news-free spikes late in the session.",
+        typical_hold_minutes=60,
+    )
     PARAMS = {"volume_mult": 3.0}
     GRID = {"volume_mult": [2.0, 3.0, 4.0, 5.0]}
 

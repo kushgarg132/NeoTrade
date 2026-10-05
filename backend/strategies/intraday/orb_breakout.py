@@ -17,12 +17,19 @@ from backend.components.quant.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
+from backend.strategies.card import StrategyCard
 
 SESSION_LOOKBACK_BARS = 100
 OPENING_RANGE_MINUTES = 15
 
 
 class ORBStrategy(TokenResolvingStrategy):
+    CARD = StrategyCard(
+        style="breakout", regimes=["risk_on", "neutral"], needs=["volume_spike"],
+        best_when="A clean opening range breaks on above-average volume in a trending tape.",
+        avoid_when="A choppy open or a high-impact event due within the hour.",
+        typical_hold_minutes=90,
+    )
     PARAMS = {"range_minutes": OPENING_RANGE_MINUTES, "volume_mult": 1.5}
     GRID = {"range_minutes": [15, 30], "volume_mult": [1.0, 1.5, 2.0]}
 

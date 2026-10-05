@@ -18,9 +18,16 @@ from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
 from backend.strategies.strength import graded, ramp, sma
+from backend.strategies.card import StrategyCard
 
 
 class MeanReversionStrategy(TokenResolvingStrategy):
+    CARD = StrategyCard(
+        style="reversion", regimes=["neutral", "risk_off"], needs=["range_day"],
+        best_when="A quality stock is oversold against its own range without bad news behind it.",
+        avoid_when="A stock falling on real bad news, where cheap gets cheaper.",
+        typical_hold_minutes=3750,
+    )
     PARAMS = {"rsi_max": 30.0, "target_pct": 0.05}
     GRID = {"rsi_max": [25.0, 30.0, 35.0], "target_pct": [0.05, 0.08]}
 

@@ -9,6 +9,7 @@ from backend.components.quant.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
+from backend.strategies.card import StrategyCard
 
 _SMA_PERIOD = 200
 
@@ -18,6 +19,12 @@ class QualityMomentumStrategy(TokenResolvingStrategy):
     symbol is in the quality-screened universe. `quality_scores` is a
     symbol -> quality_score lookup for the same universe -- used directly as
     Intent.strength."""
+    CARD = StrategyCard(
+        style="value", regimes=["risk_on", "neutral"], needs=[],
+        best_when="Strong-fundamentals names are also leading on price.",
+        avoid_when="A broad sell-off, where quality falls with everything else.",
+        typical_hold_minutes=22500,
+    )
 
     def __init__(
         self,

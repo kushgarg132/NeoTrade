@@ -15,9 +15,16 @@ from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.options.resolver import is_fo_eligible
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
+from backend.strategies.card import StrategyCard
 
 
 class CashSecuredPutStrategy(TokenResolvingStrategy):
+    CARD = StrategyCard(
+        style="options", regimes=["neutral", "risk_off"], needs=[],
+        best_when="An F&O stock you would happily own is oversold and put premiums are rich.",
+        avoid_when="A stock you would not want assigned, or a crash still unfolding.",
+        typical_hold_minutes=11250,
+    )
     def __init__(self, universe: list[str], symbol_for_token: dict[int, str]) -> None:
         super().__init__(universe, symbol_for_token)
         self.spec = StrategySpec(

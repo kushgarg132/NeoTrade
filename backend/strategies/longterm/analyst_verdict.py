@@ -11,6 +11,7 @@ from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.scoring.composite import AI_CAP, RULE_FLOOR
 from backend.strategies.base import TokenResolvingStrategy
+from backend.strategies.card import StrategyCard
 
 # 1-10 scale (backend.components.shared.models.NewsArticle.impact_score's own range) -- below
 # this, routine/low-consequence news shouldn't be enough to trigger a trade.
@@ -21,6 +22,12 @@ class AnalystVerdictStrategy(TokenResolvingStrategy):
     """BUY when the symbol's cached analyst verdict is bullish and material. `verdicts` is a
     symbol -> {"sentiment_score", "impact_score", "label", "top_reason"} lookup for the same
     curated universe this strategy trades."""
+    CARD = StrategyCard(
+        style="value", regimes=["risk_on", "neutral", "risk_off"], needs=["catalyst"],
+        best_when="A fresh, material analyst verdict backed by scored news.",
+        avoid_when="Stale verdicts or news the market has already priced in.",
+        typical_hold_minutes=22500,
+    )
 
     def __init__(
         self,

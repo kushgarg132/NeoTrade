@@ -11,12 +11,19 @@ from backend.components.quant.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
+from backend.strategies.card import StrategyCard
 
 RSI_BULL_THRESHOLD = 60.0
 MIN_RSI_JUMP = 5.0  # ponytail: filters slow drifts over the line -- 6 trades/25% win/PF 0.20 as-tuned before this, see spec memlog
 
 
 class RSIMomentumScalpStrategy(TokenResolvingStrategy):
+    CARD = StrategyCard(
+        style="momentum", regimes=["risk_on", "neutral"], needs=["trend_day"],
+        best_when="RSI crosses into momentum territory with the session trend behind it.",
+        avoid_when="Sideways chop, where RSI crosses back and forth without follow-through.",
+        typical_hold_minutes=30,
+    )
     PARAMS = {"bull": RSI_BULL_THRESHOLD, "min_jump": MIN_RSI_JUMP}
     GRID = {"bull": [60.0, 65.0], "min_jump": [3.0, 5.0, 8.0]}
 

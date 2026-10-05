@@ -15,9 +15,16 @@ from backend.core.models import Side
 from backend.engine.protocols import StrategySpec
 from backend.options.resolver import is_fo_eligible
 from backend.strategies.intraday.orb_breakout import ORBStrategy
+from backend.strategies.card import StrategyCard
 
 
 class ORBOptionsStrategy(ORBStrategy):
+    CARD = StrategyCard(
+        style="options", regimes=["risk_on", "neutral"], needs=["volume_spike"],
+        best_when="An F&O large-cap breaks its opening range decisively and premiums are live.",
+        avoid_when="Premiums are wide or expiry-day decay dominates the move.",
+        typical_hold_minutes=60,
+    )
     def __init__(self, universe: list[str], symbol_for_token: dict[int, str]) -> None:
         super().__init__(universe, symbol_for_token)
         self.spec = StrategySpec(

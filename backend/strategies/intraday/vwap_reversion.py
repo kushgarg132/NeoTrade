@@ -17,12 +17,19 @@ from backend.components.quant.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
+from backend.strategies.card import StrategyCard
 
 SESSION_LOOKBACK_BARS = 100  # > 75 5m bars/session (09:15-15:30 IST), covers a full NSE day
 DEVIATION_THRESHOLD = 0.006  # ponytail: 0.6%, tuned down from an initial 1.5% that barely ever fired (2 trades/59d backtest) -- see spec memlog
 
 
 class VWAPReversionStrategy(TokenResolvingStrategy):
+    CARD = StrategyCard(
+        style="reversion", regimes=["neutral"], needs=["range_day"],
+        best_when="Price stretches away from VWAP on a range-bound day and snaps back.",
+        avoid_when="A strong trend day, where price keeps running away from VWAP.",
+        typical_hold_minutes=45,
+    )
     PARAMS = {"deviation": DEVIATION_THRESHOLD}
     GRID = {"deviation": [0.004, 0.006, 0.008, 0.012]}
 

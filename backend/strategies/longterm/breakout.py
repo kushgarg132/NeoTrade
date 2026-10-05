@@ -12,9 +12,16 @@ from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
 from backend.strategies.strength import graded, ramp, sma
+from backend.strategies.card import StrategyCard
 
 
 class TechnicalBreakoutStrategy(TokenResolvingStrategy):
+    CARD = StrategyCard(
+        style="breakout", regimes=["risk_on"], needs=["volume_spike"],
+        best_when="A stock clears multi-week resistance on rising volume in a rising market.",
+        avoid_when="A risk-off market, where breakouts fail more often than they run.",
+        typical_hold_minutes=7500,
+    )
     PARAMS = {"volume_mult": 1.5, "target_r": 2.0}
     GRID = {"volume_mult": [1.5, 2.0], "target_r": [1.5, 2.0, 3.0]}
 
