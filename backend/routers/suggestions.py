@@ -151,20 +151,21 @@ async def approve_suggestion(
             status_code=409, detail=f"Suggestion already {suggestion['status'].lower()}"
         )
 
-    price = (
-        await option_premium(user.id, suggestion["symbol"])
-        if suggestion.get("option_contract")
-        else await mark_price(suggestion["symbol"])
-    )
-    order = await execute_suggestion(suggestion, ledger, price)
-
-    decided = await store.decide(user.id, suggestion_id, status="EXECUTED", order_id=order.id)
-    if decided is None:
-        # Someone decided it between the read above and here; the order is
-        # already in the ledger, so say so loudly rather than silently.
-        logger.warning("suggestion %s was decided concurrently after order %s", suggestion_id, order.id)
+    # Claim before filling, as approve-live does: two approvals at once (a
+    # page tap and a chat confirm) used to both book a fill.
+    if await store.decide(user.id, suggestion_id, status="SENDING") is None:
         raise HTTPException(status_code=409, detail="Suggestion was decided concurrently")
-    return decided
+    try:
+        price = (
+            await option_premium(user.id, suggestion["symbol"])
+            if suggestion.get("option_contract")
+            else await mark_price(suggestion["symbol"])
+        )
+        order = await execute_suggestion(suggestion, ledger, price)
+    except Exception:
+        await store.settle(user.id, suggestion_id, "PENDING")
+        raise
+    return await store.settle(user.id, suggestion_id, "EXECUTED", order_id=order.id)
 
 
 @router.post("/{suggestion_id}/reject")

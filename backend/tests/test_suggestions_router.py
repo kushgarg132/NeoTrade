@@ -474,3 +474,44 @@ def test_an_option_over_the_per_trade_cap_is_refused(live_client, store, mongo):
     resp = live_client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
     assert resp.status_code == 409 and "per-trade cap" in resp.json()["detail"]
     assert broker.placed == []
+
+
+async def test_two_concurrent_paper_approvals_book_one_fill(store, ledger):
+    """A page tap and a chat confirm at once: both passed the PENDING read and
+    both booked a fill before one got 409. Claim first, then fill."""
+    import asyncio
+
+    from fastapi import HTTPException
+
+    suggestion = await _seed(store)
+
+    async def slow_mark(symbol):
+        await asyncio.sleep(0.01)
+        return 105.0
+
+    async def approve():
+        try:
+            return await suggestions_router.approve_suggestion(
+                suggestion["id"], user=_USER, store=store, ledger=ledger, mark_price=slow_mark, option_premium=None)
+        except HTTPException as exc:
+            return exc.status_code
+
+    results = await asyncio.gather(approve(), approve())
+    assert sorted(r if isinstance(r, int) else 200 for r in results) == [200, 409]
+    assert len(await ledger.get_fills()) == 1
+
+
+async def test_a_failed_paper_fill_leaves_the_proposal_pending(store, ledger):
+    from fastapi import HTTPException
+
+    suggestion = await _seed(store)
+
+    async def no_price(symbol):
+        raise HTTPException(status_code=502, detail="no quote")
+
+    try:
+        await suggestions_router.approve_suggestion(
+            suggestion["id"], user=_USER, store=store, ledger=ledger, mark_price=no_price, option_premium=None)
+    except HTTPException:
+        pass
+    assert (await store.get("alice", suggestion["id"]))["status"] == "PENDING"
