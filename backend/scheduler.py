@@ -153,6 +153,11 @@ async def _run_locked(db, redis) -> Optional[dict]:
         return None
 
     try:
+        # A worker that woke late can take the lock after the pass already
+        # ran and released it: today's pass is done, so skip.
+        if await redis.get(LAST_PASS_KEY) == datetime.now(timezone.utc).astimezone(IST).date().isoformat():
+            logger.info("daily pass already done today, skipping")
+            return None
         return await run_daily_jobs(db, redis=redis)
     finally:
         # Only release if we still hold it -- never delete a lock some other

@@ -348,3 +348,25 @@ async def test_a_worker_never_releases_a_lock_it_no_longer_owns(mongo, monkeypat
     await scheduler._run_locked(mongo, redis)
 
     redis.delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_late_waking_worker_skips_a_pass_already_done_today(mongo, monkeypatch):
+    """Worker A finished and released the lock; worker B wakes late, takes the
+    free lock, and must not run a second pass."""
+    scanned = []
+
+    async def fake_scan(db, user_id, universe, **kwargs):
+        scanned.append(user_id)
+        return []
+    monkeypatch.setattr(scheduler, "scan_universe", fake_scan)
+    monkeypatch.setattr(scheduler.uuid, "uuid4", lambda: "fixed-token")
+    today = datetime.now(timezone.utc).astimezone(scheduler.IST).date().isoformat()
+
+    redis = AsyncMock()
+    redis.set = AsyncMock(return_value=True)
+    redis.get = AsyncMock(side_effect=lambda key: today if key == scheduler.LAST_PASS_KEY else "fixed-token")
+
+    assert await scheduler._run_locked(mongo, redis) is None
+    assert scanned == []
+    redis.delete.assert_awaited_once_with(scheduler.LOCK_KEY)
