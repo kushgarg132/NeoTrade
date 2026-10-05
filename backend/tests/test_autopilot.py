@@ -285,3 +285,19 @@ async def test_lock_release_never_deletes_another_workers_lock(world, monkeypatc
     monkeypatch.setattr(service, "_submit", slow_submit)
     await service.submit(db, redis, "alice", _order(qty=1), now=OPEN)
     assert redis.kv.get("autopilot:lock:alice") == "other-worker"
+
+
+@pytest.mark.parametrize("order,price,state,prefs,refusal", [
+    (_order(), 100.0, _state(event_soon=True), PREFS, "economic event"),
+    (_order(side=Side.SELL), 100.0, _state(event_soon=True, regime="risk_off", held={"INFY": (1, "CNC")}), PREFS, None),
+    (_order(qty=3), 1000.0, _state(regime="risk_off"), PREFS, "halved"),             # cap 2,500 while risk-off
+    (_order(qty=2), 1000.0, _state(regime="risk_off"), PREFS, None),
+    (_order(qty=5), 1000.0, _state(regime="neutral"), PREFS, None),
+    (_order(source="news"), 100.0, _state(), PREFS, "News-triggered trades are off"),
+    (_order(source="news"), 100.0, _state(), {**PREFS, "autopilot_news": True}, None),
+    (_order(source="news"), 100.0, _state(regime="risk_off"), {**PREFS, "autopilot_news": True}, "risk-off"),
+    (_order(source="news"), 100.0, _state(news_today=3), {**PREFS, "autopilot_news": True}, "news-triggered trades today"),
+])
+def test_fence_market_backdrop_only_tightens(order, price, state, prefs, refusal):
+    result = fence.check(order, price, state, prefs)
+    assert result is None if refusal is None else (result and refusal in result)

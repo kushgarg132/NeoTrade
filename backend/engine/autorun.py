@@ -251,15 +251,17 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
     return did
 
 
-async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dict], now: datetime) -> list[dict]:
+async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dict], now: datetime,
+                               source: str = "engine", heading: str = "morning pass") -> list[dict]:
     """Hands pending stock proposals to the autopilot (backend/autopilot/),
-    best score first, resized to its per-trade cap, with one summary note;
-    returns the ones it did not take."""
-    from backend.autopilot import service
+    best score first, resized to the per-trade cap in force, with one
+    summary note; returns the ones it did not take."""
+    from backend.autopilot import fence, service
     from backend.core.models import Side
     from backend.suggestions.notify import notify
 
-    cap = (await PrefsStore(db).get(user_id))["autopilot_per_trade_cap"]
+    regime = (await service.regime_now(redis)).get("label")
+    cap = fence.trade_cap(await PrefsStore(db).get(user_id), regime)
     left, bought, refused = [], [], []
     for s in sorted(pending, key=lambda s: (s.get("score") or {}).get("final") or 0.0, reverse=True):
         entry = s.get("entry_ref") or 0
@@ -269,7 +271,7 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
             continue
         result = await service.submit(db, redis, user_id, service.AutopilotOrder(
             symbol=s["symbol"], side=Side(s["side"]), quantity=quantity, product="CNC",
-            source="engine", reason=f"Engine proposal ({s.get('strategy') or 'scan'}): {', '.join(s.get('reason_codes') or [])}"),
+            source=source, reason=f"{'News' if source == 'news' else 'Engine'} proposal ({s.get('strategy') or 'scan'}): {', '.join(s.get('reason_codes') or [])}"),
             now=now, suggestion_id=s["id"], quiet=True)
         if result["status"] in ("FILLED", "SENT"):
             await store.decide(user_id, s["id"], status="EXECUTED", reason="autopilot", now=now)
@@ -278,7 +280,7 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
             refused.append(f"{s['symbol']} ({result.get('reason')})")
             left.append(s)
     if bought or refused:
-        lines = ["🤖 Autopilot, morning pass on the AI account:"]
+        lines = [f"🤖 Autopilot, {heading} on the AI account:"]
         if bought:
             lines.append("Bought: " + ", ".join(bought))
         if refused:

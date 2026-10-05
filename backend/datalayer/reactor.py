@@ -22,7 +22,16 @@ for the names a material item moves, directly or via their sector, within
 each scan-enabled user's universe: at most once per user and symbol a day
 and MAX_SCAN_SYMBOLS per user a pass. Proposals land PENDING with
 source="news", get a thesis and a Telegram message like the 16:00 scan's.
-Market-wide items trigger no scan: they move every name, not some.
+Market-wide items trigger no scan: they move every name, not some. With
+the autopilot and `autopilot_news` on, the new stock proposals go to the
+autopilot at once, source="news", through its fence (at most 3 a day; none
+while risk-off).
+
+`shadow_exits` records, in `autopilot_shadow`, the SELL the autopilot would
+place when a material negative item (impact >= EXIT_IMPACT, direction <=
+EXIT_DIRECTION, on the symbol or its sector) hits one of its longs. No order
+is sent: real news exits wait for a review of this log
+(docs/superpowers/specs/2026-10-05-autopilot-news-design.md).
 """
 
 import logging
@@ -45,6 +54,8 @@ PREFS = ("held", "held+watched", "all", "off")
 SCAN_KEY = "news:scanned:{}:{}"
 SCAN_TTL_SECONDS = 24 * 3600
 MAX_SCAN_SYMBOLS = 20
+EXIT_IMPACT, EXIT_DIRECTION = 8, -0.5
+SHADOW_KEY = "news:shadow:{}:{}"
 
 
 def hits_for(item: dict, sector_of: dict[str, str], pref: str, held: set[str], watched: set[str]) -> list[dict]:
@@ -158,9 +169,18 @@ async def _scan_user(db, redis, prefs: dict, symbols: list[str], now: datetime) 
 
     created = await scan_universe(db, user_id=prefs["user_id"], universe=symbols, account_size=prefs["account_size"],
                                   max_exposure=prefs["max_exposure"], source="news", redis=redis, now=now)
-    if created:
-        await attach_theses(db, prefs["user_id"], created)
-        await notify(db, prefs["user_id"], proposals_text(created, f"{len(created)} new long-term proposal(s) after news:"))
+    if not created:
+        return created
+    await attach_theses(db, prefs["user_id"], created)
+    left = created
+    if prefs.get("autopilot_enabled") and prefs.get("autopilot_news"):
+        from backend.engine.autorun import _autopilot_proposals
+        from backend.suggestions.store import SuggestionStore
+
+        left = await _autopilot_proposals(db, redis, SuggestionStore(db), prefs["user_id"], created, now,
+                                          source="news", heading="news trade")
+    if left:
+        await notify(db, prefs["user_id"], proposals_text(left, f"{len(left)} new long-term proposal(s) after news:"))
     return created
 
 
@@ -194,3 +214,48 @@ async def scan(db, redis, now: Optional[datetime] = None) -> int:
     if made:
         logger.info("news scan: %d proposal(s) from %d item(s)", made, len(items))
     return made
+
+
+def exit_hit(item: dict, symbol: str, sector_of: dict[str, str]) -> Optional[dict]:
+    """The impact on `item` bad enough to sell `symbol` on, if any."""
+    for i in item.get("impacts", []):
+        if i["impact"] >= EXIT_IMPACT and i["direction"] <= EXIT_DIRECTION and (
+                (i["type"] == "symbol" and i["target"] == symbol) or
+                (i["type"] == "sector" and sector_of.get(symbol) == i["target"])):
+            return i
+    return None
+
+
+async def shadow_exits(db, redis, now: Optional[datetime] = None) -> int:
+    """Logs the news exits the autopilot would make; places nothing."""
+    from backend.autopilot.service import _product, ledger_user
+    from backend.datalayer.news import followed
+    from backend.engine.persistence import LedgerStore
+
+    now = now or datetime.now(timezone.utc)
+    items = await _claim(db, "exit_checked_at", now)
+    if not items:
+        return 0
+    users = [d["user_id"] async for d in db["user_prefs"].find(
+        {"autopilot_enabled": True, "autopilot_news": True}, {"user_id": 1})]
+    if not users:
+        return 0
+    _, sector_of = await followed(db)
+    logged = 0
+    for user_id in users:
+        for trade in await LedgerStore(db, user_id=ledger_user(user_id)).get_trades(status="OPEN", limit=1000):
+            if trade.get("side") != "BUY":
+                continue
+            for item in items:
+                hit = exit_hit(item, trade["symbol"], sector_of)
+                if hit and await redis.set(SHADOW_KEY.format(user_id, trade["symbol"]), "1",
+                                           ex=SCAN_TTL_SECONDS, nx=True):
+                    await db["autopilot_shadow"].insert_one({
+                        "user_id": user_id, "at": now, "side": "SELL", "symbol": trade["symbol"],
+                        "quantity": trade["quantity"], "product": _product(trade), "venue": trade.get("venue"),
+                        "news_id": item["_id"], "title": item.get("event") or item["title"], "impact": hit})
+                    logged += 1
+                    break
+    if logged:
+        logger.info("news shadow exits: %d would-sell(s)", logged)
+    return logged

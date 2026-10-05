@@ -295,7 +295,14 @@ user+target an hour (`news:alerted:{user}:{target}` NX). An alert is a Telegram 
 (direct hits first, then its sectors' names; market-wide items scan nothing), at most once per
 user+symbol a day (`news:scanned:{user}:{symbol}` NX) and 20 symbols per user a pass; new PENDING
 proposals get a thesis and a Telegram message like the 16:00 scan's. `scan_universe` now loads
-`analyst_verdict:` for every scanned symbol, not just the F&O underlyings.
+`analyst_verdict:` for every scanned symbol, not just the F&O underlyings. With the autopilot and
+`autopilot_news` (default off) on, those proposals go straight to `engine/autorun._autopilot_proposals`
+with `source="news"`. `autopilot/fence.check` reads `market:regime` (via `service.regime_now`): risk-off
+halves the per-trade cap (`fence.trade_cap`, also used to size) and refuses news entries, a
+high-impact event within 30 min refuses every entry, and news entries stop at 3 a day; exits are
+never blocked, and no regime adds no rule. `news_exits` (60s) only logs, in `autopilot_shadow`, the
+SELL the autopilot would place on a material negative item (impact >= 8, direction <= -0.5, symbol or
+sector) against one of its longs. Spec: `docs/superpowers/specs/2026-10-05-autopilot-news-design.md`.
 Later loops land phase by phase per
 `docs/superpowers/plans/2026-10-05-market-news-datalayer.md`. Compose makes `backend` depend on
 `ingest` only so the shared deploy workflow's `up -d --build backend` also redeploys it.

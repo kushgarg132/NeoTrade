@@ -2,7 +2,13 @@
 
 Entries (buys) must respect every limit; an exit (selling a symbol the
 autopilot holds) only needs the switch on and the market open -- getting
-out is never blocked by a cap. Short selling is not allowed."""
+out is never blocked by a cap. Short selling is not allowed.
+
+The market backdrop only ever tightens entries
+(docs/superpowers/specs/2026-10-05-autopilot-news-design.md): risk-off
+halves the per-trade cap and refuses news-triggered entries, and a
+high-impact economic event within 30 minutes refuses every entry. No
+regime (the ingest worker is down) adds no rule."""
 
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -11,6 +17,7 @@ from typing import Optional
 from backend.core.models import Side
 
 PRODUCTS = {"CNC", "MIS"}
+NEWS_ENTRIES_PER_DAY = 3
 
 
 @dataclass
@@ -20,6 +27,14 @@ class FenceState:
     held: dict = field(default_factory=dict)  # symbol -> (quantity, product) the autopilot holds
     kill_tripped: bool = False
     session_ok: bool = True
+    regime: Optional[str] = None   # market:regime label: risk_on / neutral / risk_off
+    event_soon: bool = False       # a high-impact economic event within 30 minutes
+    news_today: int = 0            # news-triggered entries today
+
+
+def trade_cap(prefs: dict, regime: Optional[str]) -> float:
+    """The per-trade cap in force: halved while the market is risk-off."""
+    return prefs["autopilot_per_trade_cap"] / (2 if regime == "risk_off" else 1)
 
 
 @lru_cache(maxsize=1)
@@ -49,12 +64,22 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
     notional = price * order.quantity
     if state.kill_tripped:
         return "The daily loss limit was hit: no new entries today."
+    if state.event_soon:
+        return "A high-impact economic event is due within 30 minutes: no new entries until it is out."
+    if order.source == "news":
+        if not prefs.get("autopilot_news"):
+            return "News-triggered trades are off."
+        if state.regime == "risk_off":
+            return "The market is risk-off: no news-triggered entries."
+        if state.news_today >= NEWS_ENTRIES_PER_DAY:
+            return f"Already {state.news_today} news-triggered trades today (limit {NEWS_ENTRIES_PER_DAY})."
     if order.symbol not in universe():
         return f"{order.symbol} is outside the autopilot's universe (Nifty 200)."
     if order.symbol in state.held:
         return f"The autopilot is already holding {order.symbol}."
-    if notional > prefs["autopilot_per_trade_cap"] + 1e-6:
-        return f"₹{notional:,.0f} is over the per-trade cap of ₹{prefs['autopilot_per_trade_cap']:,.0f}."
+    cap = trade_cap(prefs, state.regime)
+    if notional > cap + 1e-6:
+        return f"₹{notional:,.0f} is over the per-trade cap of ₹{cap:,.0f}{' (halved: market risk-off)' if state.regime == 'risk_off' else ''}."
     if state.deployed + notional > prefs["autopilot_capital"] + 1e-6:
         return (f"₹{notional:,.0f} more would exceed the autopilot capital of ₹{prefs['autopilot_capital']:,.0f} "
                 f"(₹{state.deployed:,.0f} deployed).")

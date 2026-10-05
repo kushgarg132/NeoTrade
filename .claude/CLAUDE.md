@@ -44,6 +44,11 @@ code disagree, the code is right — fix the document in the same commit.
   on the broker whose role is `ai` (`backend/brokers/roles.py`) only, after `autopilot/fence.check`
   passes; the kill switch still applies, and nothing may route an AI order to the user's own
   (`mine`) account. See `docs/superpowers/specs/2026-10-04-dual-broker-accounts-design.md`.
+  Extended (user-approved 2026-10-05): with pref `autopilot_news` on, a `source="news"`
+  proposal may go to the autopilot at once (≤3 a day); news exits are shadow-logged only.
+  The fence's regime rule (risk-off halves the cap and blocks news entries; a high-impact
+  event within 30 min blocks all entries) only ever tightens. See
+  `docs/superpowers/specs/2026-10-05-autopilot-news-design.md`.
 
 ## Deployment
 

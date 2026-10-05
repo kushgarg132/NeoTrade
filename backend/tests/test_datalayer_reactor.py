@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+from unittest.mock import AsyncMock
+
 import pytest
 from mongomock_motor import AsyncMongoMockClient
 
@@ -107,3 +109,59 @@ async def test_scan_once_per_user_and_symbol_a_day(monkeypatch):
     assert scans == [("u1", ["INFY"])]  # capped at MAX_SCAN_SYMBOLS, direct hit first
     await db["news_items"].insert_one(_item(("symbol", "INFY", 0.8, 8), _id="a2"))
     assert await reactor.scan(db, redis, NOW) == 0  # INFY already scanned today
+
+
+@pytest.mark.asyncio
+async def test_news_proposals_go_to_the_autopilot_only_when_asked(monkeypatch):
+    from backend.engine import autorun
+    from backend.suggestions import notify as notify_module, scan as scan_module, thesis
+
+    handed, told = [], []
+
+    async def scan_universe(db, **kw):
+        return [{"id": "s1", "symbol": "TCS"}]
+
+    async def proposals(db, redis, store, user_id, pending, now, source="engine", heading=""):
+        handed.append((user_id, source))
+        return []
+
+    async def notify(db, user_id, text):
+        told.append(text)
+
+    monkeypatch.setattr(scan_module, "scan_universe", scan_universe)
+    monkeypatch.setattr(thesis, "attach_theses", AsyncMock())
+    monkeypatch.setattr(autorun, "_autopilot_proposals", proposals)
+    monkeypatch.setattr(notify_module, "notify", notify)
+    prefs = {"user_id": "u1", "account_size": 1.0, "max_exposure": 1.0, "autopilot_enabled": True}
+
+    await reactor._scan_user(AsyncMongoMockClient()["t"], None, prefs, ["TCS"], NOW)
+    assert handed == [] and len(told) == 1  # autopilot_news off: a proposal to decide
+    await reactor._scan_user(AsyncMongoMockClient()["t"], None, {**prefs, "autopilot_news": True}, ["TCS"], NOW)
+    assert handed == [("u1", "news")] and len(told) == 1  # taken: nothing left to propose
+
+
+@pytest.mark.asyncio
+async def test_shadow_exits_log_and_place_nothing(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+
+    async def followed(db):
+        return {}, SECTORS
+
+    monkeypatch.setattr("backend.datalayer.news.followed", followed)
+    await db["user_prefs"].insert_one({"user_id": "u1", "autopilot_enabled": True, "autopilot_news": True})
+    await db["paper_trades"].insert_one({"user_id": "u1:autopilot", "symbol": "INFY", "side": "BUY", "quantity": 3,
+                                   "status": "OPEN", "venue": "paper", "mode": "LONGTERM"})
+    await db["news_items"].insert_many([
+        _item(("sector", "Information Technology", -0.7, 8)),
+        _item(("symbol", "INFY", -0.9, 9), _id="a2"),  # same symbol, same day: logged once
+    ])
+    assert await reactor.shadow_exits(db, FakeRedis(), NOW) == 1
+    [row] = await db["autopilot_shadow"].find().to_list(length=None)
+    assert (row["symbol"], row["side"], row["quantity"]) == ("INFY", "SELL", 3)
+    assert await db["autopilot_log"].count_documents({}) == 0
+
+
+def test_exit_hit_needs_a_big_negative_move():
+    assert reactor.exit_hit(_item(("symbol", "INFY", -0.4, 9)), "INFY", SECTORS) is None
+    assert reactor.exit_hit(_item(("symbol", "INFY", -0.9, 7)), "INFY", SECTORS) is None
+    assert reactor.exit_hit(_item(("sector", "Information Technology", -0.6, 8)), "TCS", SECTORS)

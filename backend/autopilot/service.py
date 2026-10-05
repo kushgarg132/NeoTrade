@@ -2,6 +2,7 @@
 account's broker) -> log -> Telegram note with a one-tap stop."""
 
 import asyncio
+import json
 import logging
 import uuid
 from dataclasses import asdict, dataclass
@@ -35,7 +36,7 @@ class AutopilotOrder:
     side: Side
     quantity: int
     product: Literal["CNC", "MIS"]
-    source: Literal["chat", "engine", "factor"]
+    source: Literal["chat", "engine", "factor", "news"]
     reason: str
     suggestion_id: Optional[str] = None
 
@@ -57,7 +58,21 @@ async def _notify(db, user_id: str, text: str, stop_button: bool = True) -> bool
     return await telegram.send(chat_id, text, token)
 
 
-async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime) -> fence.FenceState:
+async def regime_now(redis) -> dict:
+    """The ingest worker's market:regime, or {} when there is none."""
+    from backend.datalayer.market import REGIME_KEY
+
+    if redis is None:
+        return {}
+    try:
+        raw = await redis.get(REGIME_KEY)
+        return json.loads(raw) if raw else {}
+    except Exception as exc:
+        logger.warning("autopilot: market regime unavailable: %s", exc)
+        return {}
+
+
+async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime, redis=None) -> fence.FenceState:
     from backend.risk.kill_switch import KillSwitchStore
 
     day = now.astimezone(IST).date()
@@ -86,8 +101,13 @@ async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime) -> fe
         await db["autopilot_state"].update_one({"_id": user_id}, {"$set": {"tripped_day": day.isoformat(),
                                                                           "user_id": user_id}}, upsert=True)
     tripped = tripped or bool(await KillSwitchStore(db).is_tripped(user_id, day))
+    news = await db["autopilot_log"].count_documents(
+        {"user_id": user_id, "status": {"$in": ["FILLED", "SENT"]}, "side": "BUY", "source": "news",
+         "at": {"$gte": day_start}})
+    regime = await regime_now(redis)
     return fence.FenceState(deployed=deployed, entries_today=entries, held=held,
-                            kill_tripped=tripped, session_ok=in_session(now))
+                            kill_tripped=tripped, session_ok=in_session(now),
+                            regime=regime.get("label"), event_soon=bool(regime.get("event_soon")), news_today=news)
 
 
 def _product(trade: dict) -> str:
@@ -144,7 +164,7 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
     price = (await mark_prices(db, {order.symbol}, max_age_seconds=ORDER_MAX_AGE_SECONDS)).get(order.symbol)
     if not price:
         return await _record(db, user_id, order, "REFUSED", now, quiet, reason=f"No live price for {order.symbol}.")
-    reason = fence.check(order, price, await _state(db, user_id, prefs, mode, now), prefs)
+    reason = fence.check(order, price, await _state(db, user_id, prefs, mode, now, redis), prefs)
     adapter = None
     if reason is None and live:
         from backend.auth.broker_credentials import get_credential_store

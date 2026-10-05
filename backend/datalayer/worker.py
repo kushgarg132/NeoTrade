@@ -52,6 +52,7 @@ def _loops() -> list[Loop]:
         Loop("brief", 60, market.brief),
         Loop("news_react", 60, reactor.react),
         Loop("news_scan", 120, reactor.scan),
+        Loop("news_exits", 60, reactor.shadow_exits),
     ]
 
 
