@@ -10,7 +10,7 @@ import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
-import { formatQuantity, formatDateTime } from '../utils/formatters';
+import { formatCurrency, formatQuantity, formatDateTime } from '../utils/formatters';
 import { Avatar } from '../components/common/Avatar';
 
 /**
@@ -901,6 +901,22 @@ const GuardrailsSheet = () => {
   }, []);
 
   const save = (patch) => api.put(endpoints.settings.preferences, patch).then((res) => setPrefs(res.data));
+  const [confirmOff, setConfirmOff] = useState(false);
+
+  // An empty or invalid field restores the saved value instead of saving 0
+  // (0 means "off" for every guardrail); a refused save says why and resets.
+  const commit = (key, value) => {
+    const restore = () => setDraft((d) => ({ ...d, [key]: prefs[key] }));
+    if (String(draft[key]).trim() === '' || !Number.isFinite(value) || value < 0) return restore();
+    if (value === prefs[key]) return undefined;
+    // 0 turns the daily loss limit -- and with it the kill-switch -- off: never by a cleared field.
+    if (key === 'daily_loss_limit' && value === 0) return setConfirmOff(true);
+    setNote(null);
+    return save({ [key]: value }).catch((err) => {
+      setNote(err?.response?.data?.detail || 'That value was not saved.');
+      restore();
+    });
+  };
 
   const act = (request, onDone) => {
     setBusy(true);
@@ -924,7 +940,7 @@ const GuardrailsSheet = () => {
       <NumberField
         value={draft[key]}
         onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
-        onCommit={() => save({ [key]: Math.max(0, Math.round(Number(draft[key]) || 0)) })}
+        onCommit={() => commit(key, Math.round(Number(draft[key])))}
       />
     </Row>
   );
@@ -969,10 +985,40 @@ const GuardrailsSheet = () => {
       >
         <NumberField
           value={draft.daily_loss_limit}
-          onChange={(value) => setDraft((d) => ({ ...d, daily_loss_limit: value }))}
-          onCommit={() => save({ daily_loss_limit: Number(draft.daily_loss_limit) })}
+          onChange={(value) => {
+            setConfirmOff(false);
+            setDraft((d) => ({ ...d, daily_loss_limit: value }));
+          }}
+          onCommit={() => commit('daily_loss_limit', Number(draft.daily_loss_limit))}
         />
       </Row>
+      {confirmOff && (
+        <div role="alert" className="py-2 flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--loss)]">
+          <span>0 turns off the daily loss limit and the engine's kill-switch.</span>
+          <span className="inline-flex gap-2">
+            <button
+              type="button"
+              className="min-h-11 sm:min-h-0 px-2 py-1 border border-[var(--rule-strong)] text-[var(--ink)]"
+              onClick={() => {
+                setConfirmOff(false);
+                setDraft((d) => ({ ...d, daily_loss_limit: prefs.daily_loss_limit }));
+              }}
+            >
+              Keep {formatCurrency(prefs.daily_loss_limit)}
+            </button>
+            <button
+              type="button"
+              className="min-h-11 sm:min-h-0 px-2 py-1 border border-[var(--loss)]"
+              onClick={() => {
+                setConfirmOff(false);
+                save({ daily_loss_limit: 0 }).catch((err) => setNote(err?.response?.data?.detail || 'That value was not saved.'));
+              }}
+            >
+              Turn off
+            </button>
+          </span>
+        </div>
+      )}
 
       {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this. 0 is off.')}
       {numberRow('cooldown_after_losses', 'Cooldown after losses in a row', 'Start a cooldown after this many losses in a row. 0 is off.')}
