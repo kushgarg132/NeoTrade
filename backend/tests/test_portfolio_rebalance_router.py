@@ -224,3 +224,14 @@ async def test_conviction_rebalance_weights_ai_pick_by_score(mdb, monkeypatch):
         "new_money": 0, "candidates": ["P"], "targets": CONVICTION_TARGETS}).json()
     target = {t["symbol"]: t["target_weight"] for t in body["trades"]}
     assert target["P"] == pytest.approx(200 / 3)
+
+
+async def test_ai_pick_wins_over_the_same_watchlist_name(mdb, monkeypatch):
+    await _snapshot(mdb)
+    await _fixed_closes(monkeypatch)
+    await mdb["watchlist"].insert_one({"user_id": "alice", "symbols": ["P1", "W1"]})
+    await mdb["suggestions"].insert_one({"user_id": "alice", "status": "PENDING", "mode": "LONGTERM", "side": "BUY",
+                                         "symbol": "P1", "score": {"final": 0.7}})
+    body = _client(_user(role="admin")).get("/api/v1/portfolio/rebalance/candidates").json()
+    assert [(c["symbol"], c["source"], c["score"], c["preselect"]) for c in body] == [
+        ("W1", "watchlist", None, False), ("P1", "ai", 0.7, True)]

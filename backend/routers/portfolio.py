@@ -140,8 +140,9 @@ async def _candidate_symbols(user: User, held: set[str]) -> list[tuple[str, str,
             symbol, score = doc.get("symbol"), (doc.get("score") or {}).get("final")
             if symbol and symbol not in held and (symbol not in picks or (score or 0) > picks[symbol]):
                 picks[symbol] = score or 0.0
-        watched = {s for s, _, _ in found}
-        found += [(s, "ai", score) for s, score in sorted(picks.items(), key=lambda kv: -kv[1]) if s not in watched]
+        # A name both watched and picked is the AI's pick: it keeps its score.
+        found = [c for c in found if c[0] not in picks]
+        found += [(s, "ai", score) for s, score in sorted(picks.items(), key=lambda kv: -kv[1])]
     return found
 
 
