@@ -299,7 +299,8 @@ def test_approve_live_needs_an_option_a_broker_and_no_kill_switch(live_client, s
 
     broker = _FakeBroker()
     _with_broker(live_client, broker)
-    today = datetime.now(timezone.utc).astimezone(IST).date()
+    # The route's own (patched) clock decides "today", not the wall clock.
+    today = suggestions_router._now().astimezone(IST).date()
     asyncio.run(KillSwitchStore(mongo).trip("alice", today, reason="test", equity=-1.0))
     resp = live_client.post(f"/api/v1/suggestions/{option['id']}/approve-live")
     assert resp.status_code == 409 and "Daily loss limit" in resp.json()["detail"]
@@ -389,7 +390,8 @@ def test_equity_approve_live_refusals_place_nothing(mine_client, store, mongo, m
     if why == "cap":
         asyncio.run(PrefsStore(mongo).update("alice", {"per_trade_cap": 500.0}))
     if why == "kill":
-        today = datetime.now(timezone.utc).astimezone(IST).date()
+        # The route's own (patched) clock decides "today", not the wall clock.
+        today = suggestions_router._now().astimezone(IST).date()
         asyncio.run(KillSwitchStore(mongo).trip("alice", today, reason="test", equity=-1.0))
     suggestion = asyncio.run(_seed(store))
     resp = _approve_live(mine_client, suggestion)
