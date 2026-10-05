@@ -109,13 +109,19 @@ class SuggestionStore:
         """Only a PENDING suggestion owned by this user can be decided, so a
         double-clicked Approve cannot place a second order and one account
         cannot act on another's inbox. Returns None when the guard bites."""
+        now = now or datetime.now(timezone.utc)
+        query = {"user_id": user_id, "id": suggestion_id, "status": PENDING}
+        # Past its expiry a proposal can still be declined, never acted on;
+        # the 16:00 sweep is only the bookkeeping.
+        if status != "REJECTED":
+            query["expires_at"] = {"$not": {"$lte": now}}
         result = await self.collection.find_one_and_update(
-            {"user_id": user_id, "id": suggestion_id, "status": PENDING},
+            query,
             {"$set": {
                 "status": status,
                 "reason": reason,
                 "order_id": order_id,
-                "decided_at": now or datetime.now(timezone.utc),
+                "decided_at": now,
             }},
             return_document=True,
         )

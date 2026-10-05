@@ -172,6 +172,14 @@ async def test_expire_stale_only_touches_pending_ones_past_their_date(store):
     assert (await store.get("alice", fresh["id"]))["status"] == "PENDING"
 
 
+@pytest.mark.asyncio
+async def test_an_expired_proposal_cannot_be_approved_before_the_sweep(store):
+    stale = await _create(store, expires_at=NOW - timedelta(minutes=1))
+    assert await store.decide("alice", stale["id"], status="SENDING", now=NOW) is None
+    # Declining it is still fine: nothing is sent.
+    assert (await store.decide("alice", stale["id"], status="REJECTED", now=NOW))["status"] == "REJECTED"
+
+
 # ---------------------------------------------------------------------------
 # The engine seam
 # ---------------------------------------------------------------------------

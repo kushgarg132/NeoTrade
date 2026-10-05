@@ -158,7 +158,7 @@ async def approve_suggestion(
     # Claim before filling, as approve-live does: two approvals at once (a
     # page tap and a chat confirm) used to both book a fill.
     if await store.decide(user.id, suggestion_id, status="SENDING", reason="paper") is None:
-        raise HTTPException(status_code=409, detail="Suggestion was decided concurrently")
+        raise HTTPException(status_code=409, detail="This proposal was already decided or has expired.")
     try:
         price = (
             await option_premium(user.id, suggestion["symbol"])
@@ -269,7 +269,7 @@ async def approve_suggestion_live(
         raise HTTPException(status_code=409, detail="Connect Kite or Upstox in Settings to trade options live.")
 
     if await store.decide(user.id, suggestion_id, status="SENDING", reason="live") is None:
-        raise HTTPException(status_code=409, detail="Suggestion was decided concurrently")
+        raise HTTPException(status_code=409, detail="This proposal was already decided or has expired.")
     try:
         order, broker_status, filled = await execute_option_suggestion_live(
             suggestion, ledger, adapter, contract, LiveOrderStore(db.db),
@@ -310,7 +310,7 @@ async def _approve_equity_live(suggestion, user_id, store, ledger, mine_broker, 
         raise HTTPException(status_code=409, detail=f"₹{value:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
 
     if await store.decide(user_id, suggestion["id"], status="SENDING", reason="live") is None:
-        raise HTTPException(status_code=409, detail="Suggestion was decided concurrently")
+        raise HTTPException(status_code=409, detail="This proposal was already decided or has expired.")
     order = Order(
         id=str(uuid.uuid4()), symbol=suggestion["symbol"], side=Side(suggestion["side"]),
         quantity=suggestion["quantity"], order_type="MARKET",
