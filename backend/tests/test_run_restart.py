@@ -87,3 +87,19 @@ async def test_only_runs_whose_worker_is_gone_are_orphaned(db):
     assert closed == 2
     status = {r["run_id"]: r["status"] async for r in db["trading_runs"].find({})}
     assert status == {"mine": "RUNNING", "other": "RUNNING", "dead": "STOPPED", "legacy": "STOPPED"}
+
+
+async def test_several_open_trades_on_one_stock_are_netted(db):
+    """Runs that started empty opened a fresh trade for a stock already held,
+    so one stock can carry several open intraday trades: adoption nets them."""
+    t = datetime(2026, 10, 5, 6, 20, tzinfo=timezone.utc)
+    await db["paper_trades"].insert_many([
+        {**_trade("CONCOR", "BUY", 22, 440.0, t), "id": "c1"},
+        {**_trade("CONCOR", "BUY", 11, 435.5, t), "id": "c2"},
+        {**_trade("ASTRAL", "SELL", 3, 1351.2, t), "id": "a1"},
+        {**_trade("ASTRAL", "BUY", 3, 1357.0, t), "id": "a2"},
+    ])
+    positions, holders, _ = await adopt_intraday(db, "alice", NOW)
+    assert positions["CONCOR"].quantity == 33
+    assert round(positions["CONCOR"].avg_price, 2) == round((22 * 440.0 + 11 * 435.5) / 33, 2)
+    assert "ASTRAL" not in positions and "ASTRAL" not in holders  # nets to flat

@@ -31,17 +31,27 @@ async def adopt_intraday(db, user_id: str, now: datetime) -> tuple[dict[str, Pos
         {"user_id": user_id, "mode": "INTRADAY", "status": "OPEN", "venue": {"$in": ["paper", None]}}
     ).to_list(length=None)
     today = now.astimezone(IST).date()
-    positions, holders, stale = {}, {}, []
+    stale, by_symbol = [], {}
     for trade in open_trades:
         if _day(trade["entry_at"]) != today:
             stale.append(trade)
+        else:
+            by_symbol.setdefault(trade["symbol"], []).append(trade)
+
+    # A stock can carry several open trades (runs that started empty opened a
+    # fresh one for a stock already held): net them into one position.
+    positions, holders = {}, {}
+    for symbol, trades in by_symbol.items():
+        signed = [(1 if t["side"] == "BUY" else -1) * float(t["quantity"]) for t in trades]
+        net = sum(signed)
+        if net == 0:
             continue
-        sign = 1 if trade["side"] == "BUY" else -1
-        positions[trade["symbol"]] = Position(
-            symbol=trade["symbol"], quantity=sign * float(trade["quantity"]), avg_price=float(trade["entry_price"]),
-        )
-        if trade.get("strategy"):
-            holders[trade["symbol"]] = trade["strategy"]
+        same_way = [(q, float(t["entry_price"])) for q, t in zip(signed, trades) if (q > 0) == (net > 0)]
+        avg = sum(abs(q) * p for q, p in same_way) / sum(abs(q) for q, _ in same_way)
+        positions[symbol] = Position(symbol=symbol, quantity=net, avg_price=avg)
+        latest = max(trades, key=lambda t: t["entry_at"])
+        if latest.get("strategy"):
+            holders[symbol] = latest["strategy"]
     return positions, holders, stale
 
 
