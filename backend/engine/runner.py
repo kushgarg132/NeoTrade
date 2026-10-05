@@ -21,6 +21,7 @@ from backend.instruments.master import InstrumentMaster
 from backend.learning.adapt import LearnedRules
 from backend.options.sizing import size_option_intent
 from backend.risk.kill_switch import should_trip
+from backend.engine.execution.costs import calculate_indian_costs
 from backend.scoring.composite import CompositeScore, score_intent
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,9 @@ OrderSink = Callable[[Proposal], Awaitable[bool]]
 # % of account risked per trade at full conviction (scored.final == 1.0),
 # scaled linearly down to 0 as conviction falls -- see size_intents' docstring.
 BASE_RISK_PCT = 1.0
+# An entry must expect at least this multiple of its round-trip friction.
+COST_MULTIPLE = 3
+FILTER_SLIPPAGE_BPS = 10.0  # per side, as the backtester assumes
 
 
 async def size_intents(
@@ -252,6 +256,21 @@ async def size_intents(
                 if size <= 0:
                     continue
         notional = size * entry
+        # Cost filter: an entry whose target cannot beat COST_MULTIPLE x its
+        # round-trip friction (charges both ways + slippage) cannot win after
+        # costs. Exits are never filtered; an intent with no target is not judged.
+        if intent.target_hint is not None and _opens(intent, portfolio, mode):
+            product_for_cost = "MIS" if mode == "INTRADAY" else "CNC"
+            gain = (intent.target_hint - entry if intent.side == Side.BUY else entry - intent.target_hint) * size
+            friction = (
+                calculate_indian_costs(entry, size, Side.BUY, product_for_cost)
+                + calculate_indian_costs(entry, size, Side.SELL, product_for_cost)
+                + notional * 2 * FILTER_SLIPPAGE_BPS / 10_000
+            )
+            if gain < COST_MULTIPLE * friction:
+                logger.info("skipping intent for %s: expected ₹%.2f < %d x friction ₹%.2f",
+                            intent.symbol, gain, COST_MULTIPLE, friction)
+                continue
         if not RiskRules.check_exposure_limit(current_exposure, max_exposure, notional):
             continue
         current_exposure += notional

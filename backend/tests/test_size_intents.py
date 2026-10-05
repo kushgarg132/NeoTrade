@@ -408,3 +408,45 @@ async def test_the_cap_never_trims_an_exit():
         account_size=1_000_000.0, max_exposure=1_000_000.0, per_trade_cap=5_000.0,
     )
     assert len(orders) == 1 and orders[0].quantity > 50  # risk-sized, not cut to 5,000 / 100
+
+
+# Cost filter: an entry whose target can't beat ~3x its round-trip friction
+# (charges both ways + slippage) cannot win after costs, so it is skipped.
+
+def _entry(target, side=Side.BUY, stop=90.0):
+    return Intent(symbol="RELIANCE", side=side, strength=1.0, reason_codes=["signal"], stop_hint=stop, target_hint=target)
+
+
+async def _size(intent, portfolio=None, owners=None):
+    return await size_intents(
+        [intent], portfolio or Portfolio(), _FakeCtx({"RELIANCE": 100.0}), owners or {}, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=1_000_000.0, per_trade_cap=5_000.0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_entry_whose_target_cannot_beat_its_costs_is_skipped():
+    assert await _size(_entry(target=100.5)) == []  # Rs 25 of gain on 50 shares vs ~Rs 50+ of friction
+
+
+@pytest.mark.asyncio
+async def test_an_entry_with_room_to_its_target_is_placed():
+    assert len(await _size(_entry(target=120.0))) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_target_on_the_wrong_side_is_no_gain():
+    assert await _size(_entry(target=95.0)) == []
+
+
+@pytest.mark.asyncio
+async def test_no_target_is_not_judged():
+    assert len(await _size(_entry(target=None))) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_exit_is_never_cost_filtered():
+    held = Portfolio()
+    held.positions["RELIANCE"] = Position(symbol="RELIANCE", quantity=80.0, avg_price=100.0)
+    orders = await _size(_entry(target=99.9, side=Side.SELL, stop=110.0), held, {"RELIANCE": _FakeStrategy("INTRADAY")})
+    assert len(orders) == 1
