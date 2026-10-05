@@ -47,6 +47,11 @@ from backend.components.master import stock_info
 from backend.routers import scanner
 
 
+# Session tokens ride the socket URL (?token=); keep them out of the access log.
+from backend import log_redaction  # noqa: E402
+
+log_redaction.install()
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="API for NeoTrade Platform",
