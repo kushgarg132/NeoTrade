@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, X, Loader2, Quote, ChevronDown } from 'lucide-react';
 import { Money, Stamp, Field, Scrip } from '../doc/Doc';
@@ -95,6 +95,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
   const [failure, setFailure] = useState(null);
   // Real money takes two taps: the first only says what will be sent.
   const [confirmLive, setConfirmLive] = useState(false);
+  const liveArmedAt = useRef(0);
   // Grounds and thesis are a tap away: the terms, risk and score are what Approve needs.
   const [why, setWhy] = useState(false);
   const canGoLive = Boolean(onApproveLive);
@@ -281,9 +282,11 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
                 variant="danger"
                 size="sm"
                 onClick={() => {
-                  if (confirmLive) return act('live');
+                  // A fast double tap is one gesture, not two taps: the send arms after 600ms.
+                  if (confirmLive) return Date.now() >= liveArmedAt.current && act('live');
                   // The second tap sends real money: show the risk, premium and
                   // margin (all under Why) before it.
+                  liveArmedAt.current = Date.now() + 600;
                   setWhy(true);
                   setConfirmLive(true);
                 }}

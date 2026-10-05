@@ -59,6 +59,11 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
   const [needsSecondTap, setNeedsSecondTap] = useState(false);
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
+  // The real-money button arms 600ms after it appears, so one fast double
+  // tap on Confirm cannot send both taps.
+  const [arming, setArming] = useState(false);
   const [error, setError] = useState(null);
   const cardRef = useRef(null);
   cardRef.current = result ? null : card;
@@ -84,7 +89,9 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
     cardRef.current = null;
   };
 
+  // Not while a request is in flight: the order may already be on its way.
   const close = () => {
+    if (busyRef.current) return;
     cancelCard();
     onClose();
   };
@@ -158,6 +165,8 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
       const res = await api.post(endpoints.chat.confirm(card.id), { second_tap: needsSecondTap });
       if (res.data.status === 'NEEDS_SECOND_TAP') {
         setNeedsSecondTap(true);
+        setArming(true);
+        setTimeout(() => setArming(false), 600);
       } else {
         setResult(res.data.result);
         onDone?.();
@@ -189,6 +198,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
           <button
             type="button"
             onClick={close}
+            disabled={busy}
             aria-label="Close the order ticket"
             className="ml-auto inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 -my-2 -mr-2 text-[var(--ink-soft)] hover:text-[var(--ink)]"
           >
@@ -293,7 +303,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
             )}
 
             {!card ? (
-              <Button className="w-full" onClick={review} disabled={!valid || busy}>
+              <Button className="w-full" onClick={review} disabled={!valid || busy || hasMine === null}>
                 {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Review
               </Button>
@@ -301,7 +311,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
               <Button
                 className={cn('w-full', needsSecondTap && 'bg-[var(--stamp)] border-[var(--stamp)]')}
                 onClick={confirm}
-                disabled={busy}
+                disabled={busy || arming}
               >
                 {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 {needsSecondTap ? 'Real money. Tap Confirm again' : 'Confirm'}
