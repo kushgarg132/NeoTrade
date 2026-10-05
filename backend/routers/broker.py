@@ -14,6 +14,7 @@ directly. `POST .../connect` accepts whatever fields the chosen broker's
 `login_url` came back non-null.
 """
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -109,23 +110,27 @@ async def broker_connect(
         logger.warning("%s connect failed for user %s: %s", broker, user.id, exc)
         raise HTTPException(status_code=502, detail=f"{broker} rejected the connection attempt")
 
-    # Best-effort, off the response: expands the instrument master beyond
-    # the bundled seed the moment a session connects, using whichever broker
-    # the user just connected -- the master is shared reference data, not
-    # per-user, so any connected session may refresh it.
+    # Best-effort and truly off the response: expands the shared instrument
+    # master (NSE/BSE, then F&O for option contracts) from the broker just
+    # connected. It used to be awaited here -- for Kite that is ~60,000
+    # instruments, so the connect hit Nginx's 60s timeout (2026-10-05).
+    task = asyncio.create_task(_refresh_instruments(adapter, broker))
+    _BACKGROUND.add(task)
+    task.add_done_callback(_BACKGROUND.discard)
+
+    return {"state": (await adapter.state()).value, "connected": True}
+
+
+_BACKGROUND: set = set()  # strong refs, so a refresh task is not garbage-collected
+
+
+async def _refresh_instruments(adapter, broker: str) -> None:
     count = await refresh_instruments_from_adapter(adapter)
     if count:
         logger.info("Instrument master expanded from %s: %d upserted.", broker, count)
-
-    # Phase 5b: also pull this broker's F&O (options/futures) dump, so
-    # backend.options.resolver can resolve a CSP contract without a live
-    # option-chain lookup. Same best-effort posture as the NSE/BSE refresh
-    # above -- refresh_instruments_from_adapter swallows its own failures.
     nfo_count = await refresh_instruments_from_adapter(adapter, exchanges=("NFO",))
     if nfo_count:
         logger.info("NFO instrument master expanded from %s: %d upserted.", broker, nfo_count)
-
-    return {"state": (await adapter.state()).value, "connected": True}
 
 
 @router.post("/{broker}/disconnect")

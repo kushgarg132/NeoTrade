@@ -122,3 +122,27 @@ def test_instrument_option_fields_default_to_none_for_equities():
     )
     assert inst.expiry is None
     assert inst.strike is None
+
+
+async def test_a_huge_upsert_keeps_in_flight_writes_bounded(master, monkeypatch):
+    """One gather() over every row put ~60,000 writes in flight at once and
+    starved the event loop; writes now go in batches."""
+    from backend.instruments import master as master_module
+
+    in_flight = {"now": 0, "max": 0}
+    real = master.collection.update_one
+
+    async def counting_update_one(*args, **kwargs):
+        in_flight["now"] += 1
+        in_flight["max"] = max(in_flight["max"], in_flight["now"])
+        try:
+            import asyncio
+            await asyncio.sleep(0)
+            return await real(*args, **kwargs)
+        finally:
+            in_flight["now"] -= 1
+
+    monkeypatch.setattr(master.collection, "update_one", counting_update_one)
+    rows = [_make_instrument(tradingsymbol=f"S{i}", instrument_token=i, exchange_token=i) for i in range(2000)]
+    assert await master.upsert_many(rows) == 2000
+    assert in_flight["max"] <= master_module.UPSERT_BATCH

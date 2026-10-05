@@ -5,6 +5,8 @@ from typing import Optional
 
 from backend.instruments.models import Instrument
 
+UPSERT_BATCH = 500  # writes in flight at once during a bulk upsert
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,8 +47,15 @@ class InstrumentMaster:
             )
             return result.upserted_id is not None or result.modified_count > 0
 
-        results = await asyncio.gather(*(_upsert_one(instrument) for instrument in instruments))
-        return sum(results)
+        # In batches: one gather() over a broker's full dump (~60,000 rows for
+        # Kite NSE+BSE+NFO) put every write in flight at once and starved the
+        # event loop -- every request on that worker timed out for minutes.
+        changed = 0
+        for start in range(0, len(instruments), UPSERT_BATCH):
+            batch = instruments[start:start + UPSERT_BATCH]
+            changed += sum(await asyncio.gather(*(_upsert_one(instrument) for instrument in batch)))
+            await asyncio.sleep(0)  # let other requests run between batches
+        return changed
 
     async def get(self, exchange: str, tradingsymbol: str) -> Optional[Instrument]:
         doc = await self.collection.find_one(

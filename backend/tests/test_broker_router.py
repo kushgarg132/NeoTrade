@@ -164,3 +164,30 @@ def test_disconnect_forgets_the_cached_token(monkeypatch):
 
     assert resp.json() == {"state": "NEEDS_LOGIN", "connected": False}
     assert adapter.cleared is True
+
+
+def test_connect_does_not_wait_for_the_instrument_refresh(monkeypatch):
+    """Connecting Kite awaited a refresh of ~60,000 instruments inside the
+    request: the call hit Nginx's 60s timeout and the refresh starved the
+    worker, so every page's data timed out (504) for minutes (2026-10-05)."""
+    import threading
+
+    started, release = threading.Event(), threading.Event()
+
+    async def slow_refresh(adapter, exchanges=("NSE", "BSE")):
+        started.set()
+        import asyncio
+        while not release.is_set():
+            await asyncio.sleep(0.01)
+        return 0
+
+    monkeypatch.setattr(broker, "refresh_instruments_from_adapter", slow_refresh)
+    import time
+    threading.Timer(3.0, release.set).start()  # frees a route that (wrongly) waits on the refresh
+    began = time.monotonic()
+    try:
+        resp = _client(_FakeAdapter(), monkeypatch).post("/api/v1/broker/kite/connect", json={"request_token": "rt"})
+        assert resp.status_code == 200 and resp.json()["connected"] is True
+        assert time.monotonic() - began < 1.5  # answered before the refresh finished
+    finally:
+        release.set()
