@@ -209,6 +209,32 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
     return price, adapter
 
 
+async def _modify_checks(db, user_id: str, adapter, params: dict) -> None:
+    """A modify is held to the same limits as a new order: whole quantity and
+    price above 0, the per-trade cap on the new notional, and no extra shares
+    on a day the kill switch tripped. It used to check only that the order
+    was still open."""
+    from backend.chat.account_actions import _open_order
+
+    quantity, price = params.get("quantity"), params.get("price")
+    if quantity is not None and (quantity <= 0 or quantity != int(quantity)):
+        raise ActionRefused("Quantity must be a whole number above zero.")
+    if price is not None and price <= 0:
+        raise ActionRefused("The new price must be a price above 0.")
+    order = await _open_order(adapter, params["order_id"])
+    if order is None:
+        raise ActionRefused(f"There is no open order {params['order_id']} in your account.")
+    new_qty = quantity if quantity is not None else float(order["quantity"])
+    unit = price or float(order.get("price") or 0) or await _mark_price(order["symbol"])
+    cap = (await PrefsStore(db).get(user_id))["per_trade_cap"]
+    if new_qty * unit > cap:
+        raise ActionRefused(f"₹{new_qty * unit:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
+    if new_qty > float(order["quantity"]) and await KillSwitchStore(db).is_tripped(
+        user_id, _now().astimezone(IST).date()
+    ):
+        raise ActionRefused("Your daily loss limit was hit today: no extra shares on an open order.")
+
+
 async def _held_on_paper(db, user_id: str, symbol: str) -> int:
     position = (await LedgerStore(db, user_id=user_id).get_open_positions()).get(symbol)
     return int(position.quantity) if position is not None and position.quantity > 0 else 0
@@ -339,7 +365,12 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
 
     async def propose_modify_order(order_id: str, price: Optional[float] = None, quantity: Optional[int] = None) -> str:
         from backend.chat import account_actions as aa
-        return await _mine_card(lambda adapter: aa.propose_modify(adapter, order_id, price, quantity))
+        async def build(adapter):
+            kind, params, summary = await aa.propose_modify(adapter, order_id, price, quantity)
+            await _modify_checks(db, user_id, adapter, params)
+            return kind, params, summary
+
+        return await _mine_card(build)
 
     async def propose_stop_loss(symbol: str, trigger_price: float) -> str:
         from backend.chat import account_actions as aa
@@ -499,6 +530,8 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
         if not in_session(_now()):
             raise ActionRefused("The market is closed; orders go only between 09:15 and 15:30 IST on weekdays.")
         adapter = await aa.mine_adapter(user_id, credentials)
+        if kind == "modify_order":
+            await _modify_checks(db, user_id, adapter, params)  # again at confirm, from the account
         try:
             return await aa.execute(adapter, kind, params)
         except aa._Refused as exc:

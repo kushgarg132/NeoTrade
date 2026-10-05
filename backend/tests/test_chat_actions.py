@@ -369,3 +369,41 @@ async def test_pending_cards_are_the_callers_unexpired_proposals(env, monkeypatc
     body = TestClient(app).get("/chat/actions/pending").json()
     assert [c["id"] for c in body] == [fresh["id"]]
     assert set(body[0]) == {"id", "kind", "summary", "venue", "needs_second_tap", "expires_at"}
+
+
+# ---------------------------------------------------------------------------
+# Order modify on the user's own account: same limits as a new order.
+# ---------------------------------------------------------------------------
+
+class _OrdersBroker:
+    def __init__(self):
+        self.modified = []
+
+    async def get_orders(self):
+        return [{"order_id": "B9", "symbol": "INFY", "side": "BUY", "quantity": 1, "price": 1500.0, "status": "open"}]
+
+    async def modify_order(self, order_id, quantity=None, price=None, trigger_price=None):
+        self.modified.append((order_id, quantity, price))
+
+
+@pytest.mark.parametrize("params,why", [
+    ({"order_id": "B9", "quantity": 5000, "price": None}, "per-trade cap"),
+    ({"order_id": "B9", "quantity": None, "price": -1.0}, "price above 0"),
+    ({"order_id": "B9", "quantity": 0, "price": None}, "whole number above zero"),
+])
+async def test_modify_is_held_to_the_same_limits_as_a_new_order(env, params, why):
+    with pytest.raises(ActionRefused, match=why):
+        await actions._modify_checks(env["db"], "alice", _OrdersBroker(), params)
+
+
+async def test_modify_cannot_add_shares_after_the_kill_switch_trips(env):
+    from backend.engine.session import IST
+    await KillSwitchStore(env["db"]).trip("alice", OPEN.astimezone(IST).date(), reason="test", equity=-1.0)
+    with pytest.raises(ActionRefused, match="daily loss limit was hit"):
+        await actions._modify_checks(env["db"], "alice", _OrdersBroker(), {"order_id": "B9", "quantity": 2, "price": None})
+    # lowering the price of the same quantity is still fine
+    await actions._modify_checks(env["db"], "alice", _OrdersBroker(), {"order_id": "B9", "quantity": None, "price": 1490.0})
+
+
+async def test_modify_within_limits_passes(env):
+    await actions._modify_checks(env["db"], "alice", _OrdersBroker(), {"order_id": "B9", "quantity": 10, "price": 1490.0})
