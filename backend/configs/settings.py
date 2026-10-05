@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # past it the backlog waits in Mongo.
     NEWS_LLM_CALLS_PER_DAY: int = 200
     PLAN_LLM_CALLS_PER_DAY: int = 100  # game-plan builds + revisions, all users (backend/plan/)
+    AI_TOOL_CALLS_PER_DAY: int = 300  # model rounds in tool-using AI calls, all users (backend/ai/runner.py)
+    AI_TOOLS_ENABLED: bool = True  # off: every tool-using site takes its single-call path
 
     # Broker API credentials are per-user and encrypted in Mongo
     # (backend/auth/broker_credentials.py) -- there is deliberately no
