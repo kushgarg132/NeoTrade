@@ -289,7 +289,13 @@ user+target an hour (`news:alerted:{user}:{target}` NX). An alert is a Telegram 
 (`suggestions/notify`) plus a `news`/`alert` socket event the app shows as a toast. The plan's
 `news:events` stream was not needed: the reactor reads Mongo in the same process. `GET /news/feed`
 (scope, mine, material, before) backs the Research › News page; `/today` carries `backdrop`
-(brief, regime, next 24h high-impact events) for Today's Markets card.
+(brief, regime, next 24h high-impact events) for Today's Markets card. A second loop,
+`news_scan` (120s, claimed with `scanned_at`), re-runs `suggestions/scan.scan_universe` with
+`source="news"` for each scan-enabled user over the universe names an item materially moves
+(direct hits first, then its sectors' names; market-wide items scan nothing), at most once per
+user+symbol a day (`news:scanned:{user}:{symbol}` NX) and 20 symbols per user a pass; new PENDING
+proposals get a thesis and a Telegram message like the 16:00 scan's. `scan_universe` now loads
+`analyst_verdict:` for every scanned symbol, not just the F&O underlyings.
 Later loops land phase by phase per
 `docs/superpowers/plans/2026-10-05-market-news-datalayer.md`. Compose makes `backend` depend on
 `ingest` only so the shared deploy workflow's `up -d --build backend` also redeploys it.

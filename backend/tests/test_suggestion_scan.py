@@ -200,12 +200,11 @@ async def test_scan_does_not_query_sentiment_for_warmup_bars(mongo, monkeypatch)
     meaningful (the final, armed session).
 
     `scan_universe` also does one upfront, non-per-bar analyst-verdict cache
-    read per `FO_UNDERLYINGS` symbol (Phase 6) before the bar replay even
+    read per scanned symbol before the bar replay even
     starts -- that's a fixed baseline unrelated to warmup, not a leak this
     test is about, so it's allowed for on top of the single per-bar read."""
     from unittest.mock import AsyncMock
 
-    from backend.options.resolver import FO_UNDERLYINGS
     from backend.suggestions import scan as scan_module
 
     monkeypatch.setattr(scan_module, "InstrumentMaster", _FakeMaster)
@@ -218,7 +217,7 @@ async def test_scan_does_not_query_sentiment_for_warmup_bars(mongo, monkeypatch)
 
     await scan_universe(mongo, user_id="alice", universe=["RELIANCE"], redis=redis)
 
-    baseline = len(FO_UNDERLYINGS)  # one upfront analyst-verdict read per curated symbol
+    baseline = 1  # one upfront analyst-verdict read per scanned symbol
     assert redis.get.await_count <= baseline + 1, (
         "expected only the fixed analyst-verdict baseline plus at most one "
         f"sentiment lookup (the final session's), got {redis.get.await_count}"

@@ -72,3 +72,38 @@ def test_alert_text():
     text = reactor.alert_text({"title": "T", "event": "TCS cuts guidance", "url": "https://x"},
                               [{"target": "TCS", "direction": -0.8, "impact": 8.0}, {"target": "INDIA", "direction": -0.5, "impact": 7.0}])
     assert text == "📰 TCS cuts guidance\nTCS ↓ 8/10, Market ↓ 7/10\nhttps://x"
+
+
+def test_scan_targets_direct_hits_first_then_the_sector():
+    item = _item(("sector", "Information Technology", 0.6, 7), ("symbol", "TCS", 0.8, 8),
+                 ("symbol", "SBIN", 0.5, 4), ("market", "INDIA", 0.9, 9))
+    assert reactor.scan_targets(item, SECTORS, {"TCS", "INFY", "SBIN"}) == ["TCS", "INFY"]
+    assert reactor.scan_targets(item, SECTORS, {"SBIN"}) == []  # below material; market moves no scan
+
+
+@pytest.mark.asyncio
+async def test_scan_once_per_user_and_symbol_a_day(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = FakeRedis()
+    scans = []
+
+    async def scan_user(db, redis, prefs, symbols, now):
+        scans.append((prefs["user_id"], symbols))
+        return [{"id": "s1"}]
+
+    async def followed(db):
+        return {}, SECTORS
+
+    async def users(self):
+        return [{"user_id": "u1", "universe": ["TCS.NS", "INFY", "SBIN"]}]
+
+    monkeypatch.setattr(reactor, "_scan_user", scan_user)
+    monkeypatch.setattr("backend.datalayer.news.followed", followed)
+    monkeypatch.setattr("backend.prefs.PrefsStore.scan_enabled_users", users)
+    monkeypatch.setattr(reactor, "MAX_SCAN_SYMBOLS", 1)
+    await db["news_items"].insert_one(_item(("sector", "Information Technology", 0.6, 7), ("symbol", "INFY", 0.8, 8)))
+
+    assert await reactor.scan(db, redis, NOW) == 1
+    assert scans == [("u1", ["INFY"])]  # capped at MAX_SCAN_SYMBOLS, direct hit first
+    await db["news_items"].insert_one(_item(("symbol", "INFY", 0.8, 8), _id="a2"))
+    assert await reactor.scan(db, redis, NOW) == 0  # INFY already scanned today

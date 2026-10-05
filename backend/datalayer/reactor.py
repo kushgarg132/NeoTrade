@@ -15,6 +15,14 @@ goes to everyone with an open position, unless they chose `off`.
 One alert per user and target (symbol, or INDIA for a shock) an hour. An
 alert is a Telegram message (a no-op for an unlinked user) plus a `news`
 event on the user's socket, which the app shows as a toast.
+
+`scan` (its own loop, claimed with `scanned_at`) re-runs the long-term scan
+(backend/suggestions/scan.py, the same strategies and composite scoring)
+for the names a material item moves, directly or via their sector, within
+each scan-enabled user's universe: at most once per user and symbol a day
+and MAX_SCAN_SYMBOLS per user a pass. Proposals land PENDING with
+source="news", get a thesis and a Telegram message like the 16:00 scan's.
+Market-wide items trigger no scan: they move every name, not some.
 """
 
 import logging
@@ -34,6 +42,9 @@ MAX_NEWS_AGE = timedelta(hours=6)  # scored late, it is no longer news
 ALERT_KEY = "news:alerted:{}:{}"
 ALERT_TTL_SECONDS = 3600
 PREFS = ("held", "held+watched", "all", "off")
+SCAN_KEY = "news:scanned:{}:{}"
+SCAN_TTL_SECONDS = 24 * 3600
+MAX_SCAN_SYMBOLS = 20
 
 
 def hits_for(item: dict, sector_of: dict[str, str], pref: str, held: set[str], watched: set[str]) -> list[dict]:
@@ -57,6 +68,15 @@ def hits_for(item: dict, sector_of: dict[str, str], pref: str, held: set[str], w
                 if sector_of.get(symbol) == i["target"]:
                     hits.setdefault(symbol, i)  # a direct hit on the symbol wins
     return [{"target": t, "direction": i["direction"], "impact": i["impact"]} for t, i in hits.items()]
+
+
+def scan_targets(item: dict, sector_of: dict[str, str], universe: set[str]) -> list[str]:
+    """Universe names `item` materially moves: direct hits first, then the
+    names in a sector it moves."""
+    material = [i for i in item.get("impacts", []) if i["impact"] >= MATERIALITY_THRESHOLD]
+    direct = [i["target"] for i in material if i["type"] == "symbol" and i["target"] in universe]
+    sectors = {i["target"] for i in material if i["type"] == "sector"}
+    return direct + sorted(s for s in universe if sector_of.get(s) in sectors and s not in direct)
 
 
 def alert_text(item: dict, hits: list[dict]) -> str:
@@ -95,18 +115,26 @@ async def _deliver(db, redis, user_id: str, item: dict, hits: list[dict]) -> Non
         logger.warning("news alert telegram for %s failed: %s", user_id, exc)
 
 
+async def _claim(db, field: str, now: datetime) -> list[dict]:
+    """Newly scored material items not yet handled by `field`'s reaction,
+    marked handled before anything is done with them."""
+    items = await db[COLLECTION].find({
+        "status": SCORED, "material": True, field: {"$exists": False},
+        "scored_at": {"$gte": now - SCORED_WITHIN}, "published_at": {"$gte": now - MAX_NEWS_AGE},
+    }).to_list(length=200)
+    if items:
+        await db[COLLECTION].update_many({"_id": {"$in": [i["_id"] for i in items]}}, {"$set": {field: now}})
+    return items
+
+
 async def react(db, redis, now: Optional[datetime] = None) -> int:
     """Alerts every newly scored material item; returns how many alerts went out."""
     from backend.datalayer.news import followed
 
     now = now or datetime.now(timezone.utc)
-    items = await db[COLLECTION].find({
-        "status": SCORED, "material": True, "reacted_at": {"$exists": False},
-        "scored_at": {"$gte": now - SCORED_WITHIN}, "published_at": {"$gte": now - MAX_NEWS_AGE},
-    }).to_list(length=200)
+    items = await _claim(db, "reacted_at", now)
     if not items:
         return 0
-    await db[COLLECTION].update_many({"_id": {"$in": [i["_id"] for i in items]}}, {"$set": {"reacted_at": now}})
 
     _, sector_of = await followed(db)
     audience = await _audience(db)
@@ -121,3 +149,48 @@ async def react(db, redis, now: Optional[datetime] = None) -> int:
     if sent:
         logger.info("news reactor: %d alert(s) from %d item(s)", sent, len(items))
     return sent
+
+
+async def _scan_user(db, redis, prefs: dict, symbols: list[str], now: datetime) -> list[dict]:
+    from backend.suggestions.notify import notify, proposals_text
+    from backend.suggestions.scan import scan_universe
+    from backend.suggestions.thesis import attach_theses
+
+    created = await scan_universe(db, user_id=prefs["user_id"], universe=symbols, account_size=prefs["account_size"],
+                                  max_exposure=prefs["max_exposure"], source="news", redis=redis, now=now)
+    if created:
+        await attach_theses(db, prefs["user_id"], created)
+        await notify(db, prefs["user_id"], proposals_text(created, f"{len(created)} new long-term proposal(s) after news:"))
+    return created
+
+
+async def scan(db, redis, now: Optional[datetime] = None) -> int:
+    """Re-scans the names newly scored material news moves; returns how many
+    proposals it made."""
+    from backend.datalayer.news import followed
+    from backend.prefs import PrefsStore
+
+    now = now or datetime.now(timezone.utc)
+    items = await _claim(db, "scanned_at", now)
+    if not items:
+        return 0
+    _, sector_of = await followed(db)
+    made = 0
+    for prefs in await PrefsStore(db).scan_enabled_users():
+        universe = {_bare(s) for s in prefs["universe"]}
+        wanted = list(dict.fromkeys(s for item in items for s in scan_targets(item, sector_of, universe)))
+        symbols = []
+        for symbol in wanted:
+            if len(symbols) == MAX_SCAN_SYMBOLS:
+                break
+            if await redis.set(SCAN_KEY.format(prefs["user_id"], symbol), "1", ex=SCAN_TTL_SECONDS, nx=True):
+                symbols.append(symbol)
+        if not symbols:
+            continue
+        try:
+            made += len(await _scan_user(db, redis, prefs, symbols, now))
+        except Exception as exc:
+            logger.exception("news scan failed for %s: %s", prefs["user_id"], exc)
+    if made:
+        logger.info("news scan: %d proposal(s) from %d item(s)", made, len(items))
+    return made

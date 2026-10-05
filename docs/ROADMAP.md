@@ -23,7 +23,7 @@ where to start — nothing else in this repo tracks it.
 | 11 | Guardrails (loss cap, trade count, cooldown) | 9 | **done 2026-09-26** (square-off: preview + opt-in live, never run live) |
 | 12 | Free beta, 20–50 real traders | 9, 10, 11 | **in progress** — tooling done 2026-09-26, recruiting not started |
 | 13 | Billing + real domain | 12 | not started |
-| 14 | Shared market, macro & news data layer (`backend/datalayer/`, `ingest` container) | — | **in progress** — 14.0 worker + leader lock + `/health`, 14.1 quotes + macro loops, 14.2 news ingest/triage/scoring/sentiment, 14.3 calendar/flows/regime/brief + chat/report/index wiring, 14.4 news alerts (Telegram + toast), News page, Today markets card done 2026-10-05; plan `docs/superpowers/plans/2026-10-05-market-news-datalayer.md` |
+| 14 | Shared market, macro & news data layer (`backend/datalayer/`, `ingest` container) | — | **in progress** — 14.0 worker + leader lock + `/health`, 14.1 quotes + macro loops, 14.2 news ingest/triage/scoring/sentiment, 14.3 calendar/flows/regime/brief + chat/report/index wiring, 14.4 news alerts (Telegram + toast), News page, Today markets card, 14.5 news-triggered scans (`source="news"` proposals) done 2026-10-05; plan `docs/superpowers/plans/2026-10-05-market-news-datalayer.md` |
 
 Two orderings are not negotiable: **Phase 3 before Phase 5** (no real order may be
 placeable before the kill-switch and the gate exist), and **Phase 1 before anything that

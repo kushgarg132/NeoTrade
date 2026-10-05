@@ -26,7 +26,6 @@ from backend.engine.runner import run
 from backend.instruments.master import InstrumentMaster
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
 from backend.options.premiums import live_premium_source
-from backend.options.resolver import FO_UNDERLYINGS
 from backend.screening.providers.yfinance_fundamentals import YFinanceFundamentalsProvider
 from backend.screening.universe import build_quality_universe
 from backend.strategies.registry import build_default_strategies
@@ -107,9 +106,11 @@ async def scan_universe(
 
     symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
 
+    # The ingest worker keeps a verdict for every followed name
+    # (backend/datalayer/news.py), so each scanned symbol may have one.
     analyst_verdicts = {}
     if redis is not None:
-        for symbol in FO_UNDERLYINGS:
+        for symbol in symbol_for_token.values():
             verdict = await get_cached_verdict(symbol, redis)
             if verdict is not None:
                 analyst_verdicts[symbol] = verdict
