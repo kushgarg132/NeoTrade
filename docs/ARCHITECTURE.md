@@ -423,6 +423,18 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   index feed is needed (so only Nifty 200 names with ≥ 3 sector peers in the run trade it).
   Live runs and the gate backtest pass both maps; live runs also pass yesterday's close
   (`bars.prev_closes`), since live feeds carry only today's bars.
+- **AI game plan** (Phase 15.2) — `backend/plan/`. At 08:45–09:15 IST `autorun.tick`
+  builds one plan per auto-intraday user (`builder.build_plan`: strategy library, regime,
+  brief, flows, calendar, the user's universe/held/watched plus up to 30 news names → one
+  `deep` call → `validate.validate`, which drops unknown names and clamps so it only
+  tightens; any failure stores `fallback_plan`). Plans are versioned in `trade_plans`,
+  current copy in Redis `plan:{user}:{date}`; LLM calls capped by
+  `PLAN_LLM_CALLS_PER_DAY`. `_launch_run` adds the plan's `add_symbols`, merges its catalysts
+  and passes `PlanGate(redis_source(...))` to `run()`; `size_intents` drops opening intraday
+  intents outside `allow`, on `skip_day` or past `max_positions`, and scales `risk_pct` by
+  `risk_multiplier`. A `skip_day` plan keeps the auto run from starting. The 16:00 daily pass
+  replays each user's day twice (`replay.replay_day`: plan versions vs no plan) into
+  `plan_scorecards`; `weeks_beating` counts the streak.
 - **Long-term engine** — not a live run: long-term strategies need months of daily bars,
   which a live feed never has, so their ideas come only from the history-backed scan
   (`backend/suggestions/scan.py`; 16:00 IST in `scheduler.py`, which records

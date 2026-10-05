@@ -49,6 +49,11 @@ code disagree, the code is right — fix the document in the same commit.
   The fence's regime rule (risk-off halves the cap and blocks news entries; a high-impact
   event within 30 min blocks all entries) only ever tightens. See
   `docs/superpowers/specs/2026-10-05-autopilot-news-design.md`.
+- **The AI game plan only tightens.** `backend/plan/` (built 08:45 IST per auto-intraday user)
+  may drop opening intraday intents, shrink their risk (`risk_multiplier` 0.25–1.0), cap new
+  positions or skip the auto run; it never touches exits, conviction, caps or gates, and any
+  failure falls back to today's behaviour. See
+  `docs/superpowers/specs/2026-10-05-ai-game-plan-and-strategy-library-design.md`.
 
 ## Deployment
 

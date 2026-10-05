@@ -168,6 +168,18 @@ merged into a new version.
 `plan:calls:<IST date>` like `news:deep_calls`. Pre-open plans are reserved first; past the
 cap, revisions stop and the current plan stands. Users without a plan get the fallback.
 
+### As built (15.2, 2026-10-05)
+
+- No per-user positions pref exists, so `max_positions` is capped at 10.
+- No pre-open gap % (NSE pre-open prices are in no feed here); candidates carry overnight
+  catalysts and their headlines instead.
+- Pre-open/fallback plans carry no exits; plan exits come with revisions (15.3).
+- The replay runs inside the 16:00 daily pass, not at 16:30.
+- Live routing is unchanged: the gate filters paper and live alike (it only tightens);
+  `weeks_beating` is computed for 15.4 to show, nothing routes on it yet.
+- `risk_multiplier` scales equity sizing; option intents are gated but sized as before.
+- A manual run on a `skip_day` still starts, and the gate lets it open nothing.
+
 ## 3. Engine enforcement
 
 ### Run start (`routers/trading.py::_launch_run`)
