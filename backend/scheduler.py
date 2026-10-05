@@ -87,6 +87,15 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
 
     journal_imported = await _sync_journals(db, redis)
     learning_changes = await _learn(db, now)
+    # The day's game plans against no plan, on the same bars (backend/plan/replay.py).
+    plan_replays = 0
+    try:
+        from backend.data.providers.yfinance_provider import YFinanceProvider
+        from backend.plan.replay import replay_all
+
+        plan_replays = await replay_all(db, YFinanceProvider(), now)
+    except Exception as exc:
+        logger.exception("plan replays failed: %s", exc)
     # Monthly, in its own process: re-tune strategy thresholds (backend/learning/retune.py).
     from backend.learning.retune import start_if_due
     try:
@@ -118,7 +127,7 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         "verdicts_refreshed": verdicts_refreshed,
         "users": scanned_users, "created": created_total,
         "journal_imported": journal_imported, "portfolios_reviewed": portfolios,
-        "learning_changes": learning_changes,
+        "learning_changes": learning_changes, "plan_replays": plan_replays,
     }
 
 
