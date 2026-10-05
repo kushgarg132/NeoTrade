@@ -1,9 +1,18 @@
+from datetime import timezone
+
 from motor.motor_asyncio import AsyncIOMotorClient
 from redis import asyncio as aioredis
 from backend.configs.settings import settings
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def mongo_client(url: str) -> AsyncIOMotorClient:
+    """Datetimes come back UTC-aware: Mongo stores UTC, and a naive value sent
+    to the browser without an offset is read as IST, 5h30m early."""
+    return AsyncIOMotorClient(url, tz_aware=True, tzinfo=timezone.utc)
+
 
 class DatabaseManager:
     client: AsyncIOMotorClient = None
@@ -12,7 +21,7 @@ class DatabaseManager:
 
     async def connect_to_database(self):
         logger.info("Connecting to MongoDB...")
-        self.client = AsyncIOMotorClient(settings.MONGODB_URL)
+        self.client = mongo_client(settings.MONGODB_URL)
         self.db = self.client[settings.DATABASE_NAME]
         logger.info("Connected to MongoDB.")
 

@@ -125,7 +125,7 @@ async def test_learn_pauses_logs_and_is_read_back_as_rules(db):
 
     assert [c["rule"] for c in changes] == ["pause"]
     logged = await db["learning_changes"].find({"user_id": "alice"}).to_list(10)
-    assert logged[0]["strategy"] == "vwap" and logged[0]["at"] == NOW.replace(tzinfo=None)
+    assert logged[0]["strategy"] == "vwap" and logged[0]["at"] == NOW
     assert (await load_rules(db, "alice")).blocks("vwap", 0.9)
     assert await learn(db, "alice", _nifty(), NOW) == []  # already paused: no repeat
 

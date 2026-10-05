@@ -90,7 +90,7 @@ async def test_test_queued_settles_each_hypothesis_and_records_the_attempt():
 
     assert [d["accepted"] for d in docs] == [True]
     h1 = await db["strategy_hypotheses"].find_one({"id": "h1"})
-    assert h1["status"] == "accepted" and h1["tested_at"] == NOW.replace(tzinfo=None)
+    assert h1["status"] == "accepted" and h1["tested_at"] == NOW
     assert (await db["strategy_hypotheses"].find_one({"id": "h2"}))["status"] == "queued"
     retune = await db["strategy_retunes"].find_one({"hypothesis_id": "h1"})
     assert retune["accepted"] and retune["params"] == {"volume_mult": 4.0} and retune["source"] == "hypothesis"
