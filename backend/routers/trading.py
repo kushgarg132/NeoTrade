@@ -64,6 +64,7 @@ from backend.suggestions.sink import SuggestionSink
 from backend.suggestions.store import SuggestionStore
 from backend.datalayer.bars import prev_closes
 from backend.datalayer.catalysts import catalyst_map
+from backend.plan.expand import make_expand
 from backend.plan.gate import PlanGate, redis_source
 from backend.datalayer.news_sources import nifty200_sectors
 
@@ -302,6 +303,15 @@ async def launch_run(
             await db.redis.delete(lock)
 
 
+def _plan_shadow_exit(user_id: str):
+    """A plan exit on a live position is logged, never sent (spec 15.3)."""
+    async def shadow(symbol: str, quantity: float, reason: str) -> None:
+        await db.db["autopilot_shadow"].insert_one({
+            "user_id": user_id, "at": datetime.now(timezone.utc), "side": "EXIT", "symbol": symbol,
+            "quantity": quantity, "product": "MIS", "source": "plan", "reason": reason})
+    return shadow
+
+
 async def _launch_run(
     user_id: str, mode: str, universe: Optional[list[str]], poll_interval_seconds: float,
     runs: RunStore, origin: str,
@@ -432,6 +442,10 @@ async def _launch_run(
         learned=await load_rules(db.db, user_id),
         holders=holders,
         plan=PlanGate(redis_source(db.redis, user_id)) if mode == "INTRADAY" and db.redis is not None else None,
+        expand=(make_expand(master, feed, YFinanceProvider(), strategies, symbol_for_token, today)
+                if mode == "INTRADAY" else None),
+        live_holders=set(live_by_strategy),
+        shadow_exit=_plan_shadow_exit(user_id),
     )
     await runs.create(
         run_id=run_id, user_id=user_id, mode=mode,

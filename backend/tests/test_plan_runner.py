@@ -113,3 +113,62 @@ async def test_expand_error_is_logged_and_the_run_continues():
     orders, _ = await _run([(1, _plan(2, add_symbols=["INFY"], exits=[{"symbol": "TCS", "reason": "x"}]))],
                            expand=expand)
     assert [o.symbol for o in orders] == ["TCS"]  # the same version's exit still happened
+
+
+# --- backend/plan/expand.py ---------------------------------------------------
+
+from datetime import date  # noqa: E402
+
+from backend.components.shared.models import PriceCandle  # noqa: E402
+from backend.instruments.models import Instrument  # noqa: E402
+from backend.plan.expand import make_expand  # noqa: E402
+from backend.strategies.intraday.orb_breakout import ORBStrategy  # noqa: E402
+
+DAY = date(2026, 10, 6)
+
+
+class _Master:
+    async def get(self, exchange, symbol):
+        if symbol == "NOPE":
+            return None
+        return Instrument(exchange="NSE", tradingsymbol=symbol, name=symbol, instrument_token=7, exchange_token=7,
+                          instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)
+
+
+class _AddFeed:
+    def __init__(self, backfill):
+        self.backfill, self.added = backfill, []
+
+    def add(self, instruments):
+        self.added += instruments
+        return self.backfill
+
+
+class _CandleProvider:
+    async def history(self, instrument, interval, period):
+        def c(ts, close):
+            return PriceCandle(symbol=instrument.tradingsymbol, timestamp=ts, open=close, high=close, low=close,
+                               close=close, volume=1)
+        return [c(START - timedelta(days=1), 1.0), c(START, 2.0), c(START + timedelta(minutes=5), 3.0),
+                c(START + timedelta(minutes=10), 9.0)]  # still forming at START+12m
+
+
+async def test_make_expand_on_a_polling_feed_needs_no_backfill():
+    strategy, tokens, feed = ORBStrategy(["TCS"], {}), {}, _AddFeed(backfill=False)
+    bars = await make_expand(_Master(), feed, _CandleProvider(), [strategy], tokens, DAY)(["INFY", "NOPE"])
+    assert bars == [] and tokens == {7: "INFY"} and "INFY" in strategy.spec.universe
+    assert [i.tradingsymbol for i in feed.added] == ["INFY"]
+
+
+async def test_make_expand_on_a_ticker_feed_backfills_today_only():
+    expand = make_expand(_Master(), _AddFeed(backfill=True), _CandleProvider(), [ORBStrategy(["TCS"], {})], {}, DAY,
+                         now_fn=lambda: START + timedelta(minutes=12))
+    bars = await expand(["INFY"])
+    assert [b.close for b in bars] == [2.0, 3.0] and all(b.warmup for b in bars)
+    assert all(b.instrument_token == 7 for b in bars)
+
+
+async def test_make_expand_on_a_feed_without_add_changes_nothing():
+    strategy, tokens = ORBStrategy(["TCS"], {}), {}
+    assert await make_expand(_Master(), object(), _CandleProvider(), [strategy], tokens, DAY)(["INFY"]) == []
+    assert tokens == {} and strategy.spec.universe == ["TCS"]
