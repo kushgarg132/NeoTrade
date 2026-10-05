@@ -4,6 +4,7 @@ import SectionTabs from '../components/layout/SectionTabs';
 import { AI_TABS } from '../components/layout/sections';
 import { Sheet, Ruling } from '../components/doc/Doc';
 import StopAutopilot from '../components/common/StopAutopilot';
+import PlanCard from '../components/plan/PlanCard';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import { formatDateTime } from '../utils/formatters';
@@ -29,6 +30,7 @@ const AiActivity = () => {
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
         <SectionTabs tabs={AI_TABS} label="AI account" />
+        <PlanCard />
         <Sheet title="Activity" meta="Last 30"
                actions={<StopAutopilot on={on} label="Stop autopilot" onStopped={() => setOn(false)} />}>
           {failed ? (

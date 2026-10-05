@@ -151,6 +151,8 @@ export const endpoints = {
   marketNews: '/news/market',
   newsFeed: '/news/feed',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
+  planToday: '/plan/today',
+  strategyLibrary: (mode) => `/strategies/library${mode ? `?mode=${mode}` : ''}`,
   trading: {
     start: '/trading/start',
     stop: '/trading/stop',
