@@ -5,6 +5,7 @@ from backend.core.models import Bar, Side
 from backend.engine.context import SimpleStrategyContext
 from backend.engine.portfolio import Portfolio
 from backend.strategies.intraday.gap_and_go import GapAndGoStrategy
+from backend.strategies.intraday.gap_fill_fade import GapFillFadeStrategy
 
 SYMBOL, TOKEN = "TEST", 111
 PRIOR, TODAY = datetime(2026, 10, 5, 3, 45, tzinfo=timezone.utc), datetime(2026, 10, 6, 3, 45, tzinfo=timezone.utc)
@@ -73,3 +74,44 @@ def test_gap_and_go_silent_on_the_first_session_in_history():
 
 def test_gap_and_go_silent_when_range_low_broken_first():
     assert _run(_gap_and_go({"2026-10-06": {SYMBOL: 0.7}}), _prior() + _up_day(post_low=102.0)) == []
+
+
+def _failed_gap_up():
+    return _session(TODAY, [
+        (103, 104, 102.5, 103.5, 1000), (103.5, 104, 103, 103.2, 1000), (103.2, 104, 103, 103.0, 1000),
+        (103.0, 103.2, 102.6, 102.8, 1000), (102.8, 102.9, 101.8, 102.0, 1000),
+    ])
+
+
+def _failed_gap_down():
+    return _session(TODAY, [
+        (97, 97.5, 96, 96.5, 1000), (96.5, 97, 96.2, 96.8, 1000), (96.8, 97.2, 96.3, 97.0, 1000),
+        (97.0, 97.4, 96.9, 97.2, 1000), (97.2, 98.0, 97.1, 97.8, 1000),
+    ])
+
+
+def _fade(catalysts=None):
+    return GapFillFadeStrategy([SYMBOL], {TOKEN: SYMBOL}, catalysts=catalysts or {})
+
+
+def test_gap_fill_fade_sells_an_uncatalysed_gap_up_that_fails():
+    intents = _run(_fade(), _prior() + _failed_gap_up())
+    assert [i.side for i in intents] == [Side.SELL]
+    assert intents[0].reason_codes == ["gap_fill_fade"]
+    assert intents[0].stop_hint == 104 and intents[0].target_hint == 100
+
+
+def test_gap_fill_fade_buys_a_failed_gap_down():
+    intents = _run(_fade(), _prior() + _failed_gap_down())
+    assert [i.side for i in intents] == [Side.BUY]
+    assert intents[0].stop_hint == 96 and intents[0].target_hint == 100
+
+
+def test_gap_fill_fade_will_not_fade_a_gap_its_news_supports():
+    assert _run(_fade({"2026-10-06": {SYMBOL: 0.8}}), _prior() + _failed_gap_up()) == []
+    # news against the gap does not block the fade
+    assert len(_run(_fade({"2026-10-06": {SYMBOL: -0.8}}), _prior() + _failed_gap_up())) == 1
+
+
+def test_gap_fill_fade_silent_on_the_first_session_in_history():
+    assert _run(_fade(), _failed_gap_up()) == []
