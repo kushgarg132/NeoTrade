@@ -34,7 +34,7 @@ const WaitingCard = ({ card, onSettled }) => {
         setTimeout(onSettled, 1500);
       }
     } catch (err) {
-      setNote(detailText(err, 'This card could not be confirmed.'));
+      setNote(err?.response ? detailText(err, 'This card could not be confirmed.') : 'No answer from the server. The order may have gone through: check Trades before trying again.');
       setTimeout(onSettled, 2500);
     } finally {
       setBusy(null);

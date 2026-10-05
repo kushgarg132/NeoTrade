@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, matchPath } from 'react-router-dom';
 import { MessageSquare, X, Send, Loader2, Maximize2, Minimize2, Check } from 'lucide-react';
 import Markdown from './common/Markdown';
 import { stream } from '../lib/ws';
@@ -39,7 +39,7 @@ const suggestionsFor = (path) =>
 const ActionCard = ({ action, onUpdate }) => {
   const [busy, setBusy] = useState(false);
   const live = action.card.venue === 'live';
-  const final = ['CONFIRMED', 'CANCELLED', 'FAILED'].includes(action.state);
+  const final = ['CONFIRMED', 'CANCELLED', 'FAILED', 'UNKNOWN'].includes(action.state);
 
   const run = async (kind) => {
     setBusy(true);
@@ -54,7 +54,9 @@ const ActionCard = ({ action, onUpdate }) => {
         onUpdate({ state: res.data.status, note: res.data.result });
       }
     } catch (err) {
-      onUpdate({ state: 'FAILED', note: err?.response?.data?.detail || 'That did not go through.' });
+      // No response at all: the confirm may have run. Never call that a failure.
+      if (kind !== 'cancel' && !err?.response) onUpdate({ state: 'UNKNOWN', note: 'No answer from the server. The order may have gone through: check Trades before trying again.' });
+      else onUpdate({ state: 'FAILED', note: err?.response?.data?.detail || 'That did not go through.' });
     } finally {
       setBusy(false);
     }
@@ -154,7 +156,9 @@ const ChatWidget = () => {
     setFollowups([]);
 
     let answer = '';
-    const context = { page: location.pathname, symbol: location.state?.symbol };
+    // A stock page carries its symbol in the URL (/research/stock/:symbol).
+    const symbol = matchPath('/research/stock/:symbol', location.pathname)?.params.symbol || location.state?.symbol;
+    const context = { page: location.pathname, symbol };
     const request = stream.request('chat', { message: text, history, context }, (event_) => {
       if (event_.event === 'suggestions') {
         setFollowups(event_.data);
