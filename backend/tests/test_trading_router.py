@@ -656,10 +656,10 @@ async def _seed_paper_record(fake_db, strategy):
     ])
 
 
-def test_start_routes_a_toggled_live_strategy_and_reconciles_positions(monkeypatch):
+def test_start_routes_a_toggled_live_strategy_through_the_autopilot(monkeypatch):
     """All three conditions hold (toggled live, broker ACTIVE, backtest-gate
-    eligible) -- the strategy must get a live BrokerExecutionClient and the
-    broker's open position must land in the fresh Portfolio.
+    eligible) -- the strategy must route through the autopilot (fence and AI
+    ledger), and the broker's positions stay out of the engine's portfolio.
 
     Calls start_trading directly (not through TestClient/HTTP) so the whole
     scenario runs on one asyncio event loop we control -- start_background_run
@@ -697,9 +697,12 @@ def test_start_routes_a_toggled_live_strategy_and_reconciles_positions(monkeypat
 
     asyncio.run(_scenario())
 
-    assert seen["portfolio"].positions["RELIANCE"].quantity == 5.0
+    # Live orders go to the AI account through the autopilot and its fence;
+    # the AI broker's positions are the autopilot's (its own ledger), so they
+    # are no longer copied into the engine's paper portfolio.
     assert isinstance(seen["execution"], trading.RoutingExecutionClient)
-    assert "technical_breakout" in seen["execution"]._live_by_strategy
+    assert isinstance(seen["execution"]._live_by_strategy["technical_breakout"], trading.AutopilotExecutionClient)
+    assert "RELIANCE" not in seen["portfolio"].positions
 
 
 class _NoopStrategy:
@@ -718,7 +721,7 @@ class _NoopStrategy:
     def on_fill(self, ctx, fill) -> None: ...
 
 
-def test_start_reconciliation_only_merges_symbols_owned_by_live_strategies(monkeypatch):
+def test_start_never_copies_ai_broker_positions_into_the_engine_portfolio(monkeypatch):
     """A paper-only strategy's symbol (TCS, owned only by a strategy never
     toggled live) must not be seeded from the broker's position book, even
     though the broker holds a real position in it -- only RELIANCE (owned by
@@ -765,7 +768,9 @@ def test_start_reconciliation_only_merges_symbols_owned_by_live_strategies(monke
 
     asyncio.run(_scenario())
 
-    assert seen["portfolio"].positions["RELIANCE"].quantity == 5.0
+    # No AI-broker position is copied into the engine's paper portfolio any
+    # more, live-owned or not.
+    assert "RELIANCE" not in seen["portfolio"].positions
     assert "TCS" not in seen["portfolio"].positions
 
 

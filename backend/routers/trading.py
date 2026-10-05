@@ -44,6 +44,7 @@ from backend.data.providers.yfinance_provider import YFinanceProvider
 from backend.engine.session import IST
 from backend.data.feeds.candle_poll import CandlePollingFeed
 from backend.data.feeds.polling_live import PollingLiveFeed
+from backend.engine.execution.autopilot import AutopilotExecutionClient
 from backend.engine.execution.broker import BrokerExecutionClient
 from backend.engine.execution.live_order_store import LiveOrderStore
 from backend.engine.execution.routing import RoutingExecutionClient
@@ -357,11 +358,12 @@ async def _launch_run(
     # this user's paper gate above.
     # Anything uncertain (no active session, not toggled, not eligible)
     # falls back to paper -- never the other way around.
-    live_by_strategy: dict[str, BrokerExecutionClient] = {}
+    # A live strategy's orders go to the AI account only through the
+    # autopilot and its fence (backend/engine/execution/autopilot.py).
+    live_by_strategy: dict[str, AutopilotExecutionClient] = {}
     if active_adapter is not None:
-        live_order_store = LiveOrderStore(db.db)
         for name in live_strategy_names & eligible_names:
-            live_by_strategy[name] = BrokerExecutionClient(active_adapter, live_order_store, user_id=user_id)
+            live_by_strategy[name] = AutopilotExecutionClient(db.db, db.redis, user_id)
 
     run_id = str(uuid.uuid4())
     feed = await build_feed(
@@ -373,22 +375,9 @@ async def _launch_run(
         RoutingExecutionClient(paper=paper_execution, live_by_strategy=live_by_strategy)
         if live_by_strategy else paper_execution
     )
+    # AI-account positions are the autopilot's (its own ledger); the engine's
+    # portfolio holds only what it trades on paper.
     portfolio = Portfolio()
-    if active_adapter is not None and live_by_strategy:
-        broker_positions = await active_adapter.get_positions()
-        # Scope the merge to symbols actually owned by a live-toggled
-        # strategy -- same owner_by_symbol construction runner.run() uses
-        # (backend/engine/runner.py) -- so a paper-only strategy's tracked
-        # position for a symbol the broker happens to also hold (a manual
-        # trade, a previous live session's leftover holding) isn't silently
-        # overwritten with the broker's real quantity/avg_price.
-        live_symbols = {
-            symbol for strategy in strategies for symbol in strategy.spec.universe
-            if strategy.spec.name in live_by_strategy
-        }
-        for symbol, position in broker_positions.items():
-            if symbol in live_symbols:
-                portfolio.positions[symbol] = position
     ledger = LedgerStore(db.db, user_id=user_id, run_id=run_id, on_change=publisher_for(user_id))
 
     # A new intraday run inherits today's open intraday positions (so caps,
