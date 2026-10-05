@@ -159,3 +159,60 @@ It is validated in `routers/settings.py`:
 - Auto-rebalancing on a schedule.
 - Tax-loss harvesting (part A).
 - Mutual fund rebalancing.
+
+---
+
+## Addendum (2026-10-05): the Conviction rule — AI-weighted targets and AI-picked names
+
+Owner decisions: targets weighted by the existing conviction score; SELL exits; the AI pre-picks
+the new names.
+
+### Targets (`rule: "conviction"`)
+
+- Each free name (not overridden) starts at an equal share, multiplied by:
+  - **ADD** holding: `1 + score.final` (the verdict's composite score from `portfolio/rules.py`).
+  - **AI pick** (candidate with `source == "ai"`): `1 + score.final` from its suggestion.
+  - **HOLD**, funds, ETFs, any verdict without a score, and watchlist names: `1`.
+  - **SELL** holding: `0`, a full exit. This matches the SELL row action.
+- The free names are then scaled to the weight left after overrides. After that, the stock and
+  sector caps clip and redistribute exactly as under `cap`, with weight nobody can absorb going to
+  cash.
+- Invariants: `score.final` is used exactly as `composite.py` computes it, with no second blend.
+  `AI_CAP` and `RULE_FLOOR` are untouched. Nothing places an order.
+
+### The AI picks the new names
+
+- `GET /portfolio/rebalance/candidates`: each `ai` candidate carries `score` (its suggestion's
+  `score.final`). AI candidates are open LONGTERM BUY suggestions that are not expired
+  (`expires_at > now`) and not held, sorted by score descending. The top 5 have `preselect: true`.
+  Watchlist candidates have `score: null` and `preselect: false`.
+- Frontend: choosing Conviction ticks the preselected names. The user can untick them or tick
+  others. Each AI pick shows its score.
+- `POST /portfolio/rebalance` looks up the score of each ticked AI candidate from the same query.
+
+### Gate
+
+- Conviction relies on verdicts, so it exists only where `verdicts_visible_to(user)` is true.
+- `POST /portfolio/rebalance` with `rule == "conviction"` (sent, or saved) returns **403**
+  "Conviction targets are not available on this account" when verdicts are hidden.
+- `GET /portfolio` row actions treat a saved `conviction` rule as `cap` when verdicts are hidden.
+  This cannot occur today, because hidden verdicts null the row actions, but it is defined anyway.
+- The Conviction option is shown only when `snapshot.verdicts_visible` is true.
+
+### Row actions
+
+- `target_gaps` takes the verdicts from the rows, so an ADD row's BUY quantity follows the saved
+  rule, Conviction included.
+
+### Testing
+
+- An ADD holding outweighs a HOLD in proportion to `1 + score`.
+- SELL gets 0%.
+- An AI pick is weighted by its score; a watchlist name gets 1×.
+- Caps clip conviction weights.
+- Overrides still win.
+- Router:
+  - 403 for a non-admin sending `conviction`.
+  - Candidates come in score order, with only the top 5 preselected.
+  - Expired, SELL and held picks are left out.
+  - The row action quantity under a saved `conviction` rule follows the conviction target.
