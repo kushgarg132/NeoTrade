@@ -435,6 +435,15 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   `risk_multiplier`. A `skip_day` plan keeps the auto run from starting. The 16:00 daily pass
   replays each user's day twice (`replay.replay_day`: plan versions vs no plan) into
   `plan_scorecards`; `weeks_beating` counts the streak.
+  Revisions (15.3): ingest loop `plan_revise` (`backend/plan/revise.py`, 60 s, in session)
+  revises a non-fallback plan on material news touching a planned/held name or its sector
+  (claimed via `planned_at`), a `market:regime` label change, or a high-impact event passing;
+  ≤ 6 a day per user, ≥ 15 min apart, one `deep` call returning the full plan, stored as a
+  new version. On a new version `run()` closes the plan's `exits` (MIS market orders;
+  live-held positions only logged to `autopilot_shadow`, `source="plan"`) and calls
+  `plan/expand.make_expand` for new `add_symbols`: feed `add()` (candle polling replays the day
+  as warmup; Kite subscribes and the hook backfills today's 5m bars into the context only;
+  Upstox has no `add()` yet, so adds are skipped there) and `extend_universe` on the strategies.
 - **Long-term engine** — not a live run: long-term strategies need months of daily bars,
   which a live feed never has, so their ideas come only from the history-backed scan
   (`backend/suggestions/scan.py`; 16:00 IST in `scheduler.py`, which records

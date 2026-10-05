@@ -232,6 +232,17 @@ B. Weekly roll-up on Today and Telegram. Plan-chosen trades become eligible for 
 only after **4 consecutive weeks** where A beats B on net P&L with drawdown ≤ B's; until then
 live routing is exactly today's.
 
+### As built (15.3, 2026-10-05)
+
+- A revision returns the full plan (not a diff), validated against the pre-open universe.
+- Triggers that arrive while a user is rate-limited are dropped, not queued.
+- Feed `add()`: candle polling (catch-up as warmup) and Kite (subscribe + backfill into the
+  context only, never through `on_bar`). Upstox runs skip plan adds for now.
+- Plan exits close paper engine positions with MIS market orders; a position held by a strategy
+  routing live is logged to `autopilot_shadow` with `source: "plan"` and never sent.
+- Pre-open builds stop at 09:15 and revisions start at 09:15 in one leader process, so plan
+  versions cannot race.
+
 ## 4. News across the app
 
 Read-only consumers of existing datalayer keys (`sentiment:{SYM}`, `news_items`,
