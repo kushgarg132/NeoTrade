@@ -115,3 +115,51 @@ def test_plan_reports_the_share_caps_leave_uninvested():
     out = plan_rebalance(rows, [], DEFAULT_TARGETS, 0, {}, TODAY)
     assert out["uninvested_pct"] == pytest.approx(55.0)
     assert plan_rebalance(rows, [], EQUAL, 0, {}, TODAY)["uninvested_pct"] == pytest.approx(0.0)
+
+
+def v(symbol, value, verdict="HOLD", score=None, sector="IT", kind="STOCK"):
+    row = h(symbol, value, sector=sector, kind=kind)
+    row.update(verdict=verdict, score=None if score is None else {"final": score})
+    return row
+
+
+CONVICTION = {"rule": "conviction", "max_stock_pct": 100, "max_sector_pct": 100, "overrides": {}}
+
+
+def test_conviction_add_outweighs_hold_by_score():
+    names = universe([v("A", 500, "ADD", 0.8), v("B", 500, "HOLD")])[0]
+    w = target_weights(names, CONVICTION, 1000)
+    assert w["A"] / w["B"] == pytest.approx(1.8) and sum(w.values()) == pytest.approx(1.0)
+
+
+def test_conviction_sell_gets_zero_and_never_absorbs():
+    names = universe([v("A", 400, "SELL", 0.7, sector="X"), v("B", 300, "ADD", 0.9, sector="Y"),
+                      v("C", 300, "HOLD", sector="Z")])[0]
+    w = target_weights(names, {**CONVICTION, "max_stock_pct": 40}, 1000)
+    assert w["A"] == 0 and w["B"] == pytest.approx(0.40) and w["C"] == pytest.approx(0.40)  # 20% left as cash
+
+
+def test_conviction_all_sell_is_cash():
+    names = universe([v("A", 500, "SELL", 0.6), v("B", 500, "SELL", 0.9)])[0]
+    assert sum(target_weights(names, CONVICTION, 1000).values()) == 0
+
+
+def test_conviction_ai_pick_weighted_watchlist_neutral():
+    out = plan_rebalance([v("A", 10_000, "HOLD", sector="X")],
+                         [{"symbol": "P", "price": 100.0, "source": "ai", "score": 0.5},
+                          {"symbol": "W", "price": 100.0, "source": "watchlist", "score": None}],
+                         CONVICTION, 0, {}, TODAY)
+    target = {t["symbol"]: t["target_weight"] for t in out["trades"]}
+    assert target["P"] / target["W"] == pytest.approx(1.5)
+
+
+def test_conviction_missing_score_is_neutral():
+    names = universe([v("A", 200, "ADD", None), v("B", 800, "HOLD")])[0]
+    assert target_weights(names, CONVICTION, 1000) == pytest.approx({"A": 0.5, "B": 0.5})
+
+
+def test_conviction_caps_and_overrides_still_apply():
+    names = universe([v("A", 100, "ADD", 1.0, sector="X"), v("B", 600, "HOLD", sector="Y"),
+                      v("C", 300, "HOLD", sector="Z")])[0]
+    w = target_weights(names, {**CONVICTION, "max_stock_pct": 45, "overrides": {"C": 10}}, 1000)
+    assert w["C"] == pytest.approx(0.10) and w["A"] == pytest.approx(0.45) and w["B"] == pytest.approx(0.45)

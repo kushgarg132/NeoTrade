@@ -29,12 +29,24 @@ def universe(holdings: list[dict]) -> tuple[list[dict], list[dict]]:
         else:
             names.append({"symbol": row["symbol"], "kind": row["kind"], "sector": row.get("sector"),
                           "quantity": float(row["quantity"]), "price": float(price),
-                          "value": float(row["quantity"]) * float(price)})
+                          "value": float(row["quantity"]) * float(price),
+                          "verdict": row.get("verdict"), "score": (row.get("score") or {}).get("final")})
     return names, excluded
 
 
 def _sector(name: dict):
     return name["sector"] if name["kind"] == "STOCK" else None  # ETFs never count toward a sector cap
+
+
+def multiplier(name: dict) -> float:
+    """A name's share under the conviction rule, from the one composite score
+    (scoring/composite.py) as stored: ADD holdings and AI picks get 1 + score,
+    SELL holdings exit, everything else is neutral."""
+    if name.get("verdict") == "SELL":
+        return 0.0
+    if (name.get("verdict") == "ADD" or name.get("source") == "ai") and name.get("score") is not None:
+        return 1 + float(name["score"])
+    return 1.0
 
 
 def target_weights(names: list[dict], targets: dict, total: float) -> dict[str, float]:
@@ -48,14 +60,17 @@ def target_weights(names: list[dict], targets: dict, total: float) -> dict[str, 
     if targets.get("rule") == "equal":
         return {**fixed, **{n["symbol"]: rest / len(free) for n in free}}
 
-    start = {n["symbol"]: (n["value"] / total if n["value"] > 0 and total > 0 else rest / len(free)) for n in free}
+    if targets.get("rule") == "conviction":
+        start = {n["symbol"]: multiplier(n) for n in free}
+    else:
+        start = {n["symbol"]: (n["value"] / total if n["value"] > 0 and total > 0 else rest / len(free)) for n in free}
     scale = rest / sum(start.values()) if sum(start.values()) > 0 else 0.0
     weights = {s: w * scale for s, w in start.items()}
 
     stock_cap = targets.get("max_stock_pct", 100) / 100
     sector_cap = targets.get("max_sector_pct", 100) / 100
     sector_of = {n["symbol"]: _sector(n) for n in names}
-    clipped: set[str] = set()
+    clipped = {s for s, w in start.items() if w <= 0}  # an exit never absorbs freed weight
     for _ in range(MAX_PASSES):
         freed = 0.0
         for symbol, weight in weights.items():
@@ -136,7 +151,8 @@ def plan_rebalance(holdings: list[dict], candidates: list[dict], targets: dict, 
     for c in candidates:
         if c["symbol"] not in held and c.get("price") and c["price"] > 0:
             names.append({"symbol": c["symbol"], "kind": c.get("kind", "STOCK"), "sector": c.get("sector"),
-                          "quantity": 0.0, "price": float(c["price"]), "value": 0.0})
+                          "quantity": 0.0, "price": float(c["price"]), "value": 0.0,
+                          "verdict": None, "source": c.get("source"), "score": c.get("score")})
     total = sum(n["value"] for n in names) + new_money
     weights = target_weights(names, targets, total) if total > 0 else {}
     skipped, sells, buys = [], [], []
