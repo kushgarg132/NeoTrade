@@ -12,8 +12,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
@@ -25,6 +25,7 @@ from backend.auth.broker_credentials import get_credential_store
 from backend.instruments.master import InstrumentMaster
 from backend.options.premiums import live_premium_source
 from backend.prefs import PrefsStore
+from backend.rate_limit import allow
 from backend.suggestions.scan import scan_universe
 from backend.brokers.protocol import BrokerSessionState
 from backend.core.models import Order, Side
@@ -92,7 +93,7 @@ class RejectRequest(BaseModel):
 
 
 class ScanRequest(BaseModel):
-    universe: Optional[list[str]] = None  # defaults to the user's saved universe
+    universe: Optional[list[str]] = Field(None, max_length=300)  # defaults to the user's saved universe
 
 
 @router.post("/scan", status_code=202)
@@ -103,6 +104,9 @@ async def scan_now(
     """Runs in the background: a scan pulls a year of daily history per
     symbol, which is minutes for a full universe -- far too long to hold an
     HTTP request open. New suggestions appear in the inbox as they land."""
+    # Each scan is minutes of background work: a few per 10 minutes is plenty.
+    if not await allow(db.redis, f"scan:{user.id}", limit=5, window_seconds=600):
+        raise HTTPException(status_code=429, detail="Too many scans started; wait a few minutes and try again.")
     prefs = await PrefsStore(db.db).get(user.id)
     universe = body.universe or prefs["universe"]
 
@@ -127,7 +131,7 @@ async def _scan_and_enrich(user_id: str, universe: list[str], prefs: dict) -> No
 async def list_suggestions(
     mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None,
     status: Optional[str] = None,
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=500),
     user: User = Depends(get_current_user),
     store: SuggestionStore = Depends(get_suggestion_store),
 ):

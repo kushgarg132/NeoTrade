@@ -28,6 +28,7 @@ from backend.auth.models import User
 from backend.auth.store import UserStore
 from backend.configs.settings import settings
 from backend.database import db
+from backend.rate_limit import allow
 from backend.ws.hub import hub
 
 logger = logging.getLogger(__name__)
@@ -97,9 +98,21 @@ async def _pump(websocket: WebSocket, connection) -> None:
         await websocket.send_json(message)
 
 
+# Per-user budgets on what costs money (LLM calls) or compute: (limit, window
+# seconds, reply topic prefix).
+_BUDGETS = {"analyze": (10, 60, "analysis"), "quick_analyze": (60, 60, "quick_analysis"), "chat": (20, 60, "chat")}
+
+
 async def _handle(websocket: WebSocket, connection, message: dict) -> None:
     action = message.get("action")
     topics = message.get("topics") or []
+
+    if action in _BUDGETS:
+        limit, window, prefix = _BUDGETS[action]
+        if not await allow(db.redis, f"{action}:{connection.user_id}", limit, window):
+            connection.offer(_frame(f"{prefix}:{message.get('req_id', '')}", "error",
+                                    {"detail": "Too many requests in a minute; wait a moment and try again."}))
+            return
 
     if action == "analyze":
         asyncio.create_task(_stream_analysis(connection, message.get("symbol", ""), message.get("req_id", "")))

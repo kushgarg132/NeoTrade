@@ -301,3 +301,26 @@ def test_chat_uses_the_users_saved_model_preference(client, monkeypatch):
 
     assert seen_model["model"] == "user/preferred"
     assert seen_model["user_id"] == "alice" and seen_model["context"] == {"page": "/portfolio"}
+
+
+def test_chat_past_its_budget_is_refused_without_starting_a_task(client, monkeypatch):
+    calls = []
+
+    async def fake_stream(db, redis, user_id, message, history, context):
+        calls.append(message)
+        yield {"type": "content", "data": "ok"}
+
+    async def over_budget(redis, key, limit, window_seconds):
+        return False
+
+    monkeypatch.setattr("backend.chat.agent.stream_chat", fake_stream)
+    monkeypatch.setattr(ws_routes, "allow", over_budget)
+
+    with client.websocket_connect("/api/v1/ws?token=good-token", headers={"origin": ALLOWED_ORIGIN}) as socket:
+        socket.receive_json()
+        socket.send_json({"action": "chat", "message": "hi", "req_id": "c9"})
+        reply = socket.receive_json()
+
+    assert (reply["topic"], reply["event"]) == ("chat:c9", "error")
+    assert "Too many" in reply["data"]["detail"]
+    assert calls == []

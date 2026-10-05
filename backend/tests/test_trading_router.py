@@ -314,7 +314,7 @@ def test_start_then_stop_round_trip(monkeypatch):
 
     with TestClient(app) as test_client:
         resp = test_client.post("/api/v1/trading/start", json={
-            "mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 0.01,
+            "mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 1.0,
         })
         assert resp.status_code == 200  # returns immediately, doesn't block on the loop
         run_id = resp.json()["run_id"]
@@ -465,7 +465,7 @@ def _start_longterm(monkeypatch, fresh_db, adapter_state):
 
     with TestClient(app) as test_client:
         resp = test_client.post("/api/v1/trading/start", json={
-            "mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 0.01,
+            "mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 1.0,
         })
         assert resp.status_code == 200
         run_id = resp.json()["run_id"]
@@ -561,7 +561,7 @@ def test_start_trading_still_works_with_no_live_strategies_toggled(monkeypatch):
 
     with TestClient(_start_app()) as test_client:
         resp = test_client.post("/api/v1/trading/start", json={
-            "mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 0.01,
+            "mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 1.0,
         })
         assert resp.status_code == 200
         run_id = resp.json()["run_id"]
@@ -590,7 +590,7 @@ def test_start_trading_no_longer_501s_on_trading_live_enabled(monkeypatch):
 
         with TestClient(_start_app()) as test_client:
             resp = test_client.post("/api/v1/trading/start", json={
-                "mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 0.01,
+                "mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 1.0,
             })
             assert resp.status_code != 501
             run_id = resp.json()["run_id"]
@@ -690,7 +690,7 @@ def test_start_routes_a_toggled_live_strategy_through_the_autopilot(monkeypatch)
 
     async def _scenario():
         await _seed_gate_and_prefs(fake_db, ["technical_breakout"])
-        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=0.01)
+        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=1.0)
         await trading.start_trading(req, user=_USER, runs=RunStore(fake_db.db))
         for _ in range(5):
             await asyncio.sleep(0)
@@ -761,7 +761,7 @@ def test_start_never_copies_ai_broker_positions_into_the_engine_portfolio(monkey
         # Only technical_breakout (RELIANCE) is toggled live; mean_reversion
         # (TCS) stays paper-only.
         await _seed_gate_and_prefs(fake_db, ["technical_breakout"])
-        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE", "TCS"], poll_interval_seconds=0.01)
+        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE", "TCS"], poll_interval_seconds=1.0)
         await trading.start_trading(req, user=_USER, runs=RunStore(fake_db.db))
         for _ in range(5):
             await asyncio.sleep(0)
@@ -792,7 +792,7 @@ def test_start_falls_back_to_paper_when_broker_session_is_not_active(monkeypatch
 
     async def _scenario():
         await _seed_gate_and_prefs(fake_db, ["technical_breakout"])
-        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=0.01)
+        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=1.0)
         await trading.start_trading(req, user=_USER, runs=RunStore(fake_db.db))
         for _ in range(5):
             await asyncio.sleep(0)
@@ -824,7 +824,7 @@ def test_start_keeps_a_toggled_strategy_on_paper_without_a_paper_record(monkeypa
 
     async def _scenario():
         await _seed_gate_and_prefs(fake_db, ["mean_reversion"])  # paper record is technical_breakout's
-        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=0.01)
+        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=1.0)
         await trading.start_trading(req, user=_USER, runs=RunStore(fake_db.db))
         for _ in range(5):
             await asyncio.sleep(0)
@@ -867,7 +867,7 @@ def test_engine_live_orders_stay_on_paper_while_the_autopilot_is_off(monkeypatch
 
     async def _scenario():
         await _seed_gate_and_prefs(fake_db, ["technical_breakout"], autopilot=False)
-        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=0.01)
+        req = trading.StartRequest(mode="LONGTERM", universe=["RELIANCE"], poll_interval_seconds=1.0)
         await trading.start_trading(req, user=_USER, runs=RunStore(fake_db.db))
         for _ in range(5):
             await asyncio.sleep(0)
@@ -889,7 +889,7 @@ def test_a_second_run_of_the_same_mode_is_refused(monkeypatch):
     app.include_router(trading.router, prefix="/api/v1")
     app.dependency_overrides[get_current_user] = lambda: _USER
     app.dependency_overrides[trading.get_run_store] = lambda: RunStore(_FakeDb.db)
-    body = {"mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 0.01}
+    body = {"mode": "LONGTERM", "universe": ["RELIANCE"], "poll_interval_seconds": 1.0}
 
     with TestClient(app) as test_client:
         first = test_client.post("/api/v1/trading/start", json=body)
@@ -899,3 +899,12 @@ def test_a_second_run_of_the_same_mode_is_refused(monkeypatch):
             assert second.status_code == 409 and "already running" in second.json()["detail"]
         finally:
             test_client.post("/api/v1/trading/stop", json={"run_id": first.json()["run_id"]})
+
+
+def test_start_inputs_are_bounded():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        trading.StartRequest(mode="INTRADAY", poll_interval_seconds=0)
+    with pytest.raises(ValidationError):
+        trading.StartRequest(mode="INTRADAY", universe=[f"S{i}" for i in range(301)])

@@ -19,8 +19,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from backend import broadcast
 from backend.learning.retune import current_params
@@ -224,8 +224,9 @@ class StartRequest(BaseModel):
     preferences, so a request cannot size itself past the limits the user
     saved. The scheduled scan path already worked this way."""
     mode: Literal["INTRADAY", "LONGTERM"] = "LONGTERM"
-    universe: Optional[list[str]] = None  # tradingsymbols; defaults to ALL_SCAN_STOCKS
-    poll_interval_seconds: float = 60.0
+    universe: Optional[list[str]] = Field(None, max_length=300)  # tradingsymbols; defaults to ALL_SCAN_STOCKS
+    # Bounded: 0 or a negative interval was a tight loop on the data provider.
+    poll_interval_seconds: float = Field(60.0, ge=1, le=3600)
 
 
 class StartResponse(BaseModel):
@@ -512,7 +513,7 @@ async def get_fills(
 @router.get("/trades")
 async def get_trades(
     status: Optional[Literal["OPEN", "CLOSED"]] = None,
-    limit: int = 200,
+    limit: int = Query(200, ge=1, le=1000),
     venue: Optional[Venue] = None,
     mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None,
     ledger: LedgerStore = Depends(get_ledger_store),
@@ -537,7 +538,7 @@ async def get_equity(venue: Optional[Venue] = None, ledger: LedgerStore = Depend
 
 
 @router.get("/instruments")
-async def search_instruments(q: str, limit: int = 10):
+async def search_instruments(q: str, limit: int = Query(10, ge=1, le=50)):
     master = InstrumentMaster(db.db)
     instruments = await master.search(q, limit=limit)
     return [i.model_dump() for i in instruments]
