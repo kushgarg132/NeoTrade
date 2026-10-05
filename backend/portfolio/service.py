@@ -45,8 +45,10 @@ def _nifty_sync() -> list:
     return [(index.date(), float(row["Close"])) for index, row in hist.iterrows()]
 
 
-async def _nifty(db) -> list:
-    points = await bars.nifty_closes(db, bars.today_ist() - timedelta(days=3653))
+async def _nifty() -> list:
+    from backend.database import db
+
+    points = await bars.nifty_closes(db.db, bars.today_ist() - timedelta(days=3653))
     if points:
         return points
     try:
@@ -148,7 +150,7 @@ async def refresh_portfolio(db, user_id: str, credentials, redis, analyse: bool 
     stocks = [(s, e) for s, e in listed if next(h for h in holdings if h.symbol == s).kind == "STOCK"]
     returns = {s: _returns(closes[s]) for s, _ in stocks if s in closes}
     trades = await JournalStore(db).list_trades(user_id)
-    card = build_scorecard(holdings, trades, await _nifty(db), await _sectors(db, stocks), returns)
+    card = build_scorecard(holdings, trades, await _nifty(), await _sectors(db, stocks), returns)
     if analyse and card["holdings"]:
         await _review(db, user_id, redis, card, closes, previous)
 
