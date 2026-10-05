@@ -120,7 +120,7 @@ const AutopilotSheet = () => {
         <ul className="divide-y divide-[var(--rule)]">
           {log.map((row, i) => (
             <li key={`${row.at}-${i}`} className="py-2 text-sm">
-              <span className={cn('field-label mr-2', row.status === 'FILLED' ? 'text-[var(--gain)]' : 'text-[var(--loss)]')}>
+              <span className={cn('field-label mr-2', row.status === 'FILLED' ? 'text-[var(--gain)]' : row.status === 'SENT' ? 'text-[var(--ink-soft)]' : 'text-[var(--loss)]')}>
                 {row.status}
               </span>
               {row.side} {row.quantity} {row.symbol}

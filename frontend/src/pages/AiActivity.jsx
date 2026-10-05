@@ -42,7 +42,7 @@ const AiActivity = () => {
             <ul className="divide-y divide-[var(--rule)]">
               {rows.map((row, i) => (
                 <li key={`${row.at}-${i}`} className="py-2.5 text-sm">
-                  <span className={cn('field-label mr-2', row.status === 'FILLED' ? 'text-[var(--gain)]' : 'text-[var(--loss)]')}>{row.status}</span>
+                  <span className={cn('field-label mr-2', row.status === 'FILLED' ? 'text-[var(--gain)]' : row.status === 'SENT' ? 'text-[var(--ink-soft)]' : 'text-[var(--loss)]')}>{row.status}</span>
                   {row.side} {row.quantity} {row.symbol}
                   <span className="doc-meta normal-case"> · {row.source} · {row.mode || ''} · {formatDateTime(row.at)}</span>
                   {row.reason && <p className="doc-meta normal-case mt-0.5">{row.reason}</p>}
