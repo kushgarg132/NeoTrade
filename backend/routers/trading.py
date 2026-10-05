@@ -286,14 +286,15 @@ async def launch_run(
     # One run per mode: two would each emit the same signals and every order
     # would go out twice. A short Redis lock covers two workers at once.
     lock = f"launch:{user_id}:{mode}"
-    if db.redis is not None and not await db.redis.set(lock, "1", nx=True, ex=30):
+    token = str(uuid.uuid4())
+    if db.redis is not None and not await db.redis.set(lock, token, nx=True, ex=30):
         raise HTTPException(status_code=409, detail=f"A {mode.lower()} run is already starting.")
     try:
         if any(r["mode"] == mode for r in await runs.list_active(user_id)):
             raise HTTPException(status_code=409, detail=f"A {mode.lower()} run is already running; stop it first.")
         return await _launch_run(user_id, mode, universe, poll_interval_seconds, runs, origin)
     finally:
-        if db.redis is not None:
+        if db.redis is not None and await db.redis.get(lock) in (token, token.encode()):
             await db.redis.delete(lock)
 
 

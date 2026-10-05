@@ -116,9 +116,10 @@ async def submit(db, redis, user_id: str, order: AutopilotOrder, now: Optional[d
     lock = _LOCKS.setdefault(user_id, asyncio.Lock())
     async with lock:
         key = f"autopilot:lock:{user_id}"
+        token = str(uuid.uuid4())
         if redis is not None:
             for _ in range(50):
-                if await redis.set(key, "1", nx=True, px=LOCK_MS):
+                if await redis.set(key, token, nx=True, px=LOCK_MS):
                     break
                 await asyncio.sleep(0.2)
             else:
@@ -128,7 +129,8 @@ async def submit(db, redis, user_id: str, order: AutopilotOrder, now: Optional[d
             return await _submit(db, redis, user_id, order, now or datetime.now(timezone.utc),
                                  suggestion_id or order.suggestion_id, quiet)
         finally:
-            if redis is not None:
+            # Only our own lock: after its TTL another worker may hold the key.
+            if redis is not None and await redis.get(key) in (token, token.encode()):
                 await redis.delete(key)
 
 

@@ -251,3 +251,37 @@ async def test_autopilot_exits_hit_stop_through_the_fence(world, monkeypatch):
     assert [c["symbol"] for c in closed] == ["INFY"]
     open_left = await db["paper_trades"].count_documents({"user_id": "alice:autopilot", "status": "OPEN"})
     assert open_left == 0
+
+
+class _Redis:
+    def __init__(self):
+        self.kv = {}
+
+    async def set(self, key, value, nx=False, px=None, ex=None):
+        if nx and key in self.kv:
+            return None
+        self.kv[key] = value
+        return True
+
+    async def get(self, key):
+        return self.kv.get(key)
+
+    async def delete(self, key):
+        self.kv.pop(key, None)
+
+
+async def test_lock_release_never_deletes_another_workers_lock(world, monkeypatch):
+    """The 30s lock expired mid-order and another worker took it: releasing
+    ours must leave theirs in place."""
+    db, _ = world
+    await _prefs(db)
+    redis = _Redis()
+    real = service._submit
+
+    async def slow_submit(*args, **kw):
+        redis.kv["autopilot:lock:alice"] = "other-worker"  # ours expired; theirs now
+        return await real(*args, **kw)
+
+    monkeypatch.setattr(service, "_submit", slow_submit)
+    await service.submit(db, redis, "alice", _order(qty=1), now=OPEN)
+    assert redis.kv.get("autopilot:lock:alice") == "other-worker"
