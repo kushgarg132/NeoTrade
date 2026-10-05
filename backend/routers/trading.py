@@ -302,16 +302,6 @@ async def launch_run(
             await db.redis.delete(lock)
 
 
-async def _run_catalysts(today, game_plan: Optional[dict]) -> dict[str, dict[str, float]]:
-    """Overnight news catalysts, with the plan's own catalyst calls on top."""
-    catalysts = await catalyst_map(db.db, today, today)
-    day = catalysts.setdefault(today.isoformat(), {})
-    for entry in (game_plan or {}).get("allow") or []:
-        if entry.get("catalyst"):
-            day[entry["symbol"]] = entry["catalyst"]["direction"]
-    return catalysts
-
-
 async def _launch_run(
     user_id: str, mode: str, universe: Optional[list[str]], poll_interval_seconds: float,
     runs: RunStore, origin: str,
@@ -320,7 +310,7 @@ async def _launch_run(
     symbols = list(universe or ALL_SCAN_STOCKS)
     # Today's game plan (backend/plan/): its news names join the run; the
     # PlanGate below decides what may open. No plan = today's behaviour.
-    game_plan = None
+    game_plan, base_universe = None, list(symbols)
     if mode == "INTRADAY":
         from backend.plan import store as plan_store
 
@@ -353,7 +343,7 @@ async def _launch_run(
             universe=[i.tradingsymbol for i in instruments], symbol_for_token=symbol_for_token,
             option_universe=[i.tradingsymbol for i in option_instruments],
             params=await current_params(db.db),
-            catalysts=await _run_catalysts(today, game_plan) if mode == "INTRADAY" else None,
+            catalysts=await catalyst_map(db.db, today, today) if mode == "INTRADAY" else None,
             # Live feeds carry only today's bars, so the gap strategies get
             # yesterday's close from the shared daily bars.
             prev_closes=({today.isoformat(): await prev_closes(db.db, [i.tradingsymbol for i in instruments], today)}
@@ -451,6 +441,8 @@ async def _launch_run(
             "account_size": account_size, "max_exposure": max_exposure,
             "live_strategies": sorted(live_by_strategy),
             "feed": getattr(feed, "source", "live broker ticks"),
+            # What the nightly plan replay (backend/plan/replay.py) compares.
+            "base_universe": base_universe, "plan_adds": (game_plan or {}).get("add_symbols") or [],
         },
     )
     start_background_run(coro, run_id=run_id, runs=runs)

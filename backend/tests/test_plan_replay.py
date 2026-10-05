@@ -73,3 +73,19 @@ async def test_weeks_beating_counts_consecutive_weeks(mongo):
     mondays = [date(2026, 9, 7) + timedelta(weeks=i) for i in range(4)]
     await mongo["plan_scorecards"].insert_many([card(mondays[0], -5, 5)] + [card(d, 10, 1) for d in mondays[1:]])
     assert await replay.weeks_beating(mongo, "alice") == 3
+
+
+async def test_baseline_trades_the_base_universe_and_the_plan_its_adds(mongo):
+    await _ran_today(mongo, [])
+    await mongo["runs"].update_one({"run_id": "r1"}, {"$set": {
+        "universe": ["TCS", "INFY", "RELIANCE"], "params": {"base_universe": ["TCS"], "plan_adds": ["INFY"]}}})
+    provider = _Provider()
+    seen = []
+    original = provider.history
+
+    async def history(instrument, interval, period):
+        seen.append(instrument.tradingsymbol)
+        return await original(instrument, interval, period)
+    provider.history = history
+    await replay.replay_day(mongo, provider, "alice", DAY)
+    assert sorted(seen) == ["INFY", "TCS", "TCS"]  # A: base + adds; B: base only; never RELIANCE

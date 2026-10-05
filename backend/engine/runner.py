@@ -245,7 +245,9 @@ async def size_intents(
         entry = history[-1].close
         stop = intent.stop_hint
 
-        risk_pct = BASE_RISK_PCT * scored.final * (plan.multiplier if plan is not None and mode == "INTRADAY" else 1.0)
+        # The plan shrinks only new risk: an exit is never sized down.
+        shrink = plan.multiplier if plan is not None and mode == "INTRADAY" and _opens(intent, portfolio, mode) else 1.0
+        risk_pct = BASE_RISK_PCT * scored.final * shrink
         raw_size = RiskRules.calculate_position_size(account_size, risk_pct, entry, stop)
         # NSE cash equity delivery/intraday trades in whole shares only.
         size = float(int(raw_size))

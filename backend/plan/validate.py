@@ -26,6 +26,9 @@ class TradePlan(BaseModel):
     allow: list[dict] = []
     exits: list[dict] = []
     rationale: list[str] = []
+    # The symbols this plan judged (universe + adds); the gate leaves any
+    # other symbol a run trades -- an F&O underlying, a custom universe -- alone.
+    scope: list[str] = []
 
 
 def _number(value, default: float) -> float:
@@ -33,12 +36,6 @@ def _number(value, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
-
-
-def _catalyst(value) -> Optional[dict]:
-    if not isinstance(value, dict) or "direction" not in value:
-        return None
-    return {"item_id": str(value.get("item_id") or ""), "direction": max(-1.0, min(1.0, _number(value["direction"], 0.0)))}
 
 
 def validate(raw: str | dict, *, trigger: str, strategies: set[str], universe: set[str],
@@ -63,9 +60,10 @@ def validate(raw: str | dict, *, trigger: str, strategies: set[str], universe: s
         names = [n for n in entry.get("strategies") or [] if n in strategies]
         if symbol not in allowed_symbols or not names:
             continue
-        kept = allow.setdefault(symbol, {"symbol": symbol, "strategies": [], "catalyst": None})
+        # No catalyst field: only scored news may make a gap strategy fire,
+        # never the model (the plan only tightens).
+        kept = allow.setdefault(symbol, {"symbol": symbol, "strategies": []})
         kept["strategies"] += [n for n in names if n not in kept["strategies"]]
-        kept["catalyst"] = kept["catalyst"] or _catalyst(entry.get("catalyst"))
 
     exits = [] if trigger in NO_EXITS else [
         {"symbol": str(e.get("symbol", "")).upper(), "reason": str(e.get("reason", ""))[:MAX_RATIONALE_CHARS]}
@@ -80,11 +78,13 @@ def validate(raw: str | dict, *, trigger: str, strategies: set[str], universe: s
         allow=list(allow.values()),
         exits=exits,
         rationale=[str(line)[:MAX_RATIONALE_CHARS] for line in data.get("rationale") or []][:MAX_RATIONALE_LINES],
+        scope=sorted(allowed_symbols),
     )
 
 
 def fallback_plan(strategies: set[str], universe: set[str], reason: str) -> TradePlan:
     """Today's behaviour, written down: every strategy on every symbol."""
     names = sorted(strategies)
-    return TradePlan(trigger="fallback", allow=[{"symbol": s, "strategies": names, "catalyst": None}
-                                                for s in sorted(universe)], rationale=[reason])
+    return TradePlan(trigger="fallback", allow=[{"symbol": s, "strategies": names}
+                                                for s in sorted(universe)], rationale=[reason],
+                     scope=sorted(universe))

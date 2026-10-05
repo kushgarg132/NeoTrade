@@ -179,6 +179,12 @@ cap, revisions stop and the current plan stands. Users without a plan get the fa
   `weeks_beating` is computed for 15.4 to show, nothing routes on it yet.
 - `risk_multiplier` scales equity sizing; option intents are gated but sized as before.
 - A manual run on a `skip_day` still starts, and the gate lets it open nothing.
+- Plans carry **no catalysts**: only scored news (`catalyst_map`) makes a gap strategy fire, so
+  a plan can never create an entry. The `allow[].catalyst` field in section 2 is dropped.
+- A `fallback` plan gates nothing, and a plan only judges its `scope` (universe + adds): other
+  symbols a run trades (F&O underlyings, a manual custom universe) pass untouched.
+- A plan-read error never stops a run: the gate trades without a plan and reads again next bar.
+- Runs record `base_universe` and `plan_adds`; the replay's B trades the base universe, A base + adds.
 
 ## 3. Engine enforcement
 

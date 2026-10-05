@@ -19,7 +19,7 @@ def test_drops_unknown_strategies_symbols_and_non_nifty_adds():
     plan = _v({"allow": [{"symbol": "tcs", "strategies": ["orb_breakout", "macd_crossover", "nope"]},
                          {"symbol": "ZZZ", "strategies": ["orb_breakout"]}],
                "add_symbols": ["INFY", "NOTNIFTY", "TCS"]})
-    assert plan.allow == [{"symbol": "TCS", "strategies": ["orb_breakout"], "catalyst": None}]
+    assert plan.allow == [{"symbol": "TCS", "strategies": ["orb_breakout"]}]
     assert plan.add_symbols == ["INFY"]
 
 
@@ -27,8 +27,8 @@ def test_added_symbols_may_be_allowed_and_duplicates_merge():
     plan = _v({"add_symbols": ["INFY"], "allow": [
         {"symbol": "INFY", "strategies": ["gap_and_go"], "catalyst": {"item_id": "a", "direction": 0.7}},
         {"symbol": "INFY", "strategies": ["orb_breakout"]}]})
-    assert plan.allow == [{"symbol": "INFY", "strategies": ["gap_and_go", "orb_breakout"],
-                           "catalyst": {"item_id": "a", "direction": 0.7}}]
+    # a plan never supplies catalysts (only scored news does): the field is dropped
+    assert plan.allow == [{"symbol": "INFY", "strategies": ["gap_and_go", "orb_breakout"]}]
 
 
 def test_json_wrapped_in_prose_is_parsed():

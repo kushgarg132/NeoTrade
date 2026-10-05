@@ -85,3 +85,41 @@ async def test_size_intents_never_blocks_a_closing_intent_and_scales_risk():
     full = await qty(None)
     assert full > 0 and abs(await qty(half) - full / 2) <= 1
     assert await qty(nothing) == 0
+
+
+async def test_a_failing_source_allows_everything_and_retries_next_bar():
+    calls = []
+
+    async def source(now):
+        calls.append(now)
+        raise ConnectionError("redis down")
+    gate = PlanGate(source)
+    await gate.refresh(NOW)
+    assert gate.blocks("orb_breakout", "INFY", False, 99) is None and gate.multiplier == 1.0
+    await gate.refresh(NOW)
+    assert len(calls) == 2  # not cached: the next read tries again
+
+
+async def test_fallback_plan_is_inert():
+    gate = await _gate(_plan(trigger="fallback", allow=[], risk_multiplier=0.5))
+    assert gate.blocks("orb_options", "NIFTY", False, 0) is None and gate.multiplier == 1.0
+
+
+async def test_symbols_outside_the_plans_scope_pass():
+    gate = await _gate(_plan(scope=["TCS"]))
+    assert gate.blocks("orb_options", "RELIANCE", False, 0) is None      # e.g. an F&O underlying
+    assert gate.blocks("vwap_reversion", "TCS", False, 0) == "plan: not in today's plan"
+
+
+async def test_risk_multiplier_never_shrinks_an_exit():
+    orb = _FakeStrategy("INTRADAY", "orb_breakout")
+
+    async def exit_qty(plan):
+        held = Portfolio()
+        held.positions["TCS"] = Position(symbol="TCS", quantity=-10.0, avg_price=100.0)
+        cover = Intent(symbol="TCS", side=Side.BUY, strength=0.9, reason_codes=["x"], stop_hint=95.0,
+                       strategy="orb_breakout")
+        orders = await size_intents([cover], held, _FakeCtx({"TCS": 100.0}), {"TCS": orb}, _no_sentiment_redis(),
+                                    account_size=1_000_000.0, max_exposure=10_000_000.0, plan=plan)
+        return orders[0].quantity
+    assert await exit_qty(await _gate(_plan(risk_multiplier=0.25))) == await exit_qty(None)

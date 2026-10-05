@@ -45,27 +45,33 @@ async def replay_day(db, provider, user_id: str, day: date) -> Optional[dict]:
     if run is None or not plans:
         return None
 
+    # B is the run as it was before plans: the base equity universe. A adds
+    # the plan's news names. Neither trades the option feed's underlyings.
+    params = run.get("params") or {}
+    base = params.get("base_universe") or run.get("universe") or []
+    adds = [s for s in params.get("plan_adds") or [] if s not in base]
     master = InstrumentMaster(db)
-    instruments = [i for s in run.get("universe") or [] if (i := await master.get("NSE", s)) is not None]
-    if not instruments:
+    resolved = {s: i for s in base + adds if (i := await master.get("NSE", s)) is not None}
+    if not resolved:
         return None
-    universe = [i.tradingsymbol for i in instruments]
-    symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
-    inputs = {"catalysts": await catalyst_map(db, day, day), "sector_of": nifty200_sectors(),
-              "prev_closes": {day.isoformat(): await prev_closes(db, universe, day)},
+    shared = {"catalysts": await catalyst_map(db, day, day), "sector_of": nifty200_sectors(),
+              "prev_closes": {day.isoformat(): await prev_closes(db, list(resolved), day)},
               "params": await current_params(db)}
     account = await backtest_account(db)
 
-    async def side(plan):
+    async def side(symbols: list[str], plan):
+        instruments = [resolved[s] for s in symbols if s in resolved]
+        universe = [i.tradingsymbol for i in instruments]
+        symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
         strategies = [s for s in build_default_strategies(universe=universe, symbol_for_token=symbol_for_token,
-                                                          **inputs) if s.spec.mode == "INTRADAY"]
+                                                          **shared) if s.spec.mode == "INTRADAY"]
         return await run_backtest(strategies, provider, instruments, start=start, end=end, timeframe="5m",
                                   plan=plan, **account)
 
-    a = await side(PlanGate(versions_source(plans)))
+    a = await side(base + adds, PlanGate(versions_source(plans)))
     if a.start_date == a.end_date:
         return None  # the provider had no bars for the day (run_backtest reports the requested start)
-    b = await side(None)
+    b = await side(base, None)
     doc = {"user_id": user_id, "date": day.isoformat(), "a": _side(a), "b": _side(b),
            "plan_versions": len(plans), "at": datetime.now(timezone.utc)}
     await db[SCORECARDS].update_one({"user_id": user_id, "date": doc["date"]}, {"$set": doc}, upsert=True)

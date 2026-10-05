@@ -3,11 +3,13 @@ open risk, how many positions, at what fraction of normal risk. Read by
 size_intents next to LearnedRules; it only ever removes or shrinks an
 opening order, and with no plan it does nothing."""
 
+import logging
 from datetime import datetime
 from typing import Awaitable, Callable, Optional
 
 from backend.engine.session import IST
 
+logger = logging.getLogger(__name__)
 PlanSource = Callable[[datetime], Awaitable[Optional[dict]]]
 
 
@@ -17,14 +19,26 @@ class PlanGate:
         self._at: Optional[datetime] = None
         self._plan: Optional[dict] = None
         self._allowed: set[tuple[str, str]] = set()
+        self._scope: set[str] = set()
 
     async def refresh(self, now: datetime) -> None:
         """At most one read per bar time: live, a Redis GET per bar."""
         if now == self._at:
             return
-        self._at, self._plan = now, await self._source(now)
+        try:
+            plan = await self._source(now)
+        except Exception as exc:
+            # A plan read must never take the run (and its square-off) down:
+            # no plan means today's behaviour, and the next bar reads again.
+            logger.warning("game plan unavailable, trading without it: %s", exc)
+            self._plan, self._allowed = None, set()
+            return
+        # The fallback plan is today's behaviour written down: it gates nothing.
+        self._at = now
+        self._plan = plan if plan and plan.get("trigger") != "fallback" else None
         self._allowed = {(name, a["symbol"]) for a in (self._plan or {}).get("allow") or []
                          for name in a.get("strategies") or []}
+        self._scope = set((self._plan or {}).get("scope") or [])
 
     @property
     def multiplier(self) -> float:
@@ -36,6 +50,8 @@ class PlanGate:
             return None
         if self._plan.get("skip_day"):
             return "plan: skip day"
+        if self._scope and symbol not in self._scope:
+            return None  # a symbol the plan never judged (e.g. an F&O underlying)
         if (strategy, symbol) not in self._allowed:
             return "plan: not in today's plan"
         if not holding and open_positions >= self._plan.get("max_positions", 0):

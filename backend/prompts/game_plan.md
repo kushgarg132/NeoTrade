@@ -19,7 +19,7 @@ Candidate stocks (in_universe = already traded; others are Nifty 200 names in th
 Trader's caps: {{caps}}
 
 Reply with this JSON object:
-{"allow": [{"symbol": "TCS", "strategies": ["orb_breakout"], "catalyst": {"item_id": "", "direction": 0.6}}],
+{"allow": [{"symbol": "TCS", "strategies": ["orb_breakout"]}],
  "add_symbols": ["AXISBANK"],
  "risk_multiplier": 1.0,
  "max_positions": 6,
@@ -30,5 +30,5 @@ Rules:
 - Pair each stock only with strategies whose card fits its situation today (a news catalyst suits gap_and_go; no news and a gap suits gap_fill_fade; a sector moving on news suits relative_strength_sector; a quiet range-bound name suits vwap_reversion).
 - Leave out strategies that are paused, or whose card says to avoid today's regime.
 - add_symbols: at most 10, only from candidates with in_universe false, only with a clear news reason; list them in allow too.
-- risk_multiplier is at most 1.0: lower it for a risk-off regime or a big event today. skip_day only for a genuinely hostile day.
+- risk_multiplier is between 0.25 and 1.0: lower it for a risk-off regime or a big event today. skip_day only for a genuinely hostile day.
 - rationale: 2 to 5 short lines a trader reads at 08:50 (what matters today and how the plan answers it).
