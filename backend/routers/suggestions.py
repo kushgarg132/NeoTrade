@@ -245,6 +245,17 @@ async def approve_suggestion_live(
         raise HTTPException(status_code=409, detail="Daily loss limit hit today: no new live orders")
     if not suggestion.get("option_contract"):
         return await _approve_equity_live(suggestion, user.id, store, ledger, mine_broker, mark_price, now)
+    # Same rails as an equity approval: market hours, and the per-trade cap on
+    # what the order ties up (margin for a sold option, else premium x qty).
+    from backend.engine.autorun import in_session
+
+    if not in_session(now):
+        raise HTTPException(status_code=409, detail="The market is closed; live orders go only between 09:15 and 15:30 IST on weekdays.")
+    terms = suggestion["option_contract"]
+    exposure = terms.get("margin_estimate") or (terms.get("premium_estimate") or 0) * suggestion["quantity"]
+    cap = (await PrefsStore(db.db).get(user.id))["per_trade_cap"]
+    if exposure > cap:
+        raise HTTPException(status_code=409, detail=f"₹{exposure:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
     contract = await InstrumentMaster(db.db).get("NFO", suggestion["symbol"])
     if contract is None:
         raise HTTPException(status_code=400, detail=f"Unknown option contract {suggestion['symbol']!r}")

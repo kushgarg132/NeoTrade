@@ -244,6 +244,8 @@ def live_client(client, mongo, monkeypatch):
         expiry=datetime(2026, 10, 27), strike=2760.0,
     )]))
     monkeypatch.setattr(suggestions_router, "db", type("_Db", (), {"db": mongo, "redis": None})())
+    # Live approvals need market hours: pin the clock to a Monday morning.
+    monkeypatch.setattr(suggestions_router, "_now", lambda: datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc))
     return client
 
 
@@ -445,3 +447,30 @@ def test_bookkeeping_failure_after_the_broker_took_it_is_not_pending(mine_client
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] in ("EXECUTED", "SENT")
     assert len(broker.placed) == 1
+
+
+
+def test_an_option_cannot_be_approved_live_outside_market_hours(live_client, store, monkeypatch):
+    import asyncio
+    broker = _FakeBroker()
+    _with_broker(live_client, broker)
+    monkeypatch.setattr(suggestions_router, "_now", lambda: datetime(2026, 10, 4, 5, 0, tzinfo=timezone.utc))  # Sunday
+    option = asyncio.run(_seed(store, proposal=_option_proposal()))
+    resp = live_client.post(f"/api/v1/suggestions/{option['id']}/approve-live")
+    assert resp.status_code == 409 and "market is closed" in resp.json()["detail"]
+    assert broker.placed == []
+
+
+def test_an_option_over_the_per_trade_cap_is_refused(live_client, store, mongo):
+    import asyncio
+    from backend.prefs import PrefsStore
+    broker = _FakeBroker()
+    _with_broker(live_client, broker)
+    asyncio.run(PrefsStore(mongo).update("alice", {"per_trade_cap": 5_000.0}))
+    proposal = _option_proposal()
+    suggestion = asyncio.run(_seed(store, proposal=proposal))
+    asyncio.run(mongo["suggestions"].update_one(
+        {"id": suggestion["id"]}, {"$set": {"option_contract.margin_estimate": 80_000.0}}))
+    resp = live_client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
+    assert resp.status_code == 409 and "per-trade cap" in resp.json()["detail"]
+    assert broker.placed == []
