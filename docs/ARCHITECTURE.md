@@ -444,6 +444,13 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   `plan/expand.make_expand` for new `add_symbols`: feed `add()` (candle polling replays the day
   as warmup; Kite subscribes and the hook backfills today's 5m bars into the context only;
   Upstox has no `add()` yet, so adds are skipped there) and `extend_universe` on the strategies.
+- **News and the plan in the UI** (Phase 15.4) — `GET /news/symbols` (sentiment + latest
+  72h scored headline per symbol) feeds `NewsChip` on Holdings (material bad news sorts
+  first), Watchlist, Scanner ("In the news · 24h" tab) and Decisions. Journal trips get
+  `news` attached at read time (`journal/news.attach_news`, 24h before entry) for the
+  `against_news` / `chasing_news` findings. `GET /plan/today` feeds the plan card on
+  AI → Activity; `/practice/library` renders `GET /strategies/library`;
+  `plan/notify.py` sends each non-fallback plan version to the user's Telegram channel.
 - **Long-term engine** — not a live run: long-term strategies need months of daily bars,
   which a live feed never has, so their ideas come only from the history-backed scan
   (`backend/suggestions/scan.py`; 16:00 IST in `scheduler.py`, which records

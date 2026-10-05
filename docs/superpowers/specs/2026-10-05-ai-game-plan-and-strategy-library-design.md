@@ -259,6 +259,13 @@ Read-only consumers of existing datalayer keys (`sentiment:{SYM}`, `news_items`,
 | Library page | strategy cards (section 1) |
 | Telegram | pre-open plan summary and each revision, with the existing stop button |
 
+### As built (15.4, 2026-10-05)
+
+- Decisions show the stock's news at read time through the shared chip; nothing is stored on proposals.
+- Journal news is attached at read time from `news_items` (24h before entry), not stored on trades.
+- Settings keeps its promotion table (it holds the live switches); the Library page links to it.
+- Telegram gets every non-fallback plan version, never a fallback.
+
 ## Build order
 
 1. **Library**: `CARD`s, `library.catalog`, `/strategies/library`, chat tool, the four new
