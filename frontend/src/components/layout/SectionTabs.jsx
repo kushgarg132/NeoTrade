@@ -1,10 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '../../utils/cn';
+import { usePendingCount } from '../../context/pendingContext';
 
 /** The tabs inside a section (e.g. Mine: Holdings · Trades · Habits). Each tab
     is its own route, so Back and deep links work. */
-const SectionTabs = ({ tabs, label }) => (
+const SectionTabs = ({ tabs, label }) => {
+  const pending = usePendingCount();
+  return (
   <nav aria-label={label} className="flex gap-1 overflow-x-auto border-b border-[var(--rule-strong)] -mx-1 px-1">
     {tabs.map((tab) => (
       <NavLink
@@ -20,9 +23,13 @@ const SectionTabs = ({ tabs, label }) => (
         }
       >
         {tab.label}
+        {tab.counter && pending > 0 && (
+          <span className="ml-1.5 figure-md px-1 text-[0.5625rem] leading-4 bg-[var(--stamp)] text-[var(--paper)]">{pending}</span>
+        )}
       </NavLink>
     ))}
   </nav>
-);
+  );
+};
 
 export default SectionTabs;

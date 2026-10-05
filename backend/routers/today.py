@@ -74,7 +74,7 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
     for s in pending[:MAX_PROPOSALS]:
         items.append({"kind": "proposal", "title": f"{s.get('side', '')} {s.get('quantity', 0):g} {s['symbol']}",
                       "detail": s.get("mode", "").title(), "expires_at": _aware(s.get("expires_at")),
-                      "link": "/ai/practice/decisions"})
+                      "link": "/ai/decisions"})
     async for card in db.db["chat_actions"].find({"user_id": user_id, "status": "PROPOSED"}):
         if (_aware(card.get("expires_at")) or now) >= now:
             items.append({"kind": "card", "title": card.get("summary", "A card waits for you"),

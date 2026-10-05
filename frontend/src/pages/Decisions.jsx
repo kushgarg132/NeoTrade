@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import Layout from '../components/Layout';
-import PaperShell from '../components/paper/PaperShell';
+import SectionTabs from '../components/layout/SectionTabs';
+import { AI_TABS } from '../components/layout/sections';
 import SuggestionRecord from '../components/suggestions/SuggestionRecord';
 import { Sheet, Empty, Ruling, Tabs } from '../components/doc/Doc';
 import WaitingCards from '../components/decisions/WaitingCards';
@@ -111,8 +112,8 @@ const Decisions = () => {
 
   return (
     <Layout>
-      <PaperShell>
       <div className="space-y-3 sm:space-y-4">
+        <SectionTabs tabs={AI_TABS} label="AI account" />
         <Tabs
           tabs={ACCOUNTS}
           active={account}
@@ -261,7 +262,6 @@ const Decisions = () => {
 
         {(account === 'all' || account === 'ai') && <AiToday />}
       </div>
-      </PaperShell>
     </Layout>
   );
 };

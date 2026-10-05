@@ -27,6 +27,7 @@ export const MINE_TABS = [
 export const AI_TABS = [
   { to: '/ai', label: 'Overview', end: true },
   { to: '/ai/activity', label: 'Activity' },
+  { to: '/ai/decisions', label: 'Decide', counter: true },
   { to: '/ai/practice', label: 'Practice' },
   { to: '/ai/limits', label: 'Limits' },
 ];
