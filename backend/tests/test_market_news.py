@@ -101,3 +101,52 @@ def test_news_feed_filters_to_the_users_names(monkeypatch):
     assert ids(mine=True) == ["tcs", "infy"]
     assert ids(scope="MACRO") == ["rbi"]
     assert ids(limit=1) == ["tcs"]
+
+
+def _symbols_client(monkeypatch, items, sentiments):
+    import asyncio
+
+    from mongomock_motor import AsyncMongoMockClient
+
+    from backend.auth.dependency import get_current_user
+    from backend.auth.models import User
+    from backend.database import db as database
+    from backend.tests.test_datalayer_news import FakeRedis
+
+    mongo, redis = AsyncMongoMockClient()["test_db"], FakeRedis()
+    monkeypatch.setattr(database, "db", mongo)
+    monkeypatch.setattr(database, "redis", redis)
+    for symbol, value in sentiments.items():
+        redis.data[f"sentiment:{symbol}"] = str(value)
+    if items:
+        asyncio.run(mongo["news_items"].insert_many(items))
+    app = FastAPI()
+    app.include_router(news.router)
+    app.dependency_overrides[get_current_user] = lambda: User(id="alice", google_sub="g", email="a@x.io", name="A",
+                                                             created_at=datetime.now(timezone.utc))
+    return TestClient(app)
+
+
+def test_symbol_news_summarises_sentiment_and_latest_headline(monkeypatch):
+    now = datetime.now(timezone.utc)
+
+    def item(_id, hours, target, impact, direction, material=False):
+        return {"_id": _id, "title": f"title {_id}", "url": f"https://x/{_id}", "status": "SCORED",
+                "material": material, "published_at": now - timedelta(hours=hours),
+                "impacts": [{"type": "symbol", "target": target, "impact": impact, "direction": direction}]}
+    client = _symbols_client(monkeypatch, [item("old", 5, "TCS", 9, 0.8), item("new", 1, "TCS", 7, -0.6, True),
+                                           item("stale", 100, "INFY", 9, 0.9)], {"TCS": -0.3, "WIPRO": 0.1})
+    body = client.get("/news/symbols", params={"symbols": "tcs.NS,INFY,WIPRO"}).json()["symbols"]
+    assert body["TCS"]["headline"] == "title new" and body["TCS"]["direction"] == -0.6
+    assert body["TCS"]["material"] is True and body["TCS"]["sentiment"] == -0.3
+    assert body["WIPRO"] == {"sentiment": 0.1, "headline": None, "direction": None, "impact": None,
+                             "material": False, "published_at": None, "url": None}
+    assert "INFY" not in body  # its only news is older than 72h and it has no sentiment
+
+
+def test_symbol_news_omits_quiet_names_and_caps_the_list(monkeypatch):
+    client = _symbols_client(monkeypatch, [], {})
+    many = ",".join(f"S{i}" for i in range(150))
+    response = client.get("/news/symbols", params={"symbols": many})
+    assert response.status_code == 200 and response.json() == {"symbols": {}}
+    assert client.get("/news/symbols", params={"symbols": ""}).json() == {"symbols": {}}
