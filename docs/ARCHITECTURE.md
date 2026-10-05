@@ -459,7 +459,9 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   `ai/runner.run_with_tools` runs the tool loop (≤ 4 rounds, `AI_TOOL_CALLS_PER_DAY` budget,
   schema repair, single-call fallback, `AI_TOOLS_ENABLED` kill switch). `ai/grounding`
   checks figures in AI prose against the facts a call received. Chat's read tools are thin
-  wrappers over the facts; other call sites move onto the runner in 16.2–16.5.
+  wrappers over the facts. Since 16.2 the game plan builder and revisions run tools first
+  (`price_summary`, `news`, `fundamentals`, `positions`; plan budget per round; rationale
+  grounded) and fall back to their single-call prompts; 16.3–16.5 move the rest.
 - **Long-term engine** — not a live run: long-term strategies need months of daily bars,
   which a live feed never has, so their ideas come only from the history-backed scan
   (`backend/suggestions/scan.py`; 16:00 IST in `scheduler.py`, which records
