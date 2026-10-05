@@ -10,7 +10,6 @@ import AiToday from '../components/decisions/AiToday';
 import { Button } from '../components/common/Button';
 import api, { endpoints } from '../utils/api';
 import { useTopic } from '../hooks/useStream';
-import { cn } from '../utils/cn';
 
 /**
  * The decisions inbox, for every account: engine proposals (approve on paper
@@ -19,16 +18,10 @@ import { cn } from '../utils/cn';
  * account's autopilot did today. Nothing here can trade the AI account.
  *
  *
- * Long-term proposals wait here for an explicit approve or decline; intraday
- * signals execute themselves — nobody can approve a five-minute breakout in
- * time for it to still be one — so that tab is a record of what fired, not a
- * queue.
+ * Long-term proposals only: each waits for an explicit approve or decline.
+ * Intraday signals execute themselves — nobody can approve a five-minute
+ * breakout in time for it to still be one — so they are not listed here.
  */
-
-const MODES = [
-  { id: 'LONGTERM', label: 'Long term' },
-  { id: 'INTRADAY', label: 'Intraday' },
-];
 
 const ACCOUNTS = [
   { id: 'all', label: 'All' },
@@ -41,7 +34,6 @@ const Decisions = () => {
   const [account, setAccount] = useState('all');
   const [hasMine, setHasMine] = useState(true);
   const [showAll, setShowAll] = useState(false);
-  const [mode, setMode] = useState('LONGTERM');
   const [showDecided, setShowDecided] = useState(false);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -105,7 +97,9 @@ const Decisions = () => {
     }
   };
 
-  const inMode = items.filter((item) => item.mode === mode);
+  // Long-term proposals only: intraday signals execute themselves and their
+  // fills are on Practice → Book.
+  const inMode = items.filter((item) => item.mode === 'LONGTERM');
   const pending = inMode.filter((item) => item.status === 'PENDING');
   const decided = inMode.filter((item) => item.status !== 'PENDING');
   const visible = showDecided ? decided : pending;
@@ -127,7 +121,7 @@ const Decisions = () => {
         <>
         <Sheet
           title="Proposals"
-          meta={`${items.filter((i) => i.status === 'PENDING').length} awaiting`}
+          meta={`${inMode.filter((i) => i.status === 'PENDING').length} awaiting`}
           actions={
             <Button variant="secondary" size="sm" onClick={scan} disabled={scanning}>
               {scanning ? (
@@ -141,45 +135,9 @@ const Decisions = () => {
           }
           bodyClassName="p-0"
         >
-          <div className="flex border-b border-[var(--rule-strong)]" role="tablist" aria-label="Horizon">
-            {MODES.map((item) => {
-              const count = items.filter(
-                (s) => s.mode === item.id && s.status === 'PENDING'
-              ).length;
-              const selected = mode === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => {
-                    setMode(item.id);
-                    setShowDecided(false);
-                  }}
-                  className={cn(
-                    'flex-1 min-h-11 sm:min-h-0 px-3 py-2 sm:px-4 sm:py-3 font-[family-name:var(--font-narrow)] text-xs font-semibold uppercase tracking-[0.11em] border-b-2 -mb-px transition-colors',
-                    selected
-                      ? 'border-[var(--stamp)] text-[var(--ink)]'
-                      : 'border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]'
-                  )}
-                >
-                  {item.label}
-                  {count > 0 && (
-                    <span className="ml-2 figure-md px-1.5 py-0.5 text-[0.625rem] bg-[var(--stamp)] text-[var(--paper)]">
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
           <div className="flex items-center justify-between gap-3 px-3 py-2 sm:px-4 sm:py-2.5 bg-[var(--paper-sunk)]">
             <p className="doc-meta normal-case hidden sm:block">
-              {mode === 'INTRADAY'
-                ? 'Intraday signals execute without approval — this is the record.'
-                : 'Long-term proposals wait for your decision.'}
+              Long-term proposals wait for your decision.
             </p>
             <button
               type="button"
@@ -220,12 +178,10 @@ const Decisions = () => {
               detail={
                 showDecided
                   ? 'Approved and declined proposals are kept here.'
-                  : mode === 'LONGTERM'
-                    ? 'The daily scan runs after the close at 16:00 IST. Run one now if you would rather not wait.'
-                    : 'Intraday signals appear here once an engine run fires one.'
+                  : 'The daily scan runs after the close at 16:00 IST. Run one now if you would rather not wait.'
               }
               action={
-                !showDecided && mode === 'LONGTERM' ? (
+                !showDecided ? (
                   <Button variant="secondary" size="sm" onClick={scan} disabled={scanning}>
                     Scan now
                   </Button>
