@@ -32,7 +32,8 @@ const ACCOUNTS = [
 
 const Decisions = () => {
   const [account, setAccount] = useState('all');
-  const [hasMine, setHasMine] = useState(true);
+  // null until preferences load: no real-money button before we know.
+  const [hasMine, setHasMine] = useState(null);
   const [showAll, setShowAll] = useState(false);
   const [showDecided, setShowDecided] = useState(false);
   const [items, setItems] = useState([]);

@@ -296,7 +296,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
                 {busy === 'live' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 {confirmLive ? 'Send real order' : 'Real money'}
               </Button>
-            ) : canGoLive ? (
+            ) : canGoLive && hasMine === false ? (
               <Link
                 to="/settings?tab=accounts"
                 className="doc-meta normal-case underline self-center text-center"

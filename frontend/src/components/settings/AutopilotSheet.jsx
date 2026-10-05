@@ -20,11 +20,14 @@ const AutopilotSheet = () => {
   const [note, setNote] = useState(null);
   const [confirmLive, setConfirmLive] = useState(null); // typed text while arming live
 
-  useEffect(() => {
+  const [failed, setFailed] = useState(false);
+  const loadPrefs = () =>
     api.get(endpoints.settings.preferences).then((res) => {
       setPrefs(res.data);
       setDraft(Object.fromEntries(LIMITS.map(([key]) => [key, res.data[key]])));
-    }).catch(() => setPrefs(null));
+    }).catch(() => setFailed(true));
+  useEffect(() => {
+    loadPrefs();
     api.get(endpoints.settings.autopilotLog).then((res) => setLog(res.data.rows)).catch(() => setLog([]));
   }, []);
 
@@ -35,6 +38,16 @@ const AutopilotSheet = () => {
       .catch((err) => setNote(err?.response?.data?.detail || 'Could not save.'));
   };
 
+  if (failed) {
+    return (
+      <Sheet title="Autopilot" className="mt-3 sm:mt-4">
+        <p className="text-sm">
+          Couldn't load the autopilot's settings.{' '}
+          <button type="button" className="underline min-h-11" onClick={() => { setFailed(false); loadPrefs(); }}>Retry</button>
+        </p>
+      </Sheet>
+    );
+  }
   if (!prefs) return <Sheet title="Autopilot" className="mt-3 sm:mt-4"><Ruling rows={3} /></Sheet>;
   const aiBroker = Object.keys(prefs.broker_roles || {}).find((b) => prefs.broker_roles[b] === 'ai');
 
