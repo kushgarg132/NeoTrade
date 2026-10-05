@@ -100,7 +100,7 @@ async def sweep(db, mark_price: Callable[[str], Awaitable[float]], now: datetime
         if mark is None or not _crossed(doc["side"], mark, doc["limit_price"]):
             continue
         claimed = await _collection(db).find_one_and_update(
-            {"id": doc["id"], "status": "OPEN"}, {"$set": {"status": "FILLING"}},
+            {"id": doc["id"], "status": "OPEN"}, {"$set": {"status": "FILLING", "claimed_at": now}},
             return_document=ReturnDocument.AFTER,
         )
         if claimed is None:
@@ -143,7 +143,11 @@ async def _loop(db) -> None:
 
     while True:
         try:
-            await sweep(db, _mark_price, SystemClock().now())
+            now = SystemClock().now()
+            await sweep(db, _mark_price, now)
+            # Rows a crash left between claim and settle (engine/stuck.py).
+            from backend.engine.stuck import sweep_stuck
+            await sweep_stuck(db, now)
         except Exception as exc:
             logger.exception("paper order sweep failed: %s", exc)
         await asyncio.sleep(INTERVAL_SECONDS)

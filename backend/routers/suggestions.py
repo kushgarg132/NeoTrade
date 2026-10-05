@@ -153,7 +153,7 @@ async def approve_suggestion(
 
     # Claim before filling, as approve-live does: two approvals at once (a
     # page tap and a chat confirm) used to both book a fill.
-    if await store.decide(user.id, suggestion_id, status="SENDING") is None:
+    if await store.decide(user.id, suggestion_id, status="SENDING", reason="paper") is None:
         raise HTTPException(status_code=409, detail="Suggestion was decided concurrently")
     try:
         price = (
@@ -163,9 +163,9 @@ async def approve_suggestion(
         )
         order = await execute_suggestion(suggestion, ledger, price)
     except Exception:
-        await store.settle(user.id, suggestion_id, "PENDING")
+        await store.settle(user.id, suggestion_id, "PENDING", reason=None)
         raise
-    return await store.settle(user.id, suggestion_id, "EXECUTED", order_id=order.id)
+    return await store.settle(user.id, suggestion_id, "EXECUTED", order_id=order.id, reason=None)
 
 
 @router.post("/{suggestion_id}/reject")
@@ -264,7 +264,7 @@ async def approve_suggestion_live(
     if adapter is None:
         raise HTTPException(status_code=409, detail="Connect Kite or Upstox in Settings to trade options live.")
 
-    if await store.decide(user.id, suggestion_id, status="SENDING") is None:
+    if await store.decide(user.id, suggestion_id, status="SENDING", reason="live") is None:
         raise HTTPException(status_code=409, detail="Suggestion was decided concurrently")
     try:
         order, broker_status, filled = await execute_option_suggestion_live(
@@ -305,7 +305,7 @@ async def _approve_equity_live(suggestion, user_id, store, ledger, mine_broker, 
     if value > cap:
         raise HTTPException(status_code=409, detail=f"₹{value:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
 
-    if await store.decide(user_id, suggestion["id"], status="SENDING") is None:
+    if await store.decide(user_id, suggestion["id"], status="SENDING", reason="live") is None:
         raise HTTPException(status_code=409, detail="Suggestion was decided concurrently")
     order = Order(
         id=str(uuid.uuid4()), symbol=suggestion["symbol"], side=Side(suggestion["side"]),

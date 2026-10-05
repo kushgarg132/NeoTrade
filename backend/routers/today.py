@@ -69,6 +69,10 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
     if kill and kill.get("tripped"):
         items.append({"kind": "kill_switch", "title": "Daily loss limit hit: live trading stopped",
                       "detail": kill.get("reason") or "", "link": "/settings?tab=safety"})
+    async for s in db.db["suggestions"].find({"user_id": user_id, "status": "NEEDS_REVIEW"}):
+        items.append({"kind": "review", "title": f"Check {s['symbol']}: an approval was interrupted",
+                      "detail": s.get("reason") or "Check your broker's order book before approving again.",
+                      "link": "/mine/trades"})
     pending = await db.db["suggestions"].find({"user_id": user_id, "status": "PENDING"}).to_list(length=200)
     pending.sort(key=lambda s: _aware(s.get("expires_at")) or now)
     for s in pending[:MAX_PROPOSALS]:
