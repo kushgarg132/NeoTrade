@@ -303,6 +303,16 @@ high-impact event within 30 min refuses every entry, and news entries stop at 3 
 never blocked, and no regime adds no rule. `news_exits` (60s) only logs, in `autopilot_shadow`, the
 SELL the autopilot would place on a material negative item (impact >= 8, direction <= -0.5, symbol or
 sector) against one of its longs. Spec: `docs/superpowers/specs/2026-10-05-autopilot-news-design.md`.
+
+**Outcomes** (`backend/datalayer/outcomes.py`, `news_outcomes` loop, 5 min). Each newly scored
+material item gets a snapshot per impact target (a symbol's `quote:`, a sector's members' quotes, Nifty
+`macro:^NSEI` for the market) in Mongo `news_outcomes`; at +1h (in-session snapshots only), +1d and
++5d it records the return and `move_{h}` (return over Nifty's; the market's own return for a market
+target). No fetches: only the caches ingest already fills. Weekly it writes `news_theme_weights` and
+Redis `news:theme_weights`: per `scope|theme|direction sign`, 1 + 2·(1d hit rate − 0.5) clamped to
+0.5–1.5, from ≥ 20 outcomes in 180 days. `news.aggregate` scales each impact by its item's mean theme
+weight before the weighted mean, so it shifts influence between items, never the −1..1 range. The
+weekly job lives in the ingest worker rather than `scheduler._learn`, which is per user.
 Later loops land phase by phase per
 `docs/superpowers/plans/2026-10-05-market-news-datalayer.md`. Compose makes `backend` depend on
 `ingest` only so the shared deploy workflow's `up -d --build backend` also redeploys it.

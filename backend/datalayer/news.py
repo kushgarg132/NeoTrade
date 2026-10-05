@@ -11,7 +11,8 @@ and keep per-symbol, per-sector and market-wide sentiment fresh.
 `sentiment:{SYM}` is what the engine and scans already read for the AI half
 of conviction (backend/ai/sentiment.py): 0.6 * company + 0.25 * the stock's
 sector + 0.15 * the Indian market, each the impact- and recency-weighted
-mean of the impacts on that target over WINDOW. It is still the single
+mean of the impacts on that target over WINDOW. Each impact is first scaled
+by its item's learned theme weight (backend/datalayer/outcomes.py, 0.5-1.5). It is still the single
 ai_score input composite.py caps at AI_CAP, not a second conviction formula.
 """
 
@@ -142,6 +143,7 @@ async def ensure_indexes(db) -> None:
     await coll.create_index([("impacts.target", 1), ("published_at", -1)])
     await coll.create_index([("symbols", 1), ("published_at", -1)])
     await coll.create_index([("published_at", -1)])
+    await db["news_outcomes"].create_index("base_at")
 
 
 async def store(db, items: list[dict], aliases, now: Optional[datetime] = None) -> int:
@@ -321,17 +323,21 @@ def _blend(company: Optional[float], sector: Optional[float], market: Optional[f
 async def aggregate(db, redis, names: dict[str, str], sector_of: dict[str, str], now: Optional[datetime] = None) -> dict:
     """Recomputes every followed symbol's sentiment, every sector's, and
     the market's from the scored items in WINDOW, and writes them."""
+    from backend.datalayer.outcomes import item_weight, load_weights
+
     now = now or datetime.now(timezone.utc)
+    weights = await load_weights(redis)
     points = defaultdict(list)
     top = {}  # symbol -> (impact, event) of its biggest company item in VERDICT_WINDOW
     cursor = db[COLLECTION].find({"status": SCORED, "published_at": {"$gte": now - WINDOW}},
-                                 {"impacts": 1, "published_at": 1, "event": 1, "title": 1})
+                                 {"impacts": 1, "published_at": 1, "event": 1, "title": 1, "scope": 1, "themes": 1})
     async for doc in cursor:
         published = doc["published_at"]
         if published.tzinfo is None:
             published = published.replace(tzinfo=timezone.utc)
         for i in doc.get("impacts", []):
-            points[(i["type"], i["target"])].append((published, i["direction"], i["impact"]))
+            weight = item_weight(weights, doc.get("scope"), doc.get("themes"), i["direction"])
+            points[(i["type"], i["target"])].append((published, i["direction"], i["impact"] * weight))
             if i["type"] == "symbol" and published >= now - VERDICT_WINDOW and i["impact"] > top.get(i["target"], (-1,))[0]:
                 top[i["target"]] = (i["impact"], doc.get("event") or doc.get("title", ""))
 
