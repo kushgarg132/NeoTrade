@@ -368,6 +368,7 @@ async def run(
     master: Optional[InstrumentMaster] = None,
     premium_source=None,
     on_progress: Optional[Callable[[dict], Awaitable[None]]] = None,
+    holders: Optional[dict[str, str]] = None,
     learned: Optional[LearnedRules] = None,
 ) -> None:
     """`symbol_for_token` is not in the plan's pseudocode signature; it's
@@ -407,8 +408,9 @@ async def run(
         symbol: strategy for strategy in strategies for symbol in strategy.spec.universe
     }
     strategies_by_name = {strategy.spec.name: strategy for strategy in strategies}
-    # symbol -> name of the strategy whose fill opened the open position.
-    holders: dict[str, str] = {}
+    # symbol -> name of the strategy whose fill opened the open position;
+    # seeded with what an earlier run of today left open (engine/adopt.py).
+    holders = dict(holders or {})
     strategy_of_order: dict[str, str] = {}
 
     for strategy in strategies:

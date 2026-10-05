@@ -373,6 +373,21 @@ async def launch_run(
                 portfolio.positions[symbol] = position
     ledger = LedgerStore(db.db, user_id=user_id, run_id=run_id, on_change=publisher_for(user_id))
 
+    # A new intraday run inherits today's open intraday positions (so caps,
+    # exposure, the kill switch and the 15:15 square-off see them) and closes
+    # any left over from an earlier day. A restart used to forget them.
+    holders: dict[str, str] = {}
+    if mode == "INTRADAY":
+        from backend.engine.adopt import adopt_intraday, close_stale
+        from backend.routers.suggestions import _live_mark_price
+
+        now = datetime.now(timezone.utc)
+        adopted, holders, stale = await adopt_intraday(db.db, user_id, now)
+        for symbol, position in adopted.items():
+            portfolio.positions.setdefault(symbol, position)
+        if stale:
+            await close_stale(ledger, stale, _live_mark_price, now)
+
     # INTRADAY orders execute themselves; LONGTERM ones stop at a PENDING
     # suggestion and wait for the user to approve or reject them.
     sink = SuggestionSink(SuggestionStore(db.db), user_id=user_id, run_id=run_id)
@@ -387,6 +402,7 @@ async def launch_run(
         master=master if premium_source is not None else None, premium_source=premium_source,
         on_progress=progress_reporter(user_id, run_id, runs, cycle=len(instruments)),
         learned=await load_rules(db.db, user_id),
+        holders=holders,
     )
     await runs.create(
         run_id=run_id, user_id=user_id, mode=mode,

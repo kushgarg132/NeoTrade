@@ -7,10 +7,17 @@ half: the task dict stays the thing that can be cancelled, while these rows
 are what the API and the UI read.
 """
 
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 ACTIVE = "RUNNING"
+# This process. A run records the boot id of the worker driving it; each
+# worker keeps `worker:alive:<boot id>` fresh in Redis (server.py), so a
+# startup sweep only orphans runs whose worker is really gone.
+BOOT_ID = uuid.uuid4().hex
+ALIVE_KEY = "worker:alive:{}"
+ALIVE_TTL_SECONDS = 90
 
 
 class RunStore:
@@ -31,6 +38,7 @@ class RunStore:
             "universe": universe,
             "params": params,
             "status": ACTIVE,
+            "boot_id": BOOT_ID,
             "started_at": datetime.now(timezone.utc),
             "stopped_at": None,
             "error": None,
@@ -63,11 +71,21 @@ class RunStore:
         cursor = self.collection.find({"user_id": user_id}).sort("started_at", -1).limit(limit)
         return [_clean(doc) for doc in await cursor.to_list(length=None)]
 
-    async def close_orphaned(self) -> int:
-        """Called at startup: any row still RUNNING belongs to a process that
-        no longer exists, since the asyncio.Task driving it died with it."""
+    async def close_orphaned(self, redis=None) -> int:
+        """Called at startup: a RUNNING row whose worker is gone (no fresh
+        alive key, or no boot id at all) died with that worker's process. A
+        row whose worker is alive -- the other uvicorn worker, still running
+        it -- is left alone. Without Redis every RUNNING row is orphaned."""
+        dead = []
+        async for row in self.collection.find({"status": ACTIVE}, {"run_id": 1, "boot_id": 1}):
+            boot = row.get("boot_id")
+            if redis is not None and boot and await redis.exists(ALIVE_KEY.format(boot)):
+                continue
+            dead.append(row["run_id"])
+        if not dead:
+            return 0
         result = await self.collection.update_many(
-            {"status": ACTIVE},
+            {"run_id": {"$in": dead}, "status": ACTIVE},
             {"$set": {
                 "status": "STOPPED",
                 "error": "orphaned by restart",

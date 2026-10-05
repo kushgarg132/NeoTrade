@@ -86,6 +86,18 @@ async def _expand_instruments(master) -> None:
         logger.warning(f"free NSE/BSE instrument refresh failed: {exc}")
 
 
+async def _heartbeat(redis) -> None:
+    """Keeps worker:alive:<boot id> fresh while this process lives (runs.py)."""
+    from backend.runs import ALIVE_KEY, ALIVE_TTL_SECONDS, BOOT_ID
+
+    while redis is not None:
+        try:
+            await redis.set(ALIVE_KEY.format(BOOT_ID), "1", ex=ALIVE_TTL_SECONDS)
+        except Exception as exc:
+            logger.warning("worker heartbeat failed: %s", exc)
+        await asyncio.sleep(ALIVE_TTL_SECONDS // 3)
+
+
 @app.on_event("startup")
 async def startup_db_client():
     logger.info("Starting up NeoTrade API...")
@@ -139,7 +151,10 @@ async def startup_db_client():
     # still marked RUNNING belongs to a previous life of this container.
     runs = RunStore(db.db)
     await runs.ensure_indexes()
-    orphaned = await runs.close_orphaned()
+    # This worker's heartbeat first, so the sweep below (and the other
+    # worker's) never mistakes this process's runs for orphans.
+    _BACKGROUND.add(asyncio.create_task(_heartbeat(db.redis)))
+    orphaned = await runs.close_orphaned(db.redis)
     if orphaned:
         logger.info(f"Closed {orphaned} orphaned trading run(s) from a previous process.")
 
