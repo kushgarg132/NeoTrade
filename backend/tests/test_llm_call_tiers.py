@@ -24,10 +24,11 @@ EXPECTED = {
 def test_every_llm_call_names_its_tier():
     for path in BACKEND.rglob("*.py"):
         rel = path.relative_to(BACKEND).as_posix()
-        if rel.startswith("tests/") or rel in ("llm.py", "routers/settings.py"):
+        # llm.py and ai/runner.py pass their caller's tier through; the callers are checked.
+        if rel.startswith("tests/") or rel in ("llm.py", "routers/settings.py", "ai/runner.py"):
             continue
         text = path.read_text()
-        calls = re.findall(r"await [\w.]*(?:get_completion|get_llm)\((.*?)\)", text, flags=re.S)
+        calls = re.findall(r"await [\w.]*(?:get_completion|get_llm|run_with_tools)\((.*?)\)", text, flags=re.S)
         if not calls:
             continue
         tiers = [m.group(1) for c in calls if (m := re.search(r'tier="(\w+)"', c))]
