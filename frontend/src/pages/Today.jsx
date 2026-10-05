@@ -44,7 +44,8 @@ const StatusStrip = ({ data }) => {
           : <Chip key={role} tone="bad" to="/settings?tab=accounts">{name} · log in ›</Chip>;
       })}
       {(armed?.autopilot || armed?.strategies?.length > 0) && (
-        <Chip tone="bad" to="/ai/limits">
+        // Goes where the armed thing is switched off: the autopilot under AI, strategies in Practice setup.
+        <Chip tone="bad" to={armed.autopilot ? '/ai/limits' : '/ai/practice/settings'}>
           ▲ LIVE armed{armed.autopilot ? ' · autopilot' : ''}{armed.strategies?.length ? ` · ${armed.strategies.length} strateg${armed.strategies.length === 1 ? 'y' : 'ies'}` : ''}
         </Chip>
       )}

@@ -37,7 +37,7 @@ const PaperShell = ({ children }) => {
           </p>
         </div>
         <nav
-          className="grid grid-cols-4 border-t border-dashed border-[var(--stamp)]"
+          className="grid grid-cols-3 border-t border-dashed border-[var(--stamp)]"
           aria-label="Paper trading"
         >
           {PAPER_TABS.map((tab) => (

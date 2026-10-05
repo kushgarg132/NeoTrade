@@ -139,7 +139,7 @@ const EngineNow = ({ prefs }) => {
             <p className="mt-1 text-sm text-[var(--ink)]">
               {liveStrategies.join(', ')} {liveStrategies.length === 1 ? 'trades' : 'trade'} real
               money when a run starts. Those orders go to your broker and print on the{' '}
-              <Link to="/" className="underline decoration-[var(--loss)] underline-offset-2">
+              <Link to="/mine/trades" className="underline decoration-[var(--loss)] underline-offset-2">
                 statement
               </Link>
               , not in this paper book.
