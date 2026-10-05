@@ -103,6 +103,22 @@ const AutopilotSheet = () => {
           </span>
         )}
       </Row>
+      <Row
+        label="Trade on news"
+        hint="Buys a proposal from material news at once instead of waiting for the morning pass. At most 3 a day, none while the market is risk-off. Sells on bad news are only logged for now."
+      >
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!!prefs.autopilot_news}
+          disabled={!prefs.autopilot_enabled}
+          onClick={() => save({ autopilot_news: !prefs.autopilot_news })}
+          className={cn('h-11 sm:h-8 px-4 text-xs border transition-colors disabled:opacity-40',
+            prefs.autopilot_news ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]' : 'border-[var(--rule-strong)]')}
+        >
+          {prefs.autopilot_news ? 'On' : 'Off'}
+        </button>
+      </Row>
       {LIMITS.map(([key, label, hint]) => (
         <Row key={key} label={label} hint={hint}>
           <NumberField
