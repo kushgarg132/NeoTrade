@@ -52,6 +52,10 @@ POLL_SECONDS = 60.0
 MODES = {"INTRADAY": "auto_paper_intraday"}
 LONGTERM_PREF = "auto_paper_longterm"
 EXIT_CHECK_MINUTES = 15
+# The game plan (backend/plan/) is built between 08:45 and the open, so a
+# fresh pre-open market read decides what the 09:15 run may trade.
+PLAN_AT = time(8, 45)
+PLAN_LOCK = "plan:build:{}:{}"
 MORNING = time(9, 20)
 
 # This process's identity for key ownership, and the auto runs it drives.
@@ -102,7 +106,35 @@ async def _stop_local(redis, runs: RunStore, slot: str) -> None:
     await _release(redis, slot)
 
 
-async def _may_start(runs: RunStore, user_id: str, mode: str, now: datetime) -> bool:
+async def _preopen_plans(db, redis, now: datetime, user_ids: list[str]) -> list[str]:
+    """Builds today's plan once per auto-intraday user, across workers."""
+    from backend.plan import builder, store
+
+    local = now.astimezone(IST)
+    if local.weekday() >= 5 or not (PLAN_AT <= local.time() < SESSION_OPEN):
+        return []
+    built = []
+    for user_id in user_ids:
+        try:
+            if await store.current(redis, user_id, local.date()) is not None:
+                continue
+            if not await redis.set(PLAN_LOCK.format(user_id, local.date().isoformat()), _TOKEN, nx=True,
+                                   px=3_600_000):
+                continue  # another worker is building it
+            await builder.build_plan(db, redis, user_id, now)
+            built.append(user_id)
+        except Exception as exc:
+            logger.exception("game plan failed for %s: %s", user_id, exc)
+    return built
+
+
+async def _may_start(runs: RunStore, user_id: str, mode: str, now: datetime, redis=None) -> bool:
+    if mode == "INTRADAY" and redis is not None:
+        from backend.plan import store
+
+        plan = await store.current(redis, user_id, now.astimezone(IST).date())
+        if plan and plan.get("skip_day"):
+            return False  # today's game plan sits the auto run out
     day_start = datetime.combine(now.astimezone(IST).date(), time(0, 0), tzinfo=IST).astimezone(timezone.utc)
     today = await runs.collection.find({
         "user_id": user_id, "mode": mode, "started_at": {"$gte": day_start},
@@ -146,6 +178,11 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
     except Exception as exc:
         logger.warning("autopilot reminders failed: %s", exc)
 
+    planned = await _preopen_plans(db, redis, now, sorted(_split(slot)[0] for slot in enabled
+                                                         if _split(slot)[1] == "INTRADAY"))
+    if planned:
+        done["planned"] = planned
+
     if not in_session(now):
         for slot in list(_LOCAL):
             await _stop_local(redis, runs, slot)
@@ -177,7 +214,7 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
         _LOCAL.pop(slot, None)  # our run ended (stopped by the user, or crashed)
         await _release(redis, slot)
 
-        if not await _may_start(runs, user_id, mode, now):
+        if not await _may_start(runs, user_id, mode, now, redis=redis):
             continue
         if not await redis.set(_key(slot), _TOKEN, nx=True, px=KEY_TTL_MS):
             continue  # another worker owns this run

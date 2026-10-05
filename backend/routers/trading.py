@@ -64,6 +64,7 @@ from backend.suggestions.sink import SuggestionSink
 from backend.suggestions.store import SuggestionStore
 from backend.datalayer.bars import prev_closes
 from backend.datalayer.catalysts import catalyst_map
+from backend.plan.gate import PlanGate, redis_source
 from backend.datalayer.news_sources import nifty200_sectors
 
 logger = logging.getLogger(__name__)
@@ -301,12 +302,30 @@ async def launch_run(
             await db.redis.delete(lock)
 
 
+async def _run_catalysts(today, game_plan: Optional[dict]) -> dict[str, dict[str, float]]:
+    """Overnight news catalysts, with the plan's own catalyst calls on top."""
+    catalysts = await catalyst_map(db.db, today, today)
+    day = catalysts.setdefault(today.isoformat(), {})
+    for entry in (game_plan or {}).get("allow") or []:
+        if entry.get("catalyst"):
+            day[entry["symbol"]] = entry["catalyst"]["direction"]
+    return catalysts
+
+
 async def _launch_run(
     user_id: str, mode: str, universe: Optional[list[str]], poll_interval_seconds: float,
     runs: RunStore, origin: str,
 ) -> str:
     master = InstrumentMaster(db.db)
-    symbols = universe or list(ALL_SCAN_STOCKS)
+    symbols = list(universe or ALL_SCAN_STOCKS)
+    # Today's game plan (backend/plan/): its news names join the run; the
+    # PlanGate below decides what may open. No plan = today's behaviour.
+    game_plan = None
+    if mode == "INTRADAY":
+        from backend.plan import store as plan_store
+
+        game_plan = await plan_store.current(db.redis, user_id, datetime.now(timezone.utc).astimezone(IST).date())
+        symbols += [s for s in (game_plan or {}).get("add_symbols") or [] if s not in symbols]
     credentials = get_credential_store()
 
     # The intraday options strategy trades only with live premiums from the
@@ -334,7 +353,7 @@ async def _launch_run(
             universe=[i.tradingsymbol for i in instruments], symbol_for_token=symbol_for_token,
             option_universe=[i.tradingsymbol for i in option_instruments],
             params=await current_params(db.db),
-            catalysts=await catalyst_map(db.db, today, today) if mode == "INTRADAY" else None,
+            catalysts=await _run_catalysts(today, game_plan) if mode == "INTRADAY" else None,
             # Live feeds carry only today's bars, so the gap strategies get
             # yesterday's close from the shared daily bars.
             prev_closes=({today.isoformat(): await prev_closes(db.db, [i.tradingsymbol for i in instruments], today)}
@@ -422,6 +441,7 @@ async def _launch_run(
         on_progress=progress_reporter(user_id, run_id, runs, cycle=len(instruments)),
         learned=await load_rules(db.db, user_id),
         holders=holders,
+        plan=PlanGate(redis_source(db.redis, user_id)) if mode == "INTRADAY" and db.redis is not None else None,
     )
     await runs.create(
         run_id=run_id, user_id=user_id, mode=mode,

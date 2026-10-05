@@ -359,3 +359,47 @@ async def test_a_run_whose_worker_died_is_swept_and_replaced_by_the_tick(world, 
 
     assert (await runs.get("zombie"))["status"] == "STOPPED"
     assert len(world.launched) == 1
+
+
+# --- Phase 15.2: the pre-open game plan ---------------------------------------
+
+MONDAY_0846 = datetime(2026, 9, 28, 8, 46, tzinfo=IST)
+
+
+@pytest.fixture
+def built(monkeypatch):
+    from backend.plan import builder
+
+    calls = []
+
+    async def fake_build(db, redis, user_id, now, complete=None):
+        calls.append(user_id)
+        return {}
+    monkeypatch.setattr(builder, "build_plan", fake_build)
+    return calls
+
+
+async def test_preopen_builds_one_plan_per_user_even_with_two_ticks(world, built):
+    await world.enable("alice")
+    await world.enable("bob")
+    await _tick(world, MONDAY_0846)
+    await _tick(world, MONDAY_0846)
+    assert sorted(built) == ["alice", "bob"]
+
+
+async def test_no_plan_outside_the_window(world, built):
+    await world.enable()
+    await _tick(world, datetime(2026, 9, 28, 8, 30, tzinfo=IST))
+    await _tick(world, datetime(2026, 9, 28, 9, 20, tzinfo=IST))
+    await _tick(world, datetime(2026, 9, 27, 8, 50, tzinfo=IST))  # Sunday
+    assert built == []
+
+
+async def test_skip_day_plan_keeps_the_auto_run_from_starting(world):
+    import json
+
+    await world.enable()
+    world.redis.data["plan:alice:2026-09-28"] = json.dumps({"skip_day": True})
+    assert not await autorun._may_start(RunStore(world.db), "alice", "INTRADAY", MONDAY_10AM, redis=world.redis)
+    assert await autorun._may_start(RunStore(world.db), "alice", "LONGTERM", MONDAY_10AM, redis=world.redis)
+    assert (await _tick(world, MONDAY_10AM))["started"] == []
