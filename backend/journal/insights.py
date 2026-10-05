@@ -166,8 +166,11 @@ def build_insights(trips: list[dict]) -> list[dict]:
 
     # News at entry (journal/news.py attach_news; absent when not attached).
     strong = [t for t in closed if (t.get("news") or {}).get("impact", 0) >= NEWS_IMPACT]
-    against = [t for t in strong if (t["news"]["direction"] < 0) == (t["direction"] == "LONG")
-               and t["news"]["direction"] != 0]
+    # A trip's view of its underlying: a long put or a short call/stock is bearish.
+    def bearish(t):
+        return (t.get("kind") == "PUT") != (t["direction"] == "SHORT")
+    against = [t for t in strong if t["news"]["direction"] != 0
+               and (t["news"]["direction"] > 0) == bearish(t)]
     if len(against) >= MIN_TRIPS:
         findings.append(_finding("against_news", "Traded against strong news", against, closed))
     chasing = [t for t in strong if t["news"]["minutes_before"] <= CHASE_MINUTES]

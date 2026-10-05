@@ -177,7 +177,7 @@ const ScannerPage = () => {
                       <Field label="3M" value={formatSignedPercent(pick.return_3m)} />
                     </div>
                     <p className="mt-2 doc-meta normal-case">{pick.reasons.join(' · ')}</p>
-                    <NewsChip entry={news[pick.symbol]} className="mt-1" />
+                    <NewsChip entry={news[pick.symbol]} className="mt-1" link={false} />
                   </button>
                   <div className="mt-2">
                     <TicketButton label="Buy" onClick={() => setTicket({ symbol: pick.symbol, lastPrice: pick.close })} />

@@ -28,6 +28,9 @@ class FakeRedis:
     async def get(self, key):
         return self.data.get(key)
 
+    async def mget(self, keys):
+        return [self.data.get(k) for k in keys]
+
     async def delete(self, key):
         self.data.pop(key, None)
 

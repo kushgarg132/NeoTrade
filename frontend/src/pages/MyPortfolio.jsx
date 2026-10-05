@@ -297,7 +297,7 @@ const HoldingsList = ({ rows, open, onToggle, onTrade, news }) => (
                 {row.weight_pct != null ? `${formatPercent(row.weight_pct)}` : row.kind}
                 {row.sector ? ` · ${row.sector}` : ''}
               </span>
-              <NewsChip entry={news?.[row.symbol]} />
+              <NewsChip entry={news?.[row.symbol]} link={false} />
             </span>
             <span className="text-right shrink-0">
               <span className="figure-md text-sm block">{row.value != null ? formatCurrency(row.value) : '—'}</span>

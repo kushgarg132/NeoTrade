@@ -201,10 +201,10 @@ async def symbol_news(symbols: str = "", user: User = Depends(get_current_user))
     """What the news layer says about each listed stock, for list pages:
     its blended sentiment and its latest scored headline (72h). Quiet names
     are left out."""
-    from backend.ai.sentiment import get_cached_sentiment
     from backend.database import db
     from backend.datalayer.news import COLLECTION, SCORED
     from backend.datalayer.prices import _bare
+    from backend.strategies.longterm.analyst_verdict import MATERIALITY_THRESHOLD
 
     wanted = list(dict.fromkeys(_bare(s.strip()).upper() for s in symbols.split(",") if s.strip()))[:SYMBOLS_LIMIT]
     if not wanted:
@@ -215,21 +215,35 @@ async def symbol_news(symbols: str = "", user: User = Depends(get_current_user))
         {"status": SCORED, "published_at": {"$gte": since}, "impacts.target": {"$in": wanted}},
         {"title": 1, "url": 1, "published_at": 1, "impacts": 1, "material": 1},
     ).sort("published_at", -1).to_list(length=1000)
+    # Newest first: the latest material item on a symbol wins (bad news must
+    # not hide behind a later minor one), else its latest item. Material is
+    # judged on this symbol's own impact, not the item's strongest target.
     for doc in docs:
         for impact in doc.get("impacts") or []:
             target = impact.get("target")
-            if impact.get("type") == "symbol" and target in wanted and target not in latest:
-                published = doc["published_at"]
-                latest[target] = {
-                    "headline": doc.get("title"), "url": doc.get("url"), "direction": impact.get("direction"),
-                    "impact": impact.get("impact"), "material": bool(doc.get("material")),
-                    "published_at": (published if published.tzinfo else published.replace(tzinfo=timezone.utc)),
-                }
+            if impact.get("type") != "symbol" or target not in wanted:
+                continue
+            material = (impact.get("impact") or 0) >= MATERIALITY_THRESHOLD
+            if target in latest and (latest[target]["material"] or not material):
+                continue
+            published = doc["published_at"]
+            latest[target] = {
+                "headline": doc.get("title"), "url": doc.get("url"), "direction": impact.get("direction"),
+                "impact": impact.get("impact"), "material": material,
+                "published_at": (published if published.tzinfo else published.replace(tzinfo=timezone.utc)),
+            }
     empty = {"headline": None, "direction": None, "impact": None, "material": False, "published_at": None,
              "url": None}
+    sentiments: dict[str, float] = {}
+    if db.redis is not None:
+        try:  # one round trip for every symbol, not one each
+            raws = await db.redis.mget([f"sentiment:{s}" for s in wanted])
+            sentiments = {s: float(v) for s, v in zip(wanted, raws) if v is not None}
+        except Exception as exc:
+            logger.warning("sentiment cache unavailable for the news summary: %s", exc)
     out = {}
     for symbol in wanted:
-        sentiment = await get_cached_sentiment(symbol, db.redis) if db.redis is not None else None
+        sentiment = sentiments.get(symbol)
         if sentiment is None and symbol not in latest:
             continue
         out[symbol] = {"sentiment": sentiment, **empty, **latest.get(symbol, {})}

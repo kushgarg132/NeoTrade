@@ -150,3 +150,36 @@ def test_symbol_news_omits_quiet_names_and_caps_the_list(monkeypatch):
     response = client.get("/news/symbols", params={"symbols": many})
     assert response.status_code == 200 and response.json() == {"symbols": {}}
     assert client.get("/news/symbols", params={"symbols": ""}).json() == {"symbols": {}}
+
+
+def test_symbol_news_prefers_material_bad_news_and_judges_materiality_per_symbol(monkeypatch):
+    now = datetime.now(timezone.utc)
+
+    def item(_id, hours, impacts, material=True):
+        return {"_id": _id, "title": f"title {_id}", "url": None, "status": "SCORED", "material": material,
+                "published_at": now - timedelta(hours=hours), "impacts": impacts}
+    client = _symbols_client(monkeypatch, [
+        item("big", 5, [{"type": "symbol", "target": "TCS", "impact": 8, "direction": -0.8}]),
+        item("small", 1, [{"type": "symbol", "target": "TCS", "impact": 2, "direction": 0.1}], material=False),
+        # material for the sector, only 2/10 for INFY itself
+        item("sector", 1, [{"type": "sector", "target": "IT", "impact": 9, "direction": -0.9},
+                           {"type": "symbol", "target": "INFY", "impact": 2, "direction": -0.2}]),
+    ], {})
+    body = client.get("/news/symbols", params={"symbols": "TCS,INFY"}).json()["symbols"]
+    assert body["TCS"]["headline"] == "title big" and body["TCS"]["material"] is True
+    assert body["INFY"]["material"] is False
+
+
+def test_symbol_news_reads_sentiment_in_one_round_trip(monkeypatch):
+    client = _symbols_client(monkeypatch, [], {"TCS": 0.3, "INFY": -0.2})
+    from backend.database import db as database
+
+    gets = []
+    original = database.redis.get
+
+    async def counting_get(key):
+        gets.append(key)
+        return await original(key)
+    database.redis.get = counting_get
+    body = client.get("/news/symbols", params={"symbols": "TCS,INFY"}).json()["symbols"]
+    assert body["TCS"]["sentiment"] == 0.3 and body["INFY"]["sentiment"] == -0.2 and gets == []

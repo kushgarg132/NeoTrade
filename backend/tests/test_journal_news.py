@@ -50,3 +50,24 @@ def test_against_news_and_chasing_news_findings():
 def test_no_news_no_finding():
     kinds = {f["kind"] for f in build_insights([{**_trip(i), "news": None} for i in range(10)])}
     assert not kinds & {"against_news", "chasing_news"}
+
+
+def test_a_put_bought_on_bad_news_trades_with_it_not_against_it():
+    puts = [{**_trip(i, symbol="NIFTY24OCT25000PE", underlying="NIFTY"), "kind": "PUT",
+             "news": {"direction": -0.8, "impact": 8, "minutes_before": 60}} for i in range(5)]
+    calls = [{**_trip(10 + i, symbol="NIFTY24OCT25000CE", underlying="NIFTY"), "kind": "CALL",
+              "news": {"direction": -0.8, "impact": 8, "minutes_before": 60}} for i in range(5)]
+    against = {f["kind"]: f for f in build_insights(puts + calls)}["against_news"]
+    assert against["trips"] == 5  # the calls, not the puts
+
+
+async def test_attach_news_scales_with_a_long_journal(mongo):
+    import time
+
+    trips = [_trip(i % 300, symbol=f"S{i % 50}", opened=T0) for i in range(3000)]
+    await mongo["news_items"].insert_many([_news(f"n{i}", f"S{i % 50}", T0 + timedelta(days=i % 300, minutes=-30))
+                                           for i in range(3000)])
+    began = time.monotonic()
+    out = await attach_news(mongo, trips)
+    assert time.monotonic() - began < 3.0
+    assert all(t["news"] is not None for t in out)

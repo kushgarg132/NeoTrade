@@ -265,6 +265,12 @@ Read-only consumers of existing datalayer keys (`sentiment:{SYM}`, `news_items`,
 - Journal news is attached at read time from `news_items` (24h before entry), not stored on trades.
 - Settings keeps its promotion table (it holds the live switches); the Library page links to it.
 - Telegram gets every non-fallback plan version, never a fallback.
+- Not built: the Watchlist "news today" dot, a Scanner catalyst column and rebalance rows
+  citing news: the shared chip (sentiment + latest material headline) and the Scanner's
+  "In the news · 24h" tab cover them.
+- The chip prefers a symbol's latest **material** item (impact ≥ 6 on that symbol) over a later
+  minor one; journal news findings read an option's direction through its type (a long put is
+  bearish).
 
 ## Build order
 
