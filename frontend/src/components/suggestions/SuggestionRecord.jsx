@@ -6,6 +6,7 @@ import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { formatCurrency, formatQuantity, formatTimeAgo, formatNoteDate } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import NewsChip from '../common/NewsChip';
 import Markdown from '../common/Markdown';
 
 /**
@@ -90,7 +91,7 @@ const OptionTerms = ({ contract, quantity }) => (
   </>
 );
 
-const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasMine = true }) => {
+const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasMine = true, news }) => {
   const [busy, setBusy] = useState(null);
   const [failure, setFailure] = useState(null);
   // Real money takes two taps: the first only says what will be sent.
@@ -141,6 +142,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
                 : suggestion.mode === 'INTRADAY' ? 'MIS' : 'CNC'}
             </Badge>
           </div>
+          <NewsChip entry={news} className="mt-1" />
           <p className="doc-meta mt-1 normal-case">
             {formatQuantity(suggestion.quantity)} {suggestion.option_contract ? 'units' : 'sh'} ·{' '}
             {formatCurrency(suggestion.notional)} ·{' '}

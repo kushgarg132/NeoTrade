@@ -12,6 +12,9 @@ import { formatCurrency, formatSignedPercent } from '../utils/formatters';
 import { cn } from '../utils/cn';
 import { stockPath } from '../utils/stocks';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
+import NewsChip from '../components/common/NewsChip';
+import useSymbolNews from '../hooks/useSymbolNews';
+import { hasRecentNews } from '../utils/news';
 
 /**
  * The scan: the user's universe swept for two named setups -- a breakout and a
@@ -52,7 +55,10 @@ const ScannerPage = () => {
 
   const open = (symbol) => navigate(stockPath(symbol));
   const findings = scan?.findings ?? [];
-  const shown = filter === 'all' ? findings : findings.filter((f) => f.setup === filter);
+  const { news } = useSymbolNews(findings.map((f) => f.symbol));
+  const inNews = (f) => hasRecentNews(news[f.symbol]);
+  const shown = filter === 'all' ? findings
+    : filter === 'news' ? findings.filter(inNews) : findings.filter((f) => f.setup === filter);
   const count = (setup) => findings.filter((f) => f.setup === setup).length;
 
   const meta = scan
@@ -144,6 +150,7 @@ const ScannerPage = () => {
                 { id: 'all', label: 'All', count: findings.length },
                 { id: 'breakout', label: 'Breakout', count: count('breakout') },
                 { id: 'pullback', label: 'Pullback', count: count('pullback') },
+                { id: 'news', label: 'In the news · 24h', count: findings.filter(inNews).length },
               ]}
               active={filter}
               onSelect={setFilter}
@@ -170,6 +177,7 @@ const ScannerPage = () => {
                       <Field label="3M" value={formatSignedPercent(pick.return_3m)} />
                     </div>
                     <p className="mt-2 doc-meta normal-case">{pick.reasons.join(' · ')}</p>
+                    <NewsChip entry={news[pick.symbol]} className="mt-1" />
                   </button>
                   <div className="mt-2">
                     <TicketButton label="Buy" onClick={() => setTicket({ symbol: pick.symbol, lastPrice: pick.close })} />
@@ -203,6 +211,7 @@ const ScannerPage = () => {
                       <span className="block doc-meta normal-case truncate max-w-[22rem]">
                         {pick.reasons.join(' · ')}
                       </span>
+                      <NewsChip entry={news[pick.symbol]} />
                     </Cell>
                     <Cell align="right" mono>
                       {formatCurrency(pick.close)}

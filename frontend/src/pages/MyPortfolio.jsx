@@ -14,6 +14,9 @@ import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
 import { ticketFrom } from '../utils/ticket';
 import Rebalance from '../components/portfolio/Rebalance';
+import NewsChip from '../components/common/NewsChip';
+import useSymbolNews from '../hooks/useSymbolNews';
+import { sortByNewsRisk } from '../utils/news';
 import { formatCurrency, formatQuantity, formatPercent, formatDateTime } from '../utils/formatters';
 
 /**
@@ -276,7 +279,7 @@ const AiAction = ({ row, onTrade }) => {
  * verdict -- with everything else a tap away. The full statement is for
  * wider sheets.
  */
-const HoldingsList = ({ rows, open, onToggle, onTrade }) => (
+const HoldingsList = ({ rows, open, onToggle, onTrade, news }) => (
   <ul className="sm:hidden -mx-3 divide-y divide-[var(--rule)]">
     {rows.map((row) => {
       const key = row.isin || row.symbol;
@@ -294,6 +297,7 @@ const HoldingsList = ({ rows, open, onToggle, onTrade }) => (
                 {row.weight_pct != null ? `${formatPercent(row.weight_pct)}` : row.kind}
                 {row.sector ? ` · ${row.sector}` : ''}
               </span>
+              <NewsChip entry={news?.[row.symbol]} />
             </span>
             <span className="text-right shrink-0">
               <span className="figure-md text-sm block">{row.value != null ? formatCurrency(row.value) : '—'}</span>
@@ -330,7 +334,7 @@ const HoldingsList = ({ rows, open, onToggle, onTrade }) => (
   </ul>
 );
 
-const HoldingsTable = ({ rows, open, onToggle, onTrade }) => (
+const HoldingsTable = ({ rows, open, onToggle, onTrade, news }) => (
   <div className="hidden sm:block">
   <Statement
     columns={[
@@ -368,6 +372,7 @@ const HoldingsTable = ({ rows, open, onToggle, onTrade }) => (
             {row.sector || (row.kind === 'STOCK' ? '' : row.kind)}
             {row.weight_pct != null && ` · ${formatPercent(row.weight_pct)} of portfolio`}
           </span>
+          <NewsChip entry={news?.[row.symbol]} />
         </Cell>
         <Cell align="right" mono>
           {formatQuantity(row.quantity)}
@@ -466,7 +471,9 @@ const MyPortfolio = ({ lockedAccount = null }) => {
 
   const urgency = (row) => ORDER[row.verdict] ?? 5;
   const byUrgency = [...(snapshot?.holdings || [])].sort((a, b) => urgency(a) - urgency(b));
-  const stocks = byUrgency.filter((row) => row.kind === 'STOCK');
+  const { news } = useSymbolNews((snapshot?.holdings || []).filter((r) => r.kind === 'STOCK').map((r) => r.symbol));
+  // Holdings hit by material bad news first (backend/datalayer news), then by review urgency.
+  const stocks = sortByNewsRisk(byUrgency.filter((row) => row.kind === 'STOCK'), news);
   const funds = byUrgency.filter((row) => row.kind !== 'STOCK');
   const brokers = (snapshot?.brokers || []).map((b) => BROKER[b] || b).join(', ');
   const hasHoldings = snapshot && snapshot.holdings.length > 0;
@@ -586,7 +593,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
                           Holdings marked Review first have serious results on the review rules. What to do is your call.
                         </p>
                       )}
-                      <Holdings rows={stocks} open={open} onToggle={toggle} onTrade={account === 'mine' ? setTicket : null} />
+                      <Holdings rows={stocks} news={news} open={open} onToggle={toggle} onTrade={account === 'mine' ? setTicket : null} />
                     </Sheet>
                   )}
                   {funds.length > 0 && (

@@ -10,12 +10,15 @@ import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatSignedPercent } from '../utils/formatters';
 import { cn } from '../utils/cn';
 import { stockPath } from '../utils/stocks';
+import NewsChip from '../components/common/NewsChip';
+import useSymbolNews from '../hooks/useSymbolNews';
 
 const Watchlist = () => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [ticket, setTicket] = useState(null);
+  const { news } = useSymbolNews(rows.map((r) => r.symbol));
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -71,6 +74,7 @@ const Watchlist = () => {
                   <span className="block doc-meta normal-case truncate max-w-[16rem]">
                     {stock.error ? 'Quote unavailable' : stock.name}
                   </span>
+                  <NewsChip entry={news[stock.symbol?.toUpperCase().replace(/\.NS$/, '')]} />
                 </Cell>
                 <Cell align="right" mono>
                   {formatCurrency(stock.current_price)}

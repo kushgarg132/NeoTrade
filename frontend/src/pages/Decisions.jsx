@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
 import { PRACTICE_TABS } from '../components/layout/sections';
 import SuggestionRecord from '../components/suggestions/SuggestionRecord';
+import useSymbolNews from '../hooks/useSymbolNews';
 import { Sheet, Empty, Ruling } from '../components/doc/Doc';
 import WaitingCards from '../components/decisions/WaitingCards';
 import { Button } from '../components/common/Button';
@@ -31,6 +32,7 @@ const Decisions = () => {
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [scanNote, setScanNote] = useState(null);
+  const { news } = useSymbolNews(items.map((s) => s.symbol));
 
   const load = () => {
     setLoading(true);
@@ -182,6 +184,7 @@ const Decisions = () => {
                 onApproveLive={() => decide(suggestion, 'live')}
                 onReject={() => decide(suggestion, 'reject')}
                 hasMine={hasMine}
+                news={news[suggestion.symbol]}
               />
             ))}
             {visible.length > 3 && (
