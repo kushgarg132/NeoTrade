@@ -121,7 +121,7 @@ async def _setup(user_id: str, prefs: dict) -> dict:
         ("connect_mine", "Connect your broker", any(b in has_creds for b, r in roles.items() if r == "mine"), "/settings?tab=accounts"),
         ("connect_ai", "Connect the AI's broker", any(b in has_creds for b, r in roles.items() if r == "ai"), "/settings?tab=accounts"),
         ("roles", "Choose which account is yours and which is the AI's", {"ai", "mine"} <= set(roles.values()), "/settings?tab=accounts"),
-        ("daily_loss", "Set a daily loss limit", bool(prefs.get("guardrails_enabled")) and (prefs.get("daily_loss_limit") or 0) > 0, "/settings?tab=safety"),
+        ("daily_loss", "Turn on Watch my broker, with a daily loss limit", bool(prefs.get("guardrails_enabled")) and (prefs.get("daily_loss_limit") or 0) > 0, "/settings?tab=safety"),
         ("telegram", "Link Telegram for alerts", bool(channel.get("telegram_chat_id")), "/settings?tab=safety"),
         ("profile", "Tell the AI about yourself", sum(1 for k, v in profile.items() if k != "memories" and v) >= 3, "/profile"),
     ]
