@@ -143,6 +143,12 @@ def read_tools(db, redis, user_id: str) -> list:
 
         return _json(await snapshot(db, user_id, await _nifty(), datetime.now(timezone.utc)))
 
+    async def get_strategy_library(mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None) -> str:
+        from backend.learning.library import catalog
+        from backend.portfolio.service import _nifty
+
+        return _json(await catalog(db, user_id, await _nifty(), mode=mode))
+
     async def get_paper() -> str:
         from backend.risk.backtest_gate import BacktestGateStore
         from backend.risk.paper_gate import paper_records
@@ -280,6 +286,11 @@ def read_tools(db, redis, user_id: str) -> list:
             "What the paper engine learned from its own closed trades: rules it follows now (paused strategies, "
             "per-strategy strength floors, skipped Nifty regimes), changes it made in the last 30 days with the "
             "evidence, and the worst setups by net P&L. Use for why the engine lost money or what it changed.")),
+        StructuredTool.from_function(coroutine=get_strategy_library, name="get_strategy_library", description=(
+            "The strategy library: what each strategy is for (style, regimes it suits, conditions it needs, "
+            "when to avoid it) and its record for this user (backtest gate, paper record, learned "
+            "pauses/floors, results by Nifty trend and by reason). Use for 'which strategy suits today' or "
+            "'how is X doing'.")),
         StructuredTool.from_function(coroutine=get_paper, name="get_paper", description=(
             "The paper-trading engine: net scorecard per strategy, open paper positions, running engine runs, "
             "the daily auto-run switch, the kill switch, and how far each strategy is from going live.")),

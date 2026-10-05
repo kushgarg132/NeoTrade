@@ -140,6 +140,19 @@ async def list_strategies(user: User = Depends(get_current_user)):
     return [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"])]
 
 
+@router.get("/strategies/library")
+async def strategy_library(
+    mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None,
+    user: User = Depends(get_current_user),
+):
+    """Every strategy's card joined with this user's record for it
+    (backend/learning/library.py)."""
+    from backend.learning.library import catalog
+    from backend.portfolio.service import _nifty
+
+    return {"strategies": await catalog(db.db, user.id, await _nifty(), mode=mode)}
+
+
 @router.get("/settings/strategies/promotion")
 async def strategy_promotion(
     user: User = Depends(get_current_user),
