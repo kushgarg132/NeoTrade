@@ -16,6 +16,7 @@ from backend.engine.persistence import LedgerStore
 from backend.engine.session import IST
 from backend.guardrails.store import GuardrailStore
 from backend.journal.insights import build_insights
+from backend.journal.news import attach_news
 from backend.journal.roundtrips import build_round_trips, daily_pnl
 from backend.journal.store import JournalStore
 from backend.portfolio.service import latest_snapshot
@@ -132,7 +133,7 @@ def read_tools(db, redis, user_id: str) -> list:
             "account": account, "period": period, "closed": len(closed), "pnl_gross": round(sum(t["pnl"] for t in closed), 2),
             "wins": sum(t["pnl"] > 0 for t in closed), "by_day": daily_pnl(trips)[-31:],
             "round_trips": [{k: t.get(k) for k in keep} for t in trips[-MAX_TRIPS:]],
-            "patterns": build_insights(trips)[:5],
+            "patterns": build_insights(await attach_news(db, trips))[:5],
             # All-time, estimated: charges taken, P&L after them, trade rate vs SEBI's 500/yr line.
             "costs_all_time": all_time,
         })

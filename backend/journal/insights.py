@@ -18,6 +18,8 @@ LOSS_STREAK = 2
 LATE_TRADE_NUMBER = 4  # the 4th and later trades opened on one day
 SIZE_UP_RATIO = 1.25
 HOLD_RATIO = 1.5
+NEWS_IMPACT = 6  # MATERIALITY_THRESHOLD in backend/strategies/longterm/analyst_verdict.py
+CHASE_MINUTES = 15
 
 _BUCKETS = [
     (time(9, 30), "Opened 09:15–09:30"),
@@ -161,6 +163,17 @@ def build_insights(trips: list[dict]) -> list[dict]:
                 "size_after_loss", "Position size right after a loss", after_loss, closed,
                 note=f"{after_size / usual_size:.1f}× your usual position size",
             ))
+
+    # News at entry (journal/news.py attach_news; absent when not attached).
+    strong = [t for t in closed if (t.get("news") or {}).get("impact", 0) >= NEWS_IMPACT]
+    against = [t for t in strong if (t["news"]["direction"] < 0) == (t["direction"] == "LONG")
+               and t["news"]["direction"] != 0]
+    if len(against) >= MIN_TRIPS:
+        findings.append(_finding("against_news", "Traded against strong news", against, closed))
+    chasing = [t for t in strong if t["news"]["minutes_before"] <= CHASE_MINUTES]
+    if len(chasing) >= MIN_TRIPS:
+        findings.append(_finding("chasing_news", f"Entered within {CHASE_MINUTES} minutes of big news", chasing,
+                                 closed))
 
     winners = [t for t in closed if t["pnl"] > 0]
     losers = [t for t in closed if t["pnl"] < 0]

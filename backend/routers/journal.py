@@ -18,6 +18,7 @@ from backend.journal.beta import beta_metrics, record_open
 from backend.journal.console_csv import parse_console_tradebook
 from backend.journal import mirror
 from backend.journal.insights import build_insights
+from backend.journal.news import attach_news
 from backend.journal.roundtrips import build_round_trips, daily_pnl
 from backend.journal.store import JournalStore
 from backend.journal.sync import connected_brokers, import_upstox_history, sync_user_trades
@@ -80,7 +81,7 @@ async def get_journal(
         "account": account,
         "round_trips": trips,
         "calendar": daily_pnl(trips),
-        "insights": build_insights(trips),
+        "insights": build_insights(await attach_news(db.db, trips)),
         # So an empty journal can say "connected, nothing imported yet"
         # rather than "connect a broker".
         "brokers_connected": await connected_brokers(db.redis, credentials, user.id),
