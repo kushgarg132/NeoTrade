@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Sheet } from '../doc/Doc';
-import { Badge } from '../common/Badge';
+import MoneyBadge from '../common/MoneyBadge';
 import { Button } from '../common/Button';
 import api, { endpoints } from '../../utils/api';
 
@@ -15,12 +15,17 @@ const detailText = (err, fallback) => {
   return typeof detail === 'string' ? detail : fallback;
 };
 
-const minutesLeft = (iso) => Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 60000));
+const minutesLeft = (iso, now) => Math.max(0, Math.ceil((new Date(iso).getTime() - now) / 60000));
 
-const WaitingCard = ({ card, onSettled }) => {
+const WaitingCard = ({ card, now, onSettled }) => {
   const [busy, setBusy] = useState(null);
   const [secondTap, setSecondTap] = useState(false);
   const [note, setNote] = useState(null);
+  // The real-money tap arms 600ms after it appears: one double tap is not two taps.
+  const [arming, setArming] = useState(false);
+  const timers = useRef([]);
+  const later = (fn, ms) => timers.current.push(setTimeout(fn, ms));
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const confirm = async () => {
     setBusy('confirm');
@@ -29,13 +34,15 @@ const WaitingCard = ({ card, onSettled }) => {
       const res = await api.post(endpoints.chat.confirm(card.id), { second_tap: secondTap });
       if (res.data.status === 'NEEDS_SECOND_TAP') {
         setSecondTap(true);
+        setArming(true);
+        later(() => setArming(false), 600);
       } else {
         setNote(res.data.result);
-        setTimeout(onSettled, 1500);
+        later(onSettled, 1500);
       }
     } catch (err) {
       setNote(err?.response ? detailText(err, 'This card could not be confirmed.') : 'No answer from the server. The order may have gone through: check Trades before trying again.');
-      setTimeout(onSettled, 2500);
+      later(onSettled, 2500);
     } finally {
       setBusy(null);
     }
@@ -50,9 +57,9 @@ const WaitingCard = ({ card, onSettled }) => {
   return (
     <li className="py-3 space-y-2">
       <div className="flex items-baseline gap-2">
-        <Badge variant={card.venue === 'live' ? 'warning' : 'secondary'}>{card.venue === 'live' ? 'Mine' : 'Paper'}</Badge>
+        <MoneyBadge kind={card.venue === 'live' ? 'mine' : 'paper'} />
         <span className="text-sm flex-1 min-w-0">{card.summary}</span>
-        <span className="doc-meta shrink-0">{minutesLeft(card.expires_at)} min left</span>
+        <span className="doc-meta shrink-0">{minutesLeft(card.expires_at, now)} min left</span>
       </div>
       {note && <p role="status" className="text-sm text-[var(--ink-soft)]">{note}</p>}
       <div className="grid grid-cols-2 gap-2">
@@ -63,7 +70,7 @@ const WaitingCard = ({ card, onSettled }) => {
         <Button
           size="sm"
           onClick={confirm}
-          disabled={busy !== null}
+          disabled={busy !== null || arming}
           className={secondTap ? 'bg-[var(--stamp)] border-[var(--stamp)]' : undefined}
         >
           {busy === 'confirm' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -76,6 +83,12 @@ const WaitingCard = ({ card, onSettled }) => {
 
 const WaitingCards = ({ venue }) => {
   const [cards, setCards] = useState([]);
+  // Re-rendered every 30s so "min left" counts down; expired cards drop out.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(tick);
+  }, []);
 
   const load = () =>
     api
@@ -87,14 +100,15 @@ const WaitingCards = ({ venue }) => {
     load();
   }, []);
 
-  const shown = venue ? cards.filter((card) => card.venue === venue) : cards;
+  const shown = (venue ? cards.filter((card) => card.venue === venue) : cards)
+    .filter((card) => minutesLeft(card.expires_at, now) > 0);
   if (shown.length === 0) return null;
 
   return (
     <Sheet title="Waiting for you" meta={String(shown.length)}>
       <ul className="divide-y divide-[var(--rule)]">
         {shown.map((card) => (
-          <WaitingCard key={card.id} card={card} onSettled={load} />
+          <WaitingCard key={card.id} card={card} now={now} onSettled={load} />
         ))}
       </ul>
     </Sheet>
