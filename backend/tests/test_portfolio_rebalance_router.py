@@ -122,3 +122,18 @@ async def test_rebalance_rate_limited(mdb, monkeypatch):
         return False
     monkeypatch.setattr(portfolio_router, "allow", refuse)
     assert _client(_user()).post("/api/v1/portfolio/rebalance", json={"new_money": 0}).status_code == 429
+
+
+async def test_rebalance_uses_only_my_account_when_roles_are_set(mdb):
+    raw = [{"symbol": "MINE1", "quantity": 800, "avg_price": 90.0, "last_price": 100.0, "close_price": 100.0, "broker": "kite"},
+           {"symbol": "MINE2", "quantity": 200, "avg_price": 90.0, "last_price": 100.0, "close_price": 100.0, "broker": "kite"},
+           {"symbol": "AI1", "quantity": 5000, "avg_price": 90.0, "last_price": 100.0, "close_price": 100.0, "broker": "upstox"}]
+    rows = [_row("MINE1", 80_000), _row("MINE2", 20_000), _row("AI1", 500_000)]
+    await mdb["portfolio_snapshots"].insert_one({"user_id": "alice", "at": datetime.now(timezone.utc),
+                                                 "holdings": rows, "raw_holdings": raw, "brokers": ["kite", "upstox"]})
+    await mdb["user_prefs"].insert_one({"user_id": "alice", "broker_roles": {"kite": "mine", "upstox": "ai"},
+                                        "rebalance_targets": {"rule": "equal", "max_stock_pct": 15,
+                                                              "max_sector_pct": 30, "overrides": {}}})
+    body = _client(_user()).post("/api/v1/portfolio/rebalance", json={"new_money": 0}).json()
+    assert {t["symbol"] for t in body["trades"]} == {"MINE1", "MINE2"}
+    assert body["total"] == pytest.approx(100_000)

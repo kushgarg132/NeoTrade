@@ -152,18 +152,27 @@ async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_
     snapshot = await latest_snapshot(db.db, user.id)
     if snapshot is None:
         raise HTTPException(status_code=409, detail="Refresh your portfolio first")
+    from backend.brokers.roles import brokers_for
     from backend.core.clock import SystemClock
     from backend.engine.session import IST
     from backend.journal.store import JournalStore
     from backend.portfolio.scorecard import open_lots
+    from backend.portfolio.service import scorecard_for
 
-    targets = request.targets.model_dump() if request.targets else (await PrefsStore(db.db).get(user.id))["rebalance_targets"]
+    prefs = await PrefsStore(db.db).get(user.id)
+    targets = request.targets.model_dump() if request.targets else prefs["rebalance_targets"]
+    trades = await JournalStore(db.db).list_trades(user.id)
+    # Trades go to the user's own account, so only its holdings are rebalanced:
+    # the AI account's book is never mixed in (backend/brokers/roles.py).
+    mine = brokers_for(prefs.get("broker_roles") or {}, "mine")
+    if mine:
+        snapshot = scorecard_for(snapshot, mine, trades, [])
+        trades = [t for t in trades if t.get("broker") in mine]
     held = {r["symbol"] for r in snapshot.get("holdings", [])}
     allowed = {s for s, _ in await _candidate_symbols(user, held)}
     wanted = [s for s in dict.fromkeys(request.candidates) if s in allowed]
     prices = await _closes(wanted)
     candidates = [{"symbol": s, "price": prices[s], "kind": "STOCK", "sector": None} for s in wanted if s in prices]
-    trades = await JournalStore(db.db).list_trades(user.id)
     lots = {s: open_lots(trades, s) for s in held}
     today = SystemClock().now().astimezone(IST).date()
     out = plan_rebalance(snapshot.get("holdings", []), candidates, targets, request.new_money, lots, today)
