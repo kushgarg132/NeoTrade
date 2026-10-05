@@ -31,6 +31,12 @@ class FakeRedis:
     async def delete(self, key):
         self.data.pop(key, None)
 
+    async def incrby(self, key, n):
+        self.data[key] = int(self.data.get(key, 0)) + n
+
+    async def expire(self, key, seconds):
+        pass
+
     def pipeline(self, transaction=False):
         redis = self
 
@@ -231,3 +237,9 @@ async def test_analysis_reads_the_layer_and_reuses_an_up_to_date_note(mongo, mon
 
 async def _async(value):
     return value
+
+
+async def test_deep_budget_stops_at_the_daily_cap(monkeypatch):
+    monkeypatch.setattr(news.settings, "NEWS_LLM_CALLS_PER_DAY", 7)
+    redis = FakeRedis()
+    assert [await news._deep_budget(redis, 5) for _ in range(3)] == [5, 2, 0]

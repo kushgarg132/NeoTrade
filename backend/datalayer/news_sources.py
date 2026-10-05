@@ -62,6 +62,7 @@ NSE_SKIP = ("newspaper publication", "trading window", "certificate under", "com
 SECTOR_SECONDS = 15 * 60
 SYMBOL_PRIORITY_SECONDS = 5 * 60
 SYMBOLS_PER_PASS = 10
+GOOGLE_SEARCH_LIMIT = 8
 
 _UNIVERSE_FILE = Path(__file__).parents[1] / "factor" / "nifty200.csv"
 _last: dict[str, float] = {}  # source key -> last fetch (unix)
@@ -124,10 +125,13 @@ def _get(url: str, **kw) -> requests.Response:
     return response
 
 
-async def fetch_rss(url: str, feed: str, scope_hint: str, symbols=()) -> list[dict]:
+async def fetch_rss(url: str, feed: str, scope_hint: str, symbols=(), limit: int = 100) -> list[dict]:
+    """`limit`: newest items kept. A Google search returns up to 100 mostly
+    old or tangential results; its top few are what matter."""
     try:
         response = await asyncio.to_thread(_get, url)
-        return parse_rss(response.content, feed, scope_hint, symbols)
+        items = parse_rss(response.content, feed, scope_hint, symbols)
+        return sorted(items, key=lambda i: i["published_at"], reverse=True)[:limit]
     except Exception as exc:
         logger.warning("news feed %s failed: %s", feed, exc)
         return []
@@ -207,10 +211,10 @@ async def poll(priority: set[str], names: dict[str, str]) -> list[dict]:
     if _due("nse", NSE_SECONDS, now):
         jobs.append(fetch_nse(set(names)))
     if _due("sectors", SECTOR_SECONDS, now):
-        jobs += [fetch_rss(GOOGLE.format(q=quote_plus(f'India "{s}" sector stocks when:1d')), "gnews_sector", "SECTOR")
+        jobs += [fetch_rss(GOOGLE.format(q=quote_plus(f'India "{s}" sector stocks when:1d')), "gnews_sector", "SECTOR", limit=GOOGLE_SEARCH_LIMIT)
                  for s in sectors()]
     for symbol in _symbol_queries(priority, names, now):
         query = f'"{names.get(symbol) or symbol}" share news when:2d'
-        jobs.append(fetch_rss(GOOGLE.format(q=quote_plus(query)), "gnews_symbol", "COMPANY", (symbol,)))
+        jobs.append(fetch_rss(GOOGLE.format(q=quote_plus(query)), "gnews_symbol", "COMPANY", (symbol,), GOOGLE_SEARCH_LIMIT))
     batches = await asyncio.gather(*jobs)
     return [item for batch in batches for item in batch]

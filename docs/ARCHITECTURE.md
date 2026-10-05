@@ -244,14 +244,14 @@ fetch live.
 
 **News** (`backend/datalayer/news_sources.py`, `news.py`). `news_poll` (60s) pulls ~20 RSS feeds
 (ET, Moneycontrol, Mint, RBI, SEBI, PIB, CNBC, BBC, Google News business/world), Google News
-searches (Indian market, macro, each NSE industry every 15 min, 10 company searches per pass --
+searches (newest 8 results each: Indian market, macro, each NSE industry every 15 min, 10 company searches per pass --
 held/watched every 5 min, the Nifty 200 round-robin), GDELT (global events, every 5 min) and NSE
 corporate filings, and upserts each story once into Mongo `news_items` (`_id` = hash of the
 normalised title; later sources only add `feeds`/`symbols`). Company symbols are tagged by name,
 unique first word and ticker (`build_aliases`). `news_process` (20s): `triage_news.md` (fast tier,
 25 headlines/call) keeps anything that could move Indian stocks -- global and macro included -- and
 drops the rest (kept 7 days; relevant items 2 years, as learning data); `score_market_news.md`
-(deep tier, 8 items/call, `NEWS_LLM_CALLS_PER_MIN`) gives each item `impacts[]` on the market
+(deep tier, 12 items/call, `NEWS_LLM_CALLS_PER_MIN`, at most `NEWS_LLM_CALLS_PER_DAY` per IST day) gives each item `impacts[]` on the market
 (`INDIA`), NSE industries (`news_sources.sectors()`) or followed symbols, validated and clamped
 (`valid_impacts`); impact >= 6 sets `material`. NSE filings skip triage. Items unscored after 3
 days go STALE. `aggregate` then writes, from the last 60 days of impacts (impact² × 30-day

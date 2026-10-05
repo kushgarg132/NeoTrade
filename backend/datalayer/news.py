@@ -3,7 +3,7 @@ and keep per-symbol, per-sector and market-wide sentiment fresh.
 
     poll (60s)     sources -> dedupe into Mongo `news_items` (status NEW)
     process (20s)  NEW -> triage (fast LLM, 25/call) -> TRIAGED or IRRELEVANT
-                   TRIAGED -> score (deep LLM, 8/call, NEWS_LLM_CALLS_PER_MIN)
+                   TRIAGED -> score (deep LLM, 12/call, NEWS_LLM_CALLS_PER_MIN/_PER_DAY)
                            -> SCORED with impacts[] on market/sectors/symbols
                    -> aggregate -> Redis sentiment:{SYM}, sector_sentiment:{S},
                       market:sentiment, analyst_verdict:{SYM}
@@ -48,7 +48,7 @@ IRRELEVANT_TTL = timedelta(days=7)
 RELEVANT_TTL = timedelta(days=730)  # kept as learning data (news -> price outcomes)
 MAX_ATTEMPTS = 3
 TRIAGE_BATCH, TRIAGE_CALLS_PER_PASS = 25, 4
-SCORE_BATCH = 8
+SCORE_BATCH = 12
 SCORE_MAX_AGE = timedelta(days=3)  # older unscored items are not worth an LLM call
 PROCESS_SECONDS = 20
 
@@ -389,12 +389,27 @@ async def poll_loop(db, redis) -> None:
         logger.info("ingest news: %d new of %d fetched", new, len(items))
 
 
+async def _deep_budget(redis, wanted: int) -> int:
+    """Reserves up to `wanted` deep calls from today's (IST) allowance,
+    NEWS_LLM_CALLS_PER_DAY; past it the backlog waits for tomorrow (and goes
+    STALE after SCORE_MAX_AGE) rather than eating the shared LLM quota."""
+    from backend.engine.session import IST
+
+    key = f"news:deep_calls:{datetime.now(timezone.utc).astimezone(IST).date().isoformat()}"
+    used = int(await redis.get(key) or 0)
+    granted = max(0, min(wanted, settings.NEWS_LLM_CALLS_PER_DAY - used))
+    if granted:
+        await redis.incrby(key, granted)
+        await redis.expire(key, 2 * 86400)
+    return granted
+
+
 async def process_loop(db, redis) -> None:
     global _last_aggregate
     triaged = await triage(db)
     names, sector_of = await followed(db)
-    calls = max(1, settings.NEWS_LLM_CALLS_PER_MIN * PROCESS_SECONDS // 60)
-    scored = await score(db, names, sector_of, await priority_symbols(db), calls)
+    calls = await _deep_budget(redis, max(1, settings.NEWS_LLM_CALLS_PER_MIN * PROCESS_SECONDS // 60))
+    scored = await score(db, names, sector_of, await priority_symbols(db), calls) if calls else 0
     if scored or time.time() - _last_aggregate >= AGGREGATE_EVERY_SECONDS:
         await aggregate(db, redis, names, sector_of)
         _last_aggregate = time.time()
