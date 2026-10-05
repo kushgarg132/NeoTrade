@@ -41,6 +41,18 @@ class PlanGate:
         self._scope = set((self._plan or {}).get("scope") or [])
 
     @property
+    def version(self) -> Optional[int]:
+        return self._plan.get("version") if self._plan else None
+
+    @property
+    def adds(self) -> list[str]:
+        return list((self._plan or {}).get("add_symbols") or [])
+
+    @property
+    def exits(self) -> list[dict]:
+        return list((self._plan or {}).get("exits") or [])
+
+    @property
     def multiplier(self) -> float:
         return float(self._plan.get("risk_multiplier", 1.0)) if self._plan else 1.0
 
