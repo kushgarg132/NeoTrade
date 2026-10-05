@@ -320,3 +320,20 @@ async def test_autopilot_login_reminder_once_before_the_open(world, longterm, mo
     await _tick(world, datetime(2026, 9, 28, 9, 5, tzinfo=IST))
     reminders = [t for t in longterm["sent"] if "not logged in" in t]
     assert len(reminders) == 1 and "09:15" in reminders[0]
+
+
+@pytest.mark.asyncio
+async def test_deploy_restarts_do_not_use_up_the_daily_start_cap(world, monkeypatch):
+    """On 2026-10-05 a day of deploys orphaned six auto runs; the crash-loop
+    cap counted them as starts and refused a seventh, leaving open intraday
+    positions with no run to square them off. A deploy is not a crash loop."""
+    await world.enable()
+    for worker in range(autorun.MAX_STARTS_PER_DAY + 1):
+        await _tick(world, MONDAY_10AM)
+        trading._RUNS.pop(f"run-{len(world.launched)}").cancel()
+        await RunStore(world.db).close_orphaned()  # the deploy's restart sweep
+        world.redis.data.clear()
+        monkeypatch.setattr(autorun, "_TOKEN", f"worker-{worker}")
+        monkeypatch.setattr(autorun, "_LOCAL", {})
+
+    assert (await _tick(world, MONDAY_10AM))["started"] == ["alice"]

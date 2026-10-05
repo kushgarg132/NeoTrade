@@ -38,7 +38,7 @@ from backend.brokers.roles import RoleUnavailable, adapter_for
 from backend.core.clock import SystemClock
 from backend.engine.session import IST
 from backend.prefs import PrefsStore
-from backend.runs import ACTIVE, RunStore
+from backend.runs import ORPHANED, ACTIVE, RunStore
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,11 @@ async def _may_start(runs: RunStore, user_id: str, mode: str, now: datetime) -> 
     auto = [r for r in today if r["params"].get("origin") == "auto"]
     if any(r["status"] == "STOPPED" and r.get("error") is None for r in auto):
         return False  # the user stopped today's auto run themselves
-    return len(auto) < MAX_STARTS_PER_DAY
+    # The cap stops a crash loop; a run swept as orphaned by a restart (a
+    # deploy) did not crash, so it does not count -- or a day of deploys
+    # leaves open positions with no run to square them off.
+    crashed_or_live = [r for r in auto if r.get("error") != ORPHANED]
+    return len(crashed_or_live) < MAX_STARTS_PER_DAY
 
 
 async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:

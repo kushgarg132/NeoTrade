@@ -18,6 +18,7 @@ ACTIVE = "RUNNING"
 BOOT_ID = uuid.uuid4().hex
 ALIVE_KEY = "worker:alive:{}"
 ALIVE_TTL_SECONDS = 90
+ORPHANED = "orphaned by restart"
 
 
 class RunStore:
@@ -88,7 +89,7 @@ class RunStore:
             {"run_id": {"$in": dead}, "status": ACTIVE},
             {"$set": {
                 "status": "STOPPED",
-                "error": "orphaned by restart",
+                "error": ORPHANED,
                 "stopped_at": datetime.now(timezone.utc),
             }},
         )
