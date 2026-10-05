@@ -7,16 +7,23 @@ facts and reasons, with a SELL shown as "review first", and no action plan. Show
 every user needs SEBI Research Analyst registration (PRODUCT.md).
 """
 
-from typing import Literal
+import asyncio
+from typing import Literal, Optional
 
+import yfinance as yf
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from backend.app_settings import AppSettingsStore
 from backend.auth.broker_credentials import BrokerCredentialStore, get_credential_store
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.database import db
+from backend.portfolio.rebalance import plan_rebalance, suggest, target_gaps
 from backend.portfolio.service import latest_snapshot, refresh_portfolio
+from backend.prefs import PrefsStore
+from backend.rate_limit import allow
+from backend.routers.settings import RebalanceTargets
 
 router = APIRouter(prefix="/portfolio", tags=["Portfolio"])
 
@@ -33,7 +40,7 @@ def present(snapshot: dict, show_verdicts: bool) -> dict:
 
     snapshot["holdings"] = [
         {**row, "verdict": mask(row.get("verdict")), "previous_verdict": mask(row.get("previous_verdict")),
-         "score": None}
+         "score": None, "suggested": None}
         for row in snapshot.get("holdings", [])
     ]
     return snapshot
@@ -54,12 +61,22 @@ async def get_portfolio(user: User = Depends(get_current_user), account: Literal
         from backend.brokers.roles import brokers_for
         from backend.journal.store import JournalStore
         from backend.portfolio.service import _nifty, scorecard_for
-        from backend.prefs import PrefsStore
 
         roles = (await PrefsStore(db.db).get(user.id)).get("broker_roles") or {}
         snapshot = scorecard_for(snapshot, brokers_for(roles, account), await JournalStore(db.db).list_trades(user.id),
                                  await _nifty())
-    return present(snapshot, await verdicts_visible_to(user))
+    visible = await verdicts_visible_to(user)
+    if visible:
+        targets = (await PrefsStore(db.db).get(user.id))["rebalance_targets"]
+        snapshot = with_suggestions(snapshot, targets)
+    return present(snapshot, visible)
+
+
+def with_suggestions(snapshot: dict, targets: dict) -> dict:
+    """Each holding row's one-tap AI action (rebalance.suggest)."""
+    gaps, total, _ = target_gaps(snapshot.get("holdings", []), targets)
+    holdings = [{**row, "suggested": suggest(row, gaps.get(row["symbol"]), total)} for row in snapshot.get("holdings", [])]
+    return {**snapshot, "holdings": holdings}
 
 
 @router.post("/refresh")
@@ -71,3 +88,83 @@ async def refresh(
     if not snapshot["holdings"] and not snapshot["errors"]:
         raise HTTPException(status_code=409, detail="Connect a broker in Settings to read your holdings.")
     return present(snapshot, await verdicts_visible_to(user))
+
+
+REBALANCE_PER_MINUTE = 10
+
+
+class RebalanceRequest(BaseModel):
+    new_money: float = Field(default=0, ge=0)
+    candidates: list[str] = Field(default_factory=list, max_length=20)
+    targets: Optional[RebalanceTargets] = None
+
+
+def _closes_sync(symbols: list[str]) -> dict[str, float]:
+    data = yf.download([f"{s}.NS" for s in symbols], period="5d", interval="1d", progress=False, group_by="ticker")
+    prices = {}
+    for symbol in symbols:
+        try:
+            frame = data[f"{symbol}.NS"] if len(symbols) > 1 else data
+            close = frame["Close"].dropna()
+            if len(close):
+                prices[symbol] = float(close.iloc[-1])
+        except Exception:
+            continue  # no price: the symbol is dropped
+    return prices
+
+
+async def _closes(symbols: list[str]) -> dict[str, float]:
+    if not symbols:
+        return {}
+    return await asyncio.to_thread(_closes_sync, symbols)
+
+
+async def _candidate_symbols(user: User, held: set[str]) -> list[tuple[str, str]]:
+    watch = await db.db["watchlist"].find_one({"user_id": user.id}) or {}
+    found = [(s, "watchlist") for s in dict.fromkeys(watch.get("symbols") or []) if s not in held]
+    if await verdicts_visible_to(user):
+        seen = held | {s for s, _ in found}
+        cursor = db.db["suggestions"].find({"user_id": user.id, "status": "PENDING", "mode": "LONGTERM"}, {"symbol": 1})
+        for doc in await cursor.to_list(length=200):
+            if doc.get("symbol") and doc["symbol"] not in seen:
+                seen.add(doc["symbol"])
+                found.append((doc["symbol"], "ai"))
+    return found
+
+
+@router.get("/rebalance/candidates")
+async def rebalance_candidates(user: User = Depends(get_current_user)):
+    """Names the user may bring into a rebalance: their watchlist, plus open
+    AI longterm picks where verdicts are visible (the SEBI gate above)."""
+    snapshot = await latest_snapshot(db.db, user.id)
+    held = {r["symbol"] for r in (snapshot or {}).get("holdings", [])}
+    symbols = await _candidate_symbols(user, held)
+    prices = await _closes([s for s, _ in symbols])
+    return [{"symbol": s, "price": prices[s], "source": source} for s, source in symbols if s in prices]
+
+
+@router.post("/rebalance")
+async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_user)):
+    """Trades that move the book toward its targets. Nothing is placed: each
+    trade opens a pre-filled ticket the user confirms."""
+    if not await allow(db.redis, f"rebalance:{user.id}", REBALANCE_PER_MINUTE, 60):
+        raise HTTPException(status_code=429, detail="Too many rebalance runs: try again in a minute")
+    snapshot = await latest_snapshot(db.db, user.id)
+    if snapshot is None:
+        raise HTTPException(status_code=409, detail="Refresh your portfolio first")
+    from backend.core.clock import SystemClock
+    from backend.engine.session import IST
+    from backend.journal.store import JournalStore
+    from backend.portfolio.scorecard import open_lots
+
+    targets = request.targets.model_dump() if request.targets else (await PrefsStore(db.db).get(user.id))["rebalance_targets"]
+    held = {r["symbol"] for r in snapshot.get("holdings", [])}
+    allowed = {s for s, _ in await _candidate_symbols(user, held)}
+    wanted = [s for s in dict.fromkeys(request.candidates) if s in allowed]
+    prices = await _closes(wanted)
+    candidates = [{"symbol": s, "price": prices[s], "kind": "STOCK", "sector": None} for s in wanted if s in prices]
+    trades = await JournalStore(db.db).list_trades(user.id)
+    lots = {s: open_lots(trades, s) for s in held}
+    today = SystemClock().now().astimezone(IST).date()
+    out = plan_rebalance(snapshot.get("holdings", []), candidates, targets, request.new_money, lots, today)
+    return {**out, "stale_since": snapshot.get("stale_since")}

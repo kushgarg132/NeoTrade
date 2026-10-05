@@ -197,3 +197,25 @@ def plan_rebalance(holdings: list[dict], candidates: list[dict], targets: dict, 
     spent = sum(t["value"] + t["charges"] for t in bought)
     return {"total": round(total, 2), "cash_left": round(cash - spent, 2), "trades": trades,
             "skipped": skipped, "excluded": excluded}
+
+
+def suggest(row: dict, gap: float | None, total: float) -> dict | None:
+    """The one-tap action for a holding row: a SELL verdict sells the whole
+    holding, an ADD verdict buys up to its target. Broker cash is unknown, so
+    a buy is not scaled to it; the broker refuses what cannot be paid for."""
+    price = row.get("last_price") or row.get("close_price")
+    if row.get("kind") not in TRADABLE or not price or price <= 0:
+        return None
+    if row.get("verdict") == "SELL":
+        side, quantity = "SELL", int(row.get("quantity") or 0)
+    elif row.get("verdict") == "ADD":
+        side, quantity = "BUY", int((gap or 0.0) * total // price)
+        if quantity <= 0:
+            return {"at_target": True}
+    else:
+        return None
+    if quantity <= 0:
+        return None
+    if charges(side, quantity, price) > quantity * price * MAX_CHARGE_PCT / 100:
+        return {"skipped": "charges above 1% of the trade"}
+    return {"side": side, "quantity": quantity, "price": float(price)}

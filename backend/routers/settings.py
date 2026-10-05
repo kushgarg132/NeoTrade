@@ -40,6 +40,22 @@ def get_app_settings_store() -> AppSettingsStore:
     return AppSettingsStore(db.db)
 
 
+class RebalanceTargets(BaseModel):
+    rule: Literal["equal", "cap"] = "cap"
+    max_stock_pct: float = Field(default=15, gt=0, le=100)
+    max_sector_pct: float = Field(default=30, gt=0, le=100)
+    overrides: dict[str, float] = Field(default_factory=dict, max_length=100)
+
+    @field_validator("overrides")
+    @classmethod
+    def _overrides(cls, value):
+        if any(not 0 < pct <= 100 for pct in value.values()):
+            raise ValueError("each override is a percentage above 0 and at most 100")
+        if sum(value.values()) > 100:
+            raise ValueError("overrides add up to more than 100%")
+        return value
+
+
 class PreferencesPatch(BaseModel):
     """Every field optional: the settings page saves one card at a time."""
     universe: Optional[list[str]] = None
@@ -69,6 +85,7 @@ class PreferencesPatch(BaseModel):
     autopilot_per_trade_cap: Optional[float] = Field(default=None, ge=0)
     autopilot_max_trades_per_day: Optional[int] = Field(default=None, ge=0, le=100)
     autopilot_daily_loss_limit: Optional[float] = Field(default=None, ge=0)
+    rebalance_targets: Optional[RebalanceTargets] = None
 
     @field_validator("broker_roles")
     @classmethod

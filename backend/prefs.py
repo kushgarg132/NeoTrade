@@ -49,6 +49,8 @@ DEFAULTS = {
     "autopilot_per_trade_cap": 5_000.0,
     "autopilot_max_trades_per_day": 5,
     "autopilot_daily_loss_limit": 1_000.0,
+    # Rebalance helper targets (backend/portfolio/rebalance.py).
+    "rebalance_targets": {"rule": "cap", "max_stock_pct": 15, "max_sector_pct": 30, "overrides": {}},
     # Start an intraday / long-term paper run by itself every trading day at
     # the open (backend/engine/autorun.py). Paper only; off until turned on.
     "auto_paper_intraday": False,
