@@ -36,6 +36,10 @@ class Bar(BaseModel):
     low: float
     close: float
     volume: float
+    # A catch-up bar from before the run started (a live feed's first poll):
+    # strategies see it so indicators warm up, but the runner never trades on
+    # it -- its price is history, not one anyone can deal at now.
+    warmup: bool = False
 
 
 class Tick(BaseModel):

@@ -439,13 +439,18 @@ async def run(
                     strategy.on_bar(ctx, bar)
 
         intents = ctx.drain_intents()
-        orders = await size_intents(
-            intents, portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,
-            order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
-            master=master, premium_source=premium_source, option_legs=option_legs, learned=learned,
-        )
-        orders.extend(_square_off_orders(symbol, bar.timestamp, portfolio, owner_by_symbol))
-        orders.extend(await _option_exit_orders(symbol, bar, portfolio, option_legs, premium_source))
+        if bar.warmup:
+            # A catch-up bar (a restarted run's first poll): the strategies
+            # have seen it, but its price is hours old -- no order on it.
+            intents, orders = [], []
+        else:
+            orders = await size_intents(
+                intents, portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,
+                order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
+                master=master, premium_source=premium_source, option_legs=option_legs, learned=learned,
+            )
+            orders.extend(_square_off_orders(symbol, bar.timestamp, portfolio, owner_by_symbol))
+            orders.extend(await _option_exit_orders(symbol, bar, portfolio, option_legs, premium_source))
 
         for order in orders:
             # An option has no bar of its own: paper fills it at the
