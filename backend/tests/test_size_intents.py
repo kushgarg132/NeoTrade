@@ -136,7 +136,11 @@ async def test_product_is_mis_for_intraday_strategy_and_cnc_otherwise():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_per_trade_cap_rejects_a_trade_whose_notional_exceeds_it():
+async def test_per_trade_cap_trims_a_trade_whose_notional_exceeds_it():
+    """Risk sizing with a tight intraday stop routinely lands far above the
+    cap; the trade is trimmed to fit, as the long-term path does
+    (backend/engine/autorun.py), instead of dropped -- dropping it meant a
+    ₹25,000 practice account with a ₹5,000 cap never placed an intraday order."""
     intent = Intent(
         symbol="RELIANCE", side=Side.BUY, strength=1.0,
         reason_codes=["signal"], stop_hint=90.0,
@@ -146,6 +150,21 @@ async def test_per_trade_cap_rejects_a_trade_whose_notional_exceeds_it():
     orders = await size_intents(
         [intent], Portfolio(), _FakeCtx({"RELIANCE": 100.0}), {}, _no_sentiment_redis(),
         account_size=1_000_000.0, max_exposure=1_000_000.0, per_trade_cap=5_000.0,
+    )
+    assert len(orders) == 1
+    assert orders[0].quantity == 50  # 5_000 // 100
+    assert orders[0].quantity * 100.0 <= 5_000.0
+
+
+@pytest.mark.asyncio
+async def test_per_trade_cap_below_one_share_places_nothing():
+    intent = Intent(
+        symbol="RELIANCE", side=Side.BUY, strength=1.0,
+        reason_codes=["signal"], stop_hint=90.0,
+    )
+    orders = await size_intents(
+        [intent], Portfolio(), _FakeCtx({"RELIANCE": 100.0}), {}, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=1_000_000.0, per_trade_cap=99.0,
     )
     assert orders == []
 
