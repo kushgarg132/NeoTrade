@@ -22,3 +22,12 @@ async def test_fills_come_back_utc_aware():
     assert fill.timestamp.tzinfo is not None
     assert fill.timestamp == when
     assert fill.model_dump(mode="json")["timestamp"].endswith(("Z", "+00:00"))
+
+
+async def test_trades_come_back_utc_aware():
+    db = AsyncMongoMockClient()["test_db"]
+    ledger = LedgerStore(db, user_id="alice")
+    when = datetime(2026, 10, 5, 6, 55, tzinfo=timezone.utc)
+    await ledger.trades.insert_one({"id": "t1", "user_id": "alice", "symbol": "ITC", "status": "OPEN", "entry_at": when})
+    (trade,) = await ledger.get_trades()
+    assert trade["entry_at"].tzinfo is not None and trade["entry_at"] == when

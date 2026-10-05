@@ -186,10 +186,7 @@ class LedgerStore:
         if mode is not None:
             query["mode"] = mode
         cursor = self.trades.find(query).sort("entry_at", -1).limit(limit)
-        docs = await cursor.to_list(length=None)
-        for doc in docs:
-            doc.pop("_id", None)
-        return docs
+        return [_clean_id(doc) for doc in await cursor.to_list(length=None)]
 
     async def get_orders(self, symbol: Optional[str] = None) -> list[Order]:
         query: dict = {"user_id": self.user_id}
