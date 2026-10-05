@@ -193,6 +193,8 @@ export const endpoints = {
   portfolio: {
     get: '/portfolio',
     refresh: '/portfolio/refresh',
+    rebalance: '/portfolio/rebalance',
+    candidates: '/portfolio/rebalance/candidates',
   },
   journal: {
     get: '/journal',

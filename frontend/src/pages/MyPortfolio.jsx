@@ -12,6 +12,8 @@ import Markdown from '../components/common/Markdown';
 import { cn } from '../utils/cn';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
+import { ticketFrom } from '../utils/ticket';
+import Rebalance from '../components/portfolio/Rebalance';
 import { formatCurrency, formatQuantity, formatPercent, formatDateTime } from '../utils/formatters';
 
 /**
@@ -251,6 +253,24 @@ const TradeButtons = ({ row, onTrade }) =>
     </span>
   ) : null;
 
+// The AI verdict as a one-tap trade: SELL sells the holding, ADD buys up to
+// the rebalance target. It opens a pre-filled ticket; nothing is placed here.
+const AiAction = ({ row, onTrade }) => {
+  const ticket = onTrade ? ticketFrom(row) : null;
+  if (ticket) {
+    return (
+      <TicketButton
+        label={`${ticket.side} ${ticket.quantity} · ${formatCurrency(ticket.quantity * ticket.limitPrice)}`}
+        tone={ticket.side === 'SELL' ? 'loss' : 'gain'}
+        onClick={() => onTrade(ticket)}
+      />
+    );
+  }
+  if (row.suggested?.at_target) return <span className="doc-meta normal-case">at target</span>;
+  if (row.suggested?.skipped) return <span className="doc-meta normal-case">{row.suggested.skipped}</span>;
+  return null;
+};
+
 /**
  * A phone's holdings: one line each -- name and weight, value and gain, the
  * verdict -- with everything else a tap away. The full statement is for
@@ -283,6 +303,11 @@ const HoldingsList = ({ rows, open, onToggle, onTrade }) => (
               <Verdict row={row} compact />
             </span>
           </button>
+          {onTrade && row.suggested && (
+            <div className="px-3 pb-2 -mt-1 flex justify-end">
+              <AiAction row={row} onTrade={onTrade} />
+            </div>
+          )}
           {open === key && (
             <div className="px-3 pb-3">
               <dl className="grid grid-cols-3 gap-2 pb-1 border-b border-[var(--rule)]">
@@ -327,6 +352,11 @@ const HoldingsTable = ({ rows, open, onToggle, onTrade }) => (
       >
         <Cell align="right">
           <Verdict row={row} />
+          {onTrade && row.suggested && (
+            <span className="block mt-1">
+              <AiAction row={row} onTrade={onTrade} />
+            </span>
+          )}
         </Cell>
         <Cell>
           {row.kind === 'MF' ? (
@@ -444,6 +474,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
   const TABS = [
     { id: 'plan', label: 'Plan' },
     { id: 'holdings', label: `Holdings${hasHoldings ? ` · ${snapshot.holdings.length}` : ''}` },
+    { id: 'rebalance', label: 'Rebalance' },
     { id: 'mix', label: 'Mix' },
     { id: 'review', label: 'Review' },
   ];
@@ -565,6 +596,8 @@ const MyPortfolio = ({ lockedAccount = null }) => {
                   )}
                 </div>
               )}
+
+              {tab === 'rebalance' && <Rebalance snapshot={snapshot} onTrade={account === 'mine' ? setTicket : null} />}
 
               {tab === 'mix' && <Concentration concentration={snapshot.concentration} count={snapshot.totals.count} />}
 
