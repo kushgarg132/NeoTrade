@@ -26,10 +26,10 @@ class Settings(BaseSettings):
 
     FINNHUB_API_KEY: Optional[str] = None
 
-    # Deep-tier LLM calls the ingest worker may spend scoring news per
-    # minute (backend/datalayer/news.py); the backlog waits in Mongo.
-    NEWS_LLM_CALLS_PER_MIN: int = 15
-    NEWS_LLM_CALLS_PER_DAY: int = 1500
+    # Deep-tier LLM calls the ingest worker may spend scoring news per IST
+    # day (backend/datalayer/news.py, one call per 5-minute pass at most);
+    # past it the backlog waits in Mongo.
+    NEWS_LLM_CALLS_PER_DAY: int = 200
 
     # Broker API credentials are per-user and encrypted in Mongo
     # (backend/auth/broker_credentials.py) -- there is deliberately no

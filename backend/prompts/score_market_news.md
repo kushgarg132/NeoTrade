@@ -18,5 +18,5 @@ Give each impact:
 
 Think through second-order effects for global and macro news: e.g. higher crude hurts oil marketing companies, airlines, paints and the rupee but helps upstream oil producers; a stronger dollar helps IT exporters; Fed hikes pull FII money out of India. List only impacts you are reasonably confident about; an item can have none. Also give a short `event` label (under 12 words) of what happened.
 
-Return exactly this JSON shape, one entry per item:
+List ONLY items with at least one impact; an index you leave out is recorded as moving nothing. Return exactly this JSON shape:
 {"items": [{"index": 0, "event": "Brent jumps 6% after Gulf strike", "impacts": [{"type": "sector", "target": "Oil Gas & Consumable Fuels", "direction": -0.4, "impact": 6, "horizon": "days"}]}]}

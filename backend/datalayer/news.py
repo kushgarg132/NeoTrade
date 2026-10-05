@@ -2,8 +2,8 @@
 and keep per-symbol, per-sector and market-wide sentiment fresh.
 
     poll (60s)     sources -> dedupe into Mongo `news_items` (status NEW)
-    process (20s)  NEW -> triage (fast LLM, 25/call) -> TRIAGED or IRRELEVANT
-                   TRIAGED -> score (deep LLM, 12/call, NEWS_LLM_CALLS_PER_MIN/_PER_DAY)
+    process (5min) NEW -> triage (ONE fast call, up to 150 headlines) -> TRIAGED or IRRELEVANT
+                   TRIAGED -> score (ONE deep call, up to 40 items, NEWS_LLM_CALLS_PER_DAY)
                            -> SCORED with impacts[] on market/sectors/symbols
                    -> aggregate -> Redis sentiment:{SYM}, sector_sentiment:{S},
                       market:sentiment, analyst_verdict:{SYM}
@@ -47,10 +47,13 @@ MARKET_TARGET = "INDIA"
 IRRELEVANT_TTL = timedelta(days=7)
 RELEVANT_TTL = timedelta(days=730)  # kept as learning data (news -> price outcomes)
 MAX_ATTEMPTS = 3
-TRIAGE_BATCH, TRIAGE_CALLS_PER_PASS = 25, 4
-SCORE_BATCH = 12
+# LLM calls are the cost, so each pass makes at most one call per stage
+# over everything that piled up since the last pass: news reaches the
+# scores within ~PROCESS_SECONDS instead of seconds, for ~2 calls a pass.
+TRIAGE_BATCH, TRIAGE_CALLS_PER_PASS = 150, 1
+SCORE_BATCH = 40
 SCORE_MAX_AGE = timedelta(days=3)  # older unscored items are not worth an LLM call
-PROCESS_SECONDS = 20
+PROCESS_SECONDS = 5 * 60
 
 WINDOW = timedelta(days=60)
 VERDICT_WINDOW = timedelta(days=14)
@@ -172,7 +175,6 @@ async def store(db, items: list[dict], aliases, now: Optional[datetime] = None) 
 
 class _Triage(BaseModel):
     index: int
-    relevant: bool
     scope: str = "MARKET"
     themes: list[str] = []
     region: str = "OTHER"
@@ -231,21 +233,19 @@ async def _failed(db, ids: list[str]) -> None:
 async def _triage_batch(db, docs: list[dict], now: datetime) -> None:
     listing = "\n".join(f"[{i}] [{d['scope_hint']}] {d['title']} ({d['source']})" for i, d in enumerate(docs))
     result = await _ask("triage_news", _fast, _Triages, items=listing)
-    verdicts = {t.index: t for t in (result.items if result else [])}
-    missing = []
+    if result is None:
+        await _failed(db, [d["_id"] for d in docs])
+        return
+    kept = {t.index: t for t in result.items}
     for i, doc in enumerate(docs):
-        t = verdicts.get(i)
-        if t is None:
-            missing.append(doc["_id"])
-        elif t.relevant:
+        t = kept.get(i)
+        if t is not None:
             await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": {
                 "status": TRIAGED, "relevant": True, "scope": t.scope if t.scope in SCOPES else doc["scope_hint"],
                 "themes": t.themes[:3], "region": t.region, "triaged_at": now, "expire_at": now + RELEVANT_TTL}})
         else:
             await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": {
                 "status": IRRELEVANT, "relevant": False, "triaged_at": now}})
-    if missing:
-        await _failed(db, missing)
 
 
 async def triage(db, now: Optional[datetime] = None) -> int:
@@ -282,19 +282,16 @@ async def _score_batch(db, docs, names, sector_of, sectors, now) -> None:
         lines.append(f"[{i}] ({d.get('scope', d['scope_hint'])}) {d['title']}\n{(d.get('content') or '')[:400]}\n"
                      f"Tagged: {tagged or 'none'}")
     result = await _ask("score_market_news", _deep, _Scores, sectors=", ".join(sectors), items="\n\n".join(lines))
-    scored = {s.index: s for s in (result.items if result else [])}
-    missing = []
+    if result is None:
+        await _failed(db, [d["_id"] for d in docs])
+        return
+    scored = {s.index: s for s in result.items}
     for i, doc in enumerate(docs):
         s = scored.get(i)
-        if s is None:
-            missing.append(doc["_id"])
-            continue
-        impacts = valid_impacts(s.impacts, set(names), set(sectors))
+        impacts = valid_impacts(s.impacts, set(names), set(sectors)) if s else []
         await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": {
-            "status": SCORED, "impacts": impacts, "event": s.event[:120], "scored_at": now,
+            "status": SCORED, "impacts": impacts, "event": (s.event if s else "")[:120], "scored_at": now,
             "material": any(i["impact"] >= MATERIALITY_THRESHOLD for i in impacts)}})
-    if missing:
-        await _failed(db, missing)
 
 
 async def score(db, names, sector_of, priority: set[str], calls: int, now: Optional[datetime] = None) -> int:
@@ -408,7 +405,7 @@ async def process_loop(db, redis) -> None:
     global _last_aggregate
     triaged = await triage(db)
     names, sector_of = await followed(db)
-    calls = await _deep_budget(redis, max(1, settings.NEWS_LLM_CALLS_PER_MIN * PROCESS_SECONDS // 60))
+    calls = await _deep_budget(redis, 1) if await db[COLLECTION].count_documents({"status": TRIAGED}, limit=1) else 0
     scored = await score(db, names, sector_of, await priority_symbols(db), calls) if calls else 0
     if scored or time.time() - _last_aggregate >= AGGREGATE_EVERY_SECONDS:
         await aggregate(db, redis, names, sector_of)

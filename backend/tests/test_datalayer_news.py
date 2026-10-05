@@ -129,18 +129,29 @@ async def test_store_dedupes_across_sources_and_filings_skip_triage(mongo):
     assert filing["status"] == news.TRIAGED and filing["expire_at"] == NOW + news.RELEVANT_TTL
 
 
-async def test_triage_keeps_relevant_drops_noise_and_retries_unanswered(mongo, monkeypatch):
+async def test_triage_keeps_listed_drops_the_rest_in_one_call(mongo, monkeypatch):
     await news.store(mongo, [_item("Fed signals hike"), _item("Cricket final tonight"), _item("Gold rate today")],
                      [], now=NOW)
-    _llm(monkeypatch, {"items": [
-        {"index": 0, "relevant": True, "scope": "GLOBAL", "themes": ["rates"], "region": "US"},
-        {"index": 1, "relevant": False}]})
+    calls = _llm(monkeypatch, {"items": [{"index": 0, "scope": "GLOBAL", "themes": ["rates"], "region": "US"}]})
     await news.triage(mongo, now=NOW)
+    assert len(calls) == 1
     by_title = {d["title"]: d async for d in mongo[news.COLLECTION].find()}
     assert by_title["Fed signals hike"]["status"] == news.TRIAGED
     assert by_title["Fed signals hike"]["expire_at"] == NOW + news.RELEVANT_TTL
     assert by_title["Cricket final tonight"]["status"] == news.IRRELEVANT
-    assert by_title["Gold rate today"]["status"] == news.NEW and by_title["Gold rate today"]["attempts"] == 1
+    assert by_title["Gold rate today"]["status"] == news.IRRELEVANT
+
+
+async def test_an_invalid_batch_is_retried_whole_then_failed(mongo, monkeypatch):
+    await news.store(mongo, [_item("Fed signals hike")], [], now=NOW)
+
+    async def garbage(system, user):
+        return "not json"
+
+    monkeypatch.setattr(news, "_fast", garbage)
+    for _ in range(news.MAX_ATTEMPTS):
+        await news.triage(mongo, now=NOW)
+    assert (await mongo[news.COLLECTION].find_one())["status"] == news.FAILED
 
 
 async def test_scoring_validates_targets_and_flags_material(mongo, monkeypatch):

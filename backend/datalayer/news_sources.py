@@ -60,8 +60,8 @@ NSE_SKIP = ("newspaper publication", "trading window", "certificate under", "com
             "loss of share", "duplicate share", "shareholders meeting", "esop", "esos")
 
 SECTOR_SECONDS = 15 * 60
-SYMBOL_PRIORITY_SECONDS = 5 * 60
-SYMBOLS_PER_PASS = 10
+SYMBOL_PRIORITY_SECONDS = 15 * 60
+SYMBOLS_PER_PASS = 5
 GOOGLE_SEARCH_LIMIT = 8
 
 _UNIVERSE_FILE = Path(__file__).parents[1] / "factor" / "nifty200.csv"

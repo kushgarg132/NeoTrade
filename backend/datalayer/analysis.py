@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 NEWS_LIMIT = 5
 NEWS_WINDOW = timedelta(days=30)
-ALIVE_SECONDS = 5 * 60
+ALIVE_SECONDS = 15 * 60  # news_process beats every ~5 min
 LOCK_SECONDS = 120
 WAIT_SECONDS = 60
 

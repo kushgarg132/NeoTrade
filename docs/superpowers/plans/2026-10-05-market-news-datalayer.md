@@ -114,7 +114,7 @@ Every record carries `at`/`as_of`. Readers treat stale data as missing.
    - The output is `impacts[]` per item, so one item can hit several targets. Example: "Brent +6% on Gulf strike" gives market −0.3, sector OMCs −0.6, aviation −0.5, upstream oil +0.5.
    - The prompt is given the sector list and the item's candidate symbols, so targets stay inside known entities. The validator drops unknown targets.
    - `_score_news`'s retry/JSON-extraction pattern is extracted from `agent.py` and reused.
-   - Budget: `NEWS_LLM_CALLS_PER_MIN` (default 15, in `configs/settings.py`), in priority order:
+   - Budget (changed 2026-10-05 at the user's request: few, batched calls): one triage call and one scoring call per 5-minute pass, at most `NEWS_LLM_CALLS_PER_DAY` (200) deep calls a day; within a batch, priority order:
      1. held
      2. MACRO/GLOBAL material
      3. watched
@@ -195,7 +195,7 @@ Before Phase 5 ships, record the autopilot news trigger and the regime fence rul
 - **Health.** `/health` reports heartbeat ages. The guardrail monitor sends the admin a Telegram when quotes are older than 2 min or news older than 10 min in session. If ingest is down, cache misses fall back to direct fetch automatically.
 - **Cost.**
   - Triage: about 1 fast call per 25 headlines.
-  - Deep scoring: capped by `NEWS_LLM_CALLS_PER_MIN`; expect about 600–1,000 deep calls a day.
+  - Deep scoring: one batched call per 5-minute pass, capped at `NEWS_LLM_CALLS_PER_DAY` (200).
   - Market brief: about 40 standard calls a day.
   - Mongo: news items are ~2 KB each. At a few thousand relevant items a day, that is ~1–2 GB over 2 years. Check the Atlas tier, or trim `content` after 90 days.
 
