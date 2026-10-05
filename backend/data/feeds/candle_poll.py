@@ -44,7 +44,19 @@ class CandlePollingFeed:
         self._now_fn = now_fn
         self._last: dict[int, datetime] = {}  # instrument_token -> newest candle yielded
         self._first_poll = True
+        self._fresh: set[int] = set()  # added mid-run, not polled yet: their catch-up is warmup too
         self.symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
+
+    def add(self, instruments: list[Instrument]) -> bool:
+        """Polls these too from the next pass. Their first poll yields the
+        day so far as warmup, so no separate backfill is needed (False)."""
+        known = {i.instrument_token for i in self._instruments}
+        for instrument in instruments:
+            if instrument.instrument_token not in known:
+                self._instruments.append(instrument)
+                self._fresh.add(instrument.instrument_token)
+                self.symbol_for_token[instrument.instrument_token] = instrument.tradingsymbol
+        return False
 
     async def _closed_candles(self, instrument: Instrument, now: datetime) -> list:
         try:
@@ -68,6 +80,8 @@ class CandlePollingFeed:
             now = self._now_fn()
             for instrument in self._instruments:
                 candles = await self._closed_candles(instrument, now)
+                catching_up = self._first_poll or instrument.instrument_token in self._fresh
+                self._fresh.discard(instrument.instrument_token)
                 for i, candle in enumerate(candles):
                     self._last[instrument.instrument_token] = candle.timestamp
                     yield Bar(
@@ -76,7 +90,7 @@ class CandlePollingFeed:
                         timestamp=candle.timestamp,
                         open=candle.open, high=candle.high, low=candle.low, close=candle.close,
                         volume=candle.volume,
-                        warmup=self._first_poll and i < len(candles) - 1,
+                        warmup=catching_up and i < len(candles) - 1,
                     )
             self._first_poll = False
             seconds = CANDLE.total_seconds()

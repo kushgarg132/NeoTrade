@@ -54,6 +54,7 @@ class KiteTickerFeed(TickBarAggregator):
         self._kite_ticker_factory = kite_ticker_factory
         self._tokens = instrument_tokens
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._kws = None
 
     # -- SDK callbacks (invoked on the Twisted reactor thread in production,
     # or called directly by tests) --
@@ -68,9 +69,20 @@ class KiteTickerFeed(TickBarAggregator):
         ws.subscribe(self._tokens)
         ws.set_mode(ws.MODE_FULL, self._tokens)
 
+    def add(self, instruments) -> bool:
+        """Subscribes to more instruments on the open socket (on_connect
+        covers a reconnect). Ticks start now, so the caller backfills the
+        day so far (True)."""
+        new = [i.instrument_token for i in instruments if i.instrument_token not in self._tokens]
+        self._tokens = list(self._tokens) + new
+        if new and self._kws is not None:
+            self._kws.subscribe(new)
+            self._kws.set_mode(self._kws.MODE_FULL, new)
+        return True
+
     async def __aiter__(self) -> AsyncIterator[Bar]:
         self._loop = asyncio.get_running_loop()
-        kws = self._kite_ticker_factory()
+        kws = self._kws = self._kite_ticker_factory()
         kws.on_ticks = self.on_ticks
         kws.on_connect = self.on_connect
         kws.connect(threaded=True)  # non-blocking: runs the SDK's Twisted reactor on its own thread
