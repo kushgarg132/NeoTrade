@@ -36,6 +36,7 @@ export const PRACTICE_TABS = [
   { to: '/practice/decisions', label: 'Decisions', counter: true },
   { to: '/practice', label: 'Engine', end: true },
   { to: '/practice/book', label: 'Book' },
+  { to: '/practice/library', label: 'Library' },
   { to: '/practice/setup', label: 'Setup' },
 ];
 
