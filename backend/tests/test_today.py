@@ -74,6 +74,19 @@ def test_needs_you_orders_proposals_by_expiry_and_includes_cards(monkeypatch):
     assert any(n["kind"] == "card" and "Sell 10 INFY" in n["title"] for n in items)
 
 
+def test_needs_you_lists_long_term_proposals_only(monkeypatch):
+    """Decisions shows long-term proposals only; Today must not count others."""
+    client, db = _client(monkeypatch)
+    _seed(db, suggestions=[
+        {"id": "lt", "user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "PENDING", "mode": "LONGTERM",
+         "quantity": 1, "expires_at": NOW + timedelta(days=1), "created_at": NOW},
+        {"id": "id", "user_id": "alice", "symbol": "SJVN", "side": "BUY", "status": "PENDING", "mode": "INTRADAY",
+         "quantity": 1, "expires_at": NOW + timedelta(days=1), "created_at": NOW},
+    ])
+    proposals = [n["title"] for n in client.get("/api/v1/today").json()["needs_you"] if n["kind"] == "proposal"]
+    assert len(proposals) == 1 and "TCS" in proposals[0]
+
+
 def test_pnl_today_splits_mine_and_ai(monkeypatch):
     client, db = _client(monkeypatch)
     _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"kite": "ai", "upstox": "mine"}}],

@@ -80,7 +80,7 @@ const PaperOverview = () => {
 
   const loadPending = () =>
     api
-      .get(endpoints.suggestions.list({ status: 'PENDING' }))
+      .get(endpoints.suggestions.list({ status: 'PENDING', mode: 'LONGTERM' }))
       .then((res) => setPending(res.data))
       .catch(() => setPending([]));
   useEffect(() => {
@@ -96,8 +96,10 @@ const PaperOverview = () => {
     if (recordOpen) loadTrades();
   });
   useTopic('suggestions', (message) => {
+    if (message.data?.mode !== 'LONGTERM') return;
     if (message.event === 'created') setPending((list) => [message.data, ...list]);
-    if (message.event === 'decided') {
+    // A failed send puts a proposal back to PENDING: it stays listed.
+    if (message.event === 'decided' && message.data.status !== 'PENDING') {
       setPending((list) => list.filter((item) => item.id !== message.data.id));
     }
   });

@@ -73,7 +73,7 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
         items.append({"kind": "review", "title": f"Check {s['symbol']}: an approval was interrupted",
                       "detail": s.get("reason") or "Check your broker's order book before approving again.",
                       "link": "/mine/trades"})
-    pending = await db.db["suggestions"].find({"user_id": user_id, "status": "PENDING"}).to_list(length=200)
+    pending = await db.db["suggestions"].find({"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200)
     pending.sort(key=lambda s: _aware(s.get("expires_at")) or now)
     for s in pending[:MAX_PROPOSALS]:
         items.append({"kind": "proposal", "title": f"{s.get('side', '')} {s.get('quantity', 0):g} {s['symbol']}",

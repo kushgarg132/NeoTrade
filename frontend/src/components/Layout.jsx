@@ -26,7 +26,7 @@ const Layout = ({ children }) => {
 
   const loadPending = () =>
     api
-      .get(endpoints.suggestions.list({ status: 'PENDING' }))
+      .get(endpoints.suggestions.list({ status: 'PENDING', mode: 'LONGTERM' }))
       .then((res) => setPending(res.data.length))
       .catch(() => setPending(0));
   useEffect(() => {
@@ -34,9 +34,10 @@ const Layout = ({ children }) => {
   }, []);
   useReconnect(loadPending);
 
+  // Counts what Decisions lists: long-term proposals. Re-counted on each
+  // event, since a failed send can put one back to PENDING.
   useTopic('suggestions', (message) => {
-    if (message.event === 'created') setPending((count) => count + 1);
-    if (message.event === 'decided') setPending((count) => Math.max(0, count - 1));
+    if (message.data?.mode === 'LONGTERM') loadPending();
   });
 
   return (
