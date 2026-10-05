@@ -90,7 +90,7 @@ async def test_candidates_hide_ai_picks_when_verdicts_hidden(mdb, monkeypatch):
     monkeypatch.setattr(portfolio_router, "_closes", closes)
 
     body = _client(_user()).get("/api/v1/portfolio/rebalance/candidates").json()
-    assert body == [{"symbol": "W1", "price": 50.0, "source": "watchlist"}]
+    assert body == [{"symbol": "W1", "price": 50.0, "source": "watchlist", "score": None, "preselect": False}]
     admin = _client(_user(role="admin")).get("/api/v1/portfolio/rebalance/candidates").json()
     assert {(c["symbol"], c["source"]) for c in admin} == {("W1", "watchlist"), ("P1", "ai")}
 
@@ -158,3 +158,69 @@ async def test_candidates_skip_ai_sell_suggestions(mdb, monkeypatch):
 ])
 def test_unbounded_numbers_rejected(mdb, body):
     assert _client(_user()).post("/api/v1/portfolio/rebalance", json=body).status_code == 422
+
+
+CONVICTION_TARGETS = {"rule": "conviction", "max_stock_pct": 100, "max_sector_pct": 100, "overrides": {}}
+
+
+async def _fixed_closes(monkeypatch):
+    async def closes(symbols):
+        return {s: 50.0 for s in symbols}
+    monkeypatch.setattr(portfolio_router, "_closes", closes)
+
+
+async def test_conviction_forbidden_when_verdicts_hidden(mdb):
+    await _snapshot(mdb)
+    sent = _client(_user()).post("/api/v1/portfolio/rebalance", json={"new_money": 0, "targets": CONVICTION_TARGETS})
+    assert sent.status_code == 403 and sent.json()["detail"] == "Conviction targets are not available on this account"
+    await mdb["user_prefs"].insert_one({"user_id": "alice", "rebalance_targets": CONVICTION_TARGETS})
+    assert _client(_user()).post("/api/v1/portfolio/rebalance", json={"new_money": 0}).status_code == 403
+
+
+async def test_candidates_scored_sorted_top5_preselected(mdb, monkeypatch):
+    await _snapshot(mdb)
+    await _fixed_closes(monkeypatch)
+    await mdb["watchlist"].insert_one({"user_id": "alice", "symbols": ["W1"]})
+    await mdb["suggestions"].insert_many([
+        {"user_id": "alice", "status": "PENDING", "mode": "LONGTERM", "side": "BUY", "symbol": f"P{i}",
+         "score": {"final": 0.5 + i / 100}} for i in range(7)])
+    body = _client(_user(role="admin")).get("/api/v1/portfolio/rebalance/candidates").json()
+    ai = [c for c in body if c["source"] == "ai"]
+    assert [c["symbol"] for c in ai] == [f"P{i}" for i in range(6, -1, -1)]
+    assert [c["preselect"] for c in ai] == [True] * 5 + [False] * 2
+    assert [c for c in body if c["source"] == "watchlist"] == [
+        {"symbol": "W1", "price": 50.0, "source": "watchlist", "score": None, "preselect": False}]
+
+
+async def test_candidates_drop_expired_and_keep_no_expiry(mdb, monkeypatch):
+    await _snapshot(mdb)
+    await _fixed_closes(monkeypatch)
+    past = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    await mdb["suggestions"].insert_many([
+        {"user_id": "alice", "status": "PENDING", "mode": "LONGTERM", "side": "BUY", "symbol": "OLD",
+         "score": {"final": 0.9}, "expires_at": past},
+        {"user_id": "alice", "status": "PENDING", "mode": "LONGTERM", "side": "BUY", "symbol": "NOEXP",
+         "score": {"final": 0.6}}])
+    body = _client(_user(role="admin")).get("/api/v1/portfolio/rebalance/candidates").json()
+    assert [c["symbol"] for c in body] == ["NOEXP"]
+
+
+async def test_row_action_follows_saved_conviction_rule(mdb):
+    rows = [_row("A", 50_000, "ADD"), _row("B", 50_000, "HOLD")]
+    rows[0]["score"] = {"final": 1.0}
+    await _snapshot(mdb, rows=rows)
+    await mdb["user_prefs"].insert_one({"user_id": "alice", "rebalance_targets": CONVICTION_TARGETS})
+    got = {r["symbol"]: r for r in _client(_user(role="admin")).get("/api/v1/portfolio").json()["holdings"]}
+    # conviction: A 2/3 of 100k -> buy 16_666 / 100 = 166 shares
+    assert got["A"]["suggested"] == {"side": "BUY", "quantity": 166, "price": 100.0}
+
+
+async def test_conviction_rebalance_weights_ai_pick_by_score(mdb, monkeypatch):
+    await _snapshot(mdb, rows=[_row("A", 100_000, "HOLD")])
+    await _fixed_closes(monkeypatch)
+    await mdb["suggestions"].insert_one({"user_id": "alice", "status": "PENDING", "mode": "LONGTERM", "side": "BUY",
+                                         "symbol": "P", "score": {"final": 1.0}})
+    body = _client(_user(role="admin")).post("/api/v1/portfolio/rebalance", json={
+        "new_money": 0, "candidates": ["P"], "targets": CONVICTION_TARGETS}).json()
+    target = {t["symbol"]: t["target_weight"] for t in body["trades"]}
+    assert target["P"] == pytest.approx(200 / 3)

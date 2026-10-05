@@ -119,17 +119,29 @@ async def _closes(symbols: list[str]) -> dict[str, float]:
     return await asyncio.to_thread(_closes_sync, symbols)
 
 
-async def _candidate_symbols(user: User, held: set[str]) -> list[tuple[str, str]]:
+PRESELECT = 5  # AI picks pre-ticked under the conviction rule
+
+
+async def _candidate_symbols(user: User, held: set[str]) -> list[tuple[str, str, Optional[float]]]:
+    """(symbol, source, score): the user's watchlist, then -- where verdicts
+    are visible -- open, unexpired AI longterm BUY picks, best score first."""
     watch = await db.db["watchlist"].find_one({"user_id": user.id}) or {}
-    found = [(s, "watchlist") for s in dict.fromkeys(watch.get("symbols") or []) if s not in held]
+    found = [(s, "watchlist", None) for s in dict.fromkeys(watch.get("symbols") or []) if s not in held]
     if await verdicts_visible_to(user):
-        seen = held | {s for s, _ in found}
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
         cursor = db.db["suggestions"].find(
-            {"user_id": user.id, "status": "PENDING", "mode": "LONGTERM", "side": "BUY"}, {"symbol": 1})
+            {"user_id": user.id, "status": "PENDING", "mode": "LONGTERM", "side": "BUY",
+             "$or": [{"expires_at": None}, {"expires_at": {"$exists": False}}, {"expires_at": {"$gt": now}}]},
+            {"symbol": 1, "score": 1})
+        picks: dict[str, float] = {}
         for doc in await cursor.to_list(length=200):
-            if doc.get("symbol") and doc["symbol"] not in seen:
-                seen.add(doc["symbol"])
-                found.append((doc["symbol"], "ai"))
+            symbol, score = doc.get("symbol"), (doc.get("score") or {}).get("final")
+            if symbol and symbol not in held and (symbol not in picks or (score or 0) > picks[symbol]):
+                picks[symbol] = score or 0.0
+        watched = {s for s, _, _ in found}
+        found += [(s, "ai", score) for s, score in sorted(picks.items(), key=lambda kv: -kv[1]) if s not in watched]
     return found
 
 
@@ -139,9 +151,16 @@ async def rebalance_candidates(user: User = Depends(get_current_user)):
     AI longterm picks where verdicts are visible (the SEBI gate above)."""
     snapshot = await latest_snapshot(db.db, user.id)
     held = {r["symbol"] for r in (snapshot or {}).get("holdings", [])}
-    symbols = await _candidate_symbols(user, held)
-    prices = await _closes([s for s, _ in symbols])
-    return [{"symbol": s, "price": prices[s], "source": source} for s, source in symbols if s in prices]
+    symbols = [c for c in await _candidate_symbols(user, held)]
+    prices = await _closes([s for s, _, _ in symbols])
+    out, picked = [], 0
+    for symbol, source, score in symbols:
+        if symbol not in prices:
+            continue
+        preselect = source == "ai" and picked < PRESELECT
+        picked += preselect
+        out.append({"symbol": symbol, "price": prices[symbol], "source": source, "score": score, "preselect": preselect})
+    return out
 
 
 @router.post("/rebalance")
@@ -162,6 +181,8 @@ async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_
 
     prefs = await PrefsStore(db.db).get(user.id)
     targets = request.targets.model_dump() if request.targets else prefs["rebalance_targets"]
+    if targets.get("rule") == "conviction" and not await verdicts_visible_to(user):
+        raise HTTPException(status_code=403, detail="Conviction targets are not available on this account")
     trades = await JournalStore(db.db).list_trades(user.id)
     # Trades go to the user's own account, so only its holdings are rebalanced:
     # the AI account's book is never mixed in (backend/brokers/roles.py).
@@ -170,10 +191,11 @@ async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_
         snapshot = scorecard_for(snapshot, mine, trades, [])
         trades = [t for t in trades if t.get("broker") in mine]
     held = {r["symbol"] for r in snapshot.get("holdings", [])}
-    allowed = {s for s, _ in await _candidate_symbols(user, held)}
+    allowed = {s: (source, score) for s, source, score in await _candidate_symbols(user, held)}
     wanted = [s for s in dict.fromkeys(request.candidates) if s in allowed]
     prices = await _closes(wanted)
-    candidates = [{"symbol": s, "price": prices[s], "kind": "STOCK", "sector": None} for s in wanted if s in prices]
+    candidates = [{"symbol": s, "price": prices[s], "kind": "STOCK", "sector": None,
+                   "source": allowed[s][0], "score": allowed[s][1]} for s in wanted if s in prices]
     lots = {s: open_lots(trades, s) for s in held}
     today = SystemClock().now().astimezone(IST).date()
     out = plan_rebalance(snapshot.get("holdings", []), candidates, targets, request.new_money, lots, today)

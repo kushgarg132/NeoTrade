@@ -41,7 +41,7 @@ def get_app_settings_store() -> AppSettingsStore:
 
 
 class RebalanceTargets(BaseModel):
-    rule: Literal["equal", "cap"] = "cap"
+    rule: Literal["equal", "cap", "conviction"] = "cap"  # conviction: only where verdicts are visible
     max_stock_pct: float = Field(default=15, gt=0, le=100, allow_inf_nan=False)
     max_sector_pct: float = Field(default=30, gt=0, le=100, allow_inf_nan=False)
     overrides: dict[str, float] = Field(default_factory=dict, max_length=100)
