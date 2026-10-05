@@ -118,21 +118,30 @@ async def sentiment(db, redis, user_id, symbol: str) -> dict:
 
 
 @fact("market_backdrop", "The Indian market right now: AI brief, rule-based regime (risk_on/neutral/risk_off and "
-      "why), indices/futures/crude/gold/USDINR/US10Y, FII/DII flows.", source="datalayer")
+      "why), indices/futures/crude/gold/USDINR/US10Y, FII/DII flows, news sentiment per NSE sector.",
+      source="datalayer")
 async def market_backdrop(db, redis, user_id) -> dict:
     from backend.datalayer.market import FLOWS_KEY, backdrop
     from backend.datalayer.prices import MACRO, macro_rows
 
+    from backend.datalayer.news_sources import sectors
+
     context = await backdrop(redis)
     flows = await redis.get(FLOWS_KEY) if redis is not None else None
+    names = sectors()
+    raws = await redis.mget([f"sector_sentiment:{s}" for s in names]) if redis is not None else []
+    sector_scores = {s: round(json.loads(r)["score"], 2) for s, r in zip(names, raws)
+                     if r and json.loads(r).get("score") is not None}
     return {"brief": context.get("brief"), "regime": context.get("regime"),
-            "markets": await macro_rows(redis, MACRO), "flows": json.loads(flows) if flows else None}
+            "markets": await macro_rows(redis, MACRO), "flows": json.loads(flows) if flows else None,
+            "sector_news_sentiment": sector_scores}
 
 
-@fact("calendar", "High-impact economic events in the next hours (time, country, title).", source="econ_calendar")
-async def calendar(db, redis, user_id, hours: int = 48) -> dict:
+@fact("calendar", "Economic calendar for the next hours (time, country, title, impact); high-impact only unless "
+      "high_only is false.", source="econ_calendar")
+async def calendar(db, redis, user_id, hours: int = 48, high_only: bool = True) -> dict:
     from backend.datalayer.market import upcoming
 
-    events = await upcoming(db, hours=max(1, min(int(hours), 7 * 24)))
+    events = await upcoming(db, hours=max(1, min(int(hours), 7 * 24)), high_only=high_only)
     return {"events": [{"at": e["at"], "country": e.get("country"), "title": e.get("title"),
                         "impact": e.get("impact")} for e in events]}

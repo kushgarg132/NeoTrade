@@ -10,22 +10,19 @@ from typing import Literal, Optional, Union
 from langchain_core.tools import StructuredTool
 
 from backend.agents.tools import fetch_price_history_tool, fetch_stock_info_tool, resolve_symbol_tool
+from backend.ai.facts import market as market_facts
+from backend.ai.facts import user as user_facts
 from backend.analytics import compute_scorecard
-from backend.chat.context import LIMIT_KEYS, plan_names
+from backend.chat.context import LIMIT_KEYS
 from backend.engine.persistence import LedgerStore
 from backend.engine.session import IST
 from backend.guardrails.store import GuardrailStore
-from backend.journal.insights import build_insights
-from backend.journal.news import attach_news
-from backend.journal.roundtrips import build_round_trips, daily_pnl
-from backend.journal.store import JournalStore
-from backend.portfolio.service import latest_snapshot
 from backend.prefs import PrefsStore
 from backend.risk.kill_switch import KillSwitchStore
 from backend.runs import RunStore, run_summary
 from backend.suggestions.store import SuggestionStore
 
-MAX_HOLDINGS, MAX_TRIPS, MAX_PROPOSALS = 40, 30, 20
+MAX_PROPOSALS = 20
 MAX_ROWS, MAX_CHARS = 100, 15000
 
 # query_my_data's allowlist. Per-user collections are always filtered to the
@@ -86,69 +83,18 @@ def _json(value) -> str:
 
 def read_tools(db, redis, user_id: str) -> list:
     async def get_portfolio(symbol: Optional[str] = None, account: Literal["all", "ai", "mine"] = "all") -> str:
-        snap = await latest_snapshot(db, user_id)
-        if not snap:
-            return "No portfolio has been analysed yet. The user can tap Analyse now on the Portfolio page."
-        if account != "all":
-            from backend.brokers.roles import brokers_for
-            from backend.portfolio.service import _nifty, scorecard_for
-
-            roles = (await PrefsStore(db).get(user_id)).get("broker_roles") or {}
-            snap = scorecard_for(snap, brokers_for(roles, account), await JournalStore(db).list_trades(user_id),
-                                 await _nifty())
-        keep = ("symbol", "kind", "sector", "quantity", "avg_price", "value", "pnl", "pnl_pct", "weight_pct",
-                "verdict", "reason_codes", "score", "note", "nifty_pnl_pct")
-        holdings = snap.get("holdings", [])
-        if symbol:
-            match = [h for h in holdings if h["symbol"].upper() == symbol.upper()]
-            if not match:
-                return f"{symbol} is not among the user's holdings."
-            return _json({**{k: match[0].get(k) for k in keep}, "health": match[0].get("health")})
-        return _json({
-            "account": account, "as_of": snap["at"], "totals": snap.get("totals"), "benchmark": snap.get("benchmark"),
-            "concentration": snap.get("concentration"), "plan": snap.get("plan"),
-            "sell_or_trim": plan_names(snap.get("plan"), "sell"), "add": plan_names(snap.get("plan"), "add"),
-            "holdings": [{k: h.get(k) for k in keep if k != "note"} for h in holdings[:MAX_HOLDINGS]],
-        })
+        out = await user_facts.portfolio(db, redis, user_id, symbol=symbol, account=account)
+        return out["error"] if "error" in out else _json(out)
 
     async def get_journal(period: Literal["today", "week", "month", "all"] = "month", symbol: Optional[str] = None,
                           account: Literal["all", "ai", "mine"] = "all") -> str:
-        from backend.journal import mirror
-        from backend.journal.accounts import brokers_of, filter_trades
-
-        prefs = await PrefsStore(db).get(user_id)
-        trades = filter_trades(await JournalStore(db).list_trades(user_id),
-                               brokers_of(prefs.get("broker_roles") or {}, account))
-        trips = build_round_trips(trades)
-        all_time = mirror.costs(trades, trips, (await PrefsStore(db).get(user_id))["account_size"])
-        today = datetime.now(timezone.utc).astimezone(IST).date()
-        since = {"today": today, "week": today - timedelta(days=7), "month": today.replace(day=1)}.get(period)
-        if since:
-            trips = [t for t in trips if t.get("day") and t["day"] >= since.isoformat()]
-        if symbol:
-            trips = [t for t in trips if t["symbol"].upper().startswith(symbol.upper())]
-        closed = [t for t in trips if t.get("pnl") is not None]
-        keep = ("symbol", "kind", "direction", "quantity", "entry_price", "exit_price", "pnl", "day", "tags", "note")
-        return _json({
-            "account": account, "period": period, "closed": len(closed), "pnl_gross": round(sum(t["pnl"] for t in closed), 2),
-            "wins": sum(t["pnl"] > 0 for t in closed), "by_day": daily_pnl(trips)[-31:],
-            "round_trips": [{k: t.get(k) for k in keep} for t in trips[-MAX_TRIPS:]],
-            "patterns": build_insights(await attach_news(db, trips))[:5],
-            # All-time, estimated: charges taken, P&L after them, trade rate vs SEBI's 500/yr line.
-            "costs_all_time": all_time,
-        })
+        return _json(await user_facts.journal(db, redis, user_id, period=period, symbol=symbol, account=account))
 
     async def get_learning() -> str:
-        from backend.learning.report import snapshot
-        from backend.portfolio.service import _nifty
-
-        return _json(await snapshot(db, user_id, await _nifty(), datetime.now(timezone.utc)))
+        return _json(await user_facts.learning(db, redis, user_id))
 
     async def get_strategy_library(mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None) -> str:
-        from backend.learning.library import catalog
-        from backend.portfolio.service import _nifty
-
-        return _json(await catalog(db, user_id, await _nifty(), mode=mode))
+        return _json((await user_facts.strategy_library(db, redis, user_id, mode=mode))["strategies"])
 
     async def get_paper() -> str:
         from backend.risk.backtest_gate import BacktestGateStore
@@ -223,49 +169,23 @@ def read_tools(db, redis, user_id: str) -> list:
     async def search_news(query: Optional[str] = None, symbol: Optional[str] = None, sector: Optional[str] = None,
                           scope: Optional[Literal["COMPANY", "SECTOR", "MARKET", "MACRO", "GLOBAL"]] = None,
                           days: int = 3, material_only: bool = False, limit: int = 10) -> str:
-        from backend.datalayer.news import COLLECTION, SCORED
-
-        days, limit = max(1, min(days, 60)), max(1, min(limit, 30))
-        conditions: list[dict] = [{"status": SCORED},
-                                  {"published_at": {"$gte": datetime.now(timezone.utc) - timedelta(days=days)}}]
-        if query:
-            conditions.append({"title": {"$regex": re.escape(query), "$options": "i"}})
-        if symbol:
-            conditions.append({"$or": [{"symbols": symbol.upper()}, {"impacts.target": symbol.upper()}]})
-        if sector:
-            conditions.append({"impacts.target": sector})
-        if scope:
-            conditions.append({"scope": scope})
-        if material_only:
-            conditions.append({"material": True})
-        rows = await db[COLLECTION].find({"$and": conditions}, {
-            "_id": 0, "title": 1, "source": 1, "published_at": 1, "scope": 1, "event": 1, "impacts": 1, "url": 1,
-        }).sort("published_at", -1).limit(limit).to_list(length=limit)
-        if not rows and symbol:
+        found = await market_facts.news(db, redis, user_id, symbol=symbol, sector=sector, scope=scope, query=query,
+                                         hours=max(1, min(days, 60)) * 24, material_only=material_only,
+                                         limit=limit)
+        if not found.get("items") and symbol:
             # Not a followed stock (or nothing stored yet): search on demand.
             from backend.components.analyst.news import fetch_news_logic
 
-            found = await fetch_news_logic([symbol.upper()], limit)
+            web = await fetch_news_logic([symbol.upper()], max(1, min(limit, 30)))
             return _json({"stored": False, "articles": [{"title": a.title, "source": a.source, "url": a.url,
-                                                         "published_at": a.published_at} for a in found]})
-        return _json({"stored": True, "articles": rows})
+                                                         "published_at": a.published_at} for a in web]})
+        # Same shape chat always had ("articles"), now from the shared news fact.
+        return _json({"stored": True, "as_of": found["as_of"], "articles": found.get("items", [])})
 
     async def get_market_backdrop() -> str:
-        from backend.datalayer.market import FLOWS_KEY, backdrop, upcoming
-        from backend.datalayer.prices import MACRO, macro_rows
-        from backend.datalayer.news_sources import sectors
-
-        context = await backdrop(redis)
-        sector_rows = await redis.mget([f"sector_sentiment:{s}" for s in sectors()])
-        flows = await redis.get(FLOWS_KEY)
-        return _json({
-            **context,
-            "markets": await macro_rows(redis, MACRO),
-            "fii_dii": json.loads(flows) if flows else None,
-            "sector_news_sentiment": {s: round(json.loads(r)["score"], 2) for s, r in zip(sectors(), sector_rows)
-                                      if r and json.loads(r).get("score") is not None},
-            "calendar_next_7d": await upcoming(db, hours=7 * 24, high_only=False),
-        })
+        backdrop = await market_facts.market_backdrop(db, redis, user_id)
+        calendar = await market_facts.calendar(db, redis, user_id, hours=7 * 24, high_only=False)
+        return _json({**backdrop, "calendar_next_7d": calendar.get("events", [])})
 
     async def explain_index(ticker: str) -> str:
         from backend.research.index_move import explain_index_move

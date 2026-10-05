@@ -67,3 +67,25 @@ async def test_get_paper_reports_a_running_runs_progress():
     out = await _tools(db, "alice")["get_paper"].ainvoke({})
     for expected in ("r-alice", "'bars': 166", "'signals': 2", "started_at"):
         assert expected in out or expected.replace("'", '"') in out
+
+
+async def test_chat_and_facts_return_the_same_portfolio_and_news():
+    import json
+
+    from backend.ai.facts import user as user_facts
+    from backend.ai.facts import market as market_facts
+
+    db = AsyncMongoMockClient()["test_db"]
+    await _seed(db)
+    await db["news_items"].insert_one({
+        "_id": "n", "status": "SCORED", "title": "SJVN order", "published_at": datetime.now(timezone.utc),
+        "scope": "COMPANY", "symbols": ["SJVN"],
+        "impacts": [{"type": "symbol", "target": "SJVN", "impact": 7, "direction": 0.5}]})
+    tools = _tools(db, "alice")
+    strip = lambda d: {k: v for k, v in d.items() if k not in ("as_of", "source")}  # noqa: E731
+    chat_portfolio = json.loads(await tools["get_portfolio"].ainvoke({}))
+    fact_portfolio = json.loads(json.dumps(strip(await user_facts.portfolio(db, None, "alice")), default=str))
+    assert strip(chat_portfolio) == fact_portfolio
+    chat_news = json.loads(await tools["search_news"].ainvoke({"symbol": "SJVN"}))
+    fact_news = json.loads(json.dumps(strip(await market_facts.news(db, None, None, symbol="SJVN", hours=72)), default=str))
+    assert chat_news["articles"] == fact_news["items"]
