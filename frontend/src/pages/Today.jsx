@@ -187,8 +187,14 @@ const Today = () => {
   };
   useEffect(() => {
     load();
-    const timer = setInterval(load, 60_000);
-    return () => clearInterval(timer);
+    // Not polled in a hidden tab; fresh again the moment it is shown.
+    const timer = setInterval(() => !document.hidden && load(), 60_000);
+    const onShow = () => !document.hidden && load();
+    document.addEventListener('visibilitychange', onShow);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onShow);
+    };
   }, []);
 
   const stop = () => setAutopilotOn(false);

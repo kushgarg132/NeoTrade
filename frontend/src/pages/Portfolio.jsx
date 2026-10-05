@@ -90,7 +90,7 @@ const Portfolio = () => {
 
   useEffect(() => {
     loadOpenOrders();
-    const timer = setInterval(loadOpenOrders, 60000);
+    const timer = setInterval(() => !document.hidden && loadOpenOrders(), 60000); // not in a hidden tab
     return () => clearInterval(timer);
   }, []);
 
