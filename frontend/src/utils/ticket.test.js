@@ -17,3 +17,7 @@ test('returns null for at-target, skipped or no suggestion', () => {
   assert.equal(ticketFrom({ symbol: 'A', suggested: { skipped: 'charges above 1% of the trade' } }), null);
   assert.equal(ticketFrom({ symbol: 'A', suggested: null }), null);
 });
+
+test('rounds the limit to paise', () => {
+  assert.equal(ticketFrom({ symbol: 'M', suggested: { side: 'SELL', quantity: 180, price: 224.9199981689453 } }).limitPrice, 224.92);
+});

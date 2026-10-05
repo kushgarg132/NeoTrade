@@ -6,5 +6,5 @@
 export const ticketFrom = (row) => {
   const s = row?.suggested;
   if (!s?.side) return null;
-  return { symbol: row.symbol, side: s.side, quantity: s.quantity, limitPrice: s.price, lastPrice: row.last_price ?? s.price };
+  return { symbol: row.symbol, side: s.side, quantity: s.quantity, limitPrice: Math.round(s.price * 100) / 100, lastPrice: row.last_price ?? s.price };
 };
