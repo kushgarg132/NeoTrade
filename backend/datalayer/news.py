@@ -55,6 +55,10 @@ TRIAGE_BATCH, TRIAGE_CALLS_PER_PASS = 150, 1
 SCORE_BATCH = 40
 SCORE_MAX_AGE = timedelta(days=3)  # older unscored items are not worth an LLM call
 PROCESS_SECONDS = 5 * 60
+# Outside the session (and its 45-min run-up) nothing trades on a score, so
+# news is triaged and scored hourly in fuller batches instead of every pass.
+OFF_PROCESS_SECONDS = 60 * 60
+OFF_TRIAGE_CALLS = 2  # ~110 headlines/hour off-hours, one batch is usually enough
 
 WINDOW = timedelta(days=60)
 VERDICT_WINDOW = timedelta(days=14)
@@ -250,10 +254,10 @@ async def _triage_batch(db, docs: list[dict], now: datetime) -> None:
                 "status": IRRELEVANT, "relevant": False, "triaged_at": now}})
 
 
-async def triage(db, now: Optional[datetime] = None) -> int:
+async def triage(db, now: Optional[datetime] = None, calls: int = TRIAGE_CALLS_PER_PASS) -> int:
     now = now or datetime.now(timezone.utc)
     docs = await db[COLLECTION].find({"status": NEW}).sort("fetched_at", 1).limit(
-        TRIAGE_BATCH * TRIAGE_CALLS_PER_PASS).to_list(length=None)
+        TRIAGE_BATCH * calls).to_list(length=None)
     batches = [docs[i:i + TRIAGE_BATCH] for i in range(0, len(docs), TRIAGE_BATCH)]
     await asyncio.gather(*(_triage_batch(db, b, now) for b in batches))
     return len(docs)
@@ -375,6 +379,7 @@ async def aggregate(db, redis, names: dict[str, str], sector_of: dict[str, str],
 _indexed = False
 _aliases: tuple[frozenset, list] = (frozenset(), [])
 _last_aggregate = 0.0
+_last_llm_pass = 0.0
 
 
 async def poll_loop(db, redis) -> None:
@@ -408,11 +413,17 @@ async def _deep_budget(redis, wanted: int) -> int:
 
 
 async def process_loop(db, redis) -> None:
-    global _last_aggregate
-    triaged = await triage(db)
+    global _last_aggregate, _last_llm_pass
+    from backend.engine.autorun import near_session
+
     names, sector_of = await followed(db)
-    calls = await _deep_budget(redis, 1) if await db[COLLECTION].count_documents({"status": TRIAGED}, limit=1) else 0
-    scored = await score(db, names, sector_of, await priority_symbols(db), calls) if calls else 0
+    triaged = scored = 0
+    active = near_session(datetime.now(timezone.utc))
+    if active or time.time() - _last_llm_pass >= OFF_PROCESS_SECONDS:
+        _last_llm_pass = time.time()
+        triaged = await triage(db, calls=TRIAGE_CALLS_PER_PASS if active else OFF_TRIAGE_CALLS)
+        calls = await _deep_budget(redis, 1) if await db[COLLECTION].count_documents({"status": TRIAGED}, limit=1) else 0
+        scored = await score(db, names, sector_of, await priority_symbols(db), calls) if calls else 0
     if scored or time.time() - _last_aggregate >= AGGREGATE_EVERY_SECONDS:
         await aggregate(db, redis, names, sector_of)
         _last_aggregate = time.time()

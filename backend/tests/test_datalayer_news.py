@@ -254,3 +254,31 @@ async def test_deep_budget_stops_at_the_daily_cap(monkeypatch):
     monkeypatch.setattr(news.settings, "NEWS_LLM_CALLS_PER_DAY", 7)
     redis = FakeRedis()
     assert [await news._deep_budget(redis, 5) for _ in range(3)] == [5, 2, 0]
+
+
+async def test_off_hours_llm_pass_runs_hourly_in_fuller_batches(monkeypatch):
+    seen = []
+
+    async def fake_triage(db, now=None, calls=None):
+        seen.append(calls)
+        return 0
+
+    async def followed(db):
+        return {}, {}
+
+    class NoTriaged:
+        async def count_documents(self, *a, **kw):
+            return 0
+
+    monkeypatch.setattr(news, "triage", fake_triage)
+    monkeypatch.setattr(news, "followed", followed)
+    monkeypatch.setattr(news, "_last_aggregate", float("inf"))
+    monkeypatch.setattr(news, "_last_llm_pass", 0.0)
+    monkeypatch.setattr("backend.engine.autorun.near_session", lambda now: False)
+    db = {news.COLLECTION: NoTriaged()}
+    await news.process_loop(db, None)
+    await news.process_loop(db, None)               # within the hour: no LLM
+    assert seen == [news.OFF_TRIAGE_CALLS]
+    monkeypatch.setattr("backend.engine.autorun.near_session", lambda now: True)
+    await news.process_loop(db, None)               # session: every pass
+    assert seen == [news.OFF_TRIAGE_CALLS, news.TRIAGE_CALLS_PER_PASS]

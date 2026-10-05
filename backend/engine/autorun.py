@@ -66,6 +66,12 @@ def in_session(now: datetime) -> bool:
     return local.weekday() < 5 and SESSION_OPEN <= local.time() < SESSION_CLOSE
 
 
+def near_session(now: datetime, lead: timedelta = timedelta(minutes=45)) -> bool:
+    """The session plus `lead` before the open: when background AI work is
+    worth paying for, so scores and the brief are fresh at 09:15."""
+    return in_session(now) or in_session(now + lead)
+
+
 def _slot(user_id: str, mode: str) -> str:
     """One auto run per user per mode. INTRADAY keeps the bare user id it had
     before LONGTERM existed."""

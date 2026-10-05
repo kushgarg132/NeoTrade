@@ -46,6 +46,15 @@ def test_brief_cadence():
     assert market._brief_due({"at": (NOW - timedelta(minutes=31)).timestamp()}, False, NOW)
 
 
+def test_brief_off_hours_ignores_big_news_until_the_pre_open():
+    night = datetime(2026, 10, 5, 17, 0, tzinfo=timezone.utc)      # 22:30 IST
+    two_hours = {"at": (night - timedelta(hours=2)).timestamp()}
+    assert not market._brief_due(two_hours, True, night)
+    assert market._brief_due({"at": (night - timedelta(hours=6)).timestamp()}, False, night)
+    pre_open = datetime(2026, 10, 6, 3, 15, tzinfo=timezone.utc)   # 08:45 IST
+    assert market._brief_due({"at": (pre_open - timedelta(minutes=31)).timestamp()}, False, pre_open)
+
+
 async def test_brief_makes_one_call_and_stores_it(mongo, monkeypatch):
     await mongo[news.COLLECTION].insert_one({
         "_id": "a", "title": "Brent jumps 8%", "source": "CNBC", "status": news.SCORED, "scope": "GLOBAL",

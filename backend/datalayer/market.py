@@ -7,9 +7,10 @@ risk regime, and one short AI-written market brief.
     brief     (60s)  at most one LLM call when due -> Redis `market:brief`, Mongo `market_briefs`
 
 The brief is the only LLM call here, and it is rationed: every
-BRIEF_SESSION_SECONDS in session, BRIEF_OFF_SECONDS outside, or sooner (but
-not within BRIEF_MIN_GAP_SECONDS) when a material market/macro/global item
-has been scored since the last brief.
+BRIEF_SESSION_SECONDS in session (and the 45 min before the open),
+BRIEF_OFF_SECONDS outside, or sooner in session (but not within
+BRIEF_MIN_GAP_SECONDS) when a material market/macro/global item has been
+scored since the last brief.
 """
 
 import asyncio
@@ -23,7 +24,7 @@ import requests
 from backend.datalayer.news import COLLECTION, SCORED
 from backend.datalayer.news_sources import UA
 from backend.datalayer.prices import MACRO, MACRO_KEY
-from backend.engine.autorun import in_session
+from backend.engine.autorun import near_session
 from backend.engine.session import IST
 from backend.llm import llm_service
 from backend.prompts import render
@@ -40,7 +41,7 @@ REGIME_TTL_SECONDS = 3600
 RISK_OFF, RISK_ON = -0.5, 0.3
 
 BRIEF_SESSION_SECONDS = 30 * 60
-BRIEF_OFF_SECONDS = 3 * 3600
+BRIEF_OFF_SECONDS = 6 * 3600
 BRIEF_MIN_GAP_SECONDS = 15 * 60
 BRIEF_ITEMS = 25
 
@@ -190,7 +191,10 @@ def _brief_due(last: Optional[dict], material_since: bool, now: datetime) -> boo
     age = now.timestamp() - last["at"]
     if age < BRIEF_MIN_GAP_SECONDS:
         return False
-    return material_since or age >= (BRIEF_SESSION_SECONDS if in_session(now) else BRIEF_OFF_SECONDS)
+    if not near_session(now):
+        # Off-hours big news waits for the pre-open brief; nothing trades on it before then.
+        return age >= BRIEF_OFF_SECONDS
+    return material_since or age >= BRIEF_SESSION_SECONDS
 
 
 async def _write_brief(system: str, prompt: str) -> str:
