@@ -124,6 +124,10 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
     done = {"started": [], "renewed": [], "stopped": []}
     if redis is None:
         return done
+    # A worker that died leaves its runs RUNNING until its alive key expires,
+    # which can be after the startup sweep: sweep here too, or one dead run
+    # blocks every new start for the day (one run per mode).
+    await runs.close_orphaned(redis)
 
     enabled = {
         _slot(doc["user_id"], mode)

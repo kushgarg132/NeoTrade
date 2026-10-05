@@ -24,6 +24,9 @@ class _Redis:
     def __init__(self):
         self.data = {}
 
+    async def exists(self, key):
+        return 1 if key in self.data else 0
+
     async def set(self, key, value, nx=False, xx=False, px=None):
         if (nx and key in self.data) or (xx and key not in self.data):
             return None
@@ -61,7 +64,10 @@ def world(monkeypatch):
     async def enable(user_id="alice"):
         await db["user_prefs"].insert_one({"user_id": user_id, "auto_paper_intraday": True})
 
-    yield type("W", (), {"db": db, "redis": _Redis(), "launch": launch, "launched": launched, "enable": enable})
+    redis = _Redis()
+    from backend.runs import ALIVE_KEY, BOOT_ID
+    redis.data[ALIVE_KEY.format(BOOT_ID)] = "1"  # this worker's heartbeat (server.py)
+    yield type("W", (), {"db": db, "redis": redis, "launch": launch, "launched": launched, "enable": enable})
     for task in list(trading._RUNS.values()):
         task.cancel()
     trading._RUNS.clear()
@@ -337,3 +343,19 @@ async def test_deploy_restarts_do_not_use_up_the_daily_start_cap(world, monkeypa
         monkeypatch.setattr(autorun, "_LOCAL", {})
 
     assert (await _tick(world, MONDAY_10AM))["started"] == ["alice"]
+
+
+@pytest.mark.asyncio
+async def test_a_run_whose_worker_died_is_swept_and_replaced_by_the_tick(world, monkeypatch):
+    """The startup sweep ran while the dead worker's alive key was still
+    fresh, so its run stayed RUNNING and blocked every new start (one run per
+    mode). The tick sweeps again once that key has expired."""
+    await world.enable()
+    runs = RunStore(world.db)
+    await runs.create(run_id="zombie", user_id="alice", mode="INTRADAY", universe=[], params={"origin": "auto"})
+    await runs.collection.update_one({"run_id": "zombie"}, {"$set": {"boot_id": "dead-worker", "started_at": MONDAY_10AM}})
+
+    await _tick(world, MONDAY_10AM)
+
+    assert (await runs.get("zombie"))["status"] == "STOPPED"
+    assert len(world.launched) == 1

@@ -164,6 +164,14 @@ async def startup_db_client():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    # A clean stop drops this worker's alive key at once, so the next
+    # worker's sweep sees its runs as gone instead of waiting out the TTL.
+    try:
+        from backend.runs import ALIVE_KEY, BOOT_ID
+        if db.redis is not None:
+            await db.redis.delete(ALIVE_KEY.format(BOOT_ID))
+    except Exception as exc:
+        logger.warning("could not clear worker heartbeat: %s", exc)
     logger.info("Shutting down NeoTrade API...")
     await db.close_database_connection()
     logger.info("Database disconnected.")
