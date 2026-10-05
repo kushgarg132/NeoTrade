@@ -9,7 +9,7 @@ EXPECTED = {
     "components/analyst/agent.py": ["deep", "standard"],   # news scoring feeds trade scores; report
     "datalayer/news.py": ["fast", "deep"],
     "datalayer/market.py": ["standard"],                 # the market brief                # triage; impacts feed trade scores
-    "plan/builder.py": ["deep"],                          # the per-user game plan; decides what may trade
+    "plan/builder.py": ["deep", "deep"],                  # the per-user game plan (single call; tool loop)
     "plan/revise.py": [],                                 # revisions call builder._llm (deep)
     "components/master/search.py": ["deep"],                # Indian peers came out wrong on Flash
     "instruments/resolve.py": ["fast"],

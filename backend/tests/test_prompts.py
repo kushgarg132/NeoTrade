@@ -19,6 +19,8 @@ PROMPTS = {
     "market_brief": {"now": "Mon", "news": "n", "board": "b", "flows": "f", "regime": "r", "calendar": "c"},
     "game_plan": {"now": "Mon", "regime": "r", "brief": "b", "flows": "f", "calendar": "c", "strategies": "s",
                   "candidates": "c", "caps": "k"},
+    "game_plan_tools": {"now": "Mon", "regime": "r", "brief": "b", "flows": "f", "calendar": "c", "strategies": "s",
+                        "candidates": "c", "caps": "k"},
     "game_plan_revision": {"now": "Mon", "trigger": "t", "regime": "r", "plan": "p", "positions": "x",
                            "strategies": "s"},
     "index_move": {"name": "NIFTY 50", "session_date": "2026-09-26", "session": "- Close 25,123.45",

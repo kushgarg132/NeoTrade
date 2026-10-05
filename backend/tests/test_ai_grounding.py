@@ -52,3 +52,7 @@ def test_percent_tolerance_is_half_a_unit_of_the_last_digit():
     facts = [{"x": 2.9}]
     assert grounding.unsupported("rose 2%", facts) == ["2%"]
     assert grounding.unsupported("rose 3%", facts) == []
+
+
+def test_dollar_and_rs_amounts_are_figures():
+    assert grounding.unsupported("Crude at $150; stock at Rs. 450.", [{"x": 1.0}]) == ["$150", "Rs. 450"]

@@ -1,6 +1,6 @@
 """Every figure an AI states must come from the data it was given.
 
-A figure is a ₹ amount, a percentage, a decimal, or a bare integer of four
+A figure is a ₹/$/Rs amount, a percentage, a decimal, or a bare integer of four
 or more digits (not a year). Dates, times, years, list markers, x/y scores
 and small bare counts ("3 names", "20 days") are not figures. A figure is
 supported when some number in the call's facts is within 0.5% of it, or --
@@ -16,7 +16,7 @@ _DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Ju
                    r"|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}\b|\b\d{1,2}:\d{2}\b",
                    re.IGNORECASE)
 # Comma groups of 2-3 digits (Indian 1,00,000 and western 100,000), never a trailing comma.
-_NUMBER = re.compile(r"(?<![\w/.])(₹\s?)?([-−+]?\d+(?:,\d{2,3})*(?:\.\d+)?)(\s?%)?(?![\w/])")
+_NUMBER = re.compile(r"(?<![\w/.])(₹\s?|\$\s?|Rs\.?\s?)?([-−+]?\d+(?:,\d{2,3})*(?:\.\d+)?)(\s?%)?(?![\w/])")
 _LIST_MARKER = re.compile(r"^\s*\d+[.)]\s", re.MULTILINE)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 
@@ -52,7 +52,12 @@ def numbers_in(facts) -> list[float]:
             try:
                 found.append(abs(float(node.replace(",", ""))))
             except ValueError:
-                pass
+                # Free text (a regime line, a headline): every number in it counts as data.
+                for m in _NUMBER.finditer(node):
+                    try:
+                        found.append(abs(float(m.group(2).replace(",", "").replace("−", "-"))))
+                    except ValueError:
+                        pass
         elif isinstance(node, dict):
             for value in node.values():
                 walk(value)
