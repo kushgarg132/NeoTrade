@@ -112,7 +112,17 @@ def _split_report(text: str) -> tuple[str, str]:
 
 
 async def _report(**values) -> tuple[str, str]:
-    """The research_report call: (summary, thesis)."""
+    """The research_report call: (summary, thesis), with the market brief
+    (backend/datalayer/market.py) as backdrop so macro and global news
+    reach every note."""
+    from backend.datalayer.market import backdrop
+
+    context = await backdrop(_redis())
+    regime = context.get("regime") or {}
+    values["backdrop"] = "\n".join(filter(None, [
+        f"Risk regime: {regime['label']} ({regime['score']:+.2f})" if regime else "",
+        context.get("brief") or "",
+    ])) or "Not available."
     system, prompt = render("research_report", **values)
     try:
         return _split_report(await llm_service.get_completion(prompt, system_prompt=system, tier="standard"))

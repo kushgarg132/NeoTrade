@@ -94,6 +94,22 @@ def _format_trend(s: Dict[str, Any]) -> str:
 
 
 async def _headlines(ticker: str) -> List[Dict[str, Any]]:
+    """The highest-impact scored market, macro and global items the ingest
+    worker stored (backend/datalayer/news.py); a fresh Google search only
+    when it has none."""
+    from backend.database import db
+    from backend.datalayer.market import top_items
+
+    scopes = ("MARKET", "MACRO", "GLOBAL") if ticker in INDIAN else ("GLOBAL",)
+    try:
+        stored = await top_items(db.db, hours=HEADLINE_MAX_AGE.total_seconds() / 3600, scopes=scopes,
+                                 limit=HEADLINE_LIMIT) if db.db is not None else []
+    except Exception as e:
+        logger.warning("index_move: stored headlines unavailable: %s", e)
+        stored = []
+    if stored:
+        return [{"title": d["title"], "url": d.get("url", ""), "source": d.get("source", ""),
+                 "published_at": d["published_at"].isoformat()} for d in stored]
     articles = await fresh_headlines(NEWS_QUERIES.get(ticker, []), max_age=HEADLINE_MAX_AGE, limit=HEADLINE_LIMIT)
     return [
         {"title": a.title, "url": a.url, "source": a.source, "published_at": a.published_at.isoformat()}
@@ -106,6 +122,12 @@ async def _peers(ticker: str) -> List[Dict[str, Any]]:
     from backend.routers.market_data import GLOBAL_INDICES, INDICES, fetch_ticker_data
 
     others = {name: sym for name, sym in {**INDICES, **GLOBAL_INDICES}.items() if sym != ticker}
+    from backend.database import db
+    from backend.datalayer.prices import macro_rows
+
+    cached = await macro_rows(db.redis, others)
+    if cached is not None:
+        return cached
     results = await asyncio.gather(*(fetch_ticker_data(sym, name) for name, sym in others.items()))
     return [r for r in results if r]
 

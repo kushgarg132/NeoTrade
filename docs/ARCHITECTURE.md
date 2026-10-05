@@ -264,7 +264,23 @@ company news in 14 days. `AnalystAgent.analyze` answers followed symbols from th
 the cached note stale, a Redis lock so concurrent misses don't both pay) while the
 `news_process` heartbeat is under 15 min; otherwise, and for unfollowed symbols, it fetches Google
 News India on demand as before. The legacy `/news/fetch`, `/news/sentiment` and `/events/classify`
-routes are gone. Later loops land phase by phase per
+routes are gone.
+
+**Backdrop** (`backend/datalayer/market.py`). `calendar` (6h) stores ForexFactory's weekly
+high/medium-impact events for USD/CNY/EUR/JPY/GBP/All in Mongo `econ_calendar` (no Indian
+releases: RBI MPC dates are not in that feed). `flows` (30 min) stores NSE's FII/DII net cash flows
+in `market:flows` and `macro_series`. `regime` (60s, no LLM, `compute_regime`) writes
+`market:regime` {score, label risk_on/neutral/risk_off, drivers}: half market news sentiment, plus
+fixed rules on India VIX level and jump, Brent, USD/INR, S&P futures, FII flows, and a flag for a
+high-impact event within 30 min. `brief` makes the one LLM call (`prompts/market_brief.md`,
+standard tier): every 30 min in session, 3h outside, or sooner (never within 15 min) after a
+material market/macro/global item; `market:brief` + Mongo `market_briefs`. Every
+`research_report` gets the regime and brief as `{{backdrop}}`; the chat's day snapshot carries
+regime, brief and the next 24h of high-impact events, and its tools `search_news` (stored scored
+news by query/symbol/sector/scope; on-demand Google only for an unfollowed symbol) and
+`get_market_backdrop` replace the uncached `fetch_news_tool`. `research/index_move.py` takes its
+headlines from the store (falls back to Google when empty) and peer indices from `macro:`.
+Later loops land phase by phase per
 `docs/superpowers/plans/2026-10-05-market-news-datalayer.md`. Compose makes `backend` depend on
 `ingest` only so the shared deploy workflow's `up -d --build backend` also redeploys it.
 

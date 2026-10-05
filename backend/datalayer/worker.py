@@ -39,13 +39,17 @@ class Loop(NamedTuple):
 
 
 def _loops() -> list[Loop]:
-    from backend.datalayer import news, prices
+    from backend.datalayer import market, news, prices
 
     return [
         Loop("quotes", 15, prices.quotes),
         Loop("macro", 60, prices.macro),
         Loop("news_poll", 60, news.poll_loop),
         Loop("news_process", news.PROCESS_SECONDS, news.process_loop),
+        Loop("calendar", 6 * 3600, market.calendar),
+        Loop("flows", 30 * 60, market.flows),
+        Loop("regime", 60, market.regime),
+        Loop("brief", 60, market.brief),
     ]
 
 

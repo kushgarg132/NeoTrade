@@ -11,6 +11,9 @@ Relevant news:
 Events:
 {{events}}
 
+Market backdrop (macro, global and sector context; use it only where it bears on this stock):
+{{backdrop}}
+
 Write two parts, in Markdown.
 
 Part 1, the sentiment report, with exactly these headings:

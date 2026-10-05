@@ -9,7 +9,7 @@ from typing import Literal, Optional, Union
 
 from langchain_core.tools import StructuredTool
 
-from backend.agents.tools import fetch_news_tool, fetch_price_history_tool, fetch_stock_info_tool, resolve_symbol_tool
+from backend.agents.tools import fetch_price_history_tool, fetch_stock_info_tool, resolve_symbol_tool
 from backend.analytics import compute_scorecard
 from backend.chat.context import LIMIT_KEYS, plan_names
 from backend.engine.persistence import LedgerStore
@@ -213,6 +213,53 @@ def read_tools(db, redis, user_id: str) -> list:
         # ponytail: hard cut keeps the context bounded; the model narrows with fields/filter/limit.
         return text if len(text) <= MAX_CHARS else text[:MAX_CHARS] + "… (truncated: pass fields or a smaller limit)"
 
+    async def search_news(query: Optional[str] = None, symbol: Optional[str] = None, sector: Optional[str] = None,
+                          scope: Optional[Literal["COMPANY", "SECTOR", "MARKET", "MACRO", "GLOBAL"]] = None,
+                          days: int = 3, material_only: bool = False, limit: int = 10) -> str:
+        from backend.datalayer.news import COLLECTION, SCORED
+
+        days, limit = max(1, min(days, 60)), max(1, min(limit, 30))
+        conditions: list[dict] = [{"status": SCORED},
+                                  {"published_at": {"$gte": datetime.now(timezone.utc) - timedelta(days=days)}}]
+        if query:
+            conditions.append({"title": {"$regex": re.escape(query), "$options": "i"}})
+        if symbol:
+            conditions.append({"$or": [{"symbols": symbol.upper()}, {"impacts.target": symbol.upper()}]})
+        if sector:
+            conditions.append({"impacts.target": sector})
+        if scope:
+            conditions.append({"scope": scope})
+        if material_only:
+            conditions.append({"material": True})
+        rows = await db[COLLECTION].find({"$and": conditions}, {
+            "_id": 0, "title": 1, "source": 1, "published_at": 1, "scope": 1, "event": 1, "impacts": 1, "url": 1,
+        }).sort("published_at", -1).limit(limit).to_list(length=limit)
+        if not rows and symbol:
+            # Not a followed stock (or nothing stored yet): search on demand.
+            from backend.components.analyst.news import fetch_news_logic
+
+            found = await fetch_news_logic([symbol.upper()], limit)
+            return _json({"stored": False, "articles": [{"title": a.title, "source": a.source, "url": a.url,
+                                                         "published_at": a.published_at} for a in found]})
+        return _json({"stored": True, "articles": rows})
+
+    async def get_market_backdrop() -> str:
+        from backend.datalayer.market import FLOWS_KEY, backdrop, upcoming
+        from backend.datalayer.prices import MACRO, macro_rows
+        from backend.datalayer.news_sources import sectors
+
+        context = await backdrop(redis)
+        sector_rows = await redis.mget([f"sector_sentiment:{s}" for s in sectors()])
+        flows = await redis.get(FLOWS_KEY)
+        return _json({
+            **context,
+            "markets": await macro_rows(redis, MACRO),
+            "fii_dii": json.loads(flows) if flows else None,
+            "sector_news_sentiment": {s: round(json.loads(r)["score"], 2) for s, r in zip(sectors(), sector_rows)
+                                      if r and json.loads(r).get("score") is not None},
+            "calendar_next_7d": await upcoming(db, hours=7 * 24, high_only=False),
+        })
+
     async def explain_index(ticker: str) -> str:
         from backend.research.index_move import explain_index_move
 
@@ -249,7 +296,16 @@ def read_tools(db, redis, user_id: str) -> list:
             + "\nfilter is a MongoDB query, e.g. {\"symbol\": \"INFY\", \"realized_pnl\": {\"$lt\": 0}}; give "
             "times as ISO datetimes (\"2026-10-01T00:00:00+05:30\"). sort_by a field (newest first by default), "
             f"limit up to {MAX_ROWS}, fields to return only some. 'matched' is the full count.")),
+        StructuredTool.from_function(coroutine=search_news, name="search_news", description=(
+            "Stored, AI-scored market news: Indian company, sector, market, macro/policy and global events "
+            "(Fed, crude, war, China...), each with what it moves (impacts on INDIA, an NSE sector or a stock, "
+            "direction -1..1 and impact 0-10). Filter by words in the headline (query), symbol, sector (an NSE "
+            "industry, e.g. 'Information Technology'), scope, days back, material_only for big movers.")),
+        StructuredTool.from_function(coroutine=get_market_backdrop, name="get_market_backdrop", description=(
+            "The market right now: the AI market brief, the rule-based risk regime (risk_on/neutral/risk_off "
+            "and why), indices, futures, crude, gold, USD/INR, US 10Y, FII/DII flows, news sentiment per sector, "
+            "and the economic calendar for the next 7 days. Use for 'what is moving markets' or macro questions.")),
         StructuredTool.from_function(coroutine=explain_index, name="explain_index", description=(
             "Why an index moved in its latest session, e.g. ^NSEI for NIFTY 50 or ^NSEBANK for BANK NIFTY.")),
     ]
-    return own + [fetch_news_tool, fetch_stock_info_tool, fetch_price_history_tool, resolve_symbol_tool]
+    return own + [fetch_stock_info_tool, fetch_price_history_tool, resolve_symbol_tool]

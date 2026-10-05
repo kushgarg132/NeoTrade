@@ -3,32 +3,11 @@ from typing import List, Optional
 import logging
 
 # Import logic from existing components
-from backend.components.analyst.news import fetch_news_logic
 from backend.components.master.stock_info import fetch_stock_info_logic
 from backend.components.quant.price import fetch_price_history_logic
 from backend.components.master.search import resolve_company_query
 
 logger = logging.getLogger(__name__)
-
-@tool
-async def fetch_news_tool(symbols: List[str], limit: int = 5) -> str:
-    """
-    Fetches latest news articles for the given stock symbols.
-    Useful for getting market sentiment, recent events, or explanations for price movements.
-    """
-    try:
-        articles = await fetch_news_logic(symbols, limit)
-        if not articles:
-            return f"No news found for {symbols}."
-            
-        result = [f"Found {len(articles)} articles for {symbols}:"]
-        for a in articles:
-            result.append(f"- [{a.published_at.strftime('%Y-%m-%d')}] {a.title} ({a.source})\n  Link: {a.url}")
-            
-        return "\n".join(result)
-    except Exception as e:
-        logger.error(f"Error in fetch_news_tool: {e}")
-        return f"Failed to fetch news: {str(e)}"
 
 @tool
 async def fetch_stock_info_tool(symbol: str) -> str:
