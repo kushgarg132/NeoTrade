@@ -100,6 +100,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
   useEffect(() => cancelCard, []);
 
   useEffect(() => {
+    const opener = document.activeElement; // focus goes back here on close
     const dialog = dialogRef.current;
     dialog?.querySelector('button, input')?.focus();
     const onKey = (event) => {
@@ -118,7 +119,10 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
       }
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      opener?.focus?.();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -231,7 +235,8 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
               locked={busy}
               disabled={{ mine: !hasMine }}
               options={[
-                { id: 'paper', label: 'Paper' },
+                // Money colours: Paper is the stamp, Mine is ink (see .badge-paper/.badge-mine).
+                { id: 'paper', label: 'Paper', selectedClass: 'bg-[var(--stamp)] text-[var(--paper)]' },
                 { id: 'mine', label: 'Mine' },
               ]}
             />
