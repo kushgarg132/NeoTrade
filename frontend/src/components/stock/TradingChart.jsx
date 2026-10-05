@@ -52,7 +52,7 @@ const TradingChart = ({ data, technicals, className, currency }) => {
   // Format data for Recharts
   const formattedData = filteredData.map(item => ({
     ...item,
-    date: new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    date: new Date(item.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
     price: Number(item.close),
     volume: Number(item.volume)
   }));

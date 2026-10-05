@@ -130,7 +130,7 @@ const OptionChain = () => {
                 >
                   {expiries.map((date) => (
                     <option key={date} value={date}>
-                      {formatNoteDate(new Date(`${date}T00:00:00`))}
+                      {formatNoteDate(new Date(`${date}T00:00:00+05:30`))}
                     </option>
                   ))}
                 </select>
@@ -163,7 +163,7 @@ const OptionChain = () => {
             <Ruling rows={8} />
           </Sheet>
         ) : (
-          <Sheet title={chain.name} meta={formatNoteDate(new Date(`${chain.expiry}T00:00:00`))} bodyClassName="p-0">
+          <Sheet title={chain.name} meta={formatNoteDate(new Date(`${chain.expiry}T00:00:00+05:30`))} bodyClassName="p-0">
             <div className="grid grid-cols-3 gap-4 px-4 py-3 border-b border-[var(--rule)]">
               <Field label="Spot" value={formatLevel(chain.spot)} />
               <Field label="At the money" value={chain.atm_strike == null ? '—' : formatLevel(chain.atm_strike)} />

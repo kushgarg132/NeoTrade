@@ -58,8 +58,8 @@ const ScannerPage = () => {
   const meta = scan
     ? [
         scan.as_of &&
-          `As of ${new Date(scan.as_of).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} close`,
-        `run ${new Date(scan.scan_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`,
+          `As of ${new Date(scan.as_of).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })} close`,
+        `run ${new Date(scan.scan_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`,
       ]
         .filter(Boolean)
         .join(' · ')
