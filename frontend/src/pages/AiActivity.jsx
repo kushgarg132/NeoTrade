@@ -3,6 +3,7 @@ import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
 import { AI_TABS } from '../components/layout/sections';
 import { Sheet, Ruling } from '../components/doc/Doc';
+import StopAutopilot from '../components/common/StopAutopilot';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import { formatDateTime } from '../utils/formatters';
@@ -11,18 +12,31 @@ import { formatDateTime } from '../utils/formatters';
 const AiActivity = () => {
   const [rows, setRows] = useState(null);
   const [on, setOn] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const load = () => {
+    api.get(endpoints.settings.autopilotLog).then((res) => setRows(res.data.rows)).catch(() => setFailed(true));
+  };
+  const retry = () => {
+    setFailed(false);
+    setRows(null);
+    load();
+  };
   useEffect(() => {
-    api.get(endpoints.settings.autopilotLog).then((res) => setRows(res.data.rows)).catch(() => setRows([]));
+    load();
     api.get(endpoints.settings.preferences).then((res) => setOn(!!res.data.autopilot_enabled)).catch(() => {});
   }, []);
-  const stop = () => api.put(endpoints.settings.preferences, { autopilot_enabled: false }).then(() => setOn(false));
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
         <SectionTabs tabs={AI_TABS} label="AI account" />
         <Sheet title="Activity" meta="Last 30"
-               actions={on ? <button type="button" onClick={stop} className="h-8 px-3 text-xs border border-[var(--loss)] text-[var(--loss)]">🛑 Stop autopilot</button> : null}>
-          {rows === null ? <Ruling rows={4} /> : rows.length === 0 ? (
+               actions={<StopAutopilot on={on} label="Stop autopilot" onStopped={() => setOn(false)} />}>
+          {failed ? (
+            <p className="text-sm">
+              Couldn't load the autopilot's activity.{' '}
+              <button type="button" onClick={retry} className="underline min-h-11">Retry</button>
+            </p>
+          ) : rows === null ? <Ruling rows={4} /> : rows.length === 0 ? (
             <p className="doc-meta normal-case">Nothing from the autopilot yet.</p>
           ) : (
             <ul className="divide-y divide-[var(--rule)]">

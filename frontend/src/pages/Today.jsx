@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Check, Circle } from 'lucide-react';
 import Layout from '../components/Layout';
 import MoneyBadge from '../components/common/MoneyBadge';
+import StopAutopilot from '../components/common/StopAutopilot';
 import { Sheet, Ruling, Money } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
@@ -143,9 +144,7 @@ const PnlSplit = ({ pnl, market, loadedAt, now }) => (
 const AiActivity = ({ rows, onStop, autopilotOn }) => (
   <Sheet
     title="AI activity"
-    actions={autopilotOn ? (
-      <button type="button" onClick={onStop} className="h-8 px-3 text-xs border border-[var(--loss)] text-[var(--loss)]">🛑 Stop</button>
-    ) : null}
+    actions={<StopAutopilot on={autopilotOn} onStopped={onStop} />}
   >
     {!rows || rows.length === 0 ? (
       <p className="doc-meta normal-case">Nothing from the autopilot yet.</p>
@@ -153,10 +152,13 @@ const AiActivity = ({ rows, onStop, autopilotOn }) => (
       <ul className="divide-y divide-[var(--rule)]">
         {rows.map((row, i) => (
           <li key={`${row.at}-${i}`} className="py-2 text-sm flex items-baseline gap-2">
-            <span className={cn('field-label', row.status === 'FILLED' ? 'text-[var(--gain)]' : 'text-[var(--loss)]')}>
-              {row.status === 'FILLED' ? (row.side === 'BUY' ? 'Bought' : 'Sold') : 'Refused'}
+            <span className={cn('field-label', row.status === 'FILLED' ? 'text-[var(--gain)]' : row.status === 'SENT' ? 'text-[var(--ink-soft)]' : 'text-[var(--loss)]')}>
+              {row.status === 'FILLED' ? (row.side === 'BUY' ? 'Bought' : 'Sold') : row.status === 'SENT' ? 'Sent' : 'Refused'}
             </span>
-            <span className="flex-1 min-w-0 truncate">{row.quantity} {row.symbol}{row.status !== 'FILLED' && row.reason ? ` · ${row.reason}` : ''}</span>
+            <span className="flex-1 min-w-0 truncate">
+              {row.quantity} {row.symbol}
+              {row.status === 'SENT' ? ' · with the broker, not filled yet' : row.status !== 'FILLED' && row.reason ? ` · ${row.reason}` : ''}
+            </span>
             <span className="doc-meta shrink-0">{formatDateTime(row.at)}</span>
           </li>
         ))}
@@ -170,8 +172,8 @@ const Today = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [autopilotOn, setAutopilotOn] = useState(false);
-  const [loadedAt, setLoadedAt] = useState(Date.now());
-  const [now, setNow] = useState(Date.now());
+  const [loadedAt, setLoadedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 10_000);
     return () => clearInterval(tick);
@@ -188,12 +190,17 @@ const Today = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const stop = () => api.put(endpoints.settings.preferences, { autopilot_enabled: false }).then(() => setAutopilotOn(false));
+  const stop = () => setAutopilotOn(false);
 
   if (!data) {
     return (
       <Layout>
-        <div className="max-w-3xl">{error ? <Sheet title="Today"><p className="text-sm">{error}</p></Sheet> : <Sheet title="Today"><Ruling rows={5} /></Sheet>}</div>
+        <div className="max-w-3xl">{error ? (
+          <Sheet title="Today">
+            <p className="text-sm">{error}</p>
+            <button type="button" onClick={() => { setError(null); load(); }} className="mt-2 min-h-11 px-3 text-sm border border-[var(--rule-strong)]">Retry</button>
+          </Sheet>
+        ) : <Sheet title="Today"><Ruling rows={5} /></Sheet>}</div>
       </Layout>
     );
   }
