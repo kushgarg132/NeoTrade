@@ -20,6 +20,8 @@ from backend.options.backtest import ModelOptions
 from backend.options.resolver import FO_UNDERLYINGS
 from backend.risk.backtest_gate import BacktestGateStore
 from backend.strategies.registry import build_default_strategies
+from backend.datalayer.catalysts import catalyst_map
+from backend.datalayer.news_sources import nifty200_sectors
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,8 @@ async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> 
             universe=universe, symbol_for_token=symbol_for_token,
             option_universe=universe if options else None,
             params=await current_params(db),
+            catalysts=await catalyst_map(db, (now - timedelta(days=365)).date(), now.date()),
+            sector_of=nifty200_sectors(),
         )
         if s.spec.name == strategy_name
     ]

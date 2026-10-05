@@ -392,16 +392,12 @@ def test_rsi_momentum_scalp_strategy_silent_on_flat_bars():
 # registry.build_default_strategies
 # ---------------------------------------------------------------------------
 
-def test_build_default_strategies_returns_expected_eight():
+def test_build_default_strategies_returns_expected_twelve():
     strategies = build_default_strategies(universe=[SYMBOL])
-    assert len(strategies) == 8
+    assert len(strategies) == 12
 
     by_mode_timeframe = sorted((s.spec.mode, s.spec.timeframe) for s in strategies)
-    assert by_mode_timeframe == [
-        ("INTRADAY", "5m"),
-        ("INTRADAY", "5m"),
-        ("INTRADAY", "5m"),
-        ("INTRADAY", "5m"),
+    assert by_mode_timeframe == [("INTRADAY", "5m")] * 8 + [
         ("LONGTERM", "1d"),
         ("LONGTERM", "1d"),
         ("LONGTERM", "1d"),
@@ -421,7 +417,7 @@ def test_build_default_strategies_includes_quality_momentum_when_provided():
         quality_universe=[SYMBOL],
         quality_scores={SYMBOL: 0.6},
     )
-    assert len(strategies) == 9
+    assert len(strategies) == 13
 
     quality_strategy = next(s for s in strategies if s.spec.name == "quality_momentum")
     assert quality_strategy.spec.mode == "LONGTERM"
@@ -483,9 +479,17 @@ def test_build_default_strategies_includes_analyst_verdict_when_provided():
         universe=[SYMBOL],
         analyst_verdicts={SYMBOL: _bullish_verdict()},
     )
-    assert len(strategies) == 9
+    assert len(strategies) == 13
 
     verdict_strategy = next(s for s in strategies if s.spec.name == "analyst_verdict")
     assert verdict_strategy.spec.mode == "LONGTERM"
     assert verdict_strategy.spec.timeframe == "1d"
     assert verdict_strategy.spec.universe == [SYMBOL]
+
+
+def test_new_strategies_get_catalysts_and_sectors():
+    catalysts, sectors = {"2026-10-06": {"TCS": 0.5}}, {"TCS": "IT"}
+    by_name = {s.spec.name: s for s in build_default_strategies(universe=["TCS"], catalysts=catalysts, sector_of=sectors)}
+    assert by_name["gap_and_go"].catalysts == catalysts and by_name["gap_fill_fade"].catalysts == catalysts
+    assert by_name["relative_strength_sector"].sector_of == sectors
+    assert "trend_day_pullback" in by_name

@@ -6,9 +6,13 @@ from typing import Optional
 
 from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
 from backend.engine.protocols import Strategy
+from backend.strategies.intraday.gap_and_go import GapAndGoStrategy
+from backend.strategies.intraday.gap_fill_fade import GapFillFadeStrategy
 from backend.strategies.intraday.orb_breakout import ORBStrategy
 from backend.strategies.intraday.orb_options import ORBOptionsStrategy
+from backend.strategies.intraday.relative_strength_sector import RelativeStrengthSectorStrategy
 from backend.strategies.intraday.rsi_momentum_scalp import RSIMomentumScalpStrategy
+from backend.strategies.intraday.trend_day_pullback import TrendDayPullbackStrategy
 from backend.strategies.intraday.volume_surge import VolumeSurgeStrategy
 from backend.strategies.intraday.vwap_reversion import VWAPReversionStrategy
 from backend.strategies.longterm.analyst_verdict import AnalystVerdictStrategy
@@ -27,6 +31,8 @@ def build_default_strategies(
     analyst_verdicts: Optional[dict[str, dict]] = None,
     option_universe: Optional[list[str]] = None,
     params: Optional[dict[str, dict]] = None,
+    catalysts: Optional[dict[str, dict[str, float]]] = None,
+    sector_of: Optional[dict[str, str]] = None,
 ) -> list[Strategy]:
     """`universe` defaults to `indian_stocks.ALL_SCAN_STOCKS` (the existing
     NSE mid/small-cap symbol list already used elsewhere in this codebase),
@@ -79,6 +85,16 @@ def build_default_strategies(
         ORBStrategy(universe, symbol_for_token, params.get("orb_breakout")),
         RSIMomentumScalpStrategy(universe, symbol_for_token, params.get("rsi_momentum_scalp")),
         CashSecuredPutStrategy(universe, symbol_for_token),
+        # News-aware intraday strategies (Phase 15.1). `catalysts` is
+        # backend/datalayer/catalysts.py's per-day map and `sector_of` the
+        # Nifty 200 sector of each symbol; without them gap_and_go and
+        # relative_strength_sector stay silent and gap_fill_fade treats
+        # every gap as un-catalysed.
+        GapAndGoStrategy(universe, symbol_for_token, params.get("gap_and_go"), catalysts=catalysts),
+        GapFillFadeStrategy(universe, symbol_for_token, params.get("gap_fill_fade"), catalysts=catalysts),
+        TrendDayPullbackStrategy(universe, symbol_for_token, params.get("trend_day_pullback")),
+        RelativeStrengthSectorStrategy(universe, symbol_for_token, params.get("relative_strength_sector"),
+                                       sector_of=sector_of),
     ]
     if quality_universe is not None and quality_scores is not None:
         strategies.append(

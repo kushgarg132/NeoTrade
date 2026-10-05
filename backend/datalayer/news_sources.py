@@ -80,6 +80,11 @@ def sectors() -> list[str]:
     return sorted({r["sector"] for r in universe_rows()})
 
 
+def nifty200_sectors() -> dict[str, str]:
+    """Symbol -> NSE industry for the Nifty 200 (relative_strength_sector's peers)."""
+    return {r["symbol"]: r["sector"] for r in universe_rows()}
+
+
 def _due(key: str, every: float, now: float) -> bool:
     if now - _last.get(key, 0) < every:
         return False

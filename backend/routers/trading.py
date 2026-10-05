@@ -62,6 +62,8 @@ from backend.options.resolver import FO_UNDERLYINGS
 from backend.strategies.registry import build_default_strategies
 from backend.suggestions.sink import SuggestionSink
 from backend.suggestions.store import SuggestionStore
+from backend.datalayer.catalysts import catalyst_map
+from backend.datalayer.news_sources import nifty200_sectors
 
 logger = logging.getLogger(__name__)
 
@@ -325,11 +327,14 @@ async def _launch_run(
         raise HTTPException(status_code=400, detail="No resolvable instruments in universe")
 
     symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments + option_instruments}
+    today = datetime.now(timezone.utc).astimezone(IST).date()
     strategies = [
         s for s in build_default_strategies(
             universe=[i.tradingsymbol for i in instruments], symbol_for_token=symbol_for_token,
             option_universe=[i.tradingsymbol for i in option_instruments],
             params=await current_params(db.db),
+            catalysts=await catalyst_map(db.db, today, today) if mode == "INTRADAY" else None,
+            sector_of=nifty200_sectors(),
         )
         if s.spec.mode == mode
     ]
