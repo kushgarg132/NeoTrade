@@ -451,6 +451,15 @@ Enforced in code, inside the sizing path, so no caller can route around them:
   `against_news` / `chasing_news` findings. `GET /plan/today` feeds the plan card on
   AI → Activity; `/practice/library` renders `GET /strategies/library`;
   `plan/notify.py` sends each non-fallback plan version to the user's Telegram channel.
+- **AI fact layer and tool runner** (Phase 16.1) — `backend/ai/facts/` is the one read-only
+  path AI features use for data: 13 facts (`quote`, `price_summary`, `fundamentals`, `news`,
+  `sentiment`, `market_backdrop`, `calendar`; user: `portfolio`, `positions`, `journal`,
+  `learning`, `strategy_library`, `game_plan`), each returning a dict with `as_of`/`source`
+  and an `error` field instead of raising; `as_tools` turns them into LangChain tools.
+  `ai/runner.run_with_tools` runs the tool loop (≤ 4 rounds, `AI_TOOL_CALLS_PER_DAY` budget,
+  schema repair, single-call fallback, `AI_TOOLS_ENABLED` kill switch). `ai/grounding`
+  checks figures in AI prose against the facts a call received. Chat's read tools are thin
+  wrappers over the facts; other call sites move onto the runner in 16.2–16.5.
 - **Long-term engine** — not a live run: long-term strategies need months of daily bars,
   which a live feed never has, so their ideas come only from the history-backed scan
   (`backend/suggestions/scan.py`; 16:00 IST in `scheduler.py`, which records

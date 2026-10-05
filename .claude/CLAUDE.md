@@ -71,6 +71,8 @@ it with a manual build. See `/home/ubuntu/CLAUDE.md` for ports, URLs, and host-l
 - System `mvn` is irrelevant here; this is Python. Backend tests: `cd backend && python -m pytest`.
 - `vitest` alone is not a build check on the frontend — run `npm run build` too.
 - Background long builds and test runs rather than idling on them.
+- AI features read data through `backend/ai/facts/` (as prompt context or as tools via
+  `ai/runner.run_with_tools`); never query collections directly to build a prompt.
 - Every LLM prompt lives in `backend/prompts/*.md` (system prompt in front matter,
   `{{placeholders}}`), rendered by `backend.prompts.render`. Never inline a prompt in a `.py` file.
 - Commit and push in the same session; split unrelated changes into separate commits.
