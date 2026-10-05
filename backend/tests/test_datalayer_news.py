@@ -266,12 +266,17 @@ async def test_off_hours_llm_pass_runs_hourly_in_fuller_batches(monkeypatch):
     async def followed(db):
         return {}, {}
 
+    async def _none():
+        return set()
+
     class NoTriaged:
         async def count_documents(self, *a, **kw):
             return 0
 
     monkeypatch.setattr(news, "triage", fake_triage)
     monkeypatch.setattr(news, "followed", followed)
+    monkeypatch.setattr(news, "priority_symbols", lambda db: _none())
+    monkeypatch.setattr(news, "_score_due", lambda db, priority, now: _none())
     monkeypatch.setattr(news, "_last_aggregate", float("inf"))
     monkeypatch.setattr(news, "_last_llm_pass", 0.0)
     monkeypatch.setattr("backend.engine.autorun.near_session", lambda now: False)
@@ -282,3 +287,19 @@ async def test_off_hours_llm_pass_runs_hourly_in_fuller_batches(monkeypatch):
     monkeypatch.setattr("backend.engine.autorun.near_session", lambda now: True)
     await news.process_loop(db, None)               # session: every pass
     assert seen == [news.OFF_TRIAGE_CALLS, news.TRIAGE_CALLS_PER_PASS]
+
+
+async def test_scoring_waits_for_a_worthwhile_batch(mongo):
+    def doc(i, symbols=(), age=timedelta(minutes=1)):
+        return {"_id": str(i), "status": news.TRIAGED, "symbols": list(symbols), "triaged_at": NOW - age}
+
+    await mongo[news.COLLECTION].insert_many([doc(i) for i in range(3)])
+    assert not await news._score_due(mongo, {"TCS"}, NOW)                       # 3 fresh items: wait
+    await mongo[news.COLLECTION].insert_one(doc(10, symbols=["TCS"]))
+    assert await news._score_due(mongo, {"TCS"}, NOW)                           # a watched name: now
+    assert not await news._score_due(mongo, set(), NOW)
+    await mongo[news.COLLECTION].insert_one(doc(11, age=news.SCORE_HOLD))
+    assert await news._score_due(mongo, set(), NOW)                             # waited long enough
+    await mongo[news.COLLECTION].delete_many({"_id": {"$in": ["10", "11"]}})
+    await mongo[news.COLLECTION].insert_many([doc(i) for i in range(100, 100 + news.SCORE_MIN_ITEMS)])
+    assert await news._score_due(mongo, set(), NOW)                             # a full enough batch

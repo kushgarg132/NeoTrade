@@ -78,8 +78,16 @@ async def test_brief_makes_one_call_and_stores_it(mongo, monkeypatch):
     assert await market.brief(mongo, redis, now=NOW)
     assert "Brent jumps 8%" in prompts[0] and "USD CPI" in prompts[0]
     assert json.loads(redis.data["market:brief"])["text"].startswith("### What's moving")
+
     assert not await market.brief(mongo, redis, now=NOW + timedelta(minutes=5))   # not due again yet
     assert len(prompts) == 1
+    later = NOW + timedelta(hours=1)                    # due again, but nothing changed
+    assert not await market.brief(mongo, redis, now=later) and len(prompts) == 1
+    await mongo[news.COLLECTION].insert_one({
+        "_id": "b", "title": "RBI cuts repo", "source": "ET", "status": news.SCORED, "scope": "MACRO",
+        "published_at": later, "scored_at": later, "material": True,
+        "impacts": [{"type": "market", "target": "INDIA", "direction": 0.6, "impact": 8}]})
+    assert await market.brief(mongo, redis, now=later) and len(prompts) == 2
 
 
 async def test_chat_search_news_reads_the_store(mongo):

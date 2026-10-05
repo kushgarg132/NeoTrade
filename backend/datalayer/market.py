@@ -218,6 +218,8 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
     raws = await redis.mget([MACRO_KEY.format(t) for t in MACRO.values()])
     board = [json.loads(r) for r in raws if r]
     regime_now = await _json(redis, REGIME_KEY) or {}
+    if last and last.get("items") == [str(d["_id"]) for d in items] and last.get("regime") == regime_now.get("label"):
+        return False  # same top stories, same regime: the brief would say the same thing again
     flows_now = await _json(redis, FLOWS_KEY) or {}
     events = await upcoming(db, hours=48, now=now)
 
