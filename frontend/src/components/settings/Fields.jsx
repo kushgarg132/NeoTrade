@@ -6,8 +6,8 @@ import { cn } from '../../utils/cn';
  * tab's engine settings so both read as the same form.
  */
 
-// A hint longer than this is folded to one line; a tap shows all of it.
-const HINT_FOLD = 30;
+// A hint longer than this is folded to two lines; a tap shows all of it.
+const HINT_FOLD = 90;
 
 const Hint = ({ text }) => {
   const [open, setOpen] = useState(false);
@@ -22,9 +22,10 @@ const Hint = ({ text }) => {
         setOpen((value) => !value);
       }}
       aria-expanded={open}
-      className={cn('doc-meta normal-case mt-0.5 text-left w-full', !open && 'line-clamp-1')}
+      className="doc-meta normal-case mt-0.5 text-left w-full"
     >
-      {text}
+      <span className={cn('block', !open && 'line-clamp-2')}>{text}</span>
+      <span className="underline">{open ? 'Less' : 'More'}</span>
     </button>
   );
 };
@@ -41,13 +42,15 @@ export const Row = ({ label, hint, children }) => (
   </div>
 );
 
-export const NumberField = ({ value, onChange, onCommit }) => (
+// zeroIsOff: a saved 0 (a number, not one being typed) reads as "Off".
+export const NumberField = ({ value, onChange, onCommit, zeroIsOff = false }) => (
   <input
     type="number"
     inputMode="numeric"
-    value={value}
+    value={zeroIsOff && value === 0 ? '' : value}
+    placeholder={zeroIsOff ? 'Off' : undefined}
     onChange={(event) => onChange(event.target.value)}
     onBlur={onCommit}
-    className="w-24 bg-transparent border-b border-[var(--rule-strong)] py-1 text-right figure-md text-sm focus:outline-none focus:border-[var(--stamp)]"
+    className="w-24 bg-transparent border-b border-[var(--rule-strong)] py-1 text-right figure-md text-sm placeholder:text-[var(--ink-soft)] focus:outline-none focus:border-[var(--stamp)]"
   />
 );

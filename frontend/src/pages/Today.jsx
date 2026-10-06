@@ -274,17 +274,24 @@ const Today = () => {
 
   return (
     <Layout>
-      <div className="private space-y-3 sm:space-y-4 max-w-3xl">
+      {/* Desktop: what needs deciding and the money on the left, the market as context on the right. */}
+      <div className="private space-y-3 sm:space-y-4 max-w-3xl lg:max-w-6xl">
         <StatusStrip data={data} />
         <SetupChecklist setup={data.setup} />
-        <NeedsYou items={data.needs_you || []} proposalsTotal={data.proposals_total} />
-        <PnlSplit pnl={data.pnl_today} aiMode={data.autopilot ? (data.autopilot.live ? 'live' : 'paper') : undefined} market={data.market} loadedAt={loadedAt} now={now} />
-        <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />
-        <MarketBackdrop backdrop={data.backdrop} />
-        <Link to="/research" className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)]">
-          <span className="text-sm"><span className="field-label">Markets</span> · NIFTY, BANK NIFTY, movers and news</span>
-          <ArrowRight className="w-4 h-4 text-[var(--ink-faint)]" />
-        </Link>
+        <div className="space-y-3 sm:space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-4 lg:items-start">
+          <div className="space-y-3 sm:space-y-4">
+            <NeedsYou items={data.needs_you || []} proposalsTotal={data.proposals_total} />
+            <PnlSplit pnl={data.pnl_today} aiMode={data.autopilot ? (data.autopilot.live ? 'live' : 'paper') : undefined} market={data.market} loadedAt={loadedAt} now={now} />
+            <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />
+          </div>
+          <div className="space-y-3 sm:space-y-4">
+            <MarketBackdrop backdrop={data.backdrop} />
+            <Link to="/research" className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)]">
+              <span className="text-sm"><span className="field-label">Markets</span> · NIFTY, BANK NIFTY, movers and news</span>
+              <ArrowRight className="w-4 h-4 text-[var(--ink-faint)]" />
+            </Link>
+          </div>
+        </div>
       </div>
     </Layout>
   );

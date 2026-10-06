@@ -43,8 +43,9 @@ const TradingLevels = ({ t, currency }) => {
   const price = t?.price;
   const macdAbove = isNum(t?.macd) && isNum(t?.macd_signal) ? t.macd >= t.macd_signal : null;
   const rows = [
-    ['Support', formatCurrency(t?.support, currency), fromPrice(t?.support, price)],
-    ['Resistance', formatCurrency(t?.resistance, currency), fromPrice(t?.resistance, price)],
+    // With a price but no level, the stock trades past every recent swing: say so.
+    ['Support', formatCurrency(t?.support, currency), isNum(price) && !isNum(t?.support) ? 'none below price' : fromPrice(t?.support, price)],
+    ['Resistance', formatCurrency(t?.resistance, currency), isNum(price) && !isNum(t?.resistance) ? 'none above price' : fromPrice(t?.resistance, price)],
     [
       'Typical daily move (ATR)',
       formatCurrency(t?.atr, currency),

@@ -288,7 +288,7 @@ const Portfolio = () => {
           </Sheet>
         )}
 
-        <Sheet title="Executions" meta={`${fills.length} fills`}>
+        <Sheet title="Executions" meta={fills.length > sortedFills.length ? `Latest ${sortedFills.length} of ${fills.length}` : `${fills.length} fills`}>
           {recentFills.length === 0 ? (
             <Empty title="No executions yet" detail="Fills appear here as orders are filled." />
           ) : (
@@ -339,7 +339,7 @@ const Portfolio = () => {
               aria-expanded={allFills}
               className="mt-2 field-label text-[var(--stamp)] hover:underline min-h-11 sm:min-h-0"
             >
-              {allFills ? 'Show latest 10' : `Show all ${sortedFills.length}`}
+              {allFills ? 'Show latest 10' : `Show latest ${sortedFills.length}`}
             </button>
           )}
         </Sheet>

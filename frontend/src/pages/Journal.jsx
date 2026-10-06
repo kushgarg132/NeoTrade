@@ -9,7 +9,6 @@ import BrokerPnl from '../components/dashboard/BrokerPnl';
 import TradeLedger from '../components/dashboard/TradeLedger';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import MonthGrid from '../components/journal/MonthGrid';
-import LearningSheet from '../components/journal/LearningSheet';
 import { monthKey, shiftMonth, monthLabel, todayIst } from '../utils/months';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
@@ -149,8 +148,8 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
   const [month, setMonth] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [openTrip, setOpenTrip] = useState(null);
-  // Mine → Trades shows the calendar and trades; Mine → Habits the patterns.
-  const [tab, setTab] = useTab(view === 'habits' ? ['patterns', 'learning'] : ['calendar', 'trades']);
+  // Mine → Trades shows the calendar and the trade list; Mine → Habits the patterns.
+  const [tab, setTab] = useTab(view === 'habits' ? ['patterns'] : ['calendar', 'trades']);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const fileInput = useRef(null);
@@ -272,7 +271,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
   }, [data, selectedDay]);
 
   const actions = (
-    <div className="flex gap-1.5">
+    <div className="flex flex-wrap justify-end gap-1.5">
       <button type="button" className={BUTTON} onClick={sync} disabled={busy} aria-label="Sync today's trades">
         <RefreshCw className="w-3.5 h-3.5" />
         Sync
@@ -284,7 +283,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
       {data?.brokers_connected?.includes('upstox') && (
         <button type="button" className={BUTTON} onClick={importUpstox} disabled={busy} aria-label="Import Upstox trade history">
           <History className="w-3.5 h-3.5" />
-          Upstox
+          Upstox history
         </button>
       )}
       <input ref={fileInput} type="file" accept=".csv,text/csv" className="hidden" onChange={importCsv} />
@@ -320,15 +319,11 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
           <TradeLedger title="Live engine orders" trades={liveTrades} loading={false} error={null} />
         )}
 
-        {data && (
+        {data && view !== 'habits' && (
           <Tabs
-            tabs={view === 'habits' ? [
-              { id: 'patterns', label: 'Patterns & charges' },
-              // The paper engine's own record: there even before any broker trades.
-              { id: 'learning', label: 'Engine learning' },
-            ] : [
+            tabs={[
               { id: 'calendar', label: 'Calendar' },
-              ...(empty ? [] : [{ id: 'trades', label: selectedDay ? `Trades · ${selectedDay.slice(5)}` : 'Trades' }]),
+              ...(empty ? [] : [{ id: 'trades', label: selectedDay ? `List · ${selectedDay.slice(5)}` : 'List' }]),
             ]}
             active={tab}
             onSelect={setTab}
@@ -336,7 +331,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
           />
         )}
 
-        {(tab === 'calendar' || (empty && tab !== 'learning')) && (
+        {(tab === 'calendar' || empty) && (
         <Sheet
           title="Journal"
           meta={summary ? `${summary.trips} closed` : undefined}
@@ -421,8 +416,6 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
         )}
 
         {!empty && tab === 'patterns' && <MirrorSheet mirror={data?.mirror} />}
-
-        {tab === 'learning' && <LearningSheet />}
 
         {!empty && tab === 'patterns' && (
           <Sheet title="Your patterns" meta="Your own trades, gross">

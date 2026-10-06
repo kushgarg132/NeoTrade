@@ -8,6 +8,7 @@ import TradeLedger from '../components/dashboard/TradeLedger';
 import Scorecard from '../components/paper/Scorecard';
 import EngineNow from '../components/paper/EngineNow';
 import StrategyReadiness from '../components/paper/StrategyReadiness';
+import LearningSheet from '../components/journal/LearningSheet';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import { cn } from '../utils/cn';
@@ -37,6 +38,7 @@ const PaperOverview = () => {
   const [pending, setPending] = useState([]);
   // Seeded once from the link; picking "All" (which clears ?book) must not close it.
   const [recordOpen, setRecordOpen] = useState(params.has('book'));
+  const [learningOpen, setLearningOpen] = useState(false);
   // Fetched once here and handed to both the engine and readiness sheets, so
   // they can never disagree on which strategies are live.
   const [prefs, setPrefs] = useState(null);
@@ -175,6 +177,12 @@ const PaperOverview = () => {
               />
             </div>
           )}
+        </details>
+
+        {/* Fetched only when opened, like the record above. */}
+        <details onToggle={(event) => setLearningOpen(event.currentTarget.open)}>
+          <summary className="sheet cursor-pointer px-4 py-3 field-label">What the engine learned</summary>
+          {learningOpen && <div className="mt-3 sm:mt-4"><LearningSheet /></div>}
         </details>
       </PaperShell>
     </Layout>

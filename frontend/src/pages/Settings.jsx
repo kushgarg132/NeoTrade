@@ -942,6 +942,7 @@ const GuardrailsSheet = () => {
         value={draft[key]}
         onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
         onCommit={() => commit(key, Math.round(Number(draft[key])))}
+        zeroIsOff
       />
     </Row>
   );
@@ -991,6 +992,7 @@ const GuardrailsSheet = () => {
             setDraft((d) => ({ ...d, daily_loss_limit: value }));
           }}
           onCommit={() => commit('daily_loss_limit', Number(draft.daily_loss_limit))}
+          zeroIsOff
         />
       </Row>
       {confirmOff && (
