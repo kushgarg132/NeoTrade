@@ -149,6 +149,11 @@ export const endpoints = {
     chain: (underlying, expiry) => `/options/chain?underlying=${underlying}&expiry=${expiry}`,
   },
   marketNews: '/news/market',
+  system: {
+    status: '/system/status',
+    backlog: '/system/backlog',
+    item: (id) => `/system/backlog/${id}`,
+  },
   newsFeed: '/news/feed',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
   planToday: '/plan/today',

@@ -1471,15 +1471,20 @@ const Settings = () => {
                 {isAdmin && <UsageSheet />}
               </>
             )}
-            {tab === 'about' && (
-              <Link
-                to="/system"
-                className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors"
-              >
-                <span className="text-sm"><span className="field-label">How NeoTrade works</span> — a live view of the system</span>
-                <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
-              </Link>
-            )}
+            {tab === 'about' && (isAdmin ? (
+              <div className="space-y-2">
+                {[['/system', 'Handbook', 'how every part works, with live status'],
+                  ['/system/future', 'Future', 'the backlog of what comes next']].map(([to, label, detail]) => (
+                  <Link key={to} to={to}
+                        className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors">
+                    <span className="text-sm"><span className="field-label">{label}</span> — {detail}</span>
+                    <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="sheet px-3 py-2.5 sm:px-4 text-sm">NeoTrade — the discipline layer on top of your broker.</p>
+            ))}
             {tab === 'beta' && isAdmin && <BetaSheet />}
           </div>
         </div>

@@ -19,13 +19,14 @@ const News = lazy(() => import('./pages/News'));
 const AiOverview = lazy(() => import('./pages/AiOverview'));
 const AiActivity = lazy(() => import('./pages/AiActivity'));
 import Login from './pages/Login';
-const SystemArchitecturePage = lazy(() => import('./pages/SystemArchitecturePage'));
+const Handbook = lazy(() => import('./pages/Handbook'));
 import RequireAuth from './components/RequireAuth';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 import { Sheet, Empty } from './components/doc/Doc';
 import { useAuth } from './context/AuthContext';
 import { stream } from './lib/ws';
+import RequireAdmin from './components/system/RequireAdmin';
 
 const NotFound = () => (
   <Layout>
@@ -116,7 +117,7 @@ const App = () => {
       {/* More */}
       <Route path="/settings" element={gated(<Settings />)} />
       <Route path="/profile" element={gated(<Profile />)} />
-      <Route path="/system" element={gated(<SystemArchitecturePage />)} />
+      <Route path="/system" element={gated(<RequireAdmin><Handbook /></RequireAdmin>)} />
       {/* Practice (under More): the strategy engine, its decisions and its book */}
       <Route path="/practice" element={gated(<PaperOverview />)} />
       <Route path="/practice/decisions" element={gated(<Decisions />)} />
