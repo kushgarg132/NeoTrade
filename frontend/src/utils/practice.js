@@ -11,7 +11,7 @@ const istDay = (date) => new Date(date.getTime() + IST_MS).toISOString().slice(0
 const inPeriod = (period, day, today) =>
   period === 'today' ? day === today : period === 'month' ? day.slice(0, 7) === today.slice(0, 7) : true;
 
-export const netOf = (trade) => (trade.realized_pnl || 0) - (trade.costs || 0);
+const netOf = (trade) => (trade.realized_pnl || 0) - (trade.costs || 0);
 
 export const periodSummary = (trades, period, now = new Date()) => {
   const today = istDay(now);

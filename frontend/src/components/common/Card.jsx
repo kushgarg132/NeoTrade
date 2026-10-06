@@ -24,23 +24,9 @@ const CardTitle = React.forwardRef(({ className, ...props }, ref) => (
 ));
 CardTitle.displayName = 'CardTitle';
 
-const CardDescription = React.forwardRef(({ className, ...props }, ref) => (
-  <p ref={ref} className={cn('text-sm text-[var(--ink-soft)] mt-1', className)} {...props} />
-));
-CardDescription.displayName = 'CardDescription';
-
 const CardContent = React.forwardRef(({ className, ...props }, ref) => (
   <div ref={ref} className={cn('p-4', className)} {...props} />
 ));
 CardContent.displayName = 'CardContent';
 
-const CardFooter = React.forwardRef(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn('px-4 py-3 border-t border-[var(--rule)] flex items-center', className)}
-    {...props}
-  />
-));
-CardFooter.displayName = 'CardFooter';
-
-export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter };
+export { Card, CardHeader, CardTitle, CardContent };

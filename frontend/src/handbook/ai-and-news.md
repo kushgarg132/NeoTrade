@@ -46,7 +46,7 @@ Every prompt is a file in `backend/prompts/*.md` (system prompt in front matter,
 |---|---|---|
 | News scoring | `news:deep_calls:<IST day>` | `NEWS_LLM_CALLS_PER_DAY` (past it, the backlog waits for tomorrow, then goes STALE) |
 | Game plans | `plan:calls:<IST day>` | `PLAN_LLM_CALLS_PER_DAY` |
-| Tool rounds | per call, ≤ 4 rounds | `AI_TOOL_CALLS_PER_DAY`, kill switch `AI_TOOLS_ENABLED` |
+| Tool rounds | per call, ≤ 4 rounds | each round spends the caller's own budget (plans: `plan:calls`); kill switch `AI_TOOLS_ENABLED` |
 
 Chat and research calls are not counted per task.
 

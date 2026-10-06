@@ -24,7 +24,7 @@ const FEED = {
 const PHASE = { open: 'Session open', pre: 'Pre-open', closed: 'Market closed' };
 const PHASE_SHORT = { open: 'Open', pre: 'Pre-open', closed: 'Closed' };
 
-export const FeedStatus = ({ className }) => {
+const FeedStatus = ({ className }) => {
   const status = useStreamStatus();
   const feed = FEED[status] || FEED.idle;
   const phase = marketPhase();

@@ -27,4 +27,3 @@ export const Avatar = ({ src, name, size = 40 }) => {
   );
 };
 
-export default Avatar;

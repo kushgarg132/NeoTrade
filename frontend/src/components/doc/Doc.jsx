@@ -252,11 +252,6 @@ export const Stamp = ({ label, tone = 'stamp', animate = false, className }) => 
   );
 };
 
-/** A dashed tear between stacked regions of one continuous form. */
-export const Perforation = ({ className }) => (
-  <div className={cn('perforated my-4', className)} aria-hidden="true" />
-);
-
 export const Empty = ({ title, detail, action, className }) => (
   <div
     className={cn(

@@ -81,8 +81,8 @@ The store holds completed bars only, so during the session the newest daily bar 
 
 **Mongo — shared reference data:** `users`, `instruments`, `instrument_meta`,
 `instrument_sectors`, `daily_bars`, `fundamentals`, `stock_health`, `macro_series`,
-`econ_calendar`, `market_briefs`, `news_items`, `news_outcomes`, `strategy_backtests`,
-`strategy_retunes`, `strategy_hypotheses`, `retune_runs`, `app_settings`, `agent_memories`,
+`econ_calendar`, `news_items`, `news_outcomes`, `strategy_backtests`,
+`strategy_retunes`, `strategy_hypotheses`, `retune_runs`, `app_settings`,
 `backlog` (the Future page).
 
 **Redis key families:**

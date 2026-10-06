@@ -110,7 +110,7 @@ const LearningSheet = () => {
   return <LearningView data={data} />;
 };
 
-export const LearningView = ({ data }) => {
+const LearningView = ({ data }) => {
   const nothing = data.groups.length === 0 && data.changes.length === 0;
 
   return (
