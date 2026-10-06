@@ -289,7 +289,7 @@ export const Tabs = ({ tabs, active, onSelect, label, className }) => (
   <nav
     aria-label={label}
     className={cn(
-      'sticky top-[calc(var(--masthead-h)+env(safe-area-inset-top))] z-30 flex border-b border-[var(--rule-strong)] bg-[var(--paper)]',
+      'sticky top-[calc(var(--masthead-h)+env(safe-area-inset-top))] z-30 flex overflow-x-auto border-b border-[var(--rule-strong)] bg-[var(--paper)]',
       className
     )}
   >
@@ -302,14 +302,15 @@ export const Tabs = ({ tabs, active, onSelect, label, className }) => (
           aria-current={selected ? 'page' : undefined}
           onClick={() => onSelect(tab.id)}
           className={cn(
-            'flex-1 min-w-0 min-h-11 px-1.5 inline-flex items-center justify-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors',
+            // Natural width, never truncated: when the labels outgrow a phone the strip scrolls.
+            'flex-1 shrink-0 min-h-11 px-2 inline-flex items-center justify-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors',
             'font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.08em]',
             selected
               ? 'border-[var(--stamp)] text-[var(--ink)]'
               : 'border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]'
           )}
         >
-          <span className="truncate">{tab.label}</span>
+          <span>{tab.label}</span>
           {tab.count > 0 && (
             <span className="figure-md px-1 text-[0.5625rem] leading-4 bg-[var(--stamp)] text-[var(--paper)]">
               {tab.count}

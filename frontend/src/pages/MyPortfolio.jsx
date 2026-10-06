@@ -482,8 +482,8 @@ const MyPortfolio = ({ lockedAccount = null }) => {
   const hasHoldings = snapshot && snapshot.holdings.length > 0;
 
   const TABS = [
-    { id: 'plan', label: 'Plan' },
     { id: 'holdings', label: `Holdings${hasHoldings ? ` · ${snapshot.holdings.length}` : ''}` },
+    { id: 'plan', label: 'Plan' },
     { id: 'rebalance', label: 'Rebalance' },
     { id: 'mix', label: 'Mix' },
     { id: 'review', label: 'Review' },
@@ -502,7 +502,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
         )}
         <Sheet
           title="Portfolio"
-          meta={snapshot ? `${formatDateTime(snapshot.at)}${brokers ? ` · ${brokers}` : ''}` : null}
+          meta={snapshot ? (snapshot.stale_since ? `Saved ${formatDateTime(snapshot.stale_since)} · broker logged out` : `${formatDateTime(snapshot.at)}${brokers ? ` · ${brokers}` : ''}`) : null}
           actions={action}
         >
           {failure && (
@@ -548,7 +548,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
               <Benchmark benchmark={snapshot.benchmark} />
               {snapshot.stale_since && (
                 <p className="doc-meta normal-case">
-                  No broker connected: holdings as of {formatDateTime(snapshot.stale_since)}, repriced from the latest
+                  Your broker is logged out: holdings as of {formatDateTime(snapshot.stale_since)}, repriced from the latest
                   closes. Log in to your broker to refresh them.
                 </p>
               )}

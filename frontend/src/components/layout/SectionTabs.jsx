@@ -16,8 +16,9 @@ const SectionTabs = ({ tabs, label }) => {
         end={tab.end}
         className={({ isActive }) =>
           cn(
-            'shrink-0 px-3 min-h-11 sm:min-h-9 flex items-center border-b-2 -mb-px transition-colors',
-            'font-[family-name:var(--font-narrow)] text-xs font-semibold uppercase tracking-[0.11em]',
+            // Five tabs fit a 390px phone at this size; wider screens get the roomier label.
+            'shrink-0 px-2 sm:px-3 min-h-11 sm:min-h-9 flex items-center border-b-2 -mb-px transition-colors',
+            'font-[family-name:var(--font-narrow)] text-[0.6875rem] sm:text-xs font-semibold uppercase tracking-[0.06em] sm:tracking-[0.11em]',
             isActive ? 'border-[var(--stamp)] text-[var(--ink)]' : 'border-transparent text-[var(--ink-faint)] hover:text-[var(--ink)]',
           )
         }
