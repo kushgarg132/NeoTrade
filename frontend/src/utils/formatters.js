@@ -90,7 +90,7 @@ export const formatTimeAgo = (dateString) => {
 };
 
 /**
- * The NSE session in IST: 09:15–15:30, weekdays. Holidays are not modelled —
+ * The NSE session in IST: pre-open 09:00–09:15, open 09:15–15:30, weekdays. Holidays are not modelled —
  * on one the app says "closed" a few hours late, which is a smaller lie than
  * showing a frozen tick as live.
  */
@@ -99,6 +99,7 @@ export const marketPhase = (now = new Date()) => {
   const day = ist.getDay();
   if (day === 0 || day === 6) return 'closed';
   const minutes = ist.getHours() * 60 + ist.getMinutes();
+  if (minutes < 540) return 'closed'; // overnight, before the 09:00 pre-open
   if (minutes < 555) return 'pre';
   if (minutes >= 930) return 'closed';
   return 'open';
