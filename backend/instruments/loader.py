@@ -40,11 +40,12 @@ class SeedFileSource:
         return [Instrument(**row) for row in rows]
 
 
-async def refresh_instruments(source: InstrumentSource, master: InstrumentMaster) -> int:
+async def refresh_instruments(source: InstrumentSource, master: InstrumentMaster, only_new: bool = False) -> int:
     """Fetches from `source` and upserts into `master`. Idempotent: re-running
-    with unchanged data upserts zero new/changed documents."""
+    with unchanged data upserts zero new/changed documents. `only_new` adds
+    missing rows only (see InstrumentMaster.upsert_many)."""
     instruments = await source.fetch()
-    count = await master.upsert_many(instruments)
+    count = await master.upsert_many(instruments, only_new=only_new)
     logger.info(f"Refreshed instrument master: {count} instruments upserted (of {len(instruments)} fetched)")
     return count
 
@@ -80,7 +81,7 @@ async def refresh_from_free_public_sources(master: InstrumentMaster) -> int:
     )
     for label, source in sources:
         try:
-            total += await refresh_instruments(source, master)
+            total += await refresh_instruments(source, master, only_new=True)
         except Exception as e:
             logger.warning(f"{label} free instrument list refresh skipped: {e}")
 

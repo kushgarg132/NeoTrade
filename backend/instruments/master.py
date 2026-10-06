@@ -36,9 +36,11 @@ class InstrumentMaster:
         await self.collection.create_index([("exchange", 1), ("tradingsymbol", 1)], unique=True)
         await self.collection.create_index("instrument_token", unique=True)
 
-    async def upsert_many(self, instruments: list[Instrument]) -> int:
+    async def upsert_many(self, instruments: list[Instrument], only_new: bool = False) -> int:
         """Upserts by (exchange, tradingsymbol). Returns the count of documents
         actually inserted or changed (re-running with identical data is a no-op).
+        `only_new` adds missing rows and leaves stored ones alone -- for the
+        seed file and free lists, whose tokens are not a broker's.
 
         Concurrent rather than one round trip awaited at a time -- the free
         NSE/BSE sources (backend/instruments/free_source.py) upsert several
@@ -64,7 +66,8 @@ class InstrumentMaster:
         stored = {(d["exchange"], d["tradingsymbol"]): _comparable(d)
                   async for d in self.collection.find({"exchange": {"$in": exchanges}}, {"_id": 0})}
         instruments = [i for i in instruments
-                       if stored.get((i.exchange, i.tradingsymbol)) != _comparable(i.model_dump())]
+                       if (i.exchange, i.tradingsymbol) not in stored
+                       or not only_new and stored[(i.exchange, i.tradingsymbol)] != _comparable(i.model_dump())]
 
         # In batches: one gather() over a broker's full dump put every write
         # in flight at once and starved the event loop.

@@ -172,3 +172,15 @@ async def test_upsert_many_skips_unchanged_rows_without_writing(master):
     assert calls == 0
     assert await master.upsert_many([_make_instrument(lot_size=5)]) == 1
     assert calls == 1
+
+
+async def test_upsert_many_only_new_leaves_broker_rows_alone(master):
+    """The seed file and free NSE/BSE lists only fill gaps: they must not
+    swap a connected broker's real instrument_token for their own."""
+    await master.upsert_many([_make_instrument(instrument_token=738561)])
+    added = await master.upsert_many([_make_instrument(instrument_token=1, name="Seed name"),
+                                      _make_instrument(tradingsymbol="TCS", instrument_token=2, exchange_token=2)],
+                                     only_new=True)
+    assert added == 1
+    assert (await master.get("NSE", "RELIANCE")).instrument_token == 738561
+    assert (await master.get("NSE", "TCS")) is not None

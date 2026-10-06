@@ -115,7 +115,7 @@ async def startup_db_client():
     await master.ensure_indexes()
     await UserStore(db.db).ensure_indexes()
     await RefreshTokenStore(db.db).ensure_indexes()
-    count = await refresh_instruments(SeedFileSource(), master)
+    count = await refresh_instruments(SeedFileSource(), master, only_new=True)
     logger.info(f"Instrument master seeded: {count} upserted.")
     # NSE/BSE list downloads plus thousands of upserts can take minutes; run
     # them in the background so a deploy never waits on them (it was a ~4
