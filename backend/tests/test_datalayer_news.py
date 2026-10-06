@@ -197,6 +197,36 @@ async def test_old_unscored_items_go_stale_without_an_llm_call(mongo, monkeypatc
     assert calls == [] and (await mongo[news.COLLECTION].find_one())["status"] == news.STALE
 
 
+async def test_triage_drops_repeats_unfollowed_companies_and_other_scripts_before_scoring(mongo, monkeypatch):
+    await news.store(mongo, [
+        _item("Iran says Strait of Hormuz will not reopen until conditions are met - Reuters", scope="GLOBAL"),
+        _item("Iran says Strait of Hormuz will not reopen until conditions are met, says reports - The Hindu",
+              scope="GLOBAL"),
+        _item("Cupid promoter declares no encumbrance of shares in FY26", scope="COMPANY"),
+        _item("TCS wins $1 billion deal", symbols=["TCS"], scope="COMPANY"),
+        _item("रक्षा मंत्री श्री राजनाथ सिंह विशाखापत्तनम में उद्घाटन करेंगे", scope="MACRO"),
+    ], [], now=NOW)
+    # The first story was already scored a pass earlier: its rewrite is a repeat too.
+    await news.store(mongo, [_item("Brent jumps 8% after Gulf strike")], [], now=NOW)
+    await mongo[news.COLLECTION].update_one({"title": "Brent jumps 8% after Gulf strike"},
+                                            {"$set": {"status": news.SCORED, "scored_at": NOW}})
+    await news.store(mongo, [_item("Brent jumps 8% after Gulf strike, says report")], [], now=NOW)
+    _llm(monkeypatch, {"items": [{"index": i, "scope": s} for i, s in
+                                 enumerate(["GLOBAL", "GLOBAL", "COMPANY", "COMPANY", "MACRO", "GLOBAL"])]})
+    await news.triage(mongo, now=NOW)
+    docs = {d["title"]: d async for d in mongo[news.COLLECTION].find()}
+    reason = {t: (d["status"], d.get("skip_reason")) for t, d in docs.items()}
+    assert reason["Iran says Strait of Hormuz will not reopen until conditions are met - Reuters"] == (news.TRIAGED, None)
+    assert reason["Iran says Strait of Hormuz will not reopen until conditions are met, says reports - The Hindu"] == \
+        (news.IRRELEVANT, "duplicate")
+    assert reason["Cupid promoter declares no encumbrance of shares in FY26"] == (news.IRRELEVANT, "unfollowed")
+    assert reason["TCS wins $1 billion deal"] == (news.TRIAGED, None)
+    assert reason["रक्षा मंत्री श्री राजनाथ सिंह विशाखापत्तनम में उद्घाटन करेंगे"] == (news.IRRELEVANT, "other_script")
+    assert reason["Brent jumps 8% after Gulf strike, says report"] == (news.IRRELEVANT, "duplicate")
+    skipped = docs["Cupid promoter declares no encumbrance of shares in FY26"]
+    assert skipped["expire_at"] == NOW + news.IRRELEVANT_TTL
+
+
 async def test_aggregate_blends_company_sector_and_market(mongo):
     def scored(title, impacts):
         return {"_id": title, "title": title, "status": news.SCORED, "published_at": NOW - timedelta(hours=1),

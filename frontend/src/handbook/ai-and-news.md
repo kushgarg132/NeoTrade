@@ -28,7 +28,7 @@ Every prompt is a file in `backend/prompts/*.md` (system prompt in front matter,
 | `score_market_news.md` | deep | impacts for up to 40 news items in one call |
 | `score_news.md` | deep | a stock's news sentiment (first of the analyst's two calls) |
 | `research_report.md` | standard | the stock's research note and thesis |
-| `market_brief.md` | standard | the market brief (every 30 min in session) |
+| `market_brief.md` | standard | the market brief (hourly in session, only when the regime moved or material news landed) |
 | `index_move.md` | standard | why an index moved in its last session |
 | `game_plan*.md`, `game_plan_revision*.md` | deep | the pre-open plan and its revisions |
 | `portfolio_review.md` | deep | holdings write-up and action plan |
@@ -97,6 +97,9 @@ Ingest loops in `backend/datalayer/`:
    (`news.py::build_aliases`).
 2. **Triage** — `news_process` (5 min): one fast call keeps anything that could move Indian
    stocks. Dropped items live 7 days; kept items 2 years as learning data. NSE filings skip triage.
+   Before scoring, `news.py::_prune` also drops (with `skip_reason`) rewrites of a story scored or
+   queued in the last day (title word overlap ≥ 0.7), company news naming no followed symbol, and
+   non-Latin-script copies.
 3. **Score** — one deep call gives each item `impacts[]` on the market (`INDIA`), an NSE
    industry, or a followed symbol; impact ≥ 6 marks it `material`. Unscored after 3 days → STALE.
 4. **Aggregate** — from 60 days of impacts (impact² weight, 30-day half-life):

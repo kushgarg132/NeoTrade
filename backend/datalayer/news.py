@@ -265,7 +265,46 @@ async def triage(db, now: Optional[datetime] = None, calls: int = TRIAGE_CALLS_P
         TRIAGE_BATCH * calls).to_list(length=None)
     batches = [docs[i:i + TRIAGE_BATCH] for i in range(0, len(docs), TRIAGE_BATCH)]
     await asyncio.gather(*(_triage_batch(db, b, now) for b in batches))
+    await _prune(db, now)
     return len(docs)
+
+
+# Measured on 3 days of prod (2,443 scored): 0.7 caught 71 rewrites of one
+# story and nothing else; 0.5 merged different companies' filings.
+DUP_JACCARD, DUP_WINDOW = 0.7, timedelta(hours=24)
+_STOP = {"the", "and", "for", "from", "with", "its", "after", "over", "amid", "says", "said", "india", "indian"}
+
+
+def _words(title: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", _title_key(title)) if len(w) > 2 and w not in _STOP}
+
+
+def _skip_reason(doc: dict, seen: list[set[str]]) -> Optional[str]:
+    """Why a triaged item is not worth a deep call, or None. Hindi/regional
+    copies repeat English stories; a company we follow no symbol of moves no
+    score; a rewrite of a story already scored or queued adds nothing."""
+    if sum(ord(c) > 0x2FF for c in doc["title"]) > 5:
+        return "other_script"
+    if doc.get("scope") == "COMPANY" and not doc.get("symbols"):
+        return "unfollowed"
+    words = _words(doc["title"])
+    if words and any(len(words & s) / len(words | s) >= DUP_JACCARD for s in seen):
+        return "duplicate"
+    seen.append(words)
+    return None
+
+
+async def _prune(db, now: datetime) -> None:
+    """Marks TRIAGED items that scoring would waste a deep call on IRRELEVANT."""
+    # ponytail: O(pending x day's stories) title compare, ~1k x 1k per pass; index by word if news volume grows 10x.
+    seen = [_words(d["title"]) async for d in db[COLLECTION].find(
+        {"status": SCORED, "scored_at": {"$gte": now - DUP_WINDOW}}, {"title": 1})]
+    async for doc in db[COLLECTION].find({"status": TRIAGED}).sort("published_at", 1):
+        reason = _skip_reason(doc, seen)
+        if reason:
+            await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": {
+                "status": IRRELEVANT, "relevant": False, "skip_reason": reason,
+                "expire_at": now + IRRELEVANT_TTL}})
 
 
 def valid_impacts(impacts: list[_Impact], symbols: set[str], sectors: set[str]) -> list[dict]:
