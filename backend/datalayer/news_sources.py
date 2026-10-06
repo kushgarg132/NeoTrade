@@ -92,6 +92,9 @@ def _due(key: str, every: float, now: float) -> bool:
     return True
 
 
+IST_ZONE = timezone(timedelta(hours=5, minutes=30))
+
+
 def _aware(dt: datetime) -> datetime:
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
@@ -108,7 +111,12 @@ def parse_rss(xml: bytes, feed: str, scope_hint: str, symbols=()) -> list[dict]:
         if not title:
             continue
         try:
-            published = _aware(parsedate_to_datetime(item.pubDate.get_text(strip=True)))
+            published = parsedate_to_datetime(item.pubDate.get_text(strip=True))
+            # No zone (RBI writes "Tue, 06 Oct 2026 19:20:00"): an Indian feed's local time.
+            if published.tzinfo is None:
+                published = published.replace(tzinfo=IST_ZONE)
+            # A feed's clock can still run ahead; nothing is published after now.
+            published = min(_aware(published), datetime.now(timezone.utc))
         except Exception:
             published = datetime.now(timezone.utc)
         if published < cutoff:

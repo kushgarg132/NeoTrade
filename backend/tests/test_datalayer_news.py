@@ -319,3 +319,20 @@ async def test_scoring_waits_for_a_worthwhile_batch(mongo):
     await mongo[news.COLLECTION].delete_many({"_id": {"$in": ["10", "11"]}})
     await mongo[news.COLLECTION].insert_many([doc(i) for i in range(100, 100 + news.SCORE_MIN_ITEMS)])
     assert await news._score_due(mongo, set(), NOW)                             # a full enough batch
+
+
+def test_rss_dates_without_a_zone_are_ist_and_never_in_the_future():
+    """RBI's feed writes `Tue, 06 Oct 2026 19:20:00` in IST with no zone; read
+    as UTC it lands 5h30 in the future and tops every newest-first list."""
+    from datetime import datetime, timedelta, timezone
+    from email.utils import format_datetime
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+    hour_ago_ist = (datetime.now(ist) - timedelta(hours=1)).replace(microsecond=0)
+    naive = format_datetime(hour_ago_ist.replace(tzinfo=None))  # no zone, like RBI
+    ahead = format_datetime(datetime.now(timezone.utc) + timedelta(hours=2))
+    xml = (f"<rss><channel><item><title>RBI release</title><link>https://x/1</link><pubDate>{naive}</pubDate></item>"
+           f"<item><title>Clock skew</title><link>https://x/2</link><pubDate>{ahead}</pubDate></item></channel></rss>").encode()
+    first, second = news_sources.parse_rss(xml, "rbi", "MACRO")
+    assert first["published_at"] == hour_ago_ist.astimezone(timezone.utc)
+    assert second["published_at"] <= datetime.now(timezone.utc)
