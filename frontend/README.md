@@ -2,7 +2,7 @@
 
 React 19 + Vite (plain JSX), Tailwind v4, React Router 7. Deployed on Vercel; the backend it
 talks to runs on the project's VM — see the root [`README.md`](../README.md) and
-[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+the handbook in [`src/handbook/`](src/handbook/).
 
 In production the API base URL is the relative path `/api/v1`, proxied to the backend by the
 rewrite in `vercel.json`. That proxy is what keeps the refresh cookie first-party, so Safari

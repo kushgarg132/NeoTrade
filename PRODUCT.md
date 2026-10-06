@@ -1,7 +1,7 @@
 # NeoTrade — product truth
 
 > What this product is and who it serves. For how it is built, see
-> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); for what gets built next, see
+> the handbook in [`frontend/src/handbook/`](frontend/src/handbook/) (in the app at `/system`); for what gets built next, see
 > [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## What it is
@@ -29,7 +29,7 @@ support. Approving one places exactly the trade the strategy asked for. The prod
 claim is *legible machine conviction* — you can always see why.
 
 That cap is not a policy, it is enforced in the type system and covered by tests. See
-`docs/ARCHITECTURE.md` §1.2.
+[`frontend/src/handbook/trading-and-money.md`](frontend/src/handbook/trading-and-money.md), "The invariants".
 
 ## Who uses it
 
@@ -76,6 +76,8 @@ book) sits under More, reached from the More page with the pending-decisions bad
 | Insights *(planned)* | Review | Plain-language findings about their own habits, e.g. "trades after 2 losses in a row: 31% win rate" |
 | Margin note (chat, every page) | Operate | Ask about your own portfolio, journal, paper engine, proposals and limits, or a stock, and get the answer from your data. It can prepare any change the app makes -- approve or decline a proposal, start or stop the paper run, change a limit, place an NSE equity market order on paper or live -- as a card that does nothing until you tap Confirm (twice for a live order); every check runs again at confirm |
 | AI → Overview / Activity / Autopilot `/ai`, `/ai/activity`, `/ai/autopilot` | Operate | The AI account (role `ai`) only: autopilot on/off and mode, capital deployed vs its limit, today's P&L (badged `AI · paper` or `AI · live`), what the autopilot did today, the monthly AI vs you table; every autopilot order and refusal with Stop; the autopilot's switch, live mode (typed confirmation) and fence |
+| Handbook `/system` (admin) | Read | The operator's reference: how every part works (`frontend/src/handbook/*.md`: System & Data, Trading & Money, AI & News, Jobs & Ops, Journey) with live panels from `GET /system/status` — deploy commits, each job's last run, news ingest, data sizes, AI budgets. Reached from More → About |
+| Future `/system/future` (admin) | Operate | The project's backlog: add, edit, reorder and close items by area and status (`backlog` collection), seeded from the roadmap and audits |
 | More (Settings) `/settings` | Operate | Tabs Accounts (brokers + which is yours / the AI's) · Safety · AI · About. Broker connection, guardrails (including the daily loss limit, which also trips the engine's kill-switch, and options limits: trades per day, lots per trade, a warning on unhedged option selling), AI model |
 | More → About → Architecture `/system` | Explain | A live view of how the system fits together |
 | Login `/login` | Operate | Google sign-in, nothing else |

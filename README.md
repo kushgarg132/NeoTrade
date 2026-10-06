@@ -17,7 +17,7 @@ system, not by convention.
 | Question | Document |
 |---|---|
 | What is this product, who uses it, what states matter? | [`PRODUCT.md`](PRODUCT.md) |
-| How does the code work, and where is it going? | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| How does the code work, and where is it going? | [`frontend/src/handbook/`](frontend/src/handbook/) (also in the app at `/system`, admin-only) |
 | What gets built next? | [`docs/ROADMAP.md`](docs/ROADMAP.md) |
 | Visual system | [`DESIGN.md`](DESIGN.md) |
 

@@ -16,12 +16,12 @@ FastAPI + MongoDB + Redis backend on this VM; React 19 + Vite frontend on Vercel
 | Question | Document |
 |---|---|
 | What is this product, who uses it, what are the states that matter? | `PRODUCT.md` |
-| How does the code actually work, and where is it going? | `docs/ARCHITECTURE.md` |
+| How does the code actually work? | `frontend/src/handbook/*.md` — the handbook, also in the app at `/system` |
 | **What should I work on right now?** | `docs/ROADMAP.md` — check the Status column |
 | What should this look like? | `DESIGN.md` (tokens are real, in `frontend/src/index.css`) |
 
-`docs/ARCHITECTURE.md` §1 is verified against the code with file:line anchors. If it and the
-code disagree, the code is right — fix the document in the same commit.
+The handbook (`frontend/src/handbook/`) is verified against the code with `file::symbol` anchors. If it and
+the code disagree, the code is right — fix the handbook in the same commit.
 
 ## Invariants — never break these silently
 

@@ -488,7 +488,7 @@ The linked Telegram bot is a second client of the same agent: live draft streami
 reasoning and tool steps, Confirm/Cancel buttons, follow-up buttons, `/portfolio` `/proposals`
 `/engine` `/limits` `/journal` `/new` `/help`, `/usage` (admins: the Settings usage sheet as one message), and 10 turns of memory. `query_my_data` lets the
 agent (web and Telegram) read any of the user's own collections on an allowlist, never secrets or
-another user's rows. See ARCHITECTURE.md.
+another user's rows. See the handbook, `frontend/src/handbook/ai-and-news.md`.
 
 ### 2026-10-04 — profile and AI personalisation
 
