@@ -26,7 +26,7 @@ where to start — nothing else in this repo tracks it.
 | 14 | Shared market, macro & news data layer (`backend/datalayer/`, `ingest` container) | — | **done** (broker ticks into `quote:` left for later) — 14.0 worker + leader lock + `/health`, 14.1 quotes + macro loops, 14.2 news ingest/triage/scoring/sentiment, 14.3 calendar/flows/regime/brief + chat/report/index wiring, 14.4 news alerts (Telegram + toast), News page, Today markets card, 14.5 news-triggered scans (`source="news"` proposals), 14.6 autopilot news entries + regime fence (exits shadow-logged), 14.7 news outcomes + theme weights (weights fill after ~3 weeks of data), 14.8 shared `daily_bars` + `fundamentals` stores (scan, scanner, quick analysis, portfolio, NIFTY benchmarks read them; per-worker caches deleted) done 2026-10-05; plan `docs/superpowers/plans/2026-10-05-market-news-datalayer.md` |
 | 15 | AI game plan + strategy library + news across the app (15.1 library + 4 strategies, 15.2 plan core + replay scorecard, 15.3 revisions, 15.4 surfacing) | 14 | **15.1 done 2026-10-05** (cards, live library + `/strategies/library` + chat tool, 4 news-aware intraday strategies on paper); **15.2 done 2026-10-05** (08:45 per-user plan, validator + fallback, PlanGate in `size_intents`, skip-day, nightly plan-vs-no-plan replay); **15.3 done 2026-10-05** (event-driven revisions in ingest, plan exits with live ones shadow-only, mid-session stocks in play with backfill); **15.4 done 2026-10-05** (news chips on holdings/watchlist/scanner/decisions via `GET /news/symbols`, journal news findings, Today's plan card on AI → Activity via `GET /plan/today`, Practice → Library page, Telegram plan summaries). **Phase 15 done.** — spec `docs/superpowers/specs/2026-10-05-ai-game-plan-and-strategy-library-design.md`, plan `docs/superpowers/plans/2026-10-05-strategy-library-plan.md` |
 | 16 | AI on tools: shared fact layer, capped tool runner, grounding check (16.1 facts+runner+grounding+chat, 16.2 plan, 16.3 analyst, 16.4 review/index/learning, 16.5 single-call sites on facts) | 15 | **16.1 done 2026-10-06** (13 facts in `backend/ai/facts/`, `ai/runner.run_with_tools`, `ai/grounding`, chat read tools on facts); **16.2 done 2026-10-06** (plan builder + revisions on tools, grounded rationale, single-call fallback); 16.3–16.5 not started — spec `docs/superpowers/specs/2026-10-06-ai-tools-fact-layer-design.md` |
-| 17 | Profitability and LLM cost: measure before spending, trade only where there is evidence (17.1 fix what corrupts the evidence, 17.2 LLM cost, 17.3 edge, 17.4 architecture, 17.5 business) | 14–16 | **planned 2026-10-07** — findings and order below |
+| 17 | Profitability and LLM cost: measure before spending, trade only where there is evidence (17.1 fix what corrupts the evidence, 17.2 LLM cost, 17.3 edge, 17.4 architecture, 17.5 business) | 14–16 | **17.1 done 2026-10-07** (auto intraday waits for a live broker feed, stale seed symbols dropped, untagged approvals refused, long-term gate backtests re-run, Today net of charges, plan replay fixed); 17.2–17.5 planned |
 
 Two orderings are not negotiable: **Phase 3 before Phase 5** (no real order may be
 placeable before the kill-switch and the gate exist), and **Phase 1 before anything that
@@ -968,6 +968,16 @@ names the number it rests on.
 5. **One money rule on Today.** Mine shows "closed, gross" beside AI's figure; show both
    net of estimated charges (the journal mirror already estimates them).
 
+**Landed 2026-10-07:** c67fd89 (auto run waits for Kite/Upstox ACTIVE), 289a1a1 (GMRINFRA,
+GSPL, GUJGASLTD, TATAMOTORS, TATAMTRDVR out of the seed and the master), ae6d319 (409 on
+approving a proposal with no strategy), d593019 (Today's Mine and AI net of charges),
+a9a2b09 (plan replay reads `trading_runs`). Long-term gate backtests re-run on today's
+code (the ₹0 technical_breakout rows predated the stop/target fix): technical_breakout
+97 trades PF 0.71, mean_reversion 65 PF 0.74, macd_crossover 89 PF 0.87 — all fail.
+cash_secured_put made 0 trades (needs Kite's NFO lot sizes). Still to run with a Kite
+session: a year of 5-minute history for the four news-aware intraday strategies, and
+quality_momentum / analyst_verdict through the scan harness.
+
 Done when: a week of intraday paper runs all record `live broker ticks`; every closed
 paper trade has a `strategy`; every registered strategy has a gate backtest row; the
 first `plan_scorecards` rows exist.
@@ -1016,8 +1026,9 @@ same feature set.
    charges at the ticket size the account actually uses.
 3. **Size for the charges.** At ₹25,000, ₹5,000 tickets pay ~0.11% round trip. Either
    trade fewer, larger tickets (long-term/factor) or accept that intraday cannot clear
-   costs at this account size. Add an "expected edge after charges" check to
-   `size_intents`: skip a trade whose target move does not cover 3× its charges.
+   costs at this account size. (`size_intents` already skips an intent whose expected
+   gain is under `COST_MULTIPLE = 3` × its charges — `backend/engine/runner.py`; keep it,
+   and report how many intents it drops so the effect is visible.)
 4. **Prove news before it moves money.** Keep the 30% cap, but turn `autopilot_news` off
    and weight news by its measured hit rate per theme (theme weights already exist)
    once `news_outcomes` has ≥ 200 rows; if the hit rate stays at or below 50%, set the
