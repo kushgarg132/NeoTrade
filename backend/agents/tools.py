@@ -68,7 +68,7 @@ async def fetch_price_history_tool(symbol: str, period: str = "1mo") -> str:
 async def resolve_symbol_tool(query: str) -> str:
     """
     Helps identify the correct stock symbol for a company name.
-    Useful if the user asks for 'Tata Motors' and you need to know it's 'TATAMOTORS.NS'.
+    Useful if the user asks for 'Tata Motors' and you need to know it's 'TMPV.NS'.
     """
     try:
         data = await resolve_company_query(query, with_peers=True)
