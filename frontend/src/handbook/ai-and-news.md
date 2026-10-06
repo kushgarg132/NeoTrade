@@ -112,7 +112,7 @@ Phase 16.2 the plan fetches its facts through tools first (≤ 2 rounds, `builde
 
 Ingest loops in `backend/datalayer/`:
 
-1. **Collect** — `news_poll` (60 s): ~20 RSS feeds (ET, Moneycontrol, Mint, RBI, SEBI, PIB,
+1. **Collect** — `news_poll` (60 s): ~20 RSS feeds (ET, Business Standard, BusinessLine, Mint, RBI, SEBI, PIB,
    CNBC, BBC, Google News), Google News searches (market, macro, each NSE industry every
    15 min, held/watched names every 15 min, the Nifty 200 round-robin), GDELT global events
    (5 min) and NSE corporate filings. Each story is stored once in `news_items` (id = hash of

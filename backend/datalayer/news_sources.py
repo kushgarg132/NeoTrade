@@ -30,8 +30,10 @@ GOOGLE = "https://news.google.com/rss/search?q={q}&hl=en-IN&gl=IN&ceid=IN:en"
 FEEDS = [
     ("et_markets", "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms", "MARKET", 60),
     ("et_economy", "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms", "MACRO", 120),
-    ("mc_latest", "https://www.moneycontrol.com/rss/latestnews.xml", "MARKET", 60),
-    ("mc_reports", "https://www.moneycontrol.com/rss/marketreports.xml", "MARKET", 300),
+    # Moneycontrol's RSS froze on 23 Apr 2024 (and 403s a browser UA); its stories still
+    # arrive through Google News. Replaced 2026-10-07 by two live market feeds.
+    ("bs_markets", "https://www.business-standard.com/rss/markets-106.rss", "MARKET", 60),
+    ("hbl_markets", "https://www.thehindubusinessline.com/markets/feeder/default.rss", "MARKET", 120),
     ("mint_markets", "https://www.livemint.com/rss/markets", "MARKET", 60),
     ("mint_economy", "https://www.livemint.com/rss/economy", "MACRO", 120),
     ("rbi", "https://www.rbi.org.in/pressreleases_rss.xml", "MACRO", 300),

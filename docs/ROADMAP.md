@@ -1119,6 +1119,10 @@ daily bars, unlisted universe symbols, feeds silent 3 days — on the Jobs panel
 a day in session" is covered by stale bars (the pass runs after the close); feed silence is
 3 days, not an hour, because the official feeds (RBI, SEBI, PIB) post rarely.
 17.4.4 (point-in-time data): no free source — see 17.3.1.
+Its first run found `mc_latest`/`mc_reports` silent: every Moneycontrol RSS feed froze on
+23 Apr 2024 (and 403s a browser UA), so both were replaced by Business Standard and
+BusinessLine markets feeds. **17.4.1 (evidence ledger) deferred** (owner, 2026-10-07): revisit
+after the plan review (~2026-11-03) or before the beta, once there is evidence to unify.
 
 ### 17.5 The business
 
