@@ -26,6 +26,7 @@ where to start — nothing else in this repo tracks it.
 | 14 | Shared market, macro & news data layer (`backend/datalayer/`, `ingest` container) | — | **done** (broker ticks into `quote:` left for later) — 14.0 worker + leader lock + `/health`, 14.1 quotes + macro loops, 14.2 news ingest/triage/scoring/sentiment, 14.3 calendar/flows/regime/brief + chat/report/index wiring, 14.4 news alerts (Telegram + toast), News page, Today markets card, 14.5 news-triggered scans (`source="news"` proposals), 14.6 autopilot news entries + regime fence (exits shadow-logged), 14.7 news outcomes + theme weights (weights fill after ~3 weeks of data), 14.8 shared `daily_bars` + `fundamentals` stores (scan, scanner, quick analysis, portfolio, NIFTY benchmarks read them; per-worker caches deleted) done 2026-10-05; plan `docs/superpowers/plans/2026-10-05-market-news-datalayer.md` |
 | 15 | AI game plan + strategy library + news across the app (15.1 library + 4 strategies, 15.2 plan core + replay scorecard, 15.3 revisions, 15.4 surfacing) | 14 | **15.1 done 2026-10-05** (cards, live library + `/strategies/library` + chat tool, 4 news-aware intraday strategies on paper); **15.2 done 2026-10-05** (08:45 per-user plan, validator + fallback, PlanGate in `size_intents`, skip-day, nightly plan-vs-no-plan replay); **15.3 done 2026-10-05** (event-driven revisions in ingest, plan exits with live ones shadow-only, mid-session stocks in play with backfill); **15.4 done 2026-10-05** (news chips on holdings/watchlist/scanner/decisions via `GET /news/symbols`, journal news findings, Today's plan card on AI → Activity via `GET /plan/today`, Practice → Library page, Telegram plan summaries). **Phase 15 done.** — spec `docs/superpowers/specs/2026-10-05-ai-game-plan-and-strategy-library-design.md`, plan `docs/superpowers/plans/2026-10-05-strategy-library-plan.md` |
 | 16 | AI on tools: shared fact layer, capped tool runner, grounding check (16.1 facts+runner+grounding+chat, 16.2 plan, 16.3 analyst, 16.4 review/index/learning, 16.5 single-call sites on facts) | 15 | **16.1 done 2026-10-06** (13 facts in `backend/ai/facts/`, `ai/runner.run_with_tools`, `ai/grounding`, chat read tools on facts); **16.2 done 2026-10-06** (plan builder + revisions on tools, grounded rationale, single-call fallback); 16.3–16.5 not started — spec `docs/superpowers/specs/2026-10-06-ai-tools-fact-layer-design.md` |
+| 17 | Profitability and LLM cost: measure before spending, trade only where there is evidence (17.1 fix what corrupts the evidence, 17.2 LLM cost, 17.3 edge, 17.4 architecture, 17.5 business) | 14–16 | **planned 2026-10-07** — findings and order below |
 
 Two orderings are not negotiable: **Phase 3 before Phase 5** (no real order may be
 placeable before the kill-switch and the gate exist), and **Phase 1 before anything that
@@ -905,3 +906,156 @@ confirmation). The autopilot is a documented, user-approved exception to the bac
 to "model output never places an order" (AGENTS.md, .claude/CLAUDE.md). Spec and plan in
 `docs/superpowers/`. Setup: Kite Connect app; static IP 161.118.167.148 whitelisted with Zerodha
 and Upstox; daily logins (09:00 reminder).
+
+## Phase 17 — Profitability and LLM cost — planned 2026-10-07
+
+Written from a whole-system scan on 2026-10-07 (code, prod data, the backup at
+`~/backups/neotrade/20261006T183548Z/`, OmniRoute's `usage_history`). Every claim below
+names the number it rests on.
+
+### Where things stand (the evidence)
+
+- **No strategy has an edge after charges except the factor portfolio.** Every intraday
+  gate backtest fails: profit factor 0.63–0.91 over 82–509 trades (volume_surge 0.73,
+  vwap_reversion 0.80, orb_breakout 0.63, rsi_momentum_scalp 0.73). The four news-aware
+  intraday strategies have never been backtested. The factor portfolio passes out of
+  sample (21.8% CAGR, Sharpe 1.59, max DD −15%, 2012–2026, survivorship caveat).
+- **Charges are larger than the edge.** Paper intraday, 21 trades: +₹33.6 gross, ₹104.5
+  charges. With a ₹25,000 account and ₹5,000 per-trade cap, the median ticket is ~₹4,900
+  and round-trip charges are ~0.11% of it — more than the 0.05–0.10% a typical intraday
+  rule earns before costs.
+- **Long-term approvals lost money untracked.** 11 long-term paper trades lost ₹16,780
+  gross (₹19,376 net) and carry no `strategy`, so no strategy was judged on them.
+- **The paper record was corrupted for a week.** 32 of 50 intraday runs (26 Sep–2 Oct)
+  died on one stale ticker, `GMRINFRA.NS`; the runner now skips a bad symbol (fixed
+  2026-10-05) but `backend/instruments/seed_nse_equity.json` still lists GMRINFRA.
+- **Paper intraday trades on 15-minute-old candles.** Every recorded run used
+  `yfinance 5m, ~15 min delayed`: the feed is picked once at 09:15, and the Kite (`ai`)
+  session is not logged in yet then, so the run never upgrades to live ticks.
+  Results from delayed bars say nothing about a live strategy.
+- **The game plan was never measured.** `plan/replay.py` read a `runs` collection that
+  does not exist (runs live in `trading_runs`), so `plan_scorecards` stayed empty.
+  Fixed 2026-10-07 (a9a2b09); scorecards start with the next 16:00 pass.
+- **News sentiment is unproven.** `news_outcomes` has 20 scored moves so far; the
+  direction called by the scorer matched the next-day move 30% of the time. Too few to
+  judge, not yet a signal — yet it is 30% of every composite score and `autopilot_news`
+  is on.
+- **LLM use.** ~200–340 calls a day since 2026-10-03 (21/day before), 5.5M tokens and
+  $6.47 this month on the gateway key. **All three tiers point at the same model,
+  `gemini-3.7-flash-high`**, so headline triage reasons like a plan: average output
+  ~4,900 tokens, about half of it reasoning. 114 calls went to
+  `claude-opus-4-6-thinking`, whose shared pool is down to 10%. The binding cost is
+  quota and latency (10 s average), not dollars — until there are more users, when
+  per-user calls (game plan ~20 deep calls a day per auto-intraday user, chat,
+  portfolio review) multiply.
+
+### 17.1 Stop corrupting the evidence (first, small)
+
+1. **Live feed or no intraday paper run.** Start the auto run when the `ai` broker
+   session becomes ACTIVE (on login, not only at 09:15), and swap a running candle-poll
+   feed for broker ticks when the session arrives. A day with no live session runs no
+   intraday paper (logged as "no live feed"), so the record only holds live-like days.
+   `backend/engine/autorun.py`, `backend/routers/trading.py::build_feed`.
+2. **Stale instruments.** Refresh `seed_nse_equity.json` from the live NSE list and add a
+   rename map (GMRINFRA → GMRAIRPORT …) applied to stored universes; a symbol that fails
+   its first quote is dropped from the run with a warning (already the runner's behaviour).
+3. **Every paper trade carries its strategy.** Refuse an approval without `strategy`;
+   backfill none (history was reset 2026-10-06).
+4. **Long-term backtests work.** `technical_breakout`'s gate backtest made 5 trades with
+   ₹0 P&L — the long-term backtest path does not close positions for it. Fix, then run
+   gate backtests for every long-term strategy and the four untested intraday ones
+   (a year of Kite 5-minute history).
+5. **One money rule on Today.** Mine shows "closed, gross" beside AI's figure; show both
+   net of estimated charges (the journal mirror already estimates them).
+
+Done when: a week of intraday paper runs all record `live broker ticks`; every closed
+paper trade has a `strategy`; every registered strategy has a gate backtest row; the
+first `plan_scorecards` rows exist.
+
+### 17.2 Cut LLM cost by matching the model to the job
+
+1. **Three tiers, three models.** `fast` = a non-reasoning flash/haiku model (triage,
+   follow-ups, name resolution); `standard` = flash with low reasoning (brief, research
+   note, learning note, index move); `deep` = flash-high only for news scoring and the
+   plan. Opus-class models only for the chat when the user asks for depth. Expected:
+   roughly half the output tokens disappear from fast and standard calls, and latency
+   drops from ~10 s.
+2. **Score less news.** Before the deep scoring call: drop near-duplicate headlines
+   (same story, many feeds — cluster by normalised title), and drop items whose tags
+   touch no followed symbol, no followed sector and not the market. Keep the 200/day cap.
+3. **Brief only when something changed.** Hourly in session instead of every 30 min,
+   and skip a slot when no material item and no regime change happened since the last
+   brief.
+4. **Plan only when it can matter.** Build the game plan only on days the intraday
+   auto-run will actually run with a live feed and only for strategies not paused;
+   revisions ≤ 2 a day (now 6); tool rounds ≤ 2 (now 4). If after four weeks
+   `plan_scorecards` shows the plan does not beat no-plan net of charges, switch plans off.
+5. **Meter per feature.** One OmniRoute key per task family (news, plan, research,
+   chat, portfolio) so `usage_history` splits by `api_key_name`; show it on the
+   handbook's AI panel with a per-feature daily budget and an 80% alert.
+6. **Cache what repeats.** Research notes are per symbol already — share them across
+   users explicitly; cache index-move explanations per ticker per session (15 min now);
+   turn on OmniRoute's semantic cache for the read-only explainers.
+7. **Per-user ceiling before the beta.** A daily per-user budget for chat and research
+   calls, with the shared pipeline (news, brief, regime) amortised across everyone.
+
+Done when: calls per day and tokens per call are visible per feature, fast-tier calls
+average under 500 output tokens, and the month's tokens fall by at least half at the
+same feature set.
+
+### 17.3 Make money where there is evidence
+
+1. **Put the capital behind the factor portfolio.** It is the only strategy with
+   out-of-sample evidence. Fix its survivorship bias first (point-in-time Nifty 200
+   membership), keep it on paper until its own gate holds (3 months, beats Nifty since
+   start), then go live small through the AI account — monthly rebalances on delivery
+   (CNC) cost little next to intraday.
+2. **Park intraday.** Turn `auto_paper_intraday` off until one intraday strategy passes
+   its gate on a year of Kite history; nothing intraday trades real money before both
+   gates (unchanged rule). Raise the bar for intraday: profit factor ≥ 1.3 *after*
+   charges at the ticket size the account actually uses.
+3. **Size for the charges.** At ₹25,000, ₹5,000 tickets pay ~0.11% round trip. Either
+   trade fewer, larger tickets (long-term/factor) or accept that intraday cannot clear
+   costs at this account size. Add an "expected edge after charges" check to
+   `size_intents`: skip a trade whose target move does not cover 3× its charges.
+4. **Prove news before it moves money.** Keep the 30% cap, but turn `autopilot_news` off
+   and weight news by its measured hit rate per theme (theme weights already exist)
+   once `news_outcomes` has ≥ 200 rows; if the hit rate stays at or below 50%, set the
+   AI share to 0 for that theme.
+5. **Long-term proposals: fewer, better.** Expire after 3 days (as now), but show only
+   the top 5 by score with a minimum expected move after charges; 27 pending is noise
+   nobody reviews.
+6. **Autopilot stays off** until a strategy on the AI account has passed both gates.
+
+Done when: the factor book has 3 months of paper beating Nifty; intraday is off or
+gated by a passing year-long backtest; no trade is sized whose expected move does not
+clear 3× charges.
+
+### 17.4 Architecture
+
+1. **One evidence ledger.** Every decision (engine proposal, plan change, news alert,
+   autopilot order, user approval) writes one row with its inputs and, later, its
+   outcome net of charges — the same shape `news_outcomes` uses. The learning loop,
+   plan scorecard, strategy record and news hit rate become queries on one table
+   instead of four bespoke stores.
+2. **Feature switches with a cost line.** Each LLM-backed feature (news scoring, plan,
+   brief, research, portfolio review, chat) gets a switch and its monthly token cost on
+   the handbook page, so turning something off is a decision with a number beside it.
+3. **Data quality as a job.** A nightly check: instruments that failed a quote, symbols
+   in universes no longer listed, bars older than a day in session, feeds silent for
+   an hour — reported on the handbook's Jobs panel.
+4. **Point-in-time data.** Index membership and fundamentals as of the backtest date,
+   so backtests stop flattering today's survivors.
+
+### 17.5 The business
+
+The product is the discipline layer (journal, habits, guardrails), not the engine. The
+engine earns its keep by being honest, and costs little once 17.2 lands. Before more
+engine work: Phase 12 (beta, 20–50 traders). Keep paid features LLM-light (journal,
+insights and guardrails make no model calls), and target an LLM cost per active user per
+month that the Pro price (₹299–499) covers many times over.
+
+### Order
+
+17.1 → 17.2 (both small, both protect everything after them) → 17.3.1–17.3.3 →
+Phase 12 beta → 17.4 → 17.3.4 once news has data → Phase 13.
