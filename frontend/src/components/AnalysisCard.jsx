@@ -86,7 +86,7 @@ const AnalysisCard = ({ quick, ai, aiLoading, aiError, aiRequested, onOpenAiTab 
                   className="w-full h-full object-contain p-1"
                 />
               ) : (
-                <StockIcon symbol={company?.symbol} className="size-full border-0 rounded-none text-base" />
+                <StockIcon symbol={company?.symbol} className="size-full border-0 text-base" />
               )}
             </div>
             <div className="min-w-0">

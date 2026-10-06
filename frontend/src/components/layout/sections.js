@@ -9,11 +9,13 @@ import { Sun, Wallet, Bot, Search, Settings } from 'lucide-react';
  * every page inside it.
  */
 export const SECTIONS = [
-  { icon: Sun, label: 'Today', path: '/', match: ['/'], exact: true, primary: true },
+  // Today carries the badge: what needs you outside practice (logins, waiting
+  // cards, interrupted approvals, guardrail alerts). Practice counts its own.
+  { icon: Sun, label: 'Today', path: '/', match: ['/'], exact: true, primary: true, counter: true },
   { icon: Wallet, label: 'Mine', path: '/mine/holdings', match: ['/mine'], primary: true },
   { icon: Bot, label: 'AI', path: '/ai', match: ['/ai'], primary: true },
   { icon: Search, label: 'Research', path: '/research', match: ['/research'], primary: true },
-  { icon: Settings, label: 'More', path: '/settings', match: ['/settings', '/profile', '/practice', '/system'], primary: true, counter: true },
+  { icon: Settings, label: 'More', path: '/settings', match: ['/settings', '/profile', '/practice', '/system'], primary: true },
 ];
 
 export const sectionActive = (item, pathname) =>

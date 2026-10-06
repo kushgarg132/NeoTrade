@@ -8,7 +8,7 @@ import { SECTIONS, sectionActive } from './sections';
  * aware — the app is used one-handed during the session, and a hamburger that
  * hides the decisions queue behind a tap is the wrong affordance for that.
  */
-const BottomNav = ({ pendingCount = 0 }) => {
+const BottomNav = ({ attention = 0 }) => {
   const { pathname } = useLocation();
   return (
   <nav
@@ -42,9 +42,9 @@ const BottomNav = ({ pendingCount = 0 }) => {
                 )}
                 <span className="relative">
                   <item.icon className="w-5 h-5" strokeWidth={1.75} />
-                  {item.counter && pendingCount > 0 && (
+                  {item.counter && attention > 0 && (
                     <span className="absolute -top-1.5 -right-2.5 min-w-[1rem] px-1 figure-md text-[0.5625rem] leading-4 text-center bg-[var(--stamp)] text-[var(--paper)]">
-                      {pendingCount}
+                      {attention}
                     </span>
                   )}
                 </span>

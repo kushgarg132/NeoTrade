@@ -38,8 +38,18 @@ const Layout = ({ children }) => {
 
   // Counts what Decisions lists: long-term proposals. Re-counted on each
   // event, since a failed send can put one back to PENDING.
+  // The nav badge: what needs the user outside practice (GET /today/attention).
+  const [attention, setAttention] = useState(0);
+  const loadAttention = () =>
+    api.get(endpoints.todayAttention).then((res) => setAttention(res.data.count)).catch(() => setAttention(0));
+  useEffect(() => {
+    loadAttention();
+  }, []);
+  useReconnect(loadAttention);
+
   useTopic('suggestions', (message) => {
     if (message.data?.mode === 'LONGTERM') loadPending();
+    loadAttention(); // an interrupted approval lands as NEEDS_REVIEW
   });
 
   // Material news on something the user holds (backend/datalayer/reactor.py):
@@ -56,7 +66,7 @@ const Layout = ({ children }) => {
   return (
     <PendingContext.Provider value={pending}>
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
-      <Sidebar pendingCount={pending} />
+      <Sidebar attention={attention} />
 
       <div className="lg:pl-56">
         <Masthead noteNumber={noteNumber()} />
@@ -81,7 +91,7 @@ const Layout = ({ children }) => {
         ))}
       </div>
 
-      <BottomNav pendingCount={pending} />
+      <BottomNav attention={attention} />
       <ChatWidget />
     </div>
     </PendingContext.Provider>

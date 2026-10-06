@@ -42,7 +42,7 @@ export const StockIcon = ({ symbol: raw, className }) => {
   const symbol = bareSymbol(raw)?.toUpperCase();
   const [failed, setFailed] = useState(null);
   if (!symbol) return null;
-  const box = 'inline-flex size-5 shrink-0 items-center justify-center rounded-sm border border-[var(--rule)]';
+  const box = 'inline-flex size-5 shrink-0 items-center justify-center border border-[var(--rule)]';
   if (failed === symbol || missingLogos.has(symbol)) {
     return (
       <span aria-hidden="true" className={cn(box, 'bg-[var(--paper-sunk)] text-[0.625rem] font-semibold text-[var(--ink-soft)]', className)}>

@@ -257,8 +257,9 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
               {suggestion.symbol} at market on your account. Tap again to send.
             </p>
           )}
-          {/* One row of three: decline, paper, real money (two taps). */}
-          <div className="grid grid-cols-3 gap-2">
+          {/* Decline and Paper share the row; real money sits apart and quiet
+              until armed, so it is never the thumb's default (two taps). */}
+          <div className="grid grid-cols-2 gap-2">
             <Button
               variant="secondary"
               size="sm"
@@ -279,10 +280,12 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
               {busy === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
               Paper
             </Button>
+          </div>
             {canGoLive && hasMine ? (
               <Button
-                variant="danger"
+                variant={confirmLive ? 'danger' : 'secondary'}
                 size="sm"
+                className="mt-2 w-full"
                 onClick={() => {
                   // A fast double tap is one gesture, not two taps: the send arms after 600ms.
                   if (confirmLive) return Date.now() >= liveArmedAt.current && act('live');
@@ -296,20 +299,17 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
                 aria-label={`Approve ${suggestion.symbol} with real money on your account`}
               >
                 {busy === 'live' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {confirmLive ? 'Send real order' : 'Real money'}
+                {confirmLive ? 'Send real order' : 'Real money on my account…'}
               </Button>
             ) : canGoLive && hasMine === false ? (
               <Link
                 to="/settings?tab=accounts"
-                className="doc-meta normal-case underline self-center text-center"
+                className="mt-2 block doc-meta normal-case underline text-center"
                 aria-label="Connect your broker and set it as My account in Settings to approve with real money"
               >
-                Connect broker
+                Connect a broker to approve with real money
               </Link>
-            ) : (
-              <span />
-            )}
-          </div>
+            ) : null}
         </div>
       )}
 

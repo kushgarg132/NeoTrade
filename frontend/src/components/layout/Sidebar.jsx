@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { SECTIONS, sectionActive } from './sections';
 import { Avatar } from '../common/Avatar';
 
-const Sidebar = ({ pendingCount = 0 }) => {
+const Sidebar = ({ attention = 0 }) => {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
 
@@ -41,9 +41,9 @@ const Sidebar = ({ pendingCount = 0 }) => {
           >
             <item.icon className="w-4 h-4 shrink-0" strokeWidth={1.75} />
             <span className="flex-1">{item.label}</span>
-            {item.counter && pendingCount > 0 && (
+            {item.counter && attention > 0 && (
               <span className="figure-md text-[0.6875rem] px-1.5 py-0.5 bg-[var(--stamp)] text-[var(--paper)]">
-                {pendingCount}
+                {attention}
               </span>
             )}
           </NavLink>

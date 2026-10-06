@@ -32,6 +32,8 @@ const Decisions = () => {
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [scanNote, setScanNote] = useState(null);
+  // Bulk decline takes two taps, like every other irreversible action here.
+  const [bulk, setBulk] = useState('idle'); // idle | armed | busy
   const { news } = useSymbolNews(items.map((s) => s.symbol));
 
   const load = () => {
@@ -94,7 +96,25 @@ const Decisions = () => {
   // Long-term proposals only: intraday signals execute themselves and their
   // fills are on Practice → Book.
   const inMode = items.filter((item) => item.mode === 'LONGTERM');
-  const pending = inMode.filter((item) => item.status === 'PENDING');
+  // Strongest first: the top of the list is the one worth a decision.
+  const pending = inMode
+    .filter((item) => item.status === 'PENDING')
+    .sort((a, b) => (b.score?.final ?? 0) - (a.score?.final ?? 0));
+  const expiring = pending.filter((item) => item.expires_at && new Date(item.expires_at) - Date.now() < 86_400_000);
+
+  const declineExpiring = async () => {
+    if (bulk === 'idle') return setBulk('armed');
+    setBulk('busy');
+    // One at a time: a failure leaves the rest pending rather than half-known.
+    for (const item of expiring) {
+      try {
+        await decide(item, 'reject');
+      } catch {
+        break;
+      }
+    }
+    setBulk('idle');
+  };
   const decided = inMode.filter((item) => item.status !== 'PENDING');
   const visible = showDecided ? decided : pending;
 
@@ -124,6 +144,24 @@ const Decisions = () => {
             <p className="doc-meta normal-case hidden sm:block">
               Long-term proposals wait for your decision.
             </p>
+            {!showDecided && expiring.length > 1 && (
+              <span className="flex items-center gap-2 ml-auto">
+                {bulk === 'armed' && (
+                  <button type="button" onClick={() => setBulk('idle')} className="field-label min-h-9 hover:underline">
+                    Keep
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={declineExpiring}
+                  disabled={bulk === 'busy'}
+                  className="field-label min-h-9 inline-flex items-center gap-1 text-[var(--ink)] hover:underline"
+                >
+                  {bulk === 'busy' && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {bulk === 'armed' ? `Tap to decline ${expiring.length}` : `Decline ${expiring.length} expiring today`}
+                </button>
+              </span>
+            )}
             <button
               type="button"
               onClick={() => setShowDecided((value) => !value)}

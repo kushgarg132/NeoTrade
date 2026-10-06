@@ -5,10 +5,10 @@ import Layout from '../components/Layout';
 import Markdown from '../components/common/Markdown';
 import MoneyBadge from '../components/common/MoneyBadge';
 import StopAutopilot from '../components/common/StopAutopilot';
-import { Sheet, Ruling, Money } from '../components/doc/Doc';
+import { Sheet, Ruling, Money, StockIcon } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
-import { formatDateTime } from '../utils/formatters';
+import { formatCurrency, formatDateTime } from '../utils/formatters';
 
 /**
  * Today: the first screen of the day. Can it trade (status strip), what
@@ -83,13 +83,25 @@ const expiresIn = (iso) => {
   return hours < 24 ? `expires in ${Math.ceil(hours)}h` : `expires in ${Math.ceil(hours / 24)}d`;
 };
 
-const NeedsYou = ({ items }) => (
+/** A proposal's row says what approving costs and how sure the engine is, so a
+ *  glance is enough to know whether to open Decisions now. */
+const proposalLine = (item) =>
+  [
+    item.entry != null && `@ ${formatCurrency(item.entry)}`,
+    item.conviction != null && `conviction ${item.conviction.toFixed(2)}`,
+    expiresIn(item.expires_at),
+  ].filter(Boolean).join(' · ');
+
+const NeedsYou = ({ items, proposalsTotal }) => {
+  const shown = items.filter((item) => item.kind === 'proposal').length;
+  const more = (proposalsTotal || 0) - shown;
+  return (
   <Sheet
     title="Needs you"
-    meta={items.length ? String(items.length) : undefined}
+    meta={items.length ? (more > 0 ? `${items.length} shown · ${more} more proposals` : String(items.length)) : undefined}
     actions={
       <Link to="/practice/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
-        All decisions ›
+        {proposalsTotal ? `All ${proposalsTotal} decisions ›` : 'All decisions ›'}
       </Link>
     }
   >
@@ -100,12 +112,18 @@ const NeedsYou = ({ items }) => (
         {items.map((item, i) => {
           const body = (
             <>
+              {item.kind === 'proposal' && <StockIcon symbol={item.symbol} />}
               <span className="flex-1 min-w-0">
                 <span className="block text-sm font-semibold truncate">{item.title}</span>
                 <span className="block doc-meta normal-case truncate">
-                  {[item.detail, expiresIn(item.expires_at)].filter(Boolean).join(' · ')}
+                  {item.kind === 'proposal'
+                    ? proposalLine(item)
+                    : [item.detail, expiresIn(item.expires_at)].filter(Boolean).join(' · ')}
                 </span>
               </span>
+              {item.kind === 'proposal' && item.notional != null && (
+                <span className="figure-md text-sm shrink-0">{formatCurrency(item.notional)}</span>
+              )}
               {item.link && <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />}
             </>
           );
@@ -120,7 +138,8 @@ const NeedsYou = ({ items }) => (
       </ul>
     )}
   </Sheet>
-);
+  );
+};
 
 const PnlSplit = ({ pnl, aiMode, market, loadedAt, now }) => (
   <Sheet title="Today" meta={market?.open
@@ -260,7 +279,7 @@ const Today = () => {
       <div className="private space-y-3 sm:space-y-4 max-w-3xl">
         <StatusStrip data={data} />
         <SetupChecklist setup={data.setup} />
-        <NeedsYou items={data.needs_you || []} />
+        <NeedsYou items={data.needs_you || []} proposalsTotal={data.proposals_total} />
         <PnlSplit pnl={data.pnl_today} aiMode={data.autopilot ? (data.autopilot.live ? 'live' : 'paper') : undefined} market={data.market} loadedAt={loadedAt} now={now} />
         <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />
         <MarketBackdrop backdrop={data.backdrop} />

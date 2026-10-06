@@ -183,6 +183,7 @@ export const endpoints = {
     scorecard: (venue, mode) => inMode('/analytics/scorecard', venue, mode),
   },
   today: '/today',
+  todayAttention: '/today/attention',
   profile: {
     get: '/profile',
     memories: '/profile/memories',
