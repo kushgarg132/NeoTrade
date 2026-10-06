@@ -134,8 +134,12 @@ async def execute_live_order(
         return order, "SUBMITTED", 0.0
 
     try:
-        await orders.update_status(order.id, status.status, status.filled_quantity, status.average_price)
-        if status.filled_quantity > 0:
+        # The reconciler may have seen this fill while we waited; then it booked it.
+        claimed = await orders.claim({"_id": order.id, "filled_quantity": 0.0, "status": "SUBMITTED"},
+                                     status.status, status.filled_quantity, status.average_price)
+        if not claimed and await orders.collection.find_one({"_id": order.id}) is None:
+            claimed = True  # never recorded (logged above): nothing else can book it
+        if claimed and status.filled_quantity > 0:
             await _book(ledger, Fill(
                 order_id=order.id, symbol=order.symbol, side=order.side, quantity=status.filled_quantity,
                 price=status.average_price, timestamp=datetime.now(timezone.utc), costs=0.0, venue="live",

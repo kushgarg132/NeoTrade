@@ -75,6 +75,25 @@ class LiveOrderStore:
             }},
         )
 
+    async def claim(
+        self, row: dict, status: LiveOrderState, filled_quantity: float, average_price: float,
+    ) -> bool:
+        """Compare-and-set from the `row` as the caller read it: True only for
+        the one caller that moves it, which alone may book the new quantity.
+        The engine's poll, the reconciler (engine/reconcile.py) and
+        execute_live_order's own status check can all see the same fill."""
+        moved = await self.collection.find_one_and_update(
+            {"_id": row["_id"], "filled_quantity": row.get("filled_quantity", 0.0), "status": row["status"]},
+            {"$set": {"status": status, "filled_quantity": filled_quantity, "average_price": average_price,
+                      "updated_at": _now()}},
+        )
+        return moved is not None
+
     async def pending_for_user(self, user_id: str) -> list[dict]:
-        cursor = self.collection.find({"user_id": user_id, "status": {"$in": list(_PENDING_STATES)}})
+        """The engine's own pending orders. Rows with a broker role (mine /
+        ai: approve-live, chat, autopilot) are the reconciler's, booked to
+        their own ledger -- never the engine run's (audit M3)."""
+        cursor = self.collection.find({
+            "user_id": user_id, "status": {"$in": list(_PENDING_STATES)}, "role": {"$nin": ["mine", "ai"]},
+        })
         return await cursor.to_list(length=None)

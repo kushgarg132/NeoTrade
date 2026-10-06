@@ -142,3 +142,46 @@ async def test_positions_proxies_the_adapter():
     positions = client.positions()
 
     assert positions == {}  # synchronous protocol method -- see Step 3 note on why
+
+
+async def test_the_engine_never_books_an_order_another_path_placed():
+    """Audit M3: an approve-live, chat or autopilot order (role mine/ai) is
+    the reconciler's (backend/engine/reconcile.py), booked to its own ledger.
+    The engine polling it too would put that fill in the run's portfolio and
+    hide it from the reconciler."""
+    adapter = _FakeBrokerAdapter()
+    client, store = _client(adapter)
+    await store.record_submitted(
+        order_id="auto-1", broker_order_id="broker-auto-1", user_id="alice", strategy_name="",
+        symbol="TCS", side=Side.BUY, role="ai",
+    )
+    adapter.set_status("broker-auto-1", BrokerOrderStatus(
+        broker_order_id="broker-auto-1", status="FILLED", filled_quantity=5.0, average_price=4000.0,
+    ))
+
+    await client.poll_once()
+
+    assert [f async for f in client.fills()] == []
+    assert (await store.collection.find_one({"_id": "auto-1"}))["filled_quantity"] == 0.0  # still the reconciler's
+
+
+async def test_two_runs_polling_one_order_book_its_fill_once():
+    adapter = _FakeBrokerAdapter()
+    first, store = _client(adapter)
+    second = BrokerExecutionClient(adapter, store, user_id="alice")  # the user's other run, same rows
+    await first.submit(_order())
+    adapter.set_status("broker-order-1", BrokerOrderStatus(
+        broker_order_id="broker-order-1", status="FILLED", filled_quantity=10.0, average_price=2500.0,
+    ))
+    rows = await store.pending_for_user("alice")
+    store.pending_for_user = lambda user_id: _rows(rows)  # both read the row before either writes
+
+    await first.poll_once()
+    await second.poll_once()
+
+    fills = [f async for f in first.fills()] + [f async for f in second.fills()]
+    assert len(fills) == 1
+
+
+async def _rows(rows):
+    return [dict(r) for r in rows]

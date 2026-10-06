@@ -78,6 +78,13 @@ today's Nifty 200 list: measured against survivorship-free yardsticks that flatt
 ~4–8% a year (`backend/factor/survivorship.py`, ROADMAP 17.3.1), leaving no clear edge over
 the index. Its forward paper record is the evidence that counts.
 
+**Who follows a live order.** Every real order is a `live_orders` row. One the engine sent has
+no broker role and is polled only by its run (`BrokerExecutionClient.poll_once`); one sent by
+approve-live, the chat or the autopilot carries its role (`mine` / `ai`) and is followed only
+by the reconciler (`engine/reconcile.py`), which books late fills to that row's ledger. Every
+status change is a compare-and-set (`LiveOrderStore.claim`), so a fill seen by two of them —
+a run and the user's other run, or `execute_live_order` and the reconciler — is booked once.
+
 ## Gates to real money
 
 A strategy switched live routes real orders only if all of these hold. Each is code, not policy.

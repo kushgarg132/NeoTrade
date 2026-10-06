@@ -73,11 +73,11 @@ class BrokerExecutionClient:
             try:
                 status = await self._adapter.get_order_status(row["broker_order_id"])
                 newly_filled = status.filled_quantity - row["filled_quantity"]
-
-                await self._store.update_status(
-                    row["_id"], status=status.status,
-                    filled_quantity=status.filled_quantity, average_price=status.average_price,
-                )
+                if newly_filled <= 0 and status.status == row["status"]:
+                    continue
+                # Another of the user's runs may have read the same row.
+                if not await self._store.claim(row, status.status, status.filled_quantity, status.average_price):
+                    continue
 
                 if newly_filled > 0:
                     self._pending_fills.append(Fill(

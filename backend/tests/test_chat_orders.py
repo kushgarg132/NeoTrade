@@ -1,6 +1,8 @@
 """Orders placed from the chat: attributed to "chat" on paper, and placed
 live through the same path an approved option proposal uses."""
 
+from datetime import datetime, timezone
+
 from mongomock_motor import AsyncMongoMockClient
 
 from backend.core.models import BrokerOrderStatus, Order, Side
@@ -45,3 +47,25 @@ async def test_live_equity_order_books_the_broker_fill():
     assert (fills[0].venue, fills[0].price) == ("live", 1501.0)
     record = await db["live_orders"].find_one({"_id": "o1"})
     assert (record["reason"], record["strategy_name"]) == ("buy 10 infy", "chat")
+
+
+async def test_a_fill_the_reconciler_booked_meanwhile_is_not_booked_twice():
+    """Audit M3: execute_live_order checks status for a few seconds; the
+    reconciler loop can see the fill in that window and book it first."""
+    from backend.engine.reconcile import reconcile
+
+    db = AsyncMongoMockClient()["test_db"]
+    ledger = LedgerStore(db, user_id="alice")
+    order = Order(id="o1", symbol="INFY", side=Side.BUY, quantity=10, order_type="MARKET", product="CNC", strategy_name="chat")
+
+    class _RacedBroker(_Broker):
+        async def get_order_status(self, broker_order_id):
+            async def adapter_for(user_id, role):
+                return _Broker()
+            await reconcile(db, adapter_for, now=datetime.now(timezone.utc))  # the other loop, mid-wait
+            return await super().get_order_status(broker_order_id)
+
+    await execute_live_order(order, ledger, _RacedBroker(), LiveOrderStore(db), "chat", "buy 10 infy")
+
+    fills = await ledger.get_fills(venue="live")
+    assert [f.quantity for f in fills] == [10]

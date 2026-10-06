@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Awaitable, Callable, Optional
 
 from backend.core.models import Fill, Side
-from backend.engine.execution.live_order_store import _PENDING_STATES
+from backend.engine.execution.live_order_store import _PENDING_STATES, LiveOrderStore
 from backend.engine.persistence import LedgerStore
 
 logger = logging.getLogger(__name__)
@@ -43,13 +43,8 @@ async def reconcile(db, adapter_for: AdapterFor, now: datetime) -> int:
         new = float(status.filled_quantity) - before
         if new > 0 or status.status != row["status"]:
             # Compare-and-set on what was filled: both workers run this loop,
-            # and only the one that moves the row may book the new quantity.
-            claimed = await db["live_orders"].find_one_and_update(
-                {"_id": row["_id"], "filled_quantity": row.get("filled_quantity", 0), "status": row["status"]},
-                {"$set": {"status": status.status, "filled_quantity": status.filled_quantity,
-                          "average_price": status.average_price, "updated_at": now}},
-            )
-            if claimed is None:
+            # and execute_live_order may still be checking the same order.
+            if not await LiveOrderStore(db).claim(row, status.status, status.filled_quantity, status.average_price):
                 continue
             if new > 0:
                 await _book(LedgerStore(db, user_id=row.get("ledger_user") or row["user_id"]), Fill(
