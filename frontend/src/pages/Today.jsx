@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Check, Circle } from 'lucide-react';
 import Layout from '../components/Layout';
@@ -161,7 +161,8 @@ const PnlSplit = ({ pnl, aiMode, market, loadedAt, now }) => (
   </Sheet>
 );
 
-const AiActivity = ({ rows, onStop, autopilotOn }) => (
+// Hidden while there is nothing to show, unless the autopilot is on: its Stop button lives here.
+const AiActivity = ({ rows, onStop, autopilotOn }) => (!rows?.length && !autopilotOn ? null : (
   <Sheet
     title="AI activity"
     actions={<StopAutopilot on={autopilotOn} onStopped={onStop} />}
@@ -186,7 +187,7 @@ const AiActivity = ({ rows, onStop, autopilotOn }) => (
     )}
     <Link to="/ai/activity" className="field-label text-[var(--stamp)] hover:underline inline-block mt-2">All activity ›</Link>
   </Sheet>
-);
+));
 
 const REGIME = {
   risk_off: { label: 'Risk off', tone: 'bad' },
@@ -195,6 +196,30 @@ const REGIME = {
 };
 
 /** The ingest worker's read of the market: regime, what drives it, the day's big events, and the brief. */
+// The brief opens on its first lines; Show more appears only when there is more.
+const Brief = ({ text }) => {
+  const [open, setOpen] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const box = useRef(null);
+  useLayoutEffect(() => {
+    if (box.current) setClipped(box.current.scrollHeight > box.current.clientHeight + 1);
+  }, [text]);
+  return (
+    <div>
+      <p className="field-label mb-1">Market brief</p>
+      <div ref={box} className={cn('overflow-hidden', !open && 'max-h-28')}>
+        <Markdown className="text-sm text-[var(--ink-soft)]">{text}</Markdown>
+      </div>
+      {(clipped || open) && (
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+                className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
+          {open ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
+};
+
 const MarketBackdrop = ({ backdrop }) => {
   const { regime, brief, events = [] } = backdrop || {};
   if (!regime && !brief && !events.length) return null;
@@ -219,12 +244,7 @@ const MarketBackdrop = ({ backdrop }) => {
           ))}
         </ul>
       )}
-      {brief && (
-        <details>
-          <summary className="field-label cursor-pointer min-h-9 inline-flex items-center">Market brief</summary>
-          <Markdown className="text-sm text-[var(--ink-soft)]">{brief}</Markdown>
-        </details>
-      )}
+      {brief && <Brief text={brief} />}
     </Sheet>
   );
 };
@@ -286,10 +306,6 @@ const Today = () => {
           </div>
           <div className="space-y-3 sm:space-y-4">
             <MarketBackdrop backdrop={data.backdrop} />
-            <Link to="/research" className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)]">
-              <span className="text-sm"><span className="field-label">Markets</span> · NIFTY, BANK NIFTY, movers and news</span>
-              <ArrowRight className="w-4 h-4 text-[var(--ink-faint)]" />
-            </Link>
           </div>
         </div>
       </div>
