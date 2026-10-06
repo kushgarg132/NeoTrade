@@ -42,7 +42,7 @@ def _bare(symbol: str) -> str:
 
 
 async def _llm(system: str, prompt: str) -> str:
-    return await llm_service.get_completion(prompt, system_prompt=system, tier="deep")
+    return await llm_service.get_completion(prompt, system_prompt=system, tier="deep", feature="plan")
 
 
 async def _json(redis, key: str) -> Optional[dict]:
@@ -155,7 +155,7 @@ async def _plan_with_tools(db, redis, user_id: str, ctx: dict, strategies: set[s
     seed = {**ctx, "candidates": json.dumps(rows, default=str)}
     system, prompt = render("game_plan_tools", **seed)
     tools = as_tools(db, redis, user_id, ["price_summary", "news", "fundamentals", "positions"])
-    out = await run_with_tools("game_plan", system=system, prompt=prompt, tools=tools, tier="deep",
+    out = await run_with_tools("game_plan", system=system, prompt=prompt, tools=tools, tier="deep", feature="plan",
                                schema=PlanReply, llm=llm, max_rounds=MAX_TOOL_ROUNDS, reserve=lambda: store.reserve_call(redis, today))
     reply = out["output"]
     if not isinstance(reply, PlanReply):

@@ -23,7 +23,7 @@ class _FakeAgent:
 
 
 async def _run(monkeypatch, seen):
-    async def fake_llm(tier=None):
+    async def fake_llm(tier=None, feature=None):
         return object()
 
     async def fake_snapshot(db, redis, user_id, now=None):
@@ -54,7 +54,7 @@ async def test_system_prompt_carries_snapshot_and_page(monkeypatch):
 
 
 async def test_a_finished_reply_ends_with_follow_up_suggestions(monkeypatch):
-    async def fake_completion(prompt, system_prompt, tier=None):
+    async def fake_completion(prompt, system_prompt, tier=None, feature=None):
         assert tier == "fast" and "Card ready." in prompt
         return "Here are three:\n1. Yes, approve it\n- What else is pending?\n\"How much is at risk?\"\nOne more?"
 
@@ -78,7 +78,7 @@ async def test_follow_ups_see_only_the_reply_after_the_last_tool(monkeypatch):
             yield {"event": "on_tool_end", "name": "get_portfolio", "data": {"output": "{}"}}
             yield chunk("SJVN is your top holding. Approve it?")
 
-    async def fake_completion(prompt, system_prompt, tier=None):
+    async def fake_completion(prompt, system_prompt, tier=None, feature=None):
         seen["prompt"] = prompt
         return "Yes, approve it"
 
@@ -93,7 +93,7 @@ async def test_follow_ups_see_only_the_reply_after_the_last_tool(monkeypatch):
 
 
 async def test_a_follow_up_failure_still_leaves_the_reply(monkeypatch):
-    async def broken(prompt, system_prompt, tier=None):
+    async def broken(prompt, system_prompt, tier=None, feature=None):
         raise RuntimeError("gateway down")
 
     monkeypatch.setattr(agent.llm_service, "get_completion", broken)

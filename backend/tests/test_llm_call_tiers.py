@@ -1,5 +1,6 @@
 """Every LLM call site says which tier it runs on, so a new one cannot
-silently land on the most expensive model."""
+silently land on the most expensive model, and which feature it serves, so
+its tokens land on that feature's gateway key (Phase 17.2.5)."""
 
 import re
 from pathlib import Path
@@ -20,6 +21,15 @@ EXPECTED = {
     "chat/agent.py": ["fast", "deep"],                   # follow-up chips; the reply
 }
 
+FEATURE = {
+    "components/analyst/agent.py": "research", "components/master/search.py": "research",
+    "instruments/resolve.py": "research", "research/index_move.py": "research",
+    "datalayer/news.py": "news", "datalayer/market.py": "news",
+    "plan/builder.py": "plan", "plan/revise.py": "plan",
+    "portfolio/review.py": "portfolio", "chat/agent.py": "chat",
+    "learning/report.py": "learning", "learning/hypotheses.py": "learning",
+}
+
 
 def test_every_llm_call_names_its_tier():
     for path in BACKEND.rglob("*.py"):
@@ -34,3 +44,17 @@ def test_every_llm_call_names_its_tier():
         tiers = [m.group(1) for c in calls if (m := re.search(r'tier="(\w+)"', c))]
         assert len(tiers) == len(calls), f"{rel}: an LLM call without tier="
         assert tiers == EXPECTED.get(rel), f"{rel}: tiers {tiers}"
+        features = {m.group(1) for c in calls if (m := re.search(r'feature="(\w+)"', c))}
+        assert features == {FEATURE[rel]} and all("feature=" in c for c in calls), f"{rel}: features {features}"
+
+
+def test_a_feature_with_its_own_key_never_spills_onto_the_shared_one(monkeypatch):
+    # The key's daily budget in OmniRoute is the feature's budget: falling
+    # back to the shared key on a 429 would make it meaningless.
+    from backend.llm import LLMService
+
+    service = LLMService()
+    monkeypatch.setattr(service, "keys", ["shared"])
+    monkeypatch.setattr(service, "feature_keys", {"news": "news-key"})
+    assert service.keys_for("news") == ["news-key"]
+    assert service.keys_for("chat") == ["shared"] and service.keys_for(None) == ["shared"]

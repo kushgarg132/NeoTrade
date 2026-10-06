@@ -1,6 +1,7 @@
+import json
 from pydantic_settings import BaseSettings, NoDecode
 from pydantic import field_validator, ValidationInfo
-from typing import Annotated, Optional, List
+from typing import Dict, Annotated, Optional, List
 
 class Settings(BaseSettings):
     # Project Info
@@ -21,6 +22,10 @@ class Settings(BaseSettings):
     # issued from the OmniRoute dashboard's Endpoints page, not a Google key.
     OMNIROUTE_API_KEY: Optional[str] = None
     OMNIROUTE_API_KEYS: List[str] = []
+    # One gateway key per feature (news, plan, research, chat, portfolio, learning),
+    # JSON in the env, so OmniRoute's usage_history splits by api_key_name. A
+    # feature with no key here uses OMNIROUTE_API_KEY(S).
+    OMNIROUTE_FEATURE_KEYS: Annotated[Dict[str, str], NoDecode] = {}
     OMNIROUTE_BASE_URL: str = "http://omniroute:20128/v1"
     OMNIROUTE_MODEL: str = "agy/gemini-3-flash"  # unversioned: agy rotates versioned ids within hours
 
@@ -92,6 +97,14 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [email.strip() for email in v.split(",") if email.strip()]
         return v
+
+    @field_validator("OMNIROUTE_FEATURE_KEYS", mode="before")
+    @classmethod
+    def empty_feature_keys(cls, v):
+        # docker-compose passes ${OMNIROUTE_FEATURE_KEYS:-} as "" when unset.
+        if isinstance(v, str):
+            return json.loads(v) if v.strip() else {}
+        return v or {}
 
     @field_validator("OMNIROUTE_API_KEYS", mode="before")
     @classmethod

@@ -154,7 +154,7 @@ async def _revise_with_tools(db, redis, user_id: str, values: dict, day, checked
 
     system, prompt = render("game_plan_revision_tools", **values)
     tools = as_tools(db, redis, user_id, ["news", "price_summary", "positions"])
-    out = await run_with_tools("plan_revision", system=system, prompt=prompt, tools=tools, tier="deep",
+    out = await run_with_tools("plan_revision", system=system, prompt=prompt, tools=tools, tier="deep", feature="plan",
                                schema=PlanReply, llm=llm, max_rounds=MAX_TOOL_ROUNDS,
                                reserve=lambda: store.reserve_call(redis, day))
     if not isinstance(out["output"], PlanReply):

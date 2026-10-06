@@ -78,7 +78,7 @@ async def propose(db, strategies: dict, now: datetime) -> list[dict]:
             f"{r['strategy']} / {r['by']} {r['group'] or ''}: n {r['trades']}, net ₹{r['net']:,.0f}, "
             f"exp ₹{r['expectancy']:,.0f}, pf {r['profit_factor']}" for r in rows) or "none yet",
     )
-    text = await llm_service.get_completion(prompt, system_prompt=system, tier="deep") or ""
+    text = await llm_service.get_completion(prompt, system_prompt=system, tier="deep", feature="learning") or ""
     match = re.search(r"\{.*\}", text, re.S)
     try:
         ideas = json.loads(match.group(0)).get("hypotheses") if match else None

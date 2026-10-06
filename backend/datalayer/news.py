@@ -215,12 +215,12 @@ class _Scores(BaseModel):
 
 async def _fast(system: str, user: str) -> str:
     # Triage only sorts headlines into relevant or not: the cheap model.
-    return await llm_service.get_completion(user, system_prompt=system, tier="fast")
+    return await llm_service.get_completion(user, system_prompt=system, tier="fast", feature="news")
 
 
 async def _deep(system: str, user: str) -> str:
     # These impacts feed every trade's AI share, same as score_news.
-    return await llm_service.get_completion(user, system_prompt=system, tier="deep")
+    return await llm_service.get_completion(user, system_prompt=system, tier="deep", feature="news")
 
 
 async def _ask(prompt: str, complete, model, **values):

@@ -77,7 +77,7 @@ async def weekly_text(db, user_id: str, nifty: list, now: datetime):
     f = facts(snap)
     system, prompt = render("learning_review", **f)
     try:
-        text = (await llm_service.get_completion(prompt, system_prompt=system, tier="standard") or "").strip()
+        text = (await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="learning") or "").strip()
     except Exception as exc:
         logger.warning("learning review: model failed: %s", exc)
         text = ""

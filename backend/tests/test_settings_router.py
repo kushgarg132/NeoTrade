@@ -474,3 +474,24 @@ def test_catalog_groups_the_gateway_models(client, monkeypatch):
     tree = client.get("/api/v1/settings/omniroute-catalog").json()
     assert [f["key"] for f in tree] == ["gemini", "other"]
     assert tree[0]["lines"][0]["models"][0]["id"] == "antigravity/gemini-2.5-flash"
+
+
+async def test_feature_usage_reads_each_feature_key_and_flags_80_percent(monkeypatch):
+    class _Budgeted(_FakeStatusResponse):
+        def __init__(self, used):
+            self.used = used
+
+        def json(self):
+            body = super().json()
+            body["usage"]["cost"] = {"usedUsd": self.used, "limitUsd": 1.0, "resetAt": "2026-10-07T18:30:00.000Z"}
+            return body
+
+    async def fake_get(self, url, **kwargs):
+        return _Budgeted({"Bearer news-key": 0.85, "Bearer chat-key": 0.2}[kwargs["headers"]["Authorization"]])
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_FEATURE_KEYS", {"news": "news-key", "chat": "chat-key"})
+    settings_router._FEATURE_USAGE.clear()
+    body = await settings_router.fetch_feature_usage()
+    assert body["news"] == {"tokens": 17, "used_usd": 0.85, "limit_usd": 1.0, "alert": True}
+    assert body["chat"]["alert"] is False and list(body) == ["chat", "news"]

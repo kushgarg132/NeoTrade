@@ -85,7 +85,7 @@ async def suggest_followups(question: str, answer: str) -> list[str]:
     never a broken reply."""
     try:
         system, prompt = render("chat_followups", question=question, answer=answer[-2000:])
-        reply = await llm_service.get_completion(prompt, system_prompt=system, tier="fast")
+        reply = await llm_service.get_completion(prompt, system_prompt=system, tier="fast", feature="chat")
         # get_completion reports failure in-band; never show that as a chip.
         if not reply or reply == "LLM_DISABLED" or reply.startswith("Error generating response"):
             return []
@@ -106,7 +106,7 @@ async def _profile(db, user_id: str) -> str:
 
 
 async def stream_chat(db, redis, user_id: str, message: str, history: list, context: dict) -> AsyncIterator[dict]:
-    llm = await llm_service.get_llm(tier="deep")
+    llm = await llm_service.get_llm(tier="deep", feature="chat")
     if not llm:
         yield {"type": "content", "data": "The AI service is not available right now."}
         return

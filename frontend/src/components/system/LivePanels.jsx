@@ -53,6 +53,11 @@ const ROWS = {
     ['News scoring calls today', `${b.news_calls_today} of ${b.news_calls_limit}`],
     ['Plan calls today', `${b.plan_calls_today} of ${b.plan_calls_limit}`],
     ['Gateway this month', b.usage.error ? b.usage.error : `${formatQuantity(b.usage.tokens.total)} tokens · $${Number(b.usage.cost.used_usd || 0).toFixed(2)}`],
+    // One gateway key per feature; with a daily limit on the key, the figures are today's.
+    ...Object.entries(b.features || {}).map(([name, f]) => [
+      `AI ${name}`,
+      f.error ? f.error : `${f.alert ? '⚠ ' : ''}${formatQuantity(f.tokens)} tokens · $${Number(f.used_usd).toFixed(2)}${f.limit_usd ? ` of $${Number(f.limit_usd).toFixed(2)}` : ''}`,
+    ]),
   ],
 };
 

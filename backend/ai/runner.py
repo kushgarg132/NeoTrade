@@ -37,6 +37,7 @@ def _parse(schema: type[BaseModel], text: str) -> Optional[BaseModel]:
 
 
 async def run_with_tools(task: str, *, system: str, prompt: str, tools: list, tier: str,
+                         feature: Optional[str] = None,
                          schema: Optional[type[BaseModel]] = None, max_rounds: int = 4,
                          reserve: Optional[Callable[[], Awaitable[bool]]] = None,
                          fallback: Optional[Callable[[], Awaitable[str]]] = None, llm=None) -> dict:
@@ -53,7 +54,7 @@ async def run_with_tools(task: str, *, system: str, prompt: str, tools: list, ti
     if llm is None:
         from backend.llm import llm_service
 
-        llm = await llm_service.get_llm(tier=tier)
+        llm = await llm_service.get_llm(tier=tier, feature=feature)
     if llm is None:
         return await use_fallback("no model configured")
 

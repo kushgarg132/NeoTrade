@@ -93,14 +93,23 @@ class LLMService:
     def __init__(self):
         # We prefer using LangChain for agents, but this client is for direct single usage if needed
         self.keys = settings.OMNIROUTE_API_KEYS
+        self.feature_keys = settings.OMNIROUTE_FEATURE_KEYS
         if not self.keys:
             logger.warning("OMNIROUTE_API_KEY(S) not set. LLM features will be disabled.")
 
-    async def get_completion(self, prompt: str, system_prompt: str, tier: Optional[str] = None) -> str:
+    def keys_for(self, feature: Optional[str]) -> List[str]:
+        """The feature's own gateway key alone -- its OmniRoute daily budget is
+        the feature's budget, so no spill-over -- else the shared key(s)."""
+        own = self.feature_keys.get(feature) if feature else None
+        return [own] if own else list(self.keys)
+
+    async def get_completion(self, prompt: str, system_prompt: str, tier: Optional[str] = None,
+                             feature: Optional[str] = None) -> str:
         """Both prompts come from backend/prompts/*.md via prompts.render.
         `tier` (fast / standard / deep) picks the admin's model for that
-        kind of task; see app_settings.TIERS."""
-        llm = await self.get_llm(tier=tier)
+        kind of task; see app_settings.TIERS. `feature` picks the gateway key
+        its usage is metered under."""
+        llm = await self.get_llm(tier=tier, feature=feature)
         if not llm:
             return "LLM_DISABLED"
         
@@ -119,11 +128,11 @@ class LLMService:
             logger.error(f"LLM Error: {e}")
             return f"Error generating response: {str(e)}"
 
-    async def get_llm(self, tier: Optional[str] = None):
+    async def get_llm(self, tier: Optional[str] = None, feature: Optional[str] = None):
         """Returns a MultiKeyChain wrapping ChatOpenAI instances pointed at the OmniRoute gateway"""
         from langchain_openai import ChatOpenAI
 
-        keys = self.keys
+        keys = self.keys_for(feature)
         if not keys:
             return None
 

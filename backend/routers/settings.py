@@ -391,6 +391,42 @@ async def fetch_usage() -> dict:
     return {**body, "refreshing": True}
 
 
+FEATURE_USAGE_SECONDS = 300  # each read polls every provider's quota (3-5 s)
+FEATURE_ALERT = 0.8
+_FEATURE_USAGE: dict = {}
+
+
+async def fetch_feature_usage() -> dict:
+    """Per feature (Phase 17.2.5): its own gateway key's tokens and cost in
+    the key's budget window (the day, once OmniRoute has a daily limit on it;
+    else the month), and `alert` at FEATURE_ALERT of that limit. A key that
+    cannot be read is {"error": ...}."""
+    keys = settings.OMNIROUTE_FEATURE_KEYS
+    if not keys:
+        return {}
+    if _FEATURE_USAGE and time.monotonic() - _FEATURE_USAGE["at"] < FEATURE_USAGE_SECONDS:
+        return _FEATURE_USAGE["body"]
+
+    async def one(client, key):
+        try:
+            resp = await client.get(f"{settings.OMNIROUTE_BASE_URL}/me/status",
+                                    headers={"Authorization": f"Bearer {key}"})
+            resp.raise_for_status()
+        except httpx.HTTPError as e:
+            return {"error": f"unreadable ({type(e).__name__})"}
+        shaped = _shape_usage(resp.json())
+        used, limit = shaped["cost"]["used_usd"] or 0, shaped["cost"]["limit_usd"]
+        return {"tokens": shaped["tokens"]["total"], "used_usd": used, "limit_usd": limit,
+                "alert": bool(limit) and used >= FEATURE_ALERT * limit}
+
+    names = sorted(keys)
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        rows = await asyncio.gather(*(one(client, keys[n]) for n in names))
+    body = dict(zip(names, rows))
+    _FEATURE_USAGE.update(at=time.monotonic(), body=body)
+    return body
+
+
 @router.get("/settings/omniroute-usage")
 async def omniroute_usage(_admin: User = Depends(require_admin)):
     try:

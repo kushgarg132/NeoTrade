@@ -202,7 +202,7 @@ def _brief_due(last: Optional[dict], material_since: bool, now: datetime, regime
 
 async def _write_brief(system: str, prompt: str) -> str:
     # One short summary for every user and every AI answer: the mid tier.
-    return await llm_service.get_completion(prompt, system_prompt=system, tier="standard")
+    return await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="news")
 
 
 async def brief(db, redis, now: Optional[datetime] = None) -> bool:

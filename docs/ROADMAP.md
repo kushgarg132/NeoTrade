@@ -1019,7 +1019,12 @@ news landed. Plan: built only once the user has a live broker feed (the auto run
 check; window now 08:45 to the close, so a late login is planned before its run starts), paused
 strategies left out (all paused → fallback, no call), revisions ≤ 2 a day, tool rounds ≤ 2. The
 four-week plan-vs-no-plan review in 17.2.4 is still to do once `plan_scorecards` fills.
-Still open: 17.2.5–17.2.7.
+Per feature: six OmniRoute keys ("NeoTrade news/plan/research/chat/portfolio/learning") in
+`OMNIROUTE_FEATURE_KEYS`; every call site names its feature (pinned by a test); a feature
+key never falls back to the shared one, so a daily USD limit on it is the feature's budget;
+the handbook's AI panel shows each key's tokens and cost with ⚠ at 80%. **Limits not set
+yet** — set them in OmniRoute after a week of per-key data (~2026-10-13). Still open:
+17.2.6–17.2.7.
 
 Done when: calls per day and tokens per call are visible per feature, fast-tier calls
 average under 500 output tokens, and the month's tokens fall by at least half at the

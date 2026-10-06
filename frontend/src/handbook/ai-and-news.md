@@ -19,6 +19,14 @@ key's tokens and cost this month and each provider's remaining quota, from OmniR
 `/v1/me/status` (served instantly from the last reading and refreshed behind, because
 OmniRoute polls every provider live, 3–5 s).
 
+Each call names its **feature** — `news` (triage, scoring, brief), `plan`, `research` (analyst,
+index move, peers, name lookup), `chat`, `portfolio`, `learning` — and runs on that feature's
+own gateway key from `OMNIROUTE_FEATURE_KEYS` (`llm.py::LLMService.keys_for`), so OmniRoute's
+`usage_history` splits by `api_key_name` ("NeoTrade news", …). A feature with its own key never
+spills onto the shared key: a daily USD limit set on the key in OmniRoute is that feature's
+budget. A feature with no key uses `OMNIROUTE_API_KEY(S)`. `tests/test_llm_call_tiers.py` pins
+every call site's tier and feature.
+
 Every prompt is a file in `backend/prompts/*.md` (system prompt in front matter,
 `{{placeholders}}`, rendered by `backend.prompts.render`); none are inlined in Python.
 
@@ -48,7 +56,9 @@ Every prompt is a file in `backend/prompts/*.md` (system prompt in front matter,
 | Game plans | `plan:calls:<IST day>` | `PLAN_LLM_CALLS_PER_DAY` |
 | Tool rounds | per call, ≤ 4 rounds (plans ≤ 2) | each round spends the caller's own budget (plans: `plan:calls`); kill switch `AI_TOOLS_ENABLED` |
 
-Chat and research calls are not counted per task.
+Chat and research calls are not counted per task. Per feature, the panel below reads each
+feature key's own `/v1/me/status` (`settings.py::fetch_feature_usage`, cached 5 min) and marks
+⚠ at 80% of the key's limit.
 
 <!-- live:ai -->
 
