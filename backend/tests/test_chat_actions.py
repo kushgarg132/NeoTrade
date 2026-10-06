@@ -53,7 +53,7 @@ async def env(monkeypatch):
         await db["suggestions"].insert_one({
             "id": f"s-{user}", "user_id": user, "symbol": "INFY", "side": "BUY", "mode": "LONGTERM",
             "status": "PENDING", "quantity": 2, "entry_ref": 1500.0, "stop": 1400.0, "target": 1700.0,
-            "score": {"final": 0.6}, "created_at": OPEN, "expires_at": OPEN + timedelta(days=3),
+            "score": {"final": 0.6}, "strategy": "quality_momentum", "created_at": OPEN, "expires_at": OPEN + timedelta(days=3),
         })
     broker = _Broker()
     clock = {"now": OPEN}

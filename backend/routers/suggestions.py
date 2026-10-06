@@ -138,6 +138,12 @@ async def list_suggestions(
     return await store.list(user.id, mode=mode, status=status, limit=limit)
 
 
+def _require_strategy(suggestion: dict) -> None:
+    """A fill no strategy owns can never be judged: approving one is refused."""
+    if not suggestion.get("strategy"):
+        raise HTTPException(status_code=409, detail="This proposal has no strategy, so its result could never be judged; decline it.")
+
+
 @router.post("/{suggestion_id}/approve")
 async def approve_suggestion(
     suggestion_id: str,
@@ -154,6 +160,7 @@ async def approve_suggestion(
         raise HTTPException(
             status_code=409, detail=f"Suggestion already {suggestion['status'].lower()}"
         )
+    _require_strategy(suggestion)
 
     # Claim before filling, as approve-live does: two approvals at once (a
     # page tap and a chat confirm) used to both book a fill.
@@ -244,6 +251,7 @@ async def approve_suggestion_live(
         raise HTTPException(status_code=404, detail="No such suggestion")
     if suggestion["status"] != "PENDING":
         raise HTTPException(status_code=409, detail=f"Suggestion already {suggestion['status'].lower()}")
+    _require_strategy(suggestion)
     now = _now()
     today = now.astimezone(IST).date()
     if await KillSwitchStore(db.db).is_tripped(user.id, today):

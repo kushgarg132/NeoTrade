@@ -27,11 +27,11 @@ _USER = User(
 )
 
 
-def _proposal(symbol: str = "RELIANCE", mode: str = "LONGTERM") -> Proposal:
+def _proposal(symbol: str = "RELIANCE", mode: str = "LONGTERM", strategy="quality_momentum") -> Proposal:
     return Proposal(
         order=Order(
             id="o-seed", symbol=symbol, side=Side.BUY, quantity=10.0,
-            order_type="MARKET", limit_price=None, product="CNC",
+            order_type="MARKET", limit_price=None, product="CNC", strategy_name=strategy,
         ),
         intent=Intent(
             symbol=symbol, side=Side.BUY, strength=0.9, reason_codes=["macd_cross"],
@@ -116,6 +116,19 @@ def test_approve_places_the_order_and_opens_a_trade(client, store, ledger):
     assert positions["RELIANCE"].quantity == 10.0
 
 
+def test_a_proposal_with_no_strategy_cannot_be_approved(client, store, ledger):
+    """A fill no strategy owns can never be judged (11 such trades lost
+    ₹16,780 unattributed): approving one is refused and fills nothing."""
+    import asyncio
+    suggestion = asyncio.run(_seed(store, proposal=_proposal(strategy=None)))
+
+    resp = client.post(f"/api/v1/suggestions/{suggestion['id']}/approve")
+
+    assert resp.status_code == 409 and "strategy" in resp.json()["detail"]
+    assert asyncio.run(ledger.get_trades()) == []
+    assert asyncio.run(store.get("alice", suggestion["id"]))["status"] == "PENDING"
+
+
 def test_approving_twice_does_not_place_a_second_order(client, store, ledger):
     import asyncio
     suggestion = asyncio.run(_seed(store))
@@ -153,7 +166,7 @@ def _option_proposal() -> Proposal:
                 "premium_estimate": 38.0, "premium_is_live": False, "margin_estimate": 1.0, "underlying_spot": 2905.0}
     return Proposal(
         order=Order(id="o-opt", symbol="RELIANCE26OCT2760PE", side=Side.SELL, quantity=250.0,
-                    order_type="MARKET", limit_price=None, product="NRML"),
+                    order_type="MARKET", limit_price=None, product="NRML", strategy_name="cash_secured_put"),
         intent=Intent(symbol="RELIANCE", side=Side.SELL, strength=0.9, reason_codes=["oversold_csp"],
                       option_flavor="CSP"),
         score=CompositeScore(rule_score=0.9, ai_score=0.0), entry=38.0, mode="LONGTERM",
