@@ -323,7 +323,7 @@ async def _weekly_mirrors(db) -> int:
             roles = prefs.get("broker_roles") or {}
             if "ai" in roles.values() and "mine" in roles.values():
                 from backend.journal.accounts import ai_vs_me
-                month = ai_vs_me(trades, roles, {"ai": prefs["autopilot_capital"], "mine": prefs["account_size"]}, nifty)
+                month = ai_vs_me(trades, roles, {"ai": prefs["account_size"], "mine": prefs["account_size"]}, nifty)
                 if month:
                     last = month[-1]
                     text += (f"\nThis month — AI account ₹{last['ai']['net_pnl']:+,.0f}, "

@@ -19,12 +19,8 @@ import StrategyRow, { GO_LIVE_RULE, StrategyFold } from './StrategyRow';
 const SWITCH =
   'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors';
 
-const SIZING = ['account_size', 'max_exposure', 'per_trade_cap'];
-
 const EngineSettings = () => {
   const [prefs, setPrefs] = useState(null);
-  const [draft, setDraft] = useState({ account_size: '', max_exposure: '', per_trade_cap: '' });
-  const [saving, setSaving] = useState(false);
   const [strategyNames, setStrategyNames] = useState([]);
   const [promotion, setPromotion] = useState({});
   const [backtesting, setBacktesting] = useState({});
@@ -48,10 +44,7 @@ const EngineSettings = () => {
 
   useEffect(() => {
     getPreferences()
-      .then((res) => {
-        setPrefs(res.data);
-        setDraft(Object.fromEntries(SIZING.map((key) => [key, res.data[key]])));
-      })
+      .then((res) => setPrefs(res.data))
       .catch(() => setPrefs(null));
     api
       .get(endpoints.settings.strategies)
@@ -64,18 +57,13 @@ const EngineSettings = () => {
   }, []);
 
   const save = async (patch) => {
-    setSaving(true);
-    try {
-      const res = await api.put(endpoints.settings.preferences, patch);
-      setPrefs(res.data);
-    } finally {
-      setSaving(false);
-    }
+    const res = await api.put(endpoints.settings.preferences, patch);
+    setPrefs(res.data);
   };
 
   if (!prefs) {
     return (
-      <Sheet title="Engine mandate">
+      <Sheet title="Daily auto-run">
         <Ruling rows={3} />
       </Sheet>
     );
@@ -97,16 +85,6 @@ const EngineSettings = () => {
       >
         {prefs[key] ? 'On' : 'Off'}
       </button>
-    </Row>
-  );
-
-  const sizingRow = (key, label, hint) => (
-    <Row label={label} hint={hint}>
-      <NumberField
-        value={draft[key]}
-        onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
-        onCommit={() => save({ [key]: Number(draft[key]) })}
-      />
     </Row>
   );
 
@@ -136,26 +114,21 @@ const EngineSettings = () => {
         </p>
       </Sheet>
 
-      <Sheet title="Engine mandate" meta={saving ? 'Saving…' : undefined}>
-        {sizingRow('account_size', 'Account size', 'What position sizing risks a percentage of.')}
-        {sizingRow('max_exposure', 'Maximum exposure', 'The engine will not open past this notional.')}
-        {sizingRow('per_trade_cap', 'Per-trade cap', 'Hard notional ceiling for any single trade.')}
-
-        <Row
-          label="Daily loss limit"
-          hint="Kill-switch trigger: reaching it halts new intraday orders for the rest of the day."
-        >
-          <span className="flex flex-col items-end gap-1">
-            <span className="figure-md text-sm">{formatCurrency(prefs.daily_loss_limit)}</span>
-            <Link to="/settings?tab=safety" className="doc-meta normal-case text-[var(--stamp)] hover:underline">
-              Set in Settings › Safety
-            </Link>
-          </span>
-        </Row>
-
+      <Sheet title="Trading limits" meta="Paper and live">
+        {[
+          ['Account size', prefs.account_size],
+          ['Max invested', prefs.max_exposure],
+          ['Per trade', prefs.per_trade_cap],
+          ['Daily loss limit', prefs.daily_loss_limit],
+        ].map(([label, value]) => (
+          <Row key={label} label={label}>
+            <span className="figure-md text-sm">{formatCurrency(value)}</span>
+          </Row>
+        ))}
         <p className="pt-3 doc-meta normal-case">
           Sizing risks up to 1% of {formatCurrency(prefs.account_size)} per trade at full
-          conviction, scaled down as conviction falls.
+          conviction, scaled down as conviction falls. One set for paper and live:{' '}
+          <Link to="/ai/autopilot" className="underline">change them on AI › Autopilot</Link>.
         </p>
       </Sheet>
 

@@ -15,8 +15,9 @@ from backend.core.models import Side
 from backend.engine.session import IST
 
 OPEN = datetime(2026, 10, 6, 11, 0, tzinfo=IST)
-PREFS = {"autopilot_enabled": True, "autopilot_live": False, "autopilot_capital": 25_000.0,
-         "autopilot_per_trade_cap": 5_000.0, "autopilot_max_trades_per_day": 5, "autopilot_daily_loss_limit": 1_000.0}
+# The shared trading limits (paper and live, Practice and the autopilot).
+PREFS = {"autopilot_enabled": True, "autopilot_live": False, "account_size": 25_000.0, "max_exposure": 25_000.0,
+         "per_trade_cap": 5_000.0, "max_trades_per_day": 5, "daily_loss_limit": 1_000.0}
 
 
 def _state(**kw):
@@ -32,7 +33,7 @@ def _order(symbol="INFY", side=Side.BUY, qty=1, product="CNC", source="chat"):
     (_order(qty=5), 1000.0, _state(), None),                                  # exactly the per-trade cap
     (_order(qty=5), 1000.2, _state(), "per-trade cap"),
     (_order(qty=1), 1000.0, _state(deployed=24_000.0), None),                 # exactly fills capital
-    (_order(qty=1), 1001.0, _state(deployed=24_000.0), "capital"),
+    (_order(qty=1), 1001.0, _state(deployed=24_000.0), "max invested"),
     (_order(), 100.0, _state(entries_today=5), "trades today"),
     (_order(symbol="NOTANIFTY"), 100.0, _state(), "universe"),
     (_order(product="NRML"), 100.0, _state(), "NSE equity"),
@@ -51,6 +52,12 @@ def test_fence_limits(order, price, state, refusal):
         assert result is None
     else:
         assert result and refusal in result
+
+
+def test_zero_trades_per_day_means_no_daily_count():
+    """0 is 'off' for trades per day, as on Settings > Safety, which shares the field."""
+    prefs = {**PREFS, "max_trades_per_day": 0}
+    assert fence.check(_order(), 100.0, _state(entries_today=50), prefs) is None
 
 
 def test_fence_refuses_everything_when_disabled():

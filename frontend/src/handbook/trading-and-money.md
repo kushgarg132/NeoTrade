@@ -138,8 +138,10 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
 
 `backend/autopilot/` places orders on the `ai` account without a tap — the one documented
 exception to the backtest gate and to "model output never places an order". Every entry
-passes `autopilot/fence.py::check`: capital limit, per-trade cap, trades per day, its own
-daily-loss trip, the shared kill switch, Nifty 200 names, NSE equity, market hours; exits
+passes `autopilot/fence.py::check` against the shared trading limits (one set for paper and
+live, edited on AI → Autopilot: `max_exposure`, `per_trade_cap`, `max_trades_per_day`,
+`daily_loss_limit` — the same fields Practice and Watch my broker read; 0 trades or loss is off),
+its own daily-loss trip, the shared kill switch, Nifty 200 names, NSE equity, market hours; exits
 are never blocked. Risk-off halves the per-trade cap and refuses news entries; a high-impact
 event within 30 min refuses all entries; news entries stop at 3 a day. One switch, Off ·
 Paper · Live (Live needs a typed confirmation). On paper it fills in the user's Practice

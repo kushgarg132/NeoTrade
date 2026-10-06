@@ -66,7 +66,7 @@ async def get_journal(
     # One account (backend/brokers/roles.py) or all of them.
     trades = filter_trades(await store.list_trades(user.id), brokers_of(prefs.get("broker_roles") or {}, account))
     trips = build_round_trips(trades)
-    capital = prefs["autopilot_capital"] if account == "ai" else prefs["account_size"]
+    capital = prefs["account_size"]  # one account size for both, paper and live
     cost_mirror = mirror.costs(trades, trips, capital)
     first = min((t["traded_at"] for t in trades), default=None)
     benchmark = mirror.benchmark(
@@ -108,7 +108,7 @@ async def ai_vs_me(
 
     prefs = await PrefsStore(db.db).get(user.id)
     return compare(await store.list_trades(user.id), prefs.get("broker_roles") or {},
-                   {"ai": prefs["autopilot_capital"], "mine": prefs["account_size"]}, nifty)
+                   {"ai": prefs["account_size"], "mine": prefs["account_size"]}, nifty)
 
 
 def _by_kind(closed: list[dict]) -> dict:

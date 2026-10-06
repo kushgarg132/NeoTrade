@@ -83,10 +83,6 @@ class PreferencesPatch(BaseModel):
     broker_roles: Optional[dict[str, str]] = None
     autopilot_enabled: Optional[bool] = None
     autopilot_live: Optional[bool] = None
-    autopilot_capital: Optional[float] = Field(default=None, ge=0)
-    autopilot_per_trade_cap: Optional[float] = Field(default=None, ge=0)
-    autopilot_max_trades_per_day: Optional[int] = Field(default=None, ge=0, le=100)
-    autopilot_daily_loss_limit: Optional[float] = Field(default=None, ge=0)
     autopilot_news: Optional[bool] = None
     rebalance_targets: Optional[RebalanceTargets] = None
     news_alerts: Optional[Literal["held", "held+watched", "all", "off"]] = None

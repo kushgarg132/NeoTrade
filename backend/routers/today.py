@@ -157,7 +157,7 @@ async def _autopilot(user_id: str, prefs: dict) -> dict:
     for t in await open_trades(db.db, user_id):
         deployed += (t.get("quantity") or 0) * (t.get("entry_price") or 0)
     return {"enabled": bool(prefs.get("autopilot_enabled")), "live": bool(prefs.get("autopilot_live")),
-            "capital": prefs.get("autopilot_capital"), "deployed": round(deployed, 2)}
+            "capital": prefs.get("max_exposure"), "deployed": round(deployed, 2)}
 
 
 async def _backdrop(now: datetime) -> dict:

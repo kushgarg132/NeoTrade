@@ -45,10 +45,8 @@ DEFAULTS = {
     # The fenced autopilot on the "ai" account (backend/autopilot/).
     "autopilot_enabled": False,
     "autopilot_live": False,
-    "autopilot_capital": 25_000.0,
-    "autopilot_per_trade_cap": 5_000.0,
-    "autopilot_max_trades_per_day": 5,
-    "autopilot_daily_loss_limit": 1_000.0,
+    # Its limits are the shared ones above (max_exposure, per_trade_cap,
+    # max_trades_per_day, daily_loss_limit): one set for paper and live.
     # Hand news-triggered proposals to the autopilot at once
     # (docs/superpowers/specs/2026-10-05-autopilot-news-design.md). Off until turned on.
     "autopilot_news": False,

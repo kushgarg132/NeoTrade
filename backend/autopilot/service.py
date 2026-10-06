@@ -118,7 +118,8 @@ async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime, redis
         deployed += row["quantity"] * (row.get("price") or 0)
     state = await db["autopilot_state"].find_one({"_id": user_id}) or {}
     tripped = state.get("tripped_day") == day.isoformat()
-    if not tripped and realized + unrealized <= -prefs["autopilot_daily_loss_limit"]:
+    loss_limit = prefs["daily_loss_limit"]  # shared with Practice and Settings > Safety; 0 is off
+    if not tripped and loss_limit and realized + unrealized <= -loss_limit:
         tripped = True
         await db["autopilot_state"].update_one({"_id": user_id}, {"$set": {"tripped_day": day.isoformat(),
                                                                           "user_id": user_id}}, upsert=True)

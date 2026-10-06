@@ -1005,7 +1005,7 @@ const GuardrailsSheet = () => {
 
       <Row
         label="Daily loss limit"
-        hint="Checked against your broker's own day P&L. Reaching it also trips the engine's kill-switch for the day."
+        hint="Checked against your broker's own day P&L. Reaching it also trips the engine's kill-switch for the day. Shared with Practice and the autopilot (AI › Autopilot › Trading limits)."
       >
         <NumberField
           value={draft.daily_loss_limit}
@@ -1045,7 +1045,7 @@ const GuardrailsSheet = () => {
         </div>
       )}
 
-      {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this. 0 is off.')}
+      {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this; the autopilot opens no more. Shared with AI › Autopilot › Trading limits. 0 is off.')}
       {numberRow('cooldown_after_losses', 'Cooldown after losses in a row', 'Start a cooldown after this many losses in a row. 0 is off.')}
       {numberRow('cooldown_minutes', 'Cooldown length, minutes', 'Any trade opened inside it is flagged.')}
       {numberRow('max_option_trades_per_day', 'Options trades per day', 'Alert when you open more options trades than this. 0 is off.')}

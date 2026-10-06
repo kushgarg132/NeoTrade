@@ -5,11 +5,14 @@ import api, { endpoints, getPreferences } from '../../utils/api';
 import { cn } from '../../utils/cn';
 import { formatDateTime } from '../../utils/formatters';
 
+// One set for paper and live: Practice, live strategies, the autopilot and
+// Watch my broker all read these fields.
 const LIMITS = [
-  ['autopilot_capital', 'Capital', 'The most it may have invested at once (₹).'],
-  ['autopilot_per_trade_cap', 'Per trade', 'Largest single order (₹).'],
-  ['autopilot_max_trades_per_day', 'Trades per day', 'New positions it may open in a day.'],
-  ['autopilot_daily_loss_limit', 'Daily loss limit', 'Stops new trades for the day once lost (₹).'],
+  ['account_size', 'Account size', 'What sizing risks up to 1% of per trade (₹).'],
+  ['max_exposure', 'Max invested', 'The most open at once (₹).'],
+  ['per_trade_cap', 'Per trade', 'Largest single order (₹). Halved while the market is risk-off.'],
+  ['max_trades_per_day', 'Trades per day', 'New positions a day. 0 is off.'],
+  ['daily_loss_limit', 'Daily loss limit', 'Stops new trades for the day once lost (₹).'],
 ];
 
 /** The fenced autopilot on the AI account (backend/autopilot/). */
@@ -52,6 +55,28 @@ const AutopilotSheet = () => {
   const aiBroker = Object.keys(prefs.broker_roles || {}).find((b) => prefs.broker_roles[b] === 'ai');
 
   return (
+    <>
+    <Sheet title="Trading limits" meta="Paper and live" className="mt-3 sm:mt-4">
+      <p className="text-sm text-[var(--ink-soft)]">
+        One set for everything: Practice, live strategies, the autopilot, and Watch my broker on your own account.
+      </p>
+      {LIMITS.map(([key, label, hint]) => (
+        <Row key={key} label={label} hint={hint}>
+          <NumberField
+            value={draft[key]}
+            onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
+            onCommit={() => {
+              const value = Math.max(0, Number(draft[key]) || 0);
+              if (key === 'daily_loss_limit' && value === 0) {
+                setDraft((d) => ({ ...d, [key]: prefs[key] }));
+                return setNote('Turn the loss limit off in Settings › Safety, which asks you to confirm.');
+              }
+              return save({ [key]: value });
+            }}
+          />
+        </Row>
+      ))}
+    </Sheet>
     <Sheet
       title="Autopilot"
       meta={prefs.autopilot_enabled ? (prefs.autopilot_live ? 'On · live' : 'On · paper') : 'Off'}
@@ -59,9 +84,9 @@ const AutopilotSheet = () => {
     >
       <p className="text-sm text-[var(--ink-soft)]">
         Acts for the AI account{aiBroker ? ` (${aiBroker.charAt(0).toUpperCase() + aiBroker.slice(1)})` : ''} without
-        asking you: it takes the Practice engine's proposals and AI chat ideas and places them, inside these limits —
-        its own, separate from Practice's sizing. NSE stocks only, market hours only. Every order and every refusal
-        is sent to you on Telegram with a stop button.
+        asking you: it takes the Practice engine's proposals and AI chat ideas and places them, inside the
+        trading limits above. NSE stocks only, market hours only. Every order and every refusal is sent to you on
+        Telegram with a stop button.
       </p>
       {!aiBroker && (
         <p className="doc-meta normal-case text-[var(--loss)] mt-2">Set one broker as the AI account in Broker settings first.</p>
@@ -124,15 +149,6 @@ const AutopilotSheet = () => {
           {prefs.autopilot_news ? 'On' : 'Off'}
         </button>
       </Row>}
-      {LIMITS.map(([key, label, hint]) => (
-        <Row key={key} label={label} hint={hint}>
-          <NumberField
-            value={draft[key]}
-            onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
-            onCommit={() => save({ [key]: Math.max(0, Number(draft[key]) || 0) })}
-          />
-        </Row>
-      ))}
       {note && <p className="doc-meta normal-case text-[var(--loss)] mt-2">{note}</p>}
       <p className="field-label mt-4 mb-1">Recent activity</p>
       {log.length === 0 ? (
@@ -152,6 +168,7 @@ const AutopilotSheet = () => {
         </ul>
       )}
     </Sheet>
+    </>
   );
 };
 

@@ -35,7 +35,7 @@ class FenceState:
 
 def trade_cap(prefs: dict, regime: Optional[str]) -> float:
     """The per-trade cap in force: halved while the market is risk-off."""
-    return prefs["autopilot_per_trade_cap"] / (2 if regime == "risk_off" else 1)
+    return prefs["per_trade_cap"] / (2 if regime == "risk_off" else 1)
 
 
 @lru_cache(maxsize=1)
@@ -83,9 +83,11 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
     cap = trade_cap(prefs, state.regime)
     if notional > cap + 1e-6:
         return f"₹{notional:,.0f} is over the per-trade cap of ₹{cap:,.0f}{' (halved: market risk-off)' if state.regime == 'risk_off' else ''}."
-    if state.deployed + notional > prefs["autopilot_capital"] + 1e-6:
-        return (f"₹{notional:,.0f} more would exceed the autopilot capital of ₹{prefs['autopilot_capital']:,.0f} "
+    # The shared trading limits (paper and live), as Practice and Settings > Safety use them.
+    if state.deployed + notional > prefs["max_exposure"] + 1e-6:
+        return (f"₹{notional:,.0f} more would exceed the max invested of ₹{prefs['max_exposure']:,.0f} "
                 f"(₹{state.deployed:,.0f} deployed).")
-    if state.entries_today >= prefs["autopilot_max_trades_per_day"]:
-        return f"Already {state.entries_today} trades today (limit {prefs['autopilot_max_trades_per_day']})."
+    limit = prefs["max_trades_per_day"]
+    if limit and state.entries_today >= limit:  # 0 is off, as on Settings > Safety
+        return f"Already {state.entries_today} trades today (limit {limit})."
     return None

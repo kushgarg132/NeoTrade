@@ -113,13 +113,13 @@ def test_a_failing_part_degrades_not_errors(monkeypatch):
 
 def test_autopilot_summary_counts_open_positions_against_capital(monkeypatch):
     client, db = _client(monkeypatch)
-    _seed(db, user_prefs=[{"user_id": "alice", "autopilot_enabled": True, "autopilot_capital": 25000.0}],
+    _seed(db, user_prefs=[{"user_id": "alice", "autopilot_enabled": True, "max_exposure": 15000.0}],
           paper_trades=[{"user_id": "alice", "symbol": "INFY", "status": "OPEN", "quantity": 3,
                          "entry_price": 1500.0, "venue": "paper", "strategy": "autopilot:chat"},
                         {"user_id": "alice", "symbol": "TCS", "status": "OPEN", "quantity": 10,
                          "entry_price": 3000.0, "venue": "paper", "strategy": "macd_crossover"}])
     summary = client.get("/api/v1/today").json()["autopilot"]
-    assert summary == {"enabled": True, "live": False, "capital": 25000.0, "deployed": 4500.0}
+    assert summary == {"enabled": True, "live": False, "capital": 15000.0, "deployed": 4500.0}
 
 
 def test_selling_a_position_bought_before_today_counts_its_pnl(monkeypatch):
