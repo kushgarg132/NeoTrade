@@ -9,14 +9,17 @@ import { Sun, Wallet, Bot, Search, Settings } from 'lucide-react';
  * every page inside it.
  */
 export const SECTIONS = [
-  // Today carries the badge: what needs you outside practice (logins, waiting
-  // cards, interrupted approvals, guardrail alerts). Practice counts its own.
-  { icon: Sun, label: 'Today', path: '/', match: ['/'], exact: true, primary: true, counter: true },
+  // Badges: Today counts what needs you outside proposals (logins, waiting
+  // cards, interrupted approvals, guardrail alerts); AI counts pending decisions.
+  { icon: Sun, label: 'Today', path: '/', match: ['/'], exact: true, primary: true, counter: 'attention' },
   { icon: Wallet, label: 'Mine', path: '/mine/holdings', match: ['/mine'], primary: true },
-  { icon: Bot, label: 'AI', path: '/ai', match: ['/ai'], primary: true },
+  { icon: Bot, label: 'AI', path: '/ai', match: ['/ai'], primary: true, counter: 'pending' },
   { icon: Search, label: 'Research', path: '/research', match: ['/research'], primary: true },
   { icon: Settings, label: 'More', path: '/settings', match: ['/settings', '/profile', '/practice', '/system'], primary: true },
 ];
+
+/** The badge number for a section: `attention` for Today, pending decisions for AI. */
+export const sectionCount = (item, counts) => (item.counter ? counts[item.counter] || 0 : 0);
 
 export const sectionActive = (item, pathname) =>
   item.exact ? pathname === '/' : item.match.some((p) => pathname === p || pathname.startsWith(`${p}/`));

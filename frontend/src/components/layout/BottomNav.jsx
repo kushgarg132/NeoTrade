@@ -1,7 +1,8 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '../../utils/cn';
-import { SECTIONS, sectionActive } from './sections';
+import { SECTIONS, sectionActive, sectionCount } from './sections';
+import { usePendingCount } from '../../context/pendingContext';
 
 /**
  * The phone's primary navigation. Thumb-reachable, five destinations, safe-area
@@ -10,6 +11,7 @@ import { SECTIONS, sectionActive } from './sections';
  */
 const BottomNav = ({ attention = 0 }) => {
   const { pathname } = useLocation();
+  const counts = { attention, pending: usePendingCount() };
   return (
   <nav
     className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-[var(--rule-strong)] bg-[var(--paper)]"
@@ -42,9 +44,9 @@ const BottomNav = ({ attention = 0 }) => {
                 )}
                 <span className="relative">
                   <item.icon className="w-5 h-5" strokeWidth={1.75} />
-                  {item.counter && attention > 0 && (
+                  {sectionCount(item, counts) > 0 && (
                     <span className="absolute -top-1.5 -right-2.5 min-w-[1rem] px-1 figure-md text-[0.5625rem] leading-4 text-center bg-[var(--stamp)] text-[var(--paper)]">
-                      {attention}
+                      {sectionCount(item, counts)}
                     </span>
                   )}
                 </span>

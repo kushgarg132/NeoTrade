@@ -3,12 +3,14 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
-import { SECTIONS, sectionActive } from './sections';
+import { SECTIONS, sectionActive, sectionCount } from './sections';
+import { usePendingCount } from '../../context/pendingContext';
 import { Avatar } from '../common/Avatar';
 
 const Sidebar = ({ attention = 0 }) => {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
+  const counts = { attention, pending: usePendingCount() };
 
   return (
     <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-56 flex-col border-r border-[var(--rule-strong)] bg-[var(--paper-sunk)] z-30">
@@ -41,9 +43,9 @@ const Sidebar = ({ attention = 0 }) => {
           >
             <item.icon className="w-4 h-4 shrink-0" strokeWidth={1.75} />
             <span className="flex-1">{item.label}</span>
-            {item.counter && attention > 0 && (
+            {sectionCount(item, counts) > 0 && (
               <span className="figure-md text-[0.6875rem] px-1.5 py-0.5 bg-[var(--stamp)] text-[var(--paper)]">
-                {attention}
+                {sectionCount(item, counts)}
               </span>
             )}
           </NavLink>
