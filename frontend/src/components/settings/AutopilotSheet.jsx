@@ -58,14 +58,15 @@ const AutopilotSheet = () => {
       className="mt-3 sm:mt-4"
     >
       <p className="text-sm text-[var(--ink-soft)]">
-        Trades the AI account{aiBroker ? ` (${aiBroker.charAt(0).toUpperCase() + aiBroker.slice(1)})` : ''} by itself —
-        AI chat ideas and engine proposals — inside these limits. NSE stocks only, market hours only. Every order
-        and every refusal is sent to you on Telegram with a stop button.
+        Acts for the AI account{aiBroker ? ` (${aiBroker.charAt(0).toUpperCase() + aiBroker.slice(1)})` : ''} without
+        asking you: it takes the Practice engine's proposals and AI chat ideas and places them, inside these limits —
+        its own, separate from Practice's sizing. NSE stocks only, market hours only. Every order and every refusal
+        is sent to you on Telegram with a stop button.
       </p>
       {!aiBroker && (
         <p className="doc-meta normal-case text-[var(--loss)] mt-2">Set one broker as the AI account in Broker settings first.</p>
       )}
-      <Row label="Autopilot" hint={prefs.autopilot_live ? 'Real orders on the AI account.' : 'Paper only for now.'}>
+      <Row label="Autopilot" hint={prefs.autopilot_live ? 'Real orders on the AI account.' : 'Paper: a rehearsal in its own book, nothing sent to the broker.'}>
         <button
           type="button"
           role="switch"
@@ -78,7 +79,7 @@ const AutopilotSheet = () => {
           {prefs.autopilot_enabled ? 'On' : 'Off'}
         </button>
       </Row>
-      <Row label="Mode" hint="Live sends real orders to the AI account's broker.">
+      <Row label="Mode" hint="Paper rehearses in the autopilot's own book (not Practice's); live sends real orders to the AI account's broker.">
         {prefs.autopilot_live ? (
           <button type="button" onClick={() => save({ autopilot_live: false })}
             className="h-11 sm:h-8 px-4 text-xs border border-[var(--loss)] text-[var(--loss)]">
@@ -103,7 +104,7 @@ const AutopilotSheet = () => {
           </span>
         )}
       </Row>
-      <Row
+      {prefs.autopilot_enabled && <Row
         label="Trade on news"
         hint="Buys a proposal from material news at once instead of waiting for the morning pass. At most 3 a day, none while the market is risk-off. Sells on bad news are only logged for now."
       >
@@ -111,14 +112,13 @@ const AutopilotSheet = () => {
           type="button"
           role="switch"
           aria-checked={!!prefs.autopilot_news}
-          disabled={!prefs.autopilot_enabled}
           onClick={() => save({ autopilot_news: !prefs.autopilot_news })}
           className={cn('h-11 sm:h-8 px-4 text-xs border transition-colors disabled:opacity-40',
             prefs.autopilot_news ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]' : 'border-[var(--rule-strong)]')}
         >
           {prefs.autopilot_news ? 'On' : 'Off'}
         </button>
-      </Row>
+      </Row>}
       {LIMITS.map(([key, label, hint]) => (
         <Row key={key} label={label} hint={hint}>
           <NumberField

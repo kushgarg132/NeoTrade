@@ -124,11 +124,14 @@ const EngineSettings = () => {
         {switchRow(
           'auto_paper_longterm',
           'Run the long-term engine every session',
-          'Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 09:20 on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest. Proposals from the 16:00 scan wait for your approval.'
+          'Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 09:20 on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest. Proposals from the 16:00 scan wait for your approval, or for the autopilot if it is on.'
         )}
         <p className="pt-3 doc-meta normal-case">
-          Paper only: a strategy you switched live trades real money only once it has passed its
-          backtest and earned it on paper (see Strategies below).
+          Practice money, in the engine's own book. Its long-term proposals wait for you in{' '}
+          <Link to="/ai/decisions" className="underline">Decisions</Link>, or the{' '}
+          <Link to="/ai/autopilot" className="underline">Autopilot</Link> acts on them for the AI account.
+          A strategy you switched live trades real money only once it has passed its backtest and
+          earned it on paper (see Strategies below).
         </p>
       </Sheet>
 
