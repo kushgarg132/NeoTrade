@@ -21,7 +21,6 @@ const EngineNow = ({ prefs }) => {
   const [runs, setRuns] = useState([]);
   const [universeSymbols, setUniverseSymbols] = useState([]);
   const [runSettings, setRunSettings] = useState(false);
-  const [aboutLongterm, setAboutLongterm] = useState(false);
   const [accountSize, setAccountSize] = useState(1_000_000);
   const [maxExposure, setMaxExposure] = useState(1_000_000);
   const [busy, setBusy] = useState(false);
@@ -227,23 +226,9 @@ const EngineNow = ({ prefs }) => {
             </Button>
           }
         >
-          <p className={cn('text-sm text-[var(--ink)]', !aboutLongterm && 'line-clamp-2')}>
-            Scans a year of daily prices after each close (16:00 IST) and files what it finds under{' '}
-            <Link to="/ai/decisions" className="underline underline-offset-2">Decisions</Link>.
-            {prefs?.auto_paper_longterm
-              ? ' At 09:20 on the first trading day of each month the factor portfolio rebalances on paper; in session, approved positions are sold at their stop or target, checked every 15 minutes.'
-              : ' Turn on the daily long-term engine in Settings to close approved positions at their stop or target.'}
-          </p>
-          <button
-            type="button"
-            onClick={() => setAboutLongterm((value) => !value)}
-            aria-expanded={aboutLongterm}
-            className="field-label text-[var(--stamp)] hover:underline min-h-9"
-          >
-            {aboutLongterm ? 'Less' : 'More'}
-          </button>
-          <p className="mt-1 doc-meta normal-case">
-            {longterm.pending} waiting for your decision · {longterm.open} open long-term position{longterm.open === 1 ? '' : 's'}
+          <p className="text-sm">
+            Next scan 16:00 IST · {longterm.open} open long-term position{longterm.open === 1 ? '' : 's'}
+            {prefs && !prefs.auto_paper_longterm && ' · stops and targets are not watched while it is off'}
           </p>
           {scan && scan !== 'starting' && <p className="mt-2 text-sm text-[var(--ink-soft)]">{scan}</p>}
         </Sheet>

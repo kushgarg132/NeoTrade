@@ -3,11 +3,10 @@ import SectionTabs from '../layout/SectionTabs';
 import { PRACTICE_TABS } from '../layout/sections';
 
 /**
- * Practice's engine pages (Engine, Book, Setup): the strategy engine trading
+ * Practice's pages (Engine, Book, Strategies, Setup): the strategy engine trading
  * practice money, printed as a specimen copy -- a dashed stamp band that says
  * so on every page, so a practice figure can never be read as the broker
- * account's. Decisions shares the tabs but not the band: an approval there
- * can be real money.
+ * account's. (Its proposals are decided under AI → Decisions.)
  *
  * Engine orders from a strategy switched to live are real money; they are
  * kept out of this section and shown on Mine -> Trades instead.
