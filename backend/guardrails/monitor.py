@@ -37,6 +37,7 @@ from backend.journal.sync import sync_user_trades
 from backend.prefs import PrefsStore
 from backend.risk.kill_switch import KillSwitchStore
 from backend.ws.hub import hub
+from backend.system.jobs import mark
 
 logger = logging.getLogger(__name__)
 
@@ -165,9 +166,11 @@ async def run_tick(db, redis, now: datetime | None = None) -> int:
 async def monitor_loop(db, redis) -> None:
     while True:
         try:
-            await run_tick(db, redis)
+            checked = await run_tick(db, redis)
+            await mark(redis, "guardrail_monitor", True, f"{checked} checked")
         except Exception as exc:
             logger.exception("guardrail tick failed: %s", exc)
+            await mark(redis, "guardrail_monitor", False, f"{type(exc).__name__}: {exc}")
         await asyncio.sleep(INTERVAL_SECONDS)
 
 

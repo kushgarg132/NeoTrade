@@ -28,6 +28,12 @@ class FakeRedis:
     async def get(self, key):
         return self.data.get(key)
 
+    async def hset(self, key, mapping):
+        self.data.setdefault(key, {}).update({k: str(v) for k, v in mapping.items()})
+
+    async def hgetall(self, key):
+        return dict(self.data.get(key) or {})
+
     async def mget(self, keys):
         return [self.data.get(k) for k in keys]
 

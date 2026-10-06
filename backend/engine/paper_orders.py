@@ -23,6 +23,7 @@ from backend.engine.autorun import in_session
 from backend.engine.persistence import LedgerStore
 from backend.engine.session import IST
 from backend.suggestions.service import fill_on_paper
+from backend.system.jobs import mark
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,11 @@ async def _adapter_for_role(user_id: str, role: str):
         return None
 
 
+def _redis():
+    from backend.database import db as database
+    return database.redis
+
+
 async def _loop(db) -> None:
     from backend.chat.actions import _mark_price
 
@@ -163,8 +169,10 @@ async def _loop(db) -> None:
             # Live orders still open at the broker: book late fills (engine/reconcile.py).
             from backend.engine.reconcile import reconcile
             await reconcile(db, _adapter_for_role, now)
+            await mark(_redis(), "paper_orders", True)
         except Exception as exc:
             logger.exception("paper order sweep failed: %s", exc)
+            await mark(_redis(), "paper_orders", False, f"{type(exc).__name__}: {exc}")
         await asyncio.sleep(INTERVAL_SECONDS)
 
 

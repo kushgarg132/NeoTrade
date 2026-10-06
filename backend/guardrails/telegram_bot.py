@@ -25,6 +25,7 @@ from backend.guardrails.store import GuardrailStore
 from backend.llm import use_model
 from backend.prefs import PrefsStore
 from backend.auth.store import UserStore
+from backend.system.jobs import mark
 from backend.engine.session import IST
 from backend.routers.settings import UsageUnavailable, fetch_usage
 
@@ -481,10 +482,12 @@ async def poll_loop(db, redis) -> None:
     while True:
         try:
             await poll_once(db, redis)
+            await mark(redis, "telegram", True)
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception("telegram polling loop failed")
+            await mark(redis, "telegram", False, f"{type(exc).__name__}: {exc}")
         await asyncio.sleep(POLL_SECONDS)
 
 

@@ -39,6 +39,7 @@ from backend.core.clock import SystemClock
 from backend.engine.session import IST
 from backend.prefs import PrefsStore
 from backend.runs import ORPHANED, ACTIVE, RunStore
+from backend.system.jobs import mark
 
 logger = logging.getLogger(__name__)
 
@@ -357,8 +358,10 @@ async def autorun_loop(db, redis) -> None:
             result = await tick(db, redis)
             if result["started"] or result["stopped"]:
                 logger.info("auto-run: %s", result)
+            await mark(redis, "autorun", True, f"started {len(result['started'])}, stopped {len(result['stopped'])}")
         except Exception as exc:
             logger.exception("auto-run tick failed: %s", exc)
+            await mark(redis, "autorun", False, f"{type(exc).__name__}: {exc}")
         await asyncio.sleep(INTERVAL_SECONDS)
 
 

@@ -7,6 +7,7 @@ which takes `now` explicitly so it can be tested without waiting for 16:00.
 """
 
 import asyncio
+import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -27,6 +28,8 @@ from backend.suggestions.notify import notify, proposals_text
 from backend.suggestions.scan import scan_universe
 from backend.suggestions.store import SuggestionStore
 from backend.suggestions.thesis import attach_theses
+
+from backend.system.jobs import DAILY_PASS, mark
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +170,13 @@ async def _run_locked(db, redis) -> Optional[dict]:
         if await redis.get(LAST_PASS_KEY) == datetime.now(timezone.utc).astimezone(IST).date().isoformat():
             logger.info("daily pass already done today, skipping")
             return None
-        return await run_daily_jobs(db, redis=redis)
+        try:
+            result = await run_daily_jobs(db, redis=redis)
+        except Exception as exc:
+            await mark(redis, DAILY_PASS, False, f"{type(exc).__name__}: {exc}")
+            raise
+        await mark(redis, DAILY_PASS, True, json.dumps(result, default=str))
+        return result
     finally:
         # Only release if we still hold it -- never delete a lock some other
         # worker has since acquired after this one's TTL expired.
