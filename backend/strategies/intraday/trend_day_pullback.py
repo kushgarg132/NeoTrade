@@ -40,10 +40,14 @@ class TrendDayPullbackStrategy(TokenResolvingStrategy):
         slope = self.p["slope_bars"]
         if len(today) < max(self.spec.warmup_bars, slope + 2):
             return None
-        df = Indicators.calculate_all(bars_to_dataframe(today))
+        # Only the two columns used: calculate_all on every bar of every symbol
+        # made a year's backtest run for hours.
+        df = bars_to_dataframe(today)
         fast = Indicators.ema(df["close"], self.p["ema_fast"])
         slow = Indicators.ema(df["close"], self.p["ema_slow"])
-        atr, vwap = df["atr_14"].iloc[-1], df["vwap"].iloc[-1]
+        atr = Indicators.atr(df["high"], df["low"], df["close"]).iloc[-1]
+        session = pd.to_datetime(df["timestamp"]).dt.normalize() if "timestamp" in df.columns else None
+        vwap = Indicators.vwap(df["high"], df["low"], df["close"], df["volume"], session).iloc[-1]
         if pd.isna(atr) or pd.isna(vwap):
             return None
         prev, cur = today[-2], today[-1]
