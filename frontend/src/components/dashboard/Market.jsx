@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sheet, Statement, Row, Cell, Ruling, Scrip } from '../doc/Doc';
 import api, { endpoints } from '../../utils/api';
-import { formatSignedPercent, formatNoteDate, formatTimeAgo, bareSymbol, formatLevel } from '../../utils/formatters';
+import { formatSignedPercent, formatNoteDate, bareSymbol, formatLevel } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 import { stockPath } from '../../utils/stocks';
 
 /**
- * Market context, printed as one appendix rather than four competing widgets:
- * the indices, the day's movers, and the headlines the analyst agent read.
+ * Market context, printed as one appendix rather than competing widgets:
+ * the indices and the day's NIFTY 50 gainers and losers.
  */
 
 /** An index name that opens its detail on the statement, the way a scrip does. */
@@ -47,17 +47,48 @@ const Quote = ({ item, onClick, index = false }) => (
   </Row>
 );
 
+/** One side of the movers: name, then last price and change, compact enough for two columns on a phone. */
+const MoverList = ({ title, items, onOpen }) => (
+  <div className="min-w-0">
+    <p className="field-label mb-1">{title}</p>
+    {items.length === 0 ? (
+      <p className="doc-meta normal-case py-2">None today.</p>
+    ) : (
+      <ul>
+        {items.map((item) => (
+          <li key={item.symbol} className="border-b border-[var(--rule)] last:border-b-0">
+            <button
+              type="button"
+              onClick={() => onOpen(item.symbol)}
+              className="w-full text-left py-2 min-h-11 hover:bg-[var(--paper-sunk)] transition-colors"
+            >
+              <span className="figure-md text-sm block truncate underline decoration-[var(--rule)] underline-offset-[3px]">
+                {item.name && item.name !== item.symbol ? item.name : bareSymbol(item.symbol)}
+              </span>
+              <span className="flex items-baseline justify-between gap-2 text-xs">
+                <span className="figure-md text-[var(--ink-soft)]">{formatLevel(item.value)}</span>
+                <span className={cn('figure-md', item.percent >= 0 ? 'text-up' : 'text-down')}>
+                  {formatSignedPercent(item.percent)}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+);
+
 const Market = () => {
   const navigate = useNavigate();
   // Each feed is shown the moment it arrives; null means still loading.
-  const [data, setData] = useState({ indices: null, global: null, trending: null, news: null });
+  const [data, setData] = useState({ indices: null, global: null, trending: null });
 
   useEffect(() => {
     const feeds = [
       ['indices', endpoints.marketIndices, (res) => res.data],
       ['global', endpoints.globalIndices, (res) => res.data],
       ['trending', endpoints.trendingStocks, (res) => res.data],
-      ['news', endpoints.marketNews, (res) => res.data.articles || []],
     ];
     let live = true;
     feeds.forEach(([key, url, pick]) => {
@@ -74,11 +105,10 @@ const Market = () => {
 
   // Indian indices first; the world ones one tap away.
   const [world, setWorld] = useState(false);
-  const [allNews, setAllNews] = useState(false);
   const quotes = [...(data.indices || []), ...(world ? data.global || [] : [])];
   const quotesLoading = data.indices === null && data.global === null;
   const done = Object.values(data).every((value) => value !== null);
-  if (done && quotes.length === 0 && data.trending.length === 0 && data.news.length === 0) return null;
+  if (done && quotes.length === 0 && data.trending.length === 0) return null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -126,54 +156,12 @@ const Market = () => {
       )}
       {data.trending?.length > 0 && (
         <Sheet title="Movers" meta="NIFTY 50">
-          <Statement
-            inline
-            columns={[
-              { key: 'name', label: 'Scrip' },
-              { key: 'value', label: 'Last', align: 'right' },
-              { key: 'change', label: 'Change', align: 'right' },
-            ]}
-          >
-            {data.trending.map((item) => (
-              <Quote
-                key={item.symbol}
-                item={item}
-                onClick={() => navigate(stockPath(item.symbol))}
-              />
-            ))}
-          </Statement>
-        </Sheet>
-      )}
-
-      {data.news?.length > 0 && (
-        <Sheet title="Headlines" className="lg:col-span-2">
-          <ul>
-            {data.news.slice(0, allNews ? 6 : 3).map((article, index) => (
-              <li key={article.url || index} className="border-b border-[var(--rule)] last:border-b-0">
-                <a
-                  href={article.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group flex items-baseline justify-between gap-4 py-2.5 hover:bg-[var(--paper-sunk)] -mx-2 px-2 transition-colors"
-                >
-                  <span className="text-sm truncate group-hover:underline decoration-[var(--stamp)] underline-offset-2">
-                    {article.title}
-                  </span>
-                  <span className="doc-meta shrink-0">{formatTimeAgo(article.published_at)}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-          {data.news.length > 3 && (
-            <button
-              type="button"
-              onClick={() => setAllNews((value) => !value)}
-              aria-expanded={allNews}
-              className="mt-1 field-label text-[var(--stamp)] hover:underline min-h-11 sm:min-h-0"
-            >
-              {allNews ? 'Fewer headlines' : 'More headlines'}
-            </button>
-          )}
+          <div className="grid grid-cols-2 gap-4">
+            <MoverList title="Gainers" items={data.trending.filter((m) => m.percent > 0)}
+              onOpen={(symbol) => navigate(stockPath(symbol))} />
+            <MoverList title="Losers" items={data.trending.filter((m) => m.percent < 0)}
+              onOpen={(symbol) => navigate(stockPath(symbol))} />
+          </div>
         </Sheet>
       )}
     </div>

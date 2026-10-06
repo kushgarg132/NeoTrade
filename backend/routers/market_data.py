@@ -88,7 +88,7 @@ MOVERS_TTL = 5 * 60
 
 
 def _movers_sync() -> List[Dict[str, Any]]:
-    """The six NIFTY 50 stocks that moved most today, from one batched
+    """The NIFTY 50's top five gainers then top five losers today, from one batched
     download of every constituent's last few daily closes -- 49 separate
     quote calls took most of the home page's load time."""
     closes = yf.download(NIFTY_50_SYMBOLS, period="5d", interval="1d", progress=False, threads=True)["Close"]
@@ -102,8 +102,10 @@ def _movers_sync() -> List[Dict[str, Any]]:
         price, prev = float(series.iloc[-1]), float(series.iloc[-2])
         movers.append({"name": symbol, "symbol": symbol, "value": price, "change": price - prev,
                        "percent": (price - prev) / prev * 100 if prev else 0.0})
-    movers.sort(key=lambda m: abs(m["percent"]), reverse=True)
-    return movers[:6]
+    movers.sort(key=lambda m: m["percent"], reverse=True)
+    gainers = [m for m in movers if m["percent"] > 0][:5]
+    losers = [m for m in reversed(movers) if m["percent"] < 0][:5]
+    return gainers + losers
 
 
 async def _quotes(names_to_symbols: Dict[str, str]) -> List[Dict[str, Any]]:

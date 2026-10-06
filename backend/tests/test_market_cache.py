@@ -89,4 +89,19 @@ def test_movers_come_from_one_batched_download(monkeypatch):
 
     movers = market_data._movers_sync()
     assert calls == [symbols]
-    assert [(m["symbol"], round(m["percent"], 1)) for m in movers] == [("B.NS", -10.0), ("A.NS", 1.0)]
+    # Gainers first (best first), then losers (worst first).
+    assert [(m["symbol"], round(m["percent"], 1)) for m in movers] == [("A.NS", 1.0), ("B.NS", -10.0)]
+
+
+def test_movers_are_the_top_gainers_and_the_top_losers(monkeypatch):
+    import pandas as pd
+
+    from backend.routers import market_data
+
+    pct = {f"G{i}.NS": 1.0 + i for i in range(7)} | {f"L{i}.NS": -1.0 - i for i in range(2)}
+    monkeypatch.setattr(market_data, "NIFTY_50_SYMBOLS", list(pct))
+    frame = pd.DataFrame({("Close", s): [100.0, 100.0 + p] for s, p in pct.items()})
+    monkeypatch.setattr(market_data.yf, "download", lambda tickers, **kw: frame)
+
+    movers = market_data._movers_sync()
+    assert [m["symbol"] for m in movers] == ["G6.NS", "G5.NS", "G4.NS", "G3.NS", "G2.NS", "L1.NS", "L0.NS"]
