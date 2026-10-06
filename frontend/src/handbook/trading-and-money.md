@@ -121,6 +121,9 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
 - Approve / reject is one atomic `find_one_and_update` gated on PENDING — double approval
   is impossible. Approval fills against a fresh price, on paper or (second tap) live on `mine`.
 - Expire after 3 days (`DEFAULT_TTL`). An equity SELL is proposed only against a held long.
+- At most 5 long-term proposals stay pending, the best by final score: after each scan the rest
+  expire as `outranked` (`scan.py::MAX_PENDING_LONGTERM`, `store.py::keep_best`), so theses are
+  written only for those. Each must already beat 3× its round-trip charges (`size_intents`).
 - Approved long-term paper positions exit at their stop or target (`suggestions/exits.py`,
   every 15 min in session).
 

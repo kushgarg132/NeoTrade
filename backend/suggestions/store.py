@@ -162,6 +162,24 @@ class SuggestionStore:
         await self.collection.update_one({"user_id": user_id, "id": suggestion_id}, {"$set": changes})
         await hub.publish(user_id, "suggestions", "enriched", await self.get(user_id, suggestion_id))
 
+    async def keep_best(self, user_id: str, mode: str, n: int, now: Optional[datetime] = None) -> int:
+        """Expires every pending `mode` proposal of the user's beyond the `n`
+        best by final score (`expired_reason: outranked`); returns how many.
+        A long list nobody reviews is noise (ROADMAP 17.3.5)."""
+        now = now or datetime.now(timezone.utc)
+        pending = await self.collection.find(
+            {"user_id": user_id, "mode": mode, "status": PENDING}, {"id": 1, "score": 1},
+        ).to_list(length=None)
+        pending.sort(key=lambda d: (d.get("score") or {}).get("final") or 0.0, reverse=True)
+        drop = [d["id"] for d in pending[n:]]
+        if not drop:
+            return 0
+        result = await self.collection.update_many(
+            {"user_id": user_id, "id": {"$in": drop}, "status": PENDING},
+            {"$set": {"status": "EXPIRED", "decided_at": now, "expired_reason": "outranked"}},
+        )
+        return result.modified_count
+
     async def expire_stale(self, now: Optional[datetime] = None) -> int:
         now = now or datetime.now(timezone.utc)
         result = await self.collection.update_many(

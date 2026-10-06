@@ -80,6 +80,9 @@ class _ArmedOnlyRedis:
         return await self._redis.get(key)
 
 
+MAX_PENDING_LONGTERM = 5
+
+
 async def scan_universe(
     db,
     user_id: str,
@@ -175,6 +178,9 @@ async def scan_universe(
         learned=await load_rules(db, user_id),
     )
 
+    # Only the best few long-term proposals stay pending (cost check already
+    # dropped any that cannot beat 3x their charges, in size_intents).
+    await store.keep_best(user_id, "LONGTERM", MAX_PENDING_LONGTERM, now=now)
     created = [
         s for s in await store.list(user_id, status="PENDING", limit=1000)
         if s["id"] not in before

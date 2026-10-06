@@ -1086,6 +1086,9 @@ start) is the only evidence that counts; no live capital before it holds.
 (`progress.below_cost`, shown on the engine card). 17.3.2's bar was already in code: gate
 backtests are net of charges and sized with the user's own `account_size`/`per_trade_cap`,
 PF ≥ 1.3. The owner kept `auto_paper_intraday` and `autopilot_news` on (asked 2026-10-07).
+17.3.5 landed: after each scan only the 5 best pending long-term proposals by final score
+stay (the rest expire as `outranked`); the minimum-move rule was already `size_intents`'
+3× charges check.
 
 Done when: the factor book has 3 months of paper beating Nifty; intraday is off or
 gated by a passing year-long backtest; no trade is sized whose expected move does not

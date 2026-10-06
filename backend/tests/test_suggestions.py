@@ -173,6 +173,22 @@ async def test_expire_stale_only_touches_pending_ones_past_their_date(store):
 
 
 @pytest.mark.asyncio
+async def test_only_the_best_few_long_term_proposals_stay_pending(store):
+    made = []
+    for i, final in enumerate([0.5, 0.9, 0.7, 0.6, 0.8]):
+        doc = await _create(store, proposal=_proposal(symbol=f"S{i}"))
+        await store.collection.update_one({"id": doc["id"]}, {"$set": {"score.final": final}})
+        made.append(doc["id"])
+    intraday = await _create(store, proposal=_proposal(mode="INTRADAY", symbol="X"))
+
+    assert await store.keep_best("alice", "LONGTERM", 3, now=NOW) == 2
+    status = {i: (await store.get("alice", i))["status"] for i in made}
+    assert [status[i] for i in made] == ["EXPIRED", "PENDING", "PENDING", "EXPIRED", "PENDING"]
+    assert (await store.get("alice", made[0]))["expired_reason"] == "outranked"
+    assert (await store.get("alice", intraday["id"]))["status"] == "PENDING"  # other modes untouched
+
+
+@pytest.mark.asyncio
 async def test_an_expired_proposal_cannot_be_approved_before_the_sweep(store):
     stale = await _create(store, expires_at=NOW - timedelta(minutes=1))
     assert await store.decide("alice", stale["id"], status="SENDING", now=NOW) is None
