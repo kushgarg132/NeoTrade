@@ -51,6 +51,9 @@ These make conviction legible. Enforced in code and tests, not by discipline.
 - **Every per-account record carries `user_id`.**
 - **Sizing lives in `size_intents` + `RiskRules`** (`backend/components/risk/risk.py`), never
   in a strategy. Risk per trade scales with conviction: `BASE_RISK_PCT × final score`.
+  An entry whose target cannot beat `COST_MULTIPLE` (3) × its round-trip charges and slippage
+  is dropped; each run counts these in `progress.below_cost`, shown on Paper → engine as
+  "too small to beat charges".
 
 ## Strategies
 

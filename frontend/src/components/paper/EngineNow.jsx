@@ -183,7 +183,7 @@ const EngineNow = ({ prefs }) => {
               </Button>
               <span className="doc-meta normal-case w-full">
                 {run.progress
-                  ? `${run.progress.bars} bars scanned · ${run.progress.signals} signals · ${run.progress.orders} orders · last ${run.progress.last_symbol ?? 'bar'} at ${formatClock(run.progress.updated_at)}`
+                  ? `${run.progress.bars} bars scanned · ${run.progress.signals} signals · ${run.progress.orders} orders${run.progress.below_cost ? ` · ${run.progress.below_cost} too small to beat charges` : ''} · last ${run.progress.last_symbol ?? 'bar'} at ${formatClock(run.progress.updated_at)}`
                   : 'Waiting for the first bar…'}
               </span>
             </div>

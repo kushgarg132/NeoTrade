@@ -101,6 +101,7 @@ async def size_intents(
     strategies_by_name: Optional[dict[str, Strategy]] = None,
     holders: Optional[dict[str, str]] = None,
     plan=None,
+    skipped: Optional[dict] = None,
 ) -> list[Order]:
     """Scores each Intent (backend.scoring.composite.score_intent, which
     caps AI's influence at AI_CAP regardless of what's passed here), then
@@ -286,6 +287,8 @@ async def size_intents(
             if gain < COST_MULTIPLE * friction:
                 logger.info("skipping intent for %s: expected ₹%.2f < %d x friction ₹%.2f",
                             intent.symbol, gain, COST_MULTIPLE, friction)
+                if skipped is not None:  # the run's progress: how often costs alone said no
+                    skipped["below_cost"] = skipped.get("below_cost", 0) + 1
                 continue
         if not RiskRules.check_exposure_limit(current_exposure, max_exposure, notional):
             continue
@@ -485,7 +488,7 @@ async def run(
     # Game-plan revisions (backend/plan/): each new version is acted on once.
     acted_version: Optional[int] = None
     known_symbols = set(owner_by_symbol)  # symbols some strategy trades
-    progress = {"bars": 0, "signals": 0, "orders": 0, "last_symbol": None, "last_bar_at": None}
+    progress = {"bars": 0, "signals": 0, "orders": 0, "below_cost": 0, "last_symbol": None, "last_bar_at": None}
 
     async for bar in feed:
         if isinstance(clock, SimClock):
@@ -559,7 +562,7 @@ async def run(
                 order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
                 master=master, premium_source=premium_source, option_legs=option_legs, learned=learned,
                 plan=plan,
-                strategies_by_name=strategies_by_name, holders=holders,
+                strategies_by_name=strategies_by_name, holders=holders, skipped=progress,
             )
             held_by = {**owner_by_symbol, **{s: strategies_by_name[h] for s, h in holders.items() if h in strategies_by_name}}
             orders.extend(_square_off_orders(symbol, bar.timestamp, portfolio, held_by))

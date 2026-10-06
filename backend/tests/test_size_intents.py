@@ -430,6 +430,17 @@ async def test_an_entry_whose_target_cannot_beat_its_costs_is_skipped():
 
 
 @pytest.mark.asyncio
+async def test_each_entry_dropped_for_costs_is_counted_for_the_run():
+    tally = {"below_cost": 0}
+    await size_intents(
+        [_entry(target=100.5), _entry(target=120.0)], Portfolio(), _FakeCtx({"RELIANCE": 100.0}), {},
+        _no_sentiment_redis(), account_size=1_000_000.0, max_exposure=1_000_000.0, per_trade_cap=5_000.0,
+        skipped=tally,
+    )
+    assert tally == {"below_cost": 1}
+
+
+@pytest.mark.asyncio
 async def test_an_entry_with_room_to_its_target_is_placed():
     assert len(await _size(_entry(target=120.0))) == 1
 

@@ -1063,6 +1063,11 @@ same feature set.
    nobody reviews.
 6. **Autopilot stays off** until a strategy on the AI account has passed both gates.
 
+**Status 2026-10-07:** 17.3.3 landed: each run counts entries dropped by the cost check
+(`progress.below_cost`, shown on the engine card). 17.3.2's bar was already in code: gate
+backtests are net of charges and sized with the user's own `account_size`/`per_trade_cap`,
+PF ≥ 1.3. The owner kept `auto_paper_intraday` and `autopilot_news` on (asked 2026-10-07).
+
 Done when: the factor book has 3 months of paper beating Nifty; intraday is off or
 gated by a passing year-long backtest; no trade is sized whose expected move does not
 clear 3× charges.
