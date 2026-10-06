@@ -35,8 +35,12 @@ def _article(title, hours_ago=1):
 
 @pytest.fixture
 def world(monkeypatch):
-    index_move._cache.clear()
-    calls = {"llm": [], "news": []}
+    from backend.database import db
+    from backend.tests.test_datalayer_news import FakeRedis
+
+    redis = FakeRedis()  # shared by every worker, so one tap serves both
+    monkeypatch.setattr(db, "redis", redis)
+    calls = {"llm": [], "news": [], "redis": redis}
 
     async def news(query, region="US", lang="en-US", limit=10):
         calls["news"].append((query, region))
@@ -111,9 +115,21 @@ def test_an_unavailable_model_is_a_503_not_error_text(world, client, monkeypatch
 
     resp = client.get("/api/v1/market/index/%5ENSEI/analysis")
     assert resp.status_code == 503
-    assert index_move._cache == {}  # a failure is never cached
+    assert not [k for k in world["redis"].data if k.startswith("index_move:")]  # a failure is never cached
 
 
 def test_an_unlisted_ticker_is_refused(world, client):
     assert client.get("/api/v1/market/index/AAPL/analysis").status_code == 404
     assert world["llm"] == []
+
+
+def test_an_open_session_is_cached_briefly_a_finished_one_until_the_next_open():
+    ist = timezone(timedelta(hours=5, minutes=30))
+    midday = datetime(2026, 10, 6, 11, 0, tzinfo=ist)
+    assert index_move._ttl("2026-10-06", midday) == index_move.SESSION_CACHE_SECONDS
+    evening = datetime(2026, 10, 6, 20, 0, tzinfo=ist)   # today's session is done...
+    assert index_move._ttl("2026-10-06", evening) == index_move.SESSION_CACHE_SECONDS  # ...but dated today
+    early = datetime(2026, 10, 7, 7, 15, tzinfo=ist)     # yesterday's session, two hours before the open
+    assert index_move._ttl("2026-10-06", early) == 2 * 3600
+    night = datetime(2026, 10, 7, 0, 30, tzinfo=ist)
+    assert index_move._ttl("2026-10-06", night) == index_move.CLOSED_CACHE_SECONDS

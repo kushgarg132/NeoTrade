@@ -4,27 +4,43 @@ OHLC, its recent trend, what the other tracked indices did, the day's
 biggest NIFTY 50 movers (for Indian indices), and recent headlines.
 
 The model only explains; the prompt (backend/prompts/index_move.md) forbids
-forecasts and buy/sell calls. Explanations are cached per index for a few
-minutes -- a tap should not cost an LLM call every time, and the headlines
-behind it do not change that fast.
+forecasts and buy/sell calls. Explanations are cached per index in Redis,
+shared by every worker and user: SESSION_CACHE_SECONDS while the session it
+explains may still be moving, then until the next Indian open -- a finished
+session's story does not change.
 """
 
 import asyncio
+import json
 import logging
-import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import yfinance as yf
 
 from backend.components.analyst.news import fresh_headlines
+from backend.engine.session import IST
 from backend.llm import llm_service
 from backend.prompts import render
 
 logger = logging.getLogger(__name__)
 
-CACHE_SECONDS = 15 * 60
-_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+SESSION_CACHE_SECONDS = 15 * 60
+# ponytail: one cap for every index; global indices' own sessions end at other
+# IST hours, so theirs may serve a finished-session story up to this long.
+CLOSED_CACHE_SECONDS = 6 * 3600
+CACHE_KEY = "index_move:{}"
+NSE_OPEN = time(9, 15)
+
+
+def _ttl(session_date: str, now: datetime) -> int:
+    local = now.astimezone(IST)
+    if session_date >= local.date().isoformat():
+        return SESSION_CACHE_SECONDS  # today's session: may still be moving
+    next_open = datetime.combine(local.date(), NSE_OPEN, tzinfo=IST)
+    if next_open <= local:
+        next_open += timedelta(days=1)
+    return int(max(60, min(CLOSED_CACHE_SECONDS, (next_open - local).total_seconds())))
 
 INDIAN = {"^NSEI", "^BSESN", "^NSEBANK", "^INDIAVIX"}
 
@@ -149,9 +165,12 @@ def _bullets(rows: List[str], empty: str) -> str:
 
 
 async def explain_index_move(ticker: str, name: str) -> Dict[str, Any]:
-    cached = _cache.get(ticker)
-    if cached and cached[0] > time.time():
-        return {**cached[1], "cached": True}
+    from backend.database import db
+
+    redis = db.redis
+    raw = await redis.get(CACHE_KEY.format(ticker)) if redis is not None else None
+    if raw:
+        return {**json.loads(raw), "cached": True}
 
     session, headlines, peers, movers = await asyncio.gather(
         asyncio.to_thread(_session_sync, ticker), _headlines(ticker), _peers(ticker), _movers(ticker),
@@ -189,5 +208,7 @@ async def explain_index_move(ticker: str, name: str) -> Dict[str, Any]:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "cached": False,
     }
-    _cache[ticker] = (time.time() + CACHE_SECONDS, result)
+    if redis is not None:
+        await redis.set(CACHE_KEY.format(ticker), json.dumps(result, default=str),
+                        ex=_ttl(session["date"], datetime.now(timezone.utc)))
     return result

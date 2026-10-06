@@ -1023,8 +1023,11 @@ Per feature: six OmniRoute keys ("NeoTrade news/plan/research/chat/portfolio/lea
 `OMNIROUTE_FEATURE_KEYS`; every call site names its feature (pinned by a test); a feature
 key never falls back to the shared one, so a daily USD limit on it is the feature's budget;
 the handbook's AI panel shows each key's tokens and cost with ⚠ at 80%. **Limits not set
-yet** — set them in OmniRoute after a week of per-key data (~2026-10-13). Still open:
-17.2.6–17.2.7.
+yet** — set them in OmniRoute after a week of per-key data (~2026-10-13). 17.2.6: research notes were already one per symbol for every user (`analyst:<SYM>`, 4 h);
+index explanations moved from a per-worker dict to Redis (shared by both workers), 15 min
+while the session is dated today, then until the next 09:15 IST open (≤ 6 h); OmniRoute's
+response cache was already on for every key (303 hits / 3,083 misses so far — explainer
+prompts carry live figures, so exact repeats are rare). Still open: 17.2.7.
 
 Done when: calls per day and tokens per call are visible per feature, fast-tier calls
 average under 500 output tokens, and the month's tokens fall by at least half at the

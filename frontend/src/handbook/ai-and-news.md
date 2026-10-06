@@ -30,6 +30,11 @@ every call site's tier and feature.
 Every prompt is a file in `backend/prompts/*.md` (system prompt in front matter,
 `{{placeholders}}`, rendered by `backend.prompts.render`); none are inlined in Python.
 
+Repeats are cached: a stock's research note per symbol for 4 h, for every user
+(`analyst:<SYM>`); index explanations as in the table; and OmniRoute answers any request
+byte-identical to one in the last 30 min from its own cache (`temperature=0`, on for every
+NeoTrade key).
+
 | Prompt | Tier | Used for |
 |---|---|---|
 | `triage_news.md` | fast | keep or drop up to 150 headlines in one call |
@@ -37,7 +42,7 @@ Every prompt is a file in `backend/prompts/*.md` (system prompt in front matter,
 | `score_news.md` | deep | a stock's news sentiment (first of the analyst's two calls) |
 | `research_report.md` | standard | the stock's research note and thesis |
 | `market_brief.md` | standard | the market brief (hourly in session, only when the regime moved or material news landed) |
-| `index_move.md` | standard | why an index moved in its last session |
+| `index_move.md` | standard | why an index moved in its last session (Redis `index_move:<ticker>`, shared: 15 min while dated today, then until the next 09:15 IST open, ≤ 6 h) |
 | `game_plan*.md`, `game_plan_revision*.md` | deep | the pre-open plan and its revisions |
 | `portfolio_review.md` | deep | holdings write-up and action plan |
 | `learning_review.md` | standard | Friday learning note |
