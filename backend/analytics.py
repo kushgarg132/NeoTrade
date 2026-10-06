@@ -64,6 +64,9 @@ async def compute_pnl(
 
     realized_today = sum(t["realized_pnl"] for t in today)
     realized_month = sum(t["realized_pnl"] for t in month)
+    # Net of charges, the figure Practice shows; older rows without `costs` count none.
+    costs = lambda trades: sum(t.get("costs") or 0.0 for t in trades)  # noqa: E731
+    realized_all = sum(t["realized_pnl"] for t in closed)
     month_wins = [t for t in month if t["realized_pnl"] > 0]
 
     entered_today = [
@@ -79,6 +82,8 @@ async def compute_pnl(
             "wins": len([t for t in today if t["realized_pnl"] > 0]),
             "losses": len([t for t in today if t["realized_pnl"] < 0]),
             "turnover": sum(t["quantity"] * t["entry_price"] for t in entered_today),
+            "costs": costs(today),
+            "net": realized_today - costs(today),
         },
         "month": {
             "realized": realized_month,
@@ -86,6 +91,16 @@ async def compute_pnl(
             "win_rate": len(month_wins) / len(month) if month else 0.0,
             "best": max((t["realized_pnl"] for t in month), default=0.0),
             "worst": min((t["realized_pnl"] for t in month), default=0.0),
+            "costs": costs(month),
+            "net": realized_month - costs(month),
+        },
+        # ponytail: capped at the 2000 newest closed trades, like every figure here.
+        "all_time": {
+            "realized": realized_all,
+            "costs": costs(closed),
+            "net": realized_all - costs(closed),
+            "trades": len(closed),
+            "wins": len([t for t in closed if t["realized_pnl"] > 0]),
         },
         "open": {
             "positions": open_count,

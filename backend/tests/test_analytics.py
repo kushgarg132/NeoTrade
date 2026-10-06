@@ -30,13 +30,14 @@ def ledger(mongo):
 
 
 async def _closed_trade(ledger, realized: float, exit_at: datetime, quantity: float = 10.0,
-                        entry_price: float = 100.0, symbol: str = "RELIANCE") -> None:
+                        entry_price: float = 100.0, symbol: str = "RELIANCE", costs=10.0) -> None:
     await ledger.trades.insert_one({
         "id": f"t-{exit_at.isoformat()}-{symbol}", "user_id": "alice", "run_id": None,
         "symbol": symbol, "mode": "LONGTERM", "side": Side.BUY.value, "status": "CLOSED",
         "quantity": quantity, "entry_price": entry_price, "entry_at": exit_at - timedelta(hours=2),
         "exit_price": entry_price + realized / quantity, "exit_at": exit_at,
-        "realized_pnl": realized, "costs": 10.0, "suggestion_id": None,
+        "realized_pnl": realized, "suggestion_id": None,
+        **({} if costs is None else {"costs": costs}),
     })
 
 
@@ -152,3 +153,22 @@ async def test_mode_splits_the_book_into_intraday_and_long_term(ledger):
 
     card = await compute_scorecard(ledger, "paper", 1_000_000, mode="INTRADAY")
     assert card["totals"]["trades"] == 1 and card["totals"]["net"] == -21.0
+
+
+@pytest.mark.asyncio
+async def test_net_subtracts_charges_per_period(ledger):
+    await _closed_trade(ledger, realized=100.0, exit_at=NOW - timedelta(hours=1), costs=5.0)
+    await _closed_trade(ledger, realized=-20.0, exit_at=NOW - timedelta(hours=2), symbol="TCS", costs=3.0)
+
+    pnl = await compute_pnl(ledger, mark_prices={}, now=NOW)
+
+    assert pnl["today"]["costs"] == 8.0 and pnl["today"]["net"] == 72.0
+    assert pnl["month"]["net"] == 72.0
+    assert pnl["all_time"] == {"realized": 80.0, "costs": 8.0, "net": 72.0, "trades": 2, "wins": 1}
+
+
+@pytest.mark.asyncio
+async def test_missing_costs_count_as_zero(ledger):
+    await _closed_trade(ledger, realized=50.0, exit_at=NOW - timedelta(hours=1), costs=None)
+    pnl = await compute_pnl(ledger, mark_prices={}, now=NOW)
+    assert pnl["today"]["net"] == 50.0 and pnl["all_time"]["net"] == 50.0
