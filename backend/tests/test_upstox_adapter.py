@@ -12,7 +12,7 @@ Endpoints this adapter uses:
               grant_type=authorization_code) -> {"access_token": ...}
 - Quote:      GET  https://api.upstox.com/v2/market-quote/quotes
               ?instrument_key=... -> {"data": {key: {"last_price", "ohlc": {...}}}}
-- Historical: GET  https://api.upstox.com/v2/historical-candle/{instrument_key}/{interval}/{to_date}/{from_date}
+- Historical: GET  https://api.upstox.com/v3/historical-candle/{instrument_key}/{unit}/{n}/{to_date}/{from_date}
               -> {"data": {"candles": [[ts, o, h, l, c, volume, oi], ...]}}
 - Instruments: gzip JSON dump at
               https://assets.upstox.com/market-quote/instruments/exchange/{NSE|BSE}.json.gz
@@ -172,7 +172,54 @@ async def test_history_maps_the_candle_array_shape(monkeypatch):
 async def test_history_rejects_an_unsupported_interval():
     adapter = _adapter()
     with pytest.raises(ValueError):
-        await adapter.history(_instrument(), interval="15m", period="1mo")
+        await adapter.history(_instrument(), interval="4h", period="1mo")
+
+
+async def test_a_year_of_5m_history_comes_in_month_chunks_oldest_first(monkeypatch):
+    """Upstox v3 refuses a minute range over a month ('Invalid date range') and
+    answers newest first; a 429 is retried, not dropped."""
+    import backend.brokers.upstox as upstox
+
+    redis = _redis()
+    await redis.set("broker:alice:upstox:access_token", "up-tok")
+    adapter = _adapter(redis)
+    scrip = [{
+        "segment": "NSE_EQ", "exchange": "NSE", "isin": "INE002A01018",
+        "instrument_type": "EQ", "instrument_key": "NSE_EQ|INE002A01018",
+        "lot_size": 1, "exchange_token": "2885", "tick_size": 0.05,
+        "trading_symbol": "RELIANCE", "name": "RELIANCE INDUSTRIES",
+    }]
+    urls, throttled = [], []
+
+    async def fake_get(self, url, params=None, **kwargs):
+        request = httpx.Request("GET", url)
+        if "assets.upstox.com" in url:
+            return httpx.Response(200, content=gzip.compress(json.dumps(scrip).encode()), request=request)
+        if not throttled:
+            throttled.append(url)
+            return httpx.Response(429, json={}, request=request)
+        urls.append(url)
+        to_date, from_date = url.rsplit("/", 2)[-2:]
+        return httpx.Response(200, json={"data": {"candles": [
+            [f"{to_date}T15:25:00+05:30", 2.0, 2.0, 2.0, 2.0, 1, 0],
+            [f"{from_date}T09:15:00+05:30", 1.0, 1.0, 1.0, 1.0, 1, 0],
+        ]}}, request=request)
+
+    async def no_wait(_seconds):
+        return None
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(upstox.asyncio, "sleep", no_wait)
+
+    candles = await adapter.history(_instrument(), interval="5m", period="max")
+
+    assert all("/v3/historical-candle/NSE_EQ|INE002A01018/minutes/5/" in u for u in urls)
+    spans = [(datetime.fromisoformat(u.rsplit("/", 2)[-2]) - datetime.fromisoformat(u.rsplit("/", 1)[-1])).days
+             for u in urls]
+    assert len(urls) >= 12 and max(spans) < 31
+    assert urls[0] == throttled[0]  # the throttled chunk was asked again
+    stamps = [c.timestamp for c in candles]
+    assert stamps == sorted(stamps) and len(candles) == 2 * len(urls)
 
 
 async def test_instruments_parses_the_gzip_scrip_master(monkeypatch):

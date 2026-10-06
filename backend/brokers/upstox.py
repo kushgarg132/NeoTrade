@@ -17,11 +17,12 @@ Real API surface used:
 - Quote:      GET https://api.upstox.com/v2/market-quote/quotes
   ?instrument_key=... , Bearer auth -> {"data": {key: {"last_price",
   "ohlc": {open,high,low,close}, "volume", ...}}}.
-- Historical: GET https://api.upstox.com/v2/historical-candle/
-  {instrument_key}/{interval}/{to_date}/{from_date}, dates as YYYY-MM-DD ->
-  {"data": {"candles": [[iso_timestamp, open, high, low, close, volume, oi], ...]}}.
-  Interval is a documented enum; only 1minute/30minute/day are verified here
-  -- everything else raises rather than guessing.
+- Historical: GET https://api.upstox.com/v3/historical-candle/
+  {instrument_key}/{unit}/{n}/{to_date}/{from_date}, dates as YYYY-MM-DD ->
+  {"data": {"candles": [[iso_timestamp, open, high, low, close, volume, oi], ...]}},
+  newest first. Verified 2026-10-07: minutes/5 back to Oct 2025, free; a minute
+  range over a month is refused (UDAPI1148 "Invalid date range"), so minute
+  history is fetched in 28-day chunks. Unmapped intervals raise rather than guess.
 - Instruments: NOT a live API call. A gzip-compressed JSON dump per exchange
   at https://assets.upstox.com/market-quote/instruments/exchange/{EXCH}.json.gz,
   refreshed daily, each row carrying instrument_key (the real query key --
@@ -77,6 +78,7 @@ instrument_token, which here is Upstox's exchange_token (numeric, but not
 the key Upstox's REST API actually accepts).
 """
 
+import asyncio
 import gzip
 import json
 import logging
@@ -97,7 +99,8 @@ from backend.instruments.models import Instrument
 _AUTHORIZE_URL = "https://api.upstox.com/v2/login/authorization/dialog"
 _TOKEN_URL = "https://api.upstox.com/v2/login/authorization/token"
 _QUOTE_URL = "https://api.upstox.com/v2/market-quote/quotes"
-_HISTORY_URL = "https://api.upstox.com/v2/historical-candle/{key}/{interval}/{to_date}/{from_date}"
+# v3: any minute interval (v2 had only 1m and 30m), from Jan 2022, free.
+_HISTORY_URL = "https://api.upstox.com/v3/historical-candle/{key}/{unit}/{n}/{to_date}/{from_date}"
 _SCRIP_URL = "https://assets.upstox.com/market-quote/instruments/exchange/{exchange}.json.gz"
 _PLACE_ORDER_URL = "https://api-hft.upstox.com/v2/order/place"
 _CANCEL_ORDER_URL = "https://api-hft.upstox.com/v2/order/cancel"
@@ -115,8 +118,13 @@ _HOLDINGS_URL = "https://api.upstox.com/v2/portfolio/long-term-holdings"
 _OPTION_CONTRACT_URL = "https://api.upstox.com/v2/option/contract"
 _OPTION_CHAIN_URL = "https://api.upstox.com/v2/option/chain"
 
-_INTERVAL_MAP = {"1m": "1minute", "30m": "30minute", "1d": "day"}
-_PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825}
+_INTERVAL_MAP = {"1m": ("minutes", 1), "5m": ("minutes", 5), "15m": ("minutes", 15),
+                 "30m": ("minutes", 30), "1d": ("days", 1)}
+# HistoricalFeed asks for "max" on intraday timeframes; a year is what the gate needs.
+_PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825, "max": 365}
+# v3 refuses a minute range over a month ("Invalid date range"); days take a decade.
+_CHUNK_DAYS = {"minutes": 28, "days": 3650}
+_RETRIES_429 = 4
 _PRODUCT_FROM_UPSTOX = {"I": "MIS", "D": "CNC"}
 # "D" is delivery for equity and carry-forward for F&O, so NRML maps there too.
 _PRODUCT_MAP = {"MIS": "I", "CNC": "D", "NRML": "D"}
@@ -288,18 +296,25 @@ class UpstoxAdapter:
 
         row = await self._resolve(instrument)
         token = await self.get_access_token()
-        to_date = datetime.now(timezone.utc).date()
-        from_date = to_date - timedelta(days=days)
+        unit, n = upstox_interval
+        end = datetime.now(timezone.utc).date()
+        start = end - timedelta(days=days)
+        candles = []
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            while end > start:
+                chunk_from = max(start, end - timedelta(days=_CHUNK_DAYS[unit]))
+                url = _HISTORY_URL.format(key=row["instrument_key"], unit=unit, n=n,
+                                          to_date=end.isoformat(), from_date=chunk_from.isoformat())
+                for attempt in range(_RETRIES_429 + 1):
+                    resp = await client.get(url, headers=self._headers(token))
+                    if resp.status_code != 429 or attempt == _RETRIES_429:
+                        break
+                    await asyncio.sleep(2 ** attempt)  # per-second/minute limits: back off
+                resp.raise_for_status()
+                candles += resp.json()["data"]["candles"]
+                end = chunk_from - timedelta(days=1)
 
-        url = _HISTORY_URL.format(
-            key=row["instrument_key"], interval=upstox_interval,
-            to_date=to_date.isoformat(), from_date=from_date.isoformat(),
-        )
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers=self._headers(token))
-            resp.raise_for_status()
-
-        candles = resp.json()["data"]["candles"]
+        candles.sort(key=lambda c: c[0])  # Upstox answers newest first
         return [
             PriceCandle(
                 symbol=instrument.tradingsymbol, timestamp=c[0], open=c[1], high=c[2],

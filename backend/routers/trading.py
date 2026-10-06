@@ -591,12 +591,17 @@ async def search_instruments(q: str, limit: int = Query(10, ge=1, le=50)):
 async def run_gate_backtest(strategy_name: str, admin: User = Depends(require_admin)):
     """Backtests one strategy over the last year and records the result
     into the backtest gate every user's live routing reads -- hence admin
-    only. History comes from the admin's own Kite session when connected
-    (a year of 5-minute candles); yfinance otherwise, whose ~60 days of
-    intraday history cannot clear the gate's one-year window. Runs in the
-    background; GET the same path for the result."""
-    kite = await get_broker_adapter("kite", admin.id, get_credential_store(), db.redis)
-    provider = kite if await kite.state() == BrokerSessionState.ACTIVE else YFinanceProvider()
+    only. History comes from the admin's own Upstox session when connected
+    (a year of 5-minute candles, free), else Kite (needs Kite Connect's paid
+    historical data), else yfinance, whose ~60 days of intraday history cannot
+    clear the gate's one-year window. Runs in the background; GET the same
+    path for the result."""
+    provider, history = YFinanceProvider(), "yfinance"
+    for name in ("upstox", "kite"):
+        adapter = await get_broker_adapter(name, admin.id, get_credential_store(), db.redis)
+        if await adapter.state() == BrokerSessionState.ACTIVE:
+            provider, history = adapter, name
+            break
 
     async def _run():
         try:
@@ -605,7 +610,7 @@ async def run_gate_backtest(strategy_name: str, admin: User = Depends(require_ad
             logger.exception("gate backtest of %s failed", strategy_name)
 
     asyncio.create_task(_run())
-    return {"started": strategy_name, "history": "kite" if provider is kite else "yfinance"}
+    return {"started": strategy_name, "history": history}
 
 
 @router.get("/backtests/{strategy_name}")
