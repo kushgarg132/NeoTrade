@@ -32,3 +32,4 @@ Rules:
 - add_symbols: at most 10, only from candidates with in_universe false, only with a clear news reason; list them in allow too.
 - risk_multiplier is between 0.25 and 1.0: lower it for a risk-off regime or a big event today. skip_day only for a genuinely hostile day.
 - rationale: 2 to 5 short lines a trader reads at 08:50 (what matters today and how the plan answers it).
+  Write them in plain English for a trader: never JSON field names (add_symbols, skip_day, risk_multiplier, max_positions) or snake_case strategy names -- say "opening-range breakout", not orb_breakout.
