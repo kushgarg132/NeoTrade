@@ -11,7 +11,7 @@ import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import { recordLine, statusOf, strategyName } from '../utils/library';
-import { readiness } from '../utils/promotion';
+import { readiness, shortStatus } from '../utils/promotion';
 import { cn } from '../utils/cn';
 
 /**
@@ -35,7 +35,7 @@ const BOOKS = [
   { key: 'longterm', label: 'Long term', mode: 'LONGTERM' },
 ];
 
-const StrategyItem = ({ card, gate, open, onToggle }) => {
+const StrategyItem = ({ card, gate, short, open, onToggle }) => {
   const status = STATUS[statusOf(card)];
   return (
     <li className="py-2.5">
@@ -46,10 +46,11 @@ const StrategyItem = ({ card, gate, open, onToggle }) => {
           <ChevronDown className={cn('ml-auto w-4 h-4 text-[var(--ink-faint)] transition-transform', open && 'rotate-180')} />
         </span>
         <span className="block doc-meta normal-case mt-0.5">{recordLine(card)}</span>
-        <span className="block text-sm mt-0.5">{gate}</span>
+        <span className="block text-sm mt-0.5">{short}</span>
       </button>
       {open && (
         <div className="mt-1.5 space-y-1">
+          <p className="text-sm">{gate}</p>
           <p className="text-sm">{card.card.best_when}</p>
           <p className="doc-meta normal-case">Avoid: {card.card.avoid_when}</p>
           <p className="doc-meta normal-case">
@@ -108,6 +109,8 @@ const Strategies = () => {
 
   const gate = (name) =>
     promotion ? readiness(promotion[name], live.includes(name)) : promotionFailed ? 'Couldn’t load what it still needs.' : '…';
+  const short = (name) =>
+    promotion ? shortStatus(promotion[name]).replace(/^ready$/, 'Ready for real money') : promotionFailed ? 'Couldn’t load what it still needs.' : '…';
   const counts = cards ? SUMMARY.map(([s, label]) => [cards.filter((c) => statusOf(c) === s).length, label]).filter(([n]) => n) : [];
 
   return (
@@ -123,7 +126,7 @@ const Strategies = () => {
           {loaded.mode === mode && loaded.failed ? <p className="text-sm py-2">Couldn’t load the strategies.</p> : cards === null ? <Ruling rows={5} /> : (
             <ul className="divide-y divide-[var(--rule)]">
               {cards.map((card) => (
-                <StrategyItem key={card.name} card={card} gate={gate(card.name)} open={openName === card.name}
+                <StrategyItem key={card.name} card={card} gate={gate(card.name)} short={short(card.name)} open={openName === card.name}
                               onToggle={() => setOpenName((n) => (n === card.name ? null : card.name))} />
               ))}
             </ul>

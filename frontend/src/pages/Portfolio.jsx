@@ -24,7 +24,6 @@ import {
   formatCurrency,
   formatQuantity,
   formatNoteDate,
-  formatPercent,
   formatClock,
   marketPhase,
 } from '../utils/formatters';
@@ -144,7 +143,7 @@ const Portfolio = () => {
 
         <Sheet
           title="Practice money"
-          meta={summary.trades ? `${summary.trades} closed · ${formatPercent(summary.winRate * 100)} won · net of charges` : 'Net of charges'}
+          meta={summary.trades ? `${summary.trades} closed · ${Math.round(summary.winRate * 100)}% won` : 'Net of charges'}
         >
           <div className="grid grid-cols-3 border border-[var(--rule-strong)] mb-3" role="tablist" aria-label="Period">
             {PERIODS.map(([id, label]) => (
@@ -163,7 +162,7 @@ const Portfolio = () => {
             <p className="doc-meta normal-case py-2">No closed trades this period.</p>
           ) : (
             <>
-              <NetLine label={PERIODS.find(([id]) => id === period)[1]}>
+              <NetLine label={`${PERIODS.find(([id]) => id === period)[1]}, net of charges`}>
                 <Money value={summary.net} size="lg" />
               </NetLine>
               {curve.length > 1 && (

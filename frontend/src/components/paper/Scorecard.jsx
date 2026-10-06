@@ -7,6 +7,7 @@ import api, { endpoints } from '../../utils/api';
 import { useReconnect, useTopic } from '../../hooks/useStream';
 import { monthKey, shiftMonth, monthLabel, todayIst } from '../../utils/months';
 import { formatPercent, formatSignedPercent, formatCurrency, formatNoteDate } from '../../utils/formatters';
+import { strategyName } from '../../utils/library';
 
 /**
  * The paper track record: every closed paper trade, net of brokerage and
@@ -158,7 +159,7 @@ const Scorecard = ({ mode }) => {
           {strategies.map((s) => (
             <Row key={s.strategy}>
               <Cell>
-                <span className="figure-md">{s.strategy === 'unattributed' ? 'Untagged' : s.strategy.replace(/_/g, ' ')}</span>
+                <span className="figure-md">{s.strategy === 'unattributed' ? 'Untagged' : strategyName(s.strategy)}</span>
               </Cell>
               <Cell align="right" mono>{s.trades}</Cell>
               <Cell align="right" mono>{formatPercent(s.win_rate * 100)}</Cell>
