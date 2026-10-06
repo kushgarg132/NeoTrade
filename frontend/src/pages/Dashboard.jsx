@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import SmartSearch from '../components/dashboard/SmartSearch';
 import IndexCard from '../components/dashboard/IndexCard';
 import IndexAnalysis from '../components/dashboard/IndexAnalysis';
-import { bareSymbol, formatCurrency, formatSignedPercent } from '../utils/formatters';
+import { bareSymbol } from '../utils/formatters';
 import Market from '../components/dashboard/Market';
 import SectionTabs from '../components/layout/SectionTabs';
 import { RESEARCH_TABS } from '../components/layout/sections';
@@ -14,14 +14,13 @@ import { Sheet, Empty } from '../components/doc/Doc';
 import { Button } from '../components/common/Button';
 import api, { endpoints } from '../utils/api';
 import { stream } from '../lib/ws';
-import { cn } from '../utils/cn';
 import { clearRecentStocks, recentStocks, rememberStock, stockPath } from '../utils/stocks';
 
 /**
  * Research. With a symbol in the URL (/research/stock/:symbol) this is that
  * stock's page: the instant snapshot, and the AI analysis only once its tab
  * is opened. Without one it is the front page: search, the stocks opened
- * recently on this device, the watchlist and the markets. The user's broker
+ * recently on this device and the markets (the watchlist has its own tab). The user's broker
  * statement lives on Mine → Trades, not here.
  *
  * Analysis streams over the socket; the HTTP route is the fallback.
@@ -38,14 +37,6 @@ const Chip = ({ to, children }) => (
 
 const FrontPage = () => {
   const [recent, setRecent] = useState(recentStocks);
-  const [watch, setWatch] = useState(null);
-
-  useEffect(() => {
-    api
-      .get(endpoints.watchlist.details)
-      .then((res) => setWatch(res.data))
-      .catch(() => setWatch([]));
-  }, []);
 
   return (
     <>
@@ -74,37 +65,6 @@ const FrontPage = () => {
           </div>
         </Sheet>
       )}
-
-      <Sheet
-        title="Watchlist"
-        actions={
-          <Link to="/research/watchlist" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
-            All watchlist ›
-          </Link>
-        }
-      >
-        {watch === null ? (
-          <div className="h-11" />
-        ) : watch.length === 0 ? (
-          <p className="text-sm text-[var(--ink-soft)]">Add stocks from a stock page with Watch.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {watch.map((stock) => (
-              <Chip key={stock.symbol} to={stockPath(stock.symbol)}>
-                <span className="figure-md text-sm">{bareSymbol(stock.symbol)}</span>
-                {stock.current_price != null && (
-                  <span className="figure-md text-xs text-[var(--ink-soft)]">{formatCurrency(stock.current_price)}</span>
-                )}
-                {stock.day_change_percent != null && (
-                  <span className={cn('figure-md text-xs', stock.day_change_percent >= 0 ? 'text-up' : 'text-down')}>
-                    {formatSignedPercent(stock.day_change_percent)}
-                  </span>
-                )}
-              </Chip>
-            ))}
-          </div>
-        )}
-      </Sheet>
 
       <Market />
     </>
