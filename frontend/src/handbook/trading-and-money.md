@@ -141,9 +141,13 @@ exception to the backtest gate and to "model output never places an order". Ever
 passes `autopilot/fence.py::check`: capital limit, per-trade cap, trades per day, its own
 daily-loss trip, the shared kill switch, Nifty 200 names, NSE equity, market hours; exits
 are never blocked. Risk-off halves the per-trade cap and refuses news entries; a high-impact
-event within 30 min refuses all entries; news entries stop at 3 a day. Paper unless
-`autopilot_live` (typed confirmation). Every order and refusal goes to `autopilot_log` and
-Telegram with a Stop button.
+event within 30 min refuses all entries; news entries stop at 3 a day. One switch, Off ·
+Paper · Live (Live needs a typed confirmation). On paper it fills in the user's Practice
+book (`autopilot/service.py::book`), every trade tagged `strategy="autopilot:<source>"`; the
+fence counts only tagged trades and refuses a symbol another strategy holds there (one owner
+per position, as in the engine), and the engine's long-term exits skip tagged trades. Live
+fills go to their own `<user>:autopilot` book. Every order and refusal goes to
+`autopilot_log` and Telegram with a Stop button.
 
 ## Practice: runs, books, learning
 

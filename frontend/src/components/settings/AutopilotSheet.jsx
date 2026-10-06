@@ -66,37 +66,42 @@ const AutopilotSheet = () => {
       {!aiBroker && (
         <p className="doc-meta normal-case text-[var(--loss)] mt-2">Set one broker as the AI account in Broker settings first.</p>
       )}
-      <Row label="Autopilot" hint={prefs.autopilot_live ? 'Real orders on the AI account.' : 'Paper: a rehearsal in its own book, nothing sent to the broker.'}>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!!prefs.autopilot_enabled}
-          disabled={!aiBroker}
-          onClick={() => save({ autopilot_enabled: !prefs.autopilot_enabled })}
-          className={cn('h-11 sm:h-8 px-4 text-xs border transition-colors disabled:opacity-40',
-            prefs.autopilot_enabled ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]' : 'border-[var(--rule-strong)]')}
-        >
-          {prefs.autopilot_enabled ? 'On' : 'Off'}
-        </button>
-      </Row>
-      <Row label="Mode" hint="Paper rehearses in the autopilot's own book (not Practice's); live sends real orders to the AI account's broker.">
-        {prefs.autopilot_live ? (
-          <button type="button" onClick={() => save({ autopilot_live: false })}
-            className="h-11 sm:h-8 px-4 text-xs border border-[var(--loss)] text-[var(--loss)]">
-            Live · switch to paper
-          </button>
-        ) : confirmLive === null ? (
-          <button type="button" disabled={!aiBroker} onClick={() => setConfirmLive('')}
-            className="h-11 sm:h-8 px-4 text-xs border border-[var(--rule-strong)] disabled:opacity-40">
-            Paper · go live…
-          </button>
+      <Row
+        label="Autopilot"
+        hint={!prefs.autopilot_enabled ? 'Off: places nothing.'
+          : prefs.autopilot_live ? 'Live: real orders on the AI account.'
+          : 'Paper: fills in your Practice book, tagged autopilot. Nothing sent to the broker.'}
+      >
+        {confirmLive === null ? (
+          <span className="inline-flex" role="radiogroup" aria-label="Autopilot mode">
+            {[
+              ['off', 'Off', !prefs.autopilot_enabled, () => save({ autopilot_enabled: false, autopilot_live: false })],
+              ['paper', 'Paper', prefs.autopilot_enabled && !prefs.autopilot_live, () => save({ autopilot_enabled: true, autopilot_live: false })],
+              ['live', 'Live', prefs.autopilot_enabled && prefs.autopilot_live, () => setConfirmLive('')],
+            ].map(([key, label, active, choose]) => (
+              <button
+                key={key}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={!aiBroker && key !== 'off'}
+                onClick={() => !active && choose()}
+                className={cn('h-11 sm:h-8 px-4 text-xs border -ml-px first:ml-0 transition-colors disabled:opacity-40',
+                  !active && 'border-[var(--rule-strong)]',
+                  active && key !== 'live' && 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]',
+                  active && key === 'live' && 'bg-[var(--loss)] text-[var(--paper)] border-[var(--loss)]')}
+              >
+                {label}
+              </button>
+            ))}
+          </span>
         ) : (
           <span className="flex items-center gap-2">
             <input autoFocus value={confirmLive} onChange={(e) => setConfirmLive(e.target.value)}
               placeholder="Type LIVE" aria-label="Type LIVE to confirm real orders"
               className="w-24 bg-transparent border-b border-[var(--loss)] py-1 text-sm focus:outline-none" />
             <button type="button" disabled={confirmLive !== 'LIVE'}
-              onClick={() => save({ autopilot_live: true }).then(() => setConfirmLive(null))}
+              onClick={() => save({ autopilot_enabled: true, autopilot_live: true }).then(() => setConfirmLive(null))}
               className="h-11 sm:h-8 px-3 text-xs bg-[var(--loss)] text-[var(--paper)] disabled:opacity-40">
               Go live
             </button>

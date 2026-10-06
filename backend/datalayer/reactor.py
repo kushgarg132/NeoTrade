@@ -228,9 +228,8 @@ def exit_hit(item: dict, symbol: str, sector_of: dict[str, str]) -> Optional[dic
 
 async def shadow_exits(db, redis, now: Optional[datetime] = None) -> int:
     """Logs the news exits the autopilot would make; places nothing."""
-    from backend.autopilot.service import _product, ledger_user
+    from backend.autopilot.service import _product, open_trades
     from backend.datalayer.news import followed
-    from backend.engine.persistence import LedgerStore
 
     now = now or datetime.now(timezone.utc)
     items = await _claim(db, "exit_checked_at", now)
@@ -243,7 +242,7 @@ async def shadow_exits(db, redis, now: Optional[datetime] = None) -> int:
     _, sector_of = await followed(db)
     logged = 0
     for user_id in users:
-        for trade in await LedgerStore(db, user_id=ledger_user(user_id)).get_trades(status="OPEN", limit=1000):
+        for trade in await open_trades(db, user_id):
             if trade.get("side") != "BUY":
                 continue
             for item in items:

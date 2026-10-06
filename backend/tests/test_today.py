@@ -95,8 +95,8 @@ def test_pnl_today_splits_mine_and_ai(monkeypatch):
                "side": "BUY", "quantity": 10, "price": 100.0, "traded_at": DAY + timedelta(minutes=1)},
               {"_id": "t2", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "INFY",
                "side": "SELL", "quantity": 10, "price": 110.0, "traded_at": DAY + timedelta(minutes=2)}],
-          paper_trades=[{"user_id": "alice:autopilot", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
-                         "realized_pnl": -50.0, "costs": 5.0, "exit_at": DAY + timedelta(minutes=3), "venue": "paper"}])
+          paper_trades=[{"user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
+                         "strategy": "autopilot:chat", "realized_pnl": -50.0, "costs": 5.0, "exit_at": DAY + timedelta(minutes=3), "venue": "paper"}])
     pnl = client.get("/api/v1/today").json()["pnl_today"]
     # Both sides net of charges: the broker book carries none, so Mine's are estimated.
     assert pnl["ai"] == -55.0 and pnl["ai_charges"] == 5.0
@@ -114,8 +114,10 @@ def test_a_failing_part_degrades_not_errors(monkeypatch):
 def test_autopilot_summary_counts_open_positions_against_capital(monkeypatch):
     client, db = _client(monkeypatch)
     _seed(db, user_prefs=[{"user_id": "alice", "autopilot_enabled": True, "autopilot_capital": 25000.0}],
-          paper_trades=[{"user_id": "alice:autopilot", "symbol": "INFY", "status": "OPEN", "quantity": 3,
-                         "entry_price": 1500.0, "venue": "paper"}])
+          paper_trades=[{"user_id": "alice", "symbol": "INFY", "status": "OPEN", "quantity": 3,
+                         "entry_price": 1500.0, "venue": "paper", "strategy": "autopilot:chat"},
+                        {"user_id": "alice", "symbol": "TCS", "status": "OPEN", "quantity": 10,
+                         "entry_price": 3000.0, "venue": "paper", "strategy": "macd_crossover"}])
     summary = client.get("/api/v1/today").json()["autopilot"]
     assert summary == {"enabled": True, "live": False, "capital": 25000.0, "deployed": 4500.0}
 

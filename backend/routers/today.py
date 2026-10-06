@@ -101,7 +101,7 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
 
 
 async def _pnl_today(user_id: str, roles: dict, now: datetime) -> dict:
-    from backend.autopilot.service import ledger_user
+    from backend.autopilot.service import trades_query
     from backend.brokers.roles import brokers_for
     from backend.journal.roundtrips import build_round_trips
     from backend.journal import mirror
@@ -121,7 +121,7 @@ async def _pnl_today(user_id: str, roles: dict, now: datetime) -> dict:
     mine_charges = mirror.costs([t for t in trades if t["_id"] in ids], closed, 0)["charges"]
     mine = sum(t["pnl"] for t in closed) - mine_charges
     ai = ai_charges = 0.0
-    async for t in db.db["paper_trades"].find({"user_id": ledger_user(user_id)}):
+    async for t in db.db["paper_trades"].find(trades_query(user_id)):
         if t.get("status") == "CLOSED" and (_aware(t.get("exit_at")) or day_start) >= day_start:
             ai += t.get("realized_pnl") or 0.0
             ai_charges += t.get("costs") or 0.0
@@ -151,10 +151,10 @@ async def _setup(user_id: str, prefs: dict) -> dict:
 async def _autopilot(user_id: str, prefs: dict) -> dict:
     """The AI account's autopilot at a glance: switch, mode, and capital in use
     (open positions at entry price -- no market call)."""
-    from backend.autopilot.service import ledger_user
+    from backend.autopilot.service import open_trades
 
     deployed = 0.0
-    async for t in db.db["paper_trades"].find({"user_id": ledger_user(user_id), "status": "OPEN"}):
+    for t in await open_trades(db.db, user_id):
         deployed += (t.get("quantity") or 0) * (t.get("entry_price") or 0)
     return {"enabled": bool(prefs.get("autopilot_enabled")), "live": bool(prefs.get("autopilot_live")),
             "capital": prefs.get("autopilot_capital"), "deployed": round(deployed, 2)}

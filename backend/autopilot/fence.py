@@ -25,6 +25,7 @@ class FenceState:
     deployed: float                # rupees in open autopilot positions, at mark
     entries_today: int
     held: dict = field(default_factory=dict)  # symbol -> (quantity, product) the autopilot holds
+    others: frozenset = frozenset()  # symbols another strategy holds in the same book
     kill_tripped: bool = False
     session_ok: bool = True
     regime: Optional[str] = None   # market:regime label: risk_on / neutral / risk_off
@@ -77,6 +78,8 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
         return f"{order.symbol} is outside the autopilot's universe (Nifty 200)."
     if order.symbol in state.held:
         return f"The autopilot is already holding {order.symbol}."
+    if order.symbol in state.others:
+        return f"The Practice engine already holds {order.symbol}; one owner per position."
     cap = trade_cap(prefs, state.regime)
     if notional > cap + 1e-6:
         return f"₹{notional:,.0f} is over the per-trade cap of ₹{cap:,.0f}{' (halved: market risk-off)' if state.regime == 'risk_off' else ''}."

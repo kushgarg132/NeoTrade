@@ -149,8 +149,9 @@ async def test_shadow_exits_log_and_place_nothing(monkeypatch):
 
     monkeypatch.setattr("backend.datalayer.news.followed", followed)
     await db["user_prefs"].insert_one({"user_id": "u1", "autopilot_enabled": True, "autopilot_news": True})
-    await db["paper_trades"].insert_one({"user_id": "u1:autopilot", "symbol": "INFY", "side": "BUY", "quantity": 3,
-                                   "status": "OPEN", "venue": "paper", "mode": "LONGTERM"})
+    await db["paper_trades"].insert_one({"user_id": "u1", "symbol": "INFY", "side": "BUY", "quantity": 3,
+                                   "status": "OPEN", "venue": "paper", "mode": "LONGTERM",
+                                   "strategy": "autopilot:engine"})
     await db["news_items"].insert_many([
         _item(("sector", "Information Technology", -0.7, 8)),
         _item(("symbol", "INFY", -0.9, 9), _id="a2"),  # same symbol, same day: logged once

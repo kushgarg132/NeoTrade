@@ -84,7 +84,7 @@ async def test_submit_paper_fills_logs_and_notifies(world):
     await _prefs(db)
     result = await service.submit(db, None, "alice", _order(qty=2), now=OPEN)
     assert result["status"] == "FILLED"
-    trades = await db["paper_trades"].find({"user_id": "alice:autopilot"}).to_list(None)
+    trades = await db["paper_trades"].find({"user_id": "alice"}).to_list(None)  # the Practice book
     assert len(trades) == 1 and trades[0]["strategy"] == "autopilot:chat"
     assert await db["autopilot_log"].count_documents({"user_id": "alice", "status": "FILLED"}) == 1
     assert sent and sent[0].startswith("🤖 AI bought 2 INFY")
@@ -126,7 +126,7 @@ async def test_stop_button_disables_once(world):
 async def test_daily_loss_trips_the_kill_switch(world):
     db, _ = world
     await _prefs(db)
-    await db["paper_trades"].insert_one({"user_id": "alice:autopilot", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
+    await db["paper_trades"].insert_one({"user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
                                          "strategy": "autopilot:chat", "realized_pnl": -1001.0, "venue": "paper",
                                          "exit_at": OPEN.replace(hour=10)})
     result = await service.submit(db, None, "alice", _order(), now=OPEN)
@@ -218,12 +218,28 @@ async def test_a_sent_but_unfilled_live_order_still_counts(world, monkeypatch):
     assert again["status"] == "REFUSED" and "already holding" in again["reason"]
 
 
-async def test_autopilot_trades_live_in_their_own_ledger(world):
+async def test_paper_autopilot_trades_in_the_practice_book_tagged(world):
     db, _ = world
     await _prefs(db)
     await service.submit(db, None, "alice", _order(qty=2), now=OPEN)
-    assert await db["paper_trades"].count_documents({"user_id": "alice:autopilot"}) == 1
-    assert await db["paper_trades"].count_documents({"user_id": "alice"}) == 0
+    assert await db["paper_trades"].count_documents({"user_id": "alice", "strategy": "autopilot:chat"}) == 1
+    assert await db["paper_trades"].count_documents({"user_id": "alice:autopilot"}) == 0
+
+
+async def test_the_engines_practice_trades_do_not_count_against_the_autopilot(world):
+    """Same book, but the fence counts only autopilot-tagged trades, and never
+    buys into a symbol the engine holds (one owner per open position)."""
+    db, _ = world
+    await _prefs(db)
+    await db["paper_trades"].insert_many([
+        {"user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "OPEN", "quantity": 100,
+         "entry_price": 1000.0, "strategy": "macd_crossover", "venue": "paper"},
+        {"user_id": "alice", "symbol": "SBIN", "side": "BUY", "status": "CLOSED", "realized_pnl": -5000.0,
+         "strategy": "macd_crossover", "venue": "paper", "exit_at": OPEN.replace(hour=10)},
+    ])
+    assert (await service.submit(db, None, "alice", _order(qty=2), now=OPEN))["status"] == "FILLED"
+    refused = await service.submit(db, None, "alice", _order(symbol="TCS"), now=OPEN)
+    assert refused["status"] == "REFUSED" and "Practice engine" in refused["reason"]
 
 
 async def test_venue_must_match_the_autopilot_mode(world, monkeypatch):
@@ -249,7 +265,7 @@ async def test_autopilot_exits_hit_stop_through_the_fence(world, monkeypatch):
     await service.submit(db, None, "alice", _order(qty=2, source="engine"), now=OPEN, suggestion_id="s1")
     closed = await service.check_exits(db, None, "alice", now=OPEN)  # mark 1000 <= stop 1100
     assert [c["symbol"] for c in closed] == ["INFY"]
-    open_left = await db["paper_trades"].count_documents({"user_id": "alice:autopilot", "status": "OPEN"})
+    open_left = await db["paper_trades"].count_documents({"user_id": "alice", "status": "OPEN"})
     assert open_left == 0
 
 

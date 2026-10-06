@@ -24,10 +24,28 @@ LOCK_MS = 30_000
 _LOCKS: dict[str, asyncio.Lock] = {}  # per user, in this process; Redis covers the other workers
 
 
+TAG = "autopilot:"  # every autopilot order's strategy_name, so its trades carry it
+
+
 def ledger_user(user_id: str) -> str:
-    """The autopilot's own ledger namespace, so its positions never merge
-    with the engine's or the user's own trades of the same symbol."""
+    """The live autopilot's ledger namespace: real orders on the AI account
+    never merge with practice positions of the same symbol."""
     return f"{user_id}:autopilot"
+
+
+def book(user_id: str, live: bool) -> str:
+    """Paper autopilot orders fill in the user's Practice book (tagged, and
+    never in a symbol another strategy holds there); live ones in their own."""
+    return ledger_user(user_id) if live else user_id
+
+
+def trades_query(user_id: str) -> dict:
+    """The autopilot's trades, paper and live, and nothing else in those books."""
+    return {"user_id": {"$in": [user_id, ledger_user(user_id)]}, "strategy": {"$regex": f"^{TAG}"}}
+
+
+async def open_trades(db, user_id: str) -> list[dict]:
+    return await db["paper_trades"].find({**trades_query(user_id), "status": "OPEN"}).to_list(length=None)
 
 
 @dataclass
@@ -77,9 +95,13 @@ async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime, redis
 
     day = now.astimezone(IST).date()
     day_start = datetime.combine(day, time(0, 0), tzinfo=IST)
-    ledger = LedgerStore(db, user_id=ledger_user(user_id))
-    mine = await ledger.get_trades(limit=1000, venue=venue)
+    ledger = LedgerStore(db, user_id=book(user_id, venue == "live"))
+    trades = await ledger.get_trades(limit=1000, venue=venue)
+    mine = [t for t in trades if (t.get("strategy") or "").startswith(TAG)]
     open_trades = [t for t in mine if t.get("status") == "OPEN"]
+    # Symbols another strategy holds in the same (Practice) book: one owner per position.
+    others = frozenset(t["symbol"] for t in trades
+                       if t.get("status") == "OPEN" and not (t.get("strategy") or "").startswith(TAG))
     marks = await mark_prices(db, {t["symbol"] for t in open_trades}) if open_trades else {}
     deployed = sum(t["quantity"] * marks.get(t["symbol"], t.get("entry_price") or 0) for t in open_trades)
     unrealized = sum((marks.get(t["symbol"], t.get("entry_price") or 0) - (t.get("entry_price") or 0)) * t["quantity"]
@@ -105,7 +127,7 @@ async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime, redis
         {"user_id": user_id, "status": {"$in": ["FILLED", "SENT"]}, "side": "BUY", "source": "news",
          "at": {"$gte": day_start}})
     regime = await regime_now(redis)
-    return fence.FenceState(deployed=deployed, entries_today=entries, held=held,
+    return fence.FenceState(deployed=deployed, entries_today=entries, held=held, others=others,
                             kill_tripped=tripped, session_ok=in_session(now),
                             regime=regime.get("label"), event_soon=bool(regime.get("event_soon")), news_today=news)
 
@@ -175,7 +197,7 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
     if reason:
         return await _record(db, user_id, order, "REFUSED", now, quiet, reason=reason, mode=mode)
 
-    ledger = LedgerStore(db, user_id=ledger_user(user_id))
+    ledger = LedgerStore(db, user_id=book(user_id, live))
     placed = Order(id=str(uuid.uuid4()), symbol=order.symbol, side=order.side, quantity=order.quantity,
                    order_type="MARKET", product=order.product, strategy_name=f"autopilot:{order.source}",
                    suggestion_id=suggestion_id)
@@ -201,8 +223,7 @@ async def check_exits(db, redis, user_id: str, now: Optional[datetime] = None) -
     from backend.suggestions.exits import breach
 
     now = now or datetime.now(timezone.utc)
-    trades = [t for t in await LedgerStore(db, user_id=ledger_user(user_id)).get_trades(status="OPEN", limit=1000)
-              if t.get("suggestion_id")]
+    trades = [t for t in await open_trades(db, user_id) if t.get("suggestion_id")]
     if not trades:
         return []
     suggestions = {s["id"]: s for s in await db["suggestions"].find(

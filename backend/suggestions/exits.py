@@ -36,7 +36,8 @@ async def check_exits(db, user_id: str, now: Optional[datetime] = None, marks_fn
     ledger = LedgerStore(db, user_id=user_id, on_change=publisher_for(user_id))
     trades = [
         t for t in await ledger.get_trades(status="OPEN", venue="paper", mode="LONGTERM", limit=1000)
-        if t["side"] == "BUY" and t.get("suggestion_id")
+        # The autopilot's paper trades share this book; it exits its own, through its fence.
+        if t["side"] == "BUY" and t.get("suggestion_id") and not (t.get("strategy") or "").startswith("autopilot:")
     ]
     if not trades:
         return []
