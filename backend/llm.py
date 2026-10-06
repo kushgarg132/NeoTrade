@@ -12,10 +12,21 @@ logger = logging.getLogger(__name__)
 _model_override: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
     "model_override", default=None
 )
+_billed_user: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar("billed_user", default=None)
+# Features a user's own request spends; the rest (news, plan, learning,
+# portfolio's weekly review) is shared or scheduled work.
+USER_FEATURES = {"chat", "research"}
+
+
+class DailyLimitReached(Exception):
+    """The user has spent today's USER_LLM_CALLS_PER_DAY."""
+
+
+LIMIT_MESSAGE = "You've used today's AI allowance. It resets at midnight IST."
 
 
 @contextlib.contextmanager
-def use_model(model: Optional[str]):
+def use_model(model: Optional[str], user_id: Optional[str] = None):
     """Ambient per-user model override for the duration of a `with` block.
     A no-op when `model` is None, so callers with no saved preference don't
     need to branch. Every nested LLMService.get_completion call anywhere in
@@ -25,11 +36,12 @@ def use_model(model: Optional[str]):
     correctly into a child asyncio.Task created via create_task/gather from
     inside the `with` block, since each new Task captures a copy of the
     current context at creation time."""
-    token = _model_override.set(model)
+    token, billed = _model_override.set(model), _billed_user.set(user_id)
     try:
         yield
     finally:
         _model_override.reset(token)
+        _billed_user.reset(billed)
 
 class MultiKeyChain(Runnable):
     def __init__(self, llms: List[Any]):
@@ -128,9 +140,28 @@ class LLMService:
             logger.error(f"LLM Error: {e}")
             return f"Error generating response: {str(e)}"
 
+    async def _charge(self, feature: Optional[str]) -> None:
+        """Counts a call made inside a user's request (use_model(user_id=...))
+        against their daily ceiling; raises DailyLimitReached past it. Fails
+        open on a Redis problem, like every rate limit here."""
+        user_id = _billed_user.get()
+        if not user_id or feature not in USER_FEATURES:
+            return
+        from datetime import datetime, timezone
+
+        from backend.database import db
+        from backend.engine.session import IST
+        from backend.rate_limit import allow
+
+        day = datetime.now(timezone.utc).astimezone(IST).date().isoformat()
+        if not await allow(db.redis, f"llm:{user_id}:{day}", settings.USER_LLM_CALLS_PER_DAY, 2 * 86400):
+            raise DailyLimitReached(user_id)
+
     async def get_llm(self, tier: Optional[str] = None, feature: Optional[str] = None):
         """Returns a MultiKeyChain wrapping ChatOpenAI instances pointed at the OmniRoute gateway"""
         from langchain_openai import ChatOpenAI
+
+        await self._charge(feature)
 
         keys = self.keys_for(feature)
         if not keys:

@@ -59,9 +59,10 @@ NeoTrade key).
 |---|---|---|
 | News scoring | `news:deep_calls:<IST day>` | `NEWS_LLM_CALLS_PER_DAY` (past it, the backlog waits for tomorrow, then goes STALE) |
 | Game plans | `plan:calls:<IST day>` | `PLAN_LLM_CALLS_PER_DAY` |
+| Per user | `rate:llm:<user>:<IST day>` | `USER_LLM_CALLS_PER_DAY` (150): every `chat`/`research` LLM call made inside that user's own chat (web, Telegram) or AI analysis (`llm.py::LLMService._charge`, via `use_model(user_id=…)`); cache hits and the shared pipeline never count. Past it: "You've used today's AI allowance" |
 | Tool rounds | per call, ≤ 4 rounds (plans ≤ 2) | each round spends the caller's own budget (plans: `plan:calls`); kill switch `AI_TOOLS_ENABLED` |
 
-Chat and research calls are not counted per task. Per feature, the panel below reads each
+Chat and research calls are not counted per task, only per user (above), on top of the per-minute WebSocket limits (`ws/routes.py::_BUDGETS`). Per feature, the panel below reads each
 feature key's own `/v1/me/status` (`settings.py::fetch_feature_usage`, cached 5 min) and marks
 ⚠ at 80% of the key's limit.
 

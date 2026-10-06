@@ -1027,7 +1027,12 @@ yet** — set them in OmniRoute after a week of per-key data (~2026-10-13). 17.2
 index explanations moved from a per-worker dict to Redis (shared by both workers), 15 min
 while the session is dated today, then until the next 09:15 IST open (≤ 6 h); OmniRoute's
 response cache was already on for every key (303 hits / 3,083 misses so far — explainer
-prompts carry live figures, so exact repeats are rare). Still open: 17.2.7.
+prompts carry live figures, so exact repeats are rare). 17.2.7: `USER_LLM_CALLS_PER_DAY` (150) counts each chat/research
+LLM call made inside a user's own chat (web, Telegram) or AI analysis; cache hits and the
+shared pipeline never count; past it the user is told plainly. Suggestion theses and the
+weekly portfolio review are not counted (scheduled, rate-limited at the scan).
+Remaining for 17.2's done-when: per-key daily limits (~2026-10-13) and a month-on-month token
+comparison.
 
 Done when: calls per day and tokens per call are visible per feature, fast-tier calls
 average under 500 output tokens, and the month's tokens fall by at least half at the

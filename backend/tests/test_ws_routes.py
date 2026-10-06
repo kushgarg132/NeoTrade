@@ -324,3 +324,26 @@ def test_chat_past_its_budget_is_refused_without_starting_a_task(client, monkeyp
     assert (reply["topic"], reply["event"]) == ("chat:c9", "error")
     assert "Too many" in reply["data"]["detail"]
     assert calls == []
+
+
+def test_analysis_past_the_daily_llm_ceiling_says_so(client, monkeypatch):
+    from backend import llm
+
+    seen = {}
+
+    class _Agent:
+        async def run(self, symbol):
+            seen["user"] = llm._billed_user.get()  # the user's calls are counted against them
+            raise llm.DailyLimitReached(seen["user"])
+
+    monkeypatch.setattr("backend.research.graph.ResearchAgent", lambda: _Agent())
+
+    with client.websocket_connect(
+        "/api/v1/ws?token=good-token", headers={"origin": ALLOWED_ORIGIN}
+    ) as socket:
+        socket.receive_json()
+        socket.send_json({"action": "analyze", "symbol": "RELIANCE", "req_id": "r9"})
+        socket.receive_json()  # started
+        failure = socket.receive_json()
+        assert failure["event"] == "error" and failure["data"]["detail"] == llm.LIMIT_MESSAGE
+    assert seen["user"]

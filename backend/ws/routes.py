@@ -158,16 +158,18 @@ async def _stream_analysis(connection, symbol: str, req_id: str) -> None:
         connection.offer(_frame(topic, "error", {"detail": "symbol is required"}))
         return
 
-    from backend.llm import use_model
+    from backend.llm import LIMIT_MESSAGE, DailyLimitReached, use_model
     from backend.prefs import PrefsStore
     from backend.research.graph import ResearchAgent
 
     connection.offer(_frame(topic, "started", {"symbol": symbol}))
     try:
         prefs = await PrefsStore(db.db).get(connection.user_id)
-        with use_model(prefs.get("omniroute_model")):
+        with use_model(prefs.get("omniroute_model"), user_id=connection.user_id):
             report = await ResearchAgent().run(symbol)
         connection.offer(_frame(topic, "report", report.model_dump()))
+    except DailyLimitReached:
+        connection.offer(_frame(topic, "error", {"detail": LIMIT_MESSAGE}))
     except Exception as exc:
         logger.warning("analysis of %s failed: %s", symbol, exc)
         # Internals stay in the log; the reader gets a sentence.
@@ -200,18 +202,20 @@ async def _stream_chat(connection, message: str, history: list, req_id: str, con
         return
 
     from backend.chat import agent
-    from backend.llm import use_model
+    from backend.llm import LIMIT_MESSAGE, DailyLimitReached, use_model
     from backend.prefs import PrefsStore
 
     try:
         prefs = await PrefsStore(db.db).get(connection.user_id)
-        with use_model(prefs.get("omniroute_model")):
+        with use_model(prefs.get("omniroute_model"), user_id=connection.user_id):
             async for event in agent.stream_chat(db.db, db.redis, connection.user_id, message, history, context or {}):
                 if event["type"] in ("step", "answer_end"):  # Telegram-only signals
                     continue
                 data = event["data"] if event["type"] in ("action", "suggestions") else {"text": event["data"]}
                 connection.offer(_frame(topic, event["type"], data))
             connection.offer(_frame(topic, "done", {}))
+    except DailyLimitReached:
+        connection.offer(_frame(topic, "error", {"detail": LIMIT_MESSAGE}))
     except Exception as exc:
         logger.warning("chat stream failed: %s", exc)
         connection.offer(_frame(topic, "error", {"detail": "something went wrong on our side; try again in a minute."}))

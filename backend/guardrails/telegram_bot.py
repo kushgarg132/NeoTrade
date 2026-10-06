@@ -22,7 +22,7 @@ from backend.chat import agent
 from backend.chat.actions import ActionRefused, ChatActionStore, confirm
 from backend.guardrails import telegram
 from backend.guardrails.store import GuardrailStore
-from backend.llm import use_model
+from backend.llm import LIMIT_MESSAGE, DailyLimitReached, use_model
 from backend.prefs import PrefsStore
 from backend.auth.store import UserStore
 from backend.system.jobs import mark
@@ -227,7 +227,7 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
 
     try:
         prefs = await PrefsStore(db).get(user_id)
-        with use_model(prefs.get("omniroute_model")):
+        with use_model(prefs.get("omniroute_model"), user_id=user_id):
             async for event in agent.stream_chat(db, redis, user_id, text, history, TELEGRAM_CONTEXT):
                 kind, data = event["type"], event["data"]
                 if kind == "step" and data["phase"] == "start":
@@ -248,6 +248,10 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
                     await finish()  # don't make the user wait for the follow-up call
                 elif kind == "suggestions" and sent.get("message_id") is not None:
                     await _attach_suggestions(redis, user_id, chat_id, token, sent["message_id"], data)
+    except DailyLimitReached:
+        if not sent:
+            state["text"] = LIMIT_MESSAGE
+            await finish(failed=True)
     except Exception:
         logger.exception("telegram chat failed for user %s", user_id)
         if not sent:

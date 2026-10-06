@@ -40,3 +40,29 @@ async def test_a_redis_failure_never_blocks_the_user():
             raise ConnectionError("redis down")
 
     assert await allow(_Broken(), "chat:alice", limit=1, window_seconds=60) is True
+
+
+async def test_a_user_has_a_daily_llm_ceiling_on_chat_and_research_only(monkeypatch):
+    """Phase 17.2.7: each call made inside a user's request counts against
+    USER_LLM_CALLS_PER_DAY; the shared pipeline (no user) and other features
+    never do, and a cache hit never reaches the LLM so never counts."""
+    import pytest
+    from backend import llm
+    from backend.database import db
+
+    redis = _Redis()
+    monkeypatch.setattr(db, "redis", redis)
+    monkeypatch.setattr(llm.settings, "USER_LLM_CALLS_PER_DAY", 2)
+    monkeypatch.setattr(llm.llm_service, "keys", [])  # no gateway: get_llm stops after the charge
+
+    with llm.use_model(None, user_id="alice"):
+        await llm.llm_service.get_llm(tier="deep", feature="chat")
+        await llm.llm_service.get_llm(tier="fast", feature="research")
+        await llm.llm_service.get_llm(tier="deep", feature="news")  # not a per-user feature
+        with pytest.raises(llm.DailyLimitReached):
+            await llm.llm_service.get_completion("q", system_prompt="s", tier="fast", feature="chat")
+    with llm.use_model(None, user_id="bob"):
+        await llm.llm_service.get_llm(tier="deep", feature="chat")
+    for _ in range(5):
+        await llm.llm_service.get_llm(tier="deep", feature="chat")  # no user: the shared pipeline
+    assert sorted(redis.counts.values()) == [1, 3]
