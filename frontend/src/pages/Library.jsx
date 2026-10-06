@@ -18,13 +18,15 @@ const STATUS = {
 /** Practice → Library: every strategy's card and its record in this account. */
 const Library = () => {
   const [mode, setMode] = useState('INTRADAY');
-  const [cards, setCards] = useState(null);
-  const [failed, setFailed] = useState(false);
+  // Keyed by mode, so switching tabs shows the skeleton until that mode's reply lands.
+  const [loaded, setLoaded] = useState({ mode: null });
   useEffect(() => {
-    setCards(null);
-    setFailed(false);
-    api.get(endpoints.strategyLibrary(mode)).then((res) => setCards(res.data.strategies)).catch(() => setFailed(true));
+    api.get(endpoints.strategyLibrary(mode))
+      .then((res) => setLoaded({ mode, cards: res.data.strategies }))
+      .catch(() => setLoaded({ mode, failed: true }));
   }, [mode]);
+  const cards = loaded.mode === mode ? loaded.cards ?? null : null;
+  const failed = loaded.mode === mode && !!loaded.failed;
 
   return (
     <Layout>
