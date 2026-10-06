@@ -1,11 +1,37 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Sheet, Statement, Row, Cell } from '../doc/Doc';
+import { Button } from '../common/Button';
+import api, { endpoints } from '../../utils/api';
 import { formatDateTime, formatQuantity, formatTimeAgo } from '../../utils/formatters';
 
 /**
  * The handbook's live panels, one per `<!-- live:x -->` marker, fed by
  * GET /system/status. A block the backend could not build says why.
  */
+
+// Phase 17.4.2: an LLM feature's switch sits beside its cost. Optimistic: the
+// panel's status is cached 30 s server-side, the switch answers at once.
+const FeatureSwitch = ({ feature, on: initial }) => {
+  const [on, setOn] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const flip = async () => {
+    setBusy(true);
+    try {
+      await api.post(endpoints.settings.llmFeature, { feature, enabled: !on });
+      setOn(!on);
+    } catch {
+      /* unchanged: the label still says what is true */
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Button size="sm" variant={on ? 'outline' : 'primary'} disabled={busy} onClick={flip}
+      aria-label={`${on ? 'Turn off' : 'Turn on'} AI ${feature}`}>
+      {on ? 'On' : 'Off'}
+    </Button>
+  );
+};
 
 const TITLES = { deploy: 'Deployed now', jobs: 'Jobs now', news: 'News now', data: 'Data now', ai: 'AI now' };
 const FRONTEND_SHA = import.meta.env.VITE_GIT_SHA || '';
@@ -56,7 +82,10 @@ const ROWS = {
     // One gateway key per feature; with a daily limit on the key, the figures are today's.
     ...Object.entries(b.features || {}).map(([name, f]) => [
       `AI ${name}`,
-      f.error ? f.error : `${f.alert ? '⚠ ' : ''}${formatQuantity(f.tokens)} tokens · $${Number(f.used_usd).toFixed(2)}${f.limit_usd ? ` of $${Number(f.limit_usd).toFixed(2)}` : ''}`,
+      <span key={name} className="inline-flex items-center gap-2 justify-end flex-wrap">
+        {f.error ? f.error : `${f.alert ? '⚠ ' : ''}${formatQuantity(f.tokens)} tokens · $${Number(f.used_usd).toFixed(2)}${f.limit_usd ? ` of $${Number(f.limit_usd).toFixed(2)}` : ''}`}
+        <FeatureSwitch feature={name} on={!(b.features_off || []).includes(name)} />
+      </span>,
     ]),
   ],
 };

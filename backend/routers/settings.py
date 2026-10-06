@@ -494,6 +494,7 @@ async def get_omniroute_tiers(app_settings: AppSettingsStore = Depends(get_app_s
     return {
         "tiers": await app_settings.get_llm_tiers(),
         "fallback": await app_settings.get_llm_model() or settings.OMNIROUTE_MODEL,
+        "features_off": await app_settings.get_features_off(),
     }
 
 
@@ -507,6 +508,25 @@ async def set_omniroute_tier(
     await app_settings.set_llm_tier(update.tier, model)
     logger.info(f"OmniRoute {update.tier} tier set to {model!r}.")
     return {"tier": update.tier, "model": model}
+
+
+class FeatureSwitch(BaseModel):
+    feature: Literal["news", "plan", "research", "chat", "portfolio", "learning"]  # app_settings.FEATURES
+    enabled: bool
+
+
+@router.post("/settings/llm-feature")
+async def set_llm_feature(
+    update: FeatureSwitch,
+    _admin: User = Depends(require_admin),
+    app_settings: AppSettingsStore = Depends(get_app_settings_store),
+):
+    """Phase 17.4.2: an LLM feature off makes no model calls anywhere (each
+    caller takes its "LLM disabled" path); the handbook's AI panel shows its
+    cost beside the switch. Other workers see it within 30 s."""
+    await app_settings.set_feature(update.feature, update.enabled)
+    logger.info(f"LLM feature {update.feature} {'on' if update.enabled else 'off'}.")
+    return {"feature": update.feature, "enabled": update.enabled}
 
 
 # Angel One's REST flow needs no long-lived secret: the account password and

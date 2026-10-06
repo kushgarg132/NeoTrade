@@ -240,6 +240,7 @@ export const endpoints = {
     omnirouteUsage: '/settings/omniroute-usage',
     autopilotLog: '/settings/autopilot/log',
     omnirouteTiers: '/settings/omniroute-tiers',
+    llmFeature: '/settings/llm-feature',
     omnirouteCatalog: '/settings/omniroute-catalog',
     preferences: '/settings/preferences',
     strategies: '/settings/strategies',

@@ -495,3 +495,14 @@ async def test_feature_usage_reads_each_feature_key_and_flags_80_percent(monkeyp
     body = await settings_router.fetch_feature_usage()
     assert body["news"] == {"tokens": 17, "used_usd": 0.85, "limit_usd": 1.0, "alert": True}
     assert body["chat"]["alert"] is False and list(body) == ["chat", "news"]
+
+
+def test_an_admin_switches_an_llm_feature_off_and_on(client, db):
+    assert client.post("/api/v1/settings/llm-feature", json={"feature": "news", "enabled": False}).status_code == 403
+    admin = _client(db, _user(role="admin"))
+    assert admin.post("/api/v1/settings/llm-feature", json={"feature": "telepathy", "enabled": False}).status_code == 422
+    assert admin.post("/api/v1/settings/llm-feature", json={"feature": "news", "enabled": False}).json() == {
+        "feature": "news", "enabled": False}
+    assert admin.get("/api/v1/settings/omniroute-tiers").json()["features_off"] == ["news"]
+    admin.post("/api/v1/settings/llm-feature", json={"feature": "news", "enabled": True})
+    assert admin.get("/api/v1/settings/omniroute-tiers").json()["features_off"] == []

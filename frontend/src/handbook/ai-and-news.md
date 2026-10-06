@@ -65,6 +65,11 @@ NeoTrade key).
 Chat and research calls are not counted per task, only per user (above), on top of the per-minute WebSocket limits (`ws/routes.py::_BUDGETS`). Per feature, the panel below reads each
 feature key's own `/v1/me/status` (`settings.py::fetch_feature_usage`, cached 5 min) and marks
 ⚠ at 80% of the key's limit.
+Each feature row has an **On/Off switch** (admin, `POST /settings/llm-feature`,
+`app_settings.llm_features_off`, seen by every worker within 30 s). Off, `LLMService.get_llm`
+returns nothing for that feature, so every caller takes its "LLM disabled" path: chat says the
+AI is unavailable, the plan falls back, research notes and the brief are skipped, and news
+stops triaging and scoring (items wait, then go STALE).
 
 <!-- live:ai -->
 

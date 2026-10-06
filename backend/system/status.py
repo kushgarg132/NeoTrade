@@ -91,6 +91,7 @@ async def _data(db, redis) -> dict:
 
 async def _ai(db, redis) -> dict:
     from backend.routers.settings import UsageUnavailable, fetch_feature_usage, fetch_usage
+    from backend.app_settings import AppSettingsStore
 
     day = datetime.now(timezone.utc).astimezone(IST).date().isoformat()
     try:
@@ -104,6 +105,7 @@ async def _ai(db, redis) -> dict:
         "plan_calls_limit": settings.PLAN_LLM_CALLS_PER_DAY,
         "usage": usage,
         "features": await fetch_feature_usage(),
+        "features_off": await AppSettingsStore(db).get_features_off(),
     }
 
 

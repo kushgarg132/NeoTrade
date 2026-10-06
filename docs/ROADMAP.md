@@ -1110,6 +1110,11 @@ clear 3× charges.
 4. **Point-in-time data.** Index membership and fundamentals as of the backtest date,
    so backtests stop flattering today's survivors.
 
+**17.4.2 landed 2026-10-07:** an On/Off switch per LLM feature beside its cost on the
+handbook's AI panel (`POST /settings/llm-feature`, `app_settings.llm_features_off`); off, the
+feature makes no model calls and each caller takes its "LLM disabled" path (news skips its
+LLM pass, the learning note falls back to plain facts).
+
 ### 17.5 The business
 
 The product is the discipline layer (journal, habits, guardrails), not the engine. The

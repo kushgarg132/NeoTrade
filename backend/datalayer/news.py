@@ -472,7 +472,10 @@ async def process_loop(db, redis) -> None:
     triaged = scored = 0
     now = datetime.now(timezone.utc)
     active = near_session(now)
-    if active or time.time() - _last_llm_pass >= OFF_PROCESS_SECONDS:
+    from backend.app_settings import feature_enabled
+
+    # Switched off (Phase 17.4.2): no triage or scoring; items wait, then go STALE.
+    if (active or time.time() - _last_llm_pass >= OFF_PROCESS_SECONDS) and await feature_enabled("news", db):
         _last_llm_pass = time.time()
         triaged = await triage(db, calls=TRIAGE_CALLS_PER_PASS if active else OFF_TRIAGE_CALLS)
         priority = await priority_symbols(db)

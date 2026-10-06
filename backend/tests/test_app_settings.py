@@ -149,3 +149,26 @@ async def test_tiers_survive_the_ttl_refresh(monkeypatch):
     )
     monkeypatch.setattr(app_settings_module, "_cache_loaded_at", 0.0)
     assert await current_llm_model(db=store._db, tier="deep") == "auto/claude-opus"
+
+
+async def test_a_switched_off_feature_gets_no_model_and_others_still_do(monkeypatch):
+    """Phase 17.4.2: each LLM feature has an admin switch; off means its
+    calls take the existing "LLM disabled" path, other features carry on."""
+    from backend import llm
+
+    monkeypatch.setattr(app_settings_module, "_cached_off", set())
+    monkeypatch.setattr(app_settings_module, "_cache_loaded_at", 0.0)
+    store = _store()
+    monkeypatch.setattr("backend.database.db.db", store._db)
+    await store.set_feature("news", enabled=False)
+    assert await store.get_features_off() == ["news"]
+    assert not await app_settings_module.feature_enabled("news", db=store._db)
+
+    monkeypatch.setattr(llm.llm_service, "keys", ["k"])
+    monkeypatch.setattr(llm.llm_service, "feature_keys", {})
+    assert await llm.llm_service.get_llm(tier="fast", feature="news") is None
+    assert await llm.llm_service.get_completion("q", system_prompt="s", feature="news") == "LLM_DISABLED"
+    assert await llm.llm_service.get_llm(tier="fast", feature="chat") is not None
+
+    await store.set_feature("news", enabled=True)
+    assert await app_settings_module.feature_enabled("news", db=store._db)

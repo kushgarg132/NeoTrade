@@ -1,5 +1,5 @@
 
-from backend.app_settings import current_llm_model
+from backend.app_settings import current_llm_model, feature_enabled
 from backend.configs.settings import settings
 from typing import Optional, List, Any, AsyncIterator
 import contextlib
@@ -161,6 +161,8 @@ class LLMService:
         """Returns a MultiKeyChain wrapping ChatOpenAI instances pointed at the OmniRoute gateway"""
         from langchain_openai import ChatOpenAI
 
+        if feature and not await feature_enabled(feature):
+            return None  # switched off by an admin: callers take their "LLM disabled" path
         await self._charge(feature)
 
         keys = self.keys_for(feature)

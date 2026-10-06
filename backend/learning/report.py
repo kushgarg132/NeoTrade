@@ -81,5 +81,7 @@ async def weekly_text(db, user_id: str, nifty: list, now: datetime):
     except Exception as exc:
         logger.warning("learning review: model failed: %s", exc)
         text = ""
+    if text == "LLM_DISABLED" or text.startswith("Error generating response"):
+        text = ""  # switched off or failed: the plain facts below, never the error text
     head = "🧠 What the paper engine learned this week"
     return f"{head}\n\n{text}" if text else f"{head}\n\n{f['rules']}\n\nChanges:\n{f['changes']}\n\nWorst setups:\n{f['groups']}"

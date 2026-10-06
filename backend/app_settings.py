@@ -26,23 +26,39 @@ _cached_llm_model: Optional[str] = None
 # to the single model above, so nothing changes until an admin sets one.
 TIERS = ("fast", "standard", "deep")
 _cached_tiers: dict = {}
+# LLM features an admin switched off (Phase 17.4.2); the names are the
+# `feature=` every call site passes (backend/tests/test_llm_call_tiers.py).
+FEATURES = ("news", "plan", "research", "chat", "portfolio", "learning")
+_cached_off: set = set()
 _cache_loaded_at: float = 0.0
 
 
-async def current_llm_model(db=None, tier: Optional[str] = None) -> str:
-    from backend.configs.settings import settings
-
-    global _cached_llm_model, _cached_tiers, _cache_loaded_at
+async def _refresh(db=None) -> None:
+    """Re-reads the settings at most once per _TTL_SECONDS per process."""
+    global _cached_llm_model, _cached_tiers, _cached_off, _cache_loaded_at
 
     if time.monotonic() - _cache_loaded_at >= _TTL_SECONDS:
         if db is None:
             from backend.database import db as _db
             db = _db.db
+        if db is None:
+            return  # not connected (a script, a test): keep what is cached
         store = AppSettingsStore(db)
         _cached_llm_model = await store.get_llm_model()
         _cached_tiers = await store.get_llm_tiers()
+        _cached_off = set(await store.get_features_off())
         _cache_loaded_at = time.monotonic()
 
+
+async def feature_enabled(feature: Optional[str], db=None) -> bool:
+    await _refresh(db)
+    return feature not in _cached_off
+
+
+async def current_llm_model(db=None, tier: Optional[str] = None) -> str:
+    from backend.configs.settings import settings
+
+    await _refresh(db)
     return (tier and _cached_tiers.get(tier)) or _cached_llm_model or settings.OMNIROUTE_MODEL
 
 
@@ -83,6 +99,21 @@ class AppSettingsStore:
         _cached_tiers = await self.get_llm_tiers()
         _cache_loaded_at = time.monotonic()
 
+    async def get_features_off(self) -> list[str]:
+        doc = await self.collection.find_one({"_id": _DOC_ID})
+        return sorted((doc or {}).get("llm_features_off") or [])
+
+    async def set_feature(self, feature: str, enabled: bool) -> None:
+        global _cached_off
+        if feature not in FEATURES:
+            raise ValueError(f"Unknown feature {feature!r}")
+        op = "$pull" if enabled else "$addToSet"
+        await self.collection.update_one(
+            {"_id": _DOC_ID}, {op: {"llm_features_off": feature}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+            upsert=True,
+        )
+        _cached_off = set(await self.get_features_off())
+
     async def get_portfolio_verdicts(self) -> str:
         """Who sees SELL / HOLD / ADD on the Portfolio page: "admin" (the
         default) or "all". Verdicts for every user need SEBI Research Analyst
@@ -98,7 +129,8 @@ class AppSettingsStore:
         )
 
     async def load_into_cache(self) -> None:
-        global _cached_llm_model, _cached_tiers, _cache_loaded_at
+        global _cached_llm_model, _cached_tiers, _cached_off, _cache_loaded_at
         _cached_llm_model = await self.get_llm_model()
         _cached_tiers = await self.get_llm_tiers()
+        _cached_off = set(await self.get_features_off())
         _cache_loaded_at = time.monotonic()
