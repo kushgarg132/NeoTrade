@@ -44,6 +44,7 @@ def test_daily_pass_records_success_and_failure(monkeypatch):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(scheduler, "run_daily_jobs", boom)
+    asyncio.run(redis.delete(scheduler.LAST_PASS_KEY))  # the ok run counted for today
     with pytest.raises(RuntimeError):
         asyncio.run(scheduler._run_locked(None, redis))
     run = asyncio.run(last_runs(redis, [DAILY_PASS]))[DAILY_PASS]

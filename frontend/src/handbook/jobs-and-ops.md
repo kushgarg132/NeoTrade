@@ -22,7 +22,10 @@ After the pass, the **data-quality check** (`backend/system/data_quality.py`, `j
 rest (a quote that keeps failing), universe symbols with no NSE instrument, and news feeds with no
 new item for 3 days. It reports; it never fails or gates the pass.
 
-A worker that wakes late after the pass already ran skips it.
+A worker that wakes late after the pass already ran skips it. If no pass finished for the
+previous weekday (a deploy restarted the backend during it), the long-term engine's 09:20
+morning pass runs the whole pass then (`backend/engine/autorun.py::_longterm_pass`), recorded
+under the missed day so that day's own 16:00 pass still runs.
 
 ## Loops in the API (every worker)
 

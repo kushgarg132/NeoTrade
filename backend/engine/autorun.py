@@ -271,10 +271,10 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
     """Exit checks once per EXIT_CHECK_MINUTES bucket, and once a day from
     MORNING the catch-up scan + digest. Redis SET NX makes each happen on
     one worker only. Returns whether this worker did anything."""
+    from backend import scheduler
     from backend.scheduler import LAST_PASS_KEY
     from backend.suggestions.exits import check_exits
     from backend.suggestions.notify import exits_text, notify, proposals_text
-    from backend.suggestions.scan import scan_universe
     from backend.suggestions.store import SuggestionStore
 
     local = now.astimezone(IST)
@@ -295,13 +295,15 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         did = True
         last_pass = await redis.get(LAST_PASS_KEY)
         last_pass = last_pass.decode() if isinstance(last_pass, bytes) else last_pass
-        if last_pass is None or last_pass < _previous_weekday(local.date()).isoformat():
-            prefs = await PrefsStore(db).get(user_id)
-            logger.info("16:00 scan missed (last pass %s); catching up for %s", last_pass, user_id)
-            await scan_universe(
-                db, user_id=user_id, universe=prefs["universe"], account_size=prefs["account_size"],
-                max_exposure=prefs["max_exposure"], source="scheduler", redis=redis, now=now,
-            )
+        missed = _previous_weekday(local.date())
+        if last_pass is None or last_pass < missed.isoformat():
+            # The whole pass, not just the scan: learning, plan replays, the
+            # re-tune and the data check are lost too when a deploy kills 16:00.
+            # Under the daily lock, so other users' morning passes skip it.
+            # ponytail: inline, so this tick waits for it (minutes, one user);
+            # move to a background task if intraday renewals start lapsing.
+            logger.info("16:00 pass missed (last pass %s); catching up for %s", last_pass, missed)
+            await scheduler._run_locked(db, redis, pass_day=missed)
         # The factor portfolio is the automatic long-term strategy: rebalanced
         # on paper at the first morning pass of each month (backend/factor/).
         from backend.factor import paper as factor_paper

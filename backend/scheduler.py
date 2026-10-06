@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Awaitable, Callable, Optional
 
 from backend.ai.analyst_verdict import refresh_analyst_verdict
@@ -117,9 +117,6 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         except Exception as exc:
             logger.exception("weekly portfolio reviews failed: %s", exc)
 
-    if redis is not None:
-        await redis.set(LAST_PASS_KEY, now.astimezone(IST).date().isoformat())
-
     logger.info(
         "daily pass: %d journal trade(s) imported, %d expired, %d option position(s) closed, %d verdict(s) refreshed, "
         "%d user(s) scanned, %d suggestion(s) created",
@@ -162,11 +159,15 @@ async def _data_quality(db, redis) -> None:
         await mark(redis, DATA_QUALITY, False, f"{type(exc).__name__}: {exc}")
 
 
-async def _run_locked(db, redis) -> Optional[dict]:
+async def _run_locked(db, redis, pass_day: Optional[date] = None) -> Optional[dict]:
     """Acquires a Redis lock before running the daily pass. Returns None
     (pass skipped) if another worker already holds it. When `redis` is None
     the lock is skipped and the pass always runs -- matches every existing
-    test's redis=None/mocked-redis calling convention for run_daily_jobs."""
+    test's redis=None/mocked-redis calling convention for run_daily_jobs.
+
+    `pass_day` is the IST day the pass counts for: today at 16:00, or the
+    missed day when 09:20 catches up (backend/engine/autorun.py), so that
+    day's own 16:00 pass still runs."""
     if redis is None:
         return await run_daily_jobs(db, redis=redis)
 
@@ -178,15 +179,19 @@ async def _run_locked(db, redis) -> Optional[dict]:
 
     try:
         # A worker that woke late can take the lock after the pass already
-        # ran and released it: today's pass is done, so skip.
-        if await redis.get(LAST_PASS_KEY) == datetime.now(timezone.utc).astimezone(IST).date().isoformat():
-            logger.info("daily pass already done today, skipping")
+        # ran and released it: that day's pass is done, so skip.
+        day = (pass_day or datetime.now(timezone.utc).astimezone(IST).date()).isoformat()
+        last = await redis.get(LAST_PASS_KEY)
+        last = last.decode() if isinstance(last, bytes) else last
+        if last is not None and last >= day:
+            logger.info("daily pass for %s already done, skipping", day)
             return None
         try:
             result = await run_daily_jobs(db, redis=redis)
         except Exception as exc:
             await mark(redis, DAILY_PASS, False, f"{type(exc).__name__}: {exc}")
             raise
+        await redis.set(LAST_PASS_KEY, day)
         await mark(redis, DAILY_PASS, True, json.dumps(result, default=str))
         await _data_quality(db, redis)
         return result

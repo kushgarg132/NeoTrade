@@ -324,7 +324,7 @@ async def test_the_lock_is_released_after_the_pass_completes(mongo, monkeypatch)
 
     redis = AsyncMock()
     redis.set = AsyncMock(return_value=True)
-    redis.get = AsyncMock(return_value="fixed-token")
+    redis.get = AsyncMock(side_effect=lambda key: None if key == scheduler.LAST_PASS_KEY else "fixed-token")
 
     result = await scheduler._run_locked(mongo, redis)
 
@@ -370,3 +370,26 @@ async def test_a_late_waking_worker_skips_a_pass_already_done_today(mongo, monke
     assert await scheduler._run_locked(mongo, redis) is None
     assert scanned == []
     redis.delete.assert_awaited_once_with(scheduler.LOCK_KEY)
+
+
+@pytest.mark.asyncio
+async def test_a_catch_up_pass_counts_for_the_day_it_missed(mongo, monkeypatch):
+    """09:20's catch-up runs Friday's pass: it records Friday, so Monday's own
+    16:00 pass still runs, and a second catch-up for Friday is skipped."""
+    from datetime import date
+
+    from backend.tests.test_autorun import _Redis
+
+    passes = []
+
+    async def fake_pass(db, redis=None, now=None):
+        passes.append(now)
+        return {}
+    monkeypatch.setattr(scheduler, "run_daily_jobs", fake_pass)
+    redis = _Redis()
+    redis.data[scheduler.LAST_PASS_KEY] = "2026-09-24"
+
+    assert await scheduler._run_locked(mongo, redis, pass_day=date(2026, 9, 25)) is not None
+    assert redis.data[scheduler.LAST_PASS_KEY] == "2026-09-25"
+    assert await scheduler._run_locked(mongo, redis, pass_day=date(2026, 9, 25)) is None
+    assert len(passes) == 1

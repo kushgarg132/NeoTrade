@@ -190,7 +190,7 @@ def longterm(world, monkeypatch):
     import backend.suggestions.notify as notify
     import backend.suggestions.scan as scan
 
-    calls = {"exits": [], "scans": [], "sent": []}
+    calls = {"exits": [], "scans": [], "sent": [], "passes": []}
 
     async def check_exits(db, user_id, now=None):
         calls["exits"].append(now)
@@ -208,7 +208,13 @@ def longterm(world, monkeypatch):
     async def not_due(db, user_id, now):
         return False  # the factor rebalance downloads market data; tested on its own
 
+    async def daily_pass(db, redis=None, now=None):
+        calls["passes"].append(now)
+        return {}
+
+    from backend import scheduler
     from backend.factor import paper
+    monkeypatch.setattr(scheduler, "run_daily_jobs", daily_pass)
     monkeypatch.setattr(exits, "check_exits", check_exits)
     monkeypatch.setattr(scan, "scan_universe", scan_universe)
     monkeypatch.setattr(notify, "notify", send)
@@ -236,7 +242,7 @@ async def test_exits_are_checked_once_per_quarter_hour_and_reported(world, longt
 
     assert len(longterm["exits"]) == 2
     assert sum("SJVN" in text for text in longterm["sent"]) == 2
-    assert longterm["scans"] == []  # 16:00 was not missed
+    assert longterm["passes"] == []  # 16:00 was not missed
 
 
 @pytest.mark.asyncio
@@ -245,10 +251,12 @@ async def test_a_missed_close_scan_is_caught_up_at_the_open(world, longterm):
     world.redis.data["scheduler:last_pass"] = "2026-09-24"  # Friday's pass never happened
 
     await _tick(world, datetime(2026, 9, 28, 9, 16, tzinfo=IST))
-    assert longterm["scans"] == []  # before 09:20
+    assert longterm["passes"] == []  # before 09:20
     await _tick(world, datetime(2026, 9, 28, 9, 21, tzinfo=IST))
     await _tick(world, datetime(2026, 9, 28, 11, 0, tzinfo=IST))
-    assert longterm["scans"] == ["scheduler"]  # once a day
+    # The whole missed pass, once, recorded as Friday's so Monday's 16:00 still runs.
+    assert len(longterm["passes"]) == 1
+    assert world.redis.data["scheduler:last_pass"] == "2026-09-25"
 
 
 @pytest.mark.asyncio
