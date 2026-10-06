@@ -1417,7 +1417,7 @@ const PracticeRow = () => {
   );
 };
 
-const LEGACY_TABS = { broker: 'accounts', guardrails: 'safety', portfolio: 'safety' };
+const LEGACY_TABS = { broker: 'accounts', guardrails: 'safety', portfolio: 'safety', beta: 'about' };
 
 const Settings = () => {
   const { user } = useAuth();
@@ -1433,7 +1433,6 @@ const Settings = () => {
     { id: 'safety', label: 'Safety' },
     { id: 'ai', label: 'AI' },
     { id: 'about', label: 'About' },
-    ...(isAdmin ? [{ id: 'beta', label: 'Beta' }] : []),
   ];
   const [tab, setTab] = useTab(tabs.map((t) => t.id));
   return (
@@ -1474,11 +1473,11 @@ const Settings = () => {
                     <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
                   </Link>
                 ))}
+                <BetaSheet />
               </div>
             ) : (
               <p className="sheet px-3 py-2.5 sm:px-4 text-sm">NeoTrade — the discipline layer on top of your broker.</p>
             ))}
-            {tab === 'beta' && isAdmin && <BetaSheet />}
           </div>
         </div>
       </div>
