@@ -8,8 +8,8 @@ export const shiftMonth = (key, delta) => {
   return date.toISOString().slice(0, 7);
 };
 
-export const monthLabel = (key) =>
-  new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
+export const monthLabel = (key, month = 'long') =>
+  new Intl.DateTimeFormat('en-IN', { month, year: 'numeric', timeZone: 'UTC' }).format(
     new Date(`${key}-01T00:00:00Z`)
   );
 

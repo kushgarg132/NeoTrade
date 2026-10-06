@@ -6,7 +6,7 @@ import { PRACTICE_TABS } from '../components/layout/sections';
 import { Sheet, Ruling, Tabs } from '../components/doc/Doc';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
-import { recordLine, statusOf } from '../utils/library';
+import { recordLine, statusOf, strategyName } from '../utils/library';
 
 const STATUS = {
   'live-ready': { label: 'Can go live', variant: 'success' },
@@ -14,7 +14,6 @@ const STATUS = {
   untested: { label: 'Not backtested', variant: 'secondary' },
   paused: { label: 'Paused by learning', variant: 'destructive' },
 };
-const NAME = (name) => name.replace(/_/g, ' ');
 
 /** Practice → Library: every strategy's card and its record in this account. */
 const Library = () => {
@@ -42,7 +41,7 @@ const Library = () => {
                 return (
                   <li key={card.name} className="py-3 space-y-1">
                     <div className="flex flex-wrap items-baseline gap-2">
-                      <h3 className="figure-md text-sm capitalize">{NAME(card.name)}</h3>
+                      <h3 className="figure-md text-sm">{strategyName(card.name)}</h3>
                       <Badge variant={status.variant}>{status.label}</Badge>
                       <span className="doc-meta normal-case">
                         {card.card.style} · suits {card.card.regimes.join(', ').replace(/_/g, '-')}

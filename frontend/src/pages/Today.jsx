@@ -87,21 +87,20 @@ const expiresIn = (iso) => {
  *  glance is enough to know whether to open Decisions now. */
 const proposalLine = (item) =>
   [
-    item.entry != null && `@ ${formatCurrency(item.entry)}`,
     item.conviction != null && `conviction ${item.conviction.toFixed(2)}`,
     expiresIn(item.expires_at),
   ].filter(Boolean).join(' · ');
 
 const NeedsYou = ({ items, proposalsTotal }) => {
   const shown = items.filter((item) => item.kind === 'proposal').length;
-  const more = (proposalsTotal || 0) - shown;
+  const hidden = (proposalsTotal || 0) - shown;
   return (
   <Sheet
     title="Needs you"
-    meta={items.length ? (more > 0 ? `${items.length} shown · ${more} more proposals` : String(items.length)) : undefined}
+    meta={items.length ? String(items.length + Math.max(hidden, 0)) : undefined}
     actions={
       <Link to="/practice/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
-        {proposalsTotal ? `All ${proposalsTotal} decisions ›` : 'All decisions ›'}
+        All decisions ›
       </Link>
     }
   >
@@ -203,7 +202,6 @@ const MarketBackdrop = ({ backdrop }) => {
   return (
     <Sheet
       title="Markets"
-      meta={regime ? `regime ${regime.score > 0 ? '+' : ''}${regime.score}` : undefined}
       actions={<Link to="/research/news" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">News ›</Link>}
     >
       {regime && (

@@ -8,6 +8,7 @@ import { formatCurrency, formatQuantity, formatTimeAgo, formatNoteDate } from '.
 import { cn } from '../../utils/cn';
 import NewsChip from '../common/NewsChip';
 import Markdown from '../common/Markdown';
+import { strategyName } from '../../utils/library';
 
 /**
  * One proposal, printed as a record on the note.
@@ -225,7 +226,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
           <div className="flex flex-wrap gap-1.5">
             {suggestion.reason_codes.map((code) => (
               <Badge key={code} variant="outline">
-                {code.replace(/_/g, ' ')}
+                {strategyName(code)}
               </Badge>
             ))}
           </div>

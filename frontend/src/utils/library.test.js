@@ -20,3 +20,10 @@ test('record line', () => {
   assert.equal(recordLine(card({ stats: { all: { trades: 1, win_rate: 0, net: -45.6 } } })),
     '1 trade · win 0% · net ₹−46');
 });
+
+test('strategy codes read as names', async () => {
+  const { strategyName } = await import('./library.js');
+  assert.equal(strategyName('orb_breakout'), 'Opening-range breakout');
+  assert.equal(strategyName('oversold_rsi_below_lower_band'), 'Oversold rsi below lower band');
+  assert.equal(strategyName(undefined), undefined);
+});

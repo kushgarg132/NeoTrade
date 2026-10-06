@@ -7,7 +7,7 @@ import { RESEARCH_TABS } from '../components/layout/sections';
 import { Sheet, Field, Empty, Ruling } from '../components/doc/Doc';
 import { Button } from '../components/common/Button';
 import api, { endpoints } from '../utils/api';
-import { formatLevel, formatCompactNumber, formatNoteDate } from '../utils/formatters';
+import { formatLevel, formatCompactNumber, formatNoteDate, marketPhase } from '../utils/formatters';
 import { cn } from '../utils/cn';
 
 /**
@@ -28,6 +28,10 @@ const oi = (leg) => (leg?.oi == null ? '—' : formatCompactNumber(leg.oi));
 const oiChange = (leg) =>
   leg?.oi_change ? `${leg.oi_change > 0 ? '+' : '−'}${formatCompactNumber(Math.abs(leg.oi_change))}` : '';
 const premium = (leg) => (leg?.ltp == null ? '—' : formatLevel(leg.ltp));
+
+// Upstox reports 0 or a capped 500%+ when it cannot solve for IV (deep in the
+// money, no trades, expiry day): those are not volatilities, so print nothing.
+const ivShown = (iv) => iv != null && iv > 0 && iv < 300;
 
 const OptionChain = () => {
   const [params, setParams] = useSearchParams();
@@ -90,7 +94,7 @@ const OptionChain = () => {
         <SectionTabs tabs={RESEARCH_TABS} label="Research" />
         <Sheet
           title="Option chain"
-          meta="Live · Upstox"
+          meta={marketPhase() === 'open' ? 'Live · Upstox' : 'Market closed · last prices · Upstox'}
           actions={
             <Button variant="secondary" size="sm" onClick={() => loadChain()} disabled={busy || !expiry}>
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -201,7 +205,7 @@ const OptionChain = () => {
                       </td>
                       <td className={cn('py-2 px-2 text-right align-top', callItm && 'bg-[var(--stamp-soft)]')}>
                         <span className="figure-md whitespace-nowrap">{premium(row.call)}</span>
-                        {row.call?.iv != null && <span className="block doc-meta normal-case whitespace-nowrap text-[0.625rem]">IV {row.call.iv.toFixed(1)}</span>}
+                        {ivShown(row.call?.iv) && <span className="block doc-meta normal-case whitespace-nowrap text-[0.625rem]">IV {row.call.iv.toFixed(1)}</span>}
                       </td>
                       <td className="py-2 px-1 text-center align-top bg-[var(--paper-sunk)]">
                         <span className={cn('figure-md whitespace-nowrap', atm && 'text-[var(--stamp)]')}>
@@ -210,7 +214,7 @@ const OptionChain = () => {
                       </td>
                       <td className={cn('py-2 px-2 align-top', putItm && 'bg-[var(--stamp-soft)]')}>
                         <span className="figure-md whitespace-nowrap">{premium(row.put)}</span>
-                        {row.put?.iv != null && <span className="block doc-meta normal-case whitespace-nowrap text-[0.625rem]">IV {row.put.iv.toFixed(1)}</span>}
+                        {ivShown(row.put?.iv) && <span className="block doc-meta normal-case whitespace-nowrap text-[0.625rem]">IV {row.put.iv.toFixed(1)}</span>}
                       </td>
                       <td className={cn('py-2 px-2 text-right align-top', putItm && 'bg-[var(--stamp-soft)]')}>
                         <span className="figure-md block">{oi(row.put)}</span>
