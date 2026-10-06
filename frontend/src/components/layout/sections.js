@@ -41,7 +41,7 @@ export const AI_TABS = [
 export const PRACTICE_TABS = [
   { to: '/practice', label: 'Engine', end: true },
   { to: '/practice/book', label: 'Book' },
-  { to: '/practice/library', label: 'Library' },
+  { to: '/practice/strategies', label: 'Strategies' },
   { to: '/practice/setup', label: 'Setup' },
 ];
 

@@ -3,7 +3,7 @@ import { Routes, Route, Link, Navigate, useLocation, useNavigationType } from 'r
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const PaperOverview = lazy(() => import('./pages/PaperOverview'));
 const PaperSettings = lazy(() => import('./pages/PaperSettings'));
-const Library = lazy(() => import('./pages/Library'));
+const Strategies = lazy(() => import('./pages/Strategies'));
 const OptionChain = lazy(() => import('./pages/OptionChain'));
 const Decisions = lazy(() => import('./pages/Decisions'));
 const ScannerPage = lazy(() => import('./pages/ScannerPage'));
@@ -125,7 +125,8 @@ const App = () => {
       <Route path="/practice/decisions" element={<Moved to="/ai/decisions" />} />
       <Route path="/practice/book" element={gated(<Portfolio />)} />
       <Route path="/practice/setup" element={gated(<PaperSettings />)} />
-      <Route path="/practice/library" element={gated(<Library />)} />
+      <Route path="/practice/strategies" element={gated(<Strategies />)} />
+      <Route path="/practice/library" element={<Moved to="/practice/strategies" />} />
       {/* Old links and bookmarks follow the move, query string included. */}
       <Route path="/portfolio" element={<Moved to="/mine/holdings" />} />
       <Route path="/journal" element={<JournalMoved />} />
