@@ -1063,6 +1063,25 @@ same feature set.
    nobody reviews.
 6. **Autopilot stays off** until a strategy on the AI account has passed both gates.
 
+**17.3.1 survivorship, measured 2026-10-07** (`python -m backend.factor.survivorship`). No free
+point-in-time Nifty 200 membership exists (niftyindices.com no longer serves history; ~28
+NSE reconstitution circulars plus missing prices for delisted names would still leave gaps),
+so the bias was measured, not removed:
+
+| Yardstick | Ours (today's list) | Survivorship-free | Gap |
+|---|---|---|---|
+| Equal weight vs `^CNX200`, 2012–2026 CAGR | 24.1% | 12.5% (price index) | +11.6%/yr |
+| Momentum-30 setup vs ABSL Nifty 200 Momentum 30 ETF, 2022-08..2026-10 | 16.6% | 8.8% | +7.9%/yr |
+| Low-vol-30 setup vs `LOWVOLIETF` (Nifty100 Low Vol 30), 2018-05..2026-10 | 14.7% | 11.2% | +3.6%/yr |
+
+The gap is not concentrated in early years (2020–2024: +17% to +30% a year on equal weight),
+so it is mostly *inclusion* bias — today's members are there because they rose — plus
+dividends (~1.3%/yr, in our adjusted closes, not in `^CNX200`) and methodology differences.
+The shipped strategy shows 19.0% CAGR / Sharpe 1.60 / max DD −16% on today's data;
+less 4–8%/yr of bias that is ~11–15%, against ~14% for the Nifty 200 with dividends. **The
+backtest is no evidence of an edge.** The forward paper gate (3 months, beats Nifty since
+start) is the only evidence that counts; no live capital before it holds.
+
 **Status 2026-10-07:** 17.3.3 landed: each run counts entries dropped by the cost check
 (`progress.below_cost`, shown on the engine card). 17.3.2's bar was already in code: gate
 backtests are net of charges and sized with the user's own `account_size`/`per_trade_cap`,

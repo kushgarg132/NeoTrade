@@ -73,8 +73,10 @@ hold), shown in Practice → Strategies with this account's record and what each
 
 Under the honest backtester (net of charges, 10 bps slippage) every intraday strategy loses
 before charges too (PF 0.63–0.80). Intraday stays experimental and off by default. The
-factor portfolio is the one with evidence (out-of-sample 2012–2026: 21.8% CAGR, Sharpe
-1.59, max DD −15% vs Nifty 200 12.8% / 0.83 / −38%).
+factor portfolio backtests best (2012–2026: ~19% CAGR, Sharpe 1.6, max DD −16%), but on
+today's Nifty 200 list: measured against survivorship-free yardsticks that flatters it by
+~4–8% a year (`backend/factor/survivorship.py`, ROADMAP 17.3.1), leaving no clear edge over
+the index. Its forward paper record is the evidence that counts.
 
 ## Gates to real money
 
