@@ -10,7 +10,7 @@ import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
-import { formatCurrency, formatQuantity, formatDateTime } from '../utils/formatters';
+import { formatCurrency, formatQuantity, formatDateTime, formatTimeAgo } from '../utils/formatters';
 import { Avatar } from '../components/common/Avatar';
 import { usePendingCount } from '../context/pendingContext';
 
@@ -848,6 +848,8 @@ const UsageSheet = () => {
             {usage.cost.limit_usd != null ? ` of $${Number(usage.cost.limit_usd).toFixed(2)}` : ' · no cost limit'}
             {usage.cost.reset_at ? ` · resets ${formatDateTime(usage.cost.reset_at)}` : ''}
           </p>
+          {/* Served from the last reading while the gateway's slow quota poll refreshes it. */}
+          {usage.as_of && <p className="doc-meta normal-case">Read {formatTimeAgo(usage.as_of)}</p>}
 
           <p className="field-label mt-4 mb-1">Providers · quota left</p>
           <p className="doc-meta normal-case mb-1">

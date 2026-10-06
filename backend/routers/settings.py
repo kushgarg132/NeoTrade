@@ -8,7 +8,9 @@ are gone: credentials are per-user and encrypted (backend/auth/broker_credential
 and the deployment model lives in Mongo behind an admin check.
 """
 
+import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
@@ -272,6 +274,7 @@ async def set_omniroute_model(
 
 USAGE_CACHE_SECONDS = 60
 _USAGE_CACHE: dict = {}  # {"at": monotonic seconds, "body": dict}
+_USAGE_REFRESH: "asyncio.Task | None" = None  # the one background refresh in flight
 
 
 def _family(name: str) -> str:
@@ -339,17 +342,7 @@ class UsageUnavailable(Exception):
         self.status, self.detail = status, detail
 
 
-async def fetch_usage() -> dict:
-    """This deployment's gateway key: its tokens and cost this month, and each
-    provider account's remaining quota, from OmniRoute's self-service
-    GET /v1/me/status (the key's default `self:usage` scope -- no management
-    key needed). Provider quotas are the gateway's shared accounts, not this
-    key's share. Cached a minute. Shared by the Settings sheet and Telegram's
-    /usage; raises UsageUnavailable."""
-    import time
-
-    if _USAGE_CACHE and time.monotonic() - _USAGE_CACHE["at"] < USAGE_CACHE_SECONDS:
-        return _USAGE_CACHE["body"]
+async def _read_usage() -> dict:
     if not settings.OMNIROUTE_API_KEYS:
         raise UsageUnavailable(409, "No gateway key configured")
     try:
@@ -362,8 +355,36 @@ async def fetch_usage() -> dict:
     except httpx.HTTPError as e:
         logger.error(f"Failed to fetch OmniRoute usage: {e}")
         raise UsageUnavailable(502, "Could not read usage from the OmniRoute gateway")
-    body = _shape_usage(resp.json())
+    body = {**_shape_usage(resp.json()), "as_of": datetime.now(timezone.utc).isoformat()}
     _USAGE_CACHE.update(at=time.monotonic(), body=body)
+    return body
+
+
+async def _refresh_usage_quietly() -> None:
+    try:
+        await _read_usage()
+    except UsageUnavailable:
+        pass  # already logged; the last reading keeps being served
+
+
+async def fetch_usage() -> dict:
+    """This deployment's gateway key: its tokens and cost this month, and each
+    provider account's remaining quota, from OmniRoute's self-service
+    GET /v1/me/status (the key's default `self:usage` scope -- no management
+    key needed). Provider quotas are the gateway's shared accounts, not this
+    key's share. Shared by the Settings sheet and Telegram's /usage; raises
+    UsageUnavailable.
+
+    OmniRoute polls every provider's quota API live on that call (3-5 s), so
+    a reading older than a minute is still answered at once, with its
+    `as_of`, while one background refresh fetches the next. Only the first
+    call of a process waits on the gateway."""
+    global _USAGE_REFRESH
+    body = _USAGE_CACHE.get("body")
+    if body is None:
+        return await _read_usage()
+    if time.monotonic() - _USAGE_CACHE["at"] >= USAGE_CACHE_SECONDS and (_USAGE_REFRESH is None or _USAGE_REFRESH.done()):
+        _USAGE_REFRESH = asyncio.create_task(_refresh_usage_quietly())
     return body
 
 
@@ -383,9 +404,6 @@ async def test_omniroute_model(update: ModelUpdate, _admin: User = Depends(requi
     """One tiny prompt to `model` through the gateway, before anyone saves it.
     Calls the model directly: LLMService.get_completion turns a failure into
     a reply string, which would read as a pass here."""
-    import asyncio
-    import time
-
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_openai import ChatOpenAI
 

@@ -398,6 +398,37 @@ def test_omniroute_usage_gateway_error_is_502(db, monkeypatch):
     assert _client(db, _user(role="admin")).get("/api/v1/settings/omniroute-usage").status_code == 502
 
 
+def test_a_stale_usage_reading_is_served_at_once_and_refreshed_behind(monkeypatch):
+    """OmniRoute polls every provider's quota API live on /me/status (3-5 s),
+    so the page must not wait on it once there is any earlier reading."""
+    import asyncio
+    import time
+
+    async def scenario():
+        release = asyncio.Event()
+
+        async def slow_get(self, url, **kwargs):
+            await release.wait()
+            return _FakeStatusResponse()
+
+        monkeypatch.setattr(httpx.AsyncClient, "get", slow_get)
+        monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+        settings_router._USAGE_CACHE.clear()
+        settings_router._USAGE_CACHE.update(at=time.monotonic() - 3600, body={"key_name": "old"})
+
+        stale = await asyncio.wait_for(settings_router.fetch_usage(), timeout=1)
+        assert stale["key_name"] == "old"
+        again = await asyncio.wait_for(settings_router.fetch_usage(), timeout=1)
+        assert again["key_name"] == "old"  # one refresh in flight, not one per call
+
+        release.set()
+        await settings_router._USAGE_REFRESH
+        fresh = await settings_router.fetch_usage()
+        assert fresh["key_name"] == "AI Stock" and fresh["as_of"]
+
+    asyncio.run(scenario())
+
+
 def test_quotas_group_into_pools_by_family_and_window():
     from backend.routers.settings import _pools
 
