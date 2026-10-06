@@ -146,3 +146,29 @@ async def test_a_huge_upsert_keeps_in_flight_writes_bounded(master, monkeypatch)
     rows = [_make_instrument(tradingsymbol=f"S{i}", instrument_token=i, exchange_token=i) for i in range(2000)]
     assert await master.upsert_many(rows) == 2000
     assert in_flight["max"] <= master_module.UPSERT_BATCH
+
+
+async def test_upsert_many_skips_unchanged_rows_without_writing(master):
+    """A broker reconnect re-sends its whole dump (~60,000 rows for Kite).
+    Unchanged rows must cost no write: one update_one per row held the Mongo
+    pool for minutes and every other request 504'd (2026-10-06)."""
+    from datetime import datetime
+
+    rows = [_make_instrument(),
+            _make_instrument(exchange="NFO", tradingsymbol="NIFTY26OCT25000CE", instrument_token=2, exchange_token=2,
+                             instrument_type="CE", segment="NFO-OPT", lot_size=75, expiry=datetime(2026, 10, 27), strike=25000.0)]
+    await master.upsert_many(rows)
+
+    calls = 0
+    real = master.collection.update_one
+
+    async def counting(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return await real(*args, **kwargs)
+
+    master.collection.update_one = counting
+    assert await master.upsert_many(rows) == 0
+    assert calls == 0
+    assert await master.upsert_many([_make_instrument(lot_size=5)]) == 1
+    assert calls == 1

@@ -1,11 +1,14 @@
 import asyncio
 import logging
 import re
+from datetime import datetime
 from typing import Optional
 
 from backend.instruments.models import Instrument
 
-UPSERT_BATCH = 500  # writes in flight at once during a bulk upsert
+# Writes in flight at once during a bulk upsert. Well under Motor's default
+# pool of 100 connections, so other requests still get one meanwhile.
+UPSERT_BATCH = 50
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +17,12 @@ def _to_instrument(doc: dict) -> Instrument:
     doc = dict(doc)
     doc.pop("_id", None)
     return Instrument(**doc)
+
+
+def _comparable(doc: dict) -> dict:
+    """A row as stored vs. as fetched: Mongo hands datetimes back tz-aware
+    (UTC), the broker dump has them naive."""
+    return {k: v.replace(tzinfo=None) if isinstance(v, datetime) else v for k, v in doc.items()}
 
 
 class InstrumentMaster:
@@ -47,9 +56,18 @@ class InstrumentMaster:
             )
             return result.upserted_id is not None or result.modified_count > 0
 
-        # In batches: one gather() over a broker's full dump (~60,000 rows for
-        # Kite NSE+BSE+NFO) put every write in flight at once and starved the
-        # event loop -- every request on that worker timed out for minutes.
+        # Every broker connect re-sends its whole dump (~60,000 rows for Kite
+        # NSE+BSE+NFO), nearly all unchanged. One write per row held the Mongo
+        # pool for minutes and every other request 504'd (2026-10-06), so read
+        # what is stored in one pass and write only what differs.
+        exchanges = sorted({i.exchange for i in instruments})
+        stored = {(d["exchange"], d["tradingsymbol"]): _comparable(d)
+                  async for d in self.collection.find({"exchange": {"$in": exchanges}}, {"_id": 0})}
+        instruments = [i for i in instruments
+                       if stored.get((i.exchange, i.tradingsymbol)) != _comparable(i.model_dump())]
+
+        # In batches: one gather() over a broker's full dump put every write
+        # in flight at once and starved the event loop.
         changed = 0
         for start in range(0, len(instruments), UPSERT_BATCH):
             batch = instruments[start:start + UPSERT_BATCH]
