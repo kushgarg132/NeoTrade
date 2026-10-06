@@ -19,6 +19,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# The commit this image was built from, shown in the handbook (backend/system/status.py).
+ARG GIT_SHA=
+ENV GIT_SHA=$GIT_SHA
+
 # Copy project into a subdirectory to preserve package imports
 COPY . ./backend
 

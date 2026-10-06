@@ -34,6 +34,12 @@ class FakeRedis:
     async def hgetall(self, key):
         return dict(self.data.get(key) or {})
 
+    async def scan_iter(self, match="*", **_):
+        import fnmatch
+        for key in list(self.data):
+            if fnmatch.fnmatch(key, match):
+                yield key
+
     async def mget(self, keys):
         return [self.data.get(k) for k in keys]
 

@@ -208,6 +208,8 @@ app.include_router(orders.router, prefix=settings.API_PREFIX, dependencies=[Depe
 
 from backend.routers import settings as settings_router
 app.include_router(settings_router.router, prefix=settings.API_PREFIX, tags=["Settings"], dependencies=[Depends(get_current_user)])
+from backend.system import router as system_router  # noqa: E402
+app.include_router(system_router.router, prefix=settings.API_PREFIX, tags=["System"], dependencies=[Depends(get_current_user)])
 from backend.routers import profile as profile_router
 app.include_router(profile_router.router, prefix=settings.API_PREFIX, tags=["Profile"], dependencies=[Depends(get_current_user)])
 from backend.routers import today as today_router

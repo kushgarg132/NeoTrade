@@ -11,6 +11,8 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        GIT_SHA: ${GIT_SHA:-}
     container_name: neotrade-backend
     restart: unless-stopped
     # The deploy workflow only names `backend`; this makes the same
