@@ -122,7 +122,7 @@ const App = () => {
       <Route path="/system/future" element={gated(<RequireAdmin><Backlog /></RequireAdmin>)} />
       {/* Practice (under More): the strategy engine, its decisions and its book */}
       <Route path="/practice" element={gated(<PaperOverview />)} />
-      <Route path="/practice/decisions" element={gated(<Decisions />)} />
+      <Route path="/practice/decisions" element={<Moved to="/ai/decisions" />} />
       <Route path="/practice/book" element={gated(<Portfolio />)} />
       <Route path="/practice/setup" element={gated(<PaperSettings />)} />
       <Route path="/practice/library" element={gated(<Library />)} />
@@ -134,19 +134,19 @@ const App = () => {
       <Route path="/options" element={<Moved to="/research/options" />} />
       <Route path="/ai/limits" element={<Moved to="/ai/autopilot" />} />
       <Route path="/ai/practice" element={<Moved to="/practice" />} />
-      <Route path="/ai/decisions" element={<Moved to="/practice/decisions" />} />
-      <Route path="/ai/practice/decisions" element={<Moved to="/practice/decisions" />} />
+      <Route path="/ai/decisions" element={gated(<Decisions />)} />
+      <Route path="/ai/practice/decisions" element={<Moved to="/ai/decisions" />} />
       <Route path="/ai/practice/book" element={<Moved to="/practice/book" />} />
       <Route path="/ai/practice/holdings" element={<Moved to="/practice/book" />} />
       <Route path="/ai/practice/engine" element={<Moved to="/practice" />} />
       <Route path="/ai/practice/settings" element={<Moved to="/practice/setup" />} />
-      <Route path="/decisions" element={<Moved to="/practice/decisions" />} />
+      <Route path="/decisions" element={<Moved to="/ai/decisions" />} />
       <Route path="/paper" element={<Moved to="/practice" />} />
-      <Route path="/paper/decisions" element={<Moved to="/practice/decisions" />} />
+      <Route path="/paper/decisions" element={<Moved to="/ai/decisions" />} />
       <Route path="/paper/holdings" element={<Moved to="/practice/book" />} />
       <Route path="/paper/engine" element={<Moved to="/practice" />} />
       <Route path="/paper/settings" element={<Moved to="/practice/setup" />} />
-      <Route path="/suggestions" element={<Moved to="/practice/decisions" />} />
+      <Route path="/suggestions" element={<Moved to="/ai/decisions" />} />
       <Route path="/trading" element={<Moved to="/practice" />} />
       <Route path="*" element={gated(<NotFound />)} />
     </Routes>

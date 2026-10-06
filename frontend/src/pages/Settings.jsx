@@ -12,7 +12,6 @@ import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
 import { formatCurrency, formatQuantity, formatDateTime, formatTimeAgo } from '../utils/formatters';
 import { Avatar } from '../components/common/Avatar';
-import { usePendingCount } from '../context/pendingContext';
 
 /**
  * Standing instructions for the real account: who the broker is, the limits
@@ -1405,19 +1404,15 @@ const ProfileRow = () => {
   );
 };
 
-/** Practice -- the strategy engine -- lives under More: its decisions, engine, book and setup. */
+/** Practice -- the strategy engine -- lives under More: engine, book, library and setup. Its decisions are under AI. */
 const PracticeRow = () => {
-  const pending = usePendingCount();
   return (
-    <Link to="/practice/decisions" className="flex items-center gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors">
+    <Link to="/practice" className="flex items-center gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors">
       <span className="flex-1 min-w-0">
         <span className="block text-sm font-semibold">
           Practice
-          {pending > 0 && (
-            <span className="ml-1.5 figure-md px-1 text-[0.5625rem] leading-4 bg-[var(--stamp)] text-[var(--paper)]">{pending}</span>
-          )}
         </span>
-        <span className="block doc-meta normal-case truncate">The strategy engine: decisions, engine, book and setup</span>
+        <span className="block doc-meta normal-case truncate">The strategy engine: engine, book, library and setup</span>
       </span>
       <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
     </Link>

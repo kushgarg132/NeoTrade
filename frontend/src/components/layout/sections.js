@@ -3,7 +3,7 @@ import { Sun, Wallet, Bot, Search, Settings } from 'lucide-react';
 /**
  * The five sections, shared by the desktop index and the phone's bottom bar,
  * laid out around the trader's day: Today (what needs me), Mine (my own
- * account), AI (the AI account only), Research, More (Practice -- the strategy
+ * account), AI (the AI account, plus Decisions on the engine's proposals and waiting cards), Research, More (Practice -- the strategy
  * engine -- plus setup).
  * `match` lists the path prefixes a section owns, so its tab stays lit on
  * every page inside it.
@@ -29,13 +29,13 @@ export const MINE_TABS = [
 
 export const AI_TABS = [
   { to: '/ai', label: 'Overview', end: true },
+  { to: '/ai/decisions', label: 'Decisions', counter: true },
   { to: '/ai/activity', label: 'Activity' },
   { to: '/ai/autopilot', label: 'Autopilot' },
 ];
 
-/** Practice: the strategy engine's proposals and its practice-money book. */
+/** Practice: the strategy engine and its practice-money book. Its proposals are decided under AI → Decisions. */
 export const PRACTICE_TABS = [
-  { to: '/practice/decisions', label: 'Decisions', counter: true },
   { to: '/practice', label: 'Engine', end: true },
   { to: '/practice/book', label: 'Book' },
   { to: '/practice/library', label: 'Library' },

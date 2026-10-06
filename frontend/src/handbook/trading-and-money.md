@@ -102,7 +102,11 @@ Every run still runs every strategy on paper; the gates decide only where orders
 - **AI game plan only tightens** — `backend/plan/`: may drop opening intents, shrink risk
   (0.25–1.0), cap positions or skip the day; never blocks an exit or touches conviction.
 
-## Long-term proposals (Decisions)
+## Long-term proposals (AI → Decisions)
+
+Decided at `/ai/decisions` (moved from Practice 2026-10-06; old paths redirect). Approving
+there never trades the AI account: fills go to paper or, on a second tap, to `mine`.
+
 
 - Made by the 16:00 IST scan (`backend/suggestions/scan.py::scan_universe`: ~400 days of
   history through the same runner, armed only on the final session) and by material news

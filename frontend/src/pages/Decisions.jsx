@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
-import { PRACTICE_TABS } from '../components/layout/sections';
+import { AI_TABS } from '../components/layout/sections';
 import SuggestionRecord from '../components/suggestions/SuggestionRecord';
 import useSymbolNews from '../hooks/useSymbolNews';
 import { Sheet, Empty, Ruling } from '../components/doc/Doc';
@@ -121,7 +121,7 @@ const Decisions = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4">
-        <SectionTabs tabs={PRACTICE_TABS} label="Practice" />
+        <SectionTabs tabs={AI_TABS} label="AI account" />
         <WaitingCards />
 
         <Sheet

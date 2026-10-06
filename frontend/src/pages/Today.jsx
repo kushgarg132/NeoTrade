@@ -99,7 +99,7 @@ const NeedsYou = ({ items, proposalsTotal }) => {
     title="Needs you"
     meta={items.length ? String(items.length + Math.max(hidden, 0)) : undefined}
     actions={
-      <Link to="/practice/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
+      <Link to="/ai/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
         All decisions ›
       </Link>
     }
