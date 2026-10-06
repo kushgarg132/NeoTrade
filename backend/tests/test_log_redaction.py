@@ -22,3 +22,15 @@ def test_other_paths_are_untouched():
     record = _record("/api/v1/scanner?x=1")
     RedactTokens().filter(record)
     assert "/api/v1/scanner?x=1" in record.getMessage()
+
+
+def test_websocket_handshake_line_is_redacted(caplog):
+    """uvicorn logs '"WebSocket <path>" [accepted]' on uvicorn.error, not
+    uvicorn.access."""
+    from backend.log_redaction import install
+
+    install()
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+        logging.getLogger("uvicorn.error").info('%s - "WebSocket %s" [accepted]', "1.2.3.4:5",
+                                                "/api/v1/ws?token=eyJhbGciOi.secret.sig")
+    assert "eyJ" not in caplog.text and "token=REDACTED" in caplog.text

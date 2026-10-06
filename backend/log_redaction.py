@@ -1,6 +1,6 @@
 """Keeps session tokens out of the access log. The live socket authenticates
-with ?token=<JWT> in its URL (backend/ws/routes.py), and uvicorn's access
-log printed the full path."""
+with ?token=<JWT> in its URL (backend/ws/routes.py), and uvicorn printed the
+full path: HTTP lines on uvicorn.access, WebSocket handshakes on uvicorn.error."""
 
 import logging
 import re
@@ -18,4 +18,5 @@ class RedactTokens(logging.Filter):
 
 
 def install() -> None:
-    logging.getLogger("uvicorn.access").addFilter(RedactTokens())
+    for name in ("uvicorn.access", "uvicorn.error"):
+        logging.getLogger(name).addFilter(RedactTokens())
