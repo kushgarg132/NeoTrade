@@ -84,10 +84,6 @@ class InstrumentMaster:
         )
         return _to_instrument(doc) if doc else None
 
-    async def get_by_token(self, token: int) -> Optional[Instrument]:
-        doc = await self.collection.find_one({"instrument_token": token})
-        return _to_instrument(doc) if doc else None
-
     async def option_contracts(self, underlying: str, option_type: str) -> list[Instrument]:
         """Every listed NFO contract of `option_type` (CE/PE) on `underlying`,
         as the connected broker's own instrument dump reported it, soonest

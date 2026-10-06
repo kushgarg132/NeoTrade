@@ -51,15 +51,6 @@ async def test_get_is_case_insensitive(master):
     assert (await master.get("NSE", "RELIANCE")) is not None
 
 
-async def test_get_by_token(master):
-    await master.upsert_many([_make_instrument(instrument_token=42)])
-    fetched = await master.get_by_token(42)
-    assert fetched is not None
-    assert fetched.tradingsymbol == "RELIANCE"
-
-    assert (await master.get_by_token(999)) is None
-
-
 async def test_upsert_many_idempotent(master):
     inst = _make_instrument()
     first = await master.upsert_many([inst])

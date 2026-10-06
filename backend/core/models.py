@@ -42,15 +42,6 @@ class Bar(BaseModel):
     warmup: bool = False
 
 
-class Tick(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    instrument_token: int
-    timestamp: datetime
-    last_price: float
-    volume: Optional[float] = None
-
-
 @dataclass(frozen=True)
 class Intent:
     """A strategy's raw trade idea, before any sizing/risk is applied.

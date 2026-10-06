@@ -1,12 +1,10 @@
 
 from backend.app_settings import current_llm_model
 from backend.configs.settings import settings
-from typing import Optional, List, Any, AsyncIterator, Dict, Union
+from typing import Optional, List, Any, AsyncIterator
 import contextlib
 import contextvars
 import logging
-import asyncio
-from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable, RunnableConfig
 
 logger = logging.getLogger(__name__)
@@ -144,11 +142,5 @@ class LLMService:
             return llms[0]
             
         return MultiKeyChain(llms)
-
-    def reload_keys(self):
-        """Reloads keys from global settings"""
-        from backend.configs.settings import settings
-        self.keys = settings.OMNIROUTE_API_KEYS
-        logger.info(f"LLMService keys reloaded. Count: {len(self.keys)}")
 
 llm_service = LLMService()

@@ -49,11 +49,3 @@ HIGH_VOLATILITY_PICKS = [
 def get_stock_symbol_nse(symbol: str) -> str:
     """Convert to yfinance NSE format"""
     return f"{symbol}.NS"
-
-def get_all_symbols_for_scan() -> list:
-    """Get all symbols in yfinance format"""
-    return [get_stock_symbol_nse(s) for s in HIGH_VOLATILITY_PICKS]
-
-def get_full_scan_list() -> list:
-    """Get full list of mid/small cap symbols"""
-    return [get_stock_symbol_nse(s) for s in ALL_SCAN_STOCKS]

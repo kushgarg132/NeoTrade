@@ -40,11 +40,6 @@ def _upstream(e: httpx.HTTPError):
     return HTTPException(status_code=502, detail=f"Upstox did not return the option data: {e}")
 
 
-@router.get("/underlyings")
-async def list_underlyings():
-    return [{"symbol": symbol, **info} for symbol, info in UNDERLYINGS.items()]
-
-
 @router.get("/expiries")
 async def get_expiries(underlying: Underlying, adapter=Depends(upstox_for)):
     try:

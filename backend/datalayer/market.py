@@ -4,7 +4,7 @@ risk regime, and one short AI-written market brief.
     calendar  (6h)   ForexFactory's weekly JSON -> Mongo `econ_calendar`
     flows     (30m)  NSE FII/DII cash flows -> Redis `market:flows`, Mongo `macro_series`
     regime    (60s)  rules over news + macro numbers -> Redis `market:regime` (no LLM)
-    brief     (60s)  at most one LLM call when due -> Redis `market:brief`, Mongo `market_briefs`
+    brief     (60s)  at most one LLM call when due -> Redis `market:brief`
 
 The brief is the only LLM call here, and it is rationed: every
 BRIEF_SESSION_SECONDS in session (and the 45 min before the open),
@@ -244,7 +244,6 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
     doc = {"text": text, "at": now.timestamp(), "regime": regime_now.get("label"),
            "items": [str(d["_id"]) for d in items]}
     await redis.set(BRIEF_KEY, json.dumps(doc))
-    await db["market_briefs"].insert_one({**doc, "at": now})
     return True
 
 

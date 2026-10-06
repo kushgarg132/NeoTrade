@@ -41,6 +41,3 @@ db = DatabaseManager()
 
 async def get_database():
     return db.db
-
-async def get_redis():
-    return db.redis

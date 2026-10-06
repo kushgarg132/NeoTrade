@@ -9,32 +9,15 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone
 from typing import Awaitable, Callable, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel, ValidationError
 
 from backend.configs.settings import settings
-from backend.engine.session import IST
 
 logger = logging.getLogger(__name__)
-CALLS_KEY = "ai:calls:{}"
 FINAL_TURN = "Answer now from what you have; no more tools."
-
-
-async def reserve_ai_call(redis, now: Optional[datetime] = None) -> bool:
-    """One model round from today's tool-call allowance (AI_TOOL_CALLS_PER_DAY)."""
-    if redis is None:
-        return True
-    day = (now or datetime.now(timezone.utc)).astimezone(IST).date().isoformat()
-    key = CALLS_KEY.format(day)
-    used = int(await redis.incrby(key, 1))
-    await redis.expire(key, 2 * 86400)
-    if used > settings.AI_TOOL_CALLS_PER_DAY:
-        await redis.incrby(key, -1)
-        return False
-    return True
 
 
 def _text(message) -> str:
