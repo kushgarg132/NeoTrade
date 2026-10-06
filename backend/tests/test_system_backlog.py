@@ -85,3 +85,15 @@ def test_backlog_is_admin_only(mongo):
     assert client.post(URL, json={"title": "x", "area": "UI"}).status_code == 403
     assert client.patch(f"{URL}/0123456789abcdef01234567", json={"why": "x"}).status_code == 403
     assert client.delete(f"{URL}/0123456789abcdef01234567").status_code == 403
+
+
+def test_seed_is_idempotent(mongo):
+    import asyncio
+
+    from backend.system.seed_backlog import SEED, seed
+
+    assert asyncio.run(seed(mongo)) == len(SEED)
+    assert asyncio.run(seed(mongo)) == 0
+    docs = asyncio.run(mongo["backlog"].find().to_list(length=None))
+    assert len(docs) == len(SEED) and all(d["source"] for d in docs)
+    assert len({d["title"] for d in SEED}) == len(SEED)
