@@ -125,6 +125,20 @@ _PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "
 # v3 refuses a minute range over a month ("Invalid date range"); days take a decade.
 _CHUNK_DAYS = {"minutes": 28, "days": 3650}
 _RETRIES_429 = 4
+# Spacing between history calls, per process: a year of 5-minute bars for the
+# gate's 75 names is ~975 calls, and Upstox counts per second, minute and
+# half hour (2,000). 0.5 s keeps under all three; a 429 still backs off.
+_HISTORY_SPACING = 0.5
+_history_lock = asyncio.Lock()
+_history_last = [0.0]
+
+
+async def _space_history_call() -> None:
+    async with _history_lock:
+        wait = _history_last[0] + _HISTORY_SPACING - asyncio.get_running_loop().time()
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _history_last[0] = asyncio.get_running_loop().time()
 _PRODUCT_FROM_UPSTOX = {"I": "MIS", "D": "CNC"}
 # "D" is delivery for equity and carry-forward for F&O, so NRML maps there too.
 _PRODUCT_MAP = {"MIS": "I", "CNC": "D", "NRML": "D"}
@@ -306,6 +320,7 @@ class UpstoxAdapter:
                 url = _HISTORY_URL.format(key=row["instrument_key"], unit=unit, n=n,
                                           to_date=end.isoformat(), from_date=chunk_from.isoformat())
                 for attempt in range(_RETRIES_429 + 1):
+                    await _space_history_call()
                     resp = await client.get(url, headers=self._headers(token))
                     if resp.status_code != 429 or attempt == _RETRIES_429:
                         break

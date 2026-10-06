@@ -172,6 +172,50 @@ async def test_run_all_retunes_the_daily_strategies_on_real_backtests(monkeypatc
     assert len(fetches) == len(set(fetches))  # memoised: each period fetched once
 
 
+@pytest.mark.asyncio
+async def test_run_all_retunes_5_minute_strategies_only_with_an_intraday_source(monkeypatch):
+    """Wiring only: with a 5-minute history source every intraday strategy
+    with a GRID gets a record; without one they are skipped, not run on
+    yfinance's ~60 days."""
+    from backend.components.quant import indian_stocks
+    from backend.components.shared.models import PriceCandle
+    from backend.instruments.master import InstrumentMaster
+    from backend.instruments.models import Instrument
+
+    db = AsyncMongoMockClient()["t"]
+    await InstrumentMaster(db).upsert_many([Instrument(
+        exchange="NSE", tradingsymbol="TEST", name="Test", instrument_token=42, exchange_token=42,
+        instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)])
+    monkeypatch.setattr(indian_stocks, "ALL_SCAN_STOCKS", ["TEST"])
+    monkeypatch.setattr(retune, "WINDOW_DAYS", {"5m": 6})
+    monkeypatch.setattr(retune, "WARMUP_DAYS", {"5m": 1})
+    now = datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc)
+    rng = random.Random(2)
+    close, candles = 100.0, []
+    for day in range(7):
+        open_at = datetime(2026, 9, 25, 3, 45, tzinfo=timezone.utc) + timedelta(days=day)
+        for i in range(75):
+            close *= 1 + rng.gauss(0, 0.003)
+            candles.append(PriceCandle(symbol="TEST", timestamp=open_at + timedelta(minutes=5 * i), open=close,
+                                       high=close * 1.002, low=close * 0.998, close=close, volume=1000 + rng.random() * 3000))
+
+    class _Provider:
+        async def history(self, instrument, interval, period):
+            return candles
+
+        async def quote(self, instrument):
+            return {}
+
+    assert await retune.run_all(db, _Provider(), now) == []  # no intraday source: skipped
+    docs = await retune.run_all(db, _Provider(), now, intraday=_Provider())
+    from backend.strategies.registry import build_default_strategies
+
+    intraday = {s.spec.name for s in build_default_strategies(universe=["TEST"])
+                if s.spec.timeframe == "5m" and getattr(s, "GRID", None)}
+    assert {d["strategy"] for d in docs} == intraday
+    assert all(not d["reason"].startswith("failed") for d in docs)
+
+
 def test_a_variant_keeps_the_strategys_news_and_sector_inputs():
     from backend.learning.retune import variant
     from backend.strategies.registry import build_default_strategies

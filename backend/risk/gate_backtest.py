@@ -28,6 +28,25 @@ logger = logging.getLogger(__name__)
 OPTIONS_STRATEGIES = {"orb_options"}
 
 
+async def intraday_history(db, redis):
+    """(broker name, adapter) serving a year of 5-minute candles, or (None, None):
+    the admin's Upstox session (free),
+    else Kite (needs Kite Connect's paid historical data). yfinance serves
+    only ~60 days of intraday bars, too short for the gate or a re-tune."""
+    from backend.auth.broker_credentials import get_credential_store
+    from backend.brokers.protocol import BrokerSessionState
+    from backend.brokers.registry import get_broker_adapter
+
+    admin = await db["users"].find_one({"role": "admin"}, {"id": 1})
+    if admin is None or redis is None:
+        return None, None
+    for name in ("upstox", "kite"):
+        adapter = await get_broker_adapter(name, admin["id"], get_credential_store(), redis)
+        if await adapter.state() == BrokerSessionState.ACTIVE:
+            return name, adapter
+    return None, None
+
+
 async def backtest_account(db) -> dict:
     """The account the gate and the retune test against: the admin's own
     sizing (the gate is admin-triggered and shared), so backtests size like

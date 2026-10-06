@@ -596,12 +596,11 @@ async def run_gate_backtest(strategy_name: str, admin: User = Depends(require_ad
     historical data), else yfinance, whose ~60 days of intraday history cannot
     clear the gate's one-year window. Runs in the background; GET the same
     path for the result."""
-    provider, history = YFinanceProvider(), "yfinance"
-    for name in ("upstox", "kite"):
-        adapter = await get_broker_adapter(name, admin.id, get_credential_store(), db.redis)
-        if await adapter.state() == BrokerSessionState.ACTIVE:
-            provider, history = adapter, name
-            break
+    from backend.risk.gate_backtest import intraday_history
+
+    history, provider = await intraday_history(db.db, db.redis)
+    if provider is None:
+        history, provider = "yfinance", YFinanceProvider()
 
     async def _run():
         try:

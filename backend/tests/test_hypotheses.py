@@ -23,12 +23,13 @@ def _strategies():
     return {s.spec.name: s for s in build_default_strategies(universe=["X"])}
 
 
-def test_only_known_daily_strategies_and_their_own_keys_within_bounds_pass():
+def test_only_known_strategies_and_their_own_keys_within_bounds_pass():
     s = _strategies()
     ok = validate({"strategy": "macd_crossover", "params": {"stop_pct": 0.04}, "rationale": "r"}, s)
     assert ok == {"strategy": "macd_crossover", "params": {"stop_pct": 0.04, "target_pct": 0.06}, "rationale": "r"}
     assert validate({"strategy": "nope", "params": {"stop_pct": 0.04}}, s) is None
-    assert validate({"strategy": "volume_surge", "params": {"volume_mult": 4.5}}, s) is None  # intraday: untestable
+    # Intraday too, now that a year of 5-minute bars comes from Upstox.
+    assert validate({"strategy": "volume_surge", "params": {"volume_mult": 4.5}}, s)["params"]["volume_mult"] == 4.5
     assert validate({"strategy": "macd_crossover", "params": {"leverage": 3}}, s) is None
     assert validate({"strategy": "macd_crossover", "params": {"stop_pct": 0.5}}, s) is None  # > 4x default
     assert validate({"strategy": "macd_crossover", "params": {"stop_pct": "wide"}}, s) is None

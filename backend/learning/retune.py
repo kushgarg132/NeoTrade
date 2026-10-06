@@ -9,8 +9,10 @@ and its deflated Sharpe (backend/factor/validate.py) clears MIN_DSR counting
 every variant ever tried for that strategy. Every attempt is recorded in
 `strategy_retunes`; the latest accepted one per strategy is what runs.
 
-Only daily-bar strategies are re-tuned: yfinance serves ~60 days of
-5-minute bars, too short a test window for any deflated Sharpe to pass.
+Daily-bar strategies are re-tuned on three years of yfinance closes;
+5-minute ones on a year from the admin's Upstox (or Kite) session
+(backend/risk/gate_backtest.py::intraday_history), and skipped when neither
+is logged in -- yfinance's ~60 days of 5-minute bars is too short a test.
 
 CPU-heavy (dozens of multi-year backtests), so the daily pass starts it as
 its own low-priority process (`python -m backend.learning.retune`), never
@@ -29,11 +31,11 @@ from backend.factor.validate import deflated_sharpe
 
 logger = logging.getLogger(__name__)
 
-WINDOW_DAYS = {"1d": 3 * 365}
+WINDOW_DAYS = {"1d": 3 * 365, "5m": 365}
 TRAIN_SHARE = 2 / 3
 # Calendar days of history before the test part, so 200-day averages and
 # indicator warmups are ready when it starts. Trades before it don't count.
-WARMUP_DAYS = {"1d": 300}
+WARMUP_DAYS = {"1d": 300, "5m": 7}
 MIN_TRAIN_TRADES = 20
 MIN_DSR = 0.95
 ACCOUNT = 1_000_000.0  # run_backtest's default account_size
@@ -147,7 +149,8 @@ def variant(strategy, universe: list[str], symbol_for_token: dict[int, str], par
     return type(strategy)(universe, symbol_for_token, params, **kept)
 
 
-async def run_all(db, provider, now: datetime) -> list[dict]:
+async def run_all(db, provider, now: datetime, intraday=None) -> list[dict]:
+    """`provider` serves daily bars; `intraday` (or None, skipping them) 5-minute ones."""
     from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
     from backend.engine.backtest import run_backtest
     from backend.instruments.master import InstrumentMaster
@@ -158,7 +161,7 @@ async def run_all(db, provider, now: datetime) -> list[dict]:
     instruments = [i for s in ALL_SCAN_STOCKS if (i := await master.get("NSE", s)) is not None]
     universe = [i.tradingsymbol for i in instruments]
     symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
-    memo = _Memo(provider)
+    memos = {"1d": _Memo(provider), "5m": _Memo(intraday) if intraday is not None else None}
     accepted = await current_params(db)
     from backend.risk.gate_backtest import backtest_account
     account = await backtest_account(db)  # size like the account that trades
@@ -170,11 +173,12 @@ async def run_all(db, provider, now: datetime) -> list[dict]:
     for strategy in build_default_strategies(universe=universe, symbol_for_token=symbol_for_token, params=accepted,
                                              catalysts=catalysts, sector_of=nifty200_sectors()):
         timeframe = strategy.spec.timeframe
-        if not getattr(strategy, "GRID", None) or timeframe not in WINDOW_DAYS:
+        if not getattr(strategy, "GRID", None) or timeframe not in WINDOW_DAYS or memos.get(timeframe) is None:
             continue
+        memo = memos[timeframe]
         name = strategy.spec.name
 
-        async def backtest(params, start, end, strategy=strategy, timeframe=timeframe):
+        async def backtest(params, start, end, strategy=strategy, timeframe=timeframe, memo=memo):
             return await run_backtest([variant(strategy, universe, symbol_for_token, params)], memo, instruments,
                                       start=start, end=end, timeframe=timeframe, **account)
 
@@ -222,11 +226,15 @@ async def _main() -> None:
     from backend.strategies.registry import build_default_strategies
 
     await db.connect_to_database()
+    from backend.risk.gate_backtest import intraday_history
+
     now = datetime.now(timezone.utc)
+    source, intraday = await intraday_history(db.db, db.redis)
+    print("intraday history:", source or "none (5-minute strategies skipped)", flush=True)
     strategies = {s.spec.name: s for s in build_default_strategies(params=await current_params(db.db))}
     for h in await propose(db.db, strategies, now):
         print("hypothesis queued:", h["strategy"], h["params"], "-", h["rationale"], flush=True)
-    for doc in await run_all(db.db, YFinanceProvider(), now):
+    for doc in await run_all(db.db, YFinanceProvider(), now, intraday=intraday):
         print(doc["strategy"], "accepted" if doc["accepted"] else "kept", "-", doc["reason"], flush=True)
 
 

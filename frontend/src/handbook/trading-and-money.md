@@ -167,9 +167,11 @@ trades), **Strategies** (which strategy is good enough, the track record, learni
 - **Scorecard** — `backend/analytics.py::compute_scorecard`: net of charges, per day and per
   strategy, profit factor, win rate, max drawdown, NIFTY 50 over the same days.
 - **Learning loop** — `backend/learning/`: nightly, pause a strategy losing over ≥ 30 trades,
-  raise its strength floor, skip a losing regime (entries only). Monthly re-tune on daily-bar
-  strategies with a Deflated Sharpe guard; the LLM may only *suggest* thresholds, which are
-  tested like any other variant. Shown under Practice → Strategies → What the engine learned.
+  raise its strength floor, skip a losing regime (entries only). Monthly re-tune with a Deflated
+  Sharpe guard: daily-bar strategies on three years of yfinance closes, 5-minute ones on a year
+  from the admin's Upstox (or Kite) session (`backend/risk/gate_backtest.py::intraday_history`),
+  skipped when neither is logged in. The LLM may only *suggest* thresholds, which are tested like
+  any other variant. Shown under Practice → Strategies → What the engine learned.
 
 ## Portfolio (Mine → Holdings)
 
