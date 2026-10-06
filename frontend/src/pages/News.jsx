@@ -55,7 +55,8 @@ const Item = ({ item }) => (
 
 const News = () => {
   const [scope, setScope] = useState('');
-  const [mine, setMine] = useState(false);
+  // Names you hold or watch first; the whole wire is one tap away.
+  const [mine, setMine] = useState(true);
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
   const [more, setMore] = useState(false);
@@ -102,6 +103,12 @@ const News = () => {
             <Empty
               title="Nothing here yet"
               detail={mine ? 'No recent news on the names you hold or watch.' : 'No stored news for this filter.'}
+              action={mine && (
+                <button type="button" onClick={() => setMine(false)}
+                        className="min-h-11 px-3 text-sm border border-[var(--rule-strong)]">
+                  Show all news
+                </button>
+              )}
             />
           ) : (
             <>

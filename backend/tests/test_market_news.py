@@ -87,7 +87,11 @@ def test_news_feed_filters_to_the_users_names(monkeypatch):
     asyncio.run(mongo["news_items"].insert_many([
         item("tcs", 1, symbols=["TCS"]), item("infy", 2, impacts=[{"type": "symbol", "target": "INFY"}]),
         item("rbi", 3, scope="MACRO"), item("junk", 4, status="IRRELEVANT"),
+        item("record-date", 5, source="NSE filing", symbols=["WIPRO"]),
+        item("order-win", 6, source="NSE filing", symbols=["HDFCBANK"], impacts=[{"type": "symbol", "target": "HDFCBANK"}]),
     ]))
+    asyncio.run(mongo["portfolio_snapshots"].insert_one(
+        {"user_id": "alice", "at": now, "holdings": [{"symbol": "HDFCBANK"}, {"symbol": "WIPRO"}]}))
     asyncio.run(mongo["paper_positions"].insert_one({"user_id": "alice", "symbol": "TCS.NS", "quantity": 1}))
     asyncio.run(mongo["watchlist"].insert_one({"user_id": "alice", "symbols": ["INFY"]}))
 
@@ -97,8 +101,10 @@ def test_news_feed_filters_to_the_users_names(monkeypatch):
                                                              created_at=now)
     client = TestClient(app)
     ids = lambda **params: [i["id"] for i in client.get("/news/feed", params=params).json()["items"]]
-    assert ids() == ["tcs", "infy", "rbi"]
-    assert ids(mine=True) == ["tcs", "infy"]
+    # A filing the scorer found moves nothing is left out; one that moves a name stays.
+    assert ids() == ["tcs", "infy", "rbi", "order-win"]
+    # Mine: paper positions, the watchlist and the broker holdings.
+    assert ids(mine=True) == ["tcs", "infy", "order-win"]
     assert ids(scope="MACRO") == ["rbi"]
     assert ids(limit=1) == ["tcs"]
 

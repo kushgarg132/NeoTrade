@@ -165,14 +165,17 @@ async def news_feed(
     user: User = Depends(get_current_user),
 ):
     """The ingest worker's news store (backend/datalayer/news.py), newest
-    first: relevant items, scored or still waiting to be. `mine` keeps the
-    ones tagged with or moving a name the user holds or watches; `before`
-    pages back by published time."""
+    first: relevant items, scored or still waiting to be. An NSE filing the
+    scorer found moves nothing (record dates, "Updates") is left out. `mine`
+    keeps the ones tagged with or moving a name the user holds (paper or at
+    the broker) or watches; `before` pages back by published time."""
     from backend.database import db
     from backend.datalayer.news import COLLECTION, SCORED, TRIAGED
     from backend.datalayer.prices import _bare
+    from backend.portfolio.service import latest_snapshot
 
-    query: dict = {"status": SCORED if material else {"$in": [SCORED, TRIAGED]}}
+    query: dict = {"status": SCORED if material else {"$in": [SCORED, TRIAGED]},
+                   "$nor": [{"source": "NSE filing", "status": SCORED, "impacts": {"$size": 0}}]}
     if material:
         query["material"] = True
     if scope:
@@ -182,7 +185,9 @@ async def news_feed(
     if mine:
         held = await db.db["paper_positions"].distinct("symbol", {"user_id": user.id, "quantity": {"$ne": 0}})
         watched = await db.db["watchlist"].distinct("symbols", {"user_id": user.id})
-        names = sorted({_bare(s) for s in [*held, *watched] if s})
+        snapshot = await latest_snapshot(db.db, user.id)
+        broker = [h.get("symbol") for h in (snapshot or {}).get("holdings", [])]
+        names = sorted({_bare(s) for s in [*held, *watched, *broker] if s})
         query["$or"] = [{"symbols": {"$in": names}}, {"impacts.target": {"$in": names}}]
     items = await db.db[COLLECTION].find(query, FEED_FIELDS).sort("published_at", -1).limit(limit).to_list(length=limit)
     for item in items:
