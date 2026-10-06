@@ -19,7 +19,7 @@ import journey from '../handbook/journey.md?raw';
  */
 const DOCS = { system, trading, ai, ops, journey };
 // Phone: a wide table scrolls inside itself and long code paths break, so the page never scrolls sideways.
-const WIDE = '[&_table]:block [&_table]:overflow-x-auto [&_table]:max-w-full [&_code]:[overflow-wrap:anywhere]';
+const WIDE = '[&_pre]:overflow-x-auto [&_pre]:max-w-full [&_table]:block [&_table]:overflow-x-auto [&_table]:max-w-full [&_code]:[overflow-wrap:anywhere]';
 
 const Handbook = () => {
   const [tab, setTab] = useTab(HANDBOOK_TABS.map((t) => t.id));

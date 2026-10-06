@@ -67,7 +67,7 @@ const LivePanel = ({ name, status }) => {
         {ROWS[name](block).map(([label, value]) => (
           <Row key={label}>
             <Cell className="text-[var(--ink-soft)]">{label}</Cell>
-            <Cell align="right" mono className="break-words">{value}</Cell>
+            <Cell align="right" mono className="whitespace-normal [overflow-wrap:anywhere]">{value}</Cell>
           </Row>
         ))}
       </Statement>
