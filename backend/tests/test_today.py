@@ -149,3 +149,28 @@ def test_broker_states_are_cached_between_polls(monkeypatch):
     client.get("/api/v1/today")
     client.get("/api/v1/today")
     assert len(calls) == 1
+
+
+def test_proposals_carry_their_terms_and_the_full_count(monkeypatch):
+    """Today shows at most a few proposals; each says what approving costs and
+    how sure the engine is, and the header says how many wait in all."""
+    client, db = _client(monkeypatch)
+    _seed(db, suggestions=[
+        {"id": f"p{i}", "user_id": "alice", "symbol": f"S{i}", "side": "BUY", "status": "PENDING", "mode": "LONGTERM",
+         "quantity": 2, "entry_ref": 100.0, "notional": 200.0, "score": {"final": 0.61},
+         "expires_at": NOW + timedelta(days=1), "created_at": NOW} for i in range(7)])
+    body = client.get("/api/v1/today").json()
+    proposals = [n for n in body["needs_you"] if n["kind"] == "proposal"]
+    assert len(proposals) == 5 and body["proposals_total"] == 7
+    assert proposals[0]["symbol"].startswith("S") and proposals[0]["entry"] == 100.0
+    assert proposals[0]["notional"] == 200.0 and proposals[0]["conviction"] == 0.61
+
+
+def test_attention_counts_what_needs_the_user_but_not_practice_proposals(monkeypatch):
+    client, db = _client(monkeypatch, states={"upstox": "ACTIVE"})
+    _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"kite": "ai", "upstox": "mine"}}],
+          suggestions=[{"id": "p", "user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "PENDING",
+                        "mode": "LONGTERM", "quantity": 1, "expires_at": NOW + timedelta(days=1), "created_at": NOW}],
+          chat_actions=[{"id": "c1", "user_id": "alice", "status": "PROPOSED", "summary": "Sell 10 INFY",
+                         "expires_at": NOW + timedelta(minutes=10), "created_at": NOW}])
+    assert client.get("/api/v1/today/attention").json() == {"count": 2}  # Kite login + the card

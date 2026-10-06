@@ -20,6 +20,7 @@ router = APIRouter(prefix="/today", tags=["Today"])
 logger = logging.getLogger(__name__)
 NAMES = {"kite": "Kite", "upstox": "Upstox", "angel_one": "Angel One"}
 MAX_PROPOSALS = 5
+PENDING_PROPOSALS = {"status": "PENDING", "mode": "LONGTERM"}  # what Decisions lists
 STATE_TTL = 60  # seconds a broker-session check is reused: Today polls every minute
 _STATE_CACHE: dict = {}  # user_id -> (checked_at, roles tuple, {role: info})
 
@@ -57,7 +58,8 @@ async def _accounts(roles: dict, user_id: str, broker_states) -> dict:
     return accounts
 
 
-async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict], now: datetime) -> list[dict]:
+async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict], now: datetime,
+                     proposals: bool = True) -> list[dict]:
     from backend.guardrails.store import GuardrailStore
 
     items = []
@@ -73,10 +75,14 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
         items.append({"kind": "review", "title": f"Check {s['symbol']}: an approval was interrupted",
                       "detail": s.get("reason") or "Check your broker's order book before approving again.",
                       "link": "/mine/trades"})
-    pending = await db.db["suggestions"].find({"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200)
+    pending = await db.db["suggestions"].find(PENDING_PROPOSALS | {"user_id": user_id}).to_list(length=200) if proposals else []
     pending.sort(key=lambda s: _aware(s.get("expires_at")) or now)
     for s in pending[:MAX_PROPOSALS]:
+        # The terms Decisions shows, so the row says what approving costs and how sure the engine is.
         items.append({"kind": "proposal", "title": f"{s.get('side', '')} {s.get('quantity', 0):g} {s['symbol']}",
+                      "symbol": s["symbol"], "side": s.get("side"), "quantity": s.get("quantity"),
+                      "entry": s.get("entry_ref"), "notional": s.get("notional"),
+                      "conviction": (s.get("score") or {}).get("final"),
                       "detail": s.get("mode", "").title(), "expires_at": _aware(s.get("expires_at")),
                       "link": "/practice/decisions"})
     async for card in db.db["chat_actions"].find({"user_id": user_id, "status": "PROPOSED"}):
@@ -183,6 +189,8 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
                        "strategies": prefs.get("live_strategies") or []},
         "kill_switch": kill,
         "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now)) or [],
+        "proposals_total": await part("proposals_total",
+                                      db.db["suggestions"].count_documents(PENDING_PROPOSALS | {"user_id": user.id})),
         "pnl_today": await part("pnl_today", _pnl_today(user.id, roles, now)),
         "ai_activity": log,
         "autopilot": await part("autopilot", _autopilot(user.id, prefs)),
@@ -190,3 +198,22 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         "backdrop": await part("backdrop", _backdrop(now)),
         "errors": errors,
     }
+
+
+@router.get("/attention")
+async def attention(user: User = Depends(get_current_user), broker_states=Depends(get_broker_states)):
+    """The navigation badge: what needs the user except the practice engine's
+    proposals (those are counted on Practice). Broker checks reuse Today's cache."""
+    from backend.prefs import PrefsStore
+    from backend.risk.kill_switch import KillSwitchStore
+
+    now = datetime.now(timezone.utc)
+    roles = (await PrefsStore(db.db).get(user.id)).get("broker_roles") or {}
+    try:
+        accounts = await _accounts(roles, user.id, broker_states)
+    except Exception as exc:
+        logger.warning("attention: broker states failed for %s: %s", user.id, exc)
+        accounts = None
+    tripped = await KillSwitchStore(db.db).is_tripped(user.id, now.astimezone(IST).date())
+    kill = {"tripped": bool(tripped), "reason": (tripped or {}).get("reason")}
+    return {"count": len(await _needs_you(user.id, accounts, kill, now, proposals=False))}
