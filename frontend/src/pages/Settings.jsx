@@ -814,15 +814,33 @@ const ProviderRow = ({ provider }) => (
   </li>
 );
 
+const USAGE_RETRIES = 5;
+const USAGE_RETRY_MS = 4000;
+
 const UsageSheet = () => {
   const [usage, setUsage] = useState(null);
   const [error, setError] = useState('');
 
+  // An old reading comes back at once with `refreshing`; ask again until the
+  // gateway's slow quota poll has landed (a few seconds), then stop.
   useEffect(() => {
-    api
-      .get(endpoints.settings.omnirouteUsage)
-      .then((res) => setUsage(res.data))
-      .catch((err) => setError(err?.response?.data?.detail || 'Could not read usage from the gateway.'));
+    let timer;
+    let tries = 0;
+    let live = true;
+    const load = () =>
+      api
+        .get(endpoints.settings.omnirouteUsage)
+        .then((res) => {
+          if (!live) return;
+          setUsage(res.data);
+          if (res.data.refreshing && ++tries <= USAGE_RETRIES) timer = setTimeout(load, USAGE_RETRY_MS);
+        })
+        .catch((err) => setError(err?.response?.data?.detail || 'Could not read usage from the gateway.'));
+    load();
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   return (
@@ -849,7 +867,11 @@ const UsageSheet = () => {
             {usage.cost.reset_at ? ` · resets ${formatDateTime(usage.cost.reset_at)}` : ''}
           </p>
           {/* Served from the last reading while the gateway's slow quota poll refreshes it. */}
-          {usage.as_of && <p className="doc-meta normal-case">Read {formatTimeAgo(usage.as_of)}</p>}
+          {usage.as_of && (
+            <p className="doc-meta normal-case" aria-live="polite">
+              Read {formatTimeAgo(usage.as_of)}{usage.refreshing ? ' · updating…' : ''}
+            </p>
+          )}
 
           <p className="field-label mt-4 mb-1">Providers · quota left</p>
           <p className="doc-meta normal-case mb-1">

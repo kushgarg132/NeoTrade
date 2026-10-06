@@ -377,15 +377,18 @@ async def fetch_usage() -> dict:
 
     OmniRoute polls every provider's quota API live on that call (3-5 s), so
     a reading older than a minute is still answered at once, with its
-    `as_of`, while one background refresh fetches the next. Only the first
-    call of a process waits on the gateway."""
+    `as_of` and `refreshing: true` (the page asks again), while one
+    background refresh fetches the next. Only the first call of a process
+    waits on the gateway."""
     global _USAGE_REFRESH
     body = _USAGE_CACHE.get("body")
     if body is None:
         return await _read_usage()
-    if time.monotonic() - _USAGE_CACHE["at"] >= USAGE_CACHE_SECONDS and (_USAGE_REFRESH is None or _USAGE_REFRESH.done()):
+    if time.monotonic() - _USAGE_CACHE["at"] < USAGE_CACHE_SECONDS:
+        return body
+    if _USAGE_REFRESH is None or _USAGE_REFRESH.done():
         _USAGE_REFRESH = asyncio.create_task(_refresh_usage_quietly())
-    return body
+    return {**body, "refreshing": True}
 
 
 @router.get("/settings/omniroute-usage")

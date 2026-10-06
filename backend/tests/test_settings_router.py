@@ -417,14 +417,14 @@ def test_a_stale_usage_reading_is_served_at_once_and_refreshed_behind(monkeypatc
         settings_router._USAGE_CACHE.update(at=time.monotonic() - 3600, body={"key_name": "old"})
 
         stale = await asyncio.wait_for(settings_router.fetch_usage(), timeout=1)
-        assert stale["key_name"] == "old"
+        assert stale["key_name"] == "old" and stale["refreshing"] is True  # the page asks again
         again = await asyncio.wait_for(settings_router.fetch_usage(), timeout=1)
         assert again["key_name"] == "old"  # one refresh in flight, not one per call
 
         release.set()
         await settings_router._USAGE_REFRESH
         fresh = await settings_router.fetch_usage()
-        assert fresh["key_name"] == "AI Stock" and fresh["as_of"]
+        assert fresh["key_name"] == "AI Stock" and fresh["as_of"] and not fresh.get("refreshing")
 
     asyncio.run(scenario())
 
