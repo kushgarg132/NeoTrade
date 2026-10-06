@@ -396,9 +396,19 @@ async def test_preopen_builds_one_plan_per_user_even_with_two_ticks(world, built
 async def test_no_plan_outside_the_window(world, built):
     await world.enable()
     await _tick(world, datetime(2026, 9, 28, 8, 30, tzinfo=IST))
-    await _tick(world, datetime(2026, 9, 28, 9, 20, tzinfo=IST))
+    await _tick(world, datetime(2026, 9, 28, 15, 40, tzinfo=IST))  # after the close
     await _tick(world, datetime(2026, 9, 27, 8, 50, tzinfo=IST))  # Sunday
     assert built == []
+
+
+async def test_no_plan_until_a_live_feed_then_one_before_the_run_starts(world, built):
+    await world.enable()
+    world.live["ready"] = False
+    await _tick(world, MONDAY_0846)
+    assert built == []  # no live feed, no auto run today: a plan would be an unused LLM call
+    world.live["ready"] = True
+    done = await _tick(world, MONDAY_10AM)  # logged in late: planned in the same tick, before the start
+    assert built == ["alice"] and done["started"] == ["alice"]
 
 
 async def test_skip_day_plan_keeps_the_auto_run_from_starting(world):

@@ -1015,7 +1015,11 @@ first `plan_scorecards` rows exist.
 the live catalog). News: `_prune` drops rewrites (title overlap ≥ 0.7 within a day), company
 news with no followed symbol and non-Latin copies before the deep call — ~10% of 3 days'
 2,443 scored items. Brief: hourly in session, skipped unless the regime moved or material
-news landed. Still open: 17.2.4–17.2.7.
+news landed. Plan: built only once the user has a live broker feed (the auto run's own
+check; window now 08:45 to the close, so a late login is planned before its run starts), paused
+strategies left out (all paused → fallback, no call), revisions ≤ 2 a day, tool rounds ≤ 2. The
+four-week plan-vs-no-plan review in 17.2.4 is still to do once `plan_scorecards` fills.
+Still open: 17.2.5–17.2.7.
 
 Done when: calls per day and tokens per call are visible per feature, fast-tier calls
 average under 500 output tokens, and the month's tokens fall by at least half at the

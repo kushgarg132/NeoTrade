@@ -59,6 +59,21 @@ async def test_budget_exhausted_skips_the_call(setup, monkeypatch):
     assert calls == [] and doc["trigger"] == "fallback"
 
 
+async def test_paused_strategies_are_left_out_and_all_paused_needs_no_call(setup):
+    mongo, redis = setup
+    everything = builder.intraday_strategies()
+    paused = sorted(everything)[0]
+    await mongo["learning_state"].insert_one({"user_id": "alice", "paused": {paused: NOW}})
+    complete, calls = _fake("Error generating response: 500")
+    doc = await builder.build_plan(mongo, redis, "alice", NOW, complete=complete)
+    assert len(calls) == 2 and paused not in doc["allow"][0]["strategies"]
+
+    await mongo["learning_state"].update_one({"user_id": "alice"}, {"$set": {"paused": {s: NOW for s in everything}}})
+    complete, calls = _fake("{}")
+    doc = await builder.build_plan(mongo, redis, "alice", NOW + timedelta(days=1), complete=complete)
+    assert calls == [] and doc["trigger"] == "fallback"
+
+
 async def test_news_names_join_the_candidates(setup):
     mongo, redis = setup
     await mongo["news_items"].insert_one({

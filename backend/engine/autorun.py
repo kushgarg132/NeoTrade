@@ -108,17 +108,21 @@ async def _stop_local(redis, runs: RunStore, slot: str) -> None:
 
 
 async def _preopen_plans(db, redis, now: datetime, user_ids: list[str]) -> list[str]:
-    """Builds today's plan once per auto-intraday user, across workers."""
+    """Builds today's plan once per auto-intraday user, across workers, once
+    that user has a live feed."""
     from backend.plan import builder, store
 
     local = now.astimezone(IST)
-    if local.weekday() >= 5 or not (PLAN_AT <= local.time() < SESSION_OPEN):
+    # Until the close: a broker login after the open still gets its plan before the run starts.
+    if local.weekday() >= 5 or not (PLAN_AT <= local.time() < SESSION_CLOSE):
         return []
     built = []
     for user_id in user_ids:
         try:
             if await store.current(redis, user_id, local.date()) is not None:
                 continue
+            if not await live_feed_ready(user_id):
+                continue  # no live feed, no auto run (_may_start): a plan would be an unused deep call
             if not await redis.set(PLAN_LOCK.format(user_id, local.date().isoformat()), _TOKEN, nx=True,
                                    px=3_600_000):
                 continue  # another worker is building it

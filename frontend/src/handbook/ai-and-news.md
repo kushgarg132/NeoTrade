@@ -46,7 +46,7 @@ Every prompt is a file in `backend/prompts/*.md` (system prompt in front matter,
 |---|---|---|
 | News scoring | `news:deep_calls:<IST day>` | `NEWS_LLM_CALLS_PER_DAY` (past it, the backlog waits for tomorrow, then goes STALE) |
 | Game plans | `plan:calls:<IST day>` | `PLAN_LLM_CALLS_PER_DAY` |
-| Tool rounds | per call, ≤ 4 rounds | each round spends the caller's own budget (plans: `plan:calls`); kill switch `AI_TOOLS_ENABLED` |
+| Tool rounds | per call, ≤ 4 rounds (plans ≤ 2) | each round spends the caller's own budget (plans: `plan:calls`); kill switch `AI_TOOLS_ENABLED` |
 
 Chat and research calls are not counted per task.
 
@@ -78,12 +78,14 @@ a Redis lock, streamed replies, Confirm / Cancel buttons through the same confir
 
 ## The game plan
 
-`backend/plan/`: at 08:45–09:15 IST one `deep` call per auto-intraday user builds a plan
-(allowed strategies and names, `risk_multiplier`, `max_positions`, `skip_day`), validated so
-it can only tighten; any failure stores a fallback plan. During the session `plan_revise`
-(ingest, 60 s) revises on material news about a planned or held name, a regime change, or a
-high-impact event — at most 6 a day, 15 min apart. Since Phase 16.2 the plan fetches its
-facts through tools first. The 16:00 pass replays each day with and without the plan.
+`backend/plan/`: from 08:45 IST, once the user has a live broker feed (`autorun.py::live_feed_ready`,
+the same check that starts the auto run — so a late login is planned before its run starts),
+one `deep` call per auto-intraday user builds a plan (allowed strategies and names,
+`risk_multiplier`, `max_positions`, `skip_day`), validated so it can only tighten; any failure
+stores a fallback plan. Paused strategies are left out (all paused → fallback, no call).
+During the session `plan_revise` (ingest, 60 s) revises on material news about a planned or
+held name, a regime change, or a high-impact event — at most 2 a day, 15 min apart. Since
+Phase 16.2 the plan fetches its facts through tools first (≤ 2 rounds, `builder.py::MAX_TOOL_ROUNDS`). The 16:00 pass replays each day with and without the plan.
 
 ## News
 

@@ -15,6 +15,7 @@ from backend.ai.sentiment import get_cached_sentiment
 from backend.datalayer.catalysts import catalyst_map
 from backend.datalayer.news_sources import nifty200_sectors
 from backend.engine.session import IST
+from backend.learning.adapt import load_rules
 from backend.llm import llm_service
 from backend.plan import store
 from backend.plan.validate import TradePlan, fallback_plan, validate
@@ -24,6 +25,8 @@ from backend.prompts import render
 logger = logging.getLogger(__name__)
 
 MAX_NEWS_NAMES = 30
+# Each round is a deep call; past two the plan rarely changes (Phase 17.2.4).
+MAX_TOOL_ROUNDS = 2
 BRIEF_CHARS = 1500
 CARD_KEYS = ("style", "regimes", "needs", "best_when", "avoid_when")
 
@@ -153,7 +156,7 @@ async def _plan_with_tools(db, redis, user_id: str, ctx: dict, strategies: set[s
     system, prompt = render("game_plan_tools", **seed)
     tools = as_tools(db, redis, user_id, ["price_summary", "news", "fundamentals", "positions"])
     out = await run_with_tools("game_plan", system=system, prompt=prompt, tools=tools, tier="deep",
-                               schema=PlanReply, llm=llm, reserve=lambda: store.reserve_call(redis, today))
+                               schema=PlanReply, llm=llm, max_rounds=MAX_TOOL_ROUNDS, reserve=lambda: store.reserve_call(redis, today))
     reply = out["output"]
     if not isinstance(reply, PlanReply):
         return None
@@ -174,11 +177,17 @@ async def build_plan(db, redis, user_id: str, now: datetime, complete=None, llm=
     today = now.astimezone(IST).date()
     prefs = await PrefsStore(db).get(user_id)
     universe = {_bare(s) for s in prefs["universe"] or []}
-    strategies = intraday_strategies()
+    everything = intraday_strategies()
+    # A paused strategy cannot trade today, so the plan spends no thought on it.
+    strategies = everything - (await load_rules(db, user_id)).paused
 
     async def fallback(reason: str) -> dict:
         logger.info("game plan for %s: fallback (%s)", user_id, reason)
-        return await store.save(db, redis, user_id, today, fallback_plan(strategies, universe, reason), now)
+        return await store.save(db, redis, user_id, today, fallback_plan(strategies or everything, universe, reason),
+                                now)
+
+    if not strategies:
+        return await fallback("every intraday strategy is paused")
 
     ctx = await _context(db, redis, user_id, prefs, universe, now)
     if complete is None:  # production: facts through tools first, the single call as fallback

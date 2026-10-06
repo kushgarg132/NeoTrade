@@ -20,7 +20,7 @@ from backend.plan.validate import validate
 
 logger = logging.getLogger(__name__)
 
-MAX_REVISIONS = 6
+MAX_REVISIONS = 2  # each is a deep call; was 6 before Phase 17.2.4
 MIN_GAP = timedelta(minutes=15)
 REGIME_SEEN = "plan:regime_seen"
 EVENT_KEY = "plan:event:{}"
@@ -149,13 +149,14 @@ async def _revise_with_tools(db, redis, user_id: str, values: dict, day, checked
     """The revised plan from the tool loop, or None to use the single call."""
     from backend.ai.facts import as_tools
     from backend.ai.runner import run_with_tools
-    from backend.plan.builder import PlanReply, _seed_values, ground_rationale
+    from backend.plan.builder import MAX_TOOL_ROUNDS, PlanReply, _seed_values, ground_rationale
     from backend.prompts import render
 
     system, prompt = render("game_plan_revision_tools", **values)
     tools = as_tools(db, redis, user_id, ["news", "price_summary", "positions"])
     out = await run_with_tools("plan_revision", system=system, prompt=prompt, tools=tools, tier="deep",
-                               schema=PlanReply, llm=llm, reserve=lambda: store.reserve_call(redis, day))
+                               schema=PlanReply, llm=llm, max_rounds=MAX_TOOL_ROUNDS,
+                               reserve=lambda: store.reserve_call(redis, day))
     if not isinstance(out["output"], PlanReply):
         return None
     revised = checked(out["output"].model_dump())
