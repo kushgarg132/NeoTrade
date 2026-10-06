@@ -33,7 +33,7 @@ const AiOverview = () => {
               <div className="h-1.5 mt-2 bg-[var(--paper-sunk)]" aria-hidden="true">
                 <div className="h-full" style={{ width: `${used}%`, background: 'var(--ai)' }} />
               </div>
-              <p className="field-label mt-3 mb-1">Today, closed</p>
+              <p className="field-label mt-3 mb-1">Today, closed, net of charges</p>
               <Money value={data.pnl_today?.ai} size="lg" />
               {!ap.enabled && (
                 <p className="doc-meta normal-case mt-2">The autopilot is off. Turn it on under Autopilot once an AI account is set.</p>

@@ -149,11 +149,11 @@ const PnlSplit = ({ pnl, aiMode, market, loadedAt, now }) => (
     ) : (
       <div className="grid grid-cols-2 gap-3">
         <Link to="/mine/trades" className="block p-2 -m-2 hover:bg-[var(--paper-sunk)]">
-          <p className="field-label mb-1"><MoneyBadge kind="mine" /> · closed, gross</p>
+          <p className="field-label mb-1"><MoneyBadge kind="mine" /> · closed, net</p>
           <Money value={pnl.mine} size="lg" />
         </Link>
         <Link to="/ai" className="block p-2 -m-2 hover:bg-[var(--paper-sunk)]">
-          <p className="field-label mb-1"><MoneyBadge kind="ai" mode={aiMode} /> · closed</p>
+          <p className="field-label mb-1"><MoneyBadge kind="ai" mode={aiMode} /> · closed, net</p>
           <Money value={pnl.ai} size="lg" />
         </Link>
       </div>

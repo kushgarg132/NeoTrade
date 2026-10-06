@@ -99,6 +99,7 @@ async def _pnl_today(user_id: str, roles: dict, now: datetime) -> dict:
     from backend.autopilot.service import ledger_user
     from backend.brokers.roles import brokers_for
     from backend.journal.roundtrips import build_round_trips
+    from backend.journal import mirror
     from backend.journal.store import JournalStore
 
     day_start = datetime.combine(now.astimezone(IST).date(), time(0, 0), tzinfo=IST)
@@ -107,13 +108,20 @@ async def _pnl_today(user_id: str, roles: dict, now: datetime) -> dict:
     # sold today is today's P&L), kept if they closed today.
     trades = [t for t in await JournalStore(db.db).list_trades(user_id)
               if not mine_brokers or t.get("broker") in mine_brokers]
-    mine = sum(t["pnl"] for t in build_round_trips(trades)
-               if t.get("pnl") is not None and (_aware(t.get("closed_at")) or day_start) >= day_start)
-    ai = 0.0
+    closed = [t for t in build_round_trips(trades)
+              if t.get("pnl") is not None and (_aware(t.get("closed_at")) or day_start) >= day_start]
+    # Net of charges on both sides, so the two figures compare: a broker's trade
+    # book carries none, so Mine's are estimated the way the journal mirror does.
+    ids = {i for trip in closed for i in trip["trade_ids"]}
+    mine_charges = mirror.costs([t for t in trades if t["_id"] in ids], closed, 0)["charges"]
+    mine = sum(t["pnl"] for t in closed) - mine_charges
+    ai = ai_charges = 0.0
     async for t in db.db["paper_trades"].find({"user_id": ledger_user(user_id)}):
         if t.get("status") == "CLOSED" and (_aware(t.get("exit_at")) or day_start) >= day_start:
             ai += t.get("realized_pnl") or 0.0
-    return {"mine": round(mine, 2), "ai": round(ai, 2)}
+            ai_charges += t.get("costs") or 0.0
+    return {"mine": round(mine, 2), "mine_charges": round(mine_charges, 2),
+            "ai": round(ai - ai_charges, 2), "ai_charges": round(ai_charges, 2)}
 
 
 async def _setup(user_id: str, prefs: dict) -> dict:

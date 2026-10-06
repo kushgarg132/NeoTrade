@@ -96,8 +96,11 @@ def test_pnl_today_splits_mine_and_ai(monkeypatch):
               {"_id": "t2", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "INFY",
                "side": "SELL", "quantity": 10, "price": 110.0, "traded_at": DAY + timedelta(minutes=2)}],
           paper_trades=[{"user_id": "alice:autopilot", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
-                         "realized_pnl": -50.0, "exit_at": DAY + timedelta(minutes=3), "venue": "paper"}])
-    assert client.get("/api/v1/today").json()["pnl_today"] == {"mine": 100.0, "ai": -50.0}
+                         "realized_pnl": -50.0, "costs": 5.0, "exit_at": DAY + timedelta(minutes=3), "venue": "paper"}])
+    pnl = client.get("/api/v1/today").json()["pnl_today"]
+    # Both sides net of charges: the broker book carries none, so Mine's are estimated.
+    assert pnl["ai"] == -55.0 and pnl["ai_charges"] == 5.0
+    assert 0 < pnl["mine_charges"] < 5 and pnl["mine"] == round(100.0 - pnl["mine_charges"], 2)
 
 
 def test_a_failing_part_degrades_not_errors(monkeypatch):
@@ -124,7 +127,8 @@ def test_selling_a_position_bought_before_today_counts_its_pnl(monkeypatch):
          "side": "BUY", "quantity": 10, "price": 90.0, "traded_at": DAY - timedelta(days=2)},
         {"_id": "t1", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "RELIANCE",
          "side": "SELL", "quantity": 10, "price": 100.0, "traded_at": DAY + timedelta(minutes=1)}])
-    assert client.get("/api/v1/today").json()["pnl_today"]["mine"] == 100.0
+    pnl = client.get("/api/v1/today").json()["pnl_today"]
+    assert pnl["mine"] == round(100.0 - pnl["mine_charges"], 2) and pnl["mine_charges"] > 0
 
 
 def test_activity_times_carry_their_timezone(monkeypatch):
