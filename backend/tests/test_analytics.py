@@ -113,7 +113,7 @@ async def test_an_empty_book_reports_zeroes_not_errors(ledger):
     pnl = await compute_pnl(ledger, mark_prices={}, now=NOW)
 
     assert pnl["today"] == {"realized": 0.0, "unrealized": 0.0, "trades": 0, "wins": 0,
-                            "losses": 0, "turnover": 0.0}
+                            "losses": 0, "turnover": 0.0, "costs": 0, "net": 0}
     assert pnl["month"]["win_rate"] == 0.0
     assert pnl["open"]["equity"] == 0.0
 
