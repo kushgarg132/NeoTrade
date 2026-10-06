@@ -37,3 +37,4 @@ test('an IST date boundary: 23:00 IST on the 5th is not today', () => {
 test('no trades: zeroes and an empty curve', () => {
   assert.deepEqual(periodSummary([], 'all', now), { net: 0, trades: 0, wins: 0, winRate: null, curve: [] });
 });
+

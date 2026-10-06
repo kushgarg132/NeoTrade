@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -14,6 +14,7 @@ import PaperShell from '../components/paper/PaperShell';
 import { paperPositions } from '../utils/books';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
 import { Badge } from '../components/common/Badge';
+import { periodSummary } from '../utils/practice';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
@@ -25,11 +26,12 @@ import {
   formatNoteDate,
   formatPercent,
   formatClock,
+  marketPhase,
 } from '../utils/formatters';
 
 /**
- * The holdings book: what is open, marked live, and the running result of
- * everything already closed.
+ * Practice → Book: how the practice money is doing -- one net-of-charges
+ * figure for the chosen period with its curve, what is open, and the fills.
  *
  * The curve is built from closed round trips rather than a stored equity
  * series — the ledger records trades, and inventing a smoother series than
@@ -42,16 +44,20 @@ const CurveTooltip = ({ active, payload }) => {
   return (
     <div className="sheet px-3 py-2 text-xs">
       <p className="doc-meta">{point.label}</p>
-      <p className="figure-md mt-1">{formatCurrency(point.cumulative)}</p>
+      <p className="figure-md mt-1">{formatCurrency(point.net)}</p>
     </div>
   );
 };
 
+const CLOSED_LIMIT = 1000;
+const PERIODS = [['today', 'Today'], ['month', 'Month'], ['all', 'All time']];
+
 const Portfolio = () => {
-  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const period = PERIODS.some(([id]) => id === params.get('period')) ? params.get('period') : 'all';
+  const [openRow, setOpenRow] = useState(null);
   const [positions, setPositions] = useState({});
   const [trades, setTrades] = useState([]);
-  const [pnl, setPnl] = useState(null);
   const [fills, setFills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -62,13 +68,12 @@ const Portfolio = () => {
   const load = () => {
     Promise.all([
       api.get(endpoints.trading.positions('paper')),
-      api.get(endpoints.trading.trades('CLOSED', 'paper')),
-      api.get(endpoints.analytics.pnl('paper')),
+      // The API's maximum; past it All time says it covers only the newest (CLOSED_LIMIT).
+      api.get(endpoints.trading.trades('CLOSED', 'paper'), { params: { limit: CLOSED_LIMIT } }),
     ])
-      .then(([positionsRes, tradesRes, pnlRes]) => {
+      .then(([positionsRes, tradesRes]) => {
         setPositions(positionsRes.data);
         setTrades(tradesRes.data);
-        setPnl(pnlRes.data);
         setError(null);
       })
       .catch((err) => setError(err?.response?.data?.detail || 'Could not load the book'))
@@ -97,32 +102,24 @@ const Portfolio = () => {
   const cancelOpenOrder = (id) =>
     api.post(endpoints.orders.cancelPaper(id)).finally(loadOpenOrders);
   useTopic('positions', (message) => setPositions(paperPositions(message.data)));
-  useTopic('pnl', (message) => message.data?.paper && setPnl(message.data.paper));
   useTopic('trades', load);
   useReconnect(() => {
     load();
     loadOpenOrders();
   });
 
-  const curve = useMemo(() => {
-    const closed = [...trades]
-      .filter((trade) => trade.exit_at)
-      .sort((a, b) => new Date(a.exit_at) - new Date(b.exit_at));
-    return closed.reduce((points, trade) => {
-      const previous = points.length ? points[points.length - 1].cumulative : 0;
-      points.push({
-        label: `${formatNoteDate(new Date(trade.exit_at))} · ${trade.symbol}`,
-        cumulative: previous + (trade.realized_pnl || 0),
-      });
-      return points;
-    }, []);
-  }, [trades]);
+  const summary = useMemo(() => periodSummary(trades, period), [trades, period]);
+  const curve = useMemo(
+    () => summary.curve.map((point) => ({ ...point, label: formatNoteDate(new Date(point.t)) })),
+    [summary]
+  );
 
   const open = Object.values(positions);
   const sortedFills = [...fills].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 25);
   // Latest 10 by default: the full list was most of the page on a phone.
   const recentFills = allFills ? sortedFills : sortedFills.slice(0, 10);
-  const realisedTotal = curve.length ? curve[curve.length - 1].cumulative : 0;
+  const closedMarket = marketPhase() !== 'open';
+  const unrealisedTotal = open.reduce((sum, p) => sum + (p.unrealized_pnl || 0), 0);
 
   if (loading) {
     return (
@@ -145,47 +142,50 @@ const Portfolio = () => {
           </Sheet>
         )}
 
-        <Sheet title="Realised result" meta={`${curve.length} closed`}>
-          {curve.length === 0 ? (
-            <Empty
-              title="No closed trades yet"
-              detail="The curve is drawn from completed round trips, so it starts once a position returns to flat."
-            />
+        <Sheet
+          title="Practice money"
+          meta={summary.trades ? `${summary.trades} closed · ${formatPercent(summary.winRate * 100)} won · net of charges` : 'Net of charges'}
+        >
+          <div className="grid grid-cols-3 border border-[var(--rule-strong)] mb-3" role="tablist" aria-label="Period">
+            {PERIODS.map(([id, label]) => (
+              <button key={id} type="button" role="tab" aria-selected={period === id}
+                      onClick={() => setParams(id === 'all' ? {} : { period: id }, { replace: true })}
+                      className={cn('min-h-11 field-label touch-manipulation',
+                        period === id ? 'bg-[var(--ink)] text-[var(--paper)]' : 'text-[var(--ink-soft)] hover:text-[var(--ink)]')}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {period === 'all' && trades.length >= CLOSED_LIMIT && (
+            <p className="doc-meta normal-case pb-2">Covers the newest {CLOSED_LIMIT} closed trades.</p>
+          )}
+          {summary.trades === 0 ? (
+            <p className="doc-meta normal-case py-2">No closed trades this period.</p>
           ) : (
             <>
-              <div className="h-48 -mx-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={curve} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
-                    <defs>
-                      <linearGradient id="curve-ink" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--stamp)" stopOpacity={0.22} />
-                        <stop offset="100%" stopColor="var(--stamp)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="label" hide />
-                    <YAxis
-                      width={54}
-                      tick={{ fontSize: 10, fill: 'var(--ink-faint)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(value) => formatQuantity(value)}
-                    />
-                    <ReferenceLine y={0} stroke="var(--rule-strong)" strokeWidth={1} />
-                    <Tooltip content={<CurveTooltip />} cursor={{ stroke: 'var(--rule-strong)' }} />
-                    <Area
-                      type="monotone"
-                      dataKey="cumulative"
-                      stroke="var(--stamp)"
-                      strokeWidth={1.5}
-                      fill="url(#curve-ink)"
-                      isAnimationActive={false}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-              <NetLine label="Realised, all time">
-                <Money value={realisedTotal} size="lg" />
+              <NetLine label={PERIODS.find(([id]) => id === period)[1]}>
+                <Money value={summary.net} size="lg" />
               </NetLine>
+              {curve.length > 1 && (
+                <div className="h-40 -mx-2 mt-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={curve} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+                      <defs>
+                        <linearGradient id="curve-ink" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--stamp)" stopOpacity={0.22} />
+                          <stop offset="100%" stopColor="var(--stamp)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="label" hide />
+                      <YAxis width={54} tick={{ fontSize: 10, fill: 'var(--ink-faint)' }} axisLine={false} tickLine={false}
+                             tickFormatter={(value) => formatQuantity(value)} />
+                      <ReferenceLine y={0} stroke="var(--rule-strong)" strokeWidth={1} />
+                      <Tooltip content={<CurveTooltip />} cursor={{ stroke: 'var(--rule-strong)' }} />
+                      <Area type="monotone" dataKey="net" stroke="var(--stamp)" strokeWidth={1.5} fill="url(#curve-ink)" isAnimationActive={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </>
           )}
         </Sheet>
@@ -198,56 +198,38 @@ const Portfolio = () => {
             />
           ) : (
             <>
-              <Statement
-                columns={[
-                  { key: 'scrip', label: 'Scrip' },
-                  { key: 'qty', label: 'Qty', align: 'right' },
-                  { key: 'avg', label: 'Avg cost', align: 'right' },
-                  { key: 'value', label: 'Value', align: 'right' },
-                  { key: 'unreal', label: 'Unrealised', align: 'right' },
-                  { key: 'trade', label: '', align: 'right' },
-                ]}
-              >
+              {/* One compact row each; a tap reveals Sell / Add, which are rarely used. */}
+              <ul className="divide-y divide-[var(--rule)]">
                 {open.map((position) => (
-                  <Row
-                    key={position.symbol}
-                    className="cursor-pointer hover:bg-[var(--paper-sunk)]"
-                    onClick={() => navigate(stockPath(position.symbol))}
-                  >
-                    <Cell>
-                      <Scrip symbol={position.symbol} />
-                    </Cell>
-                    <Cell align="right" mono>
-                      {formatQuantity(position.quantity)}
-                    </Cell>
-                    <Cell align="right" mono>
-                      {formatCurrency(position.avg_price)}
-                    </Cell>
-                    <Cell align="right" mono>
-                      {formatCurrency(position.quantity * position.avg_price)}
-                    </Cell>
-                    <Cell align="right">
-                      <Money value={position.unrealized_pnl} />
-                    </Cell>
-                    <Cell align="right">
-                      <span className="inline-flex gap-2">
-                        <TicketButton
-                          label="Sell"
-                          tone="loss"
-                          onClick={() => setTicket({ symbol: position.symbol, side: 'SELL' })}
-                        />
-                        <TicketButton label="Add" onClick={() => setTicket({ symbol: position.symbol })} />
+                  <li key={position.symbol} className="py-2">
+                    <button type="button" onClick={() => setOpenRow((s) => (s === position.symbol ? null : position.symbol))}
+                            aria-expanded={openRow === position.symbol}
+                            className="w-full flex items-baseline gap-3 text-left min-h-11">
+                      <span className="min-w-0 flex-1">
+                        <Scrip symbol={position.symbol} />
+                        <span className="block doc-meta normal-case">
+                          {formatQuantity(position.quantity)} @ {formatCurrency(position.avg_price)} · {formatCurrency(position.quantity * position.avg_price)}
+                        </span>
                       </span>
-                    </Cell>
-                  </Row>
+                      <span className="text-right">
+                        <Money value={position.unrealized_pnl} />
+                        {closedMarket && <span className="block doc-meta normal-case">at last close</span>}
+                      </span>
+                    </button>
+                    {openRow === position.symbol && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <TicketButton label="Sell" tone="loss" onClick={() => setTicket({ symbol: position.symbol, side: 'SELL' })} />
+                        <TicketButton label="Add" onClick={() => setTicket({ symbol: position.symbol })} />
+                        <Link to={stockPath(position.symbol)} className="field-label text-[var(--stamp)] hover:underline ml-auto">Stock ›</Link>
+                      </div>
+                    )}
+                  </li>
                 ))}
-              </Statement>
+              </ul>
 
-              {pnl && (
-                <NetLine label="Marked to market">
-                  <Money value={pnl.today.unrealized} size="lg" />
-                </NetLine>
-              )}
+              <NetLine label={closedMarket ? 'Unrealised, at last close' : 'Unrealised, marked now'}>
+                <Money value={unrealisedTotal} size="lg" />
+              </NetLine>
             </>
           )}
         </Sheet>
@@ -344,30 +326,6 @@ const Portfolio = () => {
           )}
         </Sheet>
 
-        {pnl && pnl.month.trades > 0 && (
-          <Sheet title="Month to date">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div>
-                <p className="field-label mb-1">Realised</p>
-                <Money value={pnl.month.realized} />
-              </div>
-              <div>
-                <p className="field-label mb-1">Strike rate</p>
-                <span className="figure-md text-base">
-                  {formatPercent(pnl.month.win_rate * 100)}
-                </span>
-              </div>
-              <div>
-                <p className="field-label mb-1">Best</p>
-                <Money value={pnl.month.best} />
-              </div>
-              <div>
-                <p className="field-label mb-1">Worst</p>
-                <Money value={pnl.month.worst} />
-              </div>
-            </div>
-          </Sheet>
-        )}
       </PaperShell>
       {ticket && (
         <OrderTicket
