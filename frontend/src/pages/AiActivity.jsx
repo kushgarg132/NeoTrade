@@ -5,7 +5,7 @@ import { AI_TABS } from '../components/layout/sections';
 import { Sheet, Ruling } from '../components/doc/Doc';
 import StopAutopilot from '../components/common/StopAutopilot';
 import PlanCard from '../components/plan/PlanCard';
-import api, { endpoints } from '../utils/api';
+import api, { endpoints, getPreferences } from '../utils/api';
 import { cn } from '../utils/cn';
 import { formatDateTime } from '../utils/formatters';
 
@@ -24,7 +24,7 @@ const AiActivity = () => {
   };
   useEffect(() => {
     load();
-    api.get(endpoints.settings.preferences).then((res) => setOn(!!res.data.autopilot_enabled)).catch(() => {});
+    getPreferences().then((res) => setOn(!!res.data.autopilot_enabled)).catch(() => {});
   }, []);
   return (
     <Layout>

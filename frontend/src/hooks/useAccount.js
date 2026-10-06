@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api, { endpoints } from '../utils/api';
+import { getPreferences } from '../utils/api';
 
 const KEY = 'neotrade_account';
 const read = () => {
@@ -18,7 +18,7 @@ export const useAccount = (locked = null) => {
   const [account, setAccountState] = useState(read);
   const [roles, setRoles] = useState(null);
   useEffect(() => {
-    api.get(endpoints.settings.preferences).then((res) => setRoles(res.data.broker_roles || {})).catch(() => setRoles({}));
+    getPreferences().then((res) => setRoles(res.data.broker_roles || {})).catch(() => setRoles({}));
   }, []);
   const setAccount = (value) => {
     setAccountState(value);

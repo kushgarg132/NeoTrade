@@ -6,7 +6,7 @@ import Markdown from '../components/common/Markdown';
 import MoneyBadge from '../components/common/MoneyBadge';
 import StopAutopilot from '../components/common/StopAutopilot';
 import { Sheet, Ruling, Money, StockIcon } from '../components/doc/Doc';
-import api, { endpoints } from '../utils/api';
+import api, { endpoints, getPreferences } from '../utils/api';
 import { cn } from '../utils/cn';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
 
@@ -263,7 +263,7 @@ const Today = () => {
   const load = () => {
     api.get(endpoints.today).then((res) => { setData(res.data); setLoadedAt(Date.now()); setNow(Date.now()); })
       .catch((err) => setError(err?.response?.data?.detail || 'Could not load today.'));
-    api.get(endpoints.settings.preferences).then((res) => setAutopilotOn(!!res.data.autopilot_enabled)).catch(() => {});
+    getPreferences().then((res) => setAutopilotOn(!!res.data.autopilot_enabled)).catch(() => {});
   };
   useEffect(() => {
     load();

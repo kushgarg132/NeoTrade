@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Sheet, Ruling } from '../doc/Doc';
 import { Row, NumberField } from '../settings/Fields';
-import api, { endpoints } from '../../utils/api';
+import api, { endpoints, getPreferences } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
@@ -47,8 +47,7 @@ const EngineSettings = () => {
   };
 
   useEffect(() => {
-    api
-      .get(endpoints.settings.preferences)
+    getPreferences()
       .then((res) => {
         setPrefs(res.data);
         setDraft(Object.fromEntries(SIZING.map((key) => [key, res.data[key]])));

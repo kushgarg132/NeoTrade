@@ -4,7 +4,7 @@ import { Sheet, Statement, Row, Cell, Empty, Field, Scrip } from '../doc/Doc';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { TicketButton } from '../trading/OrderTicket';
-import api, { endpoints } from '../../utils/api';
+import api, { endpoints, getPreferences } from '../../utils/api';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { ticketFrom } from '../../utils/ticket';
 import { cn } from '../../utils/cn';
@@ -60,7 +60,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
 
   useEffect(() => {
     let stale = false;
-    Promise.allSettled([api.get(endpoints.settings.preferences), api.get(endpoints.portfolio.candidates)]).then(([prefs, cands]) => {
+    Promise.allSettled([getPreferences(), api.get(endpoints.portfolio.candidates)]).then(([prefs, cands]) => {
       if (stale) return;
       const list = cands.status === 'fulfilled' ? cands.value.data || [] : [];
       setCandidates(list);

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Sheet, Ruling } from '../doc/Doc';
 import { Row, NumberField } from './Fields';
-import api, { endpoints } from '../../utils/api';
+import api, { endpoints, getPreferences } from '../../utils/api';
 import { cn } from '../../utils/cn';
 import { formatDateTime } from '../../utils/formatters';
 
@@ -22,7 +22,7 @@ const AutopilotSheet = () => {
 
   const [failed, setFailed] = useState(false);
   const loadPrefs = () =>
-    api.get(endpoints.settings.preferences).then((res) => {
+    getPreferences().then((res) => {
       setPrefs(res.data);
       setDraft(Object.fromEntries(LIMITS.map(([key]) => [key, res.data[key]])));
     }).catch(() => setFailed(true));

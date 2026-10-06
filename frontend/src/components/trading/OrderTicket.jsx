@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, X } from 'lucide-react';
 import { Button } from '../common/Button';
-import api, { endpoints } from '../../utils/api';
+import api, { endpoints, getPreferences } from '../../utils/api';
 import { formatCurrency } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 
@@ -71,8 +71,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
   const requestRef = useRef(0);
 
   useEffect(() => {
-    api
-      .get(endpoints.settings.preferences)
+    getPreferences()
       .then((res) => {
         const mine = Object.values(res.data.broker_roles || {}).includes('mine');
         setHasMine(mine);

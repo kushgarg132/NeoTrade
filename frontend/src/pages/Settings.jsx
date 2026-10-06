@@ -6,7 +6,7 @@ import { Sheet, Empty, Ruling, Stamp, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
-import api, { endpoints } from '../utils/api';
+import api, { endpoints, getPreferences } from '../utils/api';
 import { cn } from '../utils/cn';
 import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
@@ -58,7 +58,7 @@ const BrokerRole = ({ broker }) => {
   const [roles, setRoles] = useState(null);
   const [note, setNote] = useState(null);
   useEffect(() => {
-    api.get(endpoints.settings.preferences).then((res) => setRoles(res.data.broker_roles || {})).catch(() => setRoles({}));
+    getPreferences().then((res) => setRoles(res.data.broker_roles || {})).catch(() => setRoles({}));
   }, []);
   if (!roles) return null;
   const choose = (role) => {
@@ -914,8 +914,7 @@ const GuardrailsSheet = () => {
       .catch(() => setTelegram(null));
 
   useEffect(() => {
-    api
-      .get(endpoints.settings.preferences)
+    getPreferences()
       .then((res) => {
         setPrefs(res.data);
         setDraft(Object.fromEntries(GUARD_FIELDS.map((key) => [key, res.data[key]])));
@@ -1264,8 +1263,7 @@ const PortfolioSheet = ({ isAdmin }) => {
   const [audience, setAudience] = useState(null);
 
   useEffect(() => {
-    api
-      .get(endpoints.settings.preferences)
+    getPreferences()
       .then((res) => {
         setPrefs(res.data);
         setDraft({

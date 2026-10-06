@@ -115,6 +115,31 @@ api.interceptors.response.use(
 export const AUTH_TOKEN_STORAGE_KEY = TOKEN_STORAGE_KEY;
 
 /**
+ * One preferences read per page, not one per component: a page mounts several
+ * readers at once, and they share this request and its result for a few
+ * seconds. Any write to preferences drops it, so the next read is fresh.
+ */
+const PREFS_PATH = '/settings/preferences';
+const PREFS_TTL_MS = 5000;
+let prefsCache = null; // { promise, at }
+
+export const getPreferences = () => {
+  if (!prefsCache || Date.now() - prefsCache.at > PREFS_TTL_MS) {
+    const promise = api.get(PREFS_PATH);
+    prefsCache = { promise, at: Date.now() };
+    promise.catch(() => {
+      if (prefsCache?.promise === promise) prefsCache = null;
+    });
+  }
+  return prefsCache.promise;
+};
+
+api.interceptors.request.use((config) => {
+  if (config.url === PREFS_PATH && config.method !== 'get') prefsCache = null;
+  return config;
+});
+
+/**
  * The engine keeps two books: `paper` (practice money, the Paper tab) and
  * `live` (real orders a live strategy sent to the broker). Every ledger read
  * names one, so the two never print on the same page by accident.

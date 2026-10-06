@@ -8,7 +8,7 @@ import useSymbolNews from '../hooks/useSymbolNews';
 import { Sheet, Empty, Ruling } from '../components/doc/Doc';
 import WaitingCards from '../components/decisions/WaitingCards';
 import { Button } from '../components/common/Button';
-import api, { endpoints } from '../utils/api';
+import api, { endpoints, getPreferences } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 
 /**
@@ -51,8 +51,7 @@ const Decisions = () => {
   useEffect(load, []);
 
   useEffect(() => {
-    api
-      .get(endpoints.settings.preferences)
+    getPreferences()
       .then((res) => setHasMine(Object.values(res.data.broker_roles || {}).includes('mine')))
       .catch(() => setHasMine(false));
   }, []);

@@ -8,7 +8,7 @@ import TradeLedger from '../components/dashboard/TradeLedger';
 import LearningSheet from '../components/journal/LearningSheet';
 import { Sheet, Ruling, Tabs } from '../components/doc/Doc';
 import { Badge } from '../components/common/Badge';
-import api, { endpoints } from '../utils/api';
+import api, { endpoints, getPreferences } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import { recordLine, statusOf, strategyName } from '../utils/library';
 import { readiness, shortStatus } from '../utils/promotion';
@@ -93,7 +93,7 @@ const Strategies = () => {
       .catch(() => setPromotionFailed(true));
   useEffect(() => {
     loadPromotion();
-    api.get(endpoints.settings.preferences).then((res) => setLive(res.data.live_strategies || [])).catch(() => {});
+    getPreferences().then((res) => setLive(res.data.live_strategies || [])).catch(() => {});
   }, []);
   useTopic('trades', loadPromotion);
   useReconnect(loadPromotion);

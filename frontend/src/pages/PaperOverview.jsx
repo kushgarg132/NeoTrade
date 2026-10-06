@@ -6,7 +6,7 @@ import PaperShell from '../components/paper/PaperShell';
 import EngineNow from '../components/paper/EngineNow';
 import TodayNet from '../components/paper/TodayNet';
 import TradedToday from '../components/paper/TradedToday';
-import api, { endpoints } from '../utils/api';
+import api, { endpoints, getPreferences } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import { statusOf } from '../utils/library';
 
@@ -51,7 +51,7 @@ const PaperOverview = () => {
       .finally(() => setPnlLoading(false));
   useEffect(() => {
     loadPnl();
-    api.get(endpoints.settings.preferences).then((res) => setPrefs(res.data)).catch(() => setPrefs(null));
+    getPreferences().then((res) => setPrefs(res.data)).catch(() => setPrefs(null));
   }, []);
   useTopic('pnl', (message) => message.data?.paper && setPnl(message.data.paper));
   useReconnect(loadPnl);
