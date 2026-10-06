@@ -26,7 +26,7 @@ const EngineNow = ({ prefs }) => {
   const [busy, setBusy] = useState(false);
   const [startError, setStartError] = useState(null);
   const [killSwitch, setKillSwitch] = useState(null);
-  const [longterm, setLongterm] = useState({ pending: 0, open: 0 });
+  const [longtermOpen, setLongtermOpen] = useState(0);
   const [scan, setScan] = useState(null);
   const [stopping, setStopping] = useState(null);
 
@@ -42,12 +42,10 @@ const EngineNow = ({ prefs }) => {
       .then((res) => setRuns(res.data))
       .catch(() => setRuns([]));
 
+  // Only the open count: pending proposals are counted under AI → Decisions.
   const loadLongterm = () =>
-    Promise.all([
-      api.get(endpoints.suggestions.list({ status: 'PENDING', mode: 'LONGTERM' })),
-      api.get(endpoints.trading.trades('OPEN', 'paper', 'LONGTERM')),
-    ])
-      .then(([pendingRes, openRes]) => setLongterm({ pending: pendingRes.data.length, open: openRes.data.length }))
+    api.get(endpoints.trading.trades('OPEN', 'paper', 'LONGTERM'))
+      .then((res) => setLongtermOpen(res.data.length))
       .catch(() => {});
 
   useEffect(() => {
@@ -70,7 +68,7 @@ const EngineNow = ({ prefs }) => {
     loadKillSwitch();
     loadLongterm();
   });
-  useTopic('suggestions', loadLongterm);
+  useTopic('trades', loadLongterm);
   useReconnect(() => {
     loadRuns();
     loadKillSwitch();
@@ -227,7 +225,7 @@ const EngineNow = ({ prefs }) => {
           }
         >
           <p className="text-sm">
-            Next scan 16:00 IST · {longterm.open} open long-term position{longterm.open === 1 ? '' : 's'}
+            Next scan 16:00 IST · {longtermOpen} open long-term position{longtermOpen === 1 ? '' : 's'}
             {prefs && !prefs.auto_paper_longterm && ' · stops and targets are not watched while it is off'}
           </p>
           {scan && scan !== 'starting' && <p className="mt-2 text-sm text-[var(--ink-soft)]">{scan}</p>}
