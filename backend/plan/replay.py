@@ -35,7 +35,7 @@ async def replay_day(db, provider, user_id: str, day: date) -> Optional[dict]:
 
     start = datetime.combine(day, time(9, 15), IST)
     end = datetime.combine(day, time(15, 30), IST)
-    run = await db["runs"].find_one({
+    run = await db["trading_runs"].find_one({
         "user_id": user_id, "mode": "INTRADAY",
         "started_at": {"$gte": datetime.combine(day, time(0, 0), IST).astimezone(timezone.utc).replace(tzinfo=None),
                        "$lt": (datetime.combine(day, time(0, 0), IST) + timedelta(days=1)).astimezone(timezone.utc)
@@ -81,7 +81,7 @@ async def replay_day(db, provider, user_id: str, day: date) -> Optional[dict]:
 async def replay_all(db, provider, now: datetime) -> int:
     day = now.astimezone(IST).date()
     count = 0
-    for user_id in sorted(await db["runs"].distinct("user_id", {"mode": "INTRADAY"})):
+    for user_id in sorted(await db["trading_runs"].distinct("user_id", {"mode": "INTRADAY"})):
         try:
             count += await replay_day(db, provider, user_id, day) is not None
         except Exception as exc:

@@ -42,7 +42,7 @@ def mongo(monkeypatch):
 
 
 async def _ran_today(db, plan_allow):
-    await db["runs"].insert_one({"run_id": "r1", "user_id": "alice", "mode": "INTRADAY", "universe": ["TCS"],
+    await db["trading_runs"].insert_one({"run_id": "r1", "user_id": "alice", "mode": "INTRADAY", "universe": ["TCS"],
                                  "params": {}, "started_at": OPEN.astimezone(timezone.utc)})
     await db[COLLECTION].insert_one({"user_id": "alice", "date": DAY.isoformat(), "version": 1,
                                      "at": (OPEN - timedelta(minutes=30)).astimezone(timezone.utc),
@@ -77,7 +77,7 @@ async def test_weeks_beating_counts_consecutive_weeks(mongo):
 
 async def test_baseline_trades_the_base_universe_and_the_plan_its_adds(mongo):
     await _ran_today(mongo, [])
-    await mongo["runs"].update_one({"run_id": "r1"}, {"$set": {
+    await mongo["trading_runs"].update_one({"run_id": "r1"}, {"$set": {
         "universe": ["TCS", "INFY", "RELIANCE"], "params": {"base_universe": ["TCS"], "plan_adds": ["INFY"]}}})
     provider = _Provider()
     seen = []
