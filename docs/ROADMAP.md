@@ -1114,6 +1114,11 @@ clear 3× charges.
 handbook's AI panel (`POST /settings/llm-feature`, `app_settings.llm_features_off`); off, the
 feature makes no model calls and each caller takes its "LLM disabled" path (news skips its
 LLM pass, the learning note falls back to plain facts).
+**17.4.3 landed 2026-10-07:** `backend/system/data_quality.py` after the 16:00 pass — stale
+daily bars, unlisted universe symbols, feeds silent 3 days — on the Jobs panel. "Bars older than
+a day in session" is covered by stale bars (the pass runs after the close); feed silence is
+3 days, not an hour, because the official feeds (RBI, SEBI, PIB) post rarely.
+17.4.4 (point-in-time data): no free source — see 17.3.1.
 
 ### 17.5 The business
 

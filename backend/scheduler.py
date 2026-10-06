@@ -150,6 +150,18 @@ async def _sync_journals(db, redis) -> int:
     return total
 
 
+async def _data_quality(db, redis) -> None:
+    """Never fails the pass: the check reports, it does not gate."""
+    from backend.system.data_quality import check
+    from backend.system.jobs import DATA_QUALITY
+
+    try:
+        await mark(redis, DATA_QUALITY, True, json.dumps(await check(db)))
+    except Exception as exc:
+        logger.exception("data quality check failed: %s", exc)
+        await mark(redis, DATA_QUALITY, False, f"{type(exc).__name__}: {exc}")
+
+
 async def _run_locked(db, redis) -> Optional[dict]:
     """Acquires a Redis lock before running the daily pass. Returns None
     (pass skipped) if another worker already holds it. When `redis` is None
@@ -176,6 +188,7 @@ async def _run_locked(db, redis) -> Optional[dict]:
             await mark(redis, DAILY_PASS, False, f"{type(exc).__name__}: {exc}")
             raise
         await mark(redis, DAILY_PASS, True, json.dumps(result, default=str))
+        await _data_quality(db, redis)
         return result
     finally:
         # Only release if we still hold it -- never delete a lock some other

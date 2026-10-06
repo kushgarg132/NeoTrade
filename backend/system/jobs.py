@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 KEY = "job:last:{}"
 NOTE_LIMIT = 2000
 DAILY_PASS = "daily_pass"
+DATA_QUALITY = "data_quality"  # backend/system/data_quality.py, after the daily pass
 LOOPS = ("guardrail_monitor", "paper_orders", "autorun", "telegram")
 
 

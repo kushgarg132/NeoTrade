@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from backend.configs.settings import settings
 from backend.engine.session import IST
-from backend.system.jobs import DAILY_PASS, LOOPS, last_runs
+from backend.system.jobs import DAILY_PASS, DATA_QUALITY, LOOPS, last_runs
 
 STARTED_AT = datetime.now(timezone.utc).isoformat()
 CACHE_SECONDS = 30
@@ -37,10 +37,11 @@ async def _jobs(db, redis) -> dict:
     from backend.runs import ALIVE_KEY
     from backend.scheduler import seconds_until_next_run
 
-    runs = await last_runs(redis, [DAILY_PASS, *LOOPS])
+    runs = await last_runs(redis, [DAILY_PASS, DATA_QUALITY, *LOOPS])
     now = datetime.now(timezone.utc)
     return {
         "daily_pass": runs[DAILY_PASS],
+        "data_quality": runs[DATA_QUALITY],
         "next_daily_pass_at": (now + timedelta(seconds=seconds_until_next_run(now))).isoformat(),
         "loops": {name: runs[name] for name in LOOPS},
         "ingest": await heartbeat_ages(redis),

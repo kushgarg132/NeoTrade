@@ -17,6 +17,11 @@ Everything that runs on its own, how code reaches production, and how the doors 
 8. First pass of a month: start the re-tune as its own `nice` process.
 9. Fridays: journal mirrors and the weekly portfolio review with worsening-verdict alerts.
 
+After the pass, the **data-quality check** (`backend/system/data_quality.py`, `job:last:data_quality`,
+"Data quality found" on the panel below): covered symbols whose newest daily bar is behind the
+rest (a quote that keeps failing), universe symbols with no NSE instrument, and news feeds with no
+new item for 3 days. It reports; it never fails or gates the pass.
+
 A worker that wakes late after the pass already ran skips it.
 
 ## Loops in the API (every worker)

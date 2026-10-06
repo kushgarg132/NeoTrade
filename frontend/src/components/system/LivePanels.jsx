@@ -58,6 +58,8 @@ const ROWS = {
     ['Daily pass', run(b.daily_pass)],
     ...(b.daily_pass?.note ? [['Last pass did', summary(b.daily_pass.note)]] : []),
     ['Next daily pass', formatDateTime(b.next_daily_pass_at)],
+    ['Data quality', run(b.data_quality)],
+    ...(b.data_quality?.note ? [['Data quality found', summary(b.data_quality.note)]] : []),
     ...Object.entries(b.loops).map(([name, record]) => [name.replace(/_/g, ' '), run(record)]),
     ...Object.entries(b.ingest).map(([name, age]) => [`ingest ${name.replace(/_/g, ' ')}`, `${age}s ago`]),
     ['API workers alive', b.workers_alive],
