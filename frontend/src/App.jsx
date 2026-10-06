@@ -20,6 +20,7 @@ const AiOverview = lazy(() => import('./pages/AiOverview'));
 const AiActivity = lazy(() => import('./pages/AiActivity'));
 import Login from './pages/Login';
 const Handbook = lazy(() => import('./pages/Handbook'));
+const Backlog = lazy(() => import('./pages/Backlog'));
 import RequireAuth from './components/RequireAuth';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -118,6 +119,7 @@ const App = () => {
       <Route path="/settings" element={gated(<Settings />)} />
       <Route path="/profile" element={gated(<Profile />)} />
       <Route path="/system" element={gated(<RequireAdmin><Handbook /></RequireAdmin>)} />
+      <Route path="/system/future" element={gated(<RequireAdmin><Backlog /></RequireAdmin>)} />
       {/* Practice (under More): the strategy engine, its decisions and its book */}
       <Route path="/practice" element={gated(<PaperOverview />)} />
       <Route path="/practice/decisions" element={gated(<Decisions />)} />
