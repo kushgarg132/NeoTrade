@@ -129,7 +129,32 @@ async def _preopen_plans(db, redis, now: datetime, user_ids: list[str]) -> list[
     return built
 
 
+# Brokers whose adapter streams ticks (build_feed in routers/trading.py uses them first).
+STREAMING_BROKERS = ("kite", "upstox")
+
+
+async def live_feed_ready(user_id: str) -> bool:
+    """A logged-in broker that streams live ticks. Without one an intraday
+    run would trade 15-minute-old yfinance candles, a record that says nothing
+    about a live strategy -- so the auto run waits for the login instead."""
+    from backend.auth.broker_credentials import get_credential_store
+    from backend.brokers.protocol import BrokerSessionState
+    from backend.brokers.registry import get_broker_adapter
+    from backend.database import db
+
+    for broker in STREAMING_BROKERS:
+        try:
+            adapter = await get_broker_adapter(broker, user_id, get_credential_store(), db.redis)
+            if await adapter.state() == BrokerSessionState.ACTIVE:
+                return True
+        except Exception as exc:
+            logger.warning("live feed check for %s/%s failed: %s", user_id, broker, exc)
+    return False
+
+
 async def _may_start(runs: RunStore, user_id: str, mode: str, now: datetime, redis=None) -> bool:
+    if mode == "INTRADAY" and not await live_feed_ready(user_id):
+        return False  # waits for the broker login; checked again every tick
     if mode == "INTRADAY" and redis is not None:
         from backend.plan import store
 

@@ -3,7 +3,7 @@ across workers, comes back after a deploy, respects a manual stop, and
 stops at the close."""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from mongomock_motor import AsyncMongoMockClient
@@ -49,6 +49,12 @@ def world(monkeypatch):
     db = AsyncMongoMockClient()["test_db"]
     monkeypatch.setattr(autorun, "_LOCAL", {})
     monkeypatch.setattr(autorun, "_TOKEN", "worker-a")
+    live = {"ready": True}  # a streaming broker session is logged in
+
+    async def live_feed_ready(user_id):
+        return live["ready"]
+
+    monkeypatch.setattr(autorun, "live_feed_ready", live_feed_ready)
     launched = []
 
     async def launch(user_id, mode, universe, poll, runs, origin):
@@ -67,7 +73,7 @@ def world(monkeypatch):
     redis = _Redis()
     from backend.runs import ALIVE_KEY, BOOT_ID
     redis.data[ALIVE_KEY.format(BOOT_ID)] = "1"  # this worker's heartbeat (server.py)
-    yield type("W", (), {"db": db, "redis": redis, "launch": launch, "launched": launched, "enable": enable})
+    yield type("W", (), {"db": db, "redis": redis, "launch": launch, "launched": launched, "enable": enable, "live": live})
     for task in list(trading._RUNS.values()):
         task.cancel()
     trading._RUNS.clear()
@@ -403,3 +409,15 @@ async def test_skip_day_plan_keeps_the_auto_run_from_starting(world):
     assert not await autorun._may_start(RunStore(world.db), "alice", "INTRADAY", MONDAY_10AM, redis=world.redis)
     assert await autorun._may_start(RunStore(world.db), "alice", "LONGTERM", MONDAY_10AM, redis=world.redis)
     assert (await _tick(world, MONDAY_10AM))["started"] == []
+
+
+@pytest.mark.asyncio
+async def test_the_auto_intraday_run_waits_for_a_live_broker_feed(world):
+    """Paper results from 15-minute-old candles say nothing about a live
+    strategy: with no streaming broker logged in, the run does not start;
+    it starts on the first tick after the login."""
+    await world.enable()
+    world.live["ready"] = False
+    assert (await _tick(world, MONDAY_10AM))["started"] == []
+    world.live["ready"] = True
+    assert (await _tick(world, MONDAY_10AM + timedelta(minutes=1)))["started"] == ["alice"]
