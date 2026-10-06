@@ -32,8 +32,9 @@ const Hint = ({ text }) => {
 
 export const Row = ({ label, hint, children }) => (
   <div className="py-2 border-b border-[var(--rule)] last:border-b-0">
-    <div className="flex items-center justify-between gap-3">
-      <div className="min-w-0 flex-1">
+    {/* A control too wide to leave the label 10rem wraps under it. */}
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <div className="min-w-[10rem] flex-1">
         <p className="field-label">{label}</p>
         {hint && <Hint text={hint} />}
       </div>
