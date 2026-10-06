@@ -18,6 +18,8 @@ import journey from '../handbook/journey.md?raw';
  * markdown marks them.
  */
 const DOCS = { system, trading, ai, ops, journey };
+// Phone: a wide table scrolls inside itself and long code paths break, so the page never scrolls sideways.
+const WIDE = '[&_table]:block [&_table]:overflow-x-auto [&_table]:max-w-full [&_code]:[overflow-wrap:anywhere]';
 
 const Handbook = () => {
   const [tab, setTab] = useTab(HANDBOOK_TABS.map((t) => t.id));
@@ -42,9 +44,9 @@ const Handbook = () => {
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
         <SystemTabs active={tab} onSelect={setTab} />
-        <article className="sheet px-3 py-3 sm:px-5 sm:py-4 text-sm leading-relaxed">
+        <article className="min-w-0 sheet px-3 py-3 sm:px-5 sm:py-4 text-sm leading-relaxed">
           {splitLive(DOCS[tab], PANELS).map((part, index) =>
-            part.live ? <LivePanel key={part.live} name={part.live} status={status} /> : <Markdown key={index}>{part.md}</Markdown>
+            part.live ? <LivePanel key={part.live} name={part.live} status={status} /> : <Markdown key={index} className={WIDE}>{part.md}</Markdown>
           )}
         </article>
       </div>
