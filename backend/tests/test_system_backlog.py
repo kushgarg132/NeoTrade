@@ -97,3 +97,12 @@ def test_seed_is_idempotent(mongo):
     docs = asyncio.run(mongo["backlog"].find().to_list(length=None))
     assert len(docs) == len(SEED) and all(d["source"] for d in docs)
     assert len({d["title"] for d in SEED}) == len(SEED)
+
+
+def test_patch_null_on_required_field_is_422(mongo):
+    client = _client()
+    item = client.post(URL, json={"title": "Keep me", "area": "UI"}).json()
+    for field in ("title", "area", "status", "rank"):
+        assert client.patch(f"{URL}/{item['id']}", json={field: None}).status_code == 422
+    assert client.patch(f"{URL}/{item['id']}", json={"effort": None}).status_code == 200  # effort may be cleared
+    assert client.get(URL).status_code == 200

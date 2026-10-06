@@ -6,7 +6,7 @@ from typing import Literal, Optional
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 COLLECTION = "backlog"
 Area = Literal["System", "Data", "Trading", "AI", "News", "Journal", "UI", "Ops", "Product"]
@@ -34,6 +34,14 @@ class ItemPatch(BaseModel):
     effort: Effort = None
     source: Optional[str] = Field(None, max_length=140)
     rank: Optional[float] = None
+
+    @model_validator(mode="after")
+    def _only_effort_may_be_null(self):
+        # Optional here means "may be left out"; only effort may be cleared to null.
+        for field in self.model_fields_set - {"effort"}:
+            if getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
+        return self
 
 
 def _oid(item_id: str) -> Optional[ObjectId]:
