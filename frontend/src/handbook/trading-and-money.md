@@ -56,7 +56,7 @@ These make conviction legible. Enforced in code and tests, not by discipline.
 
 Registered in `backend/strategies/registry.py`; each class carries a `CARD`
 (`backend/strategies/card.py`: style, regimes it suits, conditions, best/avoid, typical
-hold), shown in Practice → Library with this account's record.
+hold), shown in Practice → Strategies with this account's record and what each still needs.
 
 - **Intraday:** `orb_breakout`, `vwap_reversion`, `volume_surge`, `rsi_momentum_scalp`, and the
   news-aware set `gap_and_go`, `gap_fill_fade` (per-day catalyst map,
@@ -132,6 +132,12 @@ Telegram with a Stop button.
 
 ## Practice: runs, books, learning
 
+Three tabs, one job each: **Engine** (what it is doing now, today net of charges),
+**Book** (the practice money over Today / Month / All time, net of charges, from closed
+trades), **Strategies** (which strategy is good enough, the track record, learning).
+`compute_pnl` reports `costs` and `net` per period and `all_time`.
+
+
 - **Auto run** — `backend/engine/autorun.py`: keeps one INTRADAY paper run alive 09:15–15:30
   IST for users with `auto_paper_intraday`; `autorun:<user>` (150 s TTL) decides which worker
   owns it. A run you stop stays stopped that day; at most 5 starts a day.
@@ -142,7 +148,7 @@ Telegram with a Stop button.
 - **Learning loop** — `backend/learning/`: nightly, pause a strategy losing over ≥ 30 trades,
   raise its strength floor, skip a losing regime (entries only). Monthly re-tune on daily-bar
   strategies with a Deflated Sharpe guard; the LLM may only *suggest* thresholds, which are
-  tested like any other variant. Shown under Practice → Engine → What the engine learned.
+  tested like any other variant. Shown under Practice → Strategies → What the engine learned.
 
 ## Portfolio (Mine → Holdings)
 
