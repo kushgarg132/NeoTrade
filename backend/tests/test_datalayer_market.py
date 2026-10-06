@@ -43,7 +43,11 @@ def test_brief_cadence():
     assert not market._brief_due(recent, True, NOW)                      # min gap even for big news
     older = {"at": (NOW - timedelta(minutes=20)).timestamp()}
     assert market._brief_due(older, True, NOW) and not market._brief_due(older, False, NOW)
-    assert market._brief_due({"at": (NOW - timedelta(minutes=31)).timestamp()}, False, NOW)
+    # The routine slot is hourly, and skipped when the regime has not moved.
+    assert not market._brief_due({"at": (NOW - timedelta(minutes=31)).timestamp()}, False, NOW, regime_changed=True)
+    hour = {"at": (NOW - timedelta(minutes=61)).timestamp()}
+    assert market._brief_due(hour, False, NOW, regime_changed=True)
+    assert not market._brief_due(hour, False, NOW, regime_changed=False)
 
 
 def test_brief_off_hours_ignores_big_news_until_the_pre_open():
@@ -52,7 +56,9 @@ def test_brief_off_hours_ignores_big_news_until_the_pre_open():
     assert not market._brief_due(two_hours, True, night)
     assert market._brief_due({"at": (night - timedelta(hours=6)).timestamp()}, False, night)
     pre_open = datetime(2026, 10, 6, 3, 15, tzinfo=timezone.utc)   # 08:45 IST
-    assert market._brief_due({"at": (pre_open - timedelta(minutes=31)).timestamp()}, False, pre_open)
+    # The first brief of the session run-up is always written.
+    assert market._brief_due({"at": (pre_open - timedelta(minutes=31)).timestamp()}, False, pre_open,
+                             regime_changed=False)
 
 
 async def test_brief_makes_one_call_and_stores_it(mongo, monkeypatch):

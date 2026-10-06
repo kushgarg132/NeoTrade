@@ -40,7 +40,7 @@ each loop writes `ingest:heartbeat:<name>` after a pass that did not raise, and 
 reports their ages.
 
 `quotes` 15 s · `macro` 60 s · `news_poll` 60 s · `news_process` 5 min · `calendar` 6 h ·
-`flows` 30 min · `regime` 60 s · `brief` 60 s (writes every 30 min in session) ·
+`flows` 30 min · `regime` 60 s · `brief` 60 s (writes hourly in session if the regime moved, sooner on material news) ·
 `news_react` 60 s · `news_scan` 120 s · `news_exits` 60 s · `news_outcomes` 5 min ·
 `bars` 15 min (works after 15:45 IST) · `fundamentals` 30 min · `plan_revise` 60 s.
 

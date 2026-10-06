@@ -40,7 +40,7 @@ REGIME_KEY, BRIEF_KEY, FLOWS_KEY = "market:regime", "market:brief", "market:flow
 REGIME_TTL_SECONDS = 3600
 RISK_OFF, RISK_ON = -0.5, 0.3
 
-BRIEF_SESSION_SECONDS = 30 * 60
+BRIEF_SESSION_SECONDS = 60 * 60
 BRIEF_OFF_SECONDS = 6 * 3600
 BRIEF_MIN_GAP_SECONDS = 15 * 60
 BRIEF_ITEMS = 25
@@ -185,7 +185,7 @@ async def top_items(db, hours: float, scopes=("MARKET", "MACRO", "GLOBAL", "SECT
     return docs[:limit]
 
 
-def _brief_due(last: Optional[dict], material_since: bool, now: datetime) -> bool:
+def _brief_due(last: Optional[dict], material_since: bool, now: datetime, regime_changed: bool = True) -> bool:
     if last is None:
         return True
     age = now.timestamp() - last["at"]
@@ -194,7 +194,10 @@ def _brief_due(last: Optional[dict], material_since: bool, now: datetime) -> boo
     if not near_session(now):
         # Off-hours big news waits for the pre-open brief; nothing trades on it before then.
         return age >= BRIEF_OFF_SECONDS
-    return material_since or age >= BRIEF_SESSION_SECONDS
+    if material_since or not near_session(datetime.fromtimestamp(last["at"], timezone.utc)):
+        return True  # big news, or the first brief of this session's run-up
+    # The hourly slot is skipped when nothing moved: same regime, no material item.
+    return age >= BRIEF_SESSION_SECONDS and regime_changed
 
 
 async def _write_brief(system: str, prompt: str) -> str:
@@ -209,7 +212,8 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
         "material": True, "scope": {"$in": ["MARKET", "MACRO", "GLOBAL"]},
         "scored_at": {"$gt": datetime.fromtimestamp(last["at"], timezone.utc) if last else now - timedelta(days=1)},
     }, limit=1))
-    if not _brief_due(last, material_since, now):
+    regime_now = await _json(redis, REGIME_KEY) or {}
+    if not _brief_due(last, material_since, now, regime_changed=(last or {}).get("regime") != regime_now.get("label")):
         return False
 
     items = await top_items(db, hours=24, now=now)
@@ -217,7 +221,6 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
         return False
     raws = await redis.mget([MACRO_KEY.format(t) for t in MACRO.values()])
     board = [json.loads(r) for r in raws if r]
-    regime_now = await _json(redis, REGIME_KEY) or {}
     if last and last.get("items") == [str(d["_id"]) for d in items] and last.get("regime") == regime_now.get("label"):
         return False  # same top stories, same regime: the brief would say the same thing again
     flows_now = await _json(redis, FLOWS_KEY) or {}

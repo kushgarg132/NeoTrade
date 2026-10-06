@@ -1009,6 +1009,14 @@ first `plan_scorecards` rows exist.
 7. **Per-user ceiling before the beta.** A daily per-user budget for chat and research
    calls, with the shared pipeline (news, brief, regime) amortised across everyone.
 
+**Landed 2026-10-07:** tiers set in `app_settings` — fast `kr/claude-haiku-4.5` (no reasoning,
+1.7 s, 2 output tokens on a triage probe; Kiro adds ~4k prompt tokens a call), standard
+`agy/gemini-3.7-flash-low`, deep `agy/gemini-3.7-flash-high` (no non-reasoning Gemini is in
+the live catalog). News: `_prune` drops rewrites (title overlap ≥ 0.7 within a day), company
+news with no followed symbol and non-Latin copies before the deep call — ~10% of 3 days'
+2,443 scored items. Brief: hourly in session, skipped unless the regime moved or material
+news landed. Still open: 17.2.4–17.2.7.
+
 Done when: calls per day and tokens per call are visible per feature, fast-tier calls
 average under 500 output tokens, and the month's tokens fall by at least half at the
 same feature set.
