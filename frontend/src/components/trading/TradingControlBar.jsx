@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { Badge } from '../common/Badge';
+import { StockIcon } from '../doc/Doc';
 import api, { endpoints } from '../../utils/api';
 
 
@@ -74,9 +75,12 @@ const TradingControlBar = ({
                 <button
                   type="button"
                   onClick={() => add(match.tradingsymbol)}
-                  className="w-full flex items-baseline justify-between gap-3 px-3 py-2 text-left border-b border-[var(--rule)] last:border-b-0 hover:bg-[var(--stamp-soft)]"
+                  className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left border-b border-[var(--rule)] last:border-b-0 hover:bg-[var(--stamp-soft)]"
                 >
-                  <span className="figure-md text-sm">{match.tradingsymbol}</span>
+                  <span className="figure-md text-sm inline-flex items-center gap-1.5">
+                    <StockIcon symbol={match.tradingsymbol} />
+                    {match.tradingsymbol}
+                  </span>
                   <span className="text-xs text-[var(--ink-soft)] truncate">{match.name}</span>
                 </button>
               </li>

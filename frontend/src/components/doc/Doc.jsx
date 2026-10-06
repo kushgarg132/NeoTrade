@@ -1,4 +1,4 @@
-import React, { Children, cloneElement, createContext, isValidElement, useContext } from 'react';
+import React, { Children, cloneElement, createContext, isValidElement, useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { formatSigned, formatSignedPercent, bareSymbol } from '../../utils/formatters';
@@ -29,12 +29,51 @@ export const Sheet = ({ title, meta, actions, children, className, bodyClassName
 // instrument master the enquiry reads, so they print but do not link.
 const DERIVATIVE = /(\d(CE|PE)|FUT)$/;
 
+// Symbols whose logo 404'd this session, so a re-render or another row does
+// not ask again. ponytail: per tab, in memory; persist it if 404s show up in
+// the network panel across reloads.
+const missingLogos = new Set();
+
+/**
+ * A company's logo from FMP's free CDN (NSE listing), lazy-loaded at 20px. The
+ * browser caches each image; a symbol with no logo prints its first letter.
+ */
+export const StockIcon = ({ symbol: raw, className }) => {
+  const symbol = bareSymbol(raw)?.toUpperCase();
+  const [failed, setFailed] = useState(null);
+  if (!symbol) return null;
+  const box = 'inline-flex size-5 shrink-0 items-center justify-center rounded-sm border border-[var(--rule)]';
+  if (failed === symbol || missingLogos.has(symbol)) {
+    return (
+      <span aria-hidden="true" className={cn(box, 'bg-[var(--paper-sunk)] text-[0.625rem] font-semibold text-[var(--ink-soft)]', className)}>
+        {symbol[0]}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={`https://financialmodelingprep.com/image-stock/${encodeURIComponent(symbol)}.NS.png`}
+      alt=""
+      width={20}
+      height={20}
+      loading="lazy"
+      decoding="async"
+      onError={() => {
+        missingLogos.add(symbol);
+        setFailed(symbol);
+      }}
+      className={cn(box, 'bg-white object-contain p-px', className)}
+    />
+  );
+};
+
 /**
  * A scrip name, wherever it is printed: one tap opens its enquiry on the
  * statement. Stops the click there so a row that is itself clickable (or that
- * expands on click) does not act twice.
+ * expands on click) does not act twice. Equity scrips carry their logo unless
+ * `icon={false}`.
  */
-export const Scrip = ({ symbol: raw, children, className }) => {
+export const Scrip = ({ symbol: raw, children, className, icon = true }) => {
   const symbol = bareSymbol(raw);
   const label = children ?? symbol;
   if (!symbol || DERIVATIVE.test(symbol)) {
@@ -47,11 +86,19 @@ export const Scrip = ({ symbol: raw, children, className }) => {
       className={cn(
         'figure-md underline decoration-[var(--rule)] decoration-1 underline-offset-[3px]',
         'hover:decoration-[var(--stamp)] hover:text-[var(--stamp)] transition-colors',
+        icon && 'inline-flex items-center gap-1.5 max-w-full align-middle',
         className
       )}
       aria-label={`Enquire on ${symbol}`}
     >
-      {label}
+      {icon ? (
+        <>
+          <StockIcon symbol={symbol} />
+          <span className="min-w-0 truncate">{label}</span>
+        </>
+      ) : (
+        label
+      )}
     </Link>
   );
 };

@@ -6,7 +6,7 @@ import SectionTabs from '../components/layout/SectionTabs';
 import { MINE_TABS } from '../components/layout/sections';
 import { AccountSwitch } from '../components/common/AccountSwitch';
 import { useAccount } from '../hooks/useAccount';
-import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, Scrip, Stamp, Tabs } from '../components/doc/Doc';
+import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, Scrip, Stamp, StockIcon, Tabs } from '../components/doc/Doc';
 import { useTab } from '../hooks/useTab';
 import Markdown from '../components/common/Markdown';
 import { cn } from '../utils/cn';
@@ -292,7 +292,10 @@ const HoldingsList = ({ rows, open, onToggle, onTrade, news }) => (
             className="w-full px-3 py-2.5 flex items-center gap-3 text-left hover:bg-[var(--paper-sunk)]"
           >
             <span className="min-w-0 flex-1">
-              <span className="figure-md text-sm block truncate">{row.kind === 'MF' ? row.name || row.symbol : row.symbol}</span>
+              <span className="figure-md text-sm flex items-center gap-1.5 min-w-0">
+                {row.kind !== 'MF' && <StockIcon symbol={row.symbol} />}
+                <span className="truncate">{row.kind === 'MF' ? row.name || row.symbol : row.symbol}</span>
+              </span>
               <span className="doc-meta normal-case block truncate">
                 {row.weight_pct != null ? `${formatPercent(row.weight_pct)}` : row.kind}
                 {row.sector ? ` · ${row.sector}` : ''}
@@ -321,7 +324,7 @@ const HoldingsList = ({ rows, open, onToggle, onTrade, news }) => (
               </dl>
               {row.kind !== 'MF' && (
                 <p className="pt-2 flex items-center justify-between gap-3">
-                  <Scrip symbol={row.symbol}>Open {row.symbol}'s enquiry</Scrip>
+                  <Scrip symbol={row.symbol} icon={false}>Open {row.symbol}'s enquiry</Scrip>
                   <TradeButtons row={row} onTrade={onTrade} />
                 </p>
               )}

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Building2, BookmarkPlus, Check, Loader2 } from 'lucide-react';
+import { BookmarkPlus, Check, Loader2 } from 'lucide-react';
 import api, { endpoints } from '../utils/api';
 import { Badge } from './common/Badge';
 import { Button } from './common/Button';
-import { Sheet, Empty } from './doc/Doc';
+import { Sheet, Empty, StockIcon } from './doc/Doc';
 import {
   formatCurrency,
   formatSignedPercent,
@@ -86,7 +86,7 @@ const AnalysisCard = ({ quick, ai, aiLoading, aiError, aiRequested, onOpenAiTab 
                   className="w-full h-full object-contain p-1"
                 />
               ) : (
-                <Building2 className="w-5 h-5 text-[var(--ink-faint)]" aria-hidden="true" />
+                <StockIcon symbol={company?.symbol} className="size-full border-0 rounded-none text-base" />
               )}
             </div>
             <div className="min-w-0">

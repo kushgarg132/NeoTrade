@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Search, Loader2 } from 'lucide-react';
 import api, { endpoints } from '../../utils/api';
 import { cn } from '../../utils/cn';
+import { StockIcon } from '../doc/Doc';
 import { formatCurrency, formatSignedPercent } from '../../utils/formatters';
 
 /**
@@ -144,11 +145,14 @@ const SmartSearch = ({ onSearch, isLoading, className }) => {
                   onMouseEnter={() => setActive(index)}
                   onClick={() => choose(match.tradingsymbol)}
                   className={cn(
-                    'w-full text-left px-3 py-2.5 flex items-baseline justify-between gap-3 border-b border-[var(--rule)] last:border-b-0',
+                    'w-full text-left px-3 py-2.5 flex items-center justify-between gap-3 border-b border-[var(--rule)] last:border-b-0',
                     index === active ? 'bg-[var(--stamp-soft)]' : 'bg-transparent'
                   )}
                 >
-                  <span className="figure-md text-sm shrink-0">{match.tradingsymbol}</span>
+                  <span className="figure-md text-sm shrink-0 inline-flex items-center gap-1.5">
+                    <StockIcon symbol={match.tradingsymbol} />
+                    {match.tradingsymbol}
+                  </span>
                   <span className="text-xs text-[var(--ink-soft)] truncate text-right flex-1 min-w-0">
                     {match.name}
                   </span>
