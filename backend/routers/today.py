@@ -47,14 +47,19 @@ def _aware(value: Optional[datetime]) -> Optional[datetime]:
 
 async def _accounts(roles: dict, user_id: str, broker_states) -> dict:
     """Each role's broker session. Checking one can call the broker (Kite's
-    profile endpoint), so a result is reused for STATE_TTL seconds."""
+    profile endpoint), so a result is reused for STATE_TTL seconds -- only
+    when every session is live. A logged-out one costs no broker call, and
+    reusing it would hide a fresh login for up to a minute on each worker."""
     key = tuple(sorted(roles.items()))
     cached = _STATE_CACHE.get(user_id)
     if cached and cached[1] == key and clock.monotonic() - cached[0] < STATE_TTL:
         return cached[2]
     states = await broker_states(user_id, sorted(roles))
     accounts = {role: {"broker": broker, "state": states.get(broker)} for broker, role in roles.items()}
-    _STATE_CACHE[user_id] = (clock.monotonic(), key, accounts)
+    if all(info["state"] == "ACTIVE" for info in accounts.values()):
+        _STATE_CACHE[user_id] = (clock.monotonic(), key, accounts)
+    else:
+        _STATE_CACHE.pop(user_id, None)
     return accounts
 
 

@@ -155,6 +155,23 @@ def test_broker_states_are_cached_between_polls(monkeypatch):
     assert len(calls) == 1
 
 
+def test_a_login_shows_on_the_next_poll(monkeypatch):
+    """A logged-out session is cheap to re-check and is never reused: the poll
+    after a broker login shows it live, on whichever worker answers."""
+    states = {"upstox": "NEEDS_LOGIN"}
+    client, db = _client(monkeypatch)
+
+    async def current(user_id, brokers):
+        return {b: states[b] for b in brokers}
+
+    client.app.dependency_overrides[today_router.get_broker_states] = lambda: current
+    monkeypatch.setattr(today_router, "_STATE_CACHE", {})
+    _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"upstox": "mine"}}])
+    assert client.get("/api/v1/today").json()["accounts"]["mine"]["state"] == "NEEDS_LOGIN"
+    states["upstox"] = "ACTIVE"  # the user logs in
+    assert client.get("/api/v1/today").json()["accounts"]["mine"]["state"] == "ACTIVE"
+
+
 def test_proposals_carry_their_terms_and_the_full_count(monkeypatch):
     """Today shows at most a few proposals; each says what approving costs and
     how sure the engine is, and the header says how many wait in all."""
