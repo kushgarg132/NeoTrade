@@ -508,3 +508,162 @@ async def test_ai_draft_is_never_a_duplicate_of_a_users(env):
     await _user_draft(db, "alices-private-gap", status="active")
     out = await draft.run(db, redis, NOW, llm=llm_of(GAP), backtest=backtest_of(result()))
     assert out["drafted"] == 1 and not any("alices-private-gap" in v for _, v in out["rejected"])
+
+
+# --- swing (docs/superpowers/specs/2026-10-07-swing-builder-design.md §3-4) ---
+
+SWING = {"horizon": "swing", "setup": {"breakout_n": {"days": 20}}, "filters": {}, "side": "long",
+         "stop": {"atr_multiple": 2.0}, "target": {"r_multiple": 3.0}, "max_hold_days": {"days": 10}}
+SPAN = NOW - timedelta(days=3 * 365)  # what the checks see; the backtest starts 300 days earlier
+
+
+def swing_trades(gain=3000.0, recent=None, warmup_loss=None):
+    """A round trip every fifth weekday over the 3 years: two wins of `gain`, then a loss of half.
+    `recent(at)` overrides the net of trips at `at`; `warmup_loss` adds one trip before the span."""
+    out = []
+
+    def trip(at, net, sym="AAA"):
+        exit_at = at + timedelta(days=1)
+        out.extend([{"symbol": sym, "side": "BUY", "quantity": 10, "timestamp": at.isoformat(), "net_pnl": -10.0, "realized_pnl": -10.0},
+                    {"symbol": sym, "side": "SELL", "quantity": 10, "timestamp": exit_at.isoformat(),
+                     "net_pnl": net + 10.0, "realized_pnl": net + 10.0}])
+
+    if warmup_loss is not None:
+        trip(SPAN - timedelta(days=30), -warmup_loss, "WARM")
+    for i, day in enumerate(pd.bdate_range((SPAN + timedelta(days=1)).date(), (NOW - timedelta(days=3)).date())[::5]):
+        at = datetime.combine(day.date(), datetime.min.time(), timezone.utc) + timedelta(hours=5)
+        net = gain if i % 3 else -gain / 2
+        trip(at, recent(at, net) if recent else net)
+    return out
+
+
+def swing_result(trade_list):
+    return BacktestResult(symbol="X", start_date=NOW - timedelta(days=3 * 365 + 300), end_date=NOW, total_trades=1,
+                          win_rate=0.5, profit_factor=9.0, total_pnl=0.0, max_drawdown=0.0, sharpe_ratio=0.0,
+                          trades=trade_list)
+
+
+def closes(growth, start=SPAN):
+    days = pd.bdate_range(start.date(), NOW.date())
+    return pd.DataFrame({"close": [100.0 * (1 + growth * i / (len(days) - 1)) for i in range(len(days))]},
+                        index=pd.DatetimeIndex(days))
+
+
+def swing_history(monkeypatch, res, growth=0.10, seen=None):
+    """`draft._history` for swing: the given result on bars that grow `growth` over the span."""
+    frames = {"AAA": closes(growth), "BBB": closes(growth),
+              "LATE": closes(5.0, SPAN + timedelta(days=20))}  # no bar on the first day: not in the benchmark
+
+    async def history(db, redis, horizon):
+        if horizon != "swing":
+            return None
+
+        async def backtest(strategy, start, end, account):
+            if seen is not None:
+                seen.append((strategy.spec.name, strategy.spec.timeframe, start, end))
+            return res
+        return backtest, {"universe": ["AAA", "BBB"], "symbol_for_token": {}, "bars": frames}
+
+    monkeypatch.setattr(draft, "_history", history)
+
+
+async def _swing_draft(db, slug="swingy", owner="u1"):
+    await store.insert(db, {"slug": slug, "spec": SWING, "status": "testing", "drafted_at": NOW, "owner_id": owner})
+
+
+async def test_swing_draft_passes_all_four_checks(env, monkeypatch):
+    db, redis, _ = env
+    seen = []
+    swing_history(monkeypatch, swing_result(swing_trades(warmup_loss=500_000.0)), seen=seen)
+    await _swing_draft(db)
+    await _user_draft(db, "u1-intraday", status="rejected")  # an intraday trial: not counted for swing
+    await db[store.COLLECTION].update_one({"slug": "u1-intraday"}, {"$set": {"sharpe": 2.0}})
+    out = await draft.test_one(db, redis, "swingy", NOW)
+    doc = (await _drafts(db))["swingy"]
+    assert out["status"] == "active", out["verdict"]
+    assert seen == [("built:swingy", "1d", NOW - timedelta(days=3 * 365 + 300), NOW)]
+    assert doc["trials"] == 1 and doc["sharpe"] > 0
+    assert doc["metrics"]["year"]["trades"] == len(swing_trades()) // 2  # the warm-up trip is not counted
+    bench = doc["metrics"]["benchmark"]
+    assert bench["buy_hold_pct"] == pytest.approx(10.0 - 0.2854, abs=0.01)
+    assert bench["strategy_pct"] == pytest.approx(sum(t["net_pnl"] for t in swing_trades()) / 1e4, abs=0.01)
+    gate = await db["strategy_backtests"].find_one({"strategy_name": "built:swingy"})
+    assert gate["passed"] is True
+
+
+async def test_swing_rejected_on_benchmark_with_verdict(env, monkeypatch):
+    db, redis, _ = env
+    swing_history(monkeypatch, swing_result(swing_trades()), growth=0.50)
+    await _swing_draft(db)
+    out = await draft.test_one(db, redis, "swingy", NOW)
+    strategy = sum(t["net_pnl"] for t in swing_trades()) / 1e4
+    assert out["status"] == "rejected"
+    assert out["verdict"] == f"benchmark: {strategy:+.1f}% < buy-and-hold +49.7%"
+
+
+async def test_swing_holdout_is_180_days(env, monkeypatch):
+    db, redis, _ = env
+
+    def recent(at, net):  # losing 180..90 days ago, winning in the last 90: the intraday holdout would pass
+        return -5000.0 if NOW - timedelta(days=180) <= at < NOW - timedelta(days=90) else net
+
+    swing_history(monkeypatch, swing_result(swing_trades(gain=6000.0, recent=recent)))
+    await _swing_draft(db)
+    out = await draft.test_one(db, redis, "swingy", NOW)
+    assert out["status"] == "rejected"
+    assert out["verdict"].startswith("holdout: −₹") and out["verdict"].endswith(" over the last 180 days")
+
+
+async def test_swing_waits_with_too_few_symbols(env):
+    from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+    from backend.datalayer import bars
+
+    db, redis, _ = env
+    frame = closes(0.1, NOW - timedelta(days=30)).assign(open=100.0, high=101.0, low=99.0, volume=1000.0)
+    frame.index = pd.bdate_range(end=bars.today_ist(), periods=len(frame))
+    for symbol in ALL_SCAN_STOCKS[:29]:
+        await bars.write(db, symbol, frame)
+    assert await draft._history(db, redis, "swing") is None
+    await _swing_draft(db)
+    out = await draft.test_one(db, redis, "swingy", NOW)
+    assert out == {"slug": "swingy", "status": "testing", "verdict": "waiting for market history"}
+
+
+async def test_weekly_run_drafts_both_horizons(env, monkeypatch):
+    db, redis, _ = env
+    await _admin(db)
+    swing_history(monkeypatch, swing_result(swing_trades()))
+    prompts = {}
+    swing_reply = {k: v for k, v in SWING.items() if k != "horizon"}  # the run sets it from the call
+
+    async def llm(system, prompt):
+        horizon = "swing" if "breakout_n" in prompt else "intraday"
+        prompts[horizon] = prompt
+        spec = swing_reply if horizon == "swing" else GAP
+        return json.dumps({"strategies": [{"spec": spec, "thesis": horizon}]})
+
+    out = await draft.run(db, redis, NOW, llm=llm, backtest=backtest_of(result()))
+    assert set(prompts) == {"intraday", "swing"} and "orb_break" not in prompts["swing"]
+    assert "breakout_n" not in prompts["intraday"]
+    docs = await _drafts(db)
+    assert out["drafted"] == 2 and len(out["passed"]) == 2
+    horizons = sorted(d["spec"].get("horizon", "intraday") for d in docs.values())
+    assert horizons == ["intraday", "swing"]
+    # Next week each prompt shows only its own horizon's drafts.
+    await draft.run(db, redis, NOW + timedelta(days=7), llm=llm, backtest=backtest_of(result()))
+    swing_slug = next(s for s, d in docs.items() if d["spec"].get("horizon") == "swing")
+    gap_slug = next(s for s in docs if s != swing_slug)
+    assert swing_slug in prompts["swing"] and gap_slug not in prompts["swing"]
+    assert gap_slug in prompts["intraday"] and swing_slug not in prompts["intraday"]
+
+
+async def test_make_room_per_horizon(env):
+    db, _, _ = env
+    for i in range(5):
+        await store.insert(db, {"slug": f"i{i}", "spec": ORB, "status": "active", "drafted_at": NOW - timedelta(days=9 - i)})
+    for i in range(4):
+        await store.insert(db, {"slug": f"s{i}", "spec": SWING, "status": "active", "drafted_at": NOW - timedelta(days=9 - i)})
+    assert await draft._make_room(db, "swing") == []
+    assert await draft._make_room(db, "intraday") == ["i0"]
+    await store.insert(db, {"slug": "s4", "spec": SWING, "status": "active", "drafted_at": NOW})
+    assert await draft._make_room(db, "swing") == ["s0"]

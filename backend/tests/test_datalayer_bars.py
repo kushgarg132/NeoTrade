@@ -236,3 +236,11 @@ async def test_prev_closes_returns_each_symbols_last_close_before_the_day():
         {"symbol": "INFY", "date": "2026-10-03", "close": 1500.0},
     ])
     assert await bars.prev_closes(db, ["TCS", "INFY", "NONE"], date(2026, 10, 6)) == {"TCS": 3050.0, "INFY": 1500.0}
+
+
+async def test_store_provider_serves_five_years(mongo):
+    """A swing test (3 years + 300 days of warm-up) asks the feed for "5y"."""
+    await bars.write(mongo, "AAA", _frame(1320))  # a little over 5 years of weekdays
+    fallback = Fallback()
+    candles = await StoreHistoryProvider(mongo, fallback).history(_instrument(), "1d", "5y")
+    assert fallback.calls == [] and candles[0].timestamp.date() <= TODAY - timedelta(days=1826 - 10)

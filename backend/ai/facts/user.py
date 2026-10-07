@@ -163,10 +163,10 @@ async def worst_setups(db, redis, user_id, limit: int = 10) -> dict:
 
 @fact("built_strategies", "Every strategy the AI strategy builder drafted: plain-words description, thesis, "
       "status (testing/rejected/active/retired), verdict and backtest metrics.", user=True, source="built_strategies")
-async def built_strategies(db, redis, user_id) -> dict:
-    from backend.builder.store import COLLECTION
+async def built_strategies(db, redis, user_id, horizon: Optional[Literal["intraday", "swing"]] = None) -> dict:
+    from backend.builder.store import COLLECTION, horizon_of
 
     # The AI's drafts plus the caller's own; user_id None (the builder's prompt) sees only the AI's.
     keys = ("slug", "status", "description", "thesis", "verdict", "metrics")
     docs = await db[COLLECTION].find({"owner_id": {"$in": [None, user_id]}}, {"_id": 0}).sort("drafted_at", 1).to_list(None)
-    return {"strategies": [{k: d.get(k) for k in keys} for d in docs]}
+    return {"strategies": [{k: d.get(k) for k in keys} for d in docs if horizon in (None, horizon_of(d))]}

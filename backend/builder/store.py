@@ -4,7 +4,7 @@ cache that strategies/registry.py builds from (strategies/ itself does no I/O).
 
 Doc: slug, owner_id (None/absent = the AI's, global), spec, thesis, description, drafted_at, status
 ("testing"|"rejected"|"active"|"retired"), verdict, metrics
-({"year": {...}, "holdout": {...}}), trials, sharpe (latest), trial_history (every test's finite Sharpe), params, name (a user's).
+({"year": {...}, "holdout": {...}}, swing also "benchmark"), trials, sharpe (latest), trial_history (every test's finite Sharpe), params, name (a user's).
 """
 import logging
 import math
@@ -70,19 +70,28 @@ def history_of(doc: dict) -> list[float]:
     return [s for s in h if isinstance(s, (int, float)) and math.isfinite(s)]
 
 
-async def trial_sharpes(db, owner_id: Optional[str] = None, exclude: Optional[str] = None) -> list[float]:
-    """Every Sharpe this owner (None = the AI) ever tested to, re-tests included (each is a new trial),
-    for the deflated-Sharpe trial count; `exclude` leaves out the draft under test, which adds its own."""
+def horizon_of(doc: dict) -> str:
+    """"intraday" or "swing"; a spec without `horizon` (every draft before Phase 18.1) is intraday."""
+    spec = doc.get("spec")
+    return spec.get("horizon", "intraday") if isinstance(spec, dict) else "intraday"
+
+
+async def trial_sharpes(db, owner_id: Optional[str] = None, exclude: Optional[str] = None,
+                        horizon: str = "intraday") -> list[float]:
+    """Every Sharpe this owner (None = the AI) ever tested to on this horizon, re-tests included (each
+    is a new trial), for the deflated-Sharpe trial count; `exclude` leaves out the draft under test,
+    which adds its own."""
     rows = await db[COLLECTION].find({"owner_id": owner_id, "slug": {"$ne": exclude}},
-                                     {"sharpe": 1, "trial_history": 1}).to_list(None)
-    return [s for r in rows for s in history_of(r)]
+                                     {"sharpe": 1, "trial_history": 1, "spec": 1}).to_list(None)
+    return [s for r in rows if horizon_of(r) == horizon for s in history_of(r)]
 
 
-async def regime_of(db) -> Callable[[object], Optional[str]]:
+async def regime_of(db, days: int = REGIME_DAYS) -> Callable[[object], Optional[str]]:
     """The Nifty regime lookup built strategies filter on. The 200-day average needs ~290 calendar
-    days of closes before the first day it answers, so a year-long backtest needs ~800 days loaded."""
+    days of closes before the first day it answers, so a year-long backtest needs ~800 days loaded
+    (a swing test asks for more)."""
     try:
-        return regime_by_day(await bars.nifty_closes(db, bars.today_ist() - timedelta(days=REGIME_DAYS)))
+        return regime_by_day(await bars.nifty_closes(db, bars.today_ist() - timedelta(days=days)))
     except Exception as exc:
         logger.warning("could not load the Nifty regime: %s", exc)
         return lambda d: None

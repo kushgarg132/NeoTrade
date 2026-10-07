@@ -38,6 +38,8 @@ PROMPTS = {
                             "setups": "none yet"},
     "strategy_builder": {"vocabulary": "setup gap: direction up | down", "plans": "none yet", "scorecards": "none yet",
                          "library": "[{\"name\": \"orb\"}]", "setups": "none yet", "drafts": "none yet"},
+    "strategy_builder_swing": {"vocabulary": "setup breakout_n: days 10..60 step 5",
+                               "library": "[{\"name\": \"momentum\"}]", "setups": "none yet", "drafts": "none yet"},
 }
 
 

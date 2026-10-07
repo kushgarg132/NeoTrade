@@ -107,6 +107,15 @@ warm up each morning). At most 5 are active
 (`draft.py::MAX_ACTIVE`); one the learning rules keep paused for 30 days is retired
 (`draft.py::_retire_paused`).
 
+**Swing drafts** (`"horizon": "swing"`, daily-bar blocks) are a second weekly prompt
+(`backend/prompts/strategy_builder_swing.md`, up to 3 more drafts) and their own 5-active cap
+(`draft.py::_make_room`). They test on 3 years of the stored daily bars after 300 days of warm-up
+(`draft.py::_swing_history`; no broker session needed; fewer than 30 symbols with bars leaves them
+`testing`), with delivery charges. Four checks: the same gate, the last **180** days net-positive,
+deflated Sharpe over swing drafts only (`backend/builder/store.py::trial_sharpes`), and the
+**benchmark**: the net return over the 3 years must beat an equal-weight buy-and-hold of the same
+stocks, less one round trip of charges (`draft.py::_benchmark`; "benchmark: +x% < buy-and-hold +y%").
+
 ### Your own strategies
 
 The chat can do the same: `backend/chat/actions.py::action_tools` offers `propose_strategy`, which validates the

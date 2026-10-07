@@ -6,6 +6,11 @@ of 5-minute history; it becomes `active` (paper) only if it passes the backtest 
 net-positive over the last 90 days alone, and clears the deflated Sharpe counting every draft
 ever tested. The model never decides; these three checks do.
 
+Swing drafts (docs/superpowers/specs/2026-10-07-swing-builder-design.md §3-4) get their own prompt,
+vocabulary and trial count, and test on 3 years of stored daily bars (after 300 days of warm-up):
+the gate, the last 180 days net-positive, the deflated Sharpe, and beating an equal-weight
+buy-and-hold of the same stocks over the same 3 years.
+
 CPU-heavy, so the daily pass starts it as its own low-priority process (`python -m backend.builder`).
 """
 import asyncio
@@ -16,14 +21,18 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 
+import pandas as pd
+
 from backend.builder import store
 from backend.builder.validate import describe, slugify, validate_spec
+from backend.core.models import Side
+from backend.engine.execution.costs import calculate_indian_costs
 from backend.engine.session import IST
 from backend.factor.validate import deflated_sharpe
 from backend.learning.retune import ACCOUNT, MIN_DSR, _at, _daily, _sharpe
 from backend.risk.backtest_gate import (LOOKBACK_DAYS, MAX_DRAWDOWN, MIN_PROFIT_FACTOR, MIN_TRADES, MIN_WINDOW_DAYS,
                                         BacktestGateStore, passes_gate)
-from backend.strategies.blocks.vocab import EXITS, FILTERS, SETUPS
+from backend.strategies.blocks.vocab import EXITS, FILTERS, SETUPS, SWING_EXITS, SWING_FILTERS, SWING_SETUPS
 from backend.suggestions.notify import notify
 from backend.system import jobs
 
@@ -34,13 +43,16 @@ LOCK_TTL = 6 * 3600
 MAX_DRAFTS = 3
 MAX_ACTIVE = 5
 YEAR, HOLDOUT, PAUSED_DAYS = timedelta(days=LOOKBACK_DAYS), timedelta(days=90), 30
+HORIZONS = ("intraday", "swing")
+SWING_SPAN, SWING_WARMUP, SWING_HOLDOUT = timedelta(days=3 * 365), timedelta(days=300), timedelta(days=180)
+MIN_SWING_SYMBOLS = 30  # fewer with stored bars: swing drafts wait
 
 
 def _rupees(v: float) -> str:
     return f"{'−' if v < 0 else '+' if v > 0 else ''}₹{abs(v):,.0f}"
 
 
-def _vocabulary() -> str:
+def _vocabulary(horizon: str = "intraday") -> str:
     def show(spec) -> str:
         if not spec:
             return "true (flag)"
@@ -49,7 +61,8 @@ def _vocabulary() -> str:
         return " | ".join(spec) if isinstance(spec[0], str) else f"{spec[0]}..{spec[1]} step {spec[2]}"
 
     lines = []
-    for kind, blocks in (("setup", SETUPS), ("filter", FILTERS), ("exit", EXITS)):
+    kinds = (SETUPS, FILTERS, EXITS) if horizon == "intraday" else (SWING_SETUPS, SWING_FILTERS, SWING_EXITS)
+    for kind, blocks in zip(("setup", "filter", "exit"), kinds):
         for name, params in blocks.items():
             lines.append(f"{kind} {name}: " + "; ".join(f"{k} {show(v)}" for k, v in params.items()))
     return "\n".join(lines) + "\n(regime_is regimes: any non-empty list of the choices)"
@@ -61,19 +74,21 @@ def _dump(fact_out: dict, key: str) -> str:
     return json.dumps(fact_out.get(key), default=str, ensure_ascii=False) if fact_out.get(key) else "none yet"
 
 
-async def _prompt(db, redis, admin_id) -> tuple[str, str]:
+async def _prompt(db, redis, admin_id, horizon: str = "intraday") -> tuple[str, str]:
     from backend.ai.facts import user as facts
     from backend.prompts import render
 
-    library = await facts.strategy_library(db, redis, admin_id, mode="INTRADAY") if admin_id \
-        else {"error": "no admin"}
+    mode = "INTRADAY" if horizon == "intraday" else "LONGTERM"
+    library = await facts.strategy_library(db, redis, admin_id, mode=mode) if admin_id else {"error": "no admin"}
+    common = {"vocabulary": _vocabulary(horizon), "library": _dump(library, "strategies"),
+              "setups": _dump(await facts.worst_setups(db, redis, None, limit=10), "setups"),
+              "drafts": _dump(await facts.built_strategies(db, redis, None, horizon=horizon), "strategies")}
+    if horizon == "swing":  # the game plans and their scorecards are about intraday days
+        return render("strategy_builder_swing", **common)
     return render(
-        "strategy_builder", vocabulary=_vocabulary(),
+        "strategy_builder", **common,
         plans=_dump(await facts.recent_plans(db, redis, None, days=5), "plans"),
         scorecards=_dump(await facts.plan_scorecards(db, redis, None, weeks=4), "scorecards"),
-        library=_dump(library, "strategies"),
-        setups=_dump(await facts.worst_setups(db, redis, None, limit=10), "setups"),
-        drafts=_dump(await facts.built_strategies(db, redis, None), "strategies"),
     )
 
 
@@ -92,9 +107,11 @@ def _parse(text: str) -> list:
     return [i for i in ideas if isinstance(i, dict)][:MAX_DRAFTS] if isinstance(ideas, list) else []
 
 
-async def _history(db, redis):
+async def _history(db, redis, horizon: str = "intraday"):
     """(backtest, strategy kwargs) on a year of 5-minute history, or None without a source
     (or when the source or universe cannot be read: drafts then wait for next week)."""
+    if horizon == "swing":
+        return await _swing_history(db)
     from backend.datalayer.news_sources import nifty200_sectors
     from backend.engine.backtest import run_backtest
     from backend.learning.retune import _Memo
@@ -118,6 +135,78 @@ async def _history(db, redis):
     return backtest, kwargs
 
 
+async def _swing_history(db):
+    """(backtest, strategy kwargs) on 3 years plus warm-up of the stored daily bars (no broker
+    session needed), or None while fewer than MIN_SWING_SYMBOLS of the scan universe have them.
+    kwargs["bars"] is what the buy-and-hold benchmark is computed from."""
+    from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+    from backend.data.providers.store import StoreHistoryProvider
+    from backend.datalayer import bars
+    from backend.datalayer.news_sources import nifty200_sectors
+    from backend.engine.backtest import run_backtest
+    from backend.learning.retune import _Memo
+    from backend.risk import gate_backtest
+
+    window = SWING_SPAN + SWING_WARMUP
+    try:
+        frames = await bars.read(db, ALL_SCAN_STOCKS, bars.today_ist() - window)
+        enough = len(frames) >= MIN_SWING_SYMBOLS
+        instruments, tokens = await gate_backtest.gate_universe(db, list(frames)) if enough else ([], {})
+    except Exception as exc:
+        logger.warning("strategy builder: no daily history: %s", exc)
+        return None
+    if len(instruments) < MIN_SWING_SYMBOLS:  # a symbol without bars is skipped, not faked
+        return None
+    memo = _Memo(StoreHistoryProvider(db))
+
+    async def backtest(strategy, start, end, account):
+        return await run_backtest([strategy], memo, instruments, start=start, end=end, timeframe="1d", **account)
+
+    kwargs = {"universe": [i.tradingsymbol for i in instruments], "symbol_for_token": tokens,
+              "regime_of": await store.regime_of(db, days=window.days + 300),  # + the 200-day average's own
+              "sector_of": nifty200_sectors(), "bars": frames}
+    return backtest, kwargs
+
+
+def _since(r, cut: datetime, account_size: float):
+    """`r` over the round trips opened from `cut` on: the warm-up's bars feed the indicators, its trades
+    don't count. Metrics as engine/backtest.py computes them; the span starts at `cut`."""
+    from backend.engine.metrics import compute_max_drawdown, compute_sharpe_ratio
+
+    held, early, open_net, kept, trips = {}, set(), {}, [], []
+    for t in r.trades:
+        s = t["symbol"]
+        if abs(held.get(s, 0)) < 1e-9:  # this fill opens a position
+            (early.add if _at(t) < cut else early.discard)(s)
+        held[s] = held.get(s, 0) + (t["quantity"] if t["side"] == Side.BUY.value else -t["quantity"])
+        if s in early:
+            continue
+        kept.append(t)
+        open_net[s] = open_net.get(s, 0.0) + t["net_pnl"]
+        if abs(held[s]) < 1e-9:
+            trips.append(open_net.pop(s))
+    gain = sum(t["net_pnl"] for t in kept if t["net_pnl"] > 0)
+    loss = -sum(t["net_pnl"] for t in kept if t["net_pnl"] < 0)
+    return r.model_copy(update={
+        "start_date": max(r.start_date, cut), "total_trades": len(trips),
+        "win_rate": sum(p > 0 for p in trips) / len(trips) if trips else 0.0,
+        "profit_factor": gain / loss if loss > 0 else 0.0, "total_pnl": sum(t["net_pnl"] for t in kept),
+        "max_drawdown": compute_max_drawdown(kept, account_size),
+        "sharpe_ratio": compute_sharpe_ratio(kept, account_size), "trades": kept})
+
+
+def _benchmark(bars_by_symbol: dict, start: datetime, end: datetime, charges_pct: float) -> float:
+    """Equal-weight buy-and-hold % over [start, end] of the symbols with a close on both its first and
+    last trading day, minus one round trip of charges: what a swing strategy must beat."""
+    lo, hi = (pd.Timestamp(t.astimezone(IST).date()) for t in (start, end))
+    spans = [c for f in bars_by_symbol.values() if len(c := f["close"][(f.index >= lo) & (f.index <= hi)])]
+    first, last = min(c.index[0] for c in spans), max(c.index[-1] for c in spans)
+    rets = [c.iloc[-1] / c.iloc[0] - 1 for c in spans if c.index[0] == first and c.index[-1] == last]
+    if not rets:
+        raise ValueError("no symbol spans the benchmark window")
+    return float(sum(rets) / len(rets) * 100 - charges_pct)
+
+
 def _gate_reason(r) -> str:
     """The first failing check of passes_gate, in its order."""
     days = (r.end_date - r.start_date).days
@@ -139,33 +228,47 @@ async def _test(db, doc: dict, backtest, kwargs: dict, now: datetime) -> tuple[s
     strategy = BlockStrategy(doc["slug"], doc["spec"], kwargs.get("universe", []), kwargs.get("symbol_for_token", {}),
                              regime_of=kwargs.get("regime_of"), sector_of=kwargs.get("sector_of"),
                              thesis=doc.get("thesis") or "AI-built strategy.")
-    start, end = now - YEAR, now
+    horizon = store.horizon_of(doc)
+    swing = horizon == "swing"
+    end = now
+    # Swing: the backtest starts with the warm-up, the checks see the 3 years after it.
+    cut, holdout_days = (end - SWING_SPAN, SWING_HOLDOUT) if swing else (end - YEAR, HOLDOUT)
+    start = cut - SWING_WARMUP if swing else cut
     from backend.risk.gate_backtest import backtest_account
 
     account = await backtest_account(db, doc.get("owner_id"))  # size like the draft's owner
     r = await backtest(strategy, start, end, account)
-    daily = _daily(r.trades, start, end) * (ACCOUNT / account["account_size"])  # a fraction of the account that was sized
+    if swing:
+        r = _since(r, cut, account["account_size"])
+    daily = _daily(r.trades, cut, end) * (ACCOUNT / account["account_size"])  # a fraction of the account that was sized
     sharpe = _sharpe(daily)
     finite = math.isfinite(sharpe) and math.isfinite(float(daily.to_numpy().sum()))  # _sharpe maps NaN to 0
     sharpe = sharpe if finite else None  # never stored: it would poison every later trial count
     history = store.history_of(doc) + ([sharpe] if finite else [])  # a re-test is a new trial
-    trials = await store.trial_sharpes(db, doc.get("owner_id"), exclude=doc["slug"]) + history
-    holdout = [t for t in r.trades if _at(t) >= end - HOLDOUT]
+    trials = await store.trial_sharpes(db, doc.get("owner_id"), exclude=doc["slug"], horizon=horizon) + history
+    holdout = [t for t in r.trades if _at(t) >= end - holdout_days]
     hold_net = round(sum(t["net_pnl"] for t in holdout), 2)
     fields = {"sharpe": sharpe, "trial_history": history, "trials": len(trials), "tested_at": now, "metrics": {
         "year": {"trades": r.total_trades, "pf": round(r.profit_factor, 2), "dd": round(r.max_drawdown, 4),
                  "net": round(r.total_pnl, 2), "win_rate": round(r.win_rate, 4)},
         "holdout": {"trades": len(holdout), "net": hold_net}}}
+    if swing:
+        ticket = account["per_trade_cap"] or account["account_size"]
+        charges = sum(calculate_indian_costs(ticket, 1, side, "CNC") for side in (Side.BUY, Side.SELL)) / ticket * 100
+        mine, buy_hold = r.total_pnl / account["account_size"] * 100, _benchmark(kwargs["bars"], cut, end, charges)
+        fields["metrics"]["benchmark"] = {"strategy_pct": round(mine, 2), "buy_hold_pct": round(buy_hold, 2)}
     await BacktestGateStore(db).record(strategy.spec.name, r)
     if not finite:
         return "rejected", "non-finite Sharpe", fields
     if not passes_gate(r):
         return "rejected", _gate_reason(r), fields
     if hold_net <= 0:
-        return "rejected", f"holdout: {_rupees(hold_net)} over the last 90 days", fields
+        return "rejected", f"holdout: {_rupees(hold_net)} over the last {holdout_days.days} days", fields
     dsr = deflated_sharpe(daily, trials)
     if dsr < MIN_DSR:
         return "rejected", f"deflated Sharpe {dsr:.2f} < {MIN_DSR} over {len(trials)} drafts", fields
+    if swing and not mine > buy_hold:
+        return "rejected", f"benchmark: {mine:+.1f}% < buy-and-hold {buy_hold:+.1f}%", fields
     return "active", f"passed: PF {r.profit_factor:.2f}, deflated Sharpe {dsr:.2f} over {len(trials)} drafts", fields
 
 
@@ -176,9 +279,11 @@ async def _paper_net(db, slug: str) -> float:
     return sum(net(t) for t in trades)
 
 
-async def _make_room(db) -> list[str]:
-    """At most MAX_ACTIVE AI strategies (users' own don't count): retires the lowest paper net across users (ties: oldest)."""
-    active = await db[store.COLLECTION].find({"status": "active", "owner_id": None}).sort("drafted_at", 1).to_list(None)
+async def _make_room(db, horizon: str = "intraday") -> list[str]:
+    """At most MAX_ACTIVE AI strategies per horizon (users' own don't count): retires that horizon's
+    lowest paper net across users (ties: oldest)."""
+    active = [d for d in await db[store.COLLECTION].find({"status": "active", "owner_id": None})
+              .sort("drafted_at", 1).to_list(None) if store.horizon_of(d) == horizon]
     if len(active) < MAX_ACTIVE:
         return []
     nets = [(await _paper_net(db, d["slug"]), i, d["slug"]) for i, d in enumerate(active)]
@@ -237,9 +342,31 @@ async def _run(db, redis, now, llm, backtest) -> dict:
         logger.error("strategy builder: account size is %s; nothing tested", account.get("account_size"))
         await jobs.mark(redis, jobs.BUILDER, ok=False, note="account size is 0")
         return out
-    kwargs, lines = {}, []
-    if backtest is None and (history := await _history(db, redis)) is not None:
+    lines = []
+    # An injected `backtest` is the 5-minute one; swing always tests on the stored daily bars.
+    notes = [await _run_horizon(db, redis, now, llm, backtest if horizon == "intraday" else None, horizon,
+                                admin_id, out, lines) for horizon in HORIZONS]
+    notes = [n for n in notes if n]
+
+    text = f"🧪 Strategy builder: {out['drafted']} drafted, {len(out['passed'])} passed"
+    text += (": " + "; ".join(lines) + ".") if lines else "."
+    if out["retired"]:
+        text += " Retired: " + ", ".join(f"built:{s}" for s in out["retired"]) + "."
+    if notes:
+        text += f" ({'; '.join(notes)})"
+    await jobs.mark(redis, jobs.BUILDER, ok=True, note=text)
+    if admin_id:
+        await notify(db, admin_id, text)
+    return out
+
+
+async def _run_horizon(db, redis, now, llm, backtest, horizon, admin_id, out, lines) -> str:
+    """Tests this horizon's waiting drafts, then asks the model for up to MAX_DRAFTS new ones;
+    returns a note for the summary ("" when all went to plan)."""
+    kwargs = {}
+    if backtest is None and (history := await _history(db, redis, horizon)) is not None:
         backtest, kwargs = history
+    holdout_days = (SWING_HOLDOUT if horizon == "swing" else HOLDOUT).days
 
     async def test(doc):
         try:
@@ -249,71 +376,65 @@ async def _run(db, redis, now, llm, backtest) -> dict:
             status, verdict, fields = "rejected", f"test failed: {type(exc).__name__}", {}
         if status == "active":
             if doc.get("owner_id") is None:  # a user's cap is enforced at submit
-                out["retired"] += await _make_room(db)
+                out["retired"] += await _make_room(db, horizon)
             out["passed"].append(doc["slug"])
             year, hold = fields["metrics"]["year"], fields["metrics"]["holdout"]
             lines.append(f"built:{doc['slug']} (PF {year['pf']:.2f}, {year['trades']} trades, "
-                         f"last 90 days {_rupees(hold['net'])})")
+                         f"last {holdout_days} days {_rupees(hold['net'])})")
         else:
             out["rejected"].append((doc["slug"], verdict))
         await store.set_status(db, doc["slug"], status, verdict, **fields)
 
-    waiting = [d for d in await store.all_drafts(db) if d["status"] == "testing"][::-1]  # oldest first
+    waiting = [d for d in await store.all_drafts(db)
+               if d["status"] == "testing" and store.horizon_of(d) == horizon][::-1]  # oldest first
     if backtest is not None:
         for doc in waiting:
             await test(doc)
+    if backtest is None and horizon == "swing":  # stored bars missing is the ingest's fault: draft nothing
+        return f"too few stored daily bars; {len(waiting)} swing draft(s) waiting"
     if backtest is None and waiting:
-        note = f"no 5-minute history source; {len(waiting)} draft(s) waiting"
-    else:
-        try:
-            system, prompt = await _prompt(db, redis, admin_id)
-            text = await llm(system, prompt)
-            ideas = _parse(text)
-            if not ideas:
-                # A cut-off reply is replayed by the gateway's response cache for
-                # the same prompt (seen 2026-10-07), so retry once with a new line.
-                logger.warning("strategy builder: unusable reply (%d chars), retrying: %.200s", len(text or ""), text)
-                ideas = _parse(await llm(system, f"{prompt}\n\n(attempt 2, {now.isoformat()})"))
-        except Exception as exc:  # an LLM failure drafts nothing; nothing else changes
-            logger.warning("strategy builder: no drafts: %s", exc)
-            ideas = []
-        stored = await store.all_drafts(db)
-        # AI drafts only: a user's slug in a global "duplicate of" verdict would leak it.
-        existing = [{"slug": d["slug"], "spec": d.get("spec")} for d in stored if d.get("owner_id") is None]
-        taken = {d["slug"] for d in stored}
-        for idea in ideas:
-            spec, reason = validate_spec(idea.get("spec"), existing)
-            # A refused spec is kept as text (model output may hold keys Mongo refuses, "$" or "."),
-            # under a plain slug: only validated values are safe slug material.
-            doc = {"slug": _unique(slugify(spec) if spec else "invalid", taken), "spec": spec or {},
-                   "thesis": str(idea.get("thesis") or "")[:300], "description": describe(spec) if spec else "",
-                   "drafted_at": now, "status": "testing" if spec else "rejected", "verdict": reason}
-            if spec is None:
-                doc["raw"] = json.dumps(idea.get("spec"), default=str)[:2000]
-            await store.insert(db, doc)
-            out["drafted"] += 1
-            if spec is None:
-                out["rejected"].append((doc["slug"], reason))
-                continue
-            existing.append({"slug": doc["slug"], "spec": spec})
-            if backtest is not None:
-                await test(doc)
-        note = "" if backtest is not None else "no 5-minute history source; drafts wait for next week"
-
-    text = f"🧪 Strategy builder: {out['drafted']} drafted, {len(out['passed'])} passed"
-    text += (": " + "; ".join(lines) + ".") if lines else "."
-    if out["retired"]:
-        text += " Retired: " + ", ".join(f"built:{s}" for s in out["retired"]) + "."
-    if note:
-        text += f" ({note})"
-    await jobs.mark(redis, jobs.BUILDER, ok=True, note=text)
-    if admin_id:
-        await notify(db, admin_id, text)
-    return out
+        return f"no 5-minute history source; {len(waiting)} draft(s) waiting"
+    try:
+        system, prompt = await _prompt(db, redis, admin_id, horizon)
+        text = await llm(system, prompt)
+        ideas = _parse(text)
+        if not ideas:
+            # A cut-off reply is replayed by the gateway's response cache for
+            # the same prompt (seen 2026-10-07), so retry once with a new line.
+            logger.warning("strategy builder: unusable reply (%d chars), retrying: %.200s", len(text or ""), text)
+            ideas = _parse(await llm(system, f"{prompt}\n\n(attempt 2, {now.isoformat()})"))
+    except Exception as exc:  # an LLM failure drafts nothing; nothing else changes
+        logger.warning("strategy builder: no %s drafts: %s", horizon, exc)
+        ideas = []
+    stored = await store.all_drafts(db)
+    # AI drafts only: a user's slug in a global "duplicate of" verdict would leak it.
+    existing = [{"slug": d["slug"], "spec": d.get("spec")} for d in stored if d.get("owner_id") is None]
+    taken = {d["slug"] for d in stored}
+    for idea in ideas:
+        raw = idea.get("spec")
+        # The call decides the horizon, whatever the model wrote.
+        spec, reason = validate_spec({**raw, "horizon": horizon} if isinstance(raw, dict) else raw, existing)
+        # A refused spec is kept as text (model output may hold keys Mongo refuses, "$" or "."),
+        # under a plain slug: only validated values are safe slug material.
+        doc = {"slug": _unique(slugify(spec) if spec else "invalid", taken), "spec": spec or {},
+               "thesis": str(idea.get("thesis") or "")[:300], "description": describe(spec) if spec else "",
+               "drafted_at": now, "status": "testing" if spec else "rejected", "verdict": reason}
+        if spec is None:
+            doc["raw"] = json.dumps(raw, default=str)[:2000]
+        await store.insert(db, doc)
+        out["drafted"] += 1
+        if spec is None:
+            out["rejected"].append((doc["slug"], reason))
+            continue
+        existing.append({"slug": doc["slug"], "spec": spec})
+        if backtest is not None:
+            await test(doc)
+    return "" if backtest is not None else "no 5-minute history source; drafts wait for next week"
 
 
 async def test_one(db, redis, slug: str, now: datetime, backtest=None) -> dict:
-    """Backtests one waiting draft (a user's, on submit). No LLM; its own lock, so it never waits on the weekly run."""
+    """Backtests one waiting draft (a user's, on submit) on its horizon's history. No LLM; its own lock,
+    so it never waits on the weekly run. An injected `backtest` is the 5-minute one (no benchmark bars)."""
     key = f"builder:test:{slug}"
     if not await redis.set(key, now.isoformat(), nx=True, ex=3600):
         return {"slug": slug, "status": "testing", "verdict": "already running"}
@@ -325,7 +446,7 @@ async def test_one(db, redis, slug: str, now: datetime, backtest=None) -> dict:
                     "verdict": found.get("verdict", "") if found else "no such draft"}
         kwargs = {}
         if backtest is None:
-            history = await _history(db, redis)
+            history = await _history(db, redis, store.horizon_of(doc))
             if history is None:
                 verdict = "waiting for market history"
                 await store.set_status(db, slug, "testing", verdict)

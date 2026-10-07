@@ -143,3 +143,17 @@ async def test_ensure_indexes_makes_slug_and_week_unique():
     await db[store.RUNS].insert_one({"week": "2026-W41"})
     with pytest.raises(DuplicateKeyError):
         await db[store.RUNS].insert_one({"week": "2026-W41"})
+
+
+@pytest.mark.asyncio
+async def test_trials_are_per_horizon():
+    db = AsyncMongoMockClient()["t"]
+    swing = {**SPEC, "horizon": "swing"}
+    await store.insert(db, doc("i1", "rejected", sharpe=1.0))
+    await store.insert(db, doc("i2", "rejected", spec={**SPEC, "horizon": "intraday"}, trial_history=[2.0]))
+    await store.insert(db, doc("s1", "rejected", spec=swing, trial_history=[3.0, 4.0]))
+    await store.insert(db, doc("s2", "rejected", spec=swing, sharpe=5.0, owner_id="u1"))
+    assert sorted(await store.trial_sharpes(db)) == [1.0, 2.0]
+    assert sorted(await store.trial_sharpes(db, horizon="swing")) == [3.0, 4.0]
+    assert await store.trial_sharpes(db, "u1", horizon="swing") == [5.0]
+    assert await store.trial_sharpes(db, horizon="swing", exclude="s1") == []

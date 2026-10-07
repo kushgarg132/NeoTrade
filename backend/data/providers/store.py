@@ -14,7 +14,7 @@ from backend.datalayer import bars
 from backend.engine.session import IST
 from backend.screening.protocols import FundamentalSnapshot
 
-_PERIOD_DAYS = {"1mo": 30, "3mo": 91, "6mo": 182, "1y": 365, "2y": 730}
+_PERIOD_DAYS = {"1mo": 30, "3mo": 91, "6mo": 182, "1y": 365, "2y": 730, "5y": 1826}
 _COVER_SLACK = timedelta(days=10)  # the first trading day after `since` can be a week+ later
 
 
