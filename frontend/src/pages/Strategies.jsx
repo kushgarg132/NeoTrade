@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import Layout from '../components/Layout';
@@ -6,6 +6,7 @@ import PaperShell from '../components/paper/PaperShell';
 import Scorecard from '../components/paper/Scorecard';
 import TradeLedger from '../components/dashboard/TradeLedger';
 import LearningSheet from '../components/journal/LearningSheet';
+import MyStrategies from '../components/strategies/MyStrategies';
 import { Sheet, Ruling, Tabs } from '../components/doc/Doc';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints, getPreferences } from '../utils/api';
@@ -35,7 +36,7 @@ const BOOKS = [
   { key: 'longterm', label: 'Long term', mode: 'LONGTERM' },
 ];
 
-const StrategyItem = ({ card, gate, short, open, onToggle }) => {
+const StrategyItem = ({ card, gate, short, open, onToggle, yours }) => {
   const status = STATUS[statusOf(card)];
   return (
     <li className="py-2.5">
@@ -43,7 +44,7 @@ const StrategyItem = ({ card, gate, short, open, onToggle }) => {
         <span className="flex flex-wrap items-baseline gap-2">
           <span className="figure-md text-sm">{strategyName(card.built ? card.name.replace(/^built:/, '') : card.name)}</span>
           <Badge variant={status.variant}>{status.label}</Badge>
-          {card.built && <Badge variant="secondary">Built</Badge>}
+          {card.built && <Badge variant="secondary">{yours ? 'Built · Yours' : 'Built'}</Badge>}
           <ChevronDown className={cn('ml-auto w-4 h-4 text-[var(--ink-faint)] transition-transform', open && 'rotate-180')} />
         </span>
         {card.built && (
@@ -70,12 +71,8 @@ const StrategyItem = ({ card, gate, short, open, onToggle }) => {
   );
 };
 
-/** The weekly builder's drafts that failed a check, so a rejected idea is never re-proposed unseen. */
-const Rejected = () => {
-  const [rows, setRows] = useState(null);
-  useEffect(() => {
-    api.get(endpoints.builtStrategies).then((res) => setRows(res.data.rejected || [])).catch(() => setRows([]));
-  }, []);
+/** The weekly builder's (not the user's own, those are in Mine) drafts that failed a check, so a rejected idea is never re-proposed unseen. */
+const Rejected = ({ rows }) => {
   if (!rows?.length) return null;
   return (
     <details>
@@ -106,6 +103,11 @@ const Strategies = () => {
   const [tradesOpen, setTradesOpen] = useState(false);
   const [trades, setTrades] = useState({ mode: null });
   const [learningOpen, setLearningOpen] = useState(false);
+  const [built, setBuilt] = useState(null);
+  const loadBuilt = useCallback(
+    () => api.get(endpoints.builtStrategies).then((res) => setBuilt(res.data)).catch(() => setBuilt((b) => b || {})), []);
+  useEffect(() => { loadBuilt(); }, [loadBuilt]);
+  const mineSlugs = new Set(Object.values(built || {}).flat().filter((r) => r.mine).map((r) => `built:${r.slug}`));
 
   useEffect(() => {
     api.get(endpoints.strategyLibrary(mode))
@@ -157,7 +159,7 @@ const Strategies = () => {
             <ul className="divide-y divide-[var(--rule)]">
               {cards.map((card) => (
                 <StrategyItem key={card.name} card={card} gate={gate(card.name)} short={short(card.name)} open={openName === card.name}
-                              onToggle={() => setOpenName((n) => (n === card.name ? null : card.name))} />
+                              onToggle={() => setOpenName((n) => (n === card.name ? null : card.name))} yours={mineSlugs.has(card.name)} />
               ))}
             </ul>
           )}
@@ -175,7 +177,9 @@ const Strategies = () => {
         </div>
         <Scorecard mode={book.mode} />
 
-        <Rejected />
+        <MyStrategies built={built} refresh={loadBuilt} />
+
+        <Rejected rows={(built?.rejected || []).filter((r) => !r.mine)} />
 
         <details onToggle={(event) => setTradesOpen(event.currentTarget.open)}>
           <summary className="sheet cursor-pointer px-4 py-3 field-label">Every paper trade</summary>

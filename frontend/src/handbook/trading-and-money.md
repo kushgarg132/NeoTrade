@@ -107,6 +107,24 @@ warm up each morning). At most 5 are active
 (`draft.py::MAX_ACTIVE`); one the learning rules keep paused for 30 days is retired
 (`draft.py::_retire_paused`).
 
+### Your own strategies
+
+Practice → Strategies → **Mine** → **New strategy** composes a spec from the same blocks (the form reads
+`GET /strategies/vocabulary`, `backend/routers/settings.py::strategy_vocabulary`; the live preview is
+`describe_strategy`). `submit_strategy` validates it, stores it private to you (`owner_id`; the loader and
+the library show your strategies only to you, never to other users) as `testing` and starts its backtest
+(`backend/builder/draft.py::test_one`). Same three checks as the AI's drafts, so a pass is **active** for you
+and a fail is **rejected** with the first reason. Limits, shown as-is when hit:
+
+- "3 strategies a day: try again tomorrow." (IST day; a Re-test counts too)
+- "A strategy of yours is still being tested." (one at a time)
+- "Retire one first." (5 active at most)
+
+The test uses the admin's Upstox year of 5-minute bars (the only history source; none yet leaves it
+`testing` as "waiting for market history" until the weekly run) but sizes trades with **your** account size,
+max invested and per-trade cap. The Deflated Sharpe counts only **your** earlier tried drafts, not the AI's.
+`retire_strategy` retires an active one for good; `retest_strategy` re-runs a rejected one as a new trial.
+
 ## Gates to real money
 
 A strategy switched live routes real orders only if all of these hold. Each is code, not policy.
