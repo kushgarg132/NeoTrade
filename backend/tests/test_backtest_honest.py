@@ -135,3 +135,25 @@ async def test_backtest_applies_max_hold_and_trail():
     sell = trailed.trades[1]
     assert sell["price"] == pytest.approx(trail * 0.999)
     assert sell["timestamp"] == (T0 + timedelta(days=18)).isoformat()
+
+
+@pytest.mark.asyncio
+async def test_backtest_trail_never_falls_when_atr_widens():
+    flat = (100, 102.5, 97.5, 100)
+    # Bar 17's close of 120 lifts the trail to 120 - 2 x 85/14 ~ 107.86. Bar 18 is wide (TR 32): recomputed,
+    # the trail would fall to 121 - 2 x 8 = 105. Bar 19's low of 106 must still hit the kept 107.86.
+    kept = 120 - 2 * (13 * 5 + 20) / 14
+    rows = [flat] * 17 + [(100, 120, 100, 120), (120, 140, 108, 121), (115, 116, 106, 110), flat]
+    sell = (await _run_daily(_SwingBuy(15, 20, 2.0), rows)).trades[1]
+    assert sell["price"] == pytest.approx(kept * 0.999)
+    assert sell["timestamp"] == (T0 + timedelta(days=19)).isoformat()
+
+
+@pytest.mark.asyncio
+async def test_swing_gap_through_stop_fills_at_the_open_intraday_at_the_level():
+    flat = (100, 102.5, 97.5, 100)
+    swing = await _run_daily(_SwingBuy(0, 20, None), [flat, flat, (40, 45, 35, 42), flat])
+    assert swing.trades[1]["price"] == pytest.approx(40 * 0.999)  # opened under the stop of 50
+    intraday = await _run([(100, 101, 99, 100), (102, 103, 101, 102), (90, 92, 88, 90)],
+                          account_size=25_000.0, max_exposure=15_000.0, per_trade_cap=5_000.0)
+    assert intraday.trades[1]["price"] == pytest.approx(95 * 0.999)  # unchanged: the stop level

@@ -119,3 +119,30 @@ async def test_trailing_stop_only_rises():
     closed = await check_exits(db, "alice", now=later, marks_fn=_marks({"TRAIL": 111.0, "NOBARS": 89.0}))
     assert sorted((c["symbol"], c["reason"]) for c in closed) == [("NOBARS", "stop"), ("TRAIL", "trailing stop")]
     assert (await db["paper_trades"].find_one({"symbol": "TRAIL"}))["trail_stop"] == 112.0
+
+
+@pytest.mark.asyncio
+async def test_a_failing_trail_never_blocks_other_exits(monkeypatch):
+    from backend.suggestions import exits
+
+    db = AsyncMongoMockClient()["test_db"]
+    await _approved(db, "BROKEN")
+    await _approved(db, "LOSER")
+    await db["suggestions"].update_one({"symbol": "BROKEN"}, {"$set": {"trail_atr": 2.0}})
+    await _bars(db, "BROKEN", [("2026-10-05", 101.0, 99.0, 100.0)])
+
+    def boom(*a, **k):
+        raise ValueError("bad bar")
+
+    monkeypatch.setattr(exits, "_trail_from_bars", boom)
+    closed = await check_exits(db, "alice", now=NOW, marks_fn=_marks({"BROKEN": 89.0, "LOSER": 88.0}))
+    assert sorted((c["symbol"], c["reason"]) for c in closed) == [("BROKEN", "stop"), ("LOSER", "stop")]
+
+    async def no_bars(*a, **k):
+        raise RuntimeError("mongo down")
+
+    await _approved(db, "LOSER2")
+    await db["suggestions"].update_one({"symbol": "LOSER2"}, {"$set": {"trail_atr": 2.0}})
+    monkeypatch.setattr(exits.bars, "read", no_bars)
+    closed = await check_exits(db, "alice", now=NOW, marks_fn=_marks({"LOSER2": 88.0}))
+    assert [(c["symbol"], c["reason"]) for c in closed] == [("LOSER2", "stop")]

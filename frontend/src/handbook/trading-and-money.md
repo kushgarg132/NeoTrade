@@ -178,7 +178,8 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
   every 15 min in session). A swing proposal also exits after `max_hold_days` trading days and at
   a trailing stop (highest close since entry − k × 14-day ATR, never lowered, kept as
   `trail_stop`), by `exits.py::exit_reasons`, which the autopilot's exits share; the backtest
-  applies the same rules (`engine/backtest.py::run_backtest`).
+  applies the same rules (`engine/backtest.py::run_backtest`), counting bars held rather than weekdays,
+  and fills a swing position that opens through its stop at the open.
 
 ## The autopilot (AI account)
 

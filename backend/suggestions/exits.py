@@ -74,7 +74,10 @@ async def exit_reasons(db, trades: list[dict], suggestions: dict, marks: dict, n
     frames = {}
     if trailing:  # 40 calendar days before the earliest entry covers the 14-bar ATR
         since = min(_ist_date(t["entry_at"]) for t in trailing) - timedelta(days=40)
-        frames = await bars.read(db, {t["symbol"] for t in trailing}, since, today=_ist_date(now))
+        try:
+            frames = await bars.read(db, {t["symbol"] for t in trailing}, since, today=_ist_date(now))
+        except Exception:  # stops and targets still run on the stored levels
+            logger.exception("exit check: daily bars unreadable, trails kept as stored")
     reasons = {}
     for trade in trades:
         suggestion, mark = suggestions.get(trade["suggestion_id"]), marks.get(trade["symbol"])
@@ -83,10 +86,13 @@ async def exit_reasons(db, trades: list[dict], suggestions: dict, marks: dict, n
         stop, trail = suggestion.get("stop"), trade.get("trail_stop")
         df = frames.get(trade["symbol"])
         if suggestion.get("trail_atr") and df is not None:
-            new = _trail_from_bars(df, _ist_date(trade["entry_at"]), suggestion["trail_atr"])
-            if new is not None and new > max((x for x in (stop, trail) if x is not None), default=float("-inf")):
-                trail = new
-                await db["paper_trades"].update_one({"id": trade["id"]}, {"$set": {"trail_stop": new}})
+            try:  # one bad trade's trail must not cancel the others' exits
+                new = _trail_from_bars(df, _ist_date(trade["entry_at"]), suggestion["trail_atr"])
+                if new is not None and new > max((x for x in (stop, trail) if x is not None), default=float("-inf")):
+                    await db["paper_trades"].update_one({"id": trade["id"]}, {"$set": {"trail_stop": new}})
+                    trail = new
+            except Exception:
+                logger.exception("exit check: trail for %s failed, keeping %s", trade["symbol"], trail or stop)
         if trail is not None and (stop is None or trail > stop) and mark <= trail:
             reasons[trade["id"]] = "trailing stop"
         elif why := breach(mark, stop, suggestion.get("target")):

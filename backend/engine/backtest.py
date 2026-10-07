@@ -101,12 +101,16 @@ async def run_backtest(
         if long and lv["k"]:  # past[-1] is the entry bar on the first bar held
             lv["high"] = max(lv["high"] or past[-1].close, past[-1].close)
             atr = Indicators.atr(*(pd.Series([getattr(b, f) for b in past]) for f in ("high", "low", "close"))).iloc[-1]
-            if not pd.isna(atr):
-                stop = max(stop, trail_level(lv["high"], float(atr), lv["k"]))
+            if not pd.isna(atr):  # kept: a widening ATR never lowers it
+                lv["stop"] = stop = max(stop, trail_level(lv["high"], float(atr), lv["k"]))
         if long:
             level = stop if bar.low <= stop else (target if target is not None and bar.high >= target else None)
+            gapped = bar.open <= stop
         else:
             level = stop if bar.high >= stop else (target if target is not None and bar.low <= target else None)
+            gapped = bar.open >= stop
+        if level == stop and gapped and lv["hold"]:
+            level = bar.open  # a swing position held overnight gets the gap, not its stop
         lv["bars"] += 1
         if level is None and lv["hold"] and lv["bars"] >= lv["hold"]:
             level = bar.close
