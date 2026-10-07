@@ -50,6 +50,7 @@ const MyStrategies = ({ built, refresh }) => {
           <li key={r.slug} className="py-2.5">
             <span className="flex flex-wrap items-baseline gap-2">
               <Badge variant={CHIPS[r.status][1]}>{CHIPS[r.status][0]}</Badge>
+              {r.name && <span className="text-sm font-medium">{r.name}</span>}
               <span className="text-sm min-w-0">{[r.description, r.thesis].filter(Boolean).join(' — ')}</span>
             </span>
             {r.verdict && <span className="block doc-meta normal-case">{r.verdict}</span>}

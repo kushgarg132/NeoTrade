@@ -14,9 +14,13 @@ const MAX_FILTERS = 3;
 const FIELD = 'bg-transparent border-b border-[var(--rule-strong)] py-1 text-sm focus:outline-none focus:border-[var(--stamp)] min-h-11 sm:min-h-0';
 const label = (code) => code.replace(/_/g, ' ');
 
-/** A starting value for one parameter: the low end of a range, the first choice, the earliest time. */
-const startValue = (key, spec) =>
-  spec.choices ? (key === 'regimes' ? [spec.choices[0]] : spec.choices[0]) : spec.time ? spec.time[0] : spec.min;
+/** A starting value for one parameter: the first choice, else the low end of its range — or the high end
+ *  for the top of a range filter (time_window end, atr_pct max), so a new filter is valid at once. */
+const startValue = (key, spec) => {
+  if (spec.choices) return key === 'regimes' ? [spec.choices[0]] : spec.choices[0];
+  const high = key === 'end' || key === 'max';
+  return spec.time ? spec.time[high ? 1 : 0] : high ? spec.max : spec.min;
+};
 
 const startParams = (block) => Object.fromEntries(Object.entries(block).filter(([, s]) => !s.flag).map(([k, s]) => [k, startValue(k, s)]));
 

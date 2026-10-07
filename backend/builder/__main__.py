@@ -19,4 +19,7 @@ async def _main(slug: str | None = None) -> None:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     args = sys.argv[1:]
-    asyncio.run(_main(args[1] if args[:1] == ["--test"] and len(args) > 1 else None))
+    if args[:1] == ["--test"] and len(args) < 2:
+        print("usage: python -m backend.builder [--test <slug>]", file=sys.stderr)
+        sys.exit(2)  # never the weekly job by accident
+    asyncio.run(_main(args[1] if args[:1] == ["--test"] else None))

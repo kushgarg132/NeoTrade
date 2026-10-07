@@ -616,7 +616,12 @@ async def run_gate_backtest(strategy_name: str, admin: User = Depends(require_ad
 
 
 @router.get("/backtests/{strategy_name}")
-async def latest_gate_backtest(strategy_name: str, _user: User = Depends(get_current_user)):
+async def latest_gate_backtest(strategy_name: str, user: User = Depends(get_current_user)):
+    if strategy_name.startswith("built:"):  # a user's built strategy is private to them (R5)
+        from backend.builder.store import visible
+
+        if strategy_name.removeprefix("built:") not in {d["slug"] for d in await visible(db.db, user.id)}:
+            raise HTTPException(status_code=404, detail="No backtest recorded")
     doc = await BacktestGateStore(db.db).latest(strategy_name)
     if doc is None:
         raise HTTPException(status_code=404, detail="No backtest recorded")

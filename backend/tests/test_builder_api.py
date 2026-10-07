@@ -51,7 +51,7 @@ async def test_built_endpoint_groups_by_status(env):
     body = _client().get("/api/v1/strategies/built").json()
     assert {k: [r["slug"] for r in v] for k, v in body.items()} == {
         "active": ["a"], "rejected": ["b"], "retired": ["c"], "testing": ["d"]}
-    assert set(body["active"][0]) == {"slug", "description", "thesis", "verdict", "metrics", "drafted_at", "mine"}
+    assert set(body["active"][0]) == {"slug", "name", "description", "thesis", "verdict", "metrics", "drafted_at", "mine"}
 
 
 def test_run_is_admin_only(env):

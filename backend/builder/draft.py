@@ -148,10 +148,11 @@ async def _test(db, doc: dict, backtest, kwargs: dict, now: datetime) -> tuple[s
     sharpe = _sharpe(daily)
     finite = math.isfinite(sharpe) and math.isfinite(float(daily.to_numpy().sum()))  # _sharpe maps NaN to 0
     sharpe = sharpe if finite else None  # never stored: it would poison every later trial count
-    trials = await store.trial_sharpes(db, doc.get("owner_id")) + ([sharpe] if finite else [])
+    history = store.history_of(doc) + ([sharpe] if finite else [])  # a re-test is a new trial
+    trials = await store.trial_sharpes(db, doc.get("owner_id"), exclude=doc["slug"]) + history
     holdout = [t for t in r.trades if _at(t) >= end - HOLDOUT]
     hold_net = round(sum(t["net_pnl"] for t in holdout), 2)
-    fields = {"sharpe": sharpe, "trials": len(trials), "tested_at": now, "metrics": {
+    fields = {"sharpe": sharpe, "trial_history": history, "trials": len(trials), "tested_at": now, "metrics": {
         "year": {"trades": r.total_trades, "pf": round(r.profit_factor, 2), "dd": round(r.max_drawdown, 4),
                  "net": round(r.total_pnl, 2), "win_rate": round(r.win_rate, 4)},
         "holdout": {"trades": len(holdout), "net": hold_net}}}
@@ -243,9 +244,9 @@ async def _run(db, redis, now, llm, backtest) -> dict:
     async def test(doc):
         try:
             status, verdict, fields = await _test(db, doc, backtest, kwargs, now)
-        except Exception:  # a history gap or timeout: stays testing, retried next week
+        except Exception as exc:  # rejected, not left testing: a stuck draft would lock its owner out (R3)
             logger.exception("backtest of draft %s failed", doc["slug"])
-            return
+            status, verdict, fields = "rejected", f"test failed: {type(exc).__name__}", {}
         if status == "active":
             if doc.get("owner_id") is None:  # a user's cap is enforced at submit
                 out["retired"] += await _make_room(db)
@@ -277,7 +278,8 @@ async def _run(db, redis, now, llm, backtest) -> dict:
             logger.warning("strategy builder: no drafts: %s", exc)
             ideas = []
         stored = await store.all_drafts(db)
-        existing = [{"slug": d["slug"], "spec": d.get("spec")} for d in stored]
+        # AI drafts only: a user's slug in a global "duplicate of" verdict would leak it.
+        existing = [{"slug": d["slug"], "spec": d.get("spec")} for d in stored if d.get("owner_id") is None]
         taken = {d["slug"] for d in stored}
         for idea in ideas:
             spec, reason = validate_spec(idea.get("spec"), existing)
@@ -331,9 +333,9 @@ async def test_one(db, redis, slug: str, now: datetime, backtest=None) -> dict:
             backtest, kwargs = history
         try:
             status, verdict, fields = await _test(db, doc, backtest, kwargs, now)
-        except Exception as exc:  # a history gap or timeout: stays testing
+        except Exception as exc:  # rejected so Re-test works; left testing it would lock its owner out (R3)
             logger.exception("backtest of draft %s failed", slug)
-            status, verdict, fields = "testing", f"test failed: {type(exc).__name__}", {}
+            status, verdict, fields = "rejected", f"test failed: {type(exc).__name__}", {}
         await store.set_status(db, slug, status, verdict, **fields)
         return {"slug": slug, "status": status, "verdict": verdict}
     finally:

@@ -4,7 +4,7 @@ cache that strategies/registry.py builds from (strategies/ itself does no I/O).
 
 Doc: slug, owner_id (None/absent = the AI's, global), spec, thesis, description, drafted_at, status
 ("testing"|"rejected"|"active"|"retired"), verdict, metrics
-({"year": {...}, "holdout": {...}}), trials, sharpe, params.
+({"year": {...}, "holdout": {...}}), trials, sharpe (latest), trial_history (every test's finite Sharpe), params, name (a user's).
 """
 import logging
 import math
@@ -63,10 +63,19 @@ async def visible(db, user_id: str) -> list[dict]:
     return await db[COLLECTION].find({"owner_id": {"$in": [None, user_id]}}, {"_id": 0}).sort("drafted_at", -1).to_list(None)
 
 
-async def trial_sharpes(db, owner_id: Optional[str] = None) -> list[float]:
-    """Sharpe of every draft this owner (None = the AI) already tested, for the deflated-Sharpe trial count."""
-    rows = await db[COLLECTION].find({"status": {"$ne": "testing"}, "owner_id": owner_id}, {"sharpe": 1}).to_list(None)
-    return [s for r in rows if isinstance(s := r.get("sharpe"), (int, float)) and math.isfinite(s)]
+def history_of(doc: dict) -> list[float]:
+    """Every finite Sharpe this draft was tested to: `trial_history`, or the scalar `sharpe` from before it."""
+    h = doc.get("trial_history")
+    h = h if isinstance(h, list) else [doc.get("sharpe")]
+    return [s for s in h if isinstance(s, (int, float)) and math.isfinite(s)]
+
+
+async def trial_sharpes(db, owner_id: Optional[str] = None, exclude: Optional[str] = None) -> list[float]:
+    """Every Sharpe this owner (None = the AI) ever tested to, re-tests included (each is a new trial),
+    for the deflated-Sharpe trial count; `exclude` leaves out the draft under test, which adds its own."""
+    rows = await db[COLLECTION].find({"owner_id": owner_id, "slug": {"$ne": exclude}},
+                                     {"sharpe": 1, "trial_history": 1}).to_list(None)
+    return [s for r in rows for s in history_of(r)]
 
 
 async def regime_of(db) -> Callable[[object], Optional[str]]:

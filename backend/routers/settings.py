@@ -188,6 +188,8 @@ class StrategyBody(BaseModel):
 async def _check_caps(user: User) -> None:
     from backend.builder import store
 
+    if not (await PrefsStore(db.db).get(user.id))["account_size"] > 0:  # sizing would divide by it (R3)
+        raise HTTPException(422, "Set your account size in Settings first.")
     mine = db.db[store.COLLECTION]
     if await mine.count_documents({"owner_id": user.id, "status": "active"}) >= _LIMITS["active"]:
         raise HTTPException(409, "Retire one first.")
@@ -231,7 +233,8 @@ async def submit_strategy(body: StrategyBody, user: User = Depends(get_current_u
     for _ in range(3):  # a concurrent submit can take the slug between our read and insert
         taken = {d["slug"] for d in await db.db[store.COLLECTION].find({}, {"slug": 1}).to_list(None)}
         doc = {"slug": _unique(base, taken), "spec": spec, "thesis": body.thesis, "description": describe(spec),
-               "drafted_at": datetime.now(timezone.utc), "status": "testing", "verdict": "", "owner_id": user.id}
+               "drafted_at": datetime.now(timezone.utc), "status": "testing", "verdict": "", "owner_id": user.id,
+               "name": body.name}
         try:
             await store.insert(db.db, doc)
             break
@@ -290,7 +293,7 @@ async def built_strategies(user: User = Depends(get_current_user)):
     out = {"active": [], "rejected": [], "retired": [], "testing": []}
     for d in await visible(db.db, user.id):
         if d.get("status") in out:
-            out[d["status"]].append({**{k: d.get(k) for k in ("slug", "description", "thesis", "verdict", "metrics", "drafted_at")},
+            out[d["status"]].append({**{k: d.get(k) for k in ("slug", "name", "description", "thesis", "verdict", "metrics", "drafted_at")},
                                      "mine": d.get("owner_id") == user.id})
     return out
 

@@ -294,7 +294,7 @@ async def test_a_cut_off_reply_is_retried_once_with_a_new_prompt(env):
     assert out["drafted"] == 1 and len(prompts) == 2 and prompts[1] != prompts[0]
 
 
-async def test_backtest_failure_leaves_that_draft_testing_and_tests_the_next(env):
+async def test_backtest_failure_rejects_that_draft_and_tests_the_next(env):
     db, redis, _ = env
     tested = []
 
@@ -307,7 +307,8 @@ async def test_backtest_failure_leaves_that_draft_testing_and_tests_the_next(env
     out = await draft.run(db, redis, NOW, llm=llm_of(GAP, ORB), backtest=backtest)
     statuses = {d["slug"]: d["status"] for d in (await _drafts(db)).values()}
     first = tested[0].removeprefix("built:")
-    assert len(tested) == 2 and statuses[first] == "testing" and out["drafted"] == 2
+    assert len(tested) == 2 and statuses[first] == "rejected" and out["drafted"] == 2
+    assert (await _drafts(db))[first]["verdict"] == "test failed: TimeoutError"  # re-testable, not stuck
     assert [s for s, st in statuses.items() if st == "active"] == out["passed"] != [first]
     assert redis.data["job:last:strategy_builder"]["ok"] == "1" and "builder:lock" not in redis.data
 
@@ -461,7 +462,7 @@ async def test_test_one_no_history_waits(env, monkeypatch):
     assert (await _drafts(db))["mine"]["verdict"] == "waiting for market history"
 
 
-async def test_test_one_failure_stays_testing_and_other_states_are_skipped(env):
+async def test_test_one_failure_is_rejected_and_other_states_are_skipped(env):
     db, redis, _ = env
     await _user_draft(db)
     await _user_draft(db, "done", status="active")
@@ -470,7 +471,8 @@ async def test_test_one_failure_stays_testing_and_other_states_are_skipped(env):
         raise TimeoutError("gap")
 
     out = await draft.test_one(db, redis, "mine", NOW, backtest=boom)
-    assert out["status"] == "testing" and out["verdict"] == "test failed: TimeoutError"
+    assert out["status"] == "rejected" and out["verdict"] == "test failed: TimeoutError"
+    assert (await _drafts(db))["mine"]["status"] == "rejected"
     assert (await draft.test_one(db, redis, "done", NOW, backtest=boom))["status"] == "active"
 
 
@@ -483,3 +485,26 @@ async def test_weekly_run_retests_a_users_waiting_draft_with_owner_sizing(env):
     seen = []
     out = await draft.run(db, redis, NOW, llm=llm_of(), backtest=sized_backtest(result(), seen))
     assert out["passed"] == ["mine"] and seen[0][1]["account_size"] == 50_000.0
+
+
+async def test_retest_counts_as_a_new_trial(env):
+    db, redis, _ = env
+    await _user_draft(db)
+    await _user_draft(db, "u1-legacy", status="rejected")  # tested before trial_history existed
+    await db[store.COLLECTION].update_one({"slug": "u1-legacy"}, {"$set": {"sharpe": 1.0}})
+    counts = []
+    for _ in range(3):  # test, rejected, re-test, ...
+        await draft.test_one(db, redis, "mine", NOW, backtest=backtest_of(result(pf=1.0)))
+        doc = (await _drafts(db))["mine"]
+        assert doc["status"] == "rejected"
+        counts.append(doc["trials"])
+        await store.set_status(db, "mine", "testing")
+    assert counts == [2, 3, 4] and len(doc["trial_history"]) == 3
+    assert len(await store.trial_sharpes(db, "u1")) == 4
+
+
+async def test_ai_draft_is_never_a_duplicate_of_a_users(env):
+    db, redis, _ = env
+    await _user_draft(db, "alices-private-gap", status="active")
+    out = await draft.run(db, redis, NOW, llm=llm_of(GAP), backtest=backtest_of(result()))
+    assert out["drafted"] == 1 and not any("alices-private-gap" in v for _, v in out["rejected"])

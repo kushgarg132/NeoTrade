@@ -226,3 +226,34 @@ async def test_concurrent_retest_flip_is_conditional(env):
         r = _client().post(f"{URL}/r/retest")
     assert r.status_code == 409
     spawn.assert_not_awaited()
+
+
+async def test_zero_account_size_refuses_submit_and_retest(env):
+    mongo, _, spawn = env
+    await mongo["user_prefs"].insert_one({"user_id": "alice", "account_size": 0.0})
+    await _put(mongo, "r", "rejected")
+    for r in (_client().post(URL, json=_body(spec=_spec(2.0))), _client().post(f"{URL}/r/retest")):
+        assert r.status_code == 422 and r.json()["detail"] == "Set your account size in Settings first."
+    assert (await mongo["built_strategies"].find_one({"slug": "r"}))["status"] == "rejected"
+    spawn.assert_not_awaited()
+
+
+async def test_submit_stores_name_and_list_shows_it(env):
+    _client().post(URL, json=_body(name="My Gap"))
+    assert _client().get(URL).json()["testing"][0]["name"] == "My Gap"
+
+
+async def test_gate_backtest_of_anothers_built_strategy_is_404(env):
+    from backend.routers import trading
+
+    mongo, _, _ = env
+    await _put(mongo, "secret", "active", owner="bob")
+    await mongo["strategy_backtests"].insert_one({"strategy_name": "built:secret", "passed": True,
+                                                  "run_at": datetime(2026, 10, 2, tzinfo=timezone.utc),
+                                                  "result": {"total_trades": 1}})
+    app = FastAPI()
+    app.include_router(trading.router, prefix="/api/v1")
+    for uid, code in (("alice", 404), ("bob", 200)):
+        app.dependency_overrides[get_current_user] = lambda uid=uid: _user(uid)
+        r = TestClient(app).get("/api/v1/trading/backtests/built:secret")
+        assert r.status_code == code, r.text

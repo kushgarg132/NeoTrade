@@ -40,12 +40,14 @@ async def test_refresh_loads_only_active():
 
 
 @pytest.mark.asyncio
-async def test_trial_sharpes_excludes_testing():
+async def test_trial_sharpes_counts_every_test_but_the_excluded_draft():
     db = AsyncMongoMockClient()["t"]
-    await store.insert(db, doc("a", "testing", sharpe=9.0))
-    await store.insert(db, doc("b", "rejected", sharpe=0.1))
+    await store.insert(db, doc("a", "testing", sharpe=9.0))  # re-queued: its earlier test still counts
+    await store.insert(db, doc("b", "rejected", sharpe=0.1, trial_history=[0.2, float("nan"), 0.1]))
     await store.insert(db, doc("c", "active", sharpe=0.5))
-    assert sorted(await store.trial_sharpes(db)) == [0.1, 0.5]
+    await store.insert(db, doc("d", "testing"))  # never tested
+    assert sorted(await store.trial_sharpes(db)) == [0.1, 0.2, 0.5, 9.0]
+    assert sorted(await store.trial_sharpes(db, exclude="a")) == [0.1, 0.2, 0.5]
 
 
 @pytest.mark.asyncio
