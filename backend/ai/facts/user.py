@@ -162,7 +162,7 @@ async def worst_setups(db, redis, user_id, limit: int = 10) -> dict:
 
 
 @fact("built_strategies", "Every strategy the AI strategy builder drafted: plain-words description, thesis, "
-      "status (testing/rejected/active/retired), verdict and backtest metrics.", source="built_strategies")
+      "status (testing/rejected/active/retired), verdict and backtest metrics.", user=True, source="built_strategies")
 async def built_strategies(db, redis, user_id) -> dict:
     from backend.builder.store import COLLECTION
 

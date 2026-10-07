@@ -140,15 +140,137 @@ async def list_strategies(user: User = Depends(get_current_user)):
     return [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"], user_id=user.id)]
 
 
+_LIMITS = {"active": 5, "daily": 3}
+
+
+def _vocab_json(spec: tuple) -> dict:
+    if not spec:
+        return {"flag": True}
+    if spec[0] == "HH:MM":
+        return {"time": [spec[1], spec[2]]}
+    if isinstance(spec[0], str):
+        return {"choices": list(spec)}
+    return dict(zip(("min", "max", "step"), spec))
+
+
+@router.get("/strategies/vocabulary")
+async def strategy_vocabulary(user: User = Depends(get_current_user)):
+    """The block vocabulary the form renders, straight from vocab.py so it can't drift from the validator."""
+    from backend.strategies.blocks import vocab
+
+    return {k: {b: {p: _vocab_json(s) for p, s in ps.items()} for b, ps in blocks.items()}
+            for k, blocks in (("setups", vocab.SETUPS), ("filters", vocab.FILTERS), ("exits", vocab.EXITS))}
+
+
+class DescribeBody(BaseModel):
+    spec: dict
+
+
+@router.post("/strategies/describe")
+async def describe_strategy(body: DescribeBody, user: User = Depends(get_current_user)):
+    """Validate and describe a spec for the form's live preview; nothing is stored."""
+    from backend.builder.validate import describe, validate_spec
+
+    spec, reason = validate_spec(body.spec, [])
+    if spec is None:
+        raise HTTPException(422, reason)
+    return {"spec": spec, "description": describe(spec)}
+
+
+class StrategyBody(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    thesis: str = Field(default="", max_length=200)
+    spec: dict
+
+
+async def _spend_slot(user: User) -> None:
+    """Applies the 409 checks, then spends one of today's three IST slots (checked last: `allow` increments)."""
+    from backend.builder import store
+    from backend.engine.session import IST
+    from backend.rate_limit import allow
+
+    mine = db.db[store.COLLECTION]
+    if await mine.count_documents({"owner_id": user.id, "status": "active"}) >= _LIMITS["active"]:
+        raise HTTPException(409, "Retire one first.")
+    if await mine.find_one({"owner_id": user.id, "status": "testing"}):
+        raise HTTPException(409, "A strategy of yours is still being tested.")
+    day = datetime.now(IST).date().isoformat()
+    if not await allow(db.redis, f"strategies:submit:{user.id}:{day}", _LIMITS["daily"], 2 * 86400):
+        raise HTTPException(429, "You have used today's 3 strategy tests. Try again tomorrow.")
+
+
+async def _spawn_test(slug: str) -> None:
+    from backend.builder import draft
+
+    try:
+        await draft.spawn_test(slug)
+    except Exception as exc:  # the draft stays `testing`; the weekly run retries it
+        logger.warning("could not start the test of %s: %s", slug, exc)
+
+
+@router.post("/strategies/built", status_code=201)
+async def submit_strategy(body: StrategyBody, user: User = Depends(get_current_user)):
+    """Validates a user's strategy, stores it private to them as `testing` and starts its backtest."""
+    import re
+
+    from backend.builder import store
+    from backend.builder.draft import _unique
+    from backend.builder.validate import describe, slugify, validate_spec
+
+    mine = [d for d in await store.visible(db.db, user.id) if d.get("owner_id") == user.id]
+    spec, reason = validate_spec(body.spec, mine)  # a duplicate of one's own is refused; of another's it's private
+    if spec is None:
+        raise HTTPException(422, reason)
+    taken = {d["slug"] for d in await db.db[store.COLLECTION].find({}, {"slug": 1}).to_list(None)}
+    base = re.sub(r"[^a-z0-9]+", "-", body.name.lower()).strip("-")[:40].strip("-") or slugify(spec)
+    doc = {"slug": _unique(base, taken), "spec": spec, "thesis": body.thesis, "description": describe(spec),
+           "drafted_at": datetime.now(timezone.utc), "status": "testing", "verdict": "", "owner_id": user.id}
+    await _spend_slot(user)
+    await store.insert(db.db, doc)
+    await _spawn_test(doc["slug"])
+    return doc
+
+
+async def _own(user: User, slug: str, status: str) -> None:
+    from backend.builder import store
+
+    d = await db.db[store.COLLECTION].find_one({"slug": slug, "owner_id": user.id})
+    if d is None:
+        raise HTTPException(404, "No such strategy")
+    if d["status"] != status:
+        raise HTTPException(409, f"Only {status} strategies can do that.")
+
+
+@router.post("/strategies/built/{slug}/retire")
+async def retire_strategy(slug: str, user: User = Depends(get_current_user)):
+    from backend.builder import store
+
+    await _own(user, slug, "active")
+    await store.set_status(db.db, slug, "retired")
+    return {"slug": slug, "status": "retired"}
+
+
+@router.post("/strategies/built/{slug}/retest")
+async def retest_strategy(slug: str, user: User = Depends(get_current_user)):
+    from backend.builder import store
+
+    await _own(user, slug, "rejected")
+    await _spend_slot(user)
+    await store.set_status(db.db, slug, "testing")
+    await _spawn_test(slug)
+    return {"slug": slug, "status": "testing"}
+
+
 @router.get("/strategies/built")
 async def built_strategies(user: User = Depends(get_current_user)):
-    """Every strategy the builder drafted, grouped by status, with its verdict."""
+    """The AI's drafts plus the caller's own, grouped by status, with the verdict; `mine` marks the caller's."""
     from backend.builder.store import visible
 
     out = {"active": [], "rejected": [], "retired": [], "testing": []}
     for d in await visible(db.db, user.id):
         if d.get("status") in out:
-            out[d["status"]].append({k: d.get(k) for k in ("slug", "description", "thesis", "verdict", "metrics", "drafted_at")})
+            out[d["status"]].append({**{k: d.get(k) for k in ("slug", "description", "thesis", "verdict", "metrics", "drafted_at")},
+                                     "mine": d.get("owner_id") == user.id})
     return out
 
 
