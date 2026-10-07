@@ -19,7 +19,7 @@ from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument
 from backend.options.backtest import ModelOptions
 from backend.options.resolver import FO_UNDERLYINGS
-from backend.risk.backtest_gate import BacktestGateStore
+from backend.risk.backtest_gate import LOOKBACK_DAYS, BacktestGateStore
 from backend.strategies.registry import build_default_strategies
 from backend.datalayer.catalysts import catalyst_map
 from backend.datalayer.news_sources import nifty200_sectors
@@ -91,7 +91,7 @@ async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> 
             option_universe=universe if options else None,
             regime_of=await store.regime_of(db),
             params=await current_params(db),
-            catalysts=await catalyst_map(db, (now - timedelta(days=365)).date(), now.date()),
+            catalysts=await catalyst_map(db, (now - timedelta(days=LOOKBACK_DAYS)).date(), now.date()),
             sector_of=nifty200_sectors(),
         )
         if s.spec.name == strategy_name
@@ -100,7 +100,7 @@ async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> 
         raise ValueError(f"No registered strategy named {strategy_name!r}")
 
     result = await run_backtest(
-        strategies, provider, instruments, start=now - timedelta(days=365), end=now,
+        strategies, provider, instruments, start=now - timedelta(days=LOOKBACK_DAYS), end=now,
         timeframe=strategies[0].spec.timeframe,
         model_options=ModelOptions(lot_sizes) if options else None,
         **await backtest_account(db),

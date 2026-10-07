@@ -263,6 +263,21 @@ async def test_llm_garbage_drafts_nothing(env):
     assert sent and "0 drafted" in sent[0][1]
 
 
+async def test_backtest_asks_for_more_than_a_year(env):
+    """2026-10-07: a request of exactly 365 days came back as 363 days of bars
+    and failed the gate's 365-day minimum."""
+    db, redis, _ = env
+    await _admin(db)
+    windows = []
+
+    async def backtest(strategy, start, end):
+        windows.append(end - start)
+        return result()
+
+    await draft.run(db, redis, NOW, llm=llm_of(GAP), backtest=backtest)
+    assert windows == [timedelta(days=372)]
+
+
 async def test_a_cut_off_reply_is_retried_once_with_a_new_prompt(env):
     """2026-10-07: the first live run got a truncated JSON reply, and the
     gateway's response cache replays it for the same prompt."""

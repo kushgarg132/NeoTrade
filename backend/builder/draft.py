@@ -21,7 +21,7 @@ from backend.builder.validate import describe, slugify, validate_spec
 from backend.engine.session import IST
 from backend.factor.validate import deflated_sharpe
 from backend.learning.retune import ACCOUNT, MIN_DSR, _at, _daily, _sharpe
-from backend.risk.backtest_gate import (MAX_DRAWDOWN, MIN_PROFIT_FACTOR, MIN_TRADES, MIN_WINDOW_DAYS,
+from backend.risk.backtest_gate import (LOOKBACK_DAYS, MAX_DRAWDOWN, MIN_PROFIT_FACTOR, MIN_TRADES, MIN_WINDOW_DAYS,
                                         BacktestGateStore, passes_gate)
 from backend.strategies.blocks.vocab import EXITS, FILTERS, SETUPS
 from backend.suggestions.notify import notify
@@ -33,7 +33,7 @@ LOCK = "builder:lock"
 LOCK_TTL = 6 * 3600
 MAX_DRAFTS = 3
 MAX_ACTIVE = 5
-YEAR, HOLDOUT, PAUSED_DAYS = timedelta(days=365), timedelta(days=90), 30
+YEAR, HOLDOUT, PAUSED_DAYS = timedelta(days=LOOKBACK_DAYS), timedelta(days=90), 30
 
 
 def _rupees(v: float) -> str:

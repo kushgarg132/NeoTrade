@@ -10,6 +10,9 @@ from datetime import datetime, timezone
 from backend.components.shared.models import BacktestResult
 
 MIN_WINDOW_DAYS = 365
+# What a gate backtest asks for: the actual span runs from the first bar to the
+# last, so a request of exactly 365 days always comes back a day or two short.
+LOOKBACK_DAYS = 372
 MIN_TRADES = 30
 MIN_PROFIT_FACTOR = 1.3
 MAX_DRAWDOWN = 0.15
