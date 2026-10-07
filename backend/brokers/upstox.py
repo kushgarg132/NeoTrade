@@ -120,8 +120,9 @@ _OPTION_CHAIN_URL = "https://api.upstox.com/v2/option/chain"
 
 _INTERVAL_MAP = {"1m": ("minutes", 1), "5m": ("minutes", 5), "15m": ("minutes", 15),
                  "30m": ("minutes", 30), "1d": ("days", 1)}
-# HistoricalFeed asks for "max" on intraday timeframes; a year is what the gate needs.
-_PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825, "max": 365}
+# HistoricalFeed asks for "max" on intraday timeframes: past the gate's 372-day ask
+# (risk/backtest_gate.py::LOOKBACK_DAYS), so the span is a full year.
+_PERIOD_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 182, "1y": 365, "2y": 730, "5y": 1825, "max": 400}
 # v3 refuses a minute range over a month ("Invalid date range"); days take a decade.
 _CHUNK_DAYS = {"minutes": 28, "days": 3650}
 _RETRIES_429 = 4

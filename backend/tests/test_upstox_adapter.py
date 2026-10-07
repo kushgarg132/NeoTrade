@@ -217,6 +217,8 @@ async def test_a_year_of_5m_history_comes_in_month_chunks_oldest_first(monkeypat
     spans = [(datetime.fromisoformat(u.rsplit("/", 2)[-2]) - datetime.fromisoformat(u.rsplit("/", 1)[-1])).days
              for u in urls]
     assert len(urls) >= 12 and max(spans) < 31
+    earliest = min(datetime.fromisoformat(u.rsplit("/", 1)[-1]) for u in urls)
+    assert (datetime.fromisoformat(urls[0].rsplit("/", 2)[-2]) - earliest).days >= 372  # the gate asks for 372
     assert urls[0] == throttled[0]  # the throttled chunk was asked again
     stamps = [c.timestamp for c in candles]
     assert stamps == sorted(stamps) and len(candles) == 2 * len(urls)

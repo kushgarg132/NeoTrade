@@ -81,7 +81,7 @@ async def test_kite_history_fetches_a_year_of_5m_candles_in_windows():
                new=AsyncMock(side_effect=lambda fn, *a: fn(*a))):
         await provider.history(_underlying(), interval="5m", period="max")
     spans = [(c.args[1], c.args[2]) for c in kite.historical_data.call_args_list]
-    assert len(spans) == 4 and spans[0][0] == now - timedelta(days=365) and spans[-1][1] == now
+    assert len(spans) == 5 and spans[0][0] == now - timedelta(days=400) and spans[-1][1] == now
     assert all(end - start <= timedelta(days=99) for start, end in spans)
 
 

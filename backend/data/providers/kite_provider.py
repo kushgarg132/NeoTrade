@@ -50,9 +50,9 @@ _PERIOD_DAYS = {
     "2y": 730,
     "5y": 1825,
     "10y": 3650,
-    # HistoricalFeed asks for "max" on intraday timeframes; a year is what
-    # the backtest gate's window needs.
-    "max": 365,
+    # HistoricalFeed asks for "max" on intraday timeframes; past the gate's
+    # 372-day ask (risk/backtest_gate.py::LOOKBACK_DAYS), so the span is a full year.
+    "max": 400,
 }
 # Kite's documented cap on one historical request's span, by interval
 # (https://kite.trade/docs/connect/v3/historical/): 60 days of minute
