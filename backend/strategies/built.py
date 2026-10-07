@@ -18,7 +18,8 @@ from backend.engine.session import IST
 from backend.strategies.base import TokenResolvingStrategy
 from backend.strategies.blocks.blocks import filter_passes, setup_fires
 from backend.strategies.blocks.state import SymbolState
-from backend.strategies.blocks.vocab import EXITS, FILTERS, SETUPS
+from backend.strategies.blocks.vocab import (EXITS, FILTERS, SETUPS, SWING_EXITS, SWING_FILTERS,
+                                             SWING_SETUPS)
 from backend.strategies.card import StrategyCard
 
 logger = logging.getLogger(__name__)
@@ -43,20 +44,29 @@ def _blocks_ok(blocks, vocab: dict) -> bool:
 
 def load_ok(spec: dict) -> bool:
     """Whether every block and param key in `spec` still exists in the vocabulary
-    (a vocabulary change can orphan a stored spec). Does not clamp values."""
+    (a vocabulary change can orphan a stored spec). Does not clamp values. A swing spec
+    ("horizon": "swing") is checked against the swing vocabulary: long only, max hold required."""
     try:
-        setup, filters = spec["setup"], spec.get("filters") or {}
-        if not set(spec) <= {"setup", "filters", "side", "stop", "target"}:  # e.g. a dropped time_stop
+        swing = spec.get("horizon", "intraday") == "swing"
+        if "horizon" in spec and not swing:
             return False
-        if spec["side"] not in ("long", "short") or len(setup) != 1 or not spec.get("stop") or not spec.get("target"):
+        setups, filter_vocab, exits = (SWING_SETUPS, SWING_FILTERS, SWING_EXITS) if swing else (SETUPS, FILTERS, EXITS)
+        setup, filters = spec["setup"], spec.get("filters") or {}
+        allowed = {"setup", "filters", "side", "stop", "target"} | ({"horizon", "max_hold_days", "trail_atr"} if swing else set())
+        if not set(spec) <= allowed:  # e.g. a dropped time_stop
+            return False
+        if spec["side"] not in (("long",) if swing else ("long", "short")) or len(setup) != 1 \
+                or not spec.get("stop") or not spec.get("target"):
+            return False
+        if swing and (not spec.get("max_hold_days") or len(spec["stop"]) != 1):  # one of atr_multiple / swing_low
             return False
         # Blocks index their params directly, so setups and filters need every key.
-        if not (_blocks_ok(setup, SETUPS) and _blocks_ok(filters, FILTERS)):
+        if not (_blocks_ok(setup, setups) and _blocks_ok(filters, filter_vocab)):
             return False
         if any(set(p) != {k for k, v in vocab[n].items() if v != ()}
-               for vocab, blocks in ((SETUPS, setup), (FILTERS, filters)) for n, p in blocks.items()):
+               for vocab, blocks in ((setups, setup), (filter_vocab, filters)) for n, p in blocks.items()):
             return False
-        return all(_blocks_ok({k: spec[k]}, EXITS) for k in ("stop", "target"))
+        return all(_blocks_ok({k: spec[k]}, exits) for k in ("stop", "target", *(k for k in ("max_hold_days", "trail_atr") if k in spec)))
     except (KeyError, TypeError):
         return False
 

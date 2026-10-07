@@ -171,3 +171,102 @@ def test_time_stop_is_dropped_silently():
     c, why = validate_spec(_ex(time_stop={"minutes": 30}), [])
     assert why == "" and "time_stop" not in c and load_ok(c)
     assert "exit after" not in describe(c)
+
+
+SWING = {
+    "horizon": "swing",
+    "setup": {"breakout_n": {"days": 20}},
+    "filters": {"trend_ma": {"period": "200"}, "liquidity": {"min_cr": 5}},
+    "side": "long",
+    "stop": {"atr_multiple": 2.0},
+    "target": {"r_multiple": 3.0},
+    "max_hold_days": {"days": 15},
+    "trail_atr": {"multiple": 3.0},
+}
+
+
+def _sw(**kw):
+    s = copy.deepcopy(SWING)
+    s.update(kw)
+    return s
+
+
+def test_swing_spec_validates_and_describes():
+    clean, why = validate_spec(SWING, [])
+    assert why == "" and clean == SWING and load_ok(clean)  # a validated swing spec loads
+    assert validate_spec(clean, [])[0] == clean
+    assert describe(clean) == ("Swing, long: close above the 20-day high, above the 200-day average, "
+                               "turnover of at least ₹5 crore a day; stop 2× ATR, target 3R, "
+                               "trailing 3× ATR, out after 15 days.")
+    assert slugify(clean).startswith("swing-") and len(slugify(clean)) <= 40
+    c, _ = validate_spec(_sw(stop={"swing_low": True}, trail_atr=None,
+                             setup={"pullback_ma": {"trend": "50", "pull": "20"}}), [])
+    assert c["stop"] == {"swing_low": True} and "trail_atr" not in c and load_ok(c)
+    assert "stop below the 5-day low" in describe(c) and "trailing" not in describe(c)
+    # clamp and snap, choice values must be members
+    c, _ = validate_spec(_sw(max_hold_days={"days": 99}, setup={"breakout_n": {"days": 22}}), [])
+    assert c["max_hold_days"] == {"days": 40} and c["setup"]["breakout_n"]["days"] == 20
+    c, _ = validate_spec(_sw(filters={"trend_ma": {"period": "30"}}), [])
+    assert c["filters"] == {}
+    both = _sw(stop={"atr_multiple": 2, "swing_low": True})
+    assert validate_spec(both, []) == (None, "stop needs one of atr_multiple or swing_low")
+    assert validate_spec(_sw(stop={}), []) == (None, "no stop")
+
+
+def test_swing_side_is_always_long():
+    for side in ("short", "flat", None, 5):
+        c, why = validate_spec(_sw(side=side), [])
+        assert c["side"] == "long", why
+
+
+def test_swing_needs_max_hold():
+    raw = _sw()
+    del raw["max_hold_days"]
+    assert validate_spec(raw, []) == (None, "no max hold")
+    assert validate_spec(_sw(max_hold_days={"days": "x"}), []) == (None, "no max hold")
+
+
+def test_intraday_spec_unchanged_without_horizon():
+    for h in (None, "intraday", "weekly", 5):
+        c, _ = validate_spec(_ex(horizon=h), [])
+        assert c == EXAMPLE and "horizon" not in c
+    c, _ = validate_spec(_ex(max_hold_days={"days": 5}), [])
+    assert "max_hold_days" not in c
+
+
+def test_swing_regime_and_atr_filters():
+    f = {"regime_is": {"regimes": ["risk_on", "risk_on"]}, "atr_pct": {"min": 3, "max": 2}}
+    c, _ = validate_spec(_sw(filters=f), [])
+    assert c["filters"] == {"regime_is": {"regimes": ["risk_on"]}} and load_ok(c)
+    assert "in a risk_on market" in describe(c)
+
+
+def test_duplicate_only_within_horizon():
+    a, _ = validate_spec(SWING, [])
+    assert validate_spec(_sw(setup={"breakout_n": {"days": 25}}), [{"slug": "a", "spec": a}]) \
+        == (None, "duplicate of a")
+    assert validate_spec(_sw(setup={"breakout_n": {"days": 40}}), [{"slug": "a", "spec": a}])[0] is not None
+    intraday, _ = validate_spec(EXAMPLE, [])
+    assert validate_spec(SWING, [{"slug": "i", "spec": intraday}])[0] is not None
+    assert validate_spec(EXAMPLE, [{"slug": "a", "spec": a}])[0] is not None
+
+
+def _swing_places(v):
+    for k in ("horizon", "setup", "filters", "side", "stop", "target", "max_hold_days", "trail_atr"):
+        yield {**SWING, k: v}
+    yield {**SWING, "setup": {"pullback_ma": {"trend": v, "pull": v}}}
+    yield {**SWING, "stop": {"atr_multiple": v, "swing_low": v}}
+    yield {**SWING, "max_hold_days": {"days": v}, "trail_atr": {"multiple": v}}
+    for f, params in SWING["filters"].items():
+        yield {**SWING, "filters": {f: v}}
+        yield {**SWING, "filters": {f: {k: v for k in params}}}
+    yield {**SWING, "filters": {"regime_is": {"regimes": [v]}, "atr_pct": {"min": 1, "max": v}}}
+
+
+@pytest.mark.parametrize("v", range(len(HOSTILE)))
+def test_hostile_values_never_raise_swing(v):
+    for raw in _swing_places(HOSTILE[v]):
+        out = validate_spec(raw, [{"slug": "a", "spec": HOSTILE[v]}, HOSTILE[v], {"slug": "s", "spec": SWING}])
+        assert isinstance(out, tuple) and len(out) == 2
+        if out[0] is not None:
+            assert load_ok(out[0])

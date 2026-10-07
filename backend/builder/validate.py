@@ -4,10 +4,13 @@ returns passes `built.load_ok`; no I/O.
 """
 import math
 
-from backend.strategies.blocks.vocab import EXITS, FILTERS, SETUPS
+from backend.strategies.blocks.vocab import (EXITS, FILTERS, SETUPS, SWING_EXITS, SWING_FILTERS,
+                                             SWING_SETUPS)
 
 _MAX_FILTERS = 3
 _SECTIONS = {"setup": SETUPS, "filters": FILTERS, "stop": EXITS, "target": EXITS}
+_SWING_SECTIONS = {"setup": SWING_SETUPS, "filters": SWING_FILTERS, "stop": SWING_EXITS, "target": SWING_EXITS,
+                   "max_hold_days": SWING_EXITS, "trail_atr": SWING_EXITS}
 
 
 def _num(v) -> bool:
@@ -78,8 +81,8 @@ def _clean_params(vocab: dict, raw) -> dict | None:
     return out
 
 
-def _clean_filter(name: str, raw):
-    vocab = FILTERS[name]
+def _clean_filter(name: str, raw, filters=FILTERS):
+    vocab = filters[name]
     if not isinstance(raw, dict):  # shorthand: the bare value of the block's single param
         if len(vocab) != 1:
             return None
@@ -112,7 +115,7 @@ def _flat(spec: dict) -> dict:
     for sec in ("setup", "filters"):
         for b, ps in (spec.get(sec) or {}).items():
             out.update({(sec, b, k): v for k, v in ps.items()})
-    for sec in ("stop", "target"):
+    for sec in ("stop", "target", "max_hold_days", "trail_atr"):
         out.update({(sec, sec, k): v for k, v in (spec.get(sec) or {}).items()})
     return out
 
@@ -120,6 +123,10 @@ def _flat(spec: dict) -> dict:
 def _is_dup(a: dict, b: dict) -> bool:
     """Same setup, filter names, side and every param (numbers within one step)."""
     try:
+        swing = a.get("horizon") == "swing"
+        if swing != (b.get("horizon") == "swing"):
+            return False
+        sections = _SWING_SECTIONS if swing else _SECTIONS
         if a["side"] != b["side"] or set(a["setup"]) != set(b["setup"]) \
                 or set(a.get("filters") or {}) != set(b.get("filters") or {}):
             return False
@@ -129,7 +136,7 @@ def _is_dup(a: dict, b: dict) -> bool:
         for (sec, blk, k), v in fa.items():
             w = fb[(sec, blk, k)]
             if _num(v) and _num(w):
-                step = _SECTIONS[sec][blk][k][2]
+                step = sections[sec][blk][k][2]
                 if abs(v - w) > step + 1e-9:
                     return False
             elif v != w:
@@ -139,10 +146,59 @@ def _is_dup(a: dict, b: dict) -> bool:
         return False  # a stale stored spec is simply not a duplicate
 
 
+def _clean_swing_stop(raw):
+    if not isinstance(raw, dict):
+        return None, "no stop"
+    atr = raw.get("atr_multiple")
+    low = raw.get("swing_low") is True or raw.get("swing_low") == {}
+    if _num(atr) and low:
+        return None, "stop needs one of atr_multiple or swing_low"
+    if _num(atr):
+        return {"atr_multiple": _snap(atr, SWING_EXITS["stop"]["atr_multiple"])}, ""
+    return ({"swing_low": True}, "") if low else (None, "no stop")
+
+
+def _validate_swing(raw: dict, existing: list[dict]) -> tuple[dict | None, str]:
+    """Swing counterpart of the intraday path: daily-bar vocabulary, long only, a max hold."""
+    setups = raw.get("setup")
+    setups = {n: p for n, p in setups.items() if n in SWING_SETUPS} if isinstance(setups, dict) else {}
+    if len(setups) != 1:
+        return None, "exactly one setup"
+    name, params = next(iter(setups.items()))
+    params = _clean_params(SWING_SETUPS[name], params)
+    if params is None:
+        return None, f"bad {name} params"
+    exits = raw.get("exits") if isinstance(raw.get("exits"), dict) else {}
+    pick = lambda k: raw.get(k) if raw.get(k) is not None else exits.get(k)  # noqa: E731
+    stop, why = _clean_swing_stop(pick("stop"))
+    if stop is None:
+        return None, why
+    target = _clean_params(SWING_EXITS["target"], pick("target"))
+    if target is None:
+        return None, "no target"
+    hold = _clean_params(SWING_EXITS["max_hold_days"], pick("max_hold_days"))
+    if hold is None:
+        return None, "no max hold"
+    filters = {}
+    for n, p in (raw.get("filters") or {}).items() if isinstance(raw.get("filters"), dict) else []:
+        if n in SWING_FILTERS and n not in filters and (c := _clean_filter(n, p, SWING_FILTERS)) is not None:
+            filters[n] = c
+    spec = {"horizon": "swing", "setup": {name: params}, "filters": dict(list(filters.items())[:_MAX_FILTERS]),
+            "side": "long", "stop": stop, "target": target, "max_hold_days": hold}
+    if (trail := _clean_params(SWING_EXITS["trail_atr"], pick("trail_atr"))) is not None:  # optional
+        spec["trail_atr"] = trail
+    for e in existing:
+        if isinstance(e, dict) and _is_dup(spec, e.get("spec") or {}):
+            return None, f"duplicate of {e.get('slug')}"
+    return spec, ""
+
+
 def validate_spec(raw: dict, existing: list[dict]) -> tuple[dict | None, str]:
     """`(clean_spec, "")` or `(None, reason)`. `existing` is `[{"slug", "spec"}, ...]`."""
     if not isinstance(raw, dict):
         return None, "not an object"
+    if raw.get("horizon") == "swing":  # anything else is intraday
+        return _validate_swing(raw, existing)
     setups = raw.get("setup")
     setups = {n: p for n, p in setups.items() if n in SETUPS} if isinstance(setups, dict) else {}
     if len(setups) != 1:
@@ -174,13 +230,16 @@ def validate_spec(raw: dict, existing: list[dict]) -> tuple[dict | None, str]:
 
 
 def slugify(spec: dict) -> str:
-    """e.g. `gap-down-vwap-above-long`: setup, its choice param, first filter, side; <= 40 chars."""
+    """e.g. `gap-down-vwap-above-long`: setup, its choice param, first filter, side; <= 40 chars.
+    Swing slugs start `swing-`."""
     name, params = next(iter(spec["setup"].items()))
     parts = [name, *[v for v in params.values() if isinstance(v, str)][:1]]
     for fname, fp in list((spec.get("filters") or {}).items())[:1]:
         parts += [fname.removeprefix("price_vs_"), *[v for v in fp.values() if isinstance(v, str)
                                                     and not v[:1].isdigit()][:1]]
     parts.append(spec["side"])
+    if spec.get("horizon") == "swing":
+        parts.insert(0, "swing")
     return "-".join(parts).replace("_", "-")[:40].strip("-")
 
 
@@ -210,8 +269,40 @@ _FILTER_WORDS = {
 }
 
 
+_SWING_SETUP_WORDS = {
+    "breakout_n": lambda p: f"close above the {_g(p['days'])}-day high",
+    "pullback_ma": lambda p: f"pullback to the {p['pull']}-day average, above the {p['trend']}-day average",
+    "rsi2_dip": lambda p: f"2-day RSI below {_g(p['level'])} while above the 200-day average",
+    "gap_hold": lambda p: f"gap up of at least {_g(p['min_pct'])}% that holds",
+    "momentum_rank": lambda p: f"top {_g(p['top_pct'])}% by {p['lookback']}-day return",
+    "volume_breakout": lambda p: f"volume ≥ {_g(p['multiple'])}× normal, closing near the day's high",
+}
+_SWING_FILTER_WORDS = {
+    "trend_ma": lambda p: f"above the {p['period']}-day average",
+    "regime_is": _FILTER_WORDS["regime_is"],
+    "sector_rs": _FILTER_WORDS["sector_rs"],
+    "atr_pct": _FILTER_WORDS["atr_pct"],
+    "liquidity": lambda p: f"turnover of at least ₹{_g(p['min_cr'])} crore a day",
+}
+
+
+def _describe_swing(spec: dict) -> str:
+    name, params = next(iter(spec["setup"].items()))
+    text = f"Swing, long: {_SWING_SETUP_WORDS[name](params)}"
+    for n, p in (spec.get("filters") or {}).items():
+        text += ", " + _SWING_FILTER_WORDS[n](p)
+    stop = spec["stop"]
+    text += "; stop " + (f"{_g(stop['atr_multiple'])}× ATR" if "atr_multiple" in stop else "below the 5-day low")
+    text += f", target {_g(spec['target']['r_multiple'])}R"
+    if trail := spec.get("trail_atr"):
+        text += f", trailing {_g(trail['multiple'])}× ATR"
+    return text + f", out after {_g(spec['max_hold_days']['days'])} days."
+
+
 def describe(spec: dict) -> str:
     """One plain-words sentence for the spec."""
+    if spec.get("horizon") == "swing":
+        return _describe_swing(spec)
     name, params = next(iter(spec["setup"].items()))
     filters = spec.get("filters") or {}
     text = f"{spec['side'].capitalize()} when {_SETUP_WORDS[name](params)}"
