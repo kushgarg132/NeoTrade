@@ -66,7 +66,7 @@ def llm_of(*specs, calls=None):
 
 
 def backtest_of(res, calls=None):
-    async def backtest(strategy, start, end):
+    async def backtest(strategy, start, end, account=None):
         if calls is not None:
             calls.append(strategy.spec.name)
         return res
@@ -270,7 +270,7 @@ async def test_backtest_asks_for_more_than_a_year(env):
     await _admin(db)
     windows = []
 
-    async def backtest(strategy, start, end):
+    async def backtest(strategy, start, end, account=None):
         windows.append(end - start)
         return result()
 
@@ -298,7 +298,7 @@ async def test_backtest_failure_leaves_that_draft_testing_and_tests_the_next(env
     db, redis, _ = env
     tested = []
 
-    async def backtest(strategy, start, end):
+    async def backtest(strategy, start, end, account=None):
         tested.append(strategy.spec.name)
         if len(tested) == 1:
             raise TimeoutError("history gap")
@@ -390,3 +390,96 @@ async def test_start_if_due_duplicate_key_means_already_claimed(env, monkeypatch
 
     monkeypatch.setattr(draft, "spawn", spawn)
     assert await draft.start_if_due(Db(), NOW) is False and spawned == []
+
+
+def sized_backtest(res, seen):
+    async def backtest(strategy, start, end, account=None):
+        seen.append((strategy.spec.name, account))
+        return res
+    return backtest
+
+
+async def _user_draft(db, slug="mine", owner="u1", status="testing"):
+    await store.insert(db, {"slug": slug, "spec": GAP, "status": status, "drafted_at": NOW, "owner_id": owner})
+
+
+async def test_test_one_tests_only_that_draft_without_llm(env):
+    db, redis, _ = env
+    await _user_draft(db)
+    await _user_draft(db, "other")
+    seen = []
+    out = await draft.test_one(db, redis, "mine", NOW, backtest=sized_backtest(result(), seen))
+    assert [n for n, _ in seen] == ["built:mine"]
+    assert out["slug"] == "mine" and out["status"] == "active"
+    docs = await _drafts(db)
+    assert docs["mine"]["status"] == "active" and docs["other"]["status"] == "testing"
+    assert "builder:test:mine" not in redis.data
+
+
+async def test_test_one_runs_while_the_weekly_lock_is_held(env):
+    db, redis, _ = env
+    redis.data["builder:lock"] = "x"
+    await _user_draft(db)
+    out = await draft.test_one(db, redis, "mine", NOW, backtest=sized_backtest(result(), []))
+    assert out["status"] == "active" and redis.data["builder:lock"] == "x"
+
+
+async def test_test_one_uses_owner_sizing_and_trials(env):
+    db, redis, _ = env
+    await db["user_prefs"].insert_one({"user_id": "u1", "account_size": 50_000.0, "max_exposure": 40_000.0,
+                                       "per_trade_cap": 5_000.0})
+    await _user_draft(db)
+    await _user_draft(db, "u1-old", status="rejected")
+    await _user_draft(db, "u2-old", owner="u2", status="rejected")
+    await _user_draft(db, "ai-old", owner=None, status="rejected")
+    for slug, sharpe in (("u1-old", 1.0), ("u2-old", 2.0), ("ai-old", 3.0)):
+        await db[store.COLLECTION].update_one({"slug": slug}, {"$set": {"sharpe": sharpe}})
+    seen = []
+    await draft.test_one(db, redis, "mine", NOW, backtest=sized_backtest(result(), seen))
+    assert seen[0][1] == {"account_size": 50_000.0, "max_exposure": 40_000.0, "per_trade_cap": 5_000.0}
+    assert (await _drafts(db))["mine"]["trials"] == 2  # u1's one earlier draft + this one
+
+
+async def test_owner_without_prefs_uses_defaults(env):
+    db, redis, _ = env
+    await _user_draft(db)
+    seen = []
+    await draft.test_one(db, redis, "mine", NOW, backtest=sized_backtest(result(), seen))
+    assert seen[0][1]["account_size"] == 1_000_000.0
+
+
+async def test_test_one_no_history_waits(env, monkeypatch):
+    db, redis, _ = env
+
+    async def none(db, redis):
+        return None, None
+
+    monkeypatch.setattr("backend.risk.gate_backtest.intraday_history", none)
+    await _user_draft(db)
+    out = await draft.test_one(db, redis, "mine", NOW)
+    assert out["status"] == "testing" and out["verdict"] == "waiting for market history"
+    assert (await _drafts(db))["mine"]["verdict"] == "waiting for market history"
+
+
+async def test_test_one_failure_stays_testing_and_other_states_are_skipped(env):
+    db, redis, _ = env
+    await _user_draft(db)
+    await _user_draft(db, "done", status="active")
+
+    async def boom(strategy, start, end, account=None):
+        raise TimeoutError("gap")
+
+    out = await draft.test_one(db, redis, "mine", NOW, backtest=boom)
+    assert out["status"] == "testing" and out["verdict"] == "test failed: TimeoutError"
+    assert (await draft.test_one(db, redis, "done", NOW, backtest=boom))["status"] == "active"
+
+
+async def test_weekly_run_retests_a_users_waiting_draft_with_owner_sizing(env):
+    db, redis, _ = env
+    await _admin(db)
+    await db["user_prefs"].insert_one({"user_id": "u1", "account_size": 50_000.0, "max_exposure": 40_000.0,
+                                       "per_trade_cap": 5_000.0})
+    await _user_draft(db)
+    seen = []
+    out = await draft.run(db, redis, NOW, llm=llm_of(), backtest=sized_backtest(result(), seen))
+    assert out["passed"] == ["mine"] and seen[0][1]["account_size"] == 50_000.0

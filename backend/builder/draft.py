@@ -92,7 +92,7 @@ def _parse(text: str) -> list:
     return [i for i in ideas if isinstance(i, dict)][:MAX_DRAFTS] if isinstance(ideas, list) else []
 
 
-async def _history(db, redis, account: dict):
+async def _history(db, redis):
     """(backtest, strategy kwargs) on a year of 5-minute history, or None without a source
     (or when the source or universe cannot be read: drafts then wait for next week)."""
     from backend.datalayer.news_sources import nifty200_sectors
@@ -110,7 +110,7 @@ async def _history(db, redis, account: dict):
         return None
     memo = _Memo(adapter)  # one fetch per symbol, however many drafts replay it
 
-    async def backtest(strategy, start, end):
+    async def backtest(strategy, start, end, account):  # sized per draft by its owner
         return await run_backtest([strategy], memo, instruments, start=start, end=end, timeframe="5m", **account)
 
     kwargs = {"universe": [i.tradingsymbol for i in instruments], "symbol_for_token": tokens,
@@ -132,7 +132,7 @@ def _gate_reason(r) -> str:
     return "gate: failed"
 
 
-async def _test(db, doc: dict, backtest, kwargs: dict, account_size: float, now: datetime) -> tuple[str, str, dict]:
+async def _test(db, doc: dict, backtest, kwargs: dict, now: datetime) -> tuple[str, str, dict]:
     """(status, verdict, fields) for one draft; records its gate row."""
     from backend.strategies.built import BlockStrategy
 
@@ -140,12 +140,15 @@ async def _test(db, doc: dict, backtest, kwargs: dict, account_size: float, now:
                              regime_of=kwargs.get("regime_of"), sector_of=kwargs.get("sector_of"),
                              thesis=doc.get("thesis") or "AI-built strategy.")
     start, end = now - YEAR, now
-    r = await backtest(strategy, start, end)
-    daily = _daily(r.trades, start, end) * (ACCOUNT / account_size)  # a fraction of the account that was sized
+    from backend.risk.gate_backtest import backtest_account
+
+    account = await backtest_account(db, doc.get("owner_id"))  # size like the draft's owner
+    r = await backtest(strategy, start, end, account)
+    daily = _daily(r.trades, start, end) * (ACCOUNT / account["account_size"])  # a fraction of the account that was sized
     sharpe = _sharpe(daily)
     finite = math.isfinite(sharpe) and math.isfinite(float(daily.to_numpy().sum()))  # _sharpe maps NaN to 0
     sharpe = sharpe if finite else None  # never stored: it would poison every later trial count
-    trials = await store.trial_sharpes(db, None) + ([sharpe] if finite else [])
+    trials = await store.trial_sharpes(db, doc.get("owner_id")) + ([sharpe] if finite else [])
     holdout = [t for t in r.trades if _at(t) >= end - HOLDOUT]
     hold_net = round(sum(t["net_pnl"] for t in holdout), 2)
     fields = {"sharpe": sharpe, "trials": len(trials), "tested_at": now, "metrics": {
@@ -208,7 +211,7 @@ def _unique(slug: str, taken: set) -> str:
 
 
 async def run(db, redis, now: datetime, llm=None, backtest=None) -> dict:
-    """The whole weekly job; `llm(system, prompt) -> str` and `backtest(strategy, start, end)` are injectable."""
+    """The whole weekly job; `llm(system, prompt) -> str` and `backtest(strategy, start, end, account)` are injectable."""
     if not await redis.set(LOCK, now.isoformat(), nx=True, ex=LOCK_TTL):
         return {"skipped": "running"}
     try:
@@ -234,17 +237,18 @@ async def _run(db, redis, now, llm, backtest) -> dict:
         await jobs.mark(redis, jobs.BUILDER, ok=False, note="account size is 0")
         return out
     kwargs, lines = {}, []
-    if backtest is None and (history := await _history(db, redis, account)) is not None:
+    if backtest is None and (history := await _history(db, redis)) is not None:
         backtest, kwargs = history
 
     async def test(doc):
         try:
-            status, verdict, fields = await _test(db, doc, backtest, kwargs, account["account_size"], now)
+            status, verdict, fields = await _test(db, doc, backtest, kwargs, now)
         except Exception:  # a history gap or timeout: stays testing, retried next week
             logger.exception("backtest of draft %s failed", doc["slug"])
             return
         if status == "active":
-            out["retired"] += await _make_room(db)
+            if doc.get("owner_id") is None:  # a user's cap is enforced at submit
+                out["retired"] += await _make_room(db)
             out["passed"].append(doc["slug"])
             year, hold = fields["metrics"]["year"], fields["metrics"]["holdout"]
             lines.append(f"built:{doc['slug']} (PF {year['pf']:.2f}, {year['trades']} trades, "
@@ -306,9 +310,47 @@ async def _run(db, redis, now, llm, backtest) -> dict:
     return out
 
 
-async def spawn() -> None:
-    proc = await asyncio.create_subprocess_exec("nice", "-n", "15", sys.executable, "-m", "backend.builder")
+async def test_one(db, redis, slug: str, now: datetime, backtest=None) -> dict:
+    """Backtests one waiting draft (a user's, on submit). No LLM; its own lock, so it never waits on the weekly run."""
+    key = f"builder:test:{slug}"
+    if not await redis.set(key, now.isoformat(), nx=True, ex=3600):
+        return {"slug": slug, "status": "testing", "verdict": "already running"}
+    try:
+        doc = await db[store.COLLECTION].find_one({"slug": slug, "status": "testing"})
+        if doc is None:
+            found = await db[store.COLLECTION].find_one({"slug": slug})
+            return {"slug": slug, "status": found["status"] if found else "missing",
+                    "verdict": found.get("verdict", "") if found else "no such draft"}
+        kwargs = {}
+        if backtest is None:
+            history = await _history(db, redis)
+            if history is None:
+                verdict = "waiting for market history"
+                await store.set_status(db, slug, "testing", verdict)
+                return {"slug": slug, "status": "testing", "verdict": verdict}
+            backtest, kwargs = history
+        try:
+            status, verdict, fields = await _test(db, doc, backtest, kwargs, now)
+        except Exception as exc:  # a history gap or timeout: stays testing
+            logger.exception("backtest of draft %s failed", slug)
+            status, verdict, fields = "testing", f"test failed: {type(exc).__name__}", {}
+        await store.set_status(db, slug, status, verdict, **fields)
+        return {"slug": slug, "status": status, "verdict": verdict}
+    finally:
+        await redis.delete(key)
+
+
+async def _spawn(*args: str) -> None:
+    proc = await asyncio.create_subprocess_exec("nice", "-n", "15", sys.executable, "-m", "backend.builder", *args)
     asyncio.create_task(proc.wait())  # reap it whenever it ends
+
+
+async def spawn() -> None:
+    await _spawn()
+
+
+async def spawn_test(slug: str) -> None:
+    await _spawn("--test", slug)
 
 
 async def start_if_due(db, now: datetime) -> bool:

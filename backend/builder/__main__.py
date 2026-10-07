@@ -1,19 +1,22 @@
 """`python -m backend.builder`: one weekly drafting run (backend/builder/draft.py), started by
-the Friday daily pass as its own low-priority process."""
+the Friday daily pass as its own low-priority process. `--test <slug>` backtests just that draft."""
 import asyncio
 import logging
+import sys
 from datetime import datetime, timezone
 
-from backend.builder.draft import run
+from backend.builder.draft import run, test_one
 
 
-async def _main() -> None:
+async def _main(slug: str | None = None) -> None:
     from backend.database import db
 
     await db.connect_to_database()
-    print(await run(db.db, db.redis, datetime.now(timezone.utc)), flush=True)
+    now = datetime.now(timezone.utc)
+    print(await (test_one(db.db, db.redis, slug, now) if slug else run(db.db, db.redis, now)), flush=True)
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(_main())
+    args = sys.argv[1:]
+    asyncio.run(_main(args[1] if args[:1] == ["--test"] and len(args) > 1 else None))

@@ -48,15 +48,17 @@ async def intraday_history(db, redis):
     return None, None
 
 
-async def backtest_account(db) -> dict:
-    """The account the gate and the retune test against: the admin's own
-    sizing (the gate is admin-triggered and shared), so backtests size like
-    the account that trades -- not an uncapped Rs 10 lakh one. Defaults when
-    there is no admin."""
+async def backtest_account(db, user_id: str | None = None) -> dict:
+    """The account the gate and the retune test against: that user's sizing, or
+    by default the admin's (the gate is admin-triggered and shared), so backtests
+    size like the account that trades -- not an uncapped Rs 10 lakh one. Defaults
+    when the user has no prefs or there is no admin."""
     from backend.prefs import PrefsStore
 
-    admin = await db["users"].find_one({"role": "admin"}, {"id": 1})
-    prefs = await PrefsStore(db).get(admin["id"] if admin else "__defaults__")
+    if user_id is None:
+        admin = await db["users"].find_one({"role": "admin"}, {"id": 1})
+        user_id = admin["id"] if admin else "__defaults__"
+    prefs = await PrefsStore(db).get(user_id)
     return {key: float(prefs[key]) for key in ("account_size", "max_exposure", "per_trade_cap")}
 
 
