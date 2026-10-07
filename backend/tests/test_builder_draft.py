@@ -263,6 +263,22 @@ async def test_llm_garbage_drafts_nothing(env):
     assert sent and "0 drafted" in sent[0][1]
 
 
+async def test_a_cut_off_reply_is_retried_once_with_a_new_prompt(env):
+    """2026-10-07: the first live run got a truncated JSON reply, and the
+    gateway's response cache replays it for the same prompt."""
+    db, redis, _ = env
+    await _admin(db)
+    prompts = []
+    good = llm_of(GAP)
+
+    async def llm(system, prompt):
+        prompts.append(prompt)
+        return '```json\n{"strategies": [{"spec": {"setup"' if len(prompts) == 1 else await good(system, prompt)
+
+    out = await draft.run(db, redis, NOW, llm=llm, backtest=backtest_of(result()))
+    assert out["drafted"] == 1 and len(prompts) == 2 and prompts[1] != prompts[0]
+
+
 async def test_backtest_failure_leaves_that_draft_testing_and_tests_the_next(env):
     db, redis, _ = env
     tested = []

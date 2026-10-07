@@ -261,7 +261,14 @@ async def _run(db, redis, now, llm, backtest) -> dict:
         note = f"no 5-minute history source; {len(waiting)} draft(s) waiting"
     else:
         try:
-            ideas = _parse(await llm(*await _prompt(db, redis, admin_id)))
+            system, prompt = await _prompt(db, redis, admin_id)
+            text = await llm(system, prompt)
+            ideas = _parse(text)
+            if not ideas:
+                # A cut-off reply is replayed by the gateway's response cache for
+                # the same prompt (seen 2026-10-07), so retry once with a new line.
+                logger.warning("strategy builder: unusable reply (%d chars), retrying: %.200s", len(text or ""), text)
+                ideas = _parse(await llm(system, f"{prompt}\n\n(attempt 2, {now.isoformat()})"))
         except Exception as exc:  # an LLM failure drafts nothing; nothing else changes
             logger.warning("strategy builder: no drafts: %s", exc)
             ideas = []
