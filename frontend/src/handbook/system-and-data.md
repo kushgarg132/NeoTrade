@@ -60,7 +60,7 @@ fall back to another account.
 | Live quotes | Redis `quote:<SYM>` written by ingest `quotes` (held + watched every ~15 s in session, Nifty 200 every 5 min) | yfinance fetch, written back |
 | Prices that place real orders | always fetched live at confirm time (`routers/suggestions._live_mark_price`, `chat/actions._mark_price`) | none — no guessed price |
 | Intraday bars for a run | broker stream (Kite / Upstox) | `CandlePollingFeed`: yfinance 5-min candles, ~15 min late |
-| Daily bars | Mongo `daily_bars` (ingest `bars`, after 3:45 PM IST; Nifty 200, scan lists, held, watched; 10 years of `^NSEI`). Stocks from the admin's Upstox/Kite session when up (Yahoo misdates some splits), Yahoo for the rest | yfinance for intraday intervals, uncovered symbols, stale (> 4 days) or longer periods |
+| Daily bars | Mongo `daily_bars` (ingest `bars`, after 3:45 PM IST; Nifty 200, scan lists, held, watched; 5 years of stocks, 10 years of `^NSEI`). Stocks from the admin's Upstox/Kite session when up (Yahoo misdates some splits), Yahoo for the rest | yfinance for intraday intervals, uncovered symbols, stale (> 4 days) or longer periods |
 | Fundamentals | `fundamentals` collection (ingest daily) | yfinance |
 | Indices, crude, gold, FX, US 10Y | Redis `macro:<ticker>` (ingest `macro`, 60 s) + `macro_series` | yfinance |
 | FII / DII flows | NSE, ingest `flows` (30 min) → `market:flows` | — |

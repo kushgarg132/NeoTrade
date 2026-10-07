@@ -98,7 +98,7 @@ async def test_loop_backfills_new_symbols_and_tops_up_known_ones(mongo, monkeypa
     redis = FakeRedis({bars.BARS_FULL_KEY: TODAY.isoformat()})
     await bars.loop(mongo, redis, now=AFTER_CLOSE)
 
-    assert downloads == [("2y", ["NEW.NS"]), ("1mo", ["KNOWN.NS"]), ("1mo", [bars.NIFTY])]
+    assert downloads == [("5y", ["NEW.NS"]), ("1mo", ["KNOWN.NS"]), ("1mo", [bars.NIFTY])]
     assert redis.data[bars.BARS_AS_OF_KEY] == TODAY.isoformat()
     assert set(await mongo[bars.BARS].distinct("symbol")) == {"KNOWN", "NEW", bars.NIFTY}
 
@@ -145,7 +145,7 @@ async def test_loop_takes_stocks_from_the_broker_and_the_rest_from_yahoo(mongo, 
     downloads = _broker_loop_setup(monkeypatch, FakeBroker(), {"AAA", "UNLISTED"})
     await bars.loop(mongo, FakeRedis(), now=AFTER_CLOSE)
 
-    assert downloads == [("2y", ["UNLISTED.NS"]), ("1mo", []), ("10y", [bars.NIFTY])]
+    assert downloads == [("5y", ["UNLISTED.NS"]), ("1mo", []), ("10y", [bars.NIFTY])]
     frames = await bars.read(mongo, ["AAA", "UNLISTED"], TODAY - timedelta(days=10))
     assert list(frames["AAA"]["close"]) == [50.0] * 3  # broker
     assert frames["UNLISTED"]["close"].iloc[0] == 100.0  # yahoo
@@ -155,7 +155,7 @@ async def test_loop_falls_back_to_yahoo_when_the_first_broker_call_fails(mongo, 
     downloads = _broker_loop_setup(monkeypatch, FakeBroker(fail={"AAA"}), {"AAA"})
     await bars.loop(mongo, FakeRedis(), now=AFTER_CLOSE)
 
-    assert downloads[0] == ("2y", ["AAA.NS"])
+    assert downloads[0] == ("5y", ["AAA.NS"])
 
 
 async def test_weekly_pass_redownloads_everything(mongo, monkeypatch):
@@ -169,7 +169,7 @@ async def test_weekly_pass_redownloads_everything(mongo, monkeypatch):
     monkeypatch.setattr(bars, "symbols", fake_symbols)
     redis = FakeRedis({bars.BARS_FULL_KEY: (TODAY - timedelta(days=8)).isoformat()})
     await bars.loop(mongo, redis, now=AFTER_CLOSE)
-    assert downloads == [("2y", ["KNOWN.NS"]), ("1mo", []), ("10y", [bars.NIFTY])]
+    assert downloads == [("5y", ["KNOWN.NS"]), ("1mo", []), ("10y", [bars.NIFTY])]
     assert redis.data[bars.BARS_FULL_KEY] == TODAY.isoformat()
 
 

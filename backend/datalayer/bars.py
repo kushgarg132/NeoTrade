@@ -7,8 +7,8 @@ from the admin's broker session (Upstox, else Kite) when one is up: Yahoo
 misdates some corporate actions (TRENT's 1.5 split, adjusted from the wrong
 day, read as a 33% one-day fall) and keeps bars for exchange holidays. Yahoo
 fills whatever the broker did not serve, and NIFTY. A new
-symbol gets two years; a known one the last month (cheap, and it heals a
-missed day). Once a week every symbol is re-downloaded in full, because
+symbol gets five years (swing strategies test on 3 years plus warm-up);
+a known one the last month (cheap, and it heals a missed day). Once a week every symbol is re-downloaded in full, because
 adjusted prices shift back in time after a split or dividend. NIFTY (^NSEI)
 keeps ten years for the portfolio benchmark.
 
@@ -225,7 +225,7 @@ async def loop(db, redis, now: Optional[datetime] = None) -> None:
 
     wanted = await symbols(db)
     batches = [
-        ("2y", [ticker(s) for s in wanted if s not in known]),
+        ("5y", [ticker(s) for s in wanted if s not in known]),
         ("1mo", [ticker(s) for s in wanted if s in known]),
         ("1mo" if NIFTY in known else "10y", [NIFTY]),
     ]
