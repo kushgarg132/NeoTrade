@@ -339,7 +339,7 @@ async def test_max_hold_exit_paper_and_autopilot(world):
     await db["suggestions"].insert_one({"id": "s1", "user_id": "alice", "symbol": "INFY", **swing})
     await service.submit(db, None, "alice", _order(qty=2, source="engine"), now=OPEN, suggestion_id="s1")
     assert await service.check_exits(db, None, "alice", now=OPEN + timedelta(days=2)) == []
-    closed = await service.check_exits(db, None, "alice", now=OPEN + timedelta(days=3))
+    closed = await service.check_exits(db, None, "alice", now=OPEN.replace(hour=15, minute=20) + timedelta(days=3))
     assert [(c["symbol"], c["reason"]) for c in closed] == [("INFY", "max hold")]
 
     # paper (the user's own approved proposal), same rule.
@@ -352,5 +352,5 @@ async def test_max_hold_exit_paper_and_autopilot(world):
         return {s: 1000.0 for s in symbols}
 
     assert await exits.check_exits(db, "alice", now=OPEN + timedelta(days=2), marks_fn=marks) == []
-    closed = await exits.check_exits(db, "alice", now=OPEN + timedelta(days=3), marks_fn=marks)
+    closed = await exits.check_exits(db, "alice", now=OPEN.replace(hour=15, minute=20) + timedelta(days=3), marks_fn=marks)
     assert [(c["symbol"], c["reason"]) for c in closed] == [("TCS", "max hold")]

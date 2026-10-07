@@ -54,6 +54,17 @@ def held_too_long(entry_at: datetime, now: datetime, max_hold_days: int) -> bool
     return int(np.busday_count(start, _ist_date(now) + timedelta(days=1))) >= max_hold_days
 
 
+def max_hold_due(entry_at: datetime, now: datetime, max_hold_days: int) -> bool:
+    """The backtest sells at the close of the due day: on it, only from 15:15 IST (the last check);
+    any later day, any time."""
+    if not held_too_long(entry_at, now, max_hold_days):
+        return False
+    if held_too_long(entry_at, now - timedelta(days=1), max_hold_days):
+        return True
+    t = (now if now.tzinfo else now.replace(tzinfo=timezone.utc)).astimezone(IST)
+    return (t.hour, t.minute) >= (15, 15)
+
+
 def trail_level(highest_close: float, atr: float, k: float) -> float:
     return highest_close - k * atr
 
@@ -97,7 +108,7 @@ async def exit_reasons(db, trades: list[dict], suggestions: dict, marks: dict, n
             reasons[trade["id"]] = "trailing stop"
         elif why := breach(mark, stop, suggestion.get("target")):
             reasons[trade["id"]] = why
-        elif suggestion.get("max_hold_days") and held_too_long(trade["entry_at"], now, suggestion["max_hold_days"]):
+        elif suggestion.get("max_hold_days") and max_hold_due(trade["entry_at"], now, suggestion["max_hold_days"]):
             reasons[trade["id"]] = "max hold"
     return reasons
 

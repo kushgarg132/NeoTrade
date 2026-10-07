@@ -1,4 +1,4 @@
-"""Approved long-term paper positions close at their stop or target."""
+from datetime import datetime, timedelta, timezone
 
 from datetime import datetime, timezone
 
@@ -146,3 +146,14 @@ async def test_a_failing_trail_never_blocks_other_exits(monkeypatch):
     monkeypatch.setattr(exits.bars, "read", no_bars)
     closed = await check_exits(db, "alice", now=NOW, marks_fn=_marks({"LOSER2": 88.0}))
     assert [(c["symbol"], c["reason"]) for c in closed] == [("LOSER2", "stop")]
+
+
+def test_max_hold_exits_from_the_close_on_the_due_day():
+    from backend.suggestions.exits import max_hold_due
+
+    fri = datetime(2026, 10, 2, 5, 0, tzinfo=timezone.utc)
+    ist = lambda d, h, m: datetime(2026, 10, d, h, m, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+    assert not max_hold_due(fri, ist(5, 9, 30), 1)  # Monday is due day: morning waits
+    assert not max_hold_due(fri, ist(5, 15, 14), 1)
+    assert max_hold_due(fri, ist(5, 15, 15), 1)
+    assert max_hold_due(fri, ist(6, 9, 30), 1)      # day after due: any time
