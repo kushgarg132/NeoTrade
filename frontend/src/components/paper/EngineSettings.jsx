@@ -10,8 +10,9 @@ import { promotionGaps, shortStatus } from '../../utils/promotion';
 import StrategyRow, { GO_LIVE_RULE, StrategyFold } from './StrategyRow';
 
 /**
- * The engine's standing instructions: how large it may trade, what the daily
- * scan covers, and which strategies stay on paper. The daily loss limit is
+ * The engine's standing instructions: how large it may trade and which
+ * strategies stay on paper. Its on/off switches (daily runs, the 4 PM scan)
+ * are on AI › Autopilot (components/settings/EngineSwitches.jsx). The daily loss limit is
  * not edited here -- it guards the real broker account too, so it belongs to
  * Guardrails in Settings; this sheet only states it.
  */
@@ -63,57 +64,14 @@ const EngineSettings = () => {
 
   if (!prefs) {
     return (
-      <Sheet title="Daily auto-run">
+      <Sheet title="Trading limits">
         <Ruling rows={3} />
       </Sheet>
     );
   }
 
-  const switchRow = (key, label, hint) => (
-    <Row label={label} hint={hint}>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={Boolean(prefs[key])}
-        onClick={() => save({ [key]: !prefs[key] })}
-        className={cn(
-          SWITCH,
-          prefs[key]
-            ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-            : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-        )}
-      >
-        {prefs[key] ? 'On' : 'Off'}
-      </button>
-    </Row>
-  );
-
   return (
     <div className="space-y-4">
-      <Sheet
-        title="Daily auto-run"
-        meta={prefs.auto_paper_intraday || prefs.auto_paper_longterm ? 'On' : 'Off'}
-      >
-        {switchRow(
-          'auto_paper_intraday',
-          'Paper-trade intraday every session (experimental)',
-          'Experimental: the intraday strategies lose money after charges in every backtest so far, so this is for watching them, not for results. Starts an intraday paper run at 9:15 AM IST each weekday and stops it at 3:30 PM, with positions squared off at 3:15 PM. It restarts itself after an interruption; stop it on the Engine tab and it stays off for the rest of that day.'
-        )}
-        {switchRow(
-          'auto_paper_longterm',
-          'Keep the long-term paper book running',
-          'The 4:00 PM scan below files long-term proposals either way; this switch runs the paper side. Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 9:20 AM on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest. Proposals from the 4:00 PM scan wait for your approval, or for the autopilot if it is on.'
-        )}
-        <p className="pt-3 doc-meta normal-case">
-          Practice money. Its long-term proposals wait for you in{' '}
-          <Link to="/ai/decisions" className="underline">Decisions</Link>, or the{' '}
-          <Link to="/ai/autopilot" className="underline">Autopilot</Link> acts on them — on paper it trades this
-          same book, tagged autopilot.
-          A strategy you switched live trades real money only once it has passed its backtest and
-          earned it on paper (see Strategies below).
-        </p>
-      </Sheet>
-
       <Sheet title="Trading limits" meta="Paper and live">
         {[
           ['Account size', prefs.account_size],
@@ -128,34 +86,9 @@ const EngineSettings = () => {
         <p className="pt-3 doc-meta normal-case">
           Sizing risks up to 1% of {formatCurrency(prefs.account_size)} per trade at full
           conviction, scaled down as conviction falls. One set for paper and live:{' '}
-          <Link to="/ai/autopilot" className="underline">change them on AI › Autopilot</Link>.
+          <Link to="/ai/autopilot" className="underline">change them on AI › Autopilot</Link>, where the
+          engine's daily runs and scan are switched on and off too.
         </p>
-      </Sheet>
-
-      <Sheet title="Daily scan">
-        <Row
-          label="Daily scan"
-          hint="Runs after the close at 4:00 PM IST and files proposals for your decision."
-        >
-          <button
-            type="button"
-            role="switch"
-            aria-checked={prefs.scan_enabled}
-            onClick={() => save({ scan_enabled: !prefs.scan_enabled })}
-            className={cn(
-              SWITCH,
-              prefs.scan_enabled
-                ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-                : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-            )}
-          >
-            {prefs.scan_enabled ? 'On' : 'Off'}
-          </button>
-        </Row>
-
-        <Row label="Scan universe" hint="Scrip the daily scan considers.">
-          <span className="figure-md text-sm">{prefs.universe.length} scrip</span>
-        </Row>
       </Sheet>
 
       {strategyNames.length > 0 && (

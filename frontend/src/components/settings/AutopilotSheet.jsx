@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Sheet, Ruling } from '../doc/Doc';
 import { Row, NumberField } from './Fields';
 import api, { endpoints, getPreferences } from '../../utils/api';
@@ -150,12 +149,6 @@ const AutopilotSheet = () => {
           {prefs.autopilot_news ? 'On' : 'Off'}
         </button>
       </Row>}
-      <p className="doc-meta normal-case mt-2">
-        What it acts on comes from the engine, which runs on its own: intraday paper{' '}
-        {prefs.auto_paper_intraday ? 'on' : 'off'} · long-term paper book {prefs.auto_paper_longterm ? 'on' : 'off'} ·
-        4:00 PM scan {prefs.scan_enabled ? 'on' : 'off'}.{' '}
-        <Link to="/practice/setup" className="underline">Change them in Practice › Setup</Link>.
-      </p>
       {note && <p className="doc-meta normal-case text-[var(--loss)] mt-2">{note}</p>}
       <p className="field-label mt-4 mb-1">Recent activity</p>
       {log.length === 0 ? (
