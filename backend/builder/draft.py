@@ -310,8 +310,13 @@ async def start_if_due(db, now: datetime) -> bool:
     if local.weekday() != 4:
         return False
     week = local.strftime("%G-W%V")
-    claimed = await db["builder_runs"].update_one(  # atomic: two passes never both start one
-        {"week": week}, {"$setOnInsert": {"week": week, "started_at": now}}, upsert=True)
+    from pymongo.errors import DuplicateKeyError
+
+    try:  # atomic with the unique index on week (store.ensure_indexes): two passes never both start one
+        claimed = await db[store.RUNS].update_one(
+            {"week": week}, {"$setOnInsert": {"week": week, "started_at": now}}, upsert=True)
+    except DuplicateKeyError:  # a concurrent upsert claimed it first
+        return False
     if claimed.upserted_id is None:
         return False
     await spawn()

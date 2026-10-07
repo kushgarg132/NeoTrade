@@ -20,6 +20,18 @@ REGIME_DAYS = 800  # a 365-day backtest plus 200 trading days of warmup, with ma
 logger = logging.getLogger(__name__)
 
 
+RUNS = "builder_runs"  # one doc per ISO week the job was started (backend/builder/draft.py::start_if_due)
+
+
+async def ensure_indexes(db) -> None:
+    """Unique slugs, and one run claim per week: the claim's upsert is only atomic with this index."""
+    try:
+        await db[COLLECTION].create_index("slug", unique=True)
+        await db[RUNS].create_index("week", unique=True)
+    except Exception as exc:  # startup must not fail on it; the run lock still keeps one job at a time
+        logger.error("built strategy indexes not created: %s", exc)
+
+
 async def refresh(db) -> list[dict]:
     """Loads the active specs into the strategy cache; call once per entry point."""
     try:

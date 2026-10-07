@@ -127,3 +127,17 @@ async def test_regime_of_covers_a_year_long_backtest(monkeypatch):
     monkeypatch.setattr(store.bars, "nifty_closes", closes)
     assert (await store.regime_of(None))(today - timedelta(days=365)) is not None
     assert asked == [today - timedelta(days=800)]
+
+
+@pytest.mark.asyncio
+async def test_ensure_indexes_makes_slug_and_week_unique():
+    from pymongo.errors import DuplicateKeyError
+
+    db = AsyncMongoMockClient()["t"]
+    await store.ensure_indexes(db)
+    await store.insert(db, doc("a", "testing"))
+    with pytest.raises(DuplicateKeyError):
+        await store.insert(db, doc("a", "rejected"))
+    await db[store.RUNS].insert_one({"week": "2026-W41"})
+    with pytest.raises(DuplicateKeyError):
+        await db[store.RUNS].insert_one({"week": "2026-W41"})

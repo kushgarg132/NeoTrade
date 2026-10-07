@@ -337,3 +337,25 @@ async def test_paper_net_counts_every_non_live_venue(env):
         await db["paper_trades"].insert_one({"strategy": "built:x", "venue": venue, "status": "CLOSED",
                                              "realized_pnl": pnl, "costs": 0.0})
     assert await draft._paper_net(db, "x") == 150.0
+
+
+async def test_start_if_due_duplicate_key_means_already_claimed(env, monkeypatch):
+    from pymongo.errors import DuplicateKeyError
+
+    db, _, _ = env
+    spawned = []
+
+    async def spawn():
+        spawned.append(1)
+
+    class Runs:
+        async def update_one(self, *_, **__):
+            raise DuplicateKeyError("E11000 duplicate key")
+
+    class Db:
+        def __getitem__(self, name):
+            assert name == "builder_runs"
+            return Runs()
+
+    monkeypatch.setattr(draft, "spawn", spawn)
+    assert await draft.start_if_due(Db(), NOW) is False and spawned == []
