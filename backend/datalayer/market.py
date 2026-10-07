@@ -25,7 +25,7 @@ from backend.datalayer.news import COLLECTION, SCORED
 from backend.datalayer.news_sources import UA
 from backend.datalayer.prices import MACRO, MACRO_KEY
 from backend.engine.autorun import near_session
-from backend.engine.session import IST
+from backend.engine.session import IST, clock
 from backend.llm import llm_service
 from backend.prompts import render
 
@@ -231,14 +231,14 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
 
     system, prompt = render(
         "market_brief",
-        now=now.astimezone(IST).strftime("%a %d %b %Y %H:%M IST"),
+        now=f"{now.astimezone(IST):%a %d %b %Y} {clock(now)} IST",
         news="\n".join(f"- [{d['scope']}] {d['title']} ({d.get('source', '')}) -> {impacts(d)}" for d in items),
         board="\n".join(f"- {r['name']}: {r['value']:,.2f} ({r['percent']:+.2f}%)" for r in board) or "- unavailable",
         flows=(f"FII net {flows_now['FII']:+,.0f} cr, DII net {flows_now['DII']:+,.0f} cr on {flows_now['date']}"
                if "FII" in flows_now and "DII" in flows_now else "unavailable"),
         regime=f"{regime_now.get('label', 'unknown')} ({regime_now.get('score', 0):+.2f}): "
                + ("; ".join(regime_now.get("drivers", [])) or "no strong drivers"),
-        calendar="\n".join(f"- {e['at'].astimezone(IST).strftime('%a %H:%M IST')} {e['country']} {e['title']}"
+        calendar="\n".join(f"- {e['at'].astimezone(IST):%a} {clock(e['at'])} IST {e['country']} {e['title']}"
                            for e in events) or "- nothing high-impact in the next 48 hours",
     )
     text = (await _write_brief(system, prompt) or "").strip()

@@ -14,7 +14,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from backend.engine.session import IST
+from backend.engine.session import IST, clock
 from backend.plan import store
 from backend.plan.validate import validate
 
@@ -103,7 +103,7 @@ async def revise_plan(db, redis, user_id: str, plan: dict, reasons: list[tuple[s
                                          "rationale")}
     scope, adds = set(plan.get("scope") or []), set(plan.get("add_symbols") or [])
     values = dict(
-        now=now.astimezone(IST).strftime("%a %d %b %Y %H:%M IST"),
+        now=f"{now.astimezone(IST):%a %d %b %Y} {clock(now)} IST",
         trigger="\n".join(f"- {text}" for _, text in reasons),
         regime=f"{regime.get('label', 'unknown')} ({regime.get('score', 0):+.2f})",
         # Only names the plan covers: never a long-term holding or a hand trade elsewhere.

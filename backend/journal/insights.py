@@ -22,11 +22,11 @@ NEWS_IMPACT = 6  # MATERIALITY_THRESHOLD in backend/strategies/longterm/analyst_
 CHASE_MINUTES = 15
 
 _BUCKETS = [
-    (time(9, 30), "Opened 09:15–09:30"),
-    (time(11, 0), "Opened 09:30–11:00"),
-    (time(13, 0), "Opened 11:00–13:00"),
-    (time(14, 30), "Opened 13:00–14:30"),
-    (time(23, 59, 59), "Opened after 14:30"),
+    (time(9, 30), "Opened 9:15–9:30 AM"),
+    (time(11, 0), "Opened 9:30–11:00 AM"),
+    (time(13, 0), "Opened 11:00 AM–1:00 PM"),
+    (time(14, 30), "Opened 1:00–2:30 PM"),
+    (time(23, 59, 59), "Opened after 2:30 PM"),
 ]
 _WEEKDAYS = ["Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays"]
 

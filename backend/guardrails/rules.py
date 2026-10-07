@@ -20,11 +20,7 @@ Rules, all set by the user in Settings (0 means off):
 
 from datetime import timedelta
 
-from backend.engine.session import IST
-
-
-def _clock(dt) -> str:
-    return dt.astimezone(IST).strftime("%H:%M")
+from backend.engine.session import IST, clock
 
 
 def _inr(value: float) -> str:
@@ -72,7 +68,7 @@ def _option_breaches(trips: list[dict], prefs: dict, lot_sizes: dict) -> list[di
             breaches.append({
                 "key": f"naked_option:{trip['id']}", "rule": "naked_option",
                 "title": "Option sold without a hedge",
-                "detail": f"{trip['symbol']} sold at {_clock(trip['opened_at'])} IST with no bought "
+                "detail": f"{trip['symbol']} sold at {clock(trip['opened_at'])} IST with no bought "
                           f"{trip.get('underlying')} option open to cap the loss.",
             })
     return breaches
@@ -115,14 +111,14 @@ def evaluate(trips: list[dict], day_pnl: float, prefs: dict, lot_sizes: dict | N
             breaches.append({
                 "key": f"cooldown_start:{trip['id']}", "rule": "cooldown_start",
                 "title": f"{streak} losses in a row",
-                "detail": f"Your cooldown runs until {_clock(until)} IST.",
+                "detail": f"Your cooldown runs until {clock(until)} IST.",
             })
             for other in opened:
                 if start < other["opened_at"] < until:
                     breaches.append({
                         "key": f"cooldown_broken:{other['id']}", "rule": "cooldown_broken",
                         "title": "Trade opened during your cooldown",
-                        "detail": f"{other['symbol']} at {_clock(other['opened_at'])} IST, "
-                                  f"cooldown ran until {_clock(until)} IST.",
+                        "detail": f"{other['symbol']} at {clock(other['opened_at'])} IST, "
+                                  f"cooldown ran until {clock(until)} IST.",
                     })
     return breaches

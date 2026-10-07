@@ -10,7 +10,7 @@ import api, { endpoints, getPreferences } from '../utils/api';
 import { cn } from '../utils/cn';
 import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
-import { formatCurrency, formatQuantity, formatDateTime, formatTimeAgo } from '../utils/formatters';
+import { formatCurrency, formatQuantity, formatDateTime, formatTimeAgo, formatClock } from '../utils/formatters';
 import { Avatar } from '../components/common/Avatar';
 
 /**
@@ -368,8 +368,8 @@ const BrokerSheet = () => {
 
           <p className="doc-meta normal-case">
             {broker === 'kite'
-              ? 'The token is single-use and expires in minutes. Sessions end daily at 06:00 IST.'
-              : 'The code is single-use and expires in minutes. Sessions end daily at 03:30 IST.'}
+              ? 'The token is single-use and expires in minutes. Sessions end daily at 6:00 AM IST.'
+              : 'The code is single-use and expires in minutes. Sessions end daily at 3:30 AM IST.'}
           </p>
         </div>
       )}
@@ -763,13 +763,13 @@ const Bar = ({ pct }) => (
 
 const pctText = (pct) => (pct == null ? '—' : `${Math.round(pct)}% left`);
 
-/** "06:19" today, "07 Oct" later: when a pool fills back up. */
+/** "6:19 AM" today, "07 Oct" later: when a pool fills back up. */
 const resetText = (iso) => {
   if (!iso) return '';
   const when = new Date(iso);
   const sameDay = when.toDateString() === new Date().toDateString();
   return sameDay
-    ? when.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' })
+    ? formatClock(when)
     : when.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' });
 };
 
@@ -986,7 +986,7 @@ const GuardrailsSheet = () => {
         own app.
       </p>
 
-      <Row label="Watch my broker" hint="Checks every connected broker from 09:15 to 15:35 IST.">
+      <Row label="Watch my broker" hint="Checks every connected broker from 9:15 AM to 3:35 PM IST.">
         <button
           type="button"
           role="switch"

@@ -200,7 +200,7 @@ const Decisions = () => {
               detail={
                 showDecided
                   ? 'Approved and declined proposals are kept here.'
-                  : 'The daily scan runs after the close at 16:00 IST. Run one now if you would rather not wait.'
+                  : 'The daily scan runs after the close at 4:00 PM IST. Run one now if you would rather not wait.'
               }
               action={
                 !showDecided ? (

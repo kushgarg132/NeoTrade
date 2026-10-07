@@ -10,6 +10,11 @@ every bar for INTRADAY-mode symbols, live or historical alike.
 from datetime import datetime, timedelta, timezone
 
 IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def clock(dt: datetime) -> str:
+    """Every clock time a user reads: 12-hour IST, "3:20 PM"."""
+    return dt.astimezone(IST).strftime("%I:%M %p").lstrip("0")
 SQUARE_OFF_HOUR = 15
 SQUARE_OFF_MINUTE = 15
 

@@ -4,7 +4,7 @@ import {
   CartesianGrid, Bar, ComposedChart, ReferenceLine 
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '../common/Card';
-import { formatCurrency, formatCompactNumber } from '../../utils/formatters';
+import { formatCurrency, formatCompactNumber, formatClock } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 import api, { endpoints } from '../../utils/api';
 
@@ -75,7 +75,7 @@ const TradingChart = ({ data, symbol, technicals, className, currency }) => {
   const formattedData = filteredData.map(item => ({
     ...item,
     date: isDay
-      ? new Date(item.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' })
+      ? formatClock(item.timestamp)
       : new Date(item.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
     price: Number(item.close),
     volume: Number(item.volume)

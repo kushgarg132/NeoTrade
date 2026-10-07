@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from backend.engine.autorun import in_session
-from backend.engine.session import IST
+from backend.engine.session import IST, clock
 from backend.guardrails.store import GuardrailStore
 from backend.journal.roundtrips import build_round_trips, daily_pnl
 from backend.journal.store import JournalStore
@@ -97,7 +97,7 @@ SECTIONS = {"portfolio": _portfolio, "broker": _broker, "decisions": _decisions,
 
 async def build_snapshot(db, redis, user_id: str, now: Optional[datetime] = None) -> dict:
     now = now or datetime.now(timezone.utc)
-    snapshot = {"market": {"session_open": in_session(now), "ist": now.astimezone(IST).strftime("%a %d %b %Y %H:%M IST")}}
+    snapshot = {"market": {"session_open": in_session(now), "ist": f"{now.astimezone(IST):%a %d %b %Y} {clock(now)} IST"}}
     try:
         from backend.datalayer.market import backdrop, upcoming
 
@@ -106,7 +106,7 @@ async def build_snapshot(db, redis, user_id: str, now: Optional[datetime] = None
         snapshot["market"].update({
             "regime": {k: regime.get(k) for k in ("label", "score", "drivers")} if regime else None,
             "brief": context.get("brief"),
-            "high_impact_events_24h": [f"{e['at'].astimezone(IST).strftime('%a %H:%M IST')} {e['country']} {e['title']}"
+            "high_impact_events_24h": [f"{e['at'].astimezone(IST):%a} {clock(e['at'])} IST {e['country']} {e['title']}"
                                        for e in await upcoming(db, hours=24, now=now)],
         })
     except Exception as exc:

@@ -105,7 +105,7 @@ Every run still runs every strategy on paper; the gates decide only where orders
 - **Capital caps** — per-trade and per-day, read from stored prefs, never the request body.
 - **Guardrails** (Mine) — `backend/guardrails/`: limits you set on your own broker account
   (trades per day, cooldown after losses, daily loss, options trades and lots, unhedged
-  option selling), checked every minute 09:15–15:35 IST. Alerts only — nothing here can
+  option selling), checked every minute 9:15 AM–3:35 PM IST. Alerts only — nothing here can
   stop an order you place in the broker's app.
 - **Auto square-off** — pref `auto_square_off` off / preview / live
   (`backend/guardrails/square_off.py`): on a daily-loss breach, MARKET exits for NSE MIS
@@ -120,7 +120,7 @@ Decided at `/ai/decisions` (moved from Practice 2026-10-06; old paths redirect).
 there never trades the AI account: fills go to paper or, on a second tap, to `mine`.
 
 
-- Made by the 16:00 IST scan (`backend/suggestions/scan.py::scan_universe`: ~400 days of
+- Made by the 4:00 PM IST scan (`backend/suggestions/scan.py::scan_universe`: ~400 days of
   history through the same runner, armed only on the final session) and by material news
   (`news_scan`, `source="news"`).
 - Stored by `SuggestionStore.create` with the sized order and the `{rule, ai, final}` breakdown;
@@ -159,7 +159,7 @@ trades), **Strategies** (which strategy is good enough, the track record, learni
 `compute_pnl` reports `costs` and `net` per period and `all_time`.
 
 
-- **Auto run** — `backend/engine/autorun.py`: keeps one INTRADAY paper run alive 09:15–15:30
+- **Auto run** — `backend/engine/autorun.py`: keeps one INTRADAY paper run alive 9:15 AM–3:30 PM
   IST for users with `auto_paper_intraday`; `autorun:<user>` (150 s TTL) decides which worker
   owns it. A run you stop stays stopped that day; at most 5 starts a day.
 - **Two books** — every fill carries `venue` (`paper` / `live`); "paper" reads as "not live",

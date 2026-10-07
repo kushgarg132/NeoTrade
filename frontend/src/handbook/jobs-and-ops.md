@@ -2,7 +2,7 @@
 
 Everything that runs on its own, how code reaches production, and how the doors are locked.
 
-## The daily pass — 16:00 IST
+## The daily pass — 4:00 PM IST
 
 `backend/scheduler.py::run_daily_jobs`, once a day on one worker (`scheduler:daily_lock`,
 `scheduler:last_pass`), recorded in `job:last:daily_pass`:
@@ -23,15 +23,15 @@ rest (a quote that keeps failing), universe symbols with no NSE instrument, and 
 new item for 3 days. It reports; it never fails or gates the pass.
 
 A worker that wakes late after the pass already ran skips it. If no pass finished for the
-previous weekday (a deploy restarted the backend during it), the long-term engine's 09:20
+previous weekday (a deploy restarted the backend during it), the long-term engine's 9:20 AM
 morning pass runs the whole pass then (`backend/engine/autorun.py::_longterm_pass`), recorded
-under the missed day so that day's own 16:00 pass still runs.
+under the missed day so that day's own 4:00 PM pass still runs.
 
 ## Loops in the API (every worker)
 
 | Loop | Every | Does | Code |
 |---|---|---|---|
-| Guardrail monitor | 60 s, 09:15–15:35 IST | checks each user's limits against their broker | `backend/guardrails/monitor.py` |
+| Guardrail monitor | 60 s, 9:15 AM–3:35 PM IST | checks each user's limits against their broker | `backend/guardrails/monitor.py` |
 | Paper orders | short interval | fills paper limit orders, sweeps stuck rows, books late live fills | `backend/engine/paper_orders.py` |
 | Auto run | 60 s | keeps auto paper runs alive, builds game plans, long-term passes, exits | `backend/engine/autorun.py` |
 | Telegram | long poll | answers linked chats, one poller per bot | `backend/guardrails/telegram_bot.py` |
@@ -50,7 +50,7 @@ reports their ages.
 `quotes` 15 s · `macro` 60 s · `news_poll` 60 s · `news_process` 5 min · `calendar` 6 h ·
 `flows` 30 min · `regime` 60 s · `brief` 60 s (writes hourly in session if the regime moved, sooner on material news) ·
 `news_react` 60 s · `news_scan` 120 s · `news_exits` 60 s · `news_outcomes` 5 min ·
-`bars` 15 min (works after 15:45 IST) · `fundamentals` 30 min · `plan_revise` 60 s.
+`bars` 15 min (works after 3:45 PM IST) · `fundamentals` 30 min · `plan_revise` 60 s.
 
 <!-- live:jobs -->
 

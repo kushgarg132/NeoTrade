@@ -47,7 +47,7 @@ const TradingControlBar = ({
 
   return (
     <div className="space-y-5">
-      <p className="doc-meta normal-case">Intraday · signals execute without approval, squared off by 15:15.</p>
+      <p className="doc-meta normal-case">Intraday · signals execute without approval, squared off by 3:15 PM.</p>
 
       <div className="relative">
         <label htmlFor="universe-search" className="field-label block mb-1.5">

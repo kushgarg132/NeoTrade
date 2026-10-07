@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import api, { endpoints } from '../../utils/api';
+import { formatClock } from '../../utils/formatters';
 
 /**
  * The autopilot's off switch. Says when it is working, when it failed, and
@@ -16,7 +17,7 @@ const StopAutopilot = ({ on, label = 'Stop', onStopped }) => {
     setError(null);
     try {
       await api.put(endpoints.settings.preferences, { autopilot_enabled: false });
-      setStoppedAt(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }));
+      setStoppedAt(formatClock(new Date()));
       onStopped?.();
     } catch (err) {
       setError(err?.response?.data?.detail || 'Could not stop the autopilot. Try again.');

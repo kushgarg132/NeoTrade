@@ -40,8 +40,8 @@ def test_time_of_day_reports_worst_and_best_bucket():
         trips.append(_trip(day, 10, 0, 40.0))
     tod = _by_kind(build_insights(trips), "time_of_day")
     assert [(f["title"], f["trips"], f["pnl"], f["win_rate"]) for f in tod] == [
-        ("Opened 09:15–09:30", 5, -500.0, 0.0),
-        ("Opened 09:30–11:00", 5, 200.0, 1.0),
+        ("Opened 9:15–9:30 AM", 5, -500.0, 0.0),
+        ("Opened 9:30–11:00 AM", 5, 200.0, 1.0),
     ]
     assert tod[0]["baseline_win_rate"] == 1.0
     assert tod[0]["baseline_avg_pnl"] == 40.0

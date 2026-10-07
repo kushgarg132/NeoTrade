@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict
 from backend.ai.sentiment import get_cached_sentiment
 from backend.datalayer.catalysts import catalyst_map
 from backend.datalayer.news_sources import nifty200_sectors
-from backend.engine.session import IST
+from backend.engine.session import IST, clock
 from backend.learning.adapt import load_rules
 from backend.llm import llm_service
 from backend.plan import store
@@ -93,12 +93,12 @@ async def _context(db, redis, user_id: str, prefs: dict, universe: set[str], now
     flows = await _json(redis, "market:flows") or {}
     events = await upcoming(db, hours=8, now=now)
     return {
-        "now": now.astimezone(IST).strftime("%a %d %b %Y %H:%M IST"),
+        "now": f"{now.astimezone(IST):%a %d %b %Y} {clock(now)} IST",
         "regime": f"{regime.get('label', 'unknown')} ({regime.get('score', 0):+.2f}): "
                   + ("; ".join(regime.get("drivers") or []) or "no strong drivers"),
         "brief": (brief.get("text") or "none yet")[:BRIEF_CHARS],
         "flows": json.dumps(flows) if flows else "unavailable",
-        "calendar": "\n".join(f"- {e['at'].astimezone(IST).strftime('%H:%M')} {e.get('country', '')} {e.get('title', '')}"
+        "calendar": "\n".join(f"- {clock(e['at'])} {e.get('country', '')} {e.get('title', '')}"
                               for e in events) or "- none",
         "strategies": json.dumps(cards, default=str),
         "candidates": json.dumps(rows, default=str),

@@ -19,7 +19,7 @@ const PlanCard = () => {
   return (
     <Sheet title="Today's plan" meta={meta}>
       {data === null ? <Ruling rows={3} /> : !plan ? (
-        <p className="doc-meta normal-case">No plan today. Plans are made at 08:45 IST for auto-run intraday accounts.</p>
+        <p className="doc-meta normal-case">No plan today. Plans are made at 8:45 AM IST for auto-run intraday accounts.</p>
       ) : (
         <div className="space-y-3 text-sm">
           {plan.skip_day && <p className="field-label text-down">Sitting today out: no new intraday entries.</p>}

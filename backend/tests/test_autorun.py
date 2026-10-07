@@ -339,7 +339,7 @@ async def test_autopilot_login_reminder_once_before_the_open(world, longterm, mo
     await _tick(world, datetime(2026, 9, 28, 9, 2, tzinfo=IST))
     await _tick(world, datetime(2026, 9, 28, 9, 5, tzinfo=IST))
     reminders = [t for t in longterm["sent"] if "not logged in" in t]
-    assert len(reminders) == 1 and "09:15" in reminders[0]
+    assert len(reminders) == 1 and "9:15 AM" in reminders[0]
 
 
 @pytest.mark.asyncio

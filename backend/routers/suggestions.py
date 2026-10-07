@@ -263,7 +263,7 @@ async def approve_suggestion_live(
     from backend.engine.autorun import in_session
 
     if not in_session(now):
-        raise HTTPException(status_code=409, detail="The market is closed; live orders go only between 09:15 and 15:30 IST on weekdays.")
+        raise HTTPException(status_code=409, detail="The market is closed; live orders go only between 9:15 AM and 3:30 PM IST on weekdays.")
     terms = suggestion["option_contract"]
     exposure = terms.get("margin_estimate") or (terms.get("premium_estimate") or 0) * suggestion["quantity"]
     cap = (await PrefsStore(db.db).get(user.id))["per_trade_cap"]
@@ -304,7 +304,7 @@ async def _approve_equity_live(suggestion, user_id, store, ledger, mine_broker, 
     from backend.suggestions.service import execute_live_order
 
     if not in_session(now):
-        raise HTTPException(status_code=409, detail="The market is closed; live orders go only between 09:15 and 15:30 IST on weekdays.")
+        raise HTTPException(status_code=409, detail="The market is closed; live orders go only between 9:15 AM and 3:30 PM IST on weekdays.")
     if suggestion["side"] == "SELL":
         # An equity SELL proposal exits a paper position; sent live it would
         # sell the user's own shares, which that position never bought.

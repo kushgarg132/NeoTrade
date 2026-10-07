@@ -258,7 +258,7 @@ const Portfolio = () => {
                     {formatCurrency(order.limit_price)}
                   </Cell>
                   <Cell align="right" mono>
-                    {new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
+                    {formatClock(order.created_at)}
                   </Cell>
                   <Cell align="right">
                     <TicketButton label="Cancel" tone="loss" onClick={() => cancelOpenOrder(order.id)} />

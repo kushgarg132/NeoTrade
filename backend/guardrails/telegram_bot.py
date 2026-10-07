@@ -26,7 +26,7 @@ from backend.llm import LIMIT_MESSAGE, DailyLimitReached, use_model
 from backend.prefs import PrefsStore
 from backend.auth.store import UserStore
 from backend.system.jobs import mark
-from backend.engine.session import IST
+from backend.engine.session import IST, clock
 from backend.routers.settings import UsageUnavailable, fetch_usage
 
 logger = logging.getLogger(__name__)
@@ -119,14 +119,14 @@ async def _clear_suggestions(redis, user_id: str, chat_id: int, token: Optional[
 
 
 def _when(iso: Optional[str], with_time: bool = False) -> str:
-    """Like the sheet: "06:19" today, "07 Oct" later (IST)."""
+    """Like the sheet: "6:19 AM" today, "07 Oct" later (IST)."""
     if not iso:
         return ""
     when = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
     when = (when if when.tzinfo else when.replace(tzinfo=timezone.utc)).astimezone(IST)
     if with_time:
-        return when.strftime("%d %b %H:%M")
-    return when.strftime("%H:%M") if when.date() == datetime.now(IST).date() else when.strftime("%d %b")
+        return f"{when:%d %b} {clock(when)}"
+    return clock(when) if when.date() == datetime.now(IST).date() else when.strftime("%d %b")
 
 
 def _bar(pct) -> str:

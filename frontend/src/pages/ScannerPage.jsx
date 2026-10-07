@@ -8,7 +8,7 @@ import { Sheet, Statement, Row, Cell, Empty, Ruling, Field, Scrip, Tabs } from '
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints } from '../utils/api';
-import { formatCurrency, formatSignedPercent } from '../utils/formatters';
+import { formatCurrency, formatSignedPercent, formatClock } from '../utils/formatters';
 import { cn } from '../utils/cn';
 import { stockPath } from '../utils/stocks';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
@@ -65,7 +65,7 @@ const ScannerPage = () => {
     ? [
         scan.as_of &&
           `As of ${new Date(scan.as_of).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })} close`,
-        `run ${new Date(scan.scan_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`,
+        `run ${formatClock(scan.scan_time)}`,
       ]
         .filter(Boolean)
         .join(' · ')

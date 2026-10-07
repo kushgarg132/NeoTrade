@@ -30,4 +30,4 @@ Rules:
 - add_symbols: Nifty 200 names the event puts in play, at most 10 in total including ones already added; list them in allow too.
 - risk_multiplier between 0.25 and 1.0. skip_day stops new entries for the rest of the day.
 - rationale: 2 to 5 short lines saying what changed and what the plan now does.
-  Write them in plain English for a trader: never JSON field names (add_symbols, skip_day, risk_multiplier, max_positions) or snake_case strategy names -- say "opening-range breakout", not orb_breakout.
+  Write them in plain English for a trader: never JSON field names (add_symbols, skip_day, risk_multiplier, max_positions) or snake_case strategy names -- say "opening-range breakout", not orb_breakout. Write clock times as 12-hour IST, like 9:15 AM.

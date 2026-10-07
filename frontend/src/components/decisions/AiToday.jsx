@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Sheet, Empty, Ruling } from '../doc/Doc';
 import api, { endpoints } from '../../utils/api';
 import { cn } from '../../utils/cn';
+import { formatClock } from '../../utils/formatters';
 
 /**
  * What the AI account's autopilot did today, read only. The autopilot
@@ -41,7 +42,7 @@ const AiToday = () => {
           {rows.map((row, i) => (
             <li key={`${row.at}-${i}`} className="py-2 flex items-baseline gap-3 text-sm">
               <span className="doc-meta shrink-0">
-                {new Date(row.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
+                {formatClock(row.at)}
               </span>
               <span className={cn('flex-1 min-w-0 truncate', !['FILLED', 'SENT'].includes(row.status) && 'text-[var(--ink-soft)]')}>
                 {row.status === 'FILLED'

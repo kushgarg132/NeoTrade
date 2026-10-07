@@ -380,7 +380,7 @@ async def _autopilot_reminders(db, redis, now: datetime) -> None:
         try:
             await adapter_for(user_id, "ai", get_credential_store(), redis)
         except RoleUnavailable as exc:
-            await notify(db, user_id, f"🤖 {exc.reason} Log in before 09:15 or the autopilot can't trade today.")
+            await notify(db, user_id, f"🤖 {exc.reason} Log in before 9:15 AM or the autopilot can't trade today.")
 
 
 async def autorun_loop(db, redis) -> None:

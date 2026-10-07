@@ -225,7 +225,7 @@ const EngineNow = ({ prefs }) => {
           }
         >
           <p className="text-sm">
-            Next scan 16:00 IST · {longtermOpen} open long-term position{longtermOpen === 1 ? '' : 's'}
+            Next scan 4:00 PM IST · {longtermOpen} open long-term position{longtermOpen === 1 ? '' : 's'}
             {prefs && !prefs.auto_paper_longterm && ' · stops and targets are not watched while it is off'}
           </p>
           {scan && scan !== 'starting' && <p className="mt-2 text-sm text-[var(--ink-soft)]">{scan}</p>}

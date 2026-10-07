@@ -192,7 +192,7 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
         return price, None
     now = _now()
     if not in_session(now):
-        raise ActionRefused("The market is closed; live orders go only between 09:15 and 15:30 IST on weekdays.")
+        raise ActionRefused("The market is closed; live orders go only between 9:15 AM and 3:30 PM IST on weekdays.")
     if await KillSwitchStore(db).is_tripped(user_id, now.astimezone(IST).date()):
         raise ActionRefused("Your daily loss limit was hit today: no new live orders.")
     adapter = await _active_broker(user_id, credentials)
@@ -502,7 +502,7 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
             placed = await paper_orders.place(db, user_id, params, price, _now())
             if placed["status"] == "FILLED":
                 return f"Paper {side} {params['quantity']} {params['symbol']} filled at ₹{placed['fill_price']:,.2f}."
-            return f"Paper limit ₹{params['limit_price']:,.2f} is open until 15:30; it fills if the price gets there."
+            return f"Paper limit ₹{params['limit_price']:,.2f} is open until 3:30 PM; it fills if the price gets there."
         if adapter is None:
             order = await execute_suggestion(
                 {"symbol": params["symbol"], "side": side, "quantity": params["quantity"],
@@ -520,7 +520,7 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
                     f"{params['quantity']} filled.")
         if order_type == "LIMIT" and status != "FILLED":
             return (f"Resting at your broker: limit ₹{params['limit_price']:,.2f}, {filled:g} of "
-                    f"{params['quantity']} filled. It lasts until 15:30.")
+                    f"{params['quantity']} filled. It lasts until 3:30 PM.")
         return f"Sent to your broker: {status.lower()}, {filled:g} of {params['quantity']} filled."
 
     if kind in ("exit", "cancel_order", "modify_order", "stop_loss"):
@@ -528,7 +528,7 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
         from backend.chat import account_actions as aa
 
         if not in_session(_now()):
-            raise ActionRefused("The market is closed; orders go only between 09:15 and 15:30 IST on weekdays.")
+            raise ActionRefused("The market is closed; orders go only between 9:15 AM and 3:30 PM IST on weekdays.")
         adapter = await aa.mine_adapter(user_id, credentials)
         if kind == "modify_order":
             await _modify_checks(db, user_id, adapter, params)  # again at confirm, from the account

@@ -97,12 +97,12 @@ const EngineSettings = () => {
         {switchRow(
           'auto_paper_intraday',
           'Paper-trade intraday every session (experimental)',
-          'Experimental: the intraday strategies lose money after charges in every backtest so far, so this is for watching them, not for results. Starts an intraday paper run at 09:15 IST each weekday and stops it at 15:30, with positions squared off at 15:15. It restarts itself after an interruption; stop it on the Engine tab and it stays off for the rest of that day.'
+          'Experimental: the intraday strategies lose money after charges in every backtest so far, so this is for watching them, not for results. Starts an intraday paper run at 9:15 AM IST each weekday and stops it at 3:30 PM, with positions squared off at 3:15 PM. It restarts itself after an interruption; stop it on the Engine tab and it stays off for the rest of that day.'
         )}
         {switchRow(
           'auto_paper_longterm',
           'Run the long-term engine every session',
-          'Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 09:20 on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest. Proposals from the 16:00 scan wait for your approval, or for the autopilot if it is on.'
+          'Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 9:20 AM on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest. Proposals from the 4:00 PM scan wait for your approval, or for the autopilot if it is on.'
         )}
         <p className="pt-3 doc-meta normal-case">
           Practice money. Its long-term proposals wait for you in{' '}
@@ -135,7 +135,7 @@ const EngineSettings = () => {
       <Sheet title="Daily scan">
         <Row
           label="Daily scan"
-          hint="Runs after the close at 16:00 IST and files proposals for your decision."
+          hint="Runs after the close at 4:00 PM IST and files proposals for your decision."
         >
           <button
             type="button"

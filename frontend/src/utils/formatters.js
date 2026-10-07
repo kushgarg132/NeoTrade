@@ -57,12 +57,13 @@ export const formatNoteDate = (date = new Date()) =>
     .format(date)
     .toUpperCase();
 
+/** Every clock time in the app: 12-hour IST, "3:20 PM". */
 export const formatClock = (value) => {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('en-IN', {
-    hour: '2-digit',
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
     minute: '2-digit',
-    hour12: false,
+    hour12: true,
     timeZone: 'Asia/Kolkata',
   }).format(new Date(value));
 };

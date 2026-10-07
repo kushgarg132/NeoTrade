@@ -300,7 +300,7 @@ async def test_paper_limit_card_rests_then_fills(env):
 
     card = await _card(env["db"], _order(order_type="LIMIT", limit_price=1490.0))
     done = await confirm(env["db"], None, None, "alice", card["id"])
-    assert done["result"] == "Paper limit ₹1,490.00 is open until 15:30; it fills if the price gets there."
+    assert done["result"] == "Paper limit ₹1,490.00 is open until 3:30 PM; it fills if the price gets there."
 
     async def mark(symbol):
         return 1489.0

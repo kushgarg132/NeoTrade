@@ -42,7 +42,7 @@ NeoTrade key).
 | `score_news.md` | deep | a stock's news sentiment (first of the analyst's two calls) |
 | `research_report.md` | standard | the stock's research note and thesis |
 | `market_brief.md` | standard | the market brief (hourly in session, only when the regime moved or material news landed) |
-| `index_move.md` | standard | why an index moved in its last session (Redis `index_move:<ticker>`, shared: 15 min while dated today, then until the next 09:15 IST open, ≤ 6 h) |
+| `index_move.md` | standard | why an index moved in its last session (Redis `index_move:<ticker>`, shared: 15 min while dated today, then until the next 9:15 AM IST open, ≤ 6 h) |
 | `game_plan*.md`, `game_plan_revision*.md` | deep | the pre-open plan and its revisions |
 | `portfolio_review.md` | deep | holdings write-up and action plan |
 | `learning_review.md` | standard | Friday learning note |
@@ -99,14 +99,14 @@ a Redis lock, streamed replies, Confirm / Cancel buttons through the same confir
 
 ## The game plan
 
-`backend/plan/`: from 08:45 IST, once the user has a live broker feed (`autorun.py::live_feed_ready`,
+`backend/plan/`: from 8:45 AM IST, once the user has a live broker feed (`autorun.py::live_feed_ready`,
 the same check that starts the auto run — so a late login is planned before its run starts),
 one `deep` call per auto-intraday user builds a plan (allowed strategies and names,
 `risk_multiplier`, `max_positions`, `skip_day`), validated so it can only tighten; any failure
 stores a fallback plan. Paused strategies are left out (all paused → fallback, no call).
 During the session `plan_revise` (ingest, 60 s) revises on material news about a planned or
 held name, a regime change, or a high-impact event — at most 2 a day, 15 min apart. Since
-Phase 16.2 the plan fetches its facts through tools first (≤ 2 rounds, `builder.py::MAX_TOOL_ROUNDS`). The 16:00 pass replays each day with and without the plan.
+Phase 16.2 the plan fetches its facts through tools first (≤ 2 rounds, `builder.py::MAX_TOOL_ROUNDS`). The 4:00 PM pass replays each day with and without the plan.
 
 ## News
 
