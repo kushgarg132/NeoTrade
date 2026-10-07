@@ -45,13 +45,14 @@ async def catalog(db, user_id: str, nifty: list,
     gate = BacktestGateStore(db)
     live = set(prefs.get("live_strategies") or [])
 
+    built_docs = {f"built:{d['slug']}": d for d in await store.all_drafts(db)}
     cards = []
     for s in strategies:
         name = s.spec.name
         mine = [r for r in rows if r["strategy"] == name]
         backtest = await gate.latest(name)
         result = (backtest or {}).get("result") or {}
-        cards.append({
+        card = {
             "name": name, "mode": s.spec.mode, "timeframe": s.spec.timeframe,
             "card": s.CARD.model_dump(),
             "backtest": None if backtest is None else {
@@ -69,5 +70,8 @@ async def catalog(db, user_id: str, nifty: list,
                 "by_reason": {r["group"]: _stats(r) for r in mine if r["by"] == "reason"},
             },
             "live_switch": name in live,
-        })
+        }
+        if doc := built_docs.get(name):  # the builder's own verdict; never infer pass/fail from the gate alone
+            card["built"] = {k: doc.get(k) for k in ("description", "thesis", "metrics", "verdict")}
+        cards.append(card)
     return sorted(cards, key=lambda c: c["name"])

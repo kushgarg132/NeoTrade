@@ -140,6 +140,18 @@ async def list_strategies(user: User = Depends(get_current_user)):
     return [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"])]
 
 
+@router.get("/strategies/built")
+async def built_strategies(_user: User = Depends(get_current_user)):
+    """Every strategy the builder drafted, grouped by status, with its verdict."""
+    from backend.builder.store import all_drafts
+
+    out = {"active": [], "rejected": [], "retired": [], "testing": []}
+    for d in await all_drafts(db.db):
+        if d.get("status") in out:
+            out[d["status"]].append({k: d.get(k) for k in ("slug", "description", "thesis", "verdict", "metrics", "drafted_at")})
+    return out
+
+
 @router.get("/strategies/library")
 async def strategy_library(
     mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None,

@@ -97,6 +97,10 @@ def read_tools(db, redis, user_id: str) -> list:
         out = await user_facts.strategy_library(db, redis, user_id, mode=mode)
         return _json(out.get("strategies", out))
 
+    async def get_built_strategies() -> str:
+        out = await user_facts.built_strategies(db, redis, user_id)
+        return _json(out.get("strategies", out))
+
     async def get_paper() -> str:
         from backend.risk.backtest_gate import BacktestGateStore
         from backend.risk.paper_gate import paper_records
@@ -217,6 +221,10 @@ def read_tools(db, redis, user_id: str) -> list:
             "when to avoid it) and its record for this user (backtest gate, paper record, learned "
             "pauses/floors, results by Nifty trend and by reason). Use for 'which strategy suits today' or "
             "'how is X doing'.")),
+        StructuredTool.from_function(coroutine=get_built_strategies, name="get_built_strategies", description=(
+            "Strategies the AI strategy builder drafted: plain-words description, thesis, status "
+            "(testing/rejected/active/retired), the builder's verdict and backtest metrics. Use for "
+            "'what did the builder make' or why a built strategy was rejected or retired.")),
         StructuredTool.from_function(coroutine=get_paper, name="get_paper", description=(
             "The paper-trading engine: net scorecard per strategy, open paper positions, running engine runs, "
             "the daily auto-run switch, the kill switch, and how far each strategy is from going live.")),

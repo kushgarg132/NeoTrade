@@ -15,6 +15,17 @@ async def system_status(_admin: User = Depends(require_admin)):
     return await status.cached_status(db.db, db.redis)
 
 
+@router.post("/system/builder/run")
+async def run_builder(_admin: User = Depends(require_admin)):
+    """Starts the builder now, outside its Friday slot; never inline, it runs for minutes."""
+    from backend.builder import draft
+
+    if await db.redis.get(draft.LOCK):
+        raise HTTPException(409, "The builder is already running.")
+    await draft.spawn()
+    return {"started": True}
+
+
 @router.get("/system/backlog")
 async def list_backlog(_admin: User = Depends(require_admin)):
     return {"items": await backlog.list_items(db.db)}
