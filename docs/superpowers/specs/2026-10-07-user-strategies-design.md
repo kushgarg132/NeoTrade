@@ -80,9 +80,12 @@ user's next intraday paper run and nowhere else.
   **owner's** `account_size`, `max_exposure`, `per_trade_cap`. No history source: the draft
   stays `testing` with verdict "waiting for market history" and the weekly job retries it.
 - Pass needs the same three checks as AI drafts (`builder/draft.py::_test`). The Deflated
-  Sharpe counts the owner's own tested drafts (`store.trial_sharpes(db, owner_id)`); the AI's
-  count stays the AI's.
-- Pass -> `active` for that owner; fail -> `rejected` with the first failing reason.
+  Sharpe counts every test the owner has run, re-tests included (each draft keeps a
+  `trial_history`; `store.trial_sharpes(db, owner_id)`); the AI's count stays the AI's.
+- Pass -> `active` for that owner; fail -> `rejected` with the first failing reason. A test
+  that raises also ends `rejected` ("test failed: <error>"), so Re-test stays available
+  (amended 2026-10-07: "stays testing" locked the user out). Submit refuses an account size
+  of 0.
 
 ## 4. Results and actions
 
