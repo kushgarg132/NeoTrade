@@ -1096,6 +1096,10 @@ themes stay proposals for the user. Owner chose proven-only over blocking just t
 At landing: COMPANY earnings ↑ 83% (n 54) and growth ↑ 72% (n 65) proven, COMPANY deal ↑
 45% (n 20) blocked.
 
+**Landed 2026-10-07: strategy builder.** Fridays the AI drafts up to 3 intraday block strategies, backtests
+each over a year and keeps those passing the gate, a positive last 90 days and Deflated Sharpe ≥ 0.95;
+they paper-trade as `built:*` (cap 5). Design: `docs/superpowers/specs/2026-10-07-strategy-builder-design.md`.
+
 Done when: the factor book has 3 months of paper beating Nifty; intraday is off or
 gated by a passing year-long backtest; no trade is sized whose expected move does not
 clear 3× charges.

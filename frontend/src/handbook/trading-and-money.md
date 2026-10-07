@@ -85,6 +85,25 @@ by the reconciler (`engine/reconcile.py`), which books late fills to that row's 
 status change is a compare-and-set (`LiveOrderStore.claim`), so a fill seen by two of them —
 a run and the user's other run, or `execute_live_order` and the reconciler — is booked once.
 
+## Strategy builder
+
+The AI drafts strategies from a fixed vocabulary of blocks (setups, filters, stops, targets, time stops:
+`backend/strategies/blocks/vocab.py`); it never writes code, only a spec the blocks interpret.
+
+Weekly (Friday, `backend/builder/draft.py::run`, details in Jobs & Ops): up to 3 drafts, each
+validated (`backend/builder/validate.py::validate_spec`, duplicates dropped) and backtested over a year of
+5-minute bars. A draft goes **active** only if all three checks pass:
+
+1. The backtest gate: profit factor ≥ 1.3, ≥ 30 trades, drawdown ≤ 15%, ≥ 365 days.
+2. The last 90 days alone are net-positive (the holdout).
+3. Deflated Sharpe ≥ 0.95 over every draft ever tried, so a lucky draw among many does not pass.
+
+Active strategies appear in Practice → Strategies as `built:<slug>` with a **Built** badge; failures sit
+under "Tried and rejected" with the reason. They trade on paper first, then need both gates to real money
+(above) like any strategy. Each takes at most one entry per symbol per day. At most 5 are active
+(`draft.py::MAX_ACTIVE`); one the learning rules keep paused for 30 days is retired
+(`draft.py::_retire_paused`).
+
 ## Gates to real money
 
 A strategy switched live routes real orders only if all of these hold. Each is code, not policy.

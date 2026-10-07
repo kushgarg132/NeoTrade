@@ -10,7 +10,7 @@ import { Sheet, Ruling, Tabs } from '../components/doc/Doc';
 import { Badge } from '../components/common/Badge';
 import api, { endpoints, getPreferences } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
-import { recordLine, statusOf, strategyName } from '../utils/library';
+import { builtLine, recordLine, statusOf, strategyName } from '../utils/library';
 import { readiness, shortStatus } from '../utils/promotion';
 import { cn } from '../utils/cn';
 
@@ -41,10 +41,17 @@ const StrategyItem = ({ card, gate, short, open, onToggle }) => {
     <li className="py-2.5">
       <button type="button" onClick={onToggle} aria-expanded={open} className="w-full text-left min-h-11">
         <span className="flex flex-wrap items-baseline gap-2">
-          <span className="figure-md text-sm">{strategyName(card.name)}</span>
+          <span className="figure-md text-sm">{strategyName(card.built ? card.name.replace(/^built:/, '') : card.name)}</span>
           <Badge variant={status.variant}>{status.label}</Badge>
+          {card.built && <Badge variant="secondary">Built</Badge>}
           <ChevronDown className={cn('ml-auto w-4 h-4 text-[var(--ink-faint)] transition-transform', open && 'rotate-180')} />
         </span>
+        {card.built && (
+          <span className="block text-sm mt-0.5">
+            {card.built.description} — {card.built.thesis}
+            <span className="block doc-meta normal-case">{builtLine(card.built.metrics)}</span>
+          </span>
+        )}
         <span className="block doc-meta normal-case mt-0.5">{recordLine(card)}</span>
         <span className="block text-sm mt-0.5">{short}</span>
       </button>
@@ -60,6 +67,29 @@ const StrategyItem = ({ card, gate, short, open, onToggle }) => {
         </div>
       )}
     </li>
+  );
+};
+
+/** The weekly builder's drafts that failed a check, so a rejected idea is never re-proposed unseen. */
+const Rejected = () => {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    api.get(endpoints.builtStrategies).then((res) => setRows(res.data.rejected || [])).catch(() => setRows([]));
+  }, []);
+  if (!rows?.length) return null;
+  return (
+    <details>
+      <summary className="sheet cursor-pointer px-4 py-3 field-label">Tried and rejected</summary>
+      <ul className="sheet divide-y divide-[var(--rule)] px-4 mt-3 sm:mt-4">
+        {rows.map((r) => (
+          <li key={r.slug} className="py-2.5">
+            <span className="block text-sm">{r.description} — {r.thesis}</span>
+            <span className="block doc-meta normal-case">{builtLine(r.metrics)}</span>
+            <span className="block doc-meta normal-case">{r.verdict}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 };
 
@@ -144,6 +174,8 @@ const Strategies = () => {
           ))}
         </div>
         <Scorecard mode={book.mode} />
+
+        <Rejected />
 
         <details onToggle={(event) => setTradesOpen(event.currentTarget.open)}>
           <summary className="sheet cursor-pointer px-4 py-3 field-label">Every paper trade</summary>

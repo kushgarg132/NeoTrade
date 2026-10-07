@@ -27,6 +27,15 @@ previous weekday (a deploy restarted the backend during it), the long-term engin
 morning pass runs the whole pass then (`backend/engine/autorun.py::_longterm_pass`), recorded
 under the missed day so that day's own 4:00 PM pass still runs.
 
+## The strategy builder — Fridays
+
+Spawned from Friday's 4:00 PM pass (`backend/builder/draft.py::start_if_due`, once per ISO week), as its own
+`nice` process (`python -m backend.builder`) so minutes of backtesting never stall the API. One run at a
+time (Redis lock `builder:lock`, `draft.py::LOCK`). It needs the admin's Upstox session for a year of
+5-minute history; without a source the run drafts nothing and waits for next week. The result is `job:last:strategy_builder`
+("Strategy builder" on the Jobs panel below), which also has **Run now** (admin `POST /system/builder/run`;
+"The builder is already running." if the lock is held). What it decides: Trading & Money → Strategy builder.
+
 ## Loops in the API (every worker)
 
 | Loop | Every | Does | Code |

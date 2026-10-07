@@ -179,10 +179,12 @@ export const endpoints = {
     status: '/system/status',
     backlog: '/system/backlog',
     item: (id) => `/system/backlog/${id}`,
+    builderRun: '/system/builder/run',
   },
   newsFeed: '/news/feed',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
   planToday: '/plan/today',
+  builtStrategies: '/strategies/built',
   strategyLibrary: (mode) => `/strategies/library${mode ? `?mode=${mode}` : ''}`,
   trading: {
     start: '/trading/start',

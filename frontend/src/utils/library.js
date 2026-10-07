@@ -32,6 +32,13 @@ const STRATEGY_NAMES = {
   cash_secured_put: 'Cash-secured put',
 };
 
+/** "Year: PF 1.4, 52 trades · Last 90 days ₹+3,200", from a built strategy's stored metrics. */
+export const builtLine = (metrics) => {
+  const { year, holdout } = metrics || {};
+  if (!year || !holdout) return '';
+  return `Year: PF ${year.pf}, ${year.trades} trades · Last 90 days ${rupees(holdout.net)}`;
+};
+
 /** A strategy or rule code as a trader reads it: "orb_breakout" -> "Opening-range breakout". */
 export const strategyName = (code) =>
   code ? STRATEGY_NAMES[code] || `${code.charAt(0).toUpperCase()}${code.slice(1).replace(/_/g, ' ')}` : code;

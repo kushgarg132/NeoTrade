@@ -33,6 +33,25 @@ const FeatureSwitch = ({ feature, on: initial }) => {
   );
 };
 
+// Admin-only like the panel itself; a 409 means a run is already going, and says so.
+const BuilderRun = () => {
+  const [msg, setMsg] = useState('');
+  const go = async () => {
+    try {
+      await api.post(endpoints.system.builderRun);
+      setMsg('Started.');
+    } catch (err) {
+      setMsg(err?.response?.data?.detail || 'Could not start the builder.');
+    }
+  };
+  return (
+    <span className="inline-flex items-center gap-2 justify-end flex-wrap">
+      {msg}
+      <Button size="sm" variant="outline" onClick={go}>Run now</Button>
+    </span>
+  );
+};
+
 const TITLES = { deploy: 'Deployed now', jobs: 'Jobs now', news: 'News now', data: 'Data now', ai: 'AI now' };
 const FRONTEND_SHA = import.meta.env.VITE_GIT_SHA || '';
 
@@ -62,6 +81,8 @@ const ROWS = {
     ...(b.data_quality?.note ? [['Data quality found', summary(b.data_quality.note)]] : []),
     ...Object.entries(b.loops).map(([name, record]) => [name.replace(/_/g, ' '), run(record)]),
     ...Object.entries(b.ingest).map(([name, age]) => [`ingest ${name.replace(/_/g, ' ')}`, `${age}s ago`]),
+    ['Strategy builder', <span key="builder" className="inline-flex items-center gap-2 justify-end flex-wrap">{run(b.builder)}<BuilderRun /></span>],
+    ...(b.builder?.note ? [['Builder did', summary(b.builder.note)]] : []),
     ['API workers alive', b.workers_alive],
   ],
   news: (b) => [
