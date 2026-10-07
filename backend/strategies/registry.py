@@ -39,6 +39,7 @@ def build_default_strategies(
     sector_of: Optional[dict[str, str]] = None,
     prev_closes: Optional[dict[str, dict[str, float]]] = None,
     regime_of: Optional[Callable] = None,
+    user_id: Optional[str] = None,
 ) -> list[Strategy]:
     """`universe` defaults to `indian_stocks.ALL_SCAN_STOCKS` (the existing
     NSE mid/small-cap symbol list already used elsewhere in this codebase),
@@ -75,6 +76,8 @@ def build_default_strategies(
     apart from `universe` so the F&O large-caps it needs don't also join
     every equity strategy's universe. Default `None` leaves it out, as
     backtests and the suggestion scan do: it needs live premiums to trade.
+
+    `user_id` adds that user's own built strategies to the global ones; without it only global load.
     """
     universe = list(universe) if universe is not None else list(ALL_SCAN_STOCKS)
     symbol_for_token = symbol_for_token or {}
@@ -116,6 +119,8 @@ def build_default_strategies(
             AnalystVerdictStrategy(list(analyst_verdicts.keys()), symbol_for_token, analyst_verdicts)
         )
     for d in active():
+        if d.get("owner_id") not in (None, user_id):  # the AI's are global; a user's load only for them
+            continue
         if not load_ok(d["spec"]):
             logger.warning("skipping built strategy %s: its spec no longer validates", d["slug"])
             continue

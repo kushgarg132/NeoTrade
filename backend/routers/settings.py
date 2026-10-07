@@ -137,16 +137,16 @@ async def list_strategies(user: User = Depends(get_current_user)):
     from backend.strategies.registry import build_default_strategies
 
     await store.refresh(db.db)
-    return [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"])]
+    return [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"], user_id=user.id)]
 
 
 @router.get("/strategies/built")
-async def built_strategies(_user: User = Depends(get_current_user)):
+async def built_strategies(user: User = Depends(get_current_user)):
     """Every strategy the builder drafted, grouped by status, with its verdict."""
-    from backend.builder.store import all_drafts
+    from backend.builder.store import visible
 
     out = {"active": [], "rejected": [], "retired": [], "testing": []}
-    for d in await all_drafts(db.db):
+    for d in await visible(db.db, user.id):
         if d.get("status") in out:
             out[d["status"]].append({k: d.get(k) for k in ("slug", "description", "thesis", "verdict", "metrics", "drafted_at")})
     return out
@@ -180,7 +180,7 @@ async def strategy_promotion(
     from backend.strategies.registry import build_default_strategies
 
     await store.refresh(db.db)
-    names = [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"])]
+    names = [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"], user_id=user.id)]
     account_size = (await prefs.get(user.id))["account_size"]
     records = await paper_records(db.db, user.id, names, account_size)
     gate = BacktestGateStore(db.db)

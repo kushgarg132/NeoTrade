@@ -20,13 +20,13 @@ from backend.strategies.registry import build_default_strategies
 STAT_KEYS = ("trades", "net", "win_rate", "profit_factor", "shrunk")
 
 
-def _strategies():
+def _strategies(user_id: Optional[str] = None):
     # Same set the Settings page lists: a placeholder universe builds every one.
-    return build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"])
+    return build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"], user_id=user_id)
 
 
-def strategy_names() -> list[str]:
-    return [s.spec.name for s in _strategies()]
+def strategy_names(user_id: Optional[str] = None) -> list[str]:
+    return [s.spec.name for s in _strategies(user_id)]
 
 
 def _stats(row: Optional[dict]) -> Optional[dict]:
@@ -36,7 +36,7 @@ def _stats(row: Optional[dict]) -> Optional[dict]:
 async def catalog(db, user_id: str, nifty: list,
                   mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None) -> list[dict]:
     await store.refresh(db)
-    strategies = [s for s in _strategies() if mode is None or s.spec.mode == mode]
+    strategies = [s for s in _strategies(user_id) if mode is None or s.spec.mode == mode]
     names = [s.spec.name for s in strategies]
     prefs = await PrefsStore(db).get(user_id)
     records = await paper_records(db, user_id, names, prefs["account_size"])

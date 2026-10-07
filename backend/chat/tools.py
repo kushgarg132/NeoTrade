@@ -111,7 +111,7 @@ def read_tools(db, redis, user_id: str) -> list:
         prefs = await PrefsStore(db).get(user_id)
         ledger = LedgerStore(db, user_id=user_id)
         card = await compute_scorecard(ledger, "paper", prefs["account_size"])
-        names = [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"])]
+        names = [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"], user_id=user_id)]
         records = await paper_records(db, user_id, names, prefs["account_size"])
         gate = BacktestGateStore(db)
         progress = {}

@@ -58,7 +58,7 @@ async def replay_day(db, provider, user_id: str, day: date) -> Optional[dict]:
     await store.refresh(db)
     shared = {"regime_of": await store.regime_of(db), "catalysts": await catalyst_map(db, day, day), "sector_of": nifty200_sectors(),
               "prev_closes": {day.isoformat(): await prev_closes(db, list(resolved), day)},
-              "params": await current_params(db)}
+              "params": await current_params(db), "user_id": user_id}
     account = await backtest_account(db)
 
     async def side(symbols: list[str], plan):

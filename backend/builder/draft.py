@@ -145,7 +145,7 @@ async def _test(db, doc: dict, backtest, kwargs: dict, account_size: float, now:
     sharpe = _sharpe(daily)
     finite = math.isfinite(sharpe) and math.isfinite(float(daily.to_numpy().sum()))  # _sharpe maps NaN to 0
     sharpe = sharpe if finite else None  # never stored: it would poison every later trial count
-    trials = await store.trial_sharpes(db) + ([sharpe] if finite else [])
+    trials = await store.trial_sharpes(db, None) + ([sharpe] if finite else [])
     holdout = [t for t in r.trades if _at(t) >= end - HOLDOUT]
     hold_net = round(sum(t["net_pnl"] for t in holdout), 2)
     fields = {"sharpe": sharpe, "trials": len(trials), "tested_at": now, "metrics": {
@@ -173,8 +173,8 @@ async def _paper_net(db, slug: str) -> float:
 
 
 async def _make_room(db) -> list[str]:
-    """At most MAX_ACTIVE: retires the active one with the lowest paper net across users (ties: oldest)."""
-    active = await db[store.COLLECTION].find({"status": "active"}).sort("drafted_at", 1).to_list(None)
+    """At most MAX_ACTIVE AI strategies (users' own don't count): retires the lowest paper net across users (ties: oldest)."""
+    active = await db[store.COLLECTION].find({"status": "active", "owner_id": None}).sort("drafted_at", 1).to_list(None)
     if len(active) < MAX_ACTIVE:
         return []
     nets = [(await _paper_net(db, d["slug"]), i, d["slug"]) for i, d in enumerate(active)]

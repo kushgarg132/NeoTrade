@@ -368,7 +368,7 @@ async def _launch_run(
             prev_closes=({today.isoformat(): await prev_closes(db.db, [i.tradingsymbol for i in instruments], today)}
                          if mode == "INTRADAY" else None),
             sector_of=nifty200_sectors(),
-            regime_of=await builder_store.regime_of(db.db),
+            regime_of=await builder_store.regime_of(db.db), user_id=user_id,
         )
         if s.spec.mode == mode
     ]

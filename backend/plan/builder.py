@@ -31,10 +31,10 @@ BRIEF_CHARS = 1500
 CARD_KEYS = ("style", "regimes", "needs", "best_when", "avoid_when")
 
 
-def intraday_strategies() -> set[str]:
+def intraday_strategies(user_id: Optional[str] = None) -> set[str]:
     from backend.learning.library import _strategies
 
-    return {s.spec.name for s in _strategies() if s.spec.mode == "INTRADAY"}
+    return {s.spec.name for s in _strategies(user_id) if s.spec.mode == "INTRADAY"}
 
 
 def _bare(symbol: str) -> str:
@@ -177,7 +177,7 @@ async def build_plan(db, redis, user_id: str, now: datetime, complete=None, llm=
     today = now.astimezone(IST).date()
     prefs = await PrefsStore(db).get(user_id)
     universe = {_bare(s) for s in prefs["universe"] or []}
-    everything = intraday_strategies()
+    everything = intraday_strategies(user_id)
     # A paused strategy cannot trade today, so the plan spends no thought on it.
     strategies = everything - (await load_rules(db, user_id)).paused
 

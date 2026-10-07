@@ -2,7 +2,7 @@
 its verdict. Only `active` docs run; `refresh` copies them into the in-memory
 cache that strategies/registry.py builds from (strategies/ itself does no I/O).
 
-Doc: slug, spec, thesis, description, drafted_at, status
+Doc: slug, owner_id (None/absent = the AI's, global), spec, thesis, description, drafted_at, status
 ("testing"|"rejected"|"active"|"retired"), verdict, metrics
 ({"year": {...}, "holdout": {...}}), trials, sharpe, params.
 """
@@ -58,9 +58,14 @@ async def set_status(db, slug: str, status: str, verdict: str = "", **fields) ->
     await db[COLLECTION].update_one({"slug": slug}, {"$set": {"status": status, "verdict": verdict, **fields}})
 
 
-async def trial_sharpes(db) -> list[float]:
-    """Sharpe of every draft already tested, for the deflated-Sharpe trial count."""
-    rows = await db[COLLECTION].find({"status": {"$ne": "testing"}}, {"sharpe": 1}).to_list(None)
+async def visible(db, user_id: str) -> list[dict]:
+    """The AI's drafts plus this user's own, newest first."""
+    return await db[COLLECTION].find({"owner_id": {"$in": [None, user_id]}}, {"_id": 0}).sort("drafted_at", -1).to_list(None)
+
+
+async def trial_sharpes(db, owner_id: Optional[str] = None) -> list[float]:
+    """Sharpe of every draft this owner (None = the AI) already tested, for the deflated-Sharpe trial count."""
+    rows = await db[COLLECTION].find({"status": {"$ne": "testing"}, "owner_id": owner_id}, {"sharpe": 1}).to_list(None)
     return [s for r in rows if isinstance(s := r.get("sharpe"), (int, float)) and math.isfinite(s)]
 
 
