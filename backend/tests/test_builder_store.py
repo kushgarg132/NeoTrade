@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import pytest
 from mongomock_motor import AsyncMongoMockClient
 
@@ -68,3 +70,39 @@ def test_variant_rebuilds_block_strategy_with_new_params():
     assert v.p[key] == 1.5 and s.p[key] == 1.0
     assert v._regime_of is regime and v._sector_of == {"X": "IT"}
     assert v.base_spec == s.base_spec
+
+
+class _Boom:
+    def __getitem__(self, name):
+        raise RuntimeError("db down")
+
+
+@pytest.mark.asyncio
+async def test_refresh_failure_keeps_cache_and_returns_empty():
+    set_active([{"slug": "keep", "spec": SPEC}])
+    assert await store.refresh(_Boom()) == []
+    assert [d["slug"] for d in active()] == ["keep"]
+
+
+@pytest.mark.asyncio
+async def test_refresh_skips_malformed_docs():
+    db = AsyncMongoMockClient()["t"]
+    await db[store.COLLECTION].insert_many([
+        {"status": "active", "spec": SPEC}, {"status": "active", "slug": "x"}, doc("ok", "active")])
+    assert [d["slug"] for d in await store.refresh(db)] == ["ok"]
+
+
+@pytest.mark.asyncio
+async def test_regime_of_failure_gives_none_lookup():
+    assert (await store.regime_of(_Boom()))(date(2026, 1, 5)) is None
+
+
+@pytest.mark.asyncio
+async def test_regime_of_risk_on_for_rising_nifty(monkeypatch):
+    start = date(2025, 1, 1)
+    rows = [(start + timedelta(days=i), 100.0 + i) for i in range(250)]
+
+    async def closes(db, since):
+        return rows
+    monkeypatch.setattr(store.bars, "nifty_closes", closes)
+    assert (await store.regime_of(None))(start + timedelta(days=250)) == "risk_on"

@@ -238,8 +238,6 @@ async def _main() -> None:
     now = datetime.now(timezone.utc)
     source, intraday = await intraday_history(db.db, db.redis)
     print("intraday history:", source or "none (5-minute strategies skipped)", flush=True)
-    from backend.builder import store
-    await store.refresh(db.db)
     strategies = {s.spec.name: s for s in build_default_strategies(params=await current_params(db.db))}
     for h in await propose(db.db, strategies, now):
         print("hypothesis queued:", h["strategy"], h["params"], "-", h["rationale"], flush=True)
