@@ -166,6 +166,7 @@ async def worst_setups(db, redis, user_id, limit: int = 10) -> dict:
 async def built_strategies(db, redis, user_id) -> dict:
     from backend.builder.store import COLLECTION
 
+    # The AI's drafts plus the caller's own; user_id None (the builder's prompt) sees only the AI's.
     keys = ("slug", "status", "description", "thesis", "verdict", "metrics")
-    docs = await db[COLLECTION].find({}, {"_id": 0}).sort("drafted_at", 1).to_list(None)
+    docs = await db[COLLECTION].find({"owner_id": {"$in": [None, user_id]}}, {"_id": 0}).sort("drafted_at", 1).to_list(None)
     return {"strategies": [{k: d.get(k) for k in keys} for d in docs]}

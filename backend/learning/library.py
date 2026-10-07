@@ -45,7 +45,7 @@ async def catalog(db, user_id: str, nifty: list,
     gate = BacktestGateStore(db)
     live = set(prefs.get("live_strategies") or [])
 
-    built_docs = {f"built:{d['slug']}": d for d in await store.all_drafts(db)}
+    built_docs = {f"built:{d['slug']}": d for d in await store.visible(db, user_id)}
     cards = []
     for s in strategies:
         name = s.spec.name

@@ -66,3 +66,15 @@ async def test_make_room_ignores_user_strategies():
     for i in range(draft.MAX_ACTIVE - 1):
         await store.insert(db, doc(f"ai{i}"))
     assert await draft._make_room(db) == []
+
+
+@pytest.mark.asyncio
+async def test_built_strategies_fact_is_scoped():
+    from backend.ai.facts.user import built_strategies
+
+    db = AsyncMongoMockClient()["t"]
+    for d in (doc("g"), doc("a", owner_id="A"), doc("b", owner_id="B")):
+        await store.insert(db, d)
+    slugs = lambda out: {s["slug"] for s in out["strategies"]}
+    assert slugs(await built_strategies(db, None, "B")) == {"g", "b"}
+    assert slugs(await built_strategies(db, None, None)) == {"g"}
