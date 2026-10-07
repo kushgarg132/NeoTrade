@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   CartesianGrid, Bar, ComposedChart, ReferenceLine 
@@ -6,6 +6,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../common/Card';
 import { formatCurrency, formatCompactNumber } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import api, { endpoints } from '../../utils/api';
+
+const INTRADAY_POLL_MS = 60_000;
 
 const CustomTooltip = ({ active, payload, label, currency }) => {
   if (active && payload && payload.length) {
@@ -34,11 +37,30 @@ const CustomTooltip = ({ active, payload, label, currency }) => {
   return null;
 };
 
-const TradingChart = ({ data, technicals, className, currency }) => {
+const TradingChart = ({ data, symbol, technicals, className, currency }) => {
   const [timeframe, setTimeframe] = useState('1Y');
+  const [intraday, setIntraday] = useState(null);
+  const isDay = timeframe === '1D';
+
+  // 1D: the latest session's 5-minute candles, refreshed each minute.
+  useEffect(() => {
+    if (!isDay || !symbol) return undefined;
+    let gone = false;
+    setIntraday(null);
+    const load = () => api.get(endpoints.intraday(symbol))
+      .then((res) => !gone && setIntraday(res.data))
+      .catch(() => !gone && setIntraday([]));
+    load();
+    const timer = setInterval(load, INTRADAY_POLL_MS);
+    return () => {
+      gone = true;
+      clearInterval(timer);
+    };
+  }, [isDay, symbol]);
 
   // Filter data based on timeframe
   const filteredData = React.useMemo(() => {
+    if (isDay) return intraday || [];
     if (!data) return [];
     let days = 365;
     if (timeframe === '1M') days = 22;
@@ -47,12 +69,14 @@ const TradingChart = ({ data, technicals, className, currency }) => {
     
     // Slice from the end
     return data.slice(-days);
-  }, [data, timeframe]);
+  }, [data, timeframe, isDay, intraday]);
 
   // Format data for Recharts
   const formattedData = filteredData.map(item => ({
     ...item,
-    date: new Date(item.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
+    date: isDay
+      ? new Date(item.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' })
+      : new Date(item.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
     price: Number(item.close),
     volume: Number(item.volume)
   }));
@@ -63,7 +87,7 @@ const TradingChart = ({ data, technicals, className, currency }) => {
             <div className="flex items-center gap-4">
                 <CardTitle>Price action</CardTitle>
                 <div className="flex border border-[var(--rule-strong)]">
-                    {['1M', '3M', '6M', '1Y'].map(tf => (
+                    {[...(symbol ? ['1D'] : []), '1M', '3M', '6M', '1Y'].map(tf => (
                          <button
                             key={tf}
                             onClick={() => setTimeframe(tf)}
@@ -136,7 +160,7 @@ const TradingChart = ({ data, technicals, className, currency }) => {
                 </ResponsiveContainer>
             ) : (
                 <div className="flex h-full items-center justify-center text-muted-foreground">
-                    No Data Available
+                    {isDay && intraday === null ? 'Loading…' : 'No Data Available'}
                 </div>
             )}
         </CardContent>

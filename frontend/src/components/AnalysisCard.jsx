@@ -162,7 +162,7 @@ const AnalysisCard = ({ quick, ai, aiLoading, aiError, aiRequested, onOpenAiTab 
         <div className="space-y-4">
           <StockFlags flags={quick.flags} />
           <Sheet title="Price">
-            <TradingChart data={quick.price_data} technicals={technicals} currency={currency} />
+            <TradingChart data={quick.price_data} symbol={company?.symbol} technicals={technicals} currency={currency} />
             <dl className="mt-3 grid grid-cols-5 border-t border-[var(--rule)] pt-3" aria-label="Returns">
               {RETURNS.map(([key, label]) => {
                 const value = technicals?.returns?.[key];

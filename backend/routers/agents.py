@@ -22,6 +22,15 @@ async def quick_analyze_stock(symbol: str):
         logger.error(f"Error in quick analysis for {symbol}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="The analysis failed; try again in a minute.")
 
+@router.get("/intraday/{symbol}")
+async def intraday_candles(symbol: str):
+    """The latest session's 5-minute candles (today's while the market is
+    open, else the last trading day's): the stock page's 1D chart."""
+    from backend.components.quant.price import fetch_price_history_logic
+
+    candles, _ = await fetch_price_history_logic(symbol, period="1d", interval="5m")
+    return [c.model_dump(mode="json") for c in candles]
+
 class AnalyzeRequest(BaseModel):
     symbol: str
     account_size: float = 100000.0
