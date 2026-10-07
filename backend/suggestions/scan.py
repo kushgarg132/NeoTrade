@@ -131,6 +131,11 @@ async def scan_universe(
             "no-op this scan"
         )
 
+    try:
+        sectors = nifty200_sectors()
+    except Exception:  # a sector lookup failure only disables sector_rs; it must not empty the scan
+        logger.warning("nifty200_sectors failed; scanning without sector data", exc_info=True)
+        sectors = {}
     strategies = [
         s for s in build_default_strategies(
             universe=[i.tradingsymbol for i in instruments], symbol_for_token=symbol_for_token,
@@ -139,7 +144,7 @@ async def scan_universe(
             analyst_verdicts=analyst_verdicts or None,
             params=await current_params(db),
             # The user's own swing built strategies load only in their scan (global ones in every scan).
-            user_id=user_id, regime_of=await builder_store.regime_of(db), sector_of=nifty200_sectors(),
+            user_id=user_id, regime_of=await builder_store.regime_of(db), sector_of=sectors,
         )
         if s.spec.mode == "LONGTERM"
     ]

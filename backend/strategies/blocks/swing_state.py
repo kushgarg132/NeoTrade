@@ -63,5 +63,6 @@ class SwingState:
         """Lowest low of the n bars before today."""
         return min(list(self._l)[-n - 1:-1]) if len(self._l) > n else None
 
-    def ret(self, n: int) -> float | None:
-        return self.close / self._c[-n - 1] - 1 if len(self._c) > n else None
+    def ret(self, n: int, ago: int = 0) -> float | None:
+        """n-day return as of `ago` bars back (0 = today's close)."""
+        return self._c[-1 - ago] / self._c[-n - 1 - ago] - 1 if len(self._c) > n + ago else None

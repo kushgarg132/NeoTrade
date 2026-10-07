@@ -34,6 +34,7 @@ _NEEDS = {"gap": "gap", "volume_spike": "volume_spike", "orb_break": "range_day"
           "gap_hold": "gap", "volume_breakout": "volume_spike"}
 _SWING_STYLE = {"breakout_n": "breakout", "volume_breakout": "breakout", "gap_hold": "breakout",
                 "rsi2_dip": "reversion", "pullback_ma": "reversion", "momentum_rank": "momentum"}
+_SESSION_MINUTES = 375  # one NSE session, 09:15-15:30
 _SWING_GAP = 5  # trading days (daily bars seen) between two entries in one symbol
 
 
@@ -154,7 +155,7 @@ class BlockStrategy(TokenResolvingStrategy):
             return StrategyCard(
                 style=_SWING_STYLE[name], regimes=list(regimes) if regimes else ["risk_on", "neutral", "risk_off"],
                 needs=[_NEEDS.get(name, "trend_day")], best_when=thesis, avoid_when="Outside its regimes.",
-                typical_hold_minutes=int(self._spec["max_hold_days"]["days"]) * 375)
+                typical_hold_minutes=int(self._spec["max_hold_days"]["days"]) * _SESSION_MINUTES)
         reversion = name == "rsi_cross" or (name == "vwap_cross" and params["mode"] == "reclaim")
         return StrategyCard(
             style="breakout" if name == "orb_break" else "reversion" if reversion else "momentum",
@@ -181,7 +182,7 @@ class BlockStrategy(TokenResolvingStrategy):
         else:
             s.update(bar)
         pos = ctx.position(symbol)
-        if pos is not None and pos.quantity != 0 or bar.warmup:
+        if (pos is not None and pos.quantity != 0) or bar.warmup:
             return
         if (intent := self._entry_intent(bar, symbol, s)) is not None:
             ctx.submit(intent)
@@ -221,7 +222,7 @@ class BlockStrategy(TokenResolvingStrategy):
         if symbol in self._since:
             self._since[symbol] += 1
         pos = ctx.position(symbol)
-        if pos is not None and pos.quantity != 0 or bar.warmup:
+        if (pos is not None and pos.quantity != 0) or bar.warmup:
             return
         if self._since.get(symbol, _SWING_GAP) < _SWING_GAP:  # a fresh signal after a stop-out must wait
             return
@@ -256,12 +257,14 @@ class BlockStrategy(TokenResolvingStrategy):
                           trail_atr=sp["trail_atr"]["multiple"] if sp.get("trail_atr") else None))
 
     def _day_returns(self, n: int, day: date) -> dict[str, float]:
-        """n-day return per symbol whose last bar is `day` (today's cross-section so far)."""
+        """n-day return of every symbol as of the previous session: within a day the feed delivers
+        symbols in a fixed order, so today's closes would rank a symbol only against those before it.
+        A symbol already updated today reads one bar back; one not yet updated, its last bar."""
         return {sym: r for sym, st in self._states.items()
-                if self._days.get(sym) == day and (r := st.ret(n)) is not None}
+                if (r := st.ret(n, ago=1 if self._days.get(sym) == day else 0)) is not None}
 
     def _rank_pct(self, symbol: str, n: int, day: date) -> Optional[float]:
-        """0 = best n-day return of the day's cross-section, 100 = worst."""
+        """0 = best n-day return of the cross-section (as of the previous session), 100 = worst."""
         rets = self._day_returns(n, day)
         if symbol not in rets or len(rets) < 2:
             return None
@@ -269,11 +272,13 @@ class BlockStrategy(TokenResolvingStrategy):
         return 100 * better / (len(rets) - 1)
 
     def _swing_sector_rs(self, symbol: str, day: date) -> Optional[float]:
-        """Mean 20-day return of the symbol's sector minus the universe's, in %."""
+        """Mean 20-day return of the symbol's sector minus the universe's, in %, as of the previous session."""
         sector = self._sector_of.get(symbol)
+        if sector is None:
+            return None
         rets = self._day_returns(20, day)
         mine = [r for sym, r in rets.items() if self._sector_of.get(sym) == sector]
-        if sector is None or len(mine) < 3:
+        if len(mine) < 3:
             return None
         return (sum(mine) / len(mine) - sum(rets.values()) / len(rets)) * 100
 

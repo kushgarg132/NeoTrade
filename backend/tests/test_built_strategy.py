@@ -1,5 +1,6 @@
 import copy
 import logging
+import math
 import random
 import time as clock
 from datetime import date, datetime, timedelta
@@ -281,31 +282,55 @@ def test_swing_enters_once_per_five_days():
     assert days == [13, 18, 23, 28]  # first once ATR has 14 bars
 
 
+def _feed_daily(strat, closes, order, days):
+    """closes(token, i) -> close; returns [(symbol, day index)] of every intent."""
+    ctx, out = Ctx(), []
+    for i in range(days):
+        for t in order:
+            n = len(ctx.intents)
+            strat.on_bar(ctx, dbar(i, closes(t, i), token=t))
+            out += [(x.symbol, i) for x in ctx.intents[n:]]
+    return out
+
+
 def test_momentum_rank_uses_cross_section():
-    """Five symbols, 63-day returns ranked best first among the day's states; top 25% fires."""
-    spec = {**SWING, "setup": {"momentum_rank": {"lookback": "63", "top_pct": 25}}}
+    """Five symbols ranked by 63-day return as of the previous bar; top 20% (the best one) fires,
+    in either feed order."""
+    spec = {**SWING, "setup": {"momentum_rank": {"lookback": "63", "top_pct": 20}}}
     syms = {t: f"S{t}" for t in range(1, 6)}
-    strat = BlockStrategy("mr", spec, list(syms.values()), syms)
-    ctx = Ctx()
-    for i in range(64):
-        # token 1 rises fastest; fed last each day, so it ranks against the full cross-section
-        for t in (5, 4, 3, 2, 1):
-            strat.on_bar(ctx, dbar(i, 100.0 * (1 + 0.002 * (6 - t)) ** i, token=t))
-    assert "S1" in [x.symbol for x in ctx.intents]
-    assert strat._rank_pct("S1", 63, strat._days["S1"]) == 0.0
-    assert strat._rank_pct("S2", 63, strat._days["S2"]) == 25.0
-    assert strat._rank_pct("S5", 63, strat._days["S5"]) == 100.0
+    closes = lambda t, i: 100.0 * (1 + 0.002 * (6 - t)) ** i  # token 1 rises fastest
+    for order in ((5, 4, 3, 2, 1), (1, 2, 3, 4, 5)):
+        strat = BlockStrategy("mr", spec, list(syms.values()), syms)
+        # 65 closes before a previous-bar 63-day return exists; then once per 5 days
+        assert _feed_daily(strat, closes, order, 70) == [("S1", 64), ("S1", 69)]
+        day = strat._days["S1"]
+        assert [strat._rank_pct(f"S{t}", 63, day) for t in range(1, 6)] == [0.0, 25.0, 50.0, 75.0, 100.0]
     assert strat.CARD.style == "momentum"
 
 
+def test_cross_section_is_feed_order_independent():
+    spec = {**SWING, "setup": {"momentum_rank": {"lookback": "63", "top_pct": 30}},
+            "filters": {"sector_rs": {"min": 0.0}}}
+    syms = {t: f"S{t}" for t in range(1, 9)}
+    sector = {f"S{t}": "IT" if t <= 4 else "BANK" for t in range(1, 9)}
+    rng = random.Random(7)
+    path = {t: [rng.uniform(-0.03, 0.035) for _ in range(120)] for t in syms}
+    closes = lambda t, i: 100.0 * math.prod(1 + r for r in path[t][:i + 1])
+    runs = [sorted(_feed_daily(BlockStrategy("x", spec, list(syms.values()), syms, sector_of=sector), closes, order, 120))
+            for order in (tuple(syms), tuple(reversed(syms)), (3, 7, 1, 5, 8, 2, 6, 4))]
+    assert runs[0] and runs[0] == runs[1] == runs[2]
+
+
 def test_swing_sector_rs_needs_three_in_sector():
+    """Sector minus universe 20-day return, as of the previous bar (today's jump in S1 is not counted)."""
     spec = {**SWING, "filters": {"sector_rs": {"min": 0.0}}}
     syms = {t: f"S{t}" for t in range(1, 6)}
     sector = {"S1": "IT", "S2": "IT", "S3": "IT", "S4": "BANK", "S5": "BANK"}
     strat = BlockStrategy("rs", spec, list(syms.values()), syms, sector_of=sector)
-    for i in range(21):
+    for i in range(23):
         for t in range(1, 6):
-            strat.on_bar(Ctx(), dbar(i, 100.0 * (1 + (0.01 if t <= 3 else 0.0)) ** i, token=t))
+            c = 100.0 * (1 + (0.01 if t <= 3 else 0.0)) ** min(i, 21)
+            strat.on_bar(Ctx(), dbar(i, c * (1.5 if t == 1 and i == 22 else 1.0), token=t))
     day = strat._days["S1"]
     universe = (1.01 ** 20 - 1) * 100 * 3 / 5
     assert strat._swing_sector_rs("S1", day) == pytest.approx((1.01 ** 20 - 1) * 100 - universe)
