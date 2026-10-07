@@ -2,7 +2,11 @@
 
 Bars: Mongo `daily_bars`, one doc per (symbol, IST date) with adjusted
 open/high/low/close/volume. The `bars` loop runs once a day after the close
-(15:45 IST), or right away when the store has never been filled. A new
+(15:45 IST), or right away when the store has never been filled. Stocks come
+from the admin's broker session (Upstox, else Kite) when one is up: Yahoo
+misdates some corporate actions (TRENT's 1.5 split, adjusted from the wrong
+day, read as a 33% one-day fall) and keeps bars for exchange holidays. Yahoo
+fills whatever the broker did not serve, and NIFTY. A new
 symbol gets two years; a known one the last month (cheap, and it heals a
 missed day). Once a week every symbol is re-downloaded in full, because
 adjusted prices shift back in time after a split or dividend. NIFTY (^NSEI)
@@ -86,6 +90,48 @@ def _download(tickers: list[str], period: str) -> dict[str, pd.DataFrame]:
         df = df.rename(columns=str.lower).dropna(subset=["close"])
         if not df.empty:
             frames[t] = df
+    return frames
+
+
+def _candle_frame(candles) -> pd.DataFrame:
+    return pd.DataFrame(
+        [{"open": c.open, "high": c.high, "low": c.low, "close": c.close, "volume": c.volume} for c in candles],
+        index=pd.to_datetime([c.timestamp.astimezone(IST).date() for c in candles]),
+    )
+
+
+async def _broker_session(db, redis):
+    from backend.risk.gate_backtest import intraday_history
+
+    return await intraday_history(db, redis)
+
+
+async def _broker_download(db, redis, tickers: list[str], period: str) -> dict[str, pd.DataFrame]:
+    """ticker -> frame from the admin's broker session, one history call per
+    stock. Empty when there is no session, or when the first call fails (a
+    session that does not serve daily history, e.g. Kite without the paid
+    add-on): Yahoo then takes the whole batch."""
+    from backend.instruments.master import InstrumentMaster
+
+    stocks = [t for t in tickers if not t.startswith("^")]
+    name, adapter = await _broker_session(db, redis) if stocks else (None, None)
+    if adapter is None:
+        return {}
+    master = InstrumentMaster(db)
+    frames = {}
+    for t in stocks:
+        instrument = await master.get("NSE", t.removesuffix(".NS"))
+        if instrument is None:
+            continue
+        try:
+            candles = await adapter.history(instrument, "1d", period)
+        except Exception as exc:
+            logger.warning("bars: %s daily history failed for %s: %s", name, t, exc)
+            if not frames:
+                return {}
+            continue
+        if candles:
+            frames[t] = _candle_frame(candles)
     return frames
 
 
@@ -185,7 +231,8 @@ async def loop(db, redis, now: Optional[datetime] = None) -> None:
     ]
     written = stored = 0
     for period, tickers in batches:
-        frames = await asyncio.to_thread(_download, tickers, period)
+        frames = await _broker_download(db, redis, tickers, period)
+        frames |= await asyncio.to_thread(_download, [t for t in tickers if t not in frames], period)
         for t, df in frames.items():
             written += await write(db, t.removesuffix(".NS"), df)
             stored += 1

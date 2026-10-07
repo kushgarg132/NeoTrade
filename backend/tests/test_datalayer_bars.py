@@ -103,6 +103,61 @@ async def test_loop_backfills_new_symbols_and_tops_up_known_ones(mongo, monkeypa
     assert set(await mongo[bars.BARS].distinct("symbol")) == {"KNOWN", "NEW", bars.NIFTY}
 
 
+class FakeBroker:
+    def __init__(self, fail=()):
+        self.fail = set(fail)
+
+    async def history(self, instrument, interval, period):
+        from backend.components.shared.models import PriceCandle
+
+        if instrument.tradingsymbol in self.fail:
+            raise ValueError("no daily history")
+        return [
+            PriceCandle(symbol=instrument.tradingsymbol, timestamp=datetime.combine(d, time(), bars.IST),
+                        open=50.0, high=51.0, low=49.0, close=50.0, adj_close=50.0, volume=10)
+            for d in pd.bdate_range(end=TODAY, periods=3).date
+        ]
+
+
+def _broker_loop_setup(monkeypatch, broker, wanted):
+    downloads = []
+    monkeypatch.setattr(bars, "_download", lambda t, p: downloads.append((p, sorted(t))) or {x: _frame(3) for x in t})
+
+    async def fake_symbols(db):
+        return set(wanted)
+
+    async def fake_session(db, redis):
+        return "upstox", broker
+
+    async def fake_get(self, exchange, symbol):
+        if symbol == "UNLISTED":
+            return None
+        return Instrument(exchange="NSE", tradingsymbol=symbol, name=symbol, instrument_token=1,
+                          exchange_token=1, instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)
+
+    monkeypatch.setattr(bars, "symbols", fake_symbols)
+    monkeypatch.setattr(bars, "_broker_session", fake_session)
+    monkeypatch.setattr("backend.instruments.master.InstrumentMaster.get", fake_get)
+    return downloads
+
+
+async def test_loop_takes_stocks_from_the_broker_and_the_rest_from_yahoo(mongo, monkeypatch):
+    downloads = _broker_loop_setup(monkeypatch, FakeBroker(), {"AAA", "UNLISTED"})
+    await bars.loop(mongo, FakeRedis(), now=AFTER_CLOSE)
+
+    assert downloads == [("2y", ["UNLISTED.NS"]), ("1mo", []), ("10y", [bars.NIFTY])]
+    frames = await bars.read(mongo, ["AAA", "UNLISTED"], TODAY - timedelta(days=10))
+    assert list(frames["AAA"]["close"]) == [50.0] * 3  # broker
+    assert frames["UNLISTED"]["close"].iloc[0] == 100.0  # yahoo
+
+
+async def test_loop_falls_back_to_yahoo_when_the_first_broker_call_fails(mongo, monkeypatch):
+    downloads = _broker_loop_setup(monkeypatch, FakeBroker(fail={"AAA"}), {"AAA"})
+    await bars.loop(mongo, FakeRedis(), now=AFTER_CLOSE)
+
+    assert downloads[0] == ("2y", ["AAA.NS"])
+
+
 async def test_weekly_pass_redownloads_everything(mongo, monkeypatch):
     await bars.write(mongo, "KNOWN", _frame(5))
     downloads = []
