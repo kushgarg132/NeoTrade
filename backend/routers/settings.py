@@ -160,8 +160,12 @@ async def strategy_vocabulary(user: User = Depends(get_current_user)):
     """The block vocabulary the form renders, straight from vocab.py so it can't drift from the validator."""
     from backend.strategies.blocks import vocab
 
-    return {k: {b: {p: _vocab_json(s) for p, s in ps.items()} for b, ps in blocks.items()}
-            for k, blocks in (("setups", vocab.SETUPS), ("filters", vocab.FILTERS), ("exits", vocab.EXITS))}
+    def one(*kinds):
+        return {k: {b: {p: _vocab_json(s) for p, s in ps.items()} for b, ps in blocks.items()}
+                for k, blocks in zip(("setups", "filters", "exits"), kinds)}
+
+    return {"intraday": one(vocab.SETUPS, vocab.FILTERS, vocab.EXITS),
+            "swing": one(vocab.SWING_SETUPS, vocab.SWING_FILTERS, vocab.SWING_EXITS)}
 
 
 class DescribeBody(BaseModel):
@@ -185,13 +189,15 @@ class StrategyBody(BaseModel):
     spec: dict
 
 
-async def _check_caps(user: User) -> None:
+async def _check_caps(user: User, horizon: str = "intraday") -> None:
+    """The five-active cap is per horizon (an absent horizon is intraday); the daily and one-testing rules are shared."""
     from backend.builder import store
 
     if not (await PrefsStore(db.db).get(user.id))["account_size"] > 0:  # sizing would divide by it (R3)
         raise HTTPException(422, "Set your account size in Settings first.")
     mine = db.db[store.COLLECTION]
-    if await mine.count_documents({"owner_id": user.id, "status": "active"}) >= _LIMITS["active"]:
+    same = {"spec.horizon": "swing"} if horizon == "swing" else {"spec.horizon": {"$ne": "swing"}}
+    if await mine.count_documents({"owner_id": user.id, "status": "active", **same}) >= _LIMITS["active"]:
         raise HTTPException(409, "Retire one first.")
     if await mine.find_one({"owner_id": user.id, "status": "testing"}):
         raise HTTPException(409, "A strategy of yours is still being tested.")
@@ -228,7 +234,7 @@ async def submit_strategy(body: StrategyBody, user: User = Depends(get_current_u
     spec, reason = validate_spec(body.spec, mine)  # a duplicate of one's own is refused; of another's it's private
     if spec is None:
         raise HTTPException(422, reason)
-    await _check_caps(user)
+    await _check_caps(user, spec.get("horizon", "intraday"))
     base = re.sub(r"[^a-z0-9]+", "-", body.name.lower()).strip("-")[:40].strip("-") or slugify(spec)
     for _ in range(3):  # a concurrent submit can take the slug between our read and insert
         taken = {d["slug"] for d in await db.db[store.COLLECTION].find({}, {"slug": 1}).to_list(None)}
@@ -273,7 +279,8 @@ async def retest_strategy(slug: str, user: User = Depends(get_current_user)):
     from backend.builder import store
 
     await _own(user, slug, "rejected")
-    await _check_caps(user)
+    doc = await db.db[store.COLLECTION].find_one({"slug": slug}, {"spec.horizon": 1})
+    await _check_caps(user, doc["spec"].get("horizon", "intraday"))
     flipped = await db.db[store.COLLECTION].update_one(
         {"slug": slug, "owner_id": user.id, "status": "rejected"}, {"$set": {"status": "testing"}})
     if flipped.modified_count == 0:  # a concurrent retest got there first
@@ -294,7 +301,8 @@ async def built_strategies(user: User = Depends(get_current_user)):
     for d in await visible(db.db, user.id):
         if d.get("status") in out:
             out[d["status"]].append({**{k: d.get(k) for k in ("slug", "name", "description", "thesis", "verdict", "metrics", "drafted_at")},
-                                     "mine": d.get("owner_id") == user.id})
+                                     "mine": d.get("owner_id") == user.id,
+                                     "horizon": (d.get("spec") or {}).get("horizon", "intraday")})
     return out
 
 

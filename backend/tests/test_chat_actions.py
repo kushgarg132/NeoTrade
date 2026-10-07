@@ -442,6 +442,19 @@ async def test_strategy_card_creates_nothing_until_confirmed(strategy_env):
     spawn.assert_awaited_once_with(doc["slug"])
 
 
+async def test_chat_swing_strategy_card(strategy_env):
+    db, spawn = strategy_env
+    swing = {"horizon": "swing", "setup": {"breakout_n": {"days": 20}}, "filters": {}, "side": "long",
+             "stop": {"swing_low": True}, "target": {"r_multiple": 2.0}, "max_hold_days": {"days": 10}}
+    card = await _propose(db, "propose_strategy", {"name": "Swing 20", "thesis": "", "spec": swing})
+    assert card["kind"] == "strategy" and "10" in card["summary"]
+    assert (await confirm(db, None, None, "alice", card["id"]))["status"] == "CONFIRMED"
+    doc = await db["built_strategies"].find_one({"owner_id": "alice"})
+    assert doc["spec"]["horizon"] == "swing" and doc["status"] == "testing"
+    spec = actions._strategy_vocabulary()
+    assert "SWING" in spec and "max_hold_days" in spec and "breakout_n" in spec
+
+
 async def test_strategy_proposal_returns_the_refusal(strategy_env):
     db, _ = strategy_env
     no_stop = {k: v for k, v in STRATEGY.items() if k != "stop"}

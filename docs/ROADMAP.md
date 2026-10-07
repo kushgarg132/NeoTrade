@@ -907,6 +907,13 @@ to "model output never places an order" (AGENTS.md, .claude/CLAUDE.md). Spec and
 `docs/superpowers/`. Setup: Kite Connect app; static IP 161.118.167.148 whitelisted with Zerodha
 and Upstox; daily logins (09:00 reminder).
 
+## Phase 18 — Swing builder
+
+**18.1 landed 2026-10-07.** The strategy builder gains a `swing` horizon: daily-bar blocks, long only,
+tested on 3 years of stored bars with a fourth check (beat equal-weight buy-and-hold). The AI drafts up
+to 3 swing specs a week beside the intraday 3; users compose their own in the form and the chat. Active
+cap of 5 per horizon. Spec: `docs/superpowers/specs/2026-10-07-swing-builder-design.md`.
+
 ## Phase 17 — Profitability and LLM cost — planned 2026-10-07
 
 Written from a whole-system scan on 2026-10-07 (code, prod data, the backup at

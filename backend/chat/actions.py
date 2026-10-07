@@ -252,7 +252,7 @@ def _refuse_oversell(symbol: str, quantity: int, held: int) -> None:
 def _strategy_vocabulary() -> str:
     from backend.builder.draft import _vocabulary
 
-    return _vocabulary()
+    return "INTRADAY blocks:\n" + _vocabulary() + "\nSWING blocks (daily bars):\n" + _vocabulary("swing")
 
 
 def action_tools(db, redis, user_id: str, message: str) -> list:
@@ -416,9 +416,12 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         tool(propose_cancel_order, "Cancel an open order in the trader's own account, by its broker order id." + note),
         tool(propose_modify_order, "Change the price and/or quantity of an open order in the trader's own account." + note),
         tool(propose_stop_loss, "Add a stop-loss (SL-M) below the price on a holding in the trader's own account." + note),
-        tool(propose_strategy, "Create the trader's own private intraday strategy from rule blocks; on confirm it is "
-                               "backtested on a year of 5-minute history (~10 min) and trades on paper only if it "
-                               "passes. spec = {\"setup\": {<one setup>: {params}}, \"filters\": {<0-3 filters>: "
+        tool(propose_strategy, "Create the trader's own private strategy from rule blocks; on confirm it is "
+                               "backtested and trades on paper only if it passes (intraday: a year of 5-minute "
+                               "history, ~10 min; swing: 3 years of daily bars, seconds). Swing specs need "
+                               "\"horizon\": \"swing\", are long only, and need \"max_hold_days\": {\"days\": n} "
+                               "and optionally \"trail_atr\": {\"multiple\": x}; their stop is {\"atr_multiple\": x} or "
+                               "{\"swing_low\": true}. Intraday spec = {\"setup\": {<one setup>: {params}}, \"filters\": {<0-3 filters>: "
                                "{params}}, \"side\": \"long\"|\"short\", \"stop\": {\"atr_multiple\": x} or "
                                "{\"setup_bar\": true}, \"target\": {\"r_multiple\": x}}. Blocks and ranges:\n"
                                + _strategy_vocabulary() + "\n" + note),

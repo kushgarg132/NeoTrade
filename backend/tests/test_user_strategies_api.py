@@ -106,6 +106,31 @@ async def test_active_cap_409(env):
     spawn.assert_not_awaited()
 
 
+SWING = {"horizon": "swing", "setup": {"breakout_n": {"days": 20}}, "filters": {}, "side": "long",
+         "stop": {"atr_multiple": 2.0}, "target": {"r_multiple": 2.0}, "max_hold_days": {"days": 10}}
+
+
+async def test_active_cap_is_per_horizon(env):
+    mongo, _, _ = env
+    for i in range(5):
+        await _put(mongo, f"a{i}", "active", spec=_spec(1.0 + i))
+    r = _client().post(URL, json=_body(name="sw", spec=SWING))  # five intraday actives leave swing room
+    assert r.status_code == 201
+    await mongo["built_strategies"].delete_one({"slug": r.json()["slug"]})
+    for i in range(5):
+        await _put(mongo, f"s{i}", "active", spec={**SWING, "setup": {"breakout_n": {"days": 10 + 5 * i}}})
+    r = _client().post(URL, json=_body(name="sw2", spec={**SWING, "setup": {"breakout_n": {"days": 60}}}))
+    assert r.status_code == 409 and r.json()["detail"] == "Retire one first."
+
+
+async def test_list_items_carry_horizon(env):
+    mongo, _, _ = env
+    await _put(mongo, "i", "active")
+    await _put(mongo, "s", "active", spec=SWING)
+    got = {d["slug"]: d["horizon"] for d in _client().get(URL).json()["active"]}
+    assert got == {"i": "intraday", "s": "swing"}
+
+
 async def test_one_testing_at_a_time_409(env):
     mongo, _, _ = env
     await _put(mongo, "t", "testing", spec=_spec(3.0))
@@ -178,12 +203,23 @@ async def test_spawn_failure_leaves_draft_testing(env):
 
 
 def test_vocabulary_matches_vocab_module(env):
-    body = _client().get("/api/v1/strategies/vocabulary").json()
+    body = _client().get("/api/v1/strategies/vocabulary").json()["intraday"]
     assert set(body) == {"setups", "filters", "exits"}
     assert body["setups"]["gap"] == {"direction": {"choices": ["up", "down"]}, "min_pct": {"min": 0.5, "max": 4.0, "step": 0.25}}
     assert body["filters"]["time_window"]["start"] == {"time": ["09:20", "14:45"]}
     assert body["exits"]["stop"]["setup_bar"] == {"flag": True}
     assert set(body["setups"]) == set(SETUPS) and set(body["filters"]) == set(FILTERS) and set(body["exits"]) == set(EXITS)
+
+
+def test_vocabulary_has_both_horizons(env):
+    from backend.strategies.blocks import vocab
+
+    body = _client().get("/api/v1/strategies/vocabulary").json()
+    assert set(body) == {"intraday", "swing"}
+    swing = body["swing"]
+    assert set(swing["setups"]) == set(vocab.SWING_SETUPS) and set(swing["exits"]) == set(vocab.SWING_EXITS)
+    assert swing["exits"]["stop"]["swing_low"] == {"flag": True}
+    assert swing["setups"]["pullback_ma"]["trend"] == {"choices": ["50", "100", "200"]}
 
 
 def test_describe_endpoint(env):
@@ -218,8 +254,8 @@ async def test_concurrent_retest_flip_is_conditional(env):
     await _put(mongo, "r", "rejected")
     orig = settings_router._check_caps
 
-    async def stale(user):  # caps pass, then another request wins the flip
-        await orig(user)
+    async def stale(user, *a):  # caps pass, then another request wins the flip
+        await orig(user, *a)
         await mongo["built_strategies"].update_one({"slug": "r"}, {"$set": {"status": "testing"}})
 
     with patch.object(settings_router, "_check_caps", stale):

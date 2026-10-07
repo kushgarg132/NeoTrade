@@ -51,7 +51,7 @@ async def test_built_endpoint_groups_by_status(env):
     body = _client().get("/api/v1/strategies/built").json()
     assert {k: [r["slug"] for r in v] for k, v in body.items()} == {
         "active": ["a"], "rejected": ["b"], "retired": ["c"], "testing": ["d"]}
-    assert set(body["active"][0]) == {"slug", "name", "description", "thesis", "verdict", "metrics", "drafted_at", "mine"}
+    assert set(body["active"][0]) == {"slug", "name", "description", "thesis", "verdict", "metrics", "drafted_at", "mine", "horizon"}
 
 
 def test_run_is_admin_only(env):
@@ -87,7 +87,8 @@ async def test_catalog_row_for_a_built_strategy_carries_the_verdict(env):
     await mongo["built_strategies"].insert_one(_doc("a", "active", verdict="holdout passed"))
     row = next(c for c in await catalog(mongo, "alice", []) if c["name"] == "built:a")
     assert row["built"] == {"description": "a desc", "thesis": "a thesis",
-                            "metrics": {"year": {"pf": 1.4}}, "verdict": "holdout passed"}
+                            "metrics": {"year": {"pf": 1.4}}, "verdict": "holdout passed",
+                            "horizon": "intraday"}
     assert "built" not in next(c for c in await catalog(mongo, "alice", []) if not c["name"].startswith("built:"))
 
 

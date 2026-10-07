@@ -25,7 +25,7 @@ const startValue = (key, spec) => {
 const startParams = (block) => Object.fromEntries(Object.entries(block).filter(([, s]) => !s.flag).map(([k, s]) => [k, startValue(k, s)]));
 
 /** One parameter's input, by the shape of its vocabulary spec. */
-const Param = ({ name, spec, value, onChange }) => {
+const Param = ({ name, spec, value, onChange, required }) => {
   if (spec.choices && name === 'regimes') { // the one multi-choice parameter
     return (
       <span className="flex flex-wrap gap-x-3">
@@ -50,7 +50,7 @@ const Param = ({ name, spec, value, onChange }) => {
     return <input type="time" value={value} min={spec.time[0]} max={spec.time[1]} step={300}
                   onChange={(e) => onChange(e.target.value)} aria-label={label(name)} className={FIELD} />;
   }
-  return <input type="number" inputMode="decimal" value={value} min={spec.min} max={spec.max} step={spec.step}
+  return <input type="number" inputMode="decimal" required={required} value={value} min={spec.min} max={spec.max} step={spec.step}
                 onChange={(e) => onChange(e.target.value)} aria-label={label(name)} className={cn(FIELD, 'w-24 text-right figure-md')} />;
 };
 
@@ -64,7 +64,8 @@ const Params = ({ block, params, onChange }) =>
 
 const clean = (params) => Object.fromEntries(Object.entries(params).map(([k, v]) => [k, typeof v === 'string' && v !== '' && !isNaN(v) ? Number(v) : v]));
 
-const NewStrategySheet = ({ vocab, onSubmitted }) => {
+const HorizonForm = ({ horizon, vocab, onSubmitted }) => {
+  const swing = horizon === 'swing';
   const firstSetup = Object.keys(vocab.setups)[0];
   const [setup, setSetup] = useState(firstSetup);
   const [setupParams, setSetupParams] = useState(startParams(vocab.setups[firstSetup]));
@@ -73,6 +74,8 @@ const NewStrategySheet = ({ vocab, onSubmitted }) => {
   const [stopKind, setStopKind] = useState('atr');
   const [atr, setAtr] = useState(vocab.exits.stop.atr_multiple.min);
   const [target, setTarget] = useState(vocab.exits.target.r_multiple.min);
+  const [maxHold, setMaxHold] = useState(''); // swing only, required
+  const [trail, setTrail] = useState(''); // swing only, optional
   const [name, setName] = useState('');
   const [thesis, setThesis] = useState('');
   const [preview, setPreview] = useState({ text: '…' });
@@ -80,11 +83,14 @@ const NewStrategySheet = ({ vocab, onSubmitted }) => {
   const [error, setError] = useState(null);
 
   const spec = {
+    ...(swing && { horizon: 'swing' }),
     setup: { [setup]: clean(setupParams) },
     filters: Object.fromEntries(Object.entries(filters).map(([b, p]) => [b, clean(p)])),
-    side,
-    stop: stopKind === 'atr' ? { atr_multiple: Number(atr) } : { setup_bar: true },
+    side: swing ? 'long' : side,
+    stop: stopKind === 'atr' ? { atr_multiple: Number(atr) } : swing ? { swing_low: true } : { setup_bar: true },
     target: { r_multiple: Number(target) },
+    ...(swing && maxHold !== '' && { max_hold_days: { days: Number(maxHold) } }),
+    ...(swing && trail !== '' && { trail_atr: { multiple: Number(trail) } }),
   };
   const specKey = JSON.stringify(spec);
 
@@ -140,7 +146,7 @@ const NewStrategySheet = ({ vocab, onSubmitted }) => {
         </div>
       ))}
 
-      <Row label="Side">
+      {!swing && <Row label="Side">
         <span className="inline-flex" role="radiogroup" aria-label="Side">
           {[['long', 'Long'], ['short', 'Short']].map(([key, text]) => (
             <button key={key} type="button" role="radio" aria-checked={side === key} onClick={() => setSide(key)}
@@ -150,12 +156,12 @@ const NewStrategySheet = ({ vocab, onSubmitted }) => {
             </button>
           ))}
         </span>
-      </Row>
+      </Row>}
 
       <Row label="Stop">
         <span className="flex flex-wrap items-center justify-end gap-2">
           <span className="inline-flex" role="radiogroup" aria-label="Stop">
-            {[['atr', 'ATR × n'], ['bar', 'Setup bar']].map(([key, text]) => (
+            {[['atr', 'ATR × n'], swing ? ['low', 'Swing low'] : ['bar', 'Setup bar']].map(([key, text]) => (
               <button key={key} type="button" role="radio" aria-checked={stopKind === key} onClick={() => setStopKind(key)}
                       className={cn('h-11 sm:h-8 px-3 text-xs border border-[var(--rule-strong)] -ml-px first:ml-0',
                         stopKind === key && 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]')}>
@@ -169,6 +175,17 @@ const NewStrategySheet = ({ vocab, onSubmitted }) => {
       <Row label="Target" hint="In multiples of the risk (R).">
         <Param name="r multiple" spec={vocab.exits.target.r_multiple} value={target} onChange={setTarget} />
       </Row>
+
+      {swing && (
+        <>
+          <Row label="Max hold (days)" hint="Sold at the close after this many days if neither stop nor target hit.">
+            <Param name="max hold days" spec={vocab.exits.max_hold_days.days} value={maxHold} onChange={setMaxHold} required />
+          </Row>
+          <Row label="Trailing stop (× ATR)" hint="Optional. Leave empty for none.">
+            <Param name="trailing stop atr" spec={vocab.exits.trail_atr.multiple} value={trail} onChange={setTrail} />
+          </Row>
+        </>
+      )}
 
       <Row label="Name">
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} required aria-label="Name"
@@ -186,6 +203,27 @@ const NewStrategySheet = ({ vocab, onSubmitted }) => {
         Test it
       </button>
     </form>
+  );
+};
+
+/** Horizon first; switching remounts the form so the spec starts over. */
+const NewStrategySheet = ({ vocab, onSubmitted }) => {
+  const [horizon, setHorizon] = useState('intraday');
+  return (
+    <div>
+      <Row label="Horizon">
+        <span className="inline-flex" role="radiogroup" aria-label="Horizon">
+          {[['intraday', 'Intraday'], ['swing', 'Swing']].map(([key, text]) => (
+            <button key={key} type="button" role="radio" aria-checked={horizon === key} onClick={() => setHorizon(key)}
+                    className={cn('h-11 sm:h-8 px-4 text-xs border border-[var(--rule-strong)] -ml-px first:ml-0',
+                      horizon === key && 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]')}>
+              {text}
+            </button>
+          ))}
+        </span>
+      </Row>
+      <HorizonForm key={horizon} horizon={horizon} vocab={vocab[horizon]} onSubmitted={onSubmitted} />
+    </div>
   );
 };
 

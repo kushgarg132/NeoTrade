@@ -73,5 +73,6 @@ async def catalog(db, user_id: str, nifty: list,
         }
         if doc := built_docs.get(name):  # the builder's own verdict; never infer pass/fail from the gate alone
             card["built"] = {k: doc.get(k) for k in ("description", "thesis", "metrics", "verdict")}
+            card["built"]["horizon"] = (doc.get("spec") or {}).get("horizon", "intraday")
         cards.append(card)
     return sorted(cards, key=lambda c: c["name"])

@@ -45,6 +45,7 @@ const StrategyItem = ({ card, gate, short, open, onToggle, yours }) => {
           <span className="figure-md text-sm">{strategyName(card.built ? card.name.replace(/^built:/, '') : card.name)}</span>
           <Badge variant={status.variant}>{status.label}</Badge>
           {card.built && <Badge variant="secondary">{yours ? 'Built · Yours' : 'Built'}</Badge>}
+          {card.built && <Badge variant="neutral">{card.built.horizon === 'swing' ? 'Swing' : 'Intraday'}</Badge>}
           <ChevronDown className={cn('ml-auto w-4 h-4 text-[var(--ink-faint)] transition-transform', open && 'rotate-180')} />
         </span>
         {card.built && (
@@ -80,6 +81,7 @@ const Rejected = ({ rows }) => {
       <ul className="sheet divide-y divide-[var(--rule)] px-4 mt-3 sm:mt-4">
         {rows.map((r) => (
           <li key={r.slug} className="py-2.5">
+            <Badge variant="neutral">{r.horizon === 'swing' ? 'Swing' : 'Intraday'}</Badge>
             <span className="block text-sm">{[r.description, r.thesis].filter(Boolean).join(' — ') || r.verdict}</span>
             <span className="block doc-meta normal-case">{builtLine(r.metrics)}</span>
             <span className="block doc-meta normal-case">{r.verdict}</span>

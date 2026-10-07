@@ -116,13 +116,24 @@ deflated Sharpe over swing drafts only (`backend/builder/store.py::trial_sharpes
 **benchmark**: the net return over the 3 years must beat an equal-weight buy-and-hold of the same
 stocks, less one round trip of charges (`draft.py::_benchmark`; "benchmark: +x% < buy-and-hold +y%").
 
+Swing blocks (`vocab.py::SWING_SETUPS` / `SWING_FILTERS` / `SWING_EXITS`): setups `breakout_n`, `pullback_ma`,
+`rsi2_dip`, `gap_hold`, `momentum_rank`, `volume_breakout`; filters `trend_ma`, `regime_is`, `sector_rs`,
+`atr_pct`, `liquidity`. Swing is long only. Exits: a stop (`atr_multiple` or `swing_low`, the lowest low of
+the last 5 bars), a target (`r_multiple`), a required `max_hold_days` and an optional `trail_atr`. A swing
+trade is held up to `max_hold_days` days and exits by the first of stop, target, trail or the time limit.
+The 5-active cap is per horizon (`routers/settings.py::_check_caps`); the 3-a-day and one-testing limits
+are shared across both.
+
 ### Your own strategies
 
 The chat can do the same: `backend/chat/actions.py::action_tools` offers `propose_strategy`, which validates the
 spec and returns a card; Confirm runs `submit_strategy` itself, so every limit and the test are the form's.
 
-Practice → Strategies → **Mine** → **New strategy** composes a spec from the same blocks (the form reads
-`GET /strategies/vocabulary`, `backend/routers/settings.py::strategy_vocabulary`; the live preview is
+Practice → Strategies → **Mine** → **New strategy** composes a spec from the same blocks. Pick the **Horizon**
+(Intraday / Swing) first; Swing hides Short and asks for `Max hold (days)` and an optional
+`Trailing stop (× ATR)`. Rows carry an Intraday / Swing chip. The chat's `propose_strategy` lists both
+vocabularies and takes `"horizon": "swing"` in the spec. (The form reads
+`GET /strategies/vocabulary`, which returns `{intraday, swing}`, `backend/routers/settings.py::strategy_vocabulary`; the live preview is
 `describe_strategy`). `submit_strategy` validates it, stores it private to you (`owner_id`; the loader and
 the library show your strategies only to you, never to other users) as `testing` and starts its backtest
 (`backend/builder/draft.py::test_one`). Same three checks as the AI's drafts, so a pass is **active** for you
