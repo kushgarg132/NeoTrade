@@ -168,3 +168,35 @@ async def test_a_users_own_bot_is_stored_encrypted_and_used_for_their_alerts(mon
 
     await store.set_telegram_bot("alice", "999999:Other_bot_token")  # a new bot unlinks the old chat
     assert await store.telegram_chat("alice") is None
+
+
+async def test_guardrails_watch_only_the_users_own_account(monkeypatch):
+    # The AI account's trades and P&L are the autopilot's, never the user's guardrails.
+    db = AsyncMongoMockClient()["test_db"]
+    await JournalStore(db).add_trades("alice", "kite", [
+        BrokerTrade(trade_id="1", symbol="SBIN", side=Side.BUY, quantity=100, price=800.0, traded_at=_ist(10, 0)),
+        BrokerTrade(trade_id="2", symbol="SBIN", side=Side.SELL, quantity=100, price=690.0, traded_at=_ist(10, 30)),
+    ], source="sync")
+    sync = AsyncMock(return_value={"imported": 0, "brokers": ["upstox"], "failed": [], "day_pnl": 0.0})
+    monkeypatch.setattr(monitor, "sync_user_trades", sync)
+    monkeypatch.setattr(monitor.hub, "publish", AsyncMock())
+
+    prefs = {**PREFS, "user_id": "alice", "max_trades_per_day": 1, "broker_roles": {"kite": "ai", "upstox": "mine"}}
+    assert await monitor.check_user(db, None, None, prefs, _ist(10, 31)) == []
+    assert sync.await_args.kwargs["skip"] == {"kite"}
+
+
+async def test_sync_skips_the_brokers_it_is_told_to(monkeypatch):
+    from backend.journal import sync as journal_sync
+
+    adapter = MagicMock()
+    adapter.state = AsyncMock(return_value=monitor.BrokerSessionState.ACTIVE)
+    adapter.get_trades = AsyncMock(return_value=[])
+    adapter.get_positions = AsyncMock(return_value={})
+    monkeypatch.setattr(journal_sync, "BROKERS", {"kite": None, "upstox": None})
+    get = AsyncMock(return_value=adapter)
+    monkeypatch.setattr(journal_sync, "get_broker_adapter", get)
+    db = AsyncMongoMockClient()["test_db"]
+    result = await journal_sync.sync_user_trades(db, None, None, "alice", include_pnl=True, skip={"kite"})
+    assert result["brokers"] == ["upstox"]
+    assert [c.args[0] for c in get.await_args_list] == ["upstox"]

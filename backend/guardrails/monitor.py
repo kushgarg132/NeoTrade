@@ -6,6 +6,10 @@ A new breach is alerted once -- over the socket (topic `guardrails`) and to
 Telegram if linked. A daily-loss breach also trips the engine's kill-switch
 for the day, so NeoTrade itself stops adding risk.
 
+Guardrails are the user's own rules over their own account: the broker
+holding role "ai" (backend/brokers/roles.py) is the autopilot's and is
+never synced, counted or squared off here.
+
 What this cannot do, and the UI says so: stop an order the user places in
 their broker's own app. It alerts; it does not block.
 
@@ -24,6 +28,7 @@ from datetime import datetime, time, timezone
 
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
 from backend.brokers.protocol import BrokerSessionState
+from backend.brokers.roles import brokers_for
 from backend.brokers.registry import BROKERS, get_broker_adapter
 from backend.engine.session import IST
 from backend.guardrails import telegram
@@ -54,13 +59,14 @@ def in_session(now: datetime) -> bool:
 async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list[dict]:
     """Returns the breaches that were new this time (and so were alerted)."""
     user_id = prefs["user_id"]
-    synced = await sync_user_trades(db, redis, credentials, user_id, include_pnl=True)
+    ai = brokers_for(prefs.get("broker_roles"), "ai")
+    synced = await sync_user_trades(db, redis, credentials, user_id, include_pnl=True, skip=ai)
     if not synced["brokers"]:
         return []
 
     day = now.astimezone(IST).date()
     start_of_day = datetime.combine(day, time(0, 0), tzinfo=IST).astimezone(timezone.utc)
-    trades = await JournalStore(db).list_trades(user_id, since=start_of_day)
+    trades = [t for t in await JournalStore(db).list_trades(user_id, since=start_of_day) if t.get("broker") not in ai]
     trips = [t for t in build_round_trips(trades) if t["opened_at"] >= start_of_day]
 
     store = GuardrailStore(db)
@@ -104,8 +110,11 @@ async def square_off(redis, credentials, prefs: dict) -> list[dict]:
     breach it hangs off is recorded before this runs."""
     live = prefs.get("auto_square_off") == "live"
     user_id = prefs["user_id"]
+    ai = brokers_for(prefs.get("broker_roles"), "ai")
     alerts = []
     for broker in BROKERS:
+        if broker in ai:
+            continue
         adapter = await get_broker_adapter(broker, user_id, credentials, redis)
         if await adapter.state() != BrokerSessionState.ACTIVE:
             continue

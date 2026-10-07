@@ -142,3 +142,13 @@ async def test_upstox_positions_map_product_codes(monkeypatch):
     assert (positions["SBIN"].exchange, positions["SBIN"].product) == ("NSE", "MIS")
     assert positions["TCS"].product == "CNC"
     assert positions["NIFTYFUT"].exchange == "NFO"
+
+
+async def test_square_off_never_touches_the_ai_account(monkeypatch):
+    # Guardrails are the user's own rules: the AI account is the autopilot's.
+    adapter = _adapter({"SBIN": _pos("SBIN", 100)})
+    _patch_brokers(monkeypatch, adapter)
+    prefs = {"user_id": "alice", "auto_square_off": "live", "broker_roles": {"kite": "ai"}}
+    assert await monitor.square_off(None, None, prefs) == []
+    adapter.get_positions.assert_not_awaited()
+    adapter.place_order.assert_not_awaited()

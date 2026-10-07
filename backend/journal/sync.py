@@ -21,13 +21,17 @@ async def connected_brokers(redis, credentials, user_id: str) -> list[str]:
     ]
 
 
-async def sync_user_trades(db, redis, credentials, user_id: str, include_pnl: bool = False) -> dict:
+async def sync_user_trades(db, redis, credentials, user_id: str, include_pnl: bool = False,
+                           skip: frozenset = frozenset()) -> dict:
     """`include_pnl` also sums each synced broker's own day P&L (realised +
     unrealised across its position book) -- what guardrails check the daily
-    loss limit against."""
+    loss limit against. Brokers in `skip` are left alone (guardrails skip the
+    AI account)."""
     store = JournalStore(db)
     imported, synced, failed, day_pnl = 0, [], [], 0.0
     for broker in BROKERS:
+        if broker in skip:
+            continue
         adapter = await get_broker_adapter(broker, user_id, credentials, redis)
         if await adapter.state() != BrokerSessionState.ACTIVE:
             continue

@@ -41,7 +41,7 @@ stored daily bars instead (no session needed). The result is `job:last:strategy_
 
 | Loop | Every | Does | Code |
 |---|---|---|---|
-| Guardrail monitor | 60 s, 9:15 AM–3:35 PM IST | checks each user's limits against their broker | `backend/guardrails/monitor.py` |
+| Guardrail monitor | 60 s, 9:15 AM–3:35 PM IST | checks each user's limits against their own broker (never the AI account's) | `backend/guardrails/monitor.py` |
 | Paper orders | short interval | fills paper limit orders, sweeps stuck rows, books late live fills | `backend/engine/paper_orders.py` |
 | Auto run | 60 s | keeps auto paper runs alive, builds game plans, long-term passes, exits | `backend/engine/autorun.py` |
 | Telegram | long poll | answers linked chats, one poller per bot | `backend/guardrails/telegram_bot.py` |
