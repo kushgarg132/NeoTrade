@@ -249,6 +249,12 @@ def _refuse_oversell(symbol: str, quantity: int, held: int) -> None:
 # Tools: propose only.
 # ---------------------------------------------------------------------------
 
+def _strategy_vocabulary() -> str:
+    from backend.builder.draft import _vocabulary
+
+    return _vocabulary()
+
+
 def action_tools(db, redis, user_id: str, message: str) -> list:
     store = ChatActionStore(db)
 
@@ -326,6 +332,22 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
                           f"{side} {quantity} {params['symbol']} · {kind} · market · ~₹{price * quantity:,.0f} on {venue}",
                           venue, second_tap=venue == "live")
 
+    async def propose_strategy(name: str, thesis: str, spec: dict) -> str:
+        from backend.builder import store as built
+        from backend.builder.validate import describe, validate_spec
+
+        name = (name or "").strip()
+        if not 1 <= len(name) <= 40:
+            return "Give the strategy a name of 1 to 40 characters."
+        if len(thesis or "") > 200:
+            return "Keep the thesis under 200 characters."
+        mine = [d for d in await built.visible(db, user_id) if d.get("owner_id") == user_id]
+        clean, reason = validate_spec(spec, mine)
+        if clean is None:
+            return f"Refused: {reason}. Fix the spec and propose it again."
+        return await card("strategy", {"name": name, "thesis": thesis or "", "spec": clean},
+                          f"Create and test strategy ‘{name}’: {describe(clean)}")
+
     async def propose_memory(facts: list[str]) -> str:
         from backend.profile.models import MAX_MEMORIES, MAX_MEMORY_CHARS
         from backend.profile.store import ProfileStore, _norm
@@ -394,6 +416,12 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         tool(propose_cancel_order, "Cancel an open order in the trader's own account, by its broker order id." + note),
         tool(propose_modify_order, "Change the price and/or quantity of an open order in the trader's own account." + note),
         tool(propose_stop_loss, "Add a stop-loss (SL-M) below the price on a holding in the trader's own account." + note),
+        tool(propose_strategy, "Create the trader's own private intraday strategy from rule blocks; on confirm it is "
+                               "backtested on a year of 5-minute history (~10 min) and trades on paper only if it "
+                               "passes. spec = {\"setup\": {<one setup>: {params}}, \"filters\": {<0-3 filters>: "
+                               "{params}}, \"side\": \"long\"|\"short\", \"stop\": {\"atr_multiple\": x} or "
+                               "{\"setup_bar\": true}, \"target\": {\"r_multiple\": x}}. Blocks and ranges:\n"
+                               + _strategy_vocabulary() + "\n" + note),
         tool(propose_memory, "Save lasting facts or preferences the trader shared (goals, situation, dislikes) "
                              "to their profile memory -- pass ALL of them in one call, as one card." + note),
     ]
@@ -487,6 +515,13 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
                 if "full" in str(exc):
                     raise ActionRefused(str(exc))
         return "Saved to your profile memory." if saved == 1 else f"Saved {saved} things to your profile memory."
+
+    if kind == "strategy":
+        from backend.routers import settings as routes
+
+        # The form's own handler: it re-validates the stored spec and applies every limit.
+        doc = await routes.submit_strategy(routes.StrategyBody(**params), user=SimpleNamespace(id=user_id))
+        return f"Testing ‘{doc['name']}’ now (about 10 minutes); see Practice › Strategies › Mine."
 
     if kind == "setting":
         value = _setting(params["name"], params["value"])

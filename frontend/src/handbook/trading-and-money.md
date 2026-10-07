@@ -109,6 +109,9 @@ warm up each morning). At most 5 are active
 
 ### Your own strategies
 
+The chat can do the same: `backend/chat/actions.py::action_tools` offers `propose_strategy`, which validates the
+spec and returns a card; Confirm runs `submit_strategy` itself, so every limit and the test are the form's.
+
 Practice → Strategies → **Mine** → **New strategy** composes a spec from the same blocks (the form reads
 `GET /strategies/vocabulary`, `backend/routers/settings.py::strategy_vocabulary`; the live preview is
 `describe_strategy`). `submit_strategy` validates it, stores it private to you (`owner_id`; the loader and

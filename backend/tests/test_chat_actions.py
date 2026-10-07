@@ -407,3 +407,62 @@ async def test_modify_cannot_add_shares_after_the_kill_switch_trips(env):
 
 async def test_modify_within_limits_passes(env):
     await actions._modify_checks(env["db"], "alice", _OrdersBroker(), {"order_id": "B9", "quantity": 10, "price": 1490.0})
+
+
+STRATEGY = {"setup": {"orb_break": {"range_minutes": 15}}, "filters": {}, "side": "long",
+            "stop": {"setup_bar": True}, "target": {"r_multiple": 2.0}}
+
+
+@pytest.fixture
+def strategy_env(env, monkeypatch):
+    """The confirm path calls the form's own handler, which reads the app-wide db and Redis."""
+    from unittest.mock import AsyncMock
+
+    from backend.builder import draft
+    from backend.database import db as database
+    from backend.tests.test_user_strategies_api import CountingRedis
+
+    monkeypatch.setattr(database, "db", env["db"])
+    monkeypatch.setattr(database, "redis", CountingRedis())
+    spawn = AsyncMock()
+    monkeypatch.setattr(draft, "spawn_test", spawn)
+    return env["db"], spawn
+
+
+async def test_strategy_card_creates_nothing_until_confirmed(strategy_env):
+    db, spawn = strategy_env
+    card = await _propose(db, "propose_strategy", {"name": "ORB 15", "thesis": "breakouts run", "spec": STRATEGY})
+    assert card["kind"] == "strategy" and "first 15-minute range" in card["summary"]
+    assert await db["built_strategies"].count_documents({}) == 0
+
+    result = await confirm(db, None, None, "alice", card["id"])
+    assert result["status"] == "CONFIRMED" and "ORB 15" in result["result"]
+    doc = await db["built_strategies"].find_one({"owner_id": "alice"})
+    assert doc["status"] == "testing" and doc["name"] == "ORB 15"
+    spawn.assert_awaited_once_with(doc["slug"])
+
+
+async def test_strategy_proposal_returns_the_refusal(strategy_env):
+    db, _ = strategy_env
+    no_stop = {k: v for k, v in STRATEGY.items() if k != "stop"}
+    out = await _tools(db)["propose_strategy"].ainvoke({"name": "x", "thesis": "", "spec": no_stop})
+    assert out.startswith("Refused:") and "stop" in out
+    out = await _tools(db)["propose_strategy"].ainvoke({"name": " ", "thesis": "", "spec": STRATEGY})
+    assert not out.startswith("ACTION_CARD:")
+
+
+async def test_strategy_confirm_applies_the_form_limits(strategy_env):
+    db, spawn = strategy_env
+    await db["built_strategies"].insert_one({"slug": "busy", "owner_id": "alice", "status": "testing", "spec": {}})
+    card = await _propose(db, "propose_strategy", {"name": "ORB 15", "thesis": "", "spec": STRATEGY})
+    with pytest.raises(ActionRefused, match="still being tested"):
+        await confirm(db, None, None, "alice", card["id"])
+    spawn.assert_not_awaited()
+
+
+async def test_other_user_cannot_confirm_a_strategy_card(strategy_env):
+    db, spawn = strategy_env
+    card = await _propose(db, "propose_strategy", {"name": "ORB 15", "thesis": "", "spec": STRATEGY})
+    with pytest.raises(ActionRefused):
+        await confirm(db, None, None, "bob", card["id"])
+    assert await db["built_strategies"].count_documents({}) == 0
