@@ -101,8 +101,8 @@ const EngineSettings = () => {
         )}
         {switchRow(
           'auto_paper_longterm',
-          'Run the long-term engine every session',
-          'Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 9:20 AM on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest. Proposals from the 4:00 PM scan wait for your approval, or for the autopilot if it is on.'
+          'Keep the long-term paper book running',
+          'The 4:00 PM scan below files long-term proposals either way; this switch runs the paper side. Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 9:20 AM on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest. Proposals from the 4:00 PM scan wait for your approval, or for the autopilot if it is on.'
         )}
         <p className="pt-3 doc-meta normal-case">
           Practice money. Its long-term proposals wait for you in{' '}
