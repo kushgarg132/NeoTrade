@@ -133,8 +133,10 @@ async def list_strategies(user: User = Depends(get_current_user)):
     """Plain strategy-name list for the Settings page's live/paper toggles --
     universe is a placeholder since strategy construction needs one but the
     name list doesn't depend on it."""
+    from backend.builder import store
     from backend.strategies.registry import build_default_strategies
 
+    await store.refresh(db.db)
     return [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"])]
 
 
@@ -162,8 +164,10 @@ async def strategy_promotion(
     live keeps trading paper."""
     from backend.risk.backtest_gate import BacktestGateStore
     from backend.risk.paper_gate import paper_records
+    from backend.builder import store
     from backend.strategies.registry import build_default_strategies
 
+    await store.refresh(db.db)
     names = [s.spec.name for s in build_default_strategies(universe=["PLACEHOLDER"], option_universe=["PLACEHOLDER"])]
     account_size = (await prefs.get(user.id))["account_size"]
     records = await paper_records(db.db, user.id, names, account_size)

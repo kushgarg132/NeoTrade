@@ -9,6 +9,7 @@ tool and, in Phase 15.2, the game-plan builder. Read-only.
 
 from typing import Literal, Optional
 
+from backend.builder import store
 from backend.learning.adapt import _closed_trades, _state, load_rules
 from backend.learning.attribution import attribute
 from backend.prefs import PrefsStore
@@ -34,6 +35,7 @@ def _stats(row: Optional[dict]) -> Optional[dict]:
 
 async def catalog(db, user_id: str, nifty: list,
                   mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None) -> list[dict]:
+    await store.refresh(db)
     strategies = [s for s in _strategies() if mode is None or s.spec.mode == mode]
     names = [s.spec.name for s in strategies]
     prefs = await PrefsStore(db).get(user_id)

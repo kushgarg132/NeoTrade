@@ -355,6 +355,8 @@ async def _launch_run(
 
     symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments + option_instruments}
     today = datetime.now(timezone.utc).astimezone(IST).date()
+    from backend.builder import store as builder_store
+    await builder_store.refresh(db.db)
     strategies = [
         s for s in build_default_strategies(
             universe=[i.tradingsymbol for i in instruments], symbol_for_token=symbol_for_token,
@@ -366,6 +368,7 @@ async def _launch_run(
             prev_closes=({today.isoformat(): await prev_closes(db.db, [i.tradingsymbol for i in instruments], today)}
                          if mode == "INTRADAY" else None),
             sector_of=nifty200_sectors(),
+            regime_of=await builder_store.regime_of(db.db),
         )
         if s.spec.mode == mode
     ]

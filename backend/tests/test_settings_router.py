@@ -255,7 +255,8 @@ def test_live_strategies_can_be_updated(client):
 
 # --- strategy names, for the Settings live/paper toggles --------------------
 
-def test_list_strategies_returns_plain_name_list(client):
+def test_list_strategies_returns_plain_name_list(client, db, monkeypatch):
+    monkeypatch.setattr(settings_router, "db", type("_Db", (), {"db": db})())
     resp = client.get("/api/v1/settings/strategies")
     assert resp.status_code == 200
     names = resp.json()

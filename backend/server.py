@@ -125,6 +125,8 @@ async def startup_db_client():
 
     await SuggestionStore(db.db).ensure_indexes()
     await PrefsStore(db.db).ensure_indexes()
+    from backend.builder import store as builder_store
+    await builder_store.refresh(db.db)
     await JournalStore(db.db).ensure_indexes()
     await db.db["portfolio_snapshots"].create_index([("user_id", 1), ("at", -1)])
     await GuardrailStore(db.db).ensure_indexes()

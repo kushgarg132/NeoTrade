@@ -96,6 +96,8 @@ class BlockStrategy(TokenResolvingStrategy):
             self.GRID[k] = list(dict.fromkeys(vals))
         super().__init__(universe, symbol_for_token, params)
         self.slug, self._regime_of, self._sector_of = slug, regime_of, sector_of or {}
+        self.thesis = thesis
+        self.base_spec = copy.deepcopy(spec)  # before params are applied, for retune variants
         self._spec = copy.deepcopy(spec)
         for k, v in self.p.items():
             _set(self._spec, k, int(v) if isinstance(flat[k][1][2], int) else v)

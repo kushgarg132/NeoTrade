@@ -76,10 +76,13 @@ async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> 
         )
     universe = [i.tradingsymbol for i in instruments]
     symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
+    from backend.builder import store
+    await store.refresh(db)
     strategies = [
         s for s in build_default_strategies(
             universe=universe, symbol_for_token=symbol_for_token,
             option_universe=universe if options else None,
+            regime_of=await store.regime_of(db),
             params=await current_params(db),
             catalysts=await catalyst_map(db, (now - timedelta(days=365)).date(), now.date()),
             sector_of=nifty200_sectors(),

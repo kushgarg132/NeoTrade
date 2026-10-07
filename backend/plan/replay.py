@@ -54,7 +54,9 @@ async def replay_day(db, provider, user_id: str, day: date) -> Optional[dict]:
     resolved = {s: i for s in base + adds if (i := await master.get("NSE", s)) is not None}
     if not resolved:
         return None
-    shared = {"catalysts": await catalyst_map(db, day, day), "sector_of": nifty200_sectors(),
+    from backend.builder import store
+    await store.refresh(db)
+    shared = {"regime_of": await store.regime_of(db), "catalysts": await catalyst_map(db, day, day), "sector_of": nifty200_sectors(),
               "prev_closes": {day.isoformat(): await prev_closes(db, list(resolved), day)},
               "params": await current_params(db)}
     account = await backtest_account(db)

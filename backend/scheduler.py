@@ -63,6 +63,8 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
     now = now or datetime.now(timezone.utc)
     prefs_store = PrefsStore(db)
 
+    from backend.builder import store as builder_store
+    await builder_store.refresh(db)  # the day's scans and plan replays build from the active specs
     expired = await SuggestionStore(db).expire_stale(now=now)
     options_closed = await close_expired_option_positions(db, redis=redis, now=now)
     verdicts_refreshed = await _refresh_analyst_verdicts(redis)

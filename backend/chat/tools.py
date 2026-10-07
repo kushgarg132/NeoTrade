@@ -100,8 +100,10 @@ def read_tools(db, redis, user_id: str) -> list:
     async def get_paper() -> str:
         from backend.risk.backtest_gate import BacktestGateStore
         from backend.risk.paper_gate import paper_records
+        from backend.builder import store
         from backend.strategies.registry import build_default_strategies
 
+        await store.refresh(db)
         prefs = await PrefsStore(db).get(user_id)
         ledger = LedgerStore(db, user_id=user_id)
         card = await compute_scorecard(ledger, "paper", prefs["account_size"])
