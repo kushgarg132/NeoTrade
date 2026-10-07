@@ -32,11 +32,14 @@ const STRATEGY_NAMES = {
   cash_secured_put: 'Cash-secured put',
 };
 
-/** "Year: PF 1.4, 52 trades · Last 90 days ₹+3,200", from a built strategy's stored metrics. */
-export const builtLine = (metrics) => {
-  const { year, holdout } = metrics || {};
+/** "Year: PF 1.4, 52 trades · Last 90 days ₹+3,200"; a swing row reads "3 years" / "Last 180 days" and adds the buy-and-hold test. */
+export const builtLine = (metrics, horizon) => {
+  const { year, holdout, benchmark } = metrics || {};
   if (!year || !holdout) return '';
-  return `Year: PF ${year.pf}, ${year.trades} trades · Last 90 days ${rupees(holdout.net)}`;
+  const swing = horizon === 'swing';
+  const pct = (n) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+  const bench = benchmark ? ` · vs buy-and-hold ${pct(benchmark.strategy_pct)} / ${pct(benchmark.buy_hold_pct)}` : '';
+  return `${swing ? '3 years' : 'Year'}: PF ${year.pf}, ${year.trades} trades · ${swing ? 'Last 180 days' : 'Last 90 days'} ${rupees(holdout.net)}${bench}`;
 };
 
 /** A strategy or rule code as a trader reads it: "orb_breakout" -> "Opening-range breakout". */

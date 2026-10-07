@@ -51,7 +51,7 @@ const StrategyItem = ({ card, gate, short, open, onToggle, yours }) => {
         {card.built && (
           <span className="block text-sm mt-0.5">
             {card.built.description} — {card.built.thesis}
-            <span className="block doc-meta normal-case">{builtLine(card.built.metrics)}</span>
+            <span className="block doc-meta normal-case">{builtLine(card.built.metrics, card.built.horizon)}</span>
           </span>
         )}
         <span className="block doc-meta normal-case mt-0.5">{recordLine(card)}</span>
@@ -83,7 +83,7 @@ const Rejected = ({ rows }) => {
           <li key={r.slug} className="py-2.5">
             <Badge variant="neutral">{r.horizon === 'swing' ? 'Swing' : 'Intraday'}</Badge>
             <span className="block text-sm">{[r.description, r.thesis].filter(Boolean).join(' — ') || r.verdict}</span>
-            <span className="block doc-meta normal-case">{builtLine(r.metrics)}</span>
+            <span className="block doc-meta normal-case">{builtLine(r.metrics, r.horizon)}</span>
             <span className="block doc-meta normal-case">{r.verdict}</span>
           </li>
         ))}

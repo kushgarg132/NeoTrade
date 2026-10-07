@@ -55,7 +55,7 @@ const MyStrategies = ({ built, refresh }) => {
               <span className="text-sm min-w-0">{[r.description, r.thesis].filter(Boolean).join(' — ')}</span>
             </span>
             {r.verdict && <span className="block doc-meta normal-case">{r.verdict}</span>}
-            <span className="block doc-meta normal-case">{builtLine(r.metrics)}</span>
+            <span className="block doc-meta normal-case">{builtLine(r.metrics, r.horizon)}</span>
             {(r.status === 'active' || r.status === 'rejected') && (
               <button type="button" onClick={() => act(r.slug, r.status === 'active' ? 'retire' : 'retest')}
                       className="text-xs underline min-h-11 sm:min-h-8">
