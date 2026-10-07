@@ -148,7 +148,10 @@ Paper · Live (Live needs a typed confirmation). On paper it fills in the user's
 book (`autopilot/service.py::book`), every trade tagged `strategy="autopilot:<source>"`; the
 fence counts only tagged trades and refuses a symbol another strategy holds there (one owner
 per position, as in the engine), and the engine's long-term exits skip tagged trades. Live
-fills go to their own `<user>:autopilot` book. Every order and refusal goes to
+fills go to their own `<user>:autopilot` book. Live, it takes a stock proposal (morning pass
+or news) only when the proposal's strategy passed both gates, its latest backtest and its
+paper record (`engine/autorun.py::_proven_strategies`); the rest wait for the user. Paper
+takes them all, to build the record. Every order and refusal goes to
 `autopilot_log` and Telegram with a Stop button.
 
 ## Practice: runs, books, learning

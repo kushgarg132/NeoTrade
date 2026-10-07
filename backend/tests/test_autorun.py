@@ -3,7 +3,7 @@ across workers, comes back after a deploy, respects a manual stop, and
 stops at the close."""
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from mongomock_motor import AsyncMongoMockClient
@@ -324,6 +324,54 @@ async def test_with_the_autopilot_on_engine_proposals_go_to_it(world, longterm, 
     assert sorted(submitted) == [("NHPC", "engine"), ("SJVN", "engine")]
     by = {s["symbol"]: s["status"] for s in await store.list("alice", limit=10)}
     assert by == {"SJVN": "EXECUTED", "NHPC": "PENDING"}  # refused ones wait for the user
+
+
+@pytest.mark.asyncio
+async def test_live_autopilot_takes_only_proposals_from_proven_strategies(world, longterm, monkeypatch):
+    """Live, a proposal goes to the autopilot only if its strategy passed
+    both gates; the rest wait for the user. 2026-10-07: paper autopilot
+    bought TRENT on macd_crossover, whose backtest fails (PF 0.87)."""
+    from backend.autopilot import service
+    from backend.suggestions.store import SuggestionStore
+
+    submitted = []
+
+    async def submit(db, redis, user_id, order, now=None, suggestion_id=None, quiet=False):
+        submitted.append(order.symbol)
+        return {"status": "SENT"}
+
+    async def proven(db, user_id, names, account_size):
+        assert names == {"good", "bad"}
+        return {"good"}
+
+    monkeypatch.setattr(service, "submit", submit)
+    monkeypatch.setattr(autorun, "_proven_strategies", proven)
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True,
+                                             "autopilot_enabled": True, "autopilot_live": True})
+    world.redis.data["scheduler:last_pass"] = "2026-09-25"
+    store = SuggestionStore(world.db)
+    now = datetime(2026, 9, 28, 9, 21, tzinfo=IST)
+    for symbol, strategy in (("SJVN", "good"), ("NHPC", "bad")):
+        await store.collection.insert_one({
+            "id": symbol, "user_id": "alice", "mode": "LONGTERM", "symbol": symbol, "side": "BUY",
+            "quantity": 10, "entry_ref": 55.0, "stop": 50.0, "target": 65.0, "option_contract": None,
+            "strategy": strategy, "status": "PENDING", "created_at": now, "expires_at": datetime(2026, 10, 9, tzinfo=IST),
+        })
+
+    await _tick(world, now)
+
+    assert submitted == ["SJVN"]
+    by = {s["symbol"]: s["status"] for s in await store.list("alice", limit=10)}
+    assert by == {"SJVN": "EXECUTED", "NHPC": "PENDING"}
+
+
+@pytest.mark.asyncio
+async def test_proven_strategies_need_both_gates():
+    db = AsyncMongoMockClient()["t"]
+    assert await autorun._proven_strategies(db, "alice", {"macd_crossover"}, 25_000.0) == set()  # never backtested
+    await db["strategy_backtests"].insert_one({"strategy_name": "macd_crossover", "run_at": datetime.now(timezone.utc),
+                                               "passed": True, "result": {}})
+    assert await autorun._proven_strategies(db, "alice", {"macd_crossover"}, 25_000.0) == set()  # no paper record
 
 
 @pytest.mark.asyncio

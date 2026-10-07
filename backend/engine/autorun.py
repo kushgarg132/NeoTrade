@@ -330,18 +330,25 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
                                source: str = "engine", heading: str = "morning pass") -> list[dict]:
     """Hands pending stock proposals to the autopilot (backend/autopilot/),
     best score first, resized to the per-trade cap in force, with one
-    summary note; returns the ones it did not take."""
+    summary note; returns the ones it did not take. Live, it takes only
+    proposals from strategies that cleared both gates (backtest and paper
+    record); the rest stay for the user."""
     from backend.autopilot import fence, service
     from backend.core.models import Side
     from backend.suggestions.notify import notify
 
+    prefs = await PrefsStore(db).get(user_id)
     regime = (await service.regime_now(redis)).get("label")
-    cap = fence.trade_cap(await PrefsStore(db).get(user_id), regime)
+    cap = fence.trade_cap(prefs, regime)
+    proven = None
+    if prefs.get("autopilot_live"):
+        proven = await _proven_strategies(db, user_id, {s.get("strategy") for s in pending} - {None},
+                                          prefs["account_size"])
     left, bought, refused = [], [], []
     for s in sorted(pending, key=lambda s: (s.get("score") or {}).get("final") or 0.0, reverse=True):
         entry = s.get("entry_ref") or 0
         quantity = min(int(s["quantity"]), int(cap // entry)) if entry > 0 else 0
-        if s.get("option_contract") or quantity < 1:
+        if s.get("option_contract") or quantity < 1 or (proven is not None and s.get("strategy") not in proven):
             left.append(s)
             continue
         result = await service.submit(db, redis, user_id, service.AutopilotOrder(
@@ -362,6 +369,18 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
             lines.append("Refused: " + "; ".join(refused[:5]) + (" …" if len(refused) > 5 else ""))
         await notify(db, user_id, "\n".join(lines))
     return left
+
+
+async def _proven_strategies(db, user_id: str, names: set[str], account_size: float) -> set[str]:
+    """Strategies whose latest backtest passes the gate and whose paper
+    record passes too -- the same two gates a live engine strategy needs."""
+    from backend.risk.backtest_gate import BacktestGateStore
+    from backend.risk.paper_gate import paper_records
+
+    gate = BacktestGateStore(db)
+    backtested = [n for n in sorted(names) if await gate.live_eligible(n)]
+    records = await paper_records(db, user_id, backtested, account_size)
+    return {n for n in backtested if records[n]["passed"]}
 
 
 async def _autopilot_reminders(db, redis, now: datetime) -> None:
