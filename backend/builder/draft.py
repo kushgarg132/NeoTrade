@@ -26,6 +26,7 @@ import pandas as pd
 from backend.builder import store
 from backend.builder.validate import describe, slugify, validate_spec
 from backend.core.models import Side
+from backend.engine.backtest import BACKTEST_SLIPPAGE_BPS
 from backend.engine.execution.costs import calculate_indian_costs
 from backend.engine.session import IST
 from backend.factor.validate import deflated_sharpe
@@ -135,12 +136,24 @@ async def _history(db, redis, horizon: str = "intraday"):
     return backtest, kwargs
 
 
+class _NoFetch:
+    """The swing test's fallback: a symbol the store does not cover is skipped, never fetched."""
+
+    async def history(self, instrument, interval, period):
+        return []
+
+    async def quote(self, instrument):
+        return {}
+
+
 async def _swing_history(db):
     """(backtest, strategy kwargs) on 3 years plus warm-up of the stored daily bars (no broker
-    session needed), or None while fewer than MIN_SWING_SYMBOLS of the scan universe have them.
-    kwargs["bars"] is what the buy-and-hold benchmark is computed from."""
+    session, no network), or None while fewer than MIN_SWING_SYMBOLS of the scan universe have bars
+    covering the period the feed asks for. kwargs["bars"] (the backtested symbols' bars) is what the
+    buy-and-hold benchmark is computed from."""
     from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
-    from backend.data.providers.store import StoreHistoryProvider
+    from backend.data.feeds.historical import period_for
+    from backend.data.providers.store import _COVER_SLACK, _PERIOD_DAYS, StoreHistoryProvider
     from backend.datalayer import bars
     from backend.datalayer.news_sources import nifty200_sectors
     from backend.engine.backtest import run_backtest
@@ -148,8 +161,12 @@ async def _swing_history(db):
     from backend.risk import gate_backtest
 
     window = SWING_SPAN + SWING_WARMUP
+    wall = datetime.now(timezone.utc)  # the feed picks its period from the wall clock too
+    since = bars.today_ist() - timedelta(days=_PERIOD_DAYS[period_for("1d", wall - window, wall)])
     try:
-        frames = await bars.read(db, ALL_SCAN_STOCKS, bars.today_ist() - window)
+        frames = await bars.read(db, ALL_SCAN_STOCKS, since)
+        # The provider's own cover rule: anything else would come back empty from _NoFetch.
+        frames = {sym: f for sym, f in frames.items() if f.index[0].date() <= since + _COVER_SLACK}
         enough = len(frames) >= MIN_SWING_SYMBOLS
         instruments, tokens = await gate_backtest.gate_universe(db, list(frames)) if enough else ([], {})
     except Exception as exc:
@@ -157,14 +174,15 @@ async def _swing_history(db):
         return None
     if len(instruments) < MIN_SWING_SYMBOLS:  # a symbol without bars is skipped, not faked
         return None
-    memo = _Memo(StoreHistoryProvider(db))
+    memo = _Memo(StoreHistoryProvider(db, fallback=_NoFetch()))
 
     async def backtest(strategy, start, end, account):
         return await run_backtest([strategy], memo, instruments, start=start, end=end, timeframe="1d", **account)
 
     kwargs = {"universe": [i.tradingsymbol for i in instruments], "symbol_for_token": tokens,
               "regime_of": await store.regime_of(db, days=window.days + 300),  # + the 200-day average's own
-              "sector_of": nifty200_sectors(), "bars": frames}
+              "sector_of": nifty200_sectors(),
+              "bars": {i.tradingsymbol: frames[i.tradingsymbol] for i in instruments if i.tradingsymbol in frames}}
     return backtest, kwargs
 
 
@@ -252,11 +270,6 @@ async def _test(db, doc: dict, backtest, kwargs: dict, now: datetime) -> tuple[s
         "year": {"trades": r.total_trades, "pf": round(r.profit_factor, 2), "dd": round(r.max_drawdown, 4),
                  "net": round(r.total_pnl, 2), "win_rate": round(r.win_rate, 4)},
         "holdout": {"trades": len(holdout), "net": hold_net}}}
-    if swing:
-        ticket = account["per_trade_cap"] or account["account_size"]
-        charges = sum(calculate_indian_costs(ticket, 1, side, "CNC") for side in (Side.BUY, Side.SELL)) / ticket * 100
-        mine, buy_hold = r.total_pnl / account["account_size"] * 100, _benchmark(kwargs["bars"], cut, end, charges)
-        fields["metrics"]["benchmark"] = {"strategy_pct": round(mine, 2), "buy_hold_pct": round(buy_hold, 2)}
     await BacktestGateStore(db).record(strategy.spec.name, r)
     if not finite:
         return "rejected", "non-finite Sharpe", fields
@@ -267,6 +280,12 @@ async def _test(db, doc: dict, backtest, kwargs: dict, now: datetime) -> tuple[s
     dsr = deflated_sharpe(daily, trials)
     if dsr < MIN_DSR:
         return "rejected", f"deflated Sharpe {dsr:.2f} < {MIN_DSR} over {len(trials)} drafts", fields
+    if swing:  # last, so a benchmark error never hides an earlier check's verdict
+        ticket = account["per_trade_cap"] or account["account_size"]
+        charges = sum(calculate_indian_costs(ticket, 1, side, "CNC") for side in (Side.BUY, Side.SELL)) / ticket * 100
+        charges += 2 * BACKTEST_SLIPPAGE_BPS / 100  # the slippage the strategy pays on each side
+        mine, buy_hold = r.total_pnl / account["account_size"] * 100, _benchmark(kwargs["bars"], cut, end, charges)
+        fields["metrics"]["benchmark"] = {"strategy_pct": round(mine, 2), "buy_hold_pct": round(buy_hold, 2)}
     if swing and not mine > buy_hold:
         return "rejected", f"benchmark: {mine:+.1f}% < buy-and-hold {buy_hold:+.1f}%", fields
     return "active", f"passed: PF {r.profit_factor:.2f}, deflated Sharpe {dsr:.2f} over {len(trials)} drafts", fields
@@ -416,7 +435,7 @@ async def _run_horizon(db, redis, now, llm, backtest, horizon, admin_id, out, li
         spec, reason = validate_spec({**raw, "horizon": horizon} if isinstance(raw, dict) else raw, existing)
         # A refused spec is kept as text (model output may hold keys Mongo refuses, "$" or "."),
         # under a plain slug: only validated values are safe slug material.
-        doc = {"slug": _unique(slugify(spec) if spec else "invalid", taken), "spec": spec or {},
+        doc = {"slug": _unique(slugify(spec) if spec else "invalid", taken), "spec": spec or ({"horizon": "swing"} if horizon == "swing" else {}),
                "thesis": str(idea.get("thesis") or "")[:300], "description": describe(spec) if spec else "",
                "drafted_at": now, "status": "testing" if spec else "rejected", "verdict": reason}
         if spec is None:

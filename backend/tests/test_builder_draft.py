@@ -585,7 +585,7 @@ async def test_swing_draft_passes_all_four_checks(env, monkeypatch):
     assert doc["trials"] == 1 and doc["sharpe"] > 0
     assert doc["metrics"]["year"]["trades"] == len(swing_trades()) // 2  # the warm-up trip is not counted
     bench = doc["metrics"]["benchmark"]
-    assert bench["buy_hold_pct"] == pytest.approx(10.0 - 0.2854, abs=0.01)
+    assert bench["buy_hold_pct"] == pytest.approx(10.0 - 0.2854 - 0.2, abs=0.01)
     assert bench["strategy_pct"] == pytest.approx(sum(t["net_pnl"] for t in swing_trades()) / 1e4, abs=0.01)
     gate = await db["strategy_backtests"].find_one({"strategy_name": "built:swingy"})
     assert gate["passed"] is True
@@ -598,7 +598,7 @@ async def test_swing_rejected_on_benchmark_with_verdict(env, monkeypatch):
     out = await draft.test_one(db, redis, "swingy", NOW)
     strategy = sum(t["net_pnl"] for t in swing_trades()) / 1e4
     assert out["status"] == "rejected"
-    assert out["verdict"] == f"benchmark: {strategy:+.1f}% < buy-and-hold +49.7%"
+    assert out["verdict"] == f"benchmark: {strategy:+.1f}% < buy-and-hold +49.5%"
 
 
 async def test_swing_holdout_is_180_days(env, monkeypatch):
@@ -667,3 +667,62 @@ async def test_make_room_per_horizon(env):
     assert await draft._make_room(db, "intraday") == ["i0"]
     await store.insert(db, {"slug": "s4", "spec": SWING, "status": "active", "drafted_at": NOW})
     assert await draft._make_room(db, "swing") == ["s0"]
+
+
+async def test_swing_history_skips_uncovered_and_unresolved_symbols(env, monkeypatch):
+    """Only symbols the store covers and gate_universe resolves are backtested and benchmarked;
+    nothing is fetched from yfinance."""
+    from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+    from backend.datalayer import bars
+    from backend.instruments.models import Instrument
+
+    db, redis, _ = env
+    today = bars.today_ist()
+
+    def frame(start):
+        days = pd.bdate_range(start, today)
+        return pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000.0},
+                            index=days)
+
+    covered, late, unresolved = ALL_SCAN_STOCKS[:30], ALL_SCAN_STOCKS[30], ALL_SCAN_STOCKS[31]
+    for symbol in [*covered, unresolved]:
+        await bars.write(db, symbol, frame(today - timedelta(days=1830)))
+    await bars.write(db, late, frame(today - timedelta(days=1500)))  # covers 3y + warm-up, not the feed's 5y
+
+    def inst(symbol, token):
+        return Instrument(instrument_token=token, exchange_token=token, exchange="NSE", tradingsymbol=symbol,
+                          name=symbol, instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)
+
+    async def gate_universe(db, symbols):
+        found = [inst(s, n) for n, s in enumerate(symbols) if s != unresolved]
+        return found, {i.instrument_token: i.tradingsymbol for i in found}
+
+    async def no_yfinance(*_):
+        raise AssertionError("yfinance called")
+
+    monkeypatch.setattr("backend.risk.gate_backtest.gate_universe", gate_universe)
+    monkeypatch.setattr("backend.data.providers.yfinance_provider.YFinanceProvider.history", no_yfinance)
+    seen = {}
+
+    async def run_backtest(strategies, provider, instruments, **_):
+        seen["instruments"] = [i.tradingsymbol for i in instruments]
+        seen["late"] = await provider.history(inst(late, 99), "1d", "5y")
+
+    monkeypatch.setattr("backend.engine.backtest.run_backtest", run_backtest)
+    backtest, kwargs = await draft._history(db, redis, "swing")
+    assert sorted(kwargs["bars"]) == sorted(covered) == sorted(kwargs["universe"])
+    await backtest(None, NOW - timedelta(days=1395), NOW, {})
+    assert sorted(seen["instruments"]) == sorted(covered) and seen["late"] == []
+
+
+async def test_invalid_swing_draft_counts_as_swing(env, monkeypatch):
+    db, redis, _ = env
+    swing_history(monkeypatch, swing_result(swing_trades()))
+
+    async def llm(system, prompt):
+        spec = {"setup": {"nonsense": {}}} if "breakout_n" in prompt else {"setup": {"nope": {}}}
+        return json.dumps({"strategies": [{"spec": spec, "thesis": "x"}]})
+
+    await draft.run(db, redis, NOW, llm=llm, backtest=backtest_of(result()))
+    horizons = sorted(store.horizon_of(d) for d in (await _drafts(db)).values())
+    assert horizons == ["intraday", "swing"]
