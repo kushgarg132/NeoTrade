@@ -430,6 +430,7 @@ async def run(
     per_trade_cap: Optional[float] = None,
     daily_loss_limit: Optional[float] = None,
     kill_switch_store=None,
+    day_realized: float = 0.0,
     master: Optional[InstrumentMaster] = None,
     premium_source=None,
     on_progress: Optional[Callable[[dict], Awaitable[None]]] = None,
@@ -463,8 +464,10 @@ async def run(
     this run. `kill_switch_store` is checked once at the start too, so a
     run restarted after an earlier trip today starts blocked rather than
     getting a fresh chance to lose more before re-detecting the breach.
-    Omit either argument and the kill-switch simply never engages, exactly
-    as before this parameter existed.
+    Omit either argument, or pass a limit of 0 (Settings > Safety: 0 is off),
+    and the kill-switch never engages. `day_realized` is what earlier runs
+    booked today: a restarted run starts from an empty portfolio, and
+    without it every restart would re-arm the limit.
 
     `on_progress`, if given, is awaited after every bar with running counts
     (bars seen, signals raised, orders sent, the last bar's symbol and time)
@@ -498,7 +501,7 @@ async def run(
 
         symbol = symbol_for_token.get(bar.instrument_token)
 
-        if daily_loss_limit is not None and kill_switch_store is not None and ledger is not None:
+        if daily_loss_limit and kill_switch_store is not None and ledger is not None:
             trading_day = bar.timestamp.astimezone(IST).date()
             if not kill_switch_tripped:
                 if await kill_switch_store.is_tripped(ledger.user_id, trading_day):
@@ -510,7 +513,7 @@ async def run(
                         if (history := ctx.history(pos_symbol, 1))
                     }
                     mark_prices.update({s: leg["mark"] for s, leg in option_legs.items()})
-                    equity = portfolio.equity(mark_prices)
+                    equity = day_realized + portfolio.equity(mark_prices)
                     if should_trip(equity, daily_loss_limit):
                         kill_switch_tripped = True
                         await kill_switch_store.trip(

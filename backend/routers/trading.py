@@ -16,7 +16,7 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, time as dt_time, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -425,6 +425,7 @@ async def _launch_run(
     # exposure, the kill switch and the 15:15 square-off see them) and closes
     # any left over from an earlier day. A restart used to forget them.
     holders: dict[str, str] = {}
+    day_realized = 0.0
     if mode == "INTRADAY":
         from backend.engine.adopt import adopt_intraday, close_stale
         from backend.routers.suggestions import _live_mark_price
@@ -435,6 +436,14 @@ async def _launch_run(
             portfolio.positions.setdefault(symbol, position)
         if stale:
             await close_stale(ledger, stale, _live_mark_price, now)
+        # What earlier runs booked today, so a restart does not re-arm the loss limit.
+        day_start = datetime.combine(now.astimezone(IST).date(), dt_time(0, 0), tzinfo=IST)
+        day_realized = sum(
+            t.get("realized_pnl") or 0.0
+            for t in await ledger.get_trades(status="CLOSED", venue="paper", limit=2000)
+            if t.get("exit_at") and t["exit_at"] >= day_start
+            and not (t.get("strategy") or "").startswith("autopilot:")
+        )
 
     # INTRADAY orders execute themselves; LONGTERM ones stop at a PENDING
     # suggestion and wait for the user to approve or reject them.
@@ -445,7 +454,7 @@ async def _launch_run(
         clock=SystemClock(), symbol_for_token=symbol_for_token, redis=db.redis,
         account_size=account_size, max_exposure=max_exposure, ledger=ledger,
         order_sink=sink,
-        per_trade_cap=prefs["per_trade_cap"], daily_loss_limit=prefs["daily_loss_limit"],
+        per_trade_cap=prefs["per_trade_cap"], daily_loss_limit=prefs["daily_loss_limit"], day_realized=day_realized,
         kill_switch_store=KillSwitchStore(db.db),
         master=master if premium_source is not None else None, premium_source=premium_source,
         on_progress=progress_reporter(user_id, run_id, runs, cycle=len(instruments)),

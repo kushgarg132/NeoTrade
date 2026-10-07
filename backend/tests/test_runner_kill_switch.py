@@ -152,3 +152,48 @@ async def test_a_run_already_tripped_today_starts_blocked():
 
     fills = await ledger.get_fills(symbol=SYMBOL)
     assert fills == []
+
+
+@pytest.mark.asyncio
+async def test_a_zero_limit_is_off_not_a_trip_at_once():
+    # Settings > Safety: 0 turns the daily loss limit and the kill switch off.
+    instrument = _instrument()
+    candles = _candles([100.0, 40.0])
+    feed = HistoricalFeed(
+        _FakeProvider(candles), [instrument], candles[0].timestamp, candles[-1].timestamp, TIMEFRAME,
+    )
+    client = AsyncMongoMockClient()
+    ledger = LedgerStore(client["test_db"], user_id="alice")
+    kill_switch = KillSwitchStore(client["test_db"])
+
+    await run(
+        strategies=[_BuyEveryBarStrategy()], feed=feed, execution=SimulatedExecutionClient(),
+        portfolio=Portfolio(), clock=SimClock(), symbol_for_token=feed.symbol_for_token,
+        ledger=ledger, daily_loss_limit=0.0, kill_switch_store=kill_switch,
+    )
+
+    assert len(await ledger.get_fills(symbol=SYMBOL)) == 2
+    assert await kill_switch.is_tripped("alice", date(2026, 9, 10)) is None
+
+
+@pytest.mark.asyncio
+async def test_losses_booked_by_an_earlier_run_today_count_toward_the_limit():
+    # A restarted run starts with an empty portfolio; the day's realized loss
+    # from the run before it must still count, or every restart re-arms it.
+    instrument = _instrument()
+    candles = _candles([100.0, 100.0])
+    feed = HistoricalFeed(
+        _FakeProvider(candles), [instrument], candles[0].timestamp, candles[-1].timestamp, TIMEFRAME,
+    )
+    client = AsyncMongoMockClient()
+    ledger = LedgerStore(client["test_db"], user_id="alice")
+    kill_switch = KillSwitchStore(client["test_db"])
+
+    await run(
+        strategies=[_BuyEveryBarStrategy()], feed=feed, execution=SimulatedExecutionClient(),
+        portfolio=Portfolio(), clock=SimClock(), symbol_for_token=feed.symbol_for_token,
+        ledger=ledger, daily_loss_limit=5_000.0, kill_switch_store=kill_switch, day_realized=-6_000.0,
+    )
+
+    assert await ledger.get_fills(symbol=SYMBOL) == []
+    assert await kill_switch.is_tripped("alice", date(2026, 9, 10)) is not None
