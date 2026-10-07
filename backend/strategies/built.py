@@ -109,6 +109,7 @@ class BlockStrategy(TokenResolvingStrategy):
         self._states: dict[str, SymbolState] = {}
         self._entry = {}  # symbol -> entry fill time, for the time stop
         self._exit_sent: set[str] = set()
+        self._entered: dict[str, date] = {}  # symbol -> IST day of its last entry
         self.CARD = self._card(thesis)
         self.spec = StrategySpec(name=f"built:{slug}", mode="INTRADAY", timeframe="5m", warmup_bars=20,
                                  universe=list(universe))
@@ -158,9 +159,11 @@ class BlockStrategy(TokenResolvingStrategy):
 
     def _entry_intent(self, bar, symbol: str, s: SymbolState) -> Optional[Intent]:
         name, params = self._setup
+        day = bar.timestamp.astimezone(IST)
+        if self._entered.get(symbol) == day.date():  # the setup can stay true all day; one entry per day
+            return None
         if not setup_fires(name, params, s, self._spec["side"]):
             return None
-        day = bar.timestamp.astimezone(IST)
         regime = self._regime_of(day.date()) if self._regime_of else None
         sector_rs = self._sector_rs(symbol, s) if self._needs_sector else None
         for fname, fparams in self._filters:
@@ -177,6 +180,7 @@ class BlockStrategy(TokenResolvingStrategy):
         risk = (close - stop) * sign
         if risk <= 0:
             return None
+        self._entered[symbol] = day.date()
         return Intent(symbol=symbol, side=Side.BUY if self._long else Side.SELL, strength=0.6,
                       reason_codes=[f"built:{self.slug}", name, *[n for n, _ in self._filters]],
                       stop_hint=stop, target_hint=close + sign * self._spec["target"]["r_multiple"] * risk)

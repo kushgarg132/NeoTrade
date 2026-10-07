@@ -180,3 +180,25 @@ def test_throughput_at_least_1000_bars_per_second():
     for b in bars:
         strat.on_bar(ctx, b)
     assert clock.perf_counter() - start < 50
+
+
+def test_enters_at_most_once_per_symbol_per_day():
+    strat = BlockStrategy("d", EXAMPLE, ["X"], {1: "X"})
+    bars = crafted_day()
+    ctx = run(strat, bars[:86])
+    assert len(ctx.intents) == 1
+    # stop-out: a fill leaves the book flat, then the setup and filters pass again the same day
+    strat.on_fill(ctx, Fill(order_id="2", symbol="X", side=Side.SELL, quantity=10, price=98.0,
+                            timestamp=bars[85].timestamp))
+    run(strat, [bar(date(2026, 10, 6), 11, 99.6, v=2200)], ctx)
+    assert len(ctx.intents) == 1
+    nxt = date(2026, 10, 7)
+    run(strat, [bar(nxt, i, 98.0 - 0.2 * i) for i in range(10)] + [bar(nxt, 10, 99.0, v=3000)], ctx)
+    assert len(ctx.intents) == 2
+
+
+@pytest.mark.parametrize("regime,count", [("risk_off", 0), ("risk_on", 1)])
+def test_regime_filter_gates_entry_through_on_bar(regime, count):
+    spec = {**EXAMPLE, "filters": {**EXAMPLE["filters"], "regime_is": {"regimes": ["risk_on"]}}}
+    strat = BlockStrategy("r", spec, ["X"], {1: "X"}, regime_of=lambda day: regime)
+    assert len(run(strat, crafted_day()).intents) == count
