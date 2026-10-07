@@ -4,6 +4,7 @@ import { Row, NumberField } from './Fields';
 import api, { endpoints, getPreferences } from '../../utils/api';
 import { cn } from '../../utils/cn';
 import { formatDateTime } from '../../utils/formatters';
+import EngineSwitches from './EngineSwitches';
 
 // One set for paper and live: Practice, live strategies, the autopilot and
 // Watch my broker all read these fields.
@@ -15,7 +16,8 @@ const LIMITS = [
   ['daily_loss_limit', 'Daily loss limit', 'Stops new trades for the day once lost (₹).'],
 ];
 
-/** The fenced autopilot on the AI account (backend/autopilot/). */
+/** The fenced autopilot on the AI account (backend/autopilot/), then the
+ * engine that feeds it, then the limits both trade inside. */
 const AutopilotSheet = () => {
   const [prefs, setPrefs] = useState(null);
   const [draft, setDraft] = useState({});
@@ -56,27 +58,6 @@ const AutopilotSheet = () => {
 
   return (
     <>
-    <Sheet title="Trading limits" meta="Paper and live" className="mt-3 sm:mt-4">
-      <p className="text-sm text-[var(--ink-soft)]">
-        One set for everything: Practice, live strategies, the autopilot, and Watch my broker on your own account.
-      </p>
-      {LIMITS.map(([key, label, hint]) => (
-        <Row key={key} label={label} hint={hint}>
-          <NumberField
-            value={draft[key]}
-            onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
-            onCommit={() => {
-              const value = Math.max(0, Number(draft[key]) || 0);
-              if (key === 'daily_loss_limit' && value === 0) {
-                setDraft((d) => ({ ...d, [key]: prefs[key] }));
-                return setNote('Turn the loss limit off in Settings › Safety, which asks you to confirm.');
-              }
-              return save({ [key]: value });
-            }}
-          />
-        </Row>
-      ))}
-    </Sheet>
     <Sheet
       title="Autopilot"
       meta={prefs.autopilot_enabled ? (prefs.autopilot_live ? 'On · live' : 'On · paper') : 'Off'}
@@ -85,7 +66,7 @@ const AutopilotSheet = () => {
       <p className="text-sm text-[var(--ink-soft)]">
         Acts for the AI account{aiBroker ? ` (${aiBroker.charAt(0).toUpperCase() + aiBroker.slice(1)})` : ''} without
         asking you: it takes the Practice engine's proposals and AI chat ideas and places them, inside the
-        trading limits above. NSE stocks only, market hours only. Every order and every refusal is sent to you on
+        trading limits below. NSE stocks only, market hours only. Every order and every refusal is sent to you on
         Telegram with a stop button.
       </p>
       {!aiBroker && (
@@ -167,6 +148,28 @@ const AutopilotSheet = () => {
           ))}
         </ul>
       )}
+    </Sheet>
+    <EngineSwitches prefs={prefs} save={save} />
+    <Sheet title="Trading limits" meta="Paper and live" className="mt-3 sm:mt-4">
+      <p className="text-sm text-[var(--ink-soft)]">
+        One set for everything: Practice, live strategies, the autopilot, and Watch my broker on your own account.
+      </p>
+      {LIMITS.map(([key, label, hint]) => (
+        <Row key={key} label={label} hint={hint}>
+          <NumberField
+            value={draft[key]}
+            onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
+            onCommit={() => {
+              const value = Math.max(0, Number(draft[key]) || 0);
+              if (key === 'daily_loss_limit' && value === 0) {
+                setDraft((d) => ({ ...d, [key]: prefs[key] }));
+                return setNote('Turn the loss limit off in Settings › Safety, which asks you to confirm.');
+              }
+              return save({ [key]: value });
+            }}
+          />
+        </Row>
+      ))}
     </Sheet>
     </>
   );

@@ -225,8 +225,11 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
             done["stopped"].append(slot)
 
     prefs_store = PrefsStore(db)
+    # The autopilot acts in this pass (09:20 proposals, its exits), so it
+    # keeps the pass running even with the long-term switch off.
     for user_id in sorted(
-        doc["user_id"] for doc in await db["user_prefs"].find({LONGTERM_PREF: True}).to_list(length=None)
+        doc["user_id"] for doc in await db["user_prefs"].find(
+            {"$or": [{LONGTERM_PREF: True}, {"autopilot_enabled": True}]}).to_list(length=None)
     ):
         try:
             if await _longterm_pass(db, redis, user_id, now):

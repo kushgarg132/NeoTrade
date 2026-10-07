@@ -151,7 +151,9 @@ per position, as in the engine), and the engine's long-term exits skip tagged tr
 fills go to their own `<user>:autopilot` book. Live, it takes a stock proposal (morning pass
 or news) only when the proposal's strategy passed both gates, its latest backtest and its
 paper record (`engine/autorun.py::_proven_strategies`); the rest wait for the user. Paper
-takes them all, to build the record. Every order and refusal goes to
+takes them all, to build the record. While the autopilot is on (paper or live), the 4 PM scan and the long-term pass run
+whatever their own switches say (`prefs.py::scan_enabled_users`, `engine/autorun.py::tick`): it
+trades the scan's proposals and acts in that pass, and used to sit idle with either off. Every order and refusal goes to
 `autopilot_log` and Telegram with a Stop button.
 
 ## Practice: runs, books, learning

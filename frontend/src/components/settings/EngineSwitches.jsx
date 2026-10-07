@@ -1,67 +1,59 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { Sheet, Ruling } from '../doc/Doc';
+import { Sheet } from '../doc/Doc';
 import { Row } from './Fields';
-import api, { endpoints, getPreferences } from '../../utils/api';
 import { cn } from '../../utils/cn';
 
 /**
- * What the strategy engine does by itself: the daily paper runs and the
- * 4:00 PM scan. Beside the autopilot on AI › Autopilot, since together they
- * decide what happens without a tap. Limits and per-strategy live switches
- * stay in Practice › Setup.
+ * What the strategy engine does by itself, under the autopilot on AI ›
+ * Autopilot. The autopilot trades the 4 PM scan's proposals and acts in the
+ * long-term pass, so while it is on both run regardless of their own
+ * switches (backend/prefs.py::scan_enabled_users, engine/autorun.py::tick);
+ * here they show as kept on. Intraday paper is independent. Limits and
+ * per-strategy live switches stay in Practice › Setup.
  */
 
 const SWITCH =
   'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors';
 
-const EngineSwitches = () => {
-  const [prefs, setPrefs] = useState(null);
+const EngineSwitches = ({ prefs, save }) => {
+  const autopilot = Boolean(prefs.autopilot_enabled);
+  const on = (key, byAutopilot) => (byAutopilot && autopilot) || Boolean(prefs[key]);
 
-  useEffect(() => {
-    getPreferences().then((res) => setPrefs(res.data)).catch(() => setPrefs(null));
-  }, []);
-
-  const save = async (patch) => {
-    const res = await api.put(endpoints.settings.preferences, patch);
-    setPrefs(res.data);
-  };
-
-  if (!prefs) {
-    return (
-      <Sheet title="Engine">
-        <Ruling rows={3} />
-      </Sheet>
-    );
-  }
-
-  const switchRow = (key, label, hint) => (
-    <Row label={label} hint={hint}>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={Boolean(prefs[key])}
-        onClick={() => save({ [key]: !prefs[key] })}
-        className={cn(
-          SWITCH,
-          prefs[key]
-            ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-            : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-        )}
-      >
-        {prefs[key] ? 'On' : 'Off'}
-      </button>
+  const switchRow = (key, label, hint, byAutopilot = false) => (
+    <Row label={label} hint={byAutopilot && autopilot ? `Kept on while the autopilot is on. ${hint}` : hint}>
+      {byAutopilot && autopilot ? (
+        <span className={cn(SWITCH, 'text-[var(--ink-soft)] border-[var(--rule)]')}>Autopilot</span>
+      ) : (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={Boolean(prefs[key])}
+          onClick={() => save({ [key]: !prefs[key] })}
+          className={cn(
+            SWITCH,
+            prefs[key]
+              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
+              : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
+          )}
+        >
+          {prefs[key] ? 'On' : 'Off'}
+        </button>
+      )}
     </Row>
   );
 
   return (
     <Sheet
       title="Engine"
-      meta={[prefs.auto_paper_intraday, prefs.auto_paper_longterm, prefs.scan_enabled].filter(Boolean).length + ' of 3 on'}
+      meta={`${[on('auto_paper_intraday'), on('scan_enabled', true), on('auto_paper_longterm', true)].filter(Boolean).length} of 3 on`}
+      className="mt-3 sm:mt-4"
     >
       <p className="text-sm text-[var(--ink-soft)]">
-        The strategy engine on its own. Its intraday trades are practice money; its long-term proposals wait for
-        you in <Link to="/ai/decisions" className="underline">Decisions</Link>, or for the autopilot below.
+        {autopilot
+          ? 'Feeds the autopilot: the scan and the long-term pass stay on while it is on. Only intraday paper is your call.'
+          : <>The strategy engine on its own. Its long-term proposals wait for you in{' '}
+              <Link to="/ai/decisions" className="underline">Decisions</Link>; turn the autopilot on and it takes them.</>}
       </p>
       {switchRow(
         'auto_paper_intraday',
@@ -71,15 +63,17 @@ const EngineSwitches = () => {
       {switchRow(
         'scan_enabled',
         'Daily long-term scan',
-        `Runs after the close at 4:00 PM IST over your ${prefs.universe.length} scrip and files long-term proposals for your decision.`
+        `Runs after the close at 4:00 PM IST over your ${prefs.universe.length} scrip and files long-term proposals.`,
+        true
       )}
       {switchRow(
         'auto_paper_longterm',
-        'Keep the long-term paper book running',
-        'Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 9:20 AM on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term paper position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest.'
+        'Long-term paper book',
+        'Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 9:20 AM on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term paper position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest.',
+        true
       )}
       <p className="pt-3 doc-meta normal-case">
-        Trading limits and which strategies may trade real money:{' '}
+        Which strategies may trade real money:{' '}
         <Link to="/practice/setup" className="underline">Practice › Setup</Link>.
       </p>
     </Sheet>

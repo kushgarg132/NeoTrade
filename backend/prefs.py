@@ -92,8 +92,9 @@ class PrefsStore:
     async def scan_enabled_users(self) -> list[dict]:
         """Users the scheduled scan should run for. A user who has never
         opened settings has no document at all, so absence means enabled --
-        matching DEFAULTS rather than silently excluding them."""
-        cursor = self.collection.find({"scan_enabled": False})
+        matching DEFAULTS rather than silently excluding them. The autopilot
+        trades the scan's proposals, so it keeps the scan on."""
+        cursor = self.collection.find({"scan_enabled": False, "autopilot_enabled": {"$ne": True}})
         opted_out = {doc["user_id"] for doc in await cursor.to_list(length=None)}
 
         users = await self.collection.database["users"].find({}).to_list(length=None)

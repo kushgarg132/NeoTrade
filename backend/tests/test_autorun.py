@@ -232,6 +232,27 @@ async def test_the_long_term_switch_never_starts_a_live_run(world, longterm):
 
 
 @pytest.mark.asyncio
+async def test_the_autopilot_keeps_the_long_term_pass_running(world, longterm):
+    """The autopilot buys at the 09:20 pass and exits in it: with the
+    long-term switch off it used to do nothing at all."""
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "autopilot_enabled": True})
+    assert (await _tick(world, MONDAY_10AM))["longterm"] == ["alice"]
+
+
+@pytest.mark.asyncio
+async def test_the_autopilot_keeps_the_scan_on():
+    from backend.prefs import PrefsStore
+
+    db = AsyncMongoMockClient()["t"]
+    await db["users"].insert_many([{"id": "alice"}, {"id": "bob"}])
+    await db["user_prefs"].insert_many([
+        {"user_id": "alice", "scan_enabled": False, "autopilot_enabled": True},
+        {"user_id": "bob", "scan_enabled": False},
+    ])
+    assert [p["user_id"] for p in await PrefsStore(db).scan_enabled_users()] == ["alice"]
+
+
+@pytest.mark.asyncio
 async def test_exits_are_checked_once_per_quarter_hour_and_reported(world, longterm):
     await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True})
     world.redis.data["scheduler:last_pass"] = "2026-09-25"  # Friday's 16:00 pass ran
