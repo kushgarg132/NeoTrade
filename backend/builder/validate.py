@@ -2,6 +2,7 @@
 canonical shape (backend/strategies/built.py) or refuses it with a short reason. Everything it
 returns passes `built.load_ok`; no I/O.
 """
+import math
 
 from backend.strategies.blocks.vocab import EXITS, FILTERS, SETUPS
 
@@ -10,7 +11,13 @@ _SECTIONS = {"setup": SETUPS, "filters": FILTERS, "stop": EXITS, "target": EXITS
 
 
 def _num(v) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    """A real, finite number (bool, NaN, inf and ints too big for a float are not)."""
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        return False
+    try:
+        return math.isfinite(v)
+    except OverflowError:
+        return False
 
 
 def _kind(spec: tuple) -> str:
@@ -23,11 +30,14 @@ def _kind(spec: tuple) -> str:
 
 def _snap(v, spec):
     lo, hi, step = spec
-    x = lo + int((min(hi, max(lo, v)) - lo) / step + 0.5) * step  # nearest step from lo
+    x = math.floor(min(hi, max(lo, v)) / step + 0.5) * step  # nearest multiple of step
+    x = min(hi, max(lo, x))  # rounding can step outside the range
     return int(round(x)) if all(isinstance(n, int) for n in spec) else round(x, 4)
 
 
 def _minutes(s) -> int | None:
+    if not isinstance(s, str):
+        return None
     try:
         h, m = str(s).split(":")
         return int(h) * 60 + int(m)
@@ -59,7 +69,7 @@ def _clean_params(vocab: dict, raw) -> dict | None:
             v = _clock(v, spec)
         elif k == "regimes":  # the one multi-choice param: any non-empty subset
             v = list(dict.fromkeys(x for x in ([v] if isinstance(v, str) else v if isinstance(v, list) else [])
-                                   if x in spec)) or None
+                                   if isinstance(x, str) and x in spec)) or None
         elif v not in spec:
             v = None
         if v is None:
@@ -160,7 +170,7 @@ def validate_spec(raw: dict, existing: list[dict]) -> tuple[dict | None, str]:
     if (ts := _clean_params(EXITS["time_stop"], pick("time_stop"))) is not None:
         spec["time_stop"] = ts
     for e in existing:
-        if _is_dup(spec, e.get("spec") or {}):
+        if isinstance(e, dict) and _is_dup(spec, e.get("spec") or {}):
             return None, f"duplicate of {e.get('slug')}"
     return spec, ""
 

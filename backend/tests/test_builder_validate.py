@@ -1,5 +1,7 @@
 import copy
 
+import pytest
+
 from backend.builder.validate import describe, slugify, validate_spec
 from backend.strategies.built import load_ok
 
@@ -21,8 +23,7 @@ def _ex(**kw):
 
 def test_example_roundtrips_and_loads():
     clean, why = validate_spec(EXAMPLE, [])
-    # volume_confirm's grid starts at 1.2 (step .25), so 2.0 snaps to 1.95 by the snap rule.
-    assert why == "" and load_ok(clean) and clean["filters"]["volume_confirm"] == {"multiple": 1.95}
+    assert why == "" and load_ok(clean) and clean == EXAMPLE
     assert validate_spec(clean, [])[0] == clean  # idempotent
 
 
@@ -128,3 +129,39 @@ def test_every_validated_spec_loads():
             c, why = validate_spec(_ex(setup=setup, stop=stop, target={"r_multiple": 0}), [])
             assert c is not None, why
             assert load_ok(c) and describe(c) and len(slugify(c)) <= 40
+
+
+def _deep(n=5000):
+    x = []
+    for _ in range(n):
+        x = [x]
+    return x
+
+
+HOSTILE = [float("nan"), float("inf"), float("-inf"), 10**400, None, "x", [], {}, True, list(range(10_000)), _deep()]
+
+
+def _places(v):
+    base = _ex()
+    yield v
+    yield [v]
+    for k in ("setup", "filters", "side", "stop", "target", "time_stop", "exits"):
+        yield {**base, k: v}
+    yield {**base, "exits": {"stop": v, "target": v, "time_stop": v}}
+    yield {**base, "setup": {"gap": {"direction": v, "min_pct": v}}}
+    yield {**base, "setup": {"gap": v}}
+    for f, params in EXAMPLE["filters"].items():
+        yield {**base, "filters": {f: v}}
+        yield {**base, "filters": {f: {k: v for k in params}}}
+    yield {**base, "filters": {"regime_is": {"regimes": [v]}, "atr_pct": {"min": 1, "max": v}}}
+    for k in ("stop", "target", "time_stop"):
+        yield {**base, k: {"atr_multiple": v, "setup_bar": v, "r_multiple": v, "minutes": v}}
+
+
+@pytest.mark.parametrize("v", range(len(HOSTILE)))
+def test_hostile_values_never_raise(v):
+    for raw in _places(HOSTILE[v]):
+        out = validate_spec(raw, [{"slug": "a", "spec": HOSTILE[v]}, HOSTILE[v]])
+        assert isinstance(out, tuple) and len(out) == 2
+        if out[0] is not None:
+            assert load_ok(out[0])
