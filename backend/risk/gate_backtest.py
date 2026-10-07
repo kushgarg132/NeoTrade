@@ -16,6 +16,7 @@ from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
 from backend.components.shared.models import BacktestResult
 from backend.engine.backtest import run_backtest
 from backend.instruments.master import InstrumentMaster
+from backend.instruments.models import Instrument
 from backend.options.backtest import ModelOptions
 from backend.options.resolver import FO_UNDERLYINGS
 from backend.risk.backtest_gate import BacktestGateStore
@@ -59,6 +60,13 @@ async def backtest_account(db) -> dict:
     return {key: float(prefs[key]) for key in ("account_size", "max_exposure", "per_trade_cap")}
 
 
+async def gate_universe(db, symbols=ALL_SCAN_STOCKS) -> tuple[list[Instrument], dict[int, str]]:
+    """The instruments a gate backtest runs on (the default scan universe) and their token map."""
+    master = InstrumentMaster(db)
+    instruments = [i for s in symbols if (i := await master.get("NSE", s)) is not None]
+    return instruments, {i.instrument_token: i.tradingsymbol for i in instruments}
+
+
 async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> BacktestResult:
     master = InstrumentMaster(db)
     options = strategy_name in OPTIONS_STRATEGIES
@@ -69,13 +77,12 @@ async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> 
                 lot_sizes[symbol] = contracts[0].lot_size
     symbols = list(lot_sizes) if options else list(ALL_SCAN_STOCKS)
 
-    instruments = [i for s in symbols if (i := await master.get("NSE", s)) is not None]
+    instruments, symbol_for_token = await gate_universe(db, symbols)
     if not instruments:
         raise ValueError(
             "No instruments to backtest" + (" (connect Kite to sync NFO lot sizes)" if options else "")
         )
     universe = [i.tradingsymbol for i in instruments]
-    symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
     from backend.builder import store
     await store.refresh(db)
     strategies = [

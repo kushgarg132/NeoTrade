@@ -36,6 +36,8 @@ PROMPTS = {
                         "groups": "vwap / overall: n 30, net ₹-3,000"},
     "strategy_hypotheses": {"strategies": "macd_crossover: runs {'stop_pct': 0.03}", "retunes": "none yet",
                             "setups": "none yet"},
+    "strategy_builder": {"vocabulary": "setup gap: direction up | down", "plans": "none yet", "scorecards": "none yet",
+                         "library": "[{\"name\": \"orb\"}]", "setups": "none yet", "drafts": "none yet"},
 }
 
 

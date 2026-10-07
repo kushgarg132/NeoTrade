@@ -18,6 +18,7 @@ EXPECTED = {
     "portfolio/review.py": ["deep"],
     "learning/report.py": ["standard"],
     "learning/hypotheses.py": ["deep"],
+    "builder/draft.py": ["deep"],                         # the weekly strategy drafts
     "chat/agent.py": ["fast", "deep"],                   # follow-up chips; the reply
 }
 
@@ -28,6 +29,7 @@ FEATURE = {
     "plan/builder.py": "plan", "plan/revise.py": "plan",
     "portfolio/review.py": "portfolio", "chat/agent.py": "chat",
     "learning/report.py": "learning", "learning/hypotheses.py": "learning",
+    "builder/draft.py": "learning",
 }
 
 

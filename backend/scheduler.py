@@ -107,6 +107,12 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         await start_if_due(db, now)
     except Exception as exc:
         logger.warning("could not start the monthly re-tune: %s", exc)
+    # Weekly, Fridays, in its own process: the strategy builder drafts and tests (backend/builder/draft.py).
+    from backend.builder import draft
+    try:
+        await draft.start_if_due(db, now)
+    except Exception as exc:
+        logger.warning("could not start the strategy builder: %s", exc)
 
     # Weekly portfolio review: Friday's pass, after the journal sync, while
     # that day's broker sessions are still valid.
