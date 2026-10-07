@@ -5,6 +5,8 @@ it only gives them one shared shape so the rest of the app can stop
 importing Kite-specific pieces directly.
 """
 
+import asyncio
+import logging
 from typing import Optional
 
 from backend.auth.kite_session import KiteSessionManager, KiteSessionState
@@ -15,6 +17,8 @@ from backend.data.feeds.live_kite import KiteTickerFeed
 from backend.data.providers.kite_provider import KiteProvider
 from backend.instruments.kite_source import KiteInstrumentSource
 from backend.instruments.models import Instrument
+
+logger = logging.getLogger(__name__)
 
 
 class KiteAdapter:
@@ -64,8 +68,18 @@ class KiteAdapter:
             return None
 
         from kiteconnect import KiteTicker
+        from kiteconnect.exceptions import PermissionException
 
         token = await self.get_access_token()
+        # A Kite Connect app without the market-data add-on logs in fine but
+        # its WebSocket is refused (403) and the feed would sit silent all
+        # day; None lets build_feed fall through to the next broker.
+        try:
+            probe = f"{instruments[0].exchange}:{instruments[0].tradingsymbol}" if instruments else "NSE:INFY"
+            await asyncio.to_thread(self._client_factory(token)().ltp, [probe])
+        except PermissionException:
+            logger.warning("kite app has no market-data permission: no tick feed")
+            return None
         return KiteTickerFeed(
             lambda: KiteTicker(api_key=self._api_key, access_token=token),
             [i.instrument_token for i in instruments], timeframe=timeframe, timeframe_seconds=timeframe_seconds,

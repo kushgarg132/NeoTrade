@@ -42,7 +42,7 @@ tokens are cached as `broker:<user_id>:<broker>:access_token`.
 |---|---|---|---|
 | Login | redirect + request token | OAuth code | client code + password + 6-digit TOTP |
 | Market data / history | yes (a year of 5-min via 99-day windows) | yes | yes |
-| Live stream | `KiteTickerFeed` | `UpstoxMarketFeed` (v3 protobuf) | none — falls back to polling |
+| Live stream | `KiteTickerFeed`, only if the app has the market-data add-on (`KiteAdapter::ticker_feed` probes `ltp`; refused → next broker) | `UpstoxMarketFeed` (v3 protobuf) | none — falls back to polling |
 | Holdings | stocks + mutual funds | long-term holdings | `getHolding` |
 | Trade history import | via journal sync / Console CSV | API, a year in month windows | — |
 | Equity orders | yes | yes | yes |

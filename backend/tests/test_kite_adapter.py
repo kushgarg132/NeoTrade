@@ -96,8 +96,22 @@ async def test_ticker_feed_is_none_when_not_active():
 
 async def test_ticker_feed_is_returned_when_active():
     adapter = _adapter(_redis(cached_token="tok"))
-    with patch("backend.auth.kite_session.KiteConnect") as mock_cls:
+    with patch("backend.auth.kite_session.KiteConnect") as mock_cls, patch("kiteconnect.KiteConnect"):
         mock_cls.return_value.profile.return_value = {"user_id": "AB1234"}
         feed = await adapter.ticker_feed([_instrument()], timeframe="5m", timeframe_seconds=300.0)
 
     assert isinstance(feed, KiteTickerFeed)
+
+
+async def test_ticker_feed_is_none_without_market_data_permission():
+    """A Kite app without the market-data add-on: login works, quotes and the
+    WebSocket are refused. No feed, so build_feed falls through to Upstox."""
+    from kiteconnect.exceptions import PermissionException
+
+    adapter = _adapter(_redis(cached_token="tok"))
+    with patch("backend.auth.kite_session.KiteConnect") as session_cls, patch("kiteconnect.KiteConnect") as client_cls:
+        session_cls.return_value.profile.return_value = {"user_id": "AB1234"}
+        client_cls.return_value.ltp.side_effect = PermissionException("Insufficient permission for that call.")
+        feed = await adapter.ticker_feed([_instrument()], timeframe="5m", timeframe_seconds=300.0)
+
+    assert feed is None
