@@ -2,7 +2,7 @@
 refused (logged, never retried), paper first, a one-tap stop on Telegram,
 and it never touches the user's own account."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -324,3 +324,33 @@ async def test_lock_release_never_deletes_another_workers_lock(world, monkeypatc
 def test_fence_market_backdrop_only_tightens(order, price, state, prefs, refusal):
     result = fence.check(order, price, state, prefs)
     assert result is None if refusal is None else (result and refusal in result)
+
+
+async def test_max_hold_exit_paper_and_autopilot(world):
+    """Held max_hold_days trading days, between stop and target: both books sell, reason "max hold"."""
+    from backend.engine.persistence import LedgerStore
+    from backend.suggestions import exits
+    from backend.suggestions.service import execute_suggestion
+
+    db, _ = world
+    await _prefs(db)
+    swing = {"stop": 900.0, "target": 1300.0, "max_hold_days": 3}
+    # autopilot: entered Tue 6 Oct; Thu 8 Oct is 2 trading days, Fri 9 Oct is 3.
+    await db["suggestions"].insert_one({"id": "s1", "user_id": "alice", "symbol": "INFY", **swing})
+    await service.submit(db, None, "alice", _order(qty=2, source="engine"), now=OPEN, suggestion_id="s1")
+    assert await service.check_exits(db, None, "alice", now=OPEN + timedelta(days=2)) == []
+    closed = await service.check_exits(db, None, "alice", now=OPEN + timedelta(days=3))
+    assert [(c["symbol"], c["reason"]) for c in closed] == [("INFY", "max hold")]
+
+    # paper (the user's own approved proposal), same rule.
+    suggestion = {"id": "s2", "user_id": "alice", "symbol": "TCS", "side": "BUY", "mode": "LONGTERM", "quantity": 1.0,
+                  "strategy": "swing", "option_contract": None, **swing}
+    await db["suggestions"].insert_one(dict(suggestion))
+    await execute_suggestion(suggestion, LedgerStore(db, user_id="alice"), price=1000.0, now=OPEN)
+
+    async def marks(db_, symbols):
+        return {s: 1000.0 for s in symbols}
+
+    assert await exits.check_exits(db, "alice", now=OPEN + timedelta(days=2), marks_fn=marks) == []
+    closed = await exits.check_exits(db, "alice", now=OPEN + timedelta(days=3), marks_fn=marks)
+    assert [(c["symbol"], c["reason"]) for c in closed] == [("TCS", "max hold")]

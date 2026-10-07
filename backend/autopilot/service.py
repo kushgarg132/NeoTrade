@@ -219,9 +219,10 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
 
 async def check_exits(db, redis, user_id: str, now: Optional[datetime] = None) -> list[dict]:
     """Sells autopilot positions opened from an engine proposal once the mark
-    crosses that proposal's stop or target -- through the fence, so paper
-    and live both work and the exit is logged like any other order."""
-    from backend.suggestions.exits import breach
+    crosses that proposal's stop or target, its trailing stop, or it was held
+    max_hold_days (suggestions/exits.py) -- through the fence, so paper and
+    live both work and the exit is logged like any other order."""
+    from backend.suggestions.exits import exit_reasons
 
     now = now or datetime.now(timezone.utc)
     trades = [t for t in await open_trades(db, user_id) if t.get("suggestion_id")]
@@ -230,17 +231,16 @@ async def check_exits(db, redis, user_id: str, now: Optional[datetime] = None) -
     suggestions = {s["id"]: s for s in await db["suggestions"].find(
         {"user_id": user_id, "id": {"$in": [t["suggestion_id"] for t in trades]}}).to_list(length=None)}
     marks = await mark_prices(db, {t["symbol"] for t in trades})
+    reasons = await exit_reasons(db, trades, suggestions, marks, now)
     closed = []
     for trade in trades:
-        suggestion, mark = suggestions.get(trade["suggestion_id"]), marks.get(trade["symbol"])
-        if suggestion is None or mark is None:
-            continue
-        why = breach(mark, suggestion.get("stop"), suggestion.get("target"))
+        why, mark = reasons.get(trade["id"]), marks.get(trade["symbol"])
         if why is None:
             continue
+        text = f"Exit at the proposal's {why}." if why in ("stop", "target") else f"Exit: {why}."
         result = await submit(db, redis, user_id, AutopilotOrder(
             symbol=trade["symbol"], side=Side.SELL, quantity=int(trade["quantity"]), product=_product(trade),
-            source="engine", reason=f"Exit at the proposal's {why}."), now=now, suggestion_id=trade["suggestion_id"])
+            source="engine", reason=text), now=now, suggestion_id=trade["suggestion_id"])
         if result["status"] in ("FILLED", "SENT"):
             closed.append({"symbol": trade["symbol"], "reason": why, "price": mark})
     return closed

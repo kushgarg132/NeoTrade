@@ -6,8 +6,12 @@ through the shared runner.run() loop, then reports through the existing
 import logging
 import time
 import uuid
+from collections import deque
 from datetime import datetime
 
+import pandas as pd
+
+from backend.components.quant.indicators import Indicators
 from backend.components.shared.models import BacktestResult
 from backend.core.clock import SimClock
 from backend.core.models import Order, Side
@@ -20,7 +24,7 @@ from backend.engine.protocols import Strategy
 from backend.engine.runner import run
 from backend.instruments.models import Instrument
 from backend.options.backtest import ModelOptions
-from backend.suggestions.exits import breach
+from backend.suggestions.exits import trail_level
 
 logger = logging.getLogger(__name__)
 PROGRESS_EVERY = 20_000  # bars between progress log lines
@@ -60,35 +64,58 @@ async def run_backtest(
     # bar's low/high crosses it, at that level (the stop first when both
     # cross -- the conservative reading of an OHLC bar). It used to cover
     # long-term buys only, on the close, so intraday stops were never tested.
-    levels: dict[str, tuple] = {}
+    # A swing order (context max_hold_days / trail_atr) also exits at the
+    # close of the bar that completes its hold, and at a stop that rises to
+    # the highest close since entry minus k x the 14-bar ATR, set from the
+    # bars before the one tested -- as suggestions/exits.py does live.
+    levels: dict[str, dict] = {}
+    recent: dict[str, deque] = {}  # each symbol's last 15 bars: the trail's ATR
     original_submit = execution.submit
 
     async def submit_noting_levels(order: Order) -> str:
         context = order.context or {}
         held = portfolio.positions.get(order.symbol)
         if order.contract is None and context.get("stop") is not None and (held is None or held.quantity == 0):
-            levels[order.symbol] = (order.side, context["stop"], context.get("target"), order.product)
+            levels[order.symbol] = {
+                "stop": context["stop"], "target": context.get("target"), "product": order.product,
+                "hold": context.get("max_hold_days"), "k": context.get("trail_atr"), "bars": 0, "high": None}
         return await original_submit(order)
 
     execution.submit = submit_noting_levels  # type: ignore[method-assign]
 
     async def exit_on_levels(bar) -> None:
         symbol = feed.symbol_for_token.get(bar.instrument_token)
+        past = recent.setdefault(symbol, deque(maxlen=15))
+        try:
+            await exit_at_level(symbol, bar, past)
+        finally:
+            past.append(bar)
+
+    async def exit_at_level(symbol, bar, past) -> None:
         position = portfolio.positions.get(symbol)
         if symbol not in levels or position is None or position.quantity == 0:
             return
-        side, stop, target, product = levels[symbol]
+        lv = levels[symbol]
+        stop, target = lv["stop"], lv["target"]
         long = position.quantity > 0
+        if long and lv["k"]:  # past[-1] is the entry bar on the first bar held
+            lv["high"] = max(lv["high"] or past[-1].close, past[-1].close)
+            atr = Indicators.atr(*(pd.Series([getattr(b, f) for b in past]) for f in ("high", "low", "close"))).iloc[-1]
+            if not pd.isna(atr):
+                stop = max(stop, trail_level(lv["high"], float(atr), lv["k"]))
         if long:
             level = stop if bar.low <= stop else (target if target is not None and bar.high >= target else None)
         else:
             level = stop if bar.high >= stop else (target if target is not None and bar.low <= target else None)
+        lv["bars"] += 1
+        if level is None and lv["hold"] and lv["bars"] >= lv["hold"]:
+            level = bar.close
         if level is None:
             return
         del levels[symbol]
         await execution.fill_now(Order(
             id=str(uuid.uuid4()), symbol=symbol, side=Side.SELL if long else Side.BUY,
-            quantity=abs(position.quantity), order_type="MARKET", limit_price=None, product=product,
+            quantity=abs(position.quantity), order_type="MARKET", limit_price=None, product=lv["product"],
         ), level, bar.timestamp)
 
     async def timestamped_bars():
