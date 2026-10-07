@@ -293,9 +293,10 @@ def _feed_daily(strat, closes, order, days):
     return out
 
 
-def test_momentum_rank_uses_cross_section():
+def test_momentum_rank_uses_cross_section(monkeypatch):
     """Five symbols ranked by 63-day return as of the previous bar; top 20% (the best one) fires,
     in either feed order."""
+    monkeypatch.setattr("backend.strategies.built._MIN_CROSS_SECTION", 2)  # small fixture universe
     spec = {**SWING, "setup": {"momentum_rank": {"lookback": "63", "top_pct": 20}}}
     syms = {t: f"S{t}" for t in range(1, 6)}
     closes = lambda t, i: 100.0 * (1 + 0.002 * (6 - t)) ** i  # token 1 rises fastest
@@ -308,7 +309,8 @@ def test_momentum_rank_uses_cross_section():
     assert strat.CARD.style == "momentum"
 
 
-def test_cross_section_is_feed_order_independent():
+def test_cross_section_is_feed_order_independent(monkeypatch):
+    monkeypatch.setattr("backend.strategies.built._MIN_CROSS_SECTION", 2)  # small fixture universe
     spec = {**SWING, "setup": {"momentum_rank": {"lookback": "63", "top_pct": 30}},
             "filters": {"sector_rs": {"min": 0.0}}}
     syms = {t: f"S{t}" for t in range(1, 9)}
@@ -321,8 +323,9 @@ def test_cross_section_is_feed_order_independent():
     assert runs[0] and runs[0] == runs[1] == runs[2]
 
 
-def test_swing_sector_rs_needs_three_in_sector():
+def test_swing_sector_rs_needs_three_in_sector(monkeypatch):
     """Sector minus universe 20-day return, as of the previous bar (today's jump in S1 is not counted)."""
+    monkeypatch.setattr("backend.strategies.built._MIN_CROSS_SECTION", 2)  # small fixture universe
     spec = {**SWING, "filters": {"sector_rs": {"min": 0.0}}}
     syms = {t: f"S{t}" for t in range(1, 6)}
     sector = {"S1": "IT", "S2": "IT", "S3": "IT", "S4": "BANK", "S5": "BANK"}
@@ -345,3 +348,16 @@ def test_entry_context_carries_swing_exit_fields():
     i = Intent(symbol="X", side=Side.BUY, strength=0.6, reason_codes=["r"], max_hold_days=10, trail_atr=3.0)
     c = entry_context(i, CompositeScore(rule_score=0.6, ai_score=0.0))
     assert (c["max_hold_days"], c["trail_atr"]) == (10, 3.0)
+
+
+def test_small_cross_section_never_ranks():
+    """Fewer than 30 symbols is not the universe the rank was tested on: no rank, no sector read."""
+    from backend.strategies.built import _MIN_CROSS_SECTION
+
+    spec = {**SWING, "setup": {"momentum_rank": {"lookback": "63", "top_pct": 20}}}
+    for n, fires in ((3, False), (_MIN_CROSS_SECTION, True)):
+        syms = {t: f"S{t}" for t in range(1, n + 1)}
+        closes = lambda t, i: 100.0 * (1 + 0.002 * (n + 1 - t)) ** i
+        strat = BlockStrategy("mr", spec, list(syms.values()), syms)
+        assert bool(_feed_daily(strat, closes, tuple(syms), 70)) is fires
+        assert (strat._rank_pct("S1", 63, strat._days["S1"]) is None) is (not fires)

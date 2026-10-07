@@ -35,6 +35,7 @@ _NEEDS = {"gap": "gap", "volume_spike": "volume_spike", "orb_break": "range_day"
 _SWING_STYLE = {"breakout_n": "breakout", "volume_breakout": "breakout", "gap_hold": "breakout",
                 "rsi2_dip": "reversion", "pullback_ma": "reversion", "momentum_rank": "momentum"}
 _SESSION_MINUTES = 375  # one NSE session, 09:15-15:30
+_MIN_CROSS_SECTION = 30  # a rank or sector read over fewer symbols is not the one that was tested
 _SWING_GAP = 5  # trading days (daily bars seen) between two entries in one symbol
 
 
@@ -266,7 +267,7 @@ class BlockStrategy(TokenResolvingStrategy):
     def _rank_pct(self, symbol: str, n: int, day: date) -> Optional[float]:
         """0 = best n-day return of the cross-section (as of the previous session), 100 = worst."""
         rets = self._day_returns(n, day)
-        if symbol not in rets or len(rets) < 2:
+        if symbol not in rets or len(rets) < _MIN_CROSS_SECTION:
             return None
         better = sum(r > rets[symbol] for r in rets.values())
         return 100 * better / (len(rets) - 1)
@@ -278,7 +279,7 @@ class BlockStrategy(TokenResolvingStrategy):
             return None
         rets = self._day_returns(20, day)
         mine = [r for sym, r in rets.items() if self._sector_of.get(sym) == sector]
-        if len(mine) < 3:
+        if len(rets) < _MIN_CROSS_SECTION or len(mine) < 3:
             return None
         return (sum(mine) / len(mine) - sum(rets.values()) / len(rets)) * 100
 
