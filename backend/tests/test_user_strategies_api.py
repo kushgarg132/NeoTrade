@@ -120,7 +120,8 @@ async def test_daily_limit_429(env):
         assert r.status_code == 201
         await mongo["built_strategies"].update_many({}, {"$set": {"status": "rejected"}})
     r = _client().post(URL, json=_body(name="n4", spec=_spec(3.5)))
-    assert r.status_code == 429
+    assert r.status_code == 429 and r.json()["detail"] == "3 strategies a day: try again tomorrow."
+    assert not await mongo["built_strategies"].find_one({"thesis": "gaps fill", "spec": _spec(3.5)})  # not stored
     assert _client("bob").post(URL, json=_body()).status_code == 201  # per user
 
 
@@ -154,7 +155,8 @@ async def test_other_users_strategy_is_invisible_and_untouchable(env):
     await _put(mongo, "global", "active", owner=None, spec=_spec(3.0))
     body = _client().get(URL).json()
     assert [r["slug"] for r in body["active"]] == ["global"] and body["active"][0]["mine"] is False
-    assert _client("bob").get(URL).json()["active"][0]["mine"] in (True, False)
+    bob = _client("bob").get(URL).json()["active"]
+    assert {r["slug"]: r["mine"] for r in bob} == {"secret": True, "global": False}
     for verb in ("retire", "retest"):
         assert _client().post(f"{URL}/secret/{verb}").status_code == 404
         assert _client().post(f"{URL}/global/{verb}").status_code == 404  # the AI's are not the user's to touch
@@ -189,3 +191,38 @@ def test_describe_endpoint(env):
     assert r.status_code == 200 and r.json()["spec"] == SPEC and r.json()["description"].startswith("Long when")
     r = _client().post("/api/v1/strategies/describe", json={"spec": {"setup": {}}})
     assert r.status_code == 422 and r.json()["detail"] == "exactly one setup"
+
+
+async def test_duplicate_key_on_insert_retries_with_a_suffix(env):
+    mongo, _, _ = env
+    from pymongo.errors import DuplicateKeyError
+
+    from backend.builder import store
+
+    real, calls = store.insert, []
+
+    async def flaky(db, doc):
+        calls.append(doc["slug"])
+        if len(calls) == 1:
+            await mongo["built_strategies"].insert_one({"slug": doc["slug"], "owner_id": "bob", "status": "retired", "spec": _spec(3.0)})
+            raise DuplicateKeyError("dup")
+        await real(db, doc)
+
+    with patch.object(store, "insert", flaky):
+        r = _client().post(URL, json=_body())
+    assert r.status_code == 201 and calls == ["my-gap", "my-gap-2"] and r.json()["slug"] == "my-gap-2"
+
+
+async def test_concurrent_retest_flip_is_conditional(env):
+    mongo, _, spawn = env
+    await _put(mongo, "r", "rejected")
+    orig = settings_router._check_caps
+
+    async def stale(user):  # caps pass, then another request wins the flip
+        await orig(user)
+        await mongo["built_strategies"].update_one({"slug": "r"}, {"$set": {"status": "testing"}})
+
+    with patch.object(settings_router, "_check_caps", stale):
+        r = _client().post(f"{URL}/r/retest")
+    assert r.status_code == 409
+    spawn.assert_not_awaited()

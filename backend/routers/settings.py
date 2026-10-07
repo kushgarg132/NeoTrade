@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Literal, Optional
 
 import httpx
+from pymongo.errors import DuplicateKeyError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
@@ -141,6 +142,7 @@ async def list_strategies(user: User = Depends(get_current_user)):
 
 
 _LIMITS = {"active": 5, "daily": 3}
+_DAILY = "3 strategies a day: try again tomorrow."
 
 
 def _vocab_json(spec: tuple) -> dict:
@@ -183,20 +185,23 @@ class StrategyBody(BaseModel):
     spec: dict
 
 
-async def _spend_slot(user: User) -> None:
-    """Applies the 409 checks, then spends one of today's three IST slots (checked last: `allow` increments)."""
+async def _check_caps(user: User) -> None:
     from backend.builder import store
-    from backend.engine.session import IST
-    from backend.rate_limit import allow
 
     mine = db.db[store.COLLECTION]
     if await mine.count_documents({"owner_id": user.id, "status": "active"}) >= _LIMITS["active"]:
         raise HTTPException(409, "Retire one first.")
     if await mine.find_one({"owner_id": user.id, "status": "testing"}):
         raise HTTPException(409, "A strategy of yours is still being tested.")
+
+
+async def _spend_slot(user: User) -> bool:
+    """One of today's three IST slots (`allow` increments, so call it only once the work is stored)."""
+    from backend.engine.session import IST
+    from backend.rate_limit import allow
+
     day = datetime.now(IST).date().isoformat()
-    if not await allow(db.redis, f"strategies:submit:{user.id}:{day}", _LIMITS["daily"], 2 * 86400):
-        raise HTTPException(429, "You have used today's 3 strategy tests. Try again tomorrow.")
+    return await allow(db.redis, f"strategies:submit:{user.id}:{day}", _LIMITS["daily"], 2 * 86400)
 
 
 async def _spawn_test(slug: str) -> None:
@@ -221,12 +226,22 @@ async def submit_strategy(body: StrategyBody, user: User = Depends(get_current_u
     spec, reason = validate_spec(body.spec, mine)  # a duplicate of one's own is refused; of another's it's private
     if spec is None:
         raise HTTPException(422, reason)
-    taken = {d["slug"] for d in await db.db[store.COLLECTION].find({}, {"slug": 1}).to_list(None)}
+    await _check_caps(user)
     base = re.sub(r"[^a-z0-9]+", "-", body.name.lower()).strip("-")[:40].strip("-") or slugify(spec)
-    doc = {"slug": _unique(base, taken), "spec": spec, "thesis": body.thesis, "description": describe(spec),
-           "drafted_at": datetime.now(timezone.utc), "status": "testing", "verdict": "", "owner_id": user.id}
-    await _spend_slot(user)
-    await store.insert(db.db, doc)
+    for _ in range(3):  # a concurrent submit can take the slug between our read and insert
+        taken = {d["slug"] for d in await db.db[store.COLLECTION].find({}, {"slug": 1}).to_list(None)}
+        doc = {"slug": _unique(base, taken), "spec": spec, "thesis": body.thesis, "description": describe(spec),
+               "drafted_at": datetime.now(timezone.utc), "status": "testing", "verdict": "", "owner_id": user.id}
+        try:
+            await store.insert(db.db, doc)
+            break
+        except DuplicateKeyError:
+            continue
+    else:
+        raise HTTPException(409, "Try again.")
+    if not await _spend_slot(user):
+        await db.db[store.COLLECTION].delete_one({"slug": doc["slug"]})
+        raise HTTPException(429, _DAILY)
     await _spawn_test(doc["slug"])
     return doc
 
@@ -255,8 +270,14 @@ async def retest_strategy(slug: str, user: User = Depends(get_current_user)):
     from backend.builder import store
 
     await _own(user, slug, "rejected")
-    await _spend_slot(user)
-    await store.set_status(db.db, slug, "testing")
+    await _check_caps(user)
+    flipped = await db.db[store.COLLECTION].update_one(
+        {"slug": slug, "owner_id": user.id, "status": "rejected"}, {"$set": {"status": "testing"}})
+    if flipped.modified_count == 0:  # a concurrent retest got there first
+        raise HTTPException(409, "Only rejected strategies can do that.")
+    if not await _spend_slot(user):
+        await db.db[store.COLLECTION].update_one({"slug": slug}, {"$set": {"status": "rejected"}})  # keeps the verdict
+        raise HTTPException(429, _DAILY)
     await _spawn_test(slug)
     return {"slug": slug, "status": "testing"}
 
