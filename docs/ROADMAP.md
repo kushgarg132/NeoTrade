@@ -1088,7 +1088,13 @@ backtests are net of charges and sized with the user's own `account_size`/`per_t
 PF ≥ 1.3. The owner kept `auto_paper_intraday` and `autopilot_news` on (asked 2026-10-07).
 17.3.5 landed: after each scan only the 5 best pending long-term proposals by final score
 stay (the rest expire as `outranked`); the minimum-move rule was already `size_intents`'
-3× charges check.
+3× charges check. 17.3.4 landed: with 127 measured 1-day outcomes (64% hit overall),
+the autopilot takes a news proposal only when its impact's themes are *proven* —
+measured (≥ 20 outcomes for that scope, theme and direction) with a mean weight above 1,
+i.e. hit rate over 50% (`outcomes.proven`, `reactor.ai_targets`); unmeasured or losing
+themes stay proposals for the user. Owner chose proven-only over blocking just the losers.
+At landing: COMPANY earnings ↑ 83% (n 54) and growth ↑ 72% (n 65) proven, COMPANY deal ↑
+45% (n 20) blocked.
 
 Done when: the factor book has 3 months of paper beating Nifty; intraday is off or
 gated by a passing year-long backtest; no trade is sized whose expected move does not

@@ -89,7 +89,7 @@ async def test_scan_once_per_user_and_symbol_a_day(monkeypatch):
     redis = FakeRedis()
     scans = []
 
-    async def scan_user(db, redis, prefs, symbols, now):
+    async def scan_user(db, redis, prefs, symbols, now, ai_symbols=frozenset()):
         scans.append((prefs["user_id"], symbols))
         return [{"id": "s1"}]
 
@@ -137,7 +137,25 @@ async def test_news_proposals_go_to_the_autopilot_only_when_asked(monkeypatch):
     await reactor._scan_user(AsyncMongoMockClient()["t"], None, prefs, ["TCS"], NOW)
     assert handed == [] and len(told) == 1  # autopilot_news off: a proposal to decide
     await reactor._scan_user(AsyncMongoMockClient()["t"], None, {**prefs, "autopilot_news": True}, ["TCS"], NOW)
-    assert handed == [("u1", "news")] and len(told) == 1  # taken: nothing left to propose
+    assert handed == [] and len(told) == 2  # unproven news: still a proposal to decide
+    await reactor._scan_user(AsyncMongoMockClient()["t"], None, {**prefs, "autopilot_news": True}, ["TCS"], NOW,
+                             ai_symbols=frozenset({"TCS"}))
+    assert handed == [("u1", "news")] and len(told) == 2  # taken: nothing left to propose
+
+
+def test_ai_targets_only_through_proven_themes():
+    weights = {"COMPANY|earnings|1": 1.4, "COMPANY|deal|1": 0.9, "SECTOR|growth|1": 1.2}
+    universe = {"INFY", "TCS", "SBIN"}
+
+    def item(themes, scope="COMPANY", direction=0.6):
+        return {"scope": scope, "themes": themes,
+                "impacts": [{"type": "symbol", "target": "INFY", "direction": direction, "impact": 8}]}
+
+    assert reactor.ai_targets(item(["earnings"]), SECTORS, universe, weights) == {"INFY"}
+    assert reactor.ai_targets(item(["deal"]), SECTORS, universe, weights) == set()  # hit rate under 50%
+    assert reactor.ai_targets(item(["legal"]), SECTORS, universe, weights) == set()  # unmeasured
+    assert reactor.ai_targets(item(["earnings"], direction=-0.6), SECTORS, universe, weights) == set()
+    assert reactor.ai_targets(item(["earnings", "deal"]), SECTORS, universe, weights) == {"INFY"}  # mean 1.15
 
 
 @pytest.mark.asyncio

@@ -73,6 +73,15 @@ def compute_weights(rows: list[dict]) -> dict[str, dict]:
     }
 
 
+def proven(weights: dict[str, float], scope: Optional[str], themes: list[str], direction: float) -> bool:
+    """News the autopilot may trade on (ROADMAP 17.3.4): at least one of its
+    themes measured for this direction (weights hold only themes past
+    MIN_SAMPLES) and their mean weight above 1, i.e. a hit rate over 50%.
+    Unmeasured news stays with the user as a proposal."""
+    known = [weights[k] for k in (weight_key(scope or "", t, direction) for t in themes or []) if k in weights]
+    return bool(known) and sum(known) / len(known) > 1
+
+
 def basket_return(base: dict[str, float], now: dict[str, float]) -> Optional[float]:
     returns = [now[s] / p - 1 for s, p in base.items() if p and now.get(s)]
     return sum(returns) / len(returns) if returns else None

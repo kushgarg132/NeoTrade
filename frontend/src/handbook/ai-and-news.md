@@ -131,9 +131,12 @@ Ingest loops in `backend/datalayer/`:
 5. **React** — `news_react` (60 s): each new material item alerts users by their `news_alerts`
    pref (held / held+watched / all / off), one alert per user and target an hour, by
    Telegram and an in-app toast. `news_scan` (120 s) re-scans the names it moves for new
-   long-term proposals; `news_exits` only shadow-logs what the autopilot would sell.
+   long-term proposals — the autopilot takes only those moved by a proven theme (below),
+   the rest stay yours to decide; `news_exits` only shadow-logs what the autopilot would sell.
 6. **Learn** — `news_outcomes` (5 min): each material item's move at +1 h, +1 d, +5 d against
    Nifty; weekly theme weights (0.5–1.5) shift influence between items, never the range.
+   A theme is *proven* (scope, theme and direction, 20+ outcomes, 1-day hit rate over 50%)
+   before the autopilot trades news on it (`outcomes.proven`).
 
 **The backdrop** — `regime` (60 s, no LLM) scores risk-on / neutral / risk-off from news
 sentiment, India VIX, Brent, USD/INR, S&P futures, FII flows and imminent high-impact
