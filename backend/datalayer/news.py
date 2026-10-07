@@ -133,6 +133,21 @@ def build_aliases(names: dict[str, str]) -> list[tuple[re.Pattern, str]]:
     return aliases
 
 
+# Words of a company name that say nothing about which company it is.
+_CORPORATE = {"ltd", "limited", "industries", "technologies", "enterprises", "corporation", "corp", "company",
+              "services", "finance", "financial", "holdings", "and", "the"}
+
+
+def names_company(text: str, name: str, symbol: str) -> bool:
+    """A company search result that names the company searched for: its
+    ticker, or any distinctive word of its name as a word prefix ("Airtel"
+    for Bharti Airtel, "HCL" in "HCLTech"). Looser than `tag`, which must
+    pick a company out of every headline; here the search already did."""
+    words = [w for w in re.findall(r"[A-Za-z]+", name) if len(w) >= 3 and w.lower() not in _GENERIC | _CORPORATE]
+    return (any(re.search(r"\b" + re.escape(w), text, re.I) for w in words)
+            or re.search(r"\b" + re.escape(symbol) + r"\b", text) is not None)
+
+
 def tag(text: str, aliases) -> list[str]:
     return sorted({symbol for pattern, symbol in aliases if pattern.search(text)})
 
@@ -155,14 +170,22 @@ async def ensure_indexes(db) -> None:
     await db["news_outcomes"].create_index("base_at")
 
 
-async def store(db, items: list[dict], aliases, now: Optional[datetime] = None) -> int:
+async def store(db, items: list[dict], aliases, now: Optional[datetime] = None,
+                names: Optional[dict[str, str]] = None) -> int:
     """Upserts `items`; returns how many were new. A story seen again only
     gains the new feed and symbols. NSE filings skip triage: they are about
     the named company by construction."""
     now = now or datetime.now(timezone.utc)
     new = 0
     for item in items:
-        symbols = sorted(set(item["symbols"]) | set(tag(f"{item['title']} {item['content'][:200]}", aliases)))
+        text = f"{item['title']} {item['content'][:200]}"
+        given = set(item["symbols"])
+        if item["feed"] == "gnews_symbol":
+            # A Google search for one company also returns stories that never
+            # name it (a US T-bill story under "Adani Power"): keep its tag only
+            # when the story does.
+            given = {s for s in given if s in _NO_ALIAS or names_company(text, (names or {}).get(s, s), s)}
+        symbols = sorted(given | set(tag(text, aliases)))
         filing = item["feed"] == "nse"
         insert = {
             "title": item["title"], "url": item["url"], "source": item["source"],
@@ -436,7 +459,7 @@ async def poll_loop(db, redis) -> None:
     if key != _aliases[0]:
         _aliases = (key, build_aliases(names))
     items = await news_sources.poll(await priority_symbols(db), names)
-    new = await store(db, items, _aliases[1])
+    new = await store(db, items, _aliases[1], names=names)
     if new:
         logger.info("ingest news: %d new of %d fetched", new, len(items))
 

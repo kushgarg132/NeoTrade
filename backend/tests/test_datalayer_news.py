@@ -145,6 +145,27 @@ async def test_store_dedupes_across_sources_and_filings_skip_triage(mongo):
     assert filing["status"] == news.TRIAGED and filing["expire_at"] == NOW + news.RELEVANT_TTL
 
 
+async def test_store_keeps_a_company_search_tag_only_when_the_story_names_it(mongo):
+    aliases = news.build_aliases(NAMES)
+    await news.store(mongo, [
+        _item("US Treasury bill yields rise", feed="gnews_symbol", symbols=["RELIANCE"]),
+        _item("Reliance shares slip on refining margins", feed="gnews_symbol", symbols=["RELIANCE"]),
+        _item("TCS: Outcome of Board Meeting", feed="nse", symbols=["TCS"], scope="COMPANY"),
+    ], aliases, now=NOW)
+    by_title = {d["title"]: d["symbols"] async for d in mongo[news.COLLECTION].find()}
+    assert by_title["US Treasury bill yields rise"] == []
+    assert by_title["Reliance shares slip on refining margins"] == ["RELIANCE"]
+    assert by_title["TCS: Outcome of Board Meeting"] == ["TCS"]  # filings name their company by construction
+
+
+def test_a_search_result_names_its_company_by_any_distinctive_word():
+    assert news.names_company("Airtel hikes postpaid tariffs", "Bharti Airtel", "BHARTIARTL")
+    assert news.names_company("HCLTech wins a deal", "HCL Technologies", "HCLTECH")
+    assert news.names_company("BHARTIARTL hits a high", "Bharti Airtel", "BHARTIARTL")
+    assert not news.names_company("RBI rate hike: what happens to deposits", "HCL Technologies", "HCLTECH")
+    assert not news.names_company("Indian equities fall", "Indian Oil Corporation", "IOC")  # generic words only
+
+
 async def test_triage_keeps_listed_drops_the_rest_in_one_call(mongo, monkeypatch):
     await news.store(mongo, [_item("Fed signals hike"), _item("Cricket final tonight"), _item("Gold rate today")],
                      [], now=NOW)
