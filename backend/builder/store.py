@@ -7,6 +7,7 @@ Doc: slug, spec, thesis, description, drafted_at, status
 ({"year": {...}, "holdout": {...}}), trials, sharpe, params.
 """
 import logging
+import math
 from datetime import timedelta
 from typing import Callable, Optional
 
@@ -15,6 +16,7 @@ from backend.strategies import built
 from backend.strategies.blocks.regime import regime_by_day
 
 COLLECTION = "built_strategies"
+REGIME_DAYS = 800  # a 365-day backtest plus 200 trading days of warmup, with margin
 logger = logging.getLogger(__name__)
 
 
@@ -47,13 +49,14 @@ async def set_status(db, slug: str, status: str, verdict: str = "", **fields) ->
 async def trial_sharpes(db) -> list[float]:
     """Sharpe of every draft already tested, for the deflated-Sharpe trial count."""
     rows = await db[COLLECTION].find({"status": {"$ne": "testing"}}, {"sharpe": 1}).to_list(None)
-    return [r["sharpe"] for r in rows if r.get("sharpe") is not None]
+    return [s for r in rows if isinstance(s := r.get("sharpe"), (int, float)) and math.isfinite(s)]
 
 
 async def regime_of(db) -> Callable[[object], Optional[str]]:
-    """The Nifty regime lookup built strategies filter on (200-day average needs history)."""
+    """The Nifty regime lookup built strategies filter on. The 200-day average needs ~290 calendar
+    days of closes before the first day it answers, so a year-long backtest needs ~800 days loaded."""
     try:
-        return regime_by_day(await bars.nifty_closes(db, bars.today_ist() - timedelta(days=400)))
+        return regime_by_day(await bars.nifty_closes(db, bars.today_ist() - timedelta(days=REGIME_DAYS)))
     except Exception as exc:
         logger.warning("could not load the Nifty regime: %s", exc)
         return lambda d: None

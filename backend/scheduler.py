@@ -108,8 +108,9 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
     except Exception as exc:
         logger.warning("could not start the monthly re-tune: %s", exc)
     # Weekly, Fridays, in its own process: the strategy builder drafts and tests (backend/builder/draft.py).
-    from backend.builder import draft
     try:
+        from backend.builder import draft
+
         await draft.start_if_due(db, now)
     except Exception as exc:
         logger.warning("could not start the strategy builder: %s", exc)

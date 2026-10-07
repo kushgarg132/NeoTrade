@@ -290,3 +290,50 @@ async def test_history_source_error_counts_as_no_source(env, monkeypatch):
     monkeypatch.setattr("backend.risk.gate_backtest.intraday_history", boom)
     out = await draft.run(db, redis, NOW, llm=llm_of(GAP))
     assert out["drafted"] == 1 and [d["status"] for d in (await _drafts(db)).values()] == ["testing"]
+
+
+async def test_zero_account_size_tests_nothing(env, monkeypatch):
+    db, redis, _ = env
+    calls = []
+
+    async def zero(db):
+        return {"account_size": 0.0, "max_exposure": 0.0, "per_trade_cap": 0.0}
+
+    monkeypatch.setattr("backend.risk.gate_backtest.backtest_account", zero)
+    await store.insert(db, {"slug": "waiting", "spec": GAP, "status": "testing", "drafted_at": NOW})
+    out = await draft.run(db, redis, NOW, llm=llm_of(ORB, calls=calls), backtest=backtest_of(result()))
+    assert out["drafted"] == 0 and calls == [] and (await _drafts(db))["waiting"]["status"] == "testing"
+    assert redis.data["job:last:strategy_builder"] == {**redis.data["job:last:strategy_builder"], "ok": "0",
+                                                       "note": "account size is 0"}
+    assert "builder:lock" not in redis.data
+
+
+async def test_non_finite_sharpe_is_rejected_and_not_stored(env):
+    db, redis, _ = env
+    res = result(trade_list=[{**t, "net_pnl": float("nan")} for t in trades()])
+    out = await draft.run(db, redis, NOW, llm=llm_of(GAP), backtest=backtest_of(res))
+    (slug, reason), = out["rejected"]
+    assert reason == "non-finite Sharpe" and (await _drafts(db))[slug]["sharpe"] is None
+    assert await store.trial_sharpes(db) == []
+
+
+async def test_start_if_due_claims_the_week_atomically(env, monkeypatch):
+    import asyncio
+
+    db, _, _ = env
+    spawned = []
+
+    async def spawn():
+        spawned.append(1)
+
+    monkeypatch.setattr(draft, "spawn", spawn)
+    assert sorted(await asyncio.gather(*(draft.start_if_due(db, NOW) for _ in range(5)))) == [False] * 4 + [True]
+    assert len(spawned) == 1 and await db["builder_runs"].count_documents({}) == 1
+
+
+async def test_paper_net_counts_every_non_live_venue(env):
+    db, _, _ = env
+    for venue, pnl in (("paper", 100.0), ("shadow", 50.0), ("live", 1000.0)):
+        await db["paper_trades"].insert_one({"strategy": "built:x", "venue": venue, "status": "CLOSED",
+                                             "realized_pnl": pnl, "costs": 0.0})
+    assert await draft._paper_net(db, "x") == 150.0

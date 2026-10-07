@@ -11,6 +11,7 @@ CPU-heavy, so the daily pass starts it as its own low-priority process (`python 
 import asyncio
 import json
 import logging
+import math
 import re
 import sys
 from datetime import datetime, timedelta, timezone
@@ -142,7 +143,9 @@ async def _test(db, doc: dict, backtest, kwargs: dict, account_size: float, now:
     r = await backtest(strategy, start, end)
     daily = _daily(r.trades, start, end) * (ACCOUNT / account_size)  # a fraction of the account that was sized
     sharpe = _sharpe(daily)
-    trials = await store.trial_sharpes(db) + [sharpe]
+    finite = math.isfinite(sharpe) and math.isfinite(float(daily.to_numpy().sum()))  # _sharpe maps NaN to 0
+    sharpe = sharpe if finite else None  # never stored: it would poison every later trial count
+    trials = await store.trial_sharpes(db) + ([sharpe] if finite else [])
     holdout = [t for t in r.trades if _at(t) >= end - HOLDOUT]
     hold_net = round(sum(t["net_pnl"] for t in holdout), 2)
     fields = {"sharpe": sharpe, "trials": len(trials), "tested_at": now, "metrics": {
@@ -150,6 +153,8 @@ async def _test(db, doc: dict, backtest, kwargs: dict, account_size: float, now:
                  "net": round(r.total_pnl, 2), "win_rate": round(r.win_rate, 4)},
         "holdout": {"trades": len(holdout), "net": hold_net}}}
     await BacktestGateStore(db).record(strategy.spec.name, r)
+    if not finite:
+        return "rejected", "non-finite Sharpe", fields
     if not passes_gate(r):
         return "rejected", _gate_reason(r), fields
     if hold_net <= 0:
@@ -163,7 +168,7 @@ async def _test(db, doc: dict, backtest, kwargs: dict, account_size: float, now:
 async def _paper_net(db, slug: str) -> float:
     from backend.learning.attribution import net
 
-    trades = await db["paper_trades"].find({"strategy": f"built:{slug}", "venue": "paper", "status": "CLOSED"}).to_list(None)
+    trades = await db["paper_trades"].find({"strategy": f"built:{slug}", "venue": {"$ne": "live"}, "status": "CLOSED"}).to_list(None)
     return sum(net(t) for t in trades)
 
 
@@ -224,6 +229,10 @@ async def _run(db, redis, now, llm, backtest) -> dict:
     from backend.risk.gate_backtest import backtest_account
 
     account = await backtest_account(db)  # size like the account that trades, as the gate does
+    if not account.get("account_size", 0) > 0:
+        logger.error("strategy builder: account size is %s; nothing tested", account.get("account_size"))
+        await jobs.mark(redis, jobs.BUILDER, ok=False, note="account size is 0")
+        return out
     kwargs, lines = {}, []
     if backtest is None and (history := await _history(db, redis, account)) is not None:
         backtest, kwargs = history
@@ -301,8 +310,9 @@ async def start_if_due(db, now: datetime) -> bool:
     if local.weekday() != 4:
         return False
     week = local.strftime("%G-W%V")
-    if await db["builder_runs"].find_one({"week": week}):
+    claimed = await db["builder_runs"].update_one(  # atomic: two passes never both start one
+        {"week": week}, {"$setOnInsert": {"week": week, "started_at": now}}, upsert=True)
+    if claimed.upserted_id is None:
         return False
-    await db["builder_runs"].insert_one({"week": week, "started_at": now})
     await spawn()
     return True

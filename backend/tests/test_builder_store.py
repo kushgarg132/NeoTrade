@@ -106,3 +106,24 @@ async def test_regime_of_risk_on_for_rising_nifty(monkeypatch):
         return rows
     monkeypatch.setattr(store.bars, "nifty_closes", closes)
     assert (await store.regime_of(None))(start + timedelta(days=250)) == "risk_on"
+
+
+@pytest.mark.asyncio
+async def test_trial_sharpes_drops_non_finite():
+    db = AsyncMongoMockClient()["t"]
+    for slug, s in (("a", float("nan")), ("b", float("inf")), ("c", 0.2), ("d", None)):
+        await store.insert(db, doc(slug, "rejected", sharpe=s))
+    assert await store.trial_sharpes(db) == [0.2]
+
+
+@pytest.mark.asyncio
+async def test_regime_of_covers_a_year_long_backtest(monkeypatch):
+    today = store.bars.today_ist()
+    asked = []
+
+    async def closes(db, since):
+        asked.append(since)
+        return [(since + timedelta(days=i), 100.0 + i) for i in range((today - since).days)]
+    monkeypatch.setattr(store.bars, "nifty_closes", closes)
+    assert (await store.regime_of(None))(today - timedelta(days=365)) is not None
+    assert asked == [today - timedelta(days=800)]
