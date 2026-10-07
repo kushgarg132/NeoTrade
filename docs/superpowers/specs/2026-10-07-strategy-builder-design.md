@@ -59,9 +59,13 @@ its range by the validator; a value outside it is clamped, an unknown key is dro
 | Side | `side` | long / short (short is MIS intraday only) |
 | Exits (stop and target required) | `stop` | `atr_multiple` 0.5–3.0, or `setup_bar` |
 | | `target` | `r_multiple` 1.0–4.0 |
-| | `time_stop` | `minutes` 15–240 (optional) |
 
 The 15:15 square-off always applies. A spec without a stop or target is refused.
+
+**2026-10-07: `time_stop` dropped.** The shared runner drops any intent without a
+`stop_hint`, and the engine has no path for a strategy to close its own position, so a
+time stop never fired. Built strategies exit by stop, target or the 15:15 square-off like
+every built-in; an engine exit path could bring it back.
 
 Example: `{"setup": {"gap": {"direction": "down", "min_pct": 1.0}}, "filters":
 {"price_vs_vwap": "above", "volume_confirm": {"multiple": 2.0}, "time_window":
@@ -166,7 +170,7 @@ It runs overnight, one draft at a time, under a Redis lock so two never overlap.
   on the same series.
 - `validate`: unknown blocks dropped, numbers clamped, no-stop and duplicate refused.
 - `BlockStrategy`: the example spec fires once on a crafted gap-down-and-reclaim day,
-  with the reason codes above; a time stop and the square-off close it.
+  with the reason codes above; the stop, target or square-off close it.
 - Draft job with a stubbed LLM and a stubbed backtest: pass, gate fail, holdout fail,
   Deflated Sharpe fail, duplicate, cap reached.
 - Registry loads only `active` specs, and a broken spec is skipped.

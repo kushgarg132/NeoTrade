@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from backend.core.models import Bar, Fill, Position, Side
+from backend.core.models import Bar, Fill, Side
 from backend.engine.session import IST
 from backend.strategies.blocks.regime import regime_by_day
 from backend.strategies.built import BlockStrategy, load_ok, set_active
@@ -43,12 +43,20 @@ def bar(day, i, c, v=1000, token=1, h=0.2):
     return Bar(instrument_token=token, timeframe="5m", timestamp=ts, open=c, high=c + h, low=c - h, close=c, volume=v)
 
 
+def dip_day(day, start, n=24):
+    """Opens at `start`, dips 0.05 a bar for `n` bars, then reclaims VWAP on 2.2x volume at bar `n`
+    (11:15 for n=24, once ATR and the 20-bar volume average have warmed up on today's bars)."""
+    return [bar(day, i, start - 0.05 * i) for i in range(n)] + [bar(day, n, start + 1.0, v=2200)]
+
+
+TODAY = date(2026, 10, 6)
+ENTRY = 75 + 24  # index of the entry bar in crafted_day()
+
+
 def crafted_day():
-    """Flat prior day at 100, then gap -1.5%, a steady dip, and a VWAP reclaim on 2.2x volume at 10:05."""
+    """Flat prior day at 100, then gap -1.5%, a steady dip, and a VWAP reclaim at 11:15."""
     prior = [bar(date(2026, 10, 5), i, 100.0) for i in range(75)]
-    today = date(2026, 10, 6)
-    dip = [bar(today, i, 98.5 - 0.2 * i) for i in range(10)]
-    return prior + dip + [bar(today, 10, 99.5, v=2200)] + [bar(today, 11 + i, 99.5) for i in range(4)]
+    return prior + dip_day(TODAY, 98.5) + [bar(TODAY, 25 + i, 99.5) for i in range(4)]
 
 
 def run(strat, bars, ctx=None):
@@ -65,7 +73,7 @@ def test_gap_down_vwap_reclaim_fires_once_with_reason_codes():
     i = ctx.intents[0]
     assert i.side == Side.BUY
     assert i.reason_codes == ["built:gdvr", "gap", "price_vs_vwap", "volume_confirm", "time_window"]
-    entry_atr = _atr_at(crafted_day()[:86])  # ATR as of the 10:05 entry bar
+    entry_atr = _atr_at(crafted_day()[:ENTRY + 1])  # ATR as of the 11:15 entry bar
     assert i.stop_hint == pytest.approx(99.5 - 1.0 * entry_atr)
     assert i.target_hint == pytest.approx(99.5 + 2 * (99.5 - i.stop_hint))
 
@@ -75,26 +83,6 @@ def _atr_at(bars):
     for prev, b in zip(bars, bars[1:]):
         trs.append(max(b.high - b.low, abs(b.high - prev.close), abs(b.low - prev.close)))
     return sum(trs[-14:]) / 14
-
-
-def test_time_stop_closes_even_when_filters_now_fail():
-    spec = copy.deepcopy(EXAMPLE)
-    spec["filters"] = {"volume_confirm": {"multiple": 2.0}, "time_window": {"start": "09:30", "end": "10:10"}}
-    spec["time_stop"] = {"minutes": 30}
-    strat = BlockStrategy("x", spec, ["X"], {1: "X"})
-    bars = crafted_day()
-    ctx = run(strat, bars[:86])  # through the 10:05 bar
-    assert len(ctx.intents) == 1
-    ctx.pos["X"] = Position(symbol="X", quantity=10, avg_price=99.5)
-    strat.on_fill(ctx, Fill(order_id="1", symbol="X", side=Side.BUY, quantity=10, price=99.5,
-                            timestamp=bars[85].timestamp))
-    run(strat, [bar(date(2026, 10, 6), 11 + i, 99.5) for i in range(5)], ctx)  # to 10:30, nothing yet
-    assert len(ctx.intents) == 1
-    run(strat, [bar(date(2026, 10, 6), 16, 99.5)], ctx)  # 10:35
-    assert len(ctx.intents) == 2
-    close = ctx.intents[1]
-    assert (close.side, close.reason_codes, close.stop_hint, close.target_hint) == (
-        Side.SELL, ["built:x", "time_stop"], None, None)
 
 
 def test_grid_is_one_step_either_side_and_clamped():
@@ -117,10 +105,9 @@ def test_params_override_spec_numbers():
 def test_card_is_built_per_instance():
     spec = copy.deepcopy(EXAMPLE)
     spec["filters"]["regime_is"] = {"regimes": ["risk_on"]}
-    spec["time_stop"] = {"minutes": 45}
     card = BlockStrategy("c", spec, ["X"], {}, thesis="Gaps bounce.").CARD
     assert (card.style, card.regimes, card.needs, card.best_when, card.typical_hold_minutes) == (
-        "momentum", ["risk_on"], ["gap"], "Gaps bounce.", 45)
+        "momentum", ["risk_on"], ["gap"], "Gaps bounce.", 120)
     orb = {**EXAMPLE, "setup": {"orb_break": {"range_minutes": 15}}}
     other = BlockStrategy("o", orb, ["X"], {})
     assert (other.CARD.style, other.CARD.needs, other.CARD.typical_hold_minutes) == ("breakout", ["range_day"], 120)
@@ -133,6 +120,7 @@ def test_load_ok():
     assert not load_ok({**EXAMPLE, "side": "flat"})
     assert not load_ok({k: v for k, v in EXAMPLE.items() if k != "target"})
     assert not load_ok({**EXAMPLE, "stop": {"bogus": 1}})
+    assert not load_ok({**EXAMPLE, "time_stop": {"minutes": 30}})  # dropped from the vocabulary (R16)
     assert load_ok({**EXAMPLE, "stop": {"setup_bar": True}})
 
 
@@ -185,15 +173,15 @@ def test_throughput_at_least_1000_bars_per_second():
 def test_enters_at_most_once_per_symbol_per_day():
     strat = BlockStrategy("d", EXAMPLE, ["X"], {1: "X"})
     bars = crafted_day()
-    ctx = run(strat, bars[:86])
+    ctx = run(strat, bars[:ENTRY + 1])
     assert len(ctx.intents) == 1
     # stop-out: a fill leaves the book flat, then the setup and filters pass again the same day
     strat.on_fill(ctx, Fill(order_id="2", symbol="X", side=Side.SELL, quantity=10, price=98.0,
-                            timestamp=bars[85].timestamp))
-    run(strat, [bar(date(2026, 10, 6), 11, 99.6, v=2200)], ctx)
+                            timestamp=bars[ENTRY].timestamp))
+    run(strat, [bar(TODAY, 25, 99.6, v=2200)], ctx)
     assert len(ctx.intents) == 1
     nxt = date(2026, 10, 7)
-    run(strat, [bar(nxt, i, 98.0 - 0.2 * i) for i in range(10)] + [bar(nxt, 10, 99.0, v=3000)], ctx)
+    run(strat, dip_day(nxt, 98.0), ctx)
     assert len(ctx.intents) == 2
 
 
@@ -202,3 +190,38 @@ def test_regime_filter_gates_entry_through_on_bar(regime, count):
     spec = {**EXAMPLE, "filters": {**EXAMPLE["filters"], "regime_is": {"regimes": ["risk_on"]}}}
     strat = BlockStrategy("r", spec, ["X"], {1: "X"}, regime_of=lambda day: regime)
     assert len(run(strat, crafted_day()).intents) == count
+
+
+def test_each_session_starts_fresh_no_indicator_carry_over():
+    strat = BlockStrategy("f", EXAMPLE, ["X"], {1: "X"})
+    run(strat, [bar(date(2026, 10, 5), i, 100.0) for i in range(30)])
+    assert strat._states["X"].atr is not None
+    for i in range(14):
+        run(strat, [bar(TODAY, i, 99.0)])
+        assert (strat._states["X"].atr is None) == (i < 13), i
+    assert strat._states["X"].prev_close == 100.0
+
+
+def _key(intents):
+    return [(i.symbol, i.side, i.reason_codes, i.stop_hint, i.target_hint) for i in intents]
+
+
+def test_live_feed_with_prev_closes_matches_backtest_with_yesterdays_bars():
+    today_only = dip_day(TODAY, 98.5) + [bar(TODAY, 25 + i, 99.5) for i in range(4)]
+    live = BlockStrategy("l", EXAMPLE, ["X"], {1: "X"}, prev_closes={TODAY.isoformat(): {"X": 100.0}})
+    live_intents = run(live, today_only).intents
+    assert len(live_intents) == 1 and live_intents[0].reason_codes[1] == "gap"  # the gap fires live
+    backtest = BlockStrategy("l", EXAMPLE, ["X"], {1: "X"})
+    assert _key(run(backtest, crafted_day()).intents) == _key(live_intents)
+    # Without either, there is no previous close and the gap cannot fire.
+    assert run(BlockStrategy("l", EXAMPLE, ["X"], {1: "X"}), today_only).intents == []
+
+
+def test_registry_skips_a_spec_that_passes_load_ok_but_fails_to_build(caplog):
+    bad = {**EXAMPLE, "setup": {"orb_break": {"range_minutes": "x"}}}
+    assert load_ok(bad)
+    set_active([{"slug": "bad", "spec": bad}, {"slug": "ok", "spec": EXAMPLE}])
+    with caplog.at_level(logging.WARNING):
+        names = [s.spec.name for s in build_default_strategies(universe=["X"])]
+    assert "built:ok" in names and "built:bad" not in names
+    assert "bad" in caplog.text

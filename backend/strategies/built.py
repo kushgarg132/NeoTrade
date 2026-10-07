@@ -4,7 +4,8 @@ one spec bar by bar. I/O-free and clock-free like everything under strategies/;
 the caller loads the docs and the Nifty regime.
 
 Spec shape: {"setup": {block: params}, "filters": {block: params, ...} (in spec
-order), "side": "long"|"short", "stop": {...}, "target": {...}, "time_stop": {...}}.
+order), "side": "long"|"short", "stop": {...}, "target": {...}}. Positions close at the stop, the target
+or the 15:15 square-off (the engine has no strategy exit path).
 """
 import copy
 import logging
@@ -45,6 +46,8 @@ def load_ok(spec: dict) -> bool:
     (a vocabulary change can orphan a stored spec). Does not clamp values."""
     try:
         setup, filters = spec["setup"], spec.get("filters") or {}
+        if not set(spec) <= {"setup", "filters", "side", "stop", "target"}:  # e.g. a dropped time_stop
+            return False
         if spec["side"] not in ("long", "short") or len(setup) != 1 or not spec.get("stop") or not spec.get("target"):
             return False
         # Blocks index their params directly, so setups and filters need every key.
@@ -53,7 +56,7 @@ def load_ok(spec: dict) -> bool:
         if any(set(p) != {k for k, v in vocab[n].items() if v != ()}
                for vocab, blocks in ((SETUPS, setup), (FILTERS, filters)) for n, p in blocks.items()):
             return False
-        return all(_blocks_ok({k: spec[k]}, EXITS) for k in ("stop", "target", "time_stop") if spec.get(k))
+        return all(_blocks_ok({k: spec[k]}, EXITS) for k in ("stop", "target"))
     except (KeyError, TypeError):
         return False
 
@@ -70,8 +73,8 @@ def _flat(spec: dict) -> dict[str, tuple]:
             for k, v in params.items():
                 if _numeric(v):
                     out[f"{kind}.{block}.{k}"] = (v, vocab[block][k])
-    for block in ("stop", "target", "time_stop"):
-        for k, v in (spec.get(block) or {}).items():
+    for block in ("stop", "target"):
+        for k, v in spec[block].items():
             if _numeric(v):
                 out[f"{block}.{block}.{k}"] = (v, EXITS[block][k])
     return out
@@ -86,7 +89,8 @@ def _set(spec: dict, key: str, value) -> None:
 class BlockStrategy(TokenResolvingStrategy):
     def __init__(self, slug: str, spec: dict, universe: list[str], symbol_for_token: dict[int, str],
                  params: dict | None = None, regime_of: Callable[[date], Optional[str]] | None = None,
-                 sector_of: dict[str, str] | None = None, thesis: str = "AI-built strategy.") -> None:
+                 sector_of: dict[str, str] | None = None, thesis: str = "AI-built strategy.",
+                 prev_closes: dict[str, dict[str, float]] | None = None) -> None:
         flat = _flat(spec)
         # Instance attributes: TokenResolvingStrategy reads self.PARAMS to filter overrides.
         self.PARAMS = {k: v for k, (v, _) in flat.items()}
@@ -97,6 +101,7 @@ class BlockStrategy(TokenResolvingStrategy):
         super().__init__(universe, symbol_for_token, params)
         self.slug, self._regime_of, self._sector_of = slug, regime_of, sector_of or {}
         self.thesis = thesis
+        self.prev_closes = prev_closes or {}  # ISO day -> symbol -> previous close, for live feeds
         self.base_spec = copy.deepcopy(spec)  # before params are applied, for retune variants
         self._spec = copy.deepcopy(spec)
         for k, v in self.p.items():
@@ -108,9 +113,7 @@ class BlockStrategy(TokenResolvingStrategy):
         self._rsi = {int(p["period"]) for n, p in [self._setup] if n == "rsi_cross"}
         self._range = {int(p["range_minutes"]) for n, p in [self._setup] if n == "orb_break"}
         self._needs_sector = any(n == "sector_rs" for n, _ in self._filters)
-        self._states: dict[str, SymbolState] = {}
-        self._entry = {}  # symbol -> entry fill time, for the time stop
-        self._exit_sent: set[str] = set()
+        self._states: dict[str, SymbolState] = {}  # today's session only, see on_bar
         self._entered: dict[str, date] = {}  # symbol -> IST day of its last entry
         self.CARD = self._card(thesis)
         self.spec = StrategySpec(name=f"built:{slug}", mode="INTRADAY", timeframe="5m", warmup_bars=20,
@@ -125,39 +128,28 @@ class BlockStrategy(TokenResolvingStrategy):
             regimes=list(regimes) if regimes else ["risk_on", "neutral", "risk_off"],
             needs=[_NEEDS.get(name, "trend_day")], best_when=thesis,
             avoid_when="Outside its time window or regimes.",
-            typical_hold_minutes=int((self._spec.get("time_stop") or {}).get("minutes") or 120))
-
-    def on_fill(self, ctx, fill) -> None:
-        pos = ctx.position(fill.symbol)
-        if pos is None or pos.quantity == 0:
-            self._entry.pop(fill.symbol, None)
-            self._exit_sent.discard(fill.symbol)
-        else:
-            self._entry.setdefault(fill.symbol, fill.timestamp)
+            typical_hold_minutes=120)
 
     def on_bar(self, ctx, bar) -> None:
         symbol = self.symbol_for(bar)
         if symbol is None:
             return
+        day = bar.timestamp.astimezone(IST).date()
         s = self._states.get(symbol)
-        if s is None:
+        if s is None or s.day != day:
+            # A fresh state each session, seeded only with the previous close: a backtest feeds
+            # yesterday's bars and a live feed only today's, so carrying indicators over would make
+            # the two disagree (R17). Warm-up (ATR 14 bars, volume average 20) is paid every morning.
+            prev = s.close if s is not None else self.prev_closes.get(day.isoformat(), {}).get(symbol)
             s = self._states[symbol] = SymbolState(self._ema, self._rsi, self._range)
-        s.update(bar)
+            s.update(bar, prev_close=prev)
+        else:
+            s.update(bar)
         pos = ctx.position(symbol)
-        if pos is not None and pos.quantity != 0:
-            self._maybe_time_stop(ctx, bar, symbol, pos)
-        elif not bar.warmup and (intent := self._entry_intent(bar, symbol, s)) is not None:
-            ctx.submit(intent)
-
-    def _maybe_time_stop(self, ctx, bar, symbol, pos) -> None:
-        minutes = (self._spec.get("time_stop") or {}).get("minutes")
-        start = self._entry.get(symbol)
-        if not minutes or start is None or symbol in self._exit_sent:
+        if pos is not None and pos.quantity != 0 or bar.warmup:
             return
-        if (bar.timestamp - start).total_seconds() >= minutes * 60:
-            self._exit_sent.add(symbol)  # once; on_fill clears it when flat
-            ctx.submit(Intent(symbol=symbol, side=Side.SELL if pos.quantity > 0 else Side.BUY, strength=0.6,
-                              reason_codes=[f"built:{self.slug}", "time_stop"]))
+        if (intent := self._entry_intent(bar, symbol, s)) is not None:
+            ctx.submit(intent)
 
     def _entry_intent(self, bar, symbol: str, s: SymbolState) -> Optional[Intent]:
         name, params = self._setup

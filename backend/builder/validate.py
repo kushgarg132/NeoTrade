@@ -7,7 +7,7 @@ import math
 from backend.strategies.blocks.vocab import EXITS, FILTERS, SETUPS
 
 _MAX_FILTERS = 3
-_SECTIONS = {"setup": SETUPS, "filters": FILTERS, "stop": EXITS, "target": EXITS, "time_stop": EXITS}
+_SECTIONS = {"setup": SETUPS, "filters": FILTERS, "stop": EXITS, "target": EXITS}
 
 
 def _num(v) -> bool:
@@ -112,7 +112,7 @@ def _flat(spec: dict) -> dict:
     for sec in ("setup", "filters"):
         for b, ps in (spec.get(sec) or {}).items():
             out.update({(sec, b, k): v for k, v in ps.items()})
-    for sec in ("stop", "target", "time_stop"):
+    for sec in ("stop", "target"):
         out.update({(sec, sec, k): v for k, v in (spec.get(sec) or {}).items()})
     return out
 
@@ -167,8 +167,6 @@ def validate_spec(raw: dict, existing: list[dict]) -> tuple[dict | None, str]:
             filters[n] = c
     spec = {"setup": {name: params}, "filters": dict(list(filters.items())[:_MAX_FILTERS]),
             "side": raw["side"], "stop": stop, "target": target}
-    if (ts := _clean_params(EXITS["time_stop"], pick("time_stop"))) is not None:
-        spec["time_stop"] = ts
     for e in existing:
         if isinstance(e, dict) and _is_dup(spec, e.get("spec") or {}):
             return None, f"duplicate of {e.get('slug')}"
@@ -225,6 +223,4 @@ def describe(spec: dict) -> str:
     stop = spec["stop"]
     stop_text = f"{_g(stop['atr_multiple'])}× ATR" if "atr_multiple" in stop else "the setup bar"
     text += f"; stop {stop_text}, target {_g(spec['target']['r_multiple'])}R"
-    if ts := spec.get("time_stop"):
-        text += f", exit after {_g(ts['minutes'])} min"
     return text + "."

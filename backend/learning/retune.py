@@ -148,7 +148,8 @@ def variant(strategy, universe: list[str], symbol_for_token: dict[int, str], par
     from backend.strategies.built import BlockStrategy
     if isinstance(strategy, BlockStrategy):  # slug and spec come first, regime/sector are private
         return BlockStrategy(strategy.slug, strategy.base_spec, universe, symbol_for_token, params,
-                             regime_of=strategy._regime_of, sector_of=strategy._sector_of, thesis=strategy.thesis)
+                             regime_of=strategy._regime_of, sector_of=strategy._sector_of, thesis=strategy.thesis,
+                             prev_closes=strategy.prev_closes)
     kept = {k: getattr(strategy, k) for k in INJECTED if hasattr(strategy, k)}
     return type(strategy)(universe, symbol_for_token, params, **kept)
 

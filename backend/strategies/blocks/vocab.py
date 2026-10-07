@@ -28,5 +28,4 @@ FILTERS = {
 EXITS = {
     "stop": {"atr_multiple": (0.5, 3.0, 0.25), "setup_bar": ()},  # one of the two
     "target": {"r_multiple": (1.0, 4.0, 0.25)},
-    "time_stop": {"minutes": (15, 240, 15)},  # optional
 }

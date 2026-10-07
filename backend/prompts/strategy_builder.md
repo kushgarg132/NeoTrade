@@ -4,7 +4,7 @@ system: You are a quantitative researcher drafting new intraday strategies for N
 Vocabulary (block: key range; numbers are lo..hi step N, a value is snapped to the nearest step; a list is the allowed choices; HH:MM is a clock time in IST):
 {{vocabulary}}
 
-A spec has exactly one setup, up to three filters, a side ("long" or "short"), a stop (exactly one of atr_multiple or setup_bar: true), a target, and optionally a time_stop. regime_is only ever sees risk_on or risk_off (the Nifty above or below its 200-day average); neutral never matches.
+A spec has exactly one setup, up to three filters, a side ("long" or "short"), a stop (exactly one of atr_multiple or setup_bar: true), and a target. Positions close at the stop, the target or the 15:15 square-off. regime_is only ever sees risk_on or risk_off (the Nifty above or below its 200-day average); neutral never matches.
 
 Every user's game plans over the last trading days (what the plan allowed, why, and days it skipped):
 {{plans}}
@@ -24,4 +24,4 @@ Every strategy drafted before, with its verdict and metrics (do not repeat one t
 Draft up to three new strategies that answer something in the figures above. Each thesis is one sentence saying which figure it answers and why the idea should make money after charges.
 
 Reply with exactly this JSON and nothing else:
-{"strategies": [{"spec": {"setup": {"<block>": {"<key>": <value>}}, "filters": {"<block>": {"<key>": <value>}}, "side": "long", "stop": {"atr_multiple": <number>}, "target": {"r_multiple": <number>}, "time_stop": {"minutes": <number>}}, "thesis": "<one sentence>"}]}
+{"strategies": [{"spec": {"setup": {"<block>": {"<key>": <value>}}, "filters": {"<block>": {"<key>": <value>}}, "side": "long", "stop": {"atr_multiple": <number>}, "target": {"r_multiple": <number>}}, "thesis": "<one sentence>"}]}

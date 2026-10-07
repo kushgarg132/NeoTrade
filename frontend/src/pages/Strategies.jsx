@@ -83,7 +83,7 @@ const Rejected = () => {
       <ul className="sheet divide-y divide-[var(--rule)] px-4 mt-3 sm:mt-4">
         {rows.map((r) => (
           <li key={r.slug} className="py-2.5">
-            <span className="block text-sm">{r.description} — {r.thesis}</span>
+            <span className="block text-sm">{[r.description, r.thesis].filter(Boolean).join(' — ') || r.verdict}</span>
             <span className="block doc-meta normal-case">{builtLine(r.metrics)}</span>
             <span className="block doc-meta normal-case">{r.verdict}</span>
           </li>

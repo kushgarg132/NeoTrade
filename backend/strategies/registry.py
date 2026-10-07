@@ -119,7 +119,11 @@ def build_default_strategies(
         if not load_ok(d["spec"]):
             logger.warning("skipping built strategy %s: its spec no longer validates", d["slug"])
             continue
-        strategies.append(BlockStrategy(
-            d["slug"], d["spec"], universe, symbol_for_token, params.get(f"built:{d['slug']}") or d.get("params"),
-            regime_of=regime_of, sector_of=sector_of, thesis=d.get("thesis") or "AI-built strategy."))
+        try:  # load_ok checks keys, not value types; a bad value must not break every caller
+            strategies.append(BlockStrategy(
+                d["slug"], d["spec"], universe, symbol_for_token, params.get(f"built:{d['slug']}") or d.get("params"),
+                regime_of=regime_of, sector_of=sector_of, thesis=d.get("thesis") or "AI-built strategy.",
+                prev_closes=prev_closes))
+        except Exception:
+            logger.warning("skipping built strategy %s: it failed to build", d["slug"], exc_info=True)
     return strategies

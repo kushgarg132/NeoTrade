@@ -87,7 +87,7 @@ a run and the user's other run, or `execute_live_order` and the reconciler — i
 
 ## Strategy builder
 
-The AI drafts strategies from a fixed vocabulary of blocks (setups, filters, stops, targets, time stops:
+The AI drafts strategies from a fixed vocabulary of blocks (setups, filters, stops, targets:
 `backend/strategies/blocks/vocab.py`); it never writes code, only a spec the blocks interpret.
 
 Weekly (Friday, `backend/builder/draft.py::run`, details in Jobs & Ops): up to 3 drafts, each
@@ -100,7 +100,10 @@ validated (`backend/builder/validate.py::validate_spec`, duplicates dropped) and
 
 Active strategies appear in Practice → Strategies as `built:<slug>` with a **Built** badge; failures sit
 under "Tried and rejected" with the reason. They trade on paper first, then need both gates to real money
-(above) like any strategy. Each takes at most one entry per symbol per day. At most 5 are active
+(above) like any strategy. Each takes at most one entry per symbol per day and exits by its stop, target or the
+15:15 square-off. `backend/strategies/built.py::BlockStrategy` starts each symbol fresh every session, seeded
+only with the previous close, so a backtest and a live feed see the same indicators (ATR and volume blocks
+warm up each morning). At most 5 are active
 (`draft.py::MAX_ACTIVE`); one the learning rules keep paused for 30 days is retired
 (`draft.py::_retire_paused`).
 

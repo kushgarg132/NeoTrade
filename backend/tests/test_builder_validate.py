@@ -69,7 +69,7 @@ def test_shorthand_and_exits_key():
     raw["exits"] = {"stop": stop, "target": target, "time_stop": {"minutes": 100}}
     c, why = validate_spec(raw, [])
     assert why == "" and c["filters"] == {"price_vs_vwap": {"side": "below"}, "regime_is": {"regimes": ["risk_on"]}}
-    assert c["time_stop"] == {"minutes": 105} and load_ok(c)
+    assert "time_stop" not in c and load_ok(c)  # dropped like any unknown key (R16)
     c, _ = validate_spec(_ex(filters={"regime_is": ["bogus"]}), [])
     assert c["filters"] == {}
 
@@ -165,3 +165,9 @@ def test_hostile_values_never_raise(v):
         assert isinstance(out, tuple) and len(out) == 2
         if out[0] is not None:
             assert load_ok(out[0])
+
+
+def test_time_stop_is_dropped_silently():
+    c, why = validate_spec(_ex(time_stop={"minutes": 30}), [])
+    assert why == "" and "time_stop" not in c and load_ok(c)
+    assert "exit after" not in describe(c)
