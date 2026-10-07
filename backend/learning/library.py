@@ -51,7 +51,7 @@ async def catalog(db, user_id: str, nifty: list,
         result = (backtest or {}).get("result") or {}
         cards.append({
             "name": name, "mode": s.spec.mode, "timeframe": s.spec.timeframe,
-            "card": type(s).CARD.model_dump(),
+            "card": s.CARD.model_dump(),
             "backtest": None if backtest is None else {
                 "passed": bool(backtest.get("passed")), "profit_factor": result.get("profit_factor"),
                 "max_drawdown": result.get("max_drawdown"), "trades": result.get("total_trades"),

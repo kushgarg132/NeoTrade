@@ -14,7 +14,7 @@ def _all():
 
 def test_every_registered_strategy_has_a_card():
     for strategy in _all():
-        assert isinstance(getattr(type(strategy), "CARD", None), StrategyCard), strategy.spec.name
+        assert isinstance(getattr(strategy, "CARD", None), StrategyCard), strategy.spec.name
 
 
 def test_card_rejects_unknown_regime():

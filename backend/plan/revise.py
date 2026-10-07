@@ -94,7 +94,7 @@ async def revise_plan(db, redis, user_id: str, plan: dict, reasons: list[tuple[s
     from backend.prompts import render
 
     day = now.astimezone(IST).date()
-    cards = [{"name": s.spec.name, **{k: getattr(type(s).CARD, k) for k in ("style", "regimes", "needs")}}
+    cards = [{"name": s.spec.name, **{k: getattr(s.CARD, k) for k in ("style", "regimes", "needs")}}
              for s in _strategies() if s.spec.mode == "INTRADAY"]
     names = {c["name"] for c in cards}
     raw = await redis.get("market:regime")

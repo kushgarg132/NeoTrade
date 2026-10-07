@@ -2,10 +2,12 @@
 /trading/start -- don't hardcode strategy construction.
 """
 
-from typing import Optional
+import logging
+from typing import Callable, Optional
 
 from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
 from backend.engine.protocols import Strategy
+from backend.strategies.built import BlockStrategy, active, load_ok
 from backend.strategies.intraday.gap_and_go import GapAndGoStrategy
 from backend.strategies.intraday.gap_fill_fade import GapFillFadeStrategy
 from backend.strategies.intraday.orb_breakout import ORBStrategy
@@ -22,6 +24,8 @@ from backend.strategies.longterm.macd_crossover import MACDCrossoverStrategy
 from backend.strategies.longterm.mean_reversion import MeanReversionStrategy
 from backend.strategies.longterm.quality_momentum import QualityMomentumStrategy
 
+logger = logging.getLogger(__name__)
+
 
 def build_default_strategies(
     universe: Optional[list[str]] = None,
@@ -34,6 +38,7 @@ def build_default_strategies(
     catalysts: Optional[dict[str, dict[str, float]]] = None,
     sector_of: Optional[dict[str, str]] = None,
     prev_closes: Optional[dict[str, dict[str, float]]] = None,
+    regime_of: Optional[Callable] = None,
 ) -> list[Strategy]:
     """`universe` defaults to `indian_stocks.ALL_SCAN_STOCKS` (the existing
     NSE mid/small-cap symbol list already used elsewhere in this codebase),
@@ -110,4 +115,11 @@ def build_default_strategies(
         strategies.append(
             AnalystVerdictStrategy(list(analyst_verdicts.keys()), symbol_for_token, analyst_verdicts)
         )
+    for d in active():
+        if not load_ok(d["spec"]):
+            logger.warning("skipping built strategy %s: its spec no longer validates", d["slug"])
+            continue
+        strategies.append(BlockStrategy(
+            d["slug"], d["spec"], universe, symbol_for_token, params.get(f"built:{d['slug']}") or d.get("params"),
+            regime_of=regime_of, sector_of=sector_of, thesis=d.get("thesis") or "AI-built strategy."))
     return strategies
