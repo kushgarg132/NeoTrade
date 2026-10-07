@@ -175,7 +175,10 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
   expire as `outranked` (`scan.py::MAX_PENDING_LONGTERM`, `store.py::keep_best`), so theses are
   written only for those. Each must already beat 3× its round-trip charges (`size_intents`).
 - Approved long-term paper positions exit at their stop or target (`suggestions/exits.py`,
-  every 15 min in session).
+  every 15 min in session). A swing proposal also exits after `max_hold_days` trading days and at
+  a trailing stop (highest close since entry − k × 14-day ATR, never lowered, kept as
+  `trail_stop`), by `exits.py::exit_reasons`, which the autopilot's exits share; the backtest
+  applies the same rules (`engine/backtest.py::run_backtest`).
 
 ## The autopilot (AI account)
 
