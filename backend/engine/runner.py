@@ -35,6 +35,7 @@ def entry_context(intent: Intent, scored: CompositeScore) -> dict:
         "reason_codes": list(intent.reason_codes),
         "score": {"rule": scored.rule_score, "ai": scored.ai_score, "final": scored.final},
         "stop": intent.stop_hint, "target": intent.target_hint,
+        "max_hold_days": intent.max_hold_days, "trail_atr": intent.trail_atr,
     }
 
 

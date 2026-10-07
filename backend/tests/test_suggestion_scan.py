@@ -388,3 +388,52 @@ async def test_an_approved_proposal_opens_a_trade_tagged_with_its_strategy(mongo
 
     trade = (await ledger.get_trades(status="OPEN"))[0]
     assert (trade["strategy"], trade["suggestion_id"], trade["mode"]) == ("breakout", suggestion["id"], "LONGTERM")
+
+
+# ---------------------------------------------------------------------------
+# Swing built strategies file proposals in the 4 PM scan, for their owner only
+# ---------------------------------------------------------------------------
+
+class _BreakoutTodayProvider:
+    """Flat at 100 for 59 days, then today's close at 105: a 10-day breakout on the final session."""
+
+    async def history(self, instrument, interval, period):
+        from backend.components.shared.models import PriceCandle
+
+        first_day = datetime.now(timezone.utc) - timedelta(days=60)  # last candle yesterday: a closed session
+        return [PriceCandle(symbol=instrument.tradingsymbol, timestamp=first_day + timedelta(days=d),
+                            open=c, high=c + 1, low=c - 1, close=c, volume=100_000)
+                for d, c in enumerate([100.0] * 59 + [105.0])]
+
+    async def quote(self, instrument):
+        raise NotImplementedError
+
+
+_SWING_SPEC = {
+    "horizon": "swing", "setup": {"breakout_n": {"days": 10}}, "filters": {}, "side": "long",
+    "stop": {"atr_multiple": 2.0}, "target": {"r_multiple": 2.0},
+    "max_hold_days": {"days": 10}, "trail_atr": {"multiple": 3.0},
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("owner, filed_for", [("alice", {"alice"}), (None, {"alice", "bob"})])
+async def test_scan_files_swing_proposal_for_owner_only(mongo, monkeypatch, owner, filed_for):
+    from backend.strategies.built import set_active
+    from backend.suggestions import scan as scan_module
+
+    monkeypatch.setattr(scan_module, "InstrumentMaster", _FakeMaster)
+    monkeypatch.setattr(scan_module, "StoreHistoryProvider", lambda db: _BreakoutTodayProvider())
+    monkeypatch.setattr(scan_module, "build_quality_universe", AsyncMock(return_value={}))
+    set_active([{"slug": "sw", "spec": _SWING_SPEC, "owner_id": owner}])
+    try:
+        filed = {}
+        for user in ("alice", "bob"):
+            filed[user] = [s for s in await scan_universe(mongo, user_id=user, universe=["RELIANCE"])
+                           if s["strategy"] == "built:sw"]
+    finally:
+        set_active([])
+    assert {u for u, s in filed.items() if s} == filed_for
+    s = filed["alice"][0]
+    assert s["symbol"] == "RELIANCE" and s["mode"] == "LONGTERM"
+    assert (s["max_hold_days"], s["trail_atr"]) == (10, 3.0)

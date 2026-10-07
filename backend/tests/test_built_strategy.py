@@ -225,3 +225,98 @@ def test_registry_skips_a_spec_that_passes_load_ok_but_fails_to_build(caplog):
         names = [s.spec.name for s in build_default_strategies(universe=["X"])]
     assert "built:ok" in names and "built:bad" not in names
     assert "bad" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Swing horizon: daily bars, multi-day holds, filed as long-term proposals
+# ---------------------------------------------------------------------------
+
+SWING = {
+    "horizon": "swing", "setup": {"breakout_n": {"days": 10}}, "filters": {}, "side": "long",
+    "stop": {"atr_multiple": 2.0}, "target": {"r_multiple": 2.0},
+    "max_hold_days": {"days": 10}, "trail_atr": {"multiple": 3.0},
+}
+
+
+def dbar(i, c, token=1, h=1.0):
+    ts = datetime(2026, 1, 1, 15, 30, tzinfo=IST) + timedelta(days=i)
+    return Bar(instrument_token=token, timeframe="1d", timestamp=ts, open=c, high=c + h, low=c - h, close=c,
+               volume=1000)
+
+
+def test_swing_breakout_fires_with_hold_fields():
+    strat = BlockStrategy("sw", SWING, ["X"], {1: "X"})
+    assert (strat.spec.mode, strat.spec.timeframe, strat.spec.warmup_bars) == ("LONGTERM", "1d", 200)
+    assert strat.PARAMS["max_hold_days.max_hold_days.days"] == 10
+    assert strat.CARD.style == "breakout" and strat.CARD.typical_hold_minutes == 10 * 375
+    bars = [dbar(i, 100.0) for i in range(20)] + [dbar(20, 105.0)]
+    ctx = run(strat, bars)
+    assert len(ctx.intents) == 1
+    i = ctx.intents[0]
+    assert i.side == Side.BUY and i.reason_codes == ["built:sw", "breakout_n"]
+    atr = _atr_at(bars)
+    assert i.stop_hint == pytest.approx(105.0 - 2.0 * atr)
+    assert i.target_hint == pytest.approx(105.0 + 2.0 * (105.0 - i.stop_hint))
+    assert (i.max_hold_days, i.trail_atr) == (10, 3.0)
+
+
+def test_swing_low_stop_is_lowest_low_of_last_five_bars():
+    spec = {**SWING, "stop": {"swing_low": True}}
+    spec.pop("trail_atr")
+    bars = [dbar(i, 100.0) for i in range(20)] + [dbar(20, 99.0, h=3.0), dbar(21, 105.0)]
+    i = run(BlockStrategy("sl", spec, ["X"], {1: "X"}), bars).intents[0]
+    assert i.stop_hint == 96.0 and i.trail_atr is None
+
+
+def test_swing_enters_once_per_five_days():
+    """A steady rise makes a new 10-day high every day; entries are 5 bars apart."""
+    strat = BlockStrategy("sw", SWING, ["X"], {1: "X"})
+    ctx = Ctx()
+    days = []
+    for i in range(30):
+        n = len(ctx.intents)
+        strat.on_bar(ctx, dbar(i, 100.0 + 3 * i))
+        if len(ctx.intents) > n:
+            days.append(i)
+    assert days == [13, 18, 23, 28]  # first once ATR has 14 bars
+
+
+def test_momentum_rank_uses_cross_section():
+    """Five symbols, 63-day returns ranked best first among the day's states; top 25% fires."""
+    spec = {**SWING, "setup": {"momentum_rank": {"lookback": "63", "top_pct": 25}}}
+    syms = {t: f"S{t}" for t in range(1, 6)}
+    strat = BlockStrategy("mr", spec, list(syms.values()), syms)
+    ctx = Ctx()
+    for i in range(64):
+        # token 1 rises fastest; fed last each day, so it ranks against the full cross-section
+        for t in (5, 4, 3, 2, 1):
+            strat.on_bar(ctx, dbar(i, 100.0 * (1 + 0.002 * (6 - t)) ** i, token=t))
+    assert "S1" in [x.symbol for x in ctx.intents]
+    assert strat._rank_pct("S1", 63, strat._days["S1"]) == 0.0
+    assert strat._rank_pct("S2", 63, strat._days["S2"]) == 25.0
+    assert strat._rank_pct("S5", 63, strat._days["S5"]) == 100.0
+    assert strat.CARD.style == "momentum"
+
+
+def test_swing_sector_rs_needs_three_in_sector():
+    spec = {**SWING, "filters": {"sector_rs": {"min": 0.0}}}
+    syms = {t: f"S{t}" for t in range(1, 6)}
+    sector = {"S1": "IT", "S2": "IT", "S3": "IT", "S4": "BANK", "S5": "BANK"}
+    strat = BlockStrategy("rs", spec, list(syms.values()), syms, sector_of=sector)
+    for i in range(21):
+        for t in range(1, 6):
+            strat.on_bar(Ctx(), dbar(i, 100.0 * (1 + (0.01 if t <= 3 else 0.0)) ** i, token=t))
+    day = strat._days["S1"]
+    universe = (1.01 ** 20 - 1) * 100 * 3 / 5
+    assert strat._swing_sector_rs("S1", day) == pytest.approx((1.01 ** 20 - 1) * 100 - universe)
+    assert strat._swing_sector_rs("S4", day) is None
+
+
+def test_entry_context_carries_swing_exit_fields():
+    """Every order remembers the max hold and trail its exits need (the backtest reads order.context)."""
+    from backend.core.models import Intent
+    from backend.engine.runner import entry_context
+    from backend.scoring.composite import CompositeScore
+    i = Intent(symbol="X", side=Side.BUY, strength=0.6, reason_codes=["r"], max_hold_days=10, trail_atr=3.0)
+    c = entry_context(i, CompositeScore(rule_score=0.6, ai_score=0.0))
+    assert (c["max_hold_days"], c["trail_atr"]) == (10, 3.0)

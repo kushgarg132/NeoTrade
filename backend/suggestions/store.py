@@ -51,6 +51,8 @@ class SuggestionStore:
             "entry_ref": proposal.entry,
             "stop": intent.stop_hint,
             "target": intent.target_hint,
+            "max_hold_days": intent.max_hold_days,  # swing exits (suggestions/exits.py)
+            "trail_atr": intent.trail_atr,
             "notional": order.quantity * proposal.entry,
             "option_contract": getattr(proposal, "option_contract", None),
             "strength": intent.strength,

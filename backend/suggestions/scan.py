@@ -23,6 +23,8 @@ from backend.engine.persistence import LedgerStore
 from backend.engine.portfolio import Portfolio
 from backend.engine.runner import run
 from backend.instruments.master import InstrumentMaster
+from backend.builder import store as builder_store
+from backend.datalayer.news_sources import nifty200_sectors
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
 from backend.options.premiums import live_premium_source
 from backend.screening.universe import build_quality_universe
@@ -136,6 +138,8 @@ async def scan_universe(
             quality_scores=quality_scores or None,
             analyst_verdicts=analyst_verdicts or None,
             params=await current_params(db),
+            # The user's own swing built strategies load only in their scan (global ones in every scan).
+            user_id=user_id, regime_of=await builder_store.regime_of(db), sector_of=nifty200_sectors(),
         )
         if s.spec.mode == "LONGTERM"
     ]

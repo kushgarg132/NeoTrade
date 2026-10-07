@@ -70,6 +70,10 @@ class Intent:
     # strategy's on_bar runs. None for intents made outside a run (tests,
     # chat): sizing then falls back to the symbol's listed owner.
     strategy: Optional[str] = None
+    # Swing built strategies (Phase 18.1): exit after this many trading days held, and trail the
+    # stop at close - trail_atr x ATR (a multiple; exit code computes the level from the bars).
+    max_hold_days: Optional[int] = None
+    trail_atr: Optional[float] = None
 
     def __post_init__(self) -> None:
         if not self.reason_codes:
