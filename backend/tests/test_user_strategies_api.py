@@ -101,7 +101,7 @@ async def test_active_cap_409(env):
     for i in range(5):
         await _put(mongo, f"a{i}", "active", spec=_spec(1.0 + i))
     r = _client().post(URL, json=_body(spec=_spec(0.5)))
-    assert r.status_code == 409 and r.json()["detail"] == "Retire one first."
+    assert r.status_code == 409 and r.json()["detail"] == "You have 5 active intraday strategies. Retire one first."
     assert not redis.data  # a refusal does not burn a daily slot
     spawn.assert_not_awaited()
 
@@ -120,7 +120,7 @@ async def test_active_cap_is_per_horizon(env):
     for i in range(5):
         await _put(mongo, f"s{i}", "active", spec={**SWING, "setup": {"breakout_n": {"days": 10 + 5 * i}}})
     r = _client().post(URL, json=_body(name="sw2", spec={**SWING, "setup": {"breakout_n": {"days": 60}}}))
-    assert r.status_code == 409 and r.json()["detail"] == "Retire one first."
+    assert r.status_code == 409 and r.json()["detail"] == "You have 5 active swing strategies. Retire one first."
 
 
 async def test_list_items_carry_horizon(env):

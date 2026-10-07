@@ -116,7 +116,7 @@ deflated Sharpe over swing drafts only (`backend/builder/store.py::trial_sharpes
 **benchmark**: the net return over the 3 years must beat an equal-weight buy-and-hold of the same
 stocks, less one round trip of charges (`draft.py::_benchmark`; "benchmark: +x% < buy-and-hold +y%").
 
-Swing blocks (`vocab.py::SWING_SETUPS` / `SWING_FILTERS` / `SWING_EXITS`): setups `breakout_n`, `pullback_ma`,
+Swing blocks (`backend/strategies/blocks/vocab.py::SWING_SETUPS` / `SWING_FILTERS` / `SWING_EXITS`): setups `breakout_n`, `pullback_ma`,
 `rsi2_dip`, `gap_hold`, `momentum_rank`, `volume_breakout`; filters `trend_ma`, `regime_is`, `sector_rs`,
 `atr_pct`, `liquidity`. Swing is long only. Exits: a stop (`atr_multiple` or `swing_low`, the lowest low of
 the last 5 bars), a target (`r_multiple`), a required `max_hold_days` and an optional `trail_atr`. A swing
@@ -141,7 +141,7 @@ and a fail is **rejected** with the first reason. Limits, shown as-is when hit:
 
 - "3 strategies a day: try again tomorrow." (IST day; a Re-test counts too)
 - "A strategy of yours is still being tested." (one at a time)
-- "Retire one first." (5 active at most)
+- "You have 5 active swing strategies. Retire one first." (5 active at most per horizon; says "intraday" for those)
 
 The test uses the admin's Upstox year of 5-minute bars (the only history source; none yet leaves it
 `testing` as "waiting for market history" until the weekly run) but sizes trades with **your** account size,

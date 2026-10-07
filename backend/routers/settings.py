@@ -198,7 +198,7 @@ async def _check_caps(user: User, horizon: str = "intraday") -> None:
     mine = db.db[store.COLLECTION]
     same = {"spec.horizon": "swing"} if horizon == "swing" else {"spec.horizon": {"$ne": "swing"}}
     if await mine.count_documents({"owner_id": user.id, "status": "active", **same}) >= _LIMITS["active"]:
-        raise HTTPException(409, "Retire one first.")
+        raise HTTPException(409, f"You have {_LIMITS['active']} active {'swing' if horizon == 'swing' else 'intraday'} strategies. Retire one first.")
     if await mine.find_one({"owner_id": user.id, "status": "testing"}):
         raise HTTPException(409, "A strategy of yours is still being tested.")
 
