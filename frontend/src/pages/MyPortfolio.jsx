@@ -17,7 +17,7 @@ import Rebalance from '../components/portfolio/Rebalance';
 import NewsChip from '../components/common/NewsChip';
 import useSymbolNews from '../hooks/useSymbolNews';
 import { sortByNewsRisk } from '../utils/news';
-import { formatCurrency, formatQuantity, formatPercent, formatDateTime } from '../utils/formatters';
+import { formatCurrency, formatQuantity, formatPercent, formatDateTime, marketPhase } from '../utils/formatters';
 
 /**
  * Real money: the user's long-term holdings across every connected broker,
@@ -423,6 +423,8 @@ const Holdings = (props) => (
   </>
 );
 
+const LIVE_POLL_MS = 5_000;
+
 const MyPortfolio = ({ lockedAccount = null }) => {
   const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -445,15 +447,21 @@ const MyPortfolio = ({ lockedAccount = null }) => {
   useEffect(() => {
     if (!account) return undefined;
     let gone = false;
-    const poll = () => !document.hidden && loadSnapshot(() => gone, true);
-    loadSnapshot(() => gone, true);
-    // Not polled in a hidden tab; fresh again the moment it is shown.
-    const timer = setInterval(poll, 60_000);
-    document.addEventListener('visibilitychange', poll);
+    let inFlight = false;
+    const fetchLive = () => {
+      if (inFlight || document.hidden) return;
+      inFlight = true;
+      loadSnapshot(() => gone, true).finally(() => { inFlight = false; });
+    };
+    fetchLive();
+    // Every 5s while NSE trades (prices are frozen otherwise); not in a hidden
+    // tab, fresh again the moment it is shown. One request at a time.
+    const timer = setInterval(() => marketPhase() !== 'closed' && fetchLive(), LIVE_POLL_MS);
+    document.addEventListener('visibilitychange', fetchLive);
     return () => {
       gone = true;
       clearInterval(timer);
-      document.removeEventListener('visibilitychange', poll);
+      document.removeEventListener('visibilitychange', fetchLive);
     };
   }, [account]);
 
