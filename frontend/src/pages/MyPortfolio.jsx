@@ -435,18 +435,25 @@ const MyPortfolio = ({ lockedAccount = null }) => {
   const accountState = useAccount(lockedAccount);
   const { account } = accountState;
   // `stale` is true once the account changed: a late reply for the old one is dropped.
-  const loadSnapshot = (stale = () => false) =>
+  // `live` reprices from the brokers (no AI call); a failed poll keeps what is on screen.
+  const loadSnapshot = (stale = () => false, live = false) =>
     api
-      .get(endpoints.portfolio.get, { params: { account } })
+      .get(endpoints.portfolio.get, { params: { account, live } })
       .then((res) => !stale() && setSnapshot(res.data))
-      .catch(() => !stale() && setSnapshot(null))
+      .catch(() => !stale() && !live && setSnapshot(null))
       .finally(() => !stale() && setLoading(false));
   useEffect(() => {
     if (!account) return undefined;
     let gone = false;
-    loadSnapshot(() => gone);
+    const poll = () => !document.hidden && loadSnapshot(() => gone, true);
+    loadSnapshot(() => gone, true);
+    // Not polled in a hidden tab; fresh again the moment it is shown.
+    const timer = setInterval(poll, 60_000);
+    document.addEventListener('visibilitychange', poll);
     return () => {
       gone = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', poll);
     };
   }, [account]);
 

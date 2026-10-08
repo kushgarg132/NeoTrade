@@ -166,3 +166,39 @@ async def test_refresh_saves_a_snapshot_and_reports_a_failed_broker(monkeypatch)
     assert latest["holdings"][0]["sector"] == "Energy" and latest["user_id"] == "alice"
     assert await service.latest_snapshot(db, "bob") is None
     assert (await db["instrument_sectors"].find_one({"_id": "A"}))["sector"] == "Energy"
+
+
+async def test_live_prices_reprice_keep_the_review_and_store_nothing(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+
+    class _Broker:
+        def __init__(self, holdings, fail=False):
+            self.holdings, self.fail = holdings, fail
+
+        async def state(self):
+            from backend.brokers.protocol import BrokerSessionState
+            return BrokerSessionState.ACTIVE
+
+        async def get_holdings(self):
+            if self.fail:
+                raise RuntimeError("token expired")
+            return self.holdings
+
+    brokers = {"kite": _Broker([_h("A", 10, 100, 150)]), "upstox": _Broker([]), "angel_one": _Broker([])}
+    monkeypatch.setattr(service, "get_broker_adapter", AsyncMock(side_effect=lambda b, *a: brokers[b]))
+    monkeypatch.setattr(service, "_nifty", AsyncMock(return_value=[]))
+    monkeypatch.setattr(service, "_sector_sync", lambda ticker: "Energy")
+    monkeypatch.setattr(service, "_daily_closes_sync", lambda tickers: {})
+    snapshot = await service.refresh_portfolio(db, "alice", None, None, analyse=False)
+    snapshot["holdings"][0]["verdict"] = "HOLD"
+    snapshot["summary"] = "steady"
+
+    brokers["kite"] = _Broker([_h("A", 10, 100, 200)])
+    live = await service.with_live_prices(db, "alice", snapshot, None, None)
+    assert live["totals"]["value"] == 2000
+    assert live["holdings"][0]["verdict"] == "HOLD" and live["holdings"][0]["sector"] == "Energy"
+    assert live["summary"] == "steady" and "account_view" not in live
+    assert await db["portfolio_snapshots"].count_documents({}) == 1
+
+    brokers["upstox"] = _Broker([], fail=True)
+    assert await service.with_live_prices(db, "alice", snapshot, None, None) is snapshot

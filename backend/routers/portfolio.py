@@ -20,7 +20,7 @@ from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.database import db
 from backend.portfolio.rebalance import plan_rebalance, suggest, target_gaps
-from backend.portfolio.service import latest_snapshot, refresh_portfolio
+from backend.portfolio.service import latest_snapshot, refresh_portfolio, with_live_prices
 from backend.prefs import PrefsStore
 from backend.rate_limit import allow
 from backend.routers.settings import RebalanceTargets
@@ -51,12 +51,20 @@ async def verdicts_visible_to(user: User) -> bool:
 
 
 @router.get("")
-async def get_portfolio(user: User = Depends(get_current_user), account: Literal["all", "ai", "mine"] = "all"):
+async def get_portfolio(
+    user: User = Depends(get_current_user),
+    account: Literal["all", "ai", "mine"] = "all",
+    live: bool = False,
+    credentials: BrokerCredentialStore = Depends(get_credential_store),
+):
     """The last analysed snapshot, or 404 before the first refresh. With
-    `account`, just that account's holdings (backend/brokers/roles.py)."""
+    `account`, just that account's holdings (backend/brokers/roles.py). With
+    `live`, repriced from the brokers now (service.with_live_prices)."""
     snapshot = await latest_snapshot(db.db, user.id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="No portfolio analysed yet")
+    if live:
+        snapshot = await with_live_prices(db.db, user.id, snapshot, credentials, db.redis)
     if account != "all":
         from backend.brokers.roles import brokers_for
         from backend.journal.store import JournalStore

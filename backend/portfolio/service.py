@@ -231,6 +231,22 @@ def scorecard_for(snapshot: dict, brokers: set[str], trades: list[dict], nifty: 
     return {**snapshot, **card, "brokers": sorted(brokers), "account_view": True}
 
 
+async def with_live_prices(db, user_id: str, snapshot: dict, credentials, redis) -> dict:
+    """The snapshot repriced from the brokers right now, for the page's poll.
+    Verdicts, notes and the AI review carry over (no AI call); nothing is
+    stored. Any broker down or logged out: the snapshot unchanged."""
+    holdings, errors = await fetch_holdings(user_id, credentials, redis)
+    if not holdings or errors:
+        return snapshot
+    fresh = {**snapshot, "raw_holdings": [h.model_dump() for h in holdings], "stale_since": None,
+             "at": datetime.now(timezone.utc)}
+    card = scorecard_for(fresh, {h.broker for h in holdings}, await JournalStore(db).list_trades(user_id), await _nifty())
+    # Correlation needs daily returns the poll does not fetch: keep the analysed one.
+    card["concentration"]["correlated"] = (snapshot.get("concentration") or {}).get("correlated", [])
+    card.pop("account_view", None)
+    return card
+
+
 async def latest_snapshot(db, user_id: str) -> dict | None:
     docs = await db["portfolio_snapshots"].find({"user_id": user_id}).sort("at", -1).limit(1).to_list(length=1)
     if not docs:
