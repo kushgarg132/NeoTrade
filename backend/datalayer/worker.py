@@ -18,6 +18,7 @@ that did not raise, which `/health` reports as an age.
 
 import asyncio
 import logging
+import os
 import time
 from typing import Awaitable, Callable, NamedTuple
 
@@ -122,9 +123,13 @@ async def main() -> None:
         await run(db.db, db.redis, _loops())
     finally:
         await db.close_database_connection()
+    # Only reached when leadership was lost: let Docker restart us. Exit hard, because
+    # asyncio.run() on 3.11 waits forever for a to_thread call stuck in a blocking read,
+    # which left the worker alive but idle (no news, quotes or plans) on 2026-10-08.
+    logging.shutdown()
+    os._exit(1)
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     asyncio.run(main())
-    raise SystemExit(1)  # only reached when leadership was lost: let Docker restart us
