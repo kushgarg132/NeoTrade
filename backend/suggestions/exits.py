@@ -132,22 +132,38 @@ async def check_exits(db, user_id: str, now: Optional[datetime] = None, marks_fn
     marks = await marks_fn(db, {t["symbol"] for t in trades})
     reasons = await exit_reasons(db, trades, suggestions, marks, now)
 
+    positions = await ledger.get_open_positions()
     closed = []
     for trade in trades:
         reason = reasons.get(trade["id"])
         if reason is None:
             continue
+        held = positions[trade["symbol"]].quantity if trade["symbol"] in positions else 0.0
+        if held <= 0:
+            # The position is already gone: selling again would open a short
+            # (BHEL, 2026-10-13). Close the stale trade instead.
+            await db["paper_trades"].update_one(
+                {"id": trade["id"]}, {"$set": {"status": "CLOSED", "exit_at": now, "exit_reason": "stale"}},
+            )
+            logger.warning("exit: %s trade %s has no position left, closed as stale", trade["symbol"], trade["id"])
+            continue
+        quantity = min(trade["quantity"], held)
         mark = marks[trade["symbol"]]
         order = Order(
-            id=str(uuid.uuid4()), symbol=trade["symbol"], side=Side.SELL, quantity=trade["quantity"],
+            id=str(uuid.uuid4()), symbol=trade["symbol"], side=Side.SELL, quantity=quantity,
             order_type="MARKET", limit_price=None, product="CNC",
             strategy_name=trade.get("strategy"), suggestion_id=trade["suggestion_id"],
         )
-        await fill_on_paper(ledger, order, mark, now)
-        gross = (mark - trade["entry_price"]) * trade["quantity"]
+        try:  # one bad row must not stop the other exits
+            await fill_on_paper(ledger, order, mark, now)
+        except Exception:
+            logger.exception("exit: %s for %s failed", trade["symbol"], user_id)
+            continue
+        positions[trade["symbol"]].quantity = held - quantity
         closed.append({
             "symbol": trade["symbol"], "reason": reason, "price": mark,
-            "quantity": trade["quantity"], "entry_price": trade["entry_price"], "gross_pnl": gross,
+            "quantity": quantity, "entry_price": trade["entry_price"],
+            "gross_pnl": (mark - trade["entry_price"]) * quantity,
         })
         logger.info("auto-exit %s for %s at %s (%s)", trade["symbol"], user_id, mark, reason)
     return closed

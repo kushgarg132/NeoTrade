@@ -333,6 +333,11 @@ async def _launch_run(
 
         game_plan = await plan_store.current(db.redis, user_id, datetime.now(timezone.utc).astimezone(IST).date())
         symbols += [s for s in (game_plan or {}).get("add_symbols") or [] if s not in symbols]
+        # One position row per symbol: an intraday fill on a stock the
+        # long-term book holds rewrote that holding (BHEL, 2026-10-08).
+        held = set(await db.db["paper_trades"].distinct(
+            "symbol", {"user_id": user_id, "mode": "LONGTERM", "status": "OPEN"}))
+        symbols = [s for s in symbols if s not in held]
     credentials = get_credential_store()
 
     # The intraday options strategy trades only with live premiums from the

@@ -117,15 +117,19 @@ class LedgerStore:
         await self._emit("trades", "changed", _clean_id(latest) if latest else {"symbol": fill.symbol})
 
     async def _advance_trade(self, fill: Fill, quantity_before: float, position: Position) -> None:
+        # Only the trade on the side being held can change: matching by symbol
+        # alone grew a stale BUY trade on every SELL (BHEL, 2026-10-13).
         open_trade = await self.trades.find_one(
-            {"user_id": self.user_id, "symbol": fill.symbol, "status": "OPEN"}
+            {"user_id": self.user_id, "symbol": fill.symbol, "status": "OPEN",
+             "side": "BUY" if quantity_before > 0 else "SELL"}
         )
 
         if quantity_before == 0 or open_trade is None:
             await self._open_trade(fill, position)
             return
 
-        if position.quantity == 0:
+        flipped = quantity_before * position.quantity < 0
+        if position.quantity == 0 or flipped:
             await self.trades.update_one(
                 {"_id": open_trade["_id"]},
                 {"$set": {
@@ -136,6 +140,8 @@ class LedgerStore:
                     "costs": open_trade.get("costs", 0.0) + fill.costs,
                 }},
             )
+            if flipped:  # the rest of the fill opens a trade on the other side
+                await self._open_trade(fill, position)
             return
 
         await self.trades.update_one(

@@ -157,3 +157,34 @@ def test_max_hold_exits_from_the_close_on_the_due_day():
     assert not max_hold_due(fri, ist(5, 15, 14), 1)
     assert max_hold_due(fri, ist(5, 15, 15), 1)
     assert max_hold_due(fri, ist(6, 9, 30), 1)      # day after due: any time
+
+
+@pytest.mark.asyncio
+async def test_exit_on_a_flat_position_closes_the_trade_and_never_sells():
+    # 2026-10-13 BHEL: the trade stayed OPEN after its position went flat, and
+    # every 15-minute pass sold the trade's quantity again, doubling a short.
+    db = AsyncMongoMockClient()["test_db"]
+    await _approved(db, "BHEL")
+    await db["paper_positions"].update_one({"user_id": "alice", "symbol": "BHEL"}, {"$set": {"quantity": 0.0}})
+
+    for _ in range(2):
+        assert await check_exits(db, "alice", now=NOW, marks_fn=_marks({"BHEL": 80.0})) == []
+
+    ledger = LedgerStore(db, user_id="alice")
+    assert await ledger.get_open_positions() == {}
+    assert await ledger.get_trades(status="OPEN") == []
+    assert await db["paper_fills"].count_documents({"side": "SELL"}) == 0
+
+
+@pytest.mark.asyncio
+async def test_exit_sells_only_what_is_held():
+    db = AsyncMongoMockClient()["test_db"]
+    await _approved(db, "BHEL")
+    await db["paper_positions"].update_one({"user_id": "alice", "symbol": "BHEL"}, {"$set": {"quantity": 4.0}})
+
+    closed = await check_exits(db, "alice", now=NOW, marks_fn=_marks({"BHEL": 80.0}))
+
+    assert [c["quantity"] for c in closed] == [4.0]
+    ledger = LedgerStore(db, user_id="alice")
+    assert await ledger.get_open_positions() == {}
+    assert await ledger.get_trades(status="OPEN") == []

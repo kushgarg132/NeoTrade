@@ -5,6 +5,7 @@ Mongo-test pattern.
 """
 
 from datetime import datetime, timedelta, timezone
+import uuid
 
 import pytest
 from mongomock_motor import AsyncMongoMockClient
@@ -91,3 +92,34 @@ async def test_snapshot_upserts_same_symbol(ledger):
     open_positions = await ledger.get_open_positions()
     assert len(open_positions) == 1
     assert open_positions["RELIANCE"].quantity == 20.0
+
+
+@pytest.mark.asyncio
+async def test_a_fill_never_grows_a_trade_on_the_other_side(ledger):
+    from backend.core.models import Order, Side
+    from backend.suggestions.service import fill_on_paper
+
+    now = datetime(2026, 10, 13, 4, 0, tzinfo=timezone.utc)
+
+    def order(side, qty, product="MIS"):
+        return Order(id=str(uuid.uuid4()), symbol="X", side=side, quantity=qty, order_type="MARKET",
+                     limit_price=None, product=product)
+
+    await fill_on_paper(ledger, order(Side.BUY, 10), 100.0, now)
+    await fill_on_paper(ledger, order(Side.SELL, 30), 100.0, now)  # flips long 10 -> short 20
+
+    trades = {t["side"]: t for t in await ledger.get_trades()}
+    assert trades["BUY"]["status"] == "CLOSED" and trades["BUY"]["quantity"] == 10
+    assert trades["SELL"]["status"] == "OPEN" and trades["SELL"]["quantity"] == 20
+
+
+@pytest.mark.asyncio
+async def test_a_delivery_sell_above_the_long_held_is_refused(ledger):
+    from backend.core.models import Order, Side
+    from backend.suggestions.service import fill_on_paper
+
+    now = datetime(2026, 10, 13, 4, 0, tzinfo=timezone.utc)
+    sell = Order(id="s1", symbol="X", side=Side.SELL, quantity=5, order_type="MARKET", limit_price=None, product="CNC")
+    with pytest.raises(ValueError):
+        await fill_on_paper(ledger, sell, 100.0, now)
+    assert await ledger.get_open_positions() == {}

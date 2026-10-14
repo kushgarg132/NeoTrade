@@ -51,7 +51,12 @@ async def fill_on_paper(
     ledger: LedgerStore, order: Order, price: float, now: datetime, is_option: bool = False,
 ) -> Order:
     """Records `order` and fills it in full at `price`, with the same
-    charges and ledger bookkeeping as an engine fill."""
+    charges and ledger bookkeeping as an engine fill. A delivery (CNC) sell
+    above the long held is refused: a cash account cannot short."""
+    if order.product == "CNC" and order.side == Side.SELL:
+        held = (await ledger.get_open_positions()).get(order.symbol)
+        if held is None or held.quantity < order.quantity:
+            raise ValueError(f"sell {order.quantity:g} {order.symbol}: only {held.quantity if held else 0:g} held")
     await ledger.record_order(order)
     costs = (
         calculate_options_costs(price, order.quantity, order.side) if is_option
