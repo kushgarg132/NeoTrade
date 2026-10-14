@@ -1,5 +1,6 @@
 """/today -- everything the Today page needs in one call: market and broker
-status, what needs the user, today's P&L for their own money and the AI's,
+status, the user's own portfolio right now (portfolio/digest.py::pulse),
+what needs the user, AI against the user today and this month,
 the autopilot's last moves, and how far setup has got. Each part is
 computed on its own; one that fails comes back null with its error, and
 the rest still render."""
@@ -72,7 +73,8 @@ async def _ideas(user_id: str) -> list[dict]:
 
 
 async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict], now: datetime,
-                     proposals: bool = True) -> list[dict]:
+                     proposals: bool = True, pulse: Optional[dict] = None) -> list[dict]:
+    from backend.engine.persistence import mine_book
     from backend.guardrails.store import GuardrailStore
 
     items = []
@@ -88,6 +90,16 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
         items.append({"kind": "review", "title": f"Check {s['symbol']}: an approval was interrupted",
                       "detail": s.get("reason") or "Check your broker's order book before approving again.",
                       "link": "/mine/trades"})
+    # The user's own positions: an exit level the app alerted on, still held.
+    async for t in db.db["paper_trades"].find({"user_id": mine_book(user_id), "status": "OPEN",
+                                               "alerted.0": {"$exists": True}}):
+        items.append({"kind": "exit", "title": f"Sell {t['symbol']}? Its {t['alerted'][-1]} was hit",
+                      "symbol": t["symbol"], "detail": "The idea's own exit rule. You place the sell.",
+                      "link": "/mine/holdings"})
+    for c in (pulse or {}).get("verdict_changes") or []:
+        items.append({"kind": "verdict", "title": f"{c['symbol']}: {c['from']} → {c['to']}",
+                      "symbol": c["symbol"], "detail": ", ".join(c["reasons"]).replace("_", " "),
+                      "link": "/mine/holdings"})
     pending = await _ideas(user_id) if proposals else []
     pending.sort(key=lambda s: _aware(s.get("expires_at")) or now)
     for s in pending[:MAX_PROPOSALS]:
@@ -106,35 +118,6 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
         items.append({"kind": "guardrail", "title": alert.get("title", "Guardrail alert"),
                       "detail": alert.get("detail", ""), "link": "/settings?tab=safety"})
     return items
-
-
-async def _pnl_today(user_id: str, roles: dict, now: datetime) -> dict:
-    from backend.autopilot.service import ai_book_query
-    from backend.brokers.roles import brokers_for
-    from backend.journal.roundtrips import build_round_trips
-    from backend.journal import mirror
-    from backend.journal.store import JournalStore
-
-    day_start = datetime.combine(now.astimezone(IST).date(), time(0, 0), tzinfo=IST)
-    mine_brokers = brokers_for(roles, "mine")
-    # Round trips over the whole history (a position bought before today and
-    # sold today is today's P&L), kept if they closed today.
-    trades = [t for t in await JournalStore(db.db).list_trades(user_id)
-              if not mine_brokers or t.get("broker") in mine_brokers]
-    closed = [t for t in build_round_trips(trades)
-              if t.get("pnl") is not None and (_aware(t.get("closed_at")) or day_start) >= day_start]
-    # Net of charges on both sides, so the two figures compare: a broker's trade
-    # book carries none, so Mine's are estimated the way the journal mirror does.
-    ids = {i for trip in closed for i in trip["trade_ids"]}
-    mine_charges = mirror.costs([t for t in trades if t["_id"] in ids], closed, 0)["charges"]
-    mine = sum(t["pnl"] for t in closed) - mine_charges
-    ai = ai_charges = 0.0
-    async for t in db.db["paper_trades"].find(ai_book_query(user_id)):
-        if t.get("status") == "CLOSED" and (_aware(t.get("exit_at")) or day_start) >= day_start:
-            ai += t.get("realized_pnl") or 0.0
-            ai_charges += t.get("costs") or 0.0
-    return {"mine": round(mine, 2), "mine_charges": round(mine_charges, 2),
-            "ai": round(ai - ai_charges, 2), "ai_charges": round(ai_charges, 2)}
 
 
 async def _setup(user_id: str, prefs: dict) -> dict:
@@ -180,6 +163,7 @@ async def _backdrop(now: datetime) -> dict:
 @router.get("")
 async def today(user: User = Depends(get_current_user), broker_states=Depends(get_broker_states)):
     from backend.engine.autorun import in_session
+    from backend.portfolio import digest
     from backend.prefs import PrefsStore
     from backend.risk.kill_switch import KillSwitchStore
 
@@ -209,9 +193,10 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         "live_armed": {"autopilot": bool(prefs.get("autopilot_enabled") and prefs.get("autopilot_live")),
                        "strategies": prefs.get("live_strategies") or []},
         "kill_switch": kill,
-        "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now)) or [],
+        "pulse": (pulse := await part("pulse", digest.pulse(db.db, user.id, now))),
+        "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now, pulse=pulse)) or [],
+        "scoreboard": await part("scoreboard", digest.scoreboard(db.db, user.id, roles, now)),
         "proposals_total": None if (ideas := await part("proposals_total", _ideas(user.id))) is None else len(ideas),
-        "pnl_today": await part("pnl_today", _pnl_today(user.id, roles, now)),
         "ai_activity": log,
         "autopilot": await part("autopilot", _autopilot(user.id, prefs)),
         "setup": await part("setup", _setup(user.id, prefs)),

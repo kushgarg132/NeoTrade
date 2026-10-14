@@ -11,9 +11,10 @@ import { cn } from '../utils/cn';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
 
 /**
- * Today: the first screen of the day. Can it trade (status strip), what
- * needs me (setup, Needs you), where am I (P&L for my money and the AI's),
- * and what the AI has been doing. Everything comes from one call, GET /today;
+ * Today: the first screen of the day. Can it trade (status strip), where is
+ * my account (value, today's move, what moved and why), what do I do today
+ * (exits, verdict changes, ideas, logins), me against the AI, and what the
+ * AI has been doing. Everything comes from one call, GET /today;
  * a part that failed says so in place and the rest still shows.
  */
 
@@ -96,11 +97,11 @@ const NeedsYou = ({ items, proposalsTotal }) => {
   const hidden = (proposalsTotal || 0) - shown;
   return (
   <Sheet
-    title="Needs you"
+    title="Do today"
     meta={items.length ? String(items.length + Math.max(hidden, 0)) : undefined}
     actions={
       <Link to="/ai/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
-        All decisions ›
+        Ideas ›
       </Link>
     }
   >
@@ -140,22 +141,94 @@ const NeedsYou = ({ items, proposalsTotal }) => {
   );
 };
 
-const PnlSplit = ({ pnl, aiMode, market, loadedAt, now }) => (
-  <Sheet title="Today" meta={market?.open
-    ? `updated ${Math.max(0, Math.round((now - loadedAt) / 1000))}s ago`
-    : `Market closed · as of ${formatDateTime(market?.as_of)}`}>
-    {pnl === null ? (
-      <p className="doc-meta normal-case">Couldn’t load today’s P&amp;L.</p>
+/** Your own account right now: value, today's move, the overall gain, and
+ *  the stocks that moved most with the headline behind each. Priced from
+ *  market quotes, so it is live even when the broker is logged out. */
+const Pulse = ({ pulse, failed, now }) => {
+  if (failed) {
+    return <Sheet title="Your account"><p className="doc-meta normal-case">Couldn’t price your account just now.</p></Sheet>;
+  }
+  if (!pulse) {
+    return (
+      <Sheet title="Your account">
+        <p className="text-sm">No portfolio read yet.</p>
+        <Link to="/mine/holdings" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Read it from your broker ›</Link>
+      </Sheet>
+    );
+  }
+  const stale = pulse.holdings_as_of && now - new Date(pulse.holdings_as_of) > 36 * 3_600_000;
+  return (
+    <Sheet
+      title="Your account"
+      meta={`${pulse.count} holdings · as of ${formatDateTime(pulse.as_of)}`}
+      actions={<Link to="/mine/holdings" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Holdings ›</Link>}
+    >
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+        <div>
+          <p className="field-label mb-1">Value</p>
+          <span className="figure-lg">{formatCurrency(pulse.value)}</span>
+        </div>
+        <div>
+          <p className="field-label mb-1">Today</p>
+          <Money value={pulse.day_change} size="lg" />
+          {pulse.day_change_pct != null && <span className="doc-meta ml-1.5"><Money value={pulse.day_change_pct} percent className="text-sm" /></span>}
+        </div>
+        <div>
+          <p className="field-label mb-1">Overall</p>
+          <Money value={pulse.pnl} />
+          {pulse.pnl_pct != null && <span className="doc-meta ml-1.5"><Money value={pulse.pnl_pct} percent className="text-sm" /></span>}
+        </div>
+      </div>
+      {stale && (
+        <p className="doc-meta normal-case mt-2">
+          Holdings list from {formatDateTime(pulse.holdings_as_of)}: log in to your broker to refresh it.
+        </p>
+      )}
+      {pulse.movers?.length > 0 && (
+        <>
+          <p className="field-label mt-3 mb-1">Moved most</p>
+          <ul className="divide-y divide-[var(--rule)]">
+            {pulse.movers.map((m) => (
+              <li key={m.symbol} className="py-2 flex items-start gap-3">
+                <StockIcon symbol={m.symbol} />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-semibold">{m.symbol}</span>
+                  <span className="block doc-meta normal-case">
+                    {m.why?.title
+                      ? (m.why.url ? <a href={m.why.url} target="_blank" rel="noreferrer" className="hover:underline">{m.why.title}</a> : m.why.title)
+                      : 'No news on it: a move with the market or its sector.'}
+                  </span>
+                </span>
+                <span className="text-right shrink-0">
+                  <Money value={m.move_pct} percent className="text-sm" />
+                  <span className="block"><Money value={m.day_change} className="text-xs" /></span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Sheet>
+  );
+};
+
+/** AI against you: closed trades, net of charges, today and this month. */
+const Scoreboard = ({ board, aiMode }) => (
+  <Sheet title="You vs the AI" meta="closed trades, net of charges">
+    {!board ? (
+      <p className="doc-meta normal-case">Couldn’t load the scoreboard.</p>
     ) : (
-      <div className="grid grid-cols-2 gap-3">
-        <Link to="/mine/trades" className="block p-2 -m-2 hover:bg-[var(--paper-sunk)]">
-          <p className="field-label mb-1"><MoneyBadge kind="mine" /> · closed, net</p>
-          <Money value={pnl.mine} size="lg" />
-        </Link>
-        <Link to="/ai" className="block p-2 -m-2 hover:bg-[var(--paper-sunk)]">
-          <p className="field-label mb-1"><MoneyBadge kind="ai" mode={aiMode} /> · closed, net</p>
-          <Money value={pnl.ai} size="lg" />
-        </Link>
+      <div className="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-2 items-baseline">
+        <span />
+        <Link to="/mine/trades" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="mine" /></Link>
+        <Link to="/ai" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="ai" mode={aiMode} /></Link>
+        {[['Today', board.today], ['This month', board.month]].map(([label, row]) => (
+          <React.Fragment key={label}>
+            <span className="field-label">{label}</span>
+            <Money value={row.mine} />
+            <Money value={row.ai} />
+          </React.Fragment>
+        ))}
       </div>
     )}
   </Sheet>
@@ -253,7 +326,6 @@ const Today = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [autopilotOn, setAutopilotOn] = useState(false);
-  const [loadedAt, setLoadedAt] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 10_000);
@@ -261,7 +333,7 @@ const Today = () => {
   }, []);
 
   const load = () => {
-    api.get(endpoints.today).then((res) => { setData(res.data); setLoadedAt(Date.now()); setNow(Date.now()); })
+    api.get(endpoints.today).then((res) => { setData(res.data); setNow(Date.now()); })
       .catch((err) => setError(err?.response?.data?.detail || 'Could not load today.'));
     getPreferences().then((res) => setAutopilotOn(!!res.data.autopilot_enabled)).catch(() => {});
   };
@@ -300,8 +372,9 @@ const Today = () => {
         <SetupChecklist setup={data.setup} />
         <div className="space-y-3 sm:space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-4 lg:items-start">
           <div className="space-y-3 sm:space-y-4">
+            <Pulse pulse={data.pulse} failed={!!data.errors?.pulse} now={now} />
             <NeedsYou items={data.needs_you || []} proposalsTotal={data.proposals_total} />
-            <PnlSplit pnl={data.pnl_today} aiMode={data.autopilot ? (data.autopilot.live ? 'live' : 'paper') : undefined} market={data.market} loadedAt={loadedAt} now={now} />
+            <Scoreboard board={data.scoreboard} aiMode={data.autopilot ? (data.autopilot.live ? 'live' : 'paper') : undefined} />
             <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />
           </div>
           <div className="space-y-3 sm:space-y-4">

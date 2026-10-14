@@ -16,6 +16,13 @@ Everything that runs on its own, how code reaches production, and how the doors 
 7. Replay the day's game plans against no plan.
 8. First pass of a month: start the re-tune as its own `nice` process.
 9. Every day: the portfolio review with worsening-verdict alerts. Fridays: journal mirrors.
+10. The post-close Telegram (`portfolio/digest.py::send_postclose`): your account's value and
+    day move, the movers with their headline, verdict changes, you vs the AI today, tomorrow's
+    events. Skipped when the pass runs as the 09:20 catch-up.
+
+Before the open, the autorun tick sends the 08:30 / 09:05 login reminder and, from 08:45, the
+pre-market Telegram (`digest.py::send_premarket`, once a day): value and yesterday's move,
+news on your holdings since the close, ideas for your account, the autopilot's mode.
 
 After the pass, the **data-quality check** (`backend/system/data_quality.py`, `job:last:data_quality`,
 "Data quality found" on the panel below): covered symbols whose newest daily bar is behind the

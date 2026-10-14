@@ -128,6 +128,12 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         logger.exception("daily portfolio reviews failed: %s", exc)
     if now.astimezone(IST).weekday() == 4:
         await _weekly_mirrors(db)
+    # The evening answer, from the review just done (portfolio/digest.py).
+    from backend.portfolio.digest import send_postclose
+    try:
+        await send_postclose(db, now)
+    except Exception as exc:
+        logger.exception("post-close digests failed: %s", exc)
 
     logger.info(
         "daily pass: %d journal trade(s) imported, %d expired, %d option position(s) closed, %d verdict(s) refreshed, "

@@ -207,6 +207,11 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
         await _login_reminders(db, redis, now)
     except Exception as exc:
         logger.warning("login reminders failed: %s", exc)
+    try:
+        from backend.portfolio.digest import send_premarket
+        await send_premarket(db, redis, now)
+    except Exception as exc:
+        logger.warning("pre-market digest failed: %s", exc)
 
     planned = await _preopen_plans(db, redis, now, sorted(_split(slot)[0] for slot in enabled
                                                          if _split(slot)[1] == "INTRADAY"))
