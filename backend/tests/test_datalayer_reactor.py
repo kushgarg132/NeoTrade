@@ -145,7 +145,7 @@ async def test_news_proposals_go_to_the_autopilot_only_when_asked(monkeypatch):
     assert handed == [] and len(told) == 2  # unproven news: still a proposal to decide
     await reactor._scan_user(AsyncMongoMockClient()["t"], None, {**prefs, "autopilot_news": True}, ["TCS"], NOW,
                              ai_symbols=frozenset({"TCS"}))
-    assert handed == [("u1", "news")] and len(told) == 2  # taken: nothing left to propose
+    assert handed == [("u1", "news")] and len(told) == 3  # taken by the AI, still the user's idea
 
 
 def test_ai_targets_only_through_proven_themes():

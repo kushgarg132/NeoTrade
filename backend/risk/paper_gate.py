@@ -50,3 +50,29 @@ async def paper_records(db, user_id: str, strategy_names: list[str], account_siz
         name: paper_record([d for d in docs if d.get("strategy") == name], account_size)
         for name in strategy_names
     }
+
+
+async def proven_strategies(db, user_id: str, names: set[str], account_size: float) -> set[str]:
+    """Strategies whose latest backtest passes the gate and whose paper
+    record on the AI account passes too -- the same two gates a live engine
+    strategy needs."""
+    from backend.risk.backtest_gate import BacktestGateStore
+
+    gate = BacktestGateStore(db)
+    backtested = [n for n in sorted(names) if await gate.live_eligible(n)]
+    records = await paper_records(db, user_id, backtested, account_size)
+    return {n for n in backtested if records[n]["passed"]}
+
+
+async def for_mine(db, user_id: str, proposals: list[dict]) -> list[dict]:
+    """What the user sees of `proposals`: a pending long-term idea only when
+    its strategy is proven on the AI account (Phase 19.D). Unproven ones stay
+    the AI's to paper-trade; decided ones are history and always show."""
+    from backend.prefs import PrefsStore
+
+    pending = [p for p in proposals if p.get("status") == "PENDING" and p.get("mode") == "LONGTERM"]
+    if not pending:
+        return proposals
+    account_size = (await PrefsStore(db).get(user_id))["account_size"]
+    proven = await proven_strategies(db, user_id, {p.get("strategy") for p in pending} - {None}, account_size)
+    return [p for p in proposals if p not in pending or p.get("strategy") in proven]

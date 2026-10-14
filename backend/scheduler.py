@@ -88,7 +88,10 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         created_total += len(created)
         if created:
             await attach_theses(db, user_id, created)
-            await notify(db, user_id, proposals_text(created, f"{len(created)} new long-term proposal(s) from today's close:"))
+            from backend.risk.paper_gate import for_mine
+            mine = await for_mine(db, user_id, created)
+            if mine:
+                await notify(db, user_id, proposals_text(mine, f"{len(mine)} new idea(s) for your account from today's close:"))
 
     journal_imported = await _sync_journals(db, redis)
     learning_changes = await _learn(db, now)

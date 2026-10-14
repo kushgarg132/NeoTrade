@@ -325,9 +325,11 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         pending = await store.list(user_id, mode="LONGTERM", status="PENDING", limit=100)
         if (await PrefsStore(db).get(user_id)).get("autopilot_enabled"):
             pending = await _autopilot_proposals(db, redis, store, user_id, pending, now)
+        from backend.risk.paper_gate import for_mine
+        pending = await for_mine(db, user_id, pending)
         if pending:
             pending.sort(key=lambda s: s["expires_at"])
-            await notify(db, user_id, proposals_text(pending, f"Good morning: {len(pending)} long-term proposal(s) waiting."))
+            await notify(db, user_id, proposals_text(pending, f"Good morning: {len(pending)} idea(s) for your account, from strategies proven on the AI account."))
     return did
 
 
@@ -347,14 +349,15 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
     cap = fence.trade_cap(prefs, regime)
     proven = None
     if prefs.get("autopilot_live"):
-        proven = await _proven_strategies(db, user_id, {s.get("strategy") for s in pending} - {None},
-                                          prefs["account_size"])
-    left, bought, refused = [], [], []
+        from backend.risk.paper_gate import proven_strategies
+        proven = await proven_strategies(db, user_id, {s.get("strategy") for s in pending} - {None},
+                                         prefs["account_size"])
+    bought, refused = [], []
     for s in sorted(pending, key=lambda s: (s.get("score") or {}).get("final") or 0.0, reverse=True):
         entry = s.get("entry_ref") or 0
         quantity = min(int(s["quantity"]), int(cap // entry)) if entry > 0 else 0
-        if s.get("option_contract") or quantity < 1 or (proven is not None and s.get("strategy") not in proven):
-            left.append(s)
+        if s.get("ai_order") or s.get("option_contract") or quantity < 1 or (
+                proven is not None and s.get("strategy") not in proven):
             continue
         result = await service.submit(db, redis, user_id, service.AutopilotOrder(
             symbol=s["symbol"], side=Side(s["side"]), quantity=quantity, product="CNC",
@@ -362,11 +365,13 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
             strategy=s.get("strategy")),
             now=now, suggestion_id=s["id"], quiet=True)
         if result["status"] in ("FILLED", "SENT"):
-            await store.decide(user_id, s["id"], status="EXECUTED", reason="autopilot", now=now)
+            # Still PENDING: the same idea is the user's to take on their own
+            # account if its strategy is proven (risk/paper_gate.py::for_mine).
+            await db["suggestions"].update_one({"id": s["id"], "user_id": user_id},
+                                               {"$set": {"ai_order": result["status"]}})
             bought.append(f"{s['symbol']} ×{quantity}")
         else:
             refused.append(f"{s['symbol']} ({result.get('reason')})")
-            left.append(s)
     if bought or refused:
         lines = [f"🤖 Autopilot, {heading} on the AI account:"]
         if bought:
@@ -374,19 +379,8 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
         if refused:
             lines.append("Refused: " + "; ".join(refused[:5]) + (" …" if len(refused) > 5 else ""))
         await notify(db, user_id, "\n".join(lines))
-    return left
-
-
-async def _proven_strategies(db, user_id: str, names: set[str], account_size: float) -> set[str]:
-    """Strategies whose latest backtest passes the gate and whose paper
-    record passes too -- the same two gates a live engine strategy needs."""
-    from backend.risk.backtest_gate import BacktestGateStore
-    from backend.risk.paper_gate import paper_records
-
-    gate = BacktestGateStore(db)
-    backtested = [n for n in sorted(names) if await gate.live_eligible(n)]
-    records = await paper_records(db, user_id, backtested, account_size)
-    return {n for n in backtested if records[n]["passed"]}
+    # All of them: one the AI took is still the user's to take (for_mine decides).
+    return pending
 
 
 async def _login_reminders(db, redis, now: datetime, get_adapter=None) -> None:

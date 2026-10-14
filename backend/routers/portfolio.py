@@ -142,9 +142,10 @@ async def _candidate_symbols(user: User, held: set[str]) -> list[tuple[str, str,
         cursor = db.db["suggestions"].find(
             {"user_id": user.id, "status": "PENDING", "mode": "LONGTERM", "side": "BUY",
              "$or": [{"expires_at": None}, {"expires_at": {"$exists": False}}, {"expires_at": {"$gt": now}}]},
-            {"symbol": 1, "score": 1})
+            {"symbol": 1, "score": 1, "strategy": 1, "status": 1, "mode": 1})
+        from backend.risk.paper_gate import for_mine
         picks: dict[str, float] = {}
-        for doc in await cursor.to_list(length=200):
+        for doc in await for_mine(db.db, user.id, await cursor.to_list(length=200)):
             symbol, score = doc.get("symbol"), (doc.get("score") or {}).get("final")
             if symbol and symbol not in held and (symbol not in picks or (score or 0) > picks[symbol]):
                 picks[symbol] = score or 0.0

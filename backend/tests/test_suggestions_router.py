@@ -443,3 +443,39 @@ def test_approvals_book_on_the_users_own_account_not_the_ai_book(mongo, monkeypa
     assert suggestions_router.get_ledger_store(_USER).user_id == "alice:mine"
     assert trading.get_ledger_store("live", _USER).user_id == "alice:mine"
     assert trading.get_ledger_store("paper", _USER).user_id == "alice"
+
+
+@pytest.mark.real_gate
+def test_an_idea_from_an_unproven_strategy_cannot_take_real_money(mine_client, store, monkeypatch):
+    import asyncio
+
+    from backend.risk import paper_gate
+
+    async def nothing_proven(db, user_id, names, account_size):
+        return set()
+
+    monkeypatch.setattr(paper_gate, "proven_strategies", nothing_proven)
+    broker = _FakeMine()
+    _with_mine(mine_client, broker)
+    suggestion = asyncio.run(_seed(store))
+    resp = _approve_live(mine_client, suggestion)
+    assert resp.status_code == 409 and "has not earned real money" in resp.json()["detail"]
+    assert broker.placed == []
+
+
+@pytest.mark.real_gate
+async def test_the_user_sees_pending_ideas_only_from_proven_strategies(monkeypatch):
+    from backend.risk import paper_gate
+
+    async def proven(db, user_id, names, account_size):
+        return names & {"macd_crossover"}
+
+    monkeypatch.setattr(paper_gate, "proven_strategies", proven)
+    ideas = [
+        {"id": 1, "status": "PENDING", "mode": "LONGTERM", "strategy": "macd_crossover"},
+        {"id": 2, "status": "PENDING", "mode": "LONGTERM", "strategy": "technical_breakout"},  # AI's to test
+        {"id": 3, "status": "EXPIRED", "mode": "LONGTERM", "strategy": "technical_breakout"},  # history shows
+        {"id": 4, "status": "PENDING", "mode": "LONGTERM", "strategy": None},
+    ]
+    shown = await paper_gate.for_mine(AsyncMongoMockClient()["t"], "alice", ideas)
+    assert [p["id"] for p in shown] == [1, 3]

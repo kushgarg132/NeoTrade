@@ -134,7 +134,9 @@ def read_tools(db, redis, user_id: str) -> list:
         })
 
     async def get_decisions(status: Literal["pending", "decided"] = "pending", symbol: Optional[str] = None) -> str:
-        items = await SuggestionStore(db).list(user_id, limit=200)
+        from backend.risk.paper_gate import for_mine
+
+        items = await for_mine(db, user_id, await SuggestionStore(db).list(user_id, limit=200))
         items = [s for s in items if (s["status"] == "PENDING") == (status == "pending")]
         if symbol:
             items = [s for s in items if s["symbol"].upper() == symbol.upper()]

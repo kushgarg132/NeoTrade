@@ -312,7 +312,7 @@ async def test_the_morning_pass_rebalances_the_factor_book_and_leaves_proposals_
     assert calls == ["alice"]
     assert (await store.list("alice", limit=10))[0]["status"] == "PENDING"  # no auto-buy
     assert any("risk-off" in text for text in longterm["sent"])
-    assert any("waiting" in text for text in longterm["sent"])
+    assert any("for your account" in text for text in longterm["sent"])
 
 
 @pytest.mark.asyncio
@@ -343,11 +343,13 @@ async def test_with_the_autopilot_on_engine_proposals_go_to_it(world, longterm, 
     await _tick(world, now)
 
     assert sorted(submitted) == [("NHPC", "engine"), ("SJVN", "engine")]
-    by = {s["symbol"]: s["status"] for s in await store.list("alice", limit=10)}
-    assert by == {"SJVN": "EXECUTED", "NHPC": "PENDING"}  # refused ones wait for the user
+    by = {s["symbol"]: (s["status"], s.get("ai_order")) for s in await store.list("alice", limit=10)}
+    # The AI took SJVN; the idea stays pending, the user's to take on their own account.
+    assert by == {"SJVN": ("PENDING", "FILLED"), "NHPC": ("PENDING", None)}
 
 
 @pytest.mark.asyncio
+@pytest.mark.real_gate
 async def test_live_autopilot_takes_only_proposals_from_proven_strategies(world, longterm, monkeypatch):
     """Live, a proposal goes to the autopilot only if its strategy passed
     both gates; the rest wait for the user. 2026-10-07: paper autopilot
@@ -366,7 +368,7 @@ async def test_live_autopilot_takes_only_proposals_from_proven_strategies(world,
         return {"good"}
 
     monkeypatch.setattr(service, "submit", submit)
-    monkeypatch.setattr(autorun, "_proven_strategies", proven)
+    monkeypatch.setattr("backend.risk.paper_gate.proven_strategies", proven)
     await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True,
                                              "autopilot_enabled": True, "autopilot_live": True})
     world.redis.data["scheduler:last_pass"] = "2026-09-25"
@@ -382,17 +384,20 @@ async def test_live_autopilot_takes_only_proposals_from_proven_strategies(world,
     await _tick(world, now)
 
     assert submitted == ["SJVN"]
-    by = {s["symbol"]: s["status"] for s in await store.list("alice", limit=10)}
-    assert by == {"SJVN": "EXECUTED", "NHPC": "PENDING"}
+    by = {s["symbol"]: (s["status"], s.get("ai_order")) for s in await store.list("alice", limit=10)}
+    assert by == {"SJVN": ("PENDING", "SENT"), "NHPC": ("PENDING", None)}
 
 
 @pytest.mark.asyncio
+@pytest.mark.real_gate
 async def test_proven_strategies_need_both_gates():
+    from backend.risk.paper_gate import proven_strategies
+
     db = AsyncMongoMockClient()["t"]
-    assert await autorun._proven_strategies(db, "alice", {"macd_crossover"}, 25_000.0) == set()  # never backtested
+    assert await proven_strategies(db, "alice", {"macd_crossover"}, 25_000.0) == set()  # never backtested
     await db["strategy_backtests"].insert_one({"strategy_name": "macd_crossover", "run_at": datetime.now(timezone.utc),
                                                "passed": True, "result": {}})
-    assert await autorun._proven_strategies(db, "alice", {"macd_crossover"}, 25_000.0) == set()  # no paper record
+    assert await proven_strategies(db, "alice", {"macd_crossover"}, 25_000.0) == set()  # no paper record
 
 
 @pytest.mark.asyncio

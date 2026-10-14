@@ -113,7 +113,10 @@ async def list_suggestions(
     user: User = Depends(get_current_user),
     store: SuggestionStore = Depends(get_suggestion_store),
 ):
-    return await store.list(user.id, mode=mode, status=status, limit=limit)
+    from backend.risk.paper_gate import for_mine
+
+    # Pending ideas only from strategies proven on the AI account.
+    return await for_mine(db.db, user.id, await store.list(user.id, mode=mode, status=status, limit=limit))
 
 
 def _require_strategy(suggestion: dict) -> None:
@@ -195,6 +198,11 @@ async def approve_suggestion_live(
     if suggestion["status"] != "PENDING":
         raise HTTPException(status_code=409, detail=f"Suggestion already {suggestion['status'].lower()}")
     _require_strategy(suggestion)
+    from backend.risk.paper_gate import for_mine
+    if not await for_mine(store.collection.database, user.id, [suggestion]):
+        raise HTTPException(status_code=409, detail=(
+            f"{suggestion.get('strategy')} has not earned real money yet: it needs a passing backtest and "
+            "a passing paper record on the AI account."))
     now = _now()
     today = now.astimezone(IST).date()
     if await KillSwitchStore(db.db).is_tripped(user.id, today):

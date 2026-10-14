@@ -63,6 +63,14 @@ async def _accounts(roles: dict, user_id: str, broker_states) -> dict:
     return accounts
 
 
+async def _ideas(user_id: str) -> list[dict]:
+    """Pending ideas for the user's own account: proven strategies only."""
+    from backend.risk.paper_gate import for_mine
+
+    return await for_mine(db.db, user_id, await db.db["suggestions"].find(
+        PENDING_PROPOSALS | {"user_id": user_id}).to_list(length=200))
+
+
 async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict], now: datetime,
                      proposals: bool = True) -> list[dict]:
     from backend.guardrails.store import GuardrailStore
@@ -80,7 +88,7 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
         items.append({"kind": "review", "title": f"Check {s['symbol']}: an approval was interrupted",
                       "detail": s.get("reason") or "Check your broker's order book before approving again.",
                       "link": "/mine/trades"})
-    pending = await db.db["suggestions"].find(PENDING_PROPOSALS | {"user_id": user_id}).to_list(length=200) if proposals else []
+    pending = await _ideas(user_id) if proposals else []
     pending.sort(key=lambda s: _aware(s.get("expires_at")) or now)
     for s in pending[:MAX_PROPOSALS]:
         # The terms Decisions shows, so the row says what approving costs and how sure the engine is.
@@ -202,8 +210,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
                        "strategies": prefs.get("live_strategies") or []},
         "kill_switch": kill,
         "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now)) or [],
-        "proposals_total": await part("proposals_total",
-                                      db.db["suggestions"].count_documents(PENDING_PROPOSALS | {"user_id": user.id})),
+        "proposals_total": None if (ideas := await part("proposals_total", _ideas(user.id))) is None else len(ideas),
         "pnl_today": await part("pnl_today", _pnl_today(user.id, roles, now)),
         "ai_activity": log,
         "autopilot": await part("autopilot", _autopilot(user.id, prefs)),

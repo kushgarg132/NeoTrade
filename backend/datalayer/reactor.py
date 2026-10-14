@@ -194,11 +194,12 @@ async def _scan_user(db, redis, prefs: dict, symbols: list[str], now: datetime,
         from backend.engine.autorun import _autopilot_proposals
         from backend.suggestions.store import SuggestionStore
 
-        left = [p for p in created if p["symbol"] not in ai_symbols]
-        left += await _autopilot_proposals(db, redis, SuggestionStore(db), prefs["user_id"], for_ai, now,
-                                           source="news", heading="news trade")
+        await _autopilot_proposals(db, redis, SuggestionStore(db), prefs["user_id"], for_ai, now,
+                                   source="news", heading="news trade")
+    from backend.risk.paper_gate import for_mine
+    left = await for_mine(db, prefs["user_id"], left)
     if left:
-        await notify(db, prefs["user_id"], proposals_text(left, f"{len(left)} new long-term proposal(s) after news:"))
+        await notify(db, prefs["user_id"], proposals_text(left, f"{len(left)} new idea(s) for your account after news:"))
     return created
 
 
