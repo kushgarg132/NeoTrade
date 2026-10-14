@@ -115,43 +115,50 @@ def _returns(closes: list[tuple]) -> dict:
     return {day: close / prev - 1 for (_, prev), (day, close) in zip(closes, closes[1:]) if prev}
 
 
-async def fetch_holdings(user_id: str, credentials, redis) -> tuple[list, dict]:
-    """Holdings from every broker with an ACTIVE session, and the error per
-    broker that failed (one broker down must not hide the others)."""
-    holdings, errors = [], {}
+async def fetch_holdings(user_id: str, credentials, redis, previous: dict | None = None) -> tuple[list, dict, list]:
+    """(holdings read now, the error per broker that failed, holdings carried
+    over from `previous` for every broker not read now). A logged-out broker
+    must not drop its holdings: with only Kite logged in, the Upstox account
+    vanished from the portfolio."""
+    holdings, errors, read = [], {}, set()
     for broker in BROKERS:
         adapter = await get_broker_adapter(broker, user_id, credentials, redis)
         if await adapter.state() != BrokerSessionState.ACTIVE:
             continue
         try:
             holdings += await adapter.get_holdings()
+            read.add(broker)
         except Exception as exc:
             logger.warning("portfolio: %s holdings failed for %s: %s", broker, user_id, exc)
             errors[broker] = str(exc)
-    return holdings, errors
+    carried = [Holding(**h) for h in (previous or {}).get("raw_holdings") or [] if h.get("broker") not in read]
+    return holdings, errors, carried
 
 
 async def refresh_portfolio(db, user_id: str, credentials, redis, analyse: bool = True) -> dict:
     previous = await latest_snapshot(db, user_id)
-    holdings, errors = await fetch_holdings(user_id, credentials, redis)
-    stale_since = None
-    if not holdings and previous and previous.get("raw_holdings"):
-        holdings = [Holding(**h) for h in previous["raw_holdings"]]
-        stale_since = previous.get("stale_since") or previous["at"]
+    holdings, errors, carried = await fetch_holdings(user_id, credentials, redis, previous)
+    stale_since = (previous.get("stale_since") or previous["at"]) if carried else None
 
-    listed = sorted({(h.symbol, h.exchange) for h in holdings if h.kind != "MF"})
+    listed = sorted({(h.symbol, h.exchange) for h in holdings + carried if h.kind != "MF"})
     closes = await _closes(db, listed)
-    if stale_since:
-        holdings = [
-            h.model_copy(update={"last_price": closes[h.symbol][-1][1], "close_price": closes[h.symbol][-2][1]})
-            if len(closes.get(h.symbol, [])) >= 2 else h
-            for h in holdings
-        ]
+    holdings += [
+        h.model_copy(update={"last_price": closes[h.symbol][-1][1], "close_price": closes[h.symbol][-2][1]})
+        if len(closes.get(h.symbol, [])) >= 2 else h
+        for h in carried
+    ]
 
     stocks = [(s, e) for s, e in listed if next(h for h in holdings if h.symbol == s).kind == "STOCK"]
     returns = {s: _returns(closes[s]) for s, _ in stocks if s in closes}
     trades = await JournalStore(db).list_trades(user_id)
-    card = build_scorecard(holdings, trades, await _nifty(), await _sectors(db, stocks), returns)
+    # The review, its verdicts and its AI text are about the user's own
+    # account: the AI account's holdings are the autopilot's business.
+    from backend.brokers.roles import brokers_for
+    mine = brokers_for((await PrefsStore(db).get(user_id)).get("broker_roles") or {}, "mine")
+    if mine:
+        trades = [t for t in trades if t.get("broker") in mine]
+    reviewed = [h for h in holdings if h.broker in mine] if mine else holdings
+    card = build_scorecard(reviewed, trades, await _nifty(), await _sectors(db, stocks), returns)
     if analyse and card["holdings"]:
         await _review(db, user_id, redis, card, closes, previous)
 
@@ -238,26 +245,42 @@ async def with_live_prices(db, user_id: str, snapshot: dict, credentials, redis)
     stored. Any broker down or logged out: the last holdings repriced from
     market quotes (stocks only), with `holdings_as_of` saying how old the
     list of holdings is -- never a days-old value shown as today's."""
-    holdings, errors = await fetch_holdings(user_id, credentials, redis)
+    holdings, _, carried = await fetch_holdings(user_id, credentials, redis, snapshot)
     now = datetime.now(timezone.utc)
-    if holdings and not errors:
-        fresh = {**snapshot, "raw_holdings": [h.model_dump() for h in holdings], "stale_since": None, "at": now}
-    else:
-        raw = snapshot.get("raw_holdings") or []
+    raw = [h.model_dump() for h in carried]
+    if raw:
         stocks = [h["symbol"] for h in raw if h.get("kind", "STOCK") != "MF"]
         marks = await mark_prices(db, stocks)
-        if not marks:
+        if not marks and not holdings:
             return snapshot
         prev = await bars.prev_closes(db, stocks, bars.today_ist(now))
         raw = [{**h, "last_price": marks.get(h["symbol"], h.get("last_price")),
                 "close_price": prev.get(h["symbol"], h.get("close_price"))} for h in raw]
-        fresh = {**snapshot, "raw_holdings": raw, "at": now, "holdings_as_of": snapshot.get("at")}
+    elif not holdings:
+        return snapshot
+    fresh = {**snapshot, "raw_holdings": [h.model_dump() for h in holdings] + raw, "at": now,
+             "stale_since": None, "holdings_as_of": (snapshot.get("stale_since") or snapshot.get("at")) if raw else None}
     brokers = {h["broker"] for h in fresh["raw_holdings"]}
     card = scorecard_for(fresh, brokers, await JournalStore(db).list_trades(user_id), await _nifty())
     # Correlation needs daily returns the poll does not fetch: keep the analysed one.
     card["concentration"]["correlated"] = (snapshot.get("concentration") or {}).get("correlated", [])
     card.pop("account_view", None)
     return card
+
+
+async def mine_holdings(db, user_id: str) -> dict[str, float]:
+    """symbol -> quantity the user really holds on their own (`mine`)
+    account, from the latest snapshot. With no account roles set, every
+    holding is theirs."""
+    from backend.brokers.roles import brokers_for
+
+    snapshot = await latest_snapshot(db, user_id) or {}
+    mine = brokers_for((await PrefsStore(db).get(user_id)).get("broker_roles") or {}, "mine")
+    held: dict[str, float] = {}
+    for h in snapshot.get("raw_holdings") or []:
+        if h.get("kind", "STOCK") != "MF" and (not mine or h.get("broker") in mine):
+            held[h["symbol"]] = held.get(h["symbol"], 0.0) + h["quantity"]
+    return held
 
 
 async def latest_snapshot(db, user_id: str) -> dict | None:
@@ -268,11 +291,11 @@ async def latest_snapshot(db, user_id: str) -> dict | None:
     return docs[0]
 
 
-async def weekly_reviews(db, redis) -> int:
-    """Re-reviews every portfolio that has been analysed before and alerts
-    its owner (socket + Telegram) about holdings whose verdict got worse.
-    Run from the Friday post-close pass (backend/scheduler.py), when the
-    brokers' sessions from that trading day are usually still valid."""
+async def daily_reviews(db, redis) -> int:
+    """Re-reviews the portfolio of every user with a broker account set or a
+    portfolio analysed before, and alerts its owner (socket + Telegram)
+    about holdings whose verdict got worse. Run from the daily post-close
+    pass (backend/scheduler.py), when the day's broker sessions are valid."""
     from backend.app_settings import AppSettingsStore
     from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
     from backend.guardrails import telegram
@@ -282,11 +305,13 @@ async def weekly_reviews(db, redis) -> int:
     credentials = BrokerCredentialStore(db, fernet_from_settings())
     audience = await AppSettingsStore(db).get_portfolio_verdicts()
     reviewed = 0
-    for user_id in await db["portfolio_snapshots"].distinct("user_id"):
+    users = set(await db["portfolio_snapshots"].distinct("user_id")) | set(
+        await db["user_prefs"].distinct("user_id", {"broker_roles": {"$exists": True, "$ne": {}}}))
+    for user_id in sorted(users):
         try:
             snapshot = await refresh_portfolio(db, user_id, credentials, redis)
         except Exception as exc:
-            logger.exception("weekly portfolio review failed for %s: %s", user_id, exc)
+            logger.exception("daily portfolio review failed for %s: %s", user_id, exc)
             continue
         reviewed += 1
         worse = [r for r in snapshot["holdings"] if worsened(r.get("previous_verdict"), r.get("verdict", ""))]
@@ -299,7 +324,7 @@ async def weekly_reviews(db, redis) -> int:
             label = f"{r['verdict']} (was {r['previous_verdict']})" if show else "worth a closer look"
             reasons = ", ".join(r["reason_codes"]).replace("_", " ")
             lines.append(f"{r['symbol']}: {label} -- {reasons}")
-        text = "NeoTrade weekly portfolio review\n" + "\n".join(lines)
+        text = "NeoTrade daily portfolio review\n" + "\n".join(lines)
         await hub.publish(user_id, "portfolio", "worsened", {"symbols": [r["symbol"] for r in worse]})
         await telegram.alert(db, user_id, text)
     return reviewed

@@ -200,13 +200,53 @@ async def test_live_prices_reprice_keep_the_review_and_store_nothing(monkeypatch
     assert live["summary"] == "steady" and "account_view" not in live
     assert await db["portfolio_snapshots"].count_documents({}) == 1
 
+    # One broker failing keeps the other's fresh read.
     brokers["upstox"] = _Broker([], fail=True)
+    assert (await service.with_live_prices(db, "alice", snapshot, None, None))["totals"]["value"] == 2000
+
+    # Nothing read and no quotes: the snapshot as it was.
+    brokers["kite"] = _Broker([], fail=True)
     monkeypatch.setattr(service, "mark_prices", AsyncMock(return_value={}))
     assert await service.with_live_prices(db, "alice", snapshot, None, None) is snapshot
 
-    # A broker logged out: the last holdings, repriced from market quotes.
+    # Kite logged out: its last holdings, repriced from market quotes.
     monkeypatch.setattr(service, "mark_prices", AsyncMock(return_value={"A": 250.0}))
     monkeypatch.setattr(service.bars, "prev_closes", AsyncMock(return_value={"A": 240.0}))
     quoted = await service.with_live_prices(db, "alice", snapshot, None, None)
     assert quoted["totals"]["value"] == 2500
     assert quoted["holdings_as_of"] == snapshot["at"] and quoted["holdings"][0]["verdict"] == "HOLD"
+
+
+@pytest.mark.asyncio
+async def test_a_logged_out_broker_keeps_its_holdings_and_mine_holdings_reads_only_mine(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+
+    class _Broker:
+        def __init__(self, holdings, active=True):
+            self.holdings, self.active = holdings, active
+
+        async def state(self):
+            from backend.brokers.protocol import BrokerSessionState
+            return BrokerSessionState.ACTIVE if self.active else BrokerSessionState.NEEDS_LOGIN
+
+        async def get_holdings(self):
+            return self.holdings
+
+    brokers = {"kite": _Broker([_h("AI1", 5, 100, 110)]), "upstox": _Broker([_h("MINE1", 10, 50, 60, broker="upstox")]),
+               "angel_one": _Broker([], active=False)}
+    monkeypatch.setattr(service, "get_broker_adapter", AsyncMock(side_effect=lambda b, *a: brokers[b]))
+    monkeypatch.setattr(service, "_nifty", AsyncMock(return_value=[]))
+    monkeypatch.setattr(service, "_sector_sync", lambda ticker: "Energy")
+    monkeypatch.setattr(service, "_daily_closes_sync", lambda tickers: {})
+    await service.refresh_portfolio(db, "alice", None, None, analyse=False)
+
+    brokers["upstox"] = _Broker([], active=False)  # Upstox session gone, Kite still in
+    snapshot = await service.refresh_portfolio(db, "alice", None, None, analyse=False)
+    assert sorted(h["symbol"] for h in snapshot["raw_holdings"]) == ["AI1", "MINE1"]
+    assert snapshot["stale_since"] is not None
+
+    await db["user_prefs"].insert_one({"user_id": "alice", "broker_roles": {"kite": "ai", "upstox": "mine"}})
+    assert await service.mine_holdings(db, "alice") == {"MINE1": 10}
+    reviewed = await service.refresh_portfolio(db, "alice", None, None, analyse=False)
+    assert [r["symbol"] for r in reviewed["holdings"]] == ["MINE1"]
+    assert sorted(h["symbol"] for h in reviewed["raw_holdings"]) == ["AI1", "MINE1"]
