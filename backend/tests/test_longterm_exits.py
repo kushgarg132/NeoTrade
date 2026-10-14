@@ -25,7 +25,11 @@ async def _approved(db, symbol, mode="LONGTERM"):
         "quantity": 10.0, "stop": 90.0, "target": 120.0, "strategy": "breakout", "option_contract": None,
     }
     await db["suggestions"].insert_one(dict(suggestion))
-    await execute_suggestion(suggestion, LedgerStore(db, user_id="alice"), price=100.0, now=NOW)
+    # Approved with real money on the user's own account, and in its holdings.
+    await execute_suggestion(suggestion, LedgerStore(db, user_id="alice:mine"), price=100.0, now=NOW)
+    await db["portfolio_snapshots"].update_one(
+        {"user_id": "alice"}, {"$set": {"at": NOW}, "$push": {"raw_holdings": {"symbol": symbol, "quantity": 10.0, "broker": "upstox"}}},
+        upsert=True)
 
 
 def _marks(prices):
@@ -34,20 +38,6 @@ def _marks(prices):
     return fn
 
 
-@pytest.mark.asyncio
-async def test_positions_close_at_stop_and_target_and_others_stay_open():
-    db = AsyncMongoMockClient()["test_db"]
-    for symbol in ("LOSER", "WINNER", "HOLD"):
-        await _approved(db, symbol)
-
-    closed = await check_exits(db, "alice", now=NOW, marks_fn=_marks({"LOSER": 88.0, "WINNER": 121.0, "HOLD": 100.0}))
-
-    assert sorted((c["symbol"], c["reason"]) for c in closed) == [("LOSER", "stop"), ("WINNER", "target")]
-    ledger = LedgerStore(db, user_id="alice")
-    assert [t["symbol"] for t in await ledger.get_trades(status="OPEN")] == ["HOLD"]
-    done = {t["symbol"]: t for t in await ledger.get_trades(status="CLOSED")}
-    assert done["WINNER"]["realized_pnl"] == pytest.approx(210.0)
-    assert done["WINNER"]["strategy"] == "breakout"
 
 
 @pytest.mark.asyncio
@@ -159,32 +149,36 @@ def test_max_hold_exits_from_the_close_on_the_due_day():
     assert max_hold_due(fri, ist(6, 9, 30), 1)      # day after due: any time
 
 
-@pytest.mark.asyncio
-async def test_exit_on_a_flat_position_closes_the_trade_and_never_sells():
-    # 2026-10-13 BHEL: the trade stayed OPEN after its position went flat, and
-    # every 15-minute pass sold the trade's quantity again, doubling a short.
-    db = AsyncMongoMockClient()["test_db"]
-    await _approved(db, "BHEL")
-    await db["paper_positions"].update_one({"user_id": "alice", "symbol": "BHEL"}, {"$set": {"quantity": 0.0}})
 
-    for _ in range(2):
-        assert await check_exits(db, "alice", now=NOW, marks_fn=_marks({"BHEL": 80.0})) == []
 
-    ledger = LedgerStore(db, user_id="alice")
-    assert await ledger.get_open_positions() == {}
-    assert await ledger.get_trades(status="OPEN") == []
-    assert await db["paper_fills"].count_documents({"side": "SELL"}) == 0
+
 
 
 @pytest.mark.asyncio
-async def test_exit_sells_only_what_is_held():
+async def test_exit_levels_alert_once_and_sell_nothing():
     db = AsyncMongoMockClient()["test_db"]
-    await _approved(db, "BHEL")
-    await db["paper_positions"].update_one({"user_id": "alice", "symbol": "BHEL"}, {"$set": {"quantity": 4.0}})
+    for symbol in ("LOSER", "WINNER", "HOLD"):
+        await _approved(db, symbol)
+    marks = _marks({"LOSER": 88.0, "WINNER": 121.0, "HOLD": 100.0})
 
-    closed = await check_exits(db, "alice", now=NOW, marks_fn=_marks({"BHEL": 80.0}))
+    alerts = await check_exits(db, "alice", now=NOW, marks_fn=marks)
 
-    assert [c["quantity"] for c in closed] == [4.0]
-    ledger = LedgerStore(db, user_id="alice")
-    assert await ledger.get_open_positions() == {}
-    assert await ledger.get_trades(status="OPEN") == []
+    assert sorted((a["symbol"], a["reason"]) for a in alerts) == [("LOSER", "stop"), ("WINNER", "target")]
+    assert next(a for a in alerts if a["symbol"] == "WINNER")["gross_pnl"] == pytest.approx(210.0)
+    assert await check_exits(db, "alice", now=NOW, marks_fn=marks) == []  # once per reason
+    assert await db["paper_fills"].count_documents({"side": "SELL"}) == 0  # the user sells, not the app
+    assert len(await LedgerStore(db, user_id="alice:mine").get_trades(status="OPEN")) == 3
+
+
+@pytest.mark.asyncio
+async def test_a_stock_sold_in_the_broker_app_closes_its_trade():
+    db = AsyncMongoMockClient()["test_db"]
+    await _approved(db, "SOLD")
+    await _approved(db, "KEPT")
+    later = NOW + timedelta(days=1)
+    await db["portfolio_snapshots"].insert_one(
+        {"user_id": "alice", "at": later, "raw_holdings": [{"symbol": "KEPT", "quantity": 10.0, "broker": "upstox"}]})
+
+    assert await check_exits(db, "alice", now=later, marks_fn=_marks({"SOLD": 80.0, "KEPT": 80.0})) != []
+    trades = {t["symbol"]: t["status"] for t in await LedgerStore(db, user_id="alice:mine").get_trades()}
+    assert trades == {"SOLD": "CLOSED", "KEPT": "OPEN"}

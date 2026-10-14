@@ -198,8 +198,16 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
 - At most 5 long-term proposals stay pending, the best by final score: after each scan the rest
   expire as `outranked` (`scan.py::MAX_PENDING_LONGTERM`, `store.py::keep_best`), so theses are
   written only for those. Each must already beat 3× its round-trip charges (`size_intents`).
-- Long-term paper positions with a proposal exit at their stop or target (`suggestions/exits.py`,
-  every 15 min in session). A swing proposal also exits after `max_hold_days` trading days and at
+- **Ideas for the user's account come only from proven strategies**
+  (`risk/paper_gate.py::for_mine`: a passing backtest and a passing paper record on the AI
+  account). Decisions, Today, the chat, portfolio picks and every proposal Telegram message read
+  through it, and approve-live refuses an unproven one with a 409. Until a strategy is proven the
+  AI paper-trades its ideas alone. A proposal the AI took stays PENDING with `ai_order` set, so
+  both accounts can act on the same idea.
+- Exits: the autopilot sells its own positions at the proposal's stop or target. On the user's
+  own account `suggestions/exits.py::check_exits` only **alerts** (every 15 min in session, once
+  per trade and reason) for app-placed longs in `<user>:mine`, and closes a trade as `sold` once
+  its stock has left the user's holdings. A swing proposal also exits after `max_hold_days` trading days and at
   a trailing stop (highest close since entry − k × 14-day ATR, never lowered, kept as
   `trail_stop`), by `exits.py::exit_reasons`, which the autopilot's exits share; the backtest
   applies the same rules (`engine/backtest.py::run_backtest`), counting bars held rather than weekdays,
@@ -222,8 +230,8 @@ there (one owner per position, as in the engine), and the engine's long-term exi
 Live fills go to their own `<user>:autopilot` book. `autopilot/service.py::check_exits` runs
 for anyone holding autopilot trades, on or off, and squares off intraday positions from 15:15. Live, it takes a stock proposal (morning pass
 or news) only when the proposal's strategy passed both gates, its latest backtest and its
-paper record (`engine/autorun.py::_proven_strategies`); the rest wait for the user. Paper
-takes them all, to build the record. While the autopilot is on (paper or live), the 4 PM scan and the long-term pass run
+paper record (`risk/paper_gate.py::proven_strategies`). Paper takes them all, to build the
+record that decides what reaches the user. While the autopilot is on (paper or live), the 4 PM scan and the long-term pass run
 whatever their own switches say (`prefs.py::scan_enabled_users`, `engine/autorun.py::tick`): it
 trades the scan's proposals and acts in that pass, and used to sit idle with either off. Every order and refusal goes to
 `autopilot_log` and Telegram with a Stop button.

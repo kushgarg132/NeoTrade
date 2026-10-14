@@ -230,8 +230,9 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
     # both off while it still holds something, so its exits still run.
     users = {doc["user_id"] for doc in await db["user_prefs"].find(
         {"$or": [{LONGTERM_PREF: True}, {"autopilot_enabled": True}]}).to_list(length=None)}
+    # Likewise anyone with app-placed positions on their own account: their exit alerts.
     users |= {u.split(":")[0] for u in await db["paper_trades"].distinct(
-        "user_id", {"status": "OPEN", "via": {"$regex": "^autopilot:"}})}
+        "user_id", {"status": "OPEN", "$or": [{"via": {"$regex": "^autopilot:"}}, {"user_id": {"$regex": ":mine$"}}]})}
     for user_id in sorted(users):
         try:
             if await _longterm_pass(db, redis, user_id, now):

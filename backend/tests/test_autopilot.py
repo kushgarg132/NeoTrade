@@ -345,11 +345,11 @@ async def test_max_hold_exit_paper_and_autopilot(world):
     closed = await service.check_exits(db, None, "alice", now=OPEN.replace(hour=15, minute=20) + timedelta(days=3))
     assert [(c["symbol"], c["reason"]) for c in closed] == [("INFY", "max hold")]
 
-    # paper (the user's own approved proposal), same rule.
+    # The user's own account (an approved proposal): the same rule, as an alert.
     suggestion = {"id": "s2", "user_id": "alice", "symbol": "TCS", "side": "BUY", "mode": "LONGTERM", "quantity": 1.0,
                   "strategy": "swing", "option_contract": None, **swing}
     await db["suggestions"].insert_one(dict(suggestion))
-    await execute_suggestion(suggestion, LedgerStore(db, user_id="alice"), price=1000.0, now=OPEN)
+    await execute_suggestion(suggestion, LedgerStore(db, user_id="alice:mine"), price=1000.0, now=OPEN)
 
     async def marks(db_, symbols):
         return {s: 1000.0 for s in symbols}

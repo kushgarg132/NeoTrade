@@ -1,4 +1,4 @@
-"""Closing approved long-term paper positions at their stop or target.
+"""Exit levels for long-term positions, and alerts for the user's own.
 
 A swing proposal also carries `max_hold_days` (out after that many trading
 days) and `trail_atr` (the stop rises to the highest close since entry minus
@@ -6,15 +6,12 @@ k x the 14-day ATR, from daily_bars, and never falls; kept on the trade as
 `trail_stop`). exit_reasons() applies all of it for this book and the
 autopilot's.
 
-A long-term proposal is approved together with its stop and target; nothing
-else ever sells it. This checks every open long-term paper long against the
-proposal that opened it and, when the mark has crossed either level, sells
-the whole position on paper at that mark -- the same fill path an approval
-uses (service.fill_on_paper). Paper only: a live position is the broker's.
+A long-term proposal comes with its stop and target. The autopilot sells
+its own positions at them (autopilot/service.py::check_exits); on the
+user's own account check_exits() only alerts -- the user places the sell.
 """
 
 import logging
-import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -22,13 +19,10 @@ import numpy as np
 import pandas as pd
 
 from backend.components.quant.indicators import Indicators
-from backend.core.models import Order, Side
 from backend.datalayer import bars
-from backend.engine.persistence import LedgerStore
+from backend.engine.persistence import LedgerStore, mine_book
 from backend.engine.session import IST
 from backend.marks import mark_prices
-from backend.suggestions.service import fill_on_paper
-from backend.ws.publish import publisher_for
 
 logger = logging.getLogger(__name__)
 
@@ -114,56 +108,56 @@ async def exit_reasons(db, trades: list[dict], suggestions: dict, marks: dict, n
 
 
 async def check_exits(db, user_id: str, now: Optional[datetime] = None, marks_fn=mark_prices) -> list[dict]:
+    """Exit alerts for the user's own account: each open long the app placed
+    there from a proposal (`<user>:mine`, engine/persistence.py::mine_book)
+    whose mark crossed that proposal's stop, target or trailing stop, or that
+    reached max_hold_days. Nothing is sold -- the user decides; each reason
+    alerts once per trade. A trade whose stock has left the user's holdings
+    since it was bought (sold in the broker's own app) is closed as `sold`."""
+    from backend.portfolio.service import latest_snapshot, mine_holdings
+
     now = now or datetime.now(timezone.utc)
-    ledger = LedgerStore(db, user_id=user_id, on_change=publisher_for(user_id))
-    trades = [
-        t for t in await ledger.get_trades(status="OPEN", venue="paper", mode="LONGTERM", limit=1000)
-        # The autopilot's paper trades share this book; it exits its own, through its fence.
-        if t["side"] == "BUY" and t.get("suggestion_id") and not (t.get("via") or "").startswith("autopilot:")
-    ]
+    ledger = LedgerStore(db, user_id=mine_book(user_id))
+    trades = [t for t in await ledger.get_trades(status="OPEN", mode="LONGTERM", limit=1000)
+              if t["side"] == "BUY" and t.get("suggestion_id")]
     if not trades:
+        return []
+
+    snapshot = await latest_snapshot(db, user_id)
+    seen_at = _aware(snapshot["at"]) if snapshot else None
+    held = await mine_holdings(db, user_id)
+    open_ = []
+    for trade in trades:
+        if seen_at is not None and seen_at > _aware(trade["entry_at"]) and trade["symbol"] not in held:
+            await db["paper_trades"].update_one(
+                {"id": trade["id"]}, {"$set": {"status": "CLOSED", "exit_at": now, "exit_reason": "sold"}})
+            continue
+        open_.append(trade)
+    if not open_:
         return []
 
     suggestions = {
         s["id"]: s for s in await db["suggestions"].find(
-            {"user_id": user_id, "id": {"$in": [t["suggestion_id"] for t in trades]}}
+            {"user_id": user_id, "id": {"$in": [t["suggestion_id"] for t in open_]}}
         ).to_list(length=None)
     }
-    marks = await marks_fn(db, {t["symbol"] for t in trades})
-    reasons = await exit_reasons(db, trades, suggestions, marks, now)
+    marks = await marks_fn(db, {t["symbol"] for t in open_})
+    reasons = await exit_reasons(db, open_, suggestions, marks, now)
 
-    positions = await ledger.get_open_positions()
-    closed = []
-    for trade in trades:
+    alerts = []
+    for trade in open_:
         reason = reasons.get(trade["id"])
-        if reason is None:
+        if reason is None or reason in (trade.get("alerted") or []):
             continue
-        held = positions[trade["symbol"]].quantity if trade["symbol"] in positions else 0.0
-        if held <= 0:
-            # The position is already gone: selling again would open a short
-            # (BHEL, 2026-10-13). Close the stale trade instead.
-            await db["paper_trades"].update_one(
-                {"id": trade["id"]}, {"$set": {"status": "CLOSED", "exit_at": now, "exit_reason": "stale"}},
-            )
-            logger.warning("exit: %s trade %s has no position left, closed as stale", trade["symbol"], trade["id"])
-            continue
-        quantity = min(trade["quantity"], held)
+        await db["paper_trades"].update_one({"id": trade["id"]}, {"$addToSet": {"alerted": reason}})
         mark = marks[trade["symbol"]]
-        order = Order(
-            id=str(uuid.uuid4()), symbol=trade["symbol"], side=Side.SELL, quantity=quantity,
-            order_type="MARKET", limit_price=None, product="CNC",
-            strategy_name=trade.get("strategy"), suggestion_id=trade["suggestion_id"],
-        )
-        try:  # one bad row must not stop the other exits
-            await fill_on_paper(ledger, order, mark, now)
-        except Exception:
-            logger.exception("exit: %s for %s failed", trade["symbol"], user_id)
-            continue
-        positions[trade["symbol"]].quantity = held - quantity
-        closed.append({
+        alerts.append({
             "symbol": trade["symbol"], "reason": reason, "price": mark,
-            "quantity": quantity, "entry_price": trade["entry_price"],
-            "gross_pnl": (mark - trade["entry_price"]) * quantity,
+            "quantity": trade["quantity"], "entry_price": trade["entry_price"],
+            "gross_pnl": (mark - trade["entry_price"]) * trade["quantity"],
         })
-        logger.info("auto-exit %s for %s at %s (%s)", trade["symbol"], user_id, mark, reason)
-    return closed
+    return alerts
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
