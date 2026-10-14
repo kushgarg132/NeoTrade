@@ -229,19 +229,32 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
 async def check_exits(db, redis, user_id: str, now: Optional[datetime] = None) -> list[dict]:
     """Sells autopilot positions opened from an engine proposal once the mark
     crosses that proposal's stop or target, its trailing stop, or it was held
-    max_hold_days (suggestions/exits.py) -- through the fence, so paper and
-    live both work and the exit is logged like any other order."""
+    max_hold_days (suggestions/exits.py), and squares off its intraday (MIS)
+    positions from 15:15 -- through the fence, so paper and live both work
+    and the exit is logged like any other order."""
+    from backend.engine.session import is_past_square_off_time
     from backend.suggestions.exits import exit_reasons
 
     now = now or datetime.now(timezone.utc)
-    trades = [t for t in await open_trades(db, user_id) if t.get("suggestion_id")]
+    held = await open_trades(db, user_id)
+    closed = []
+    if is_past_square_off_time(now):
+        # A live engine order never reports its fill back to the run, so no
+        # strategy squares it off: without this the broker's own ~15:20
+        # square-off (with its fee) was the only exit.
+        for trade in [t for t in held if t.get("mode") == "INTRADAY" and t["side"] == "BUY"]:
+            result = await submit(db, redis, user_id, AutopilotOrder(
+                symbol=trade["symbol"], side=Side.SELL, quantity=int(trade["quantity"]), product="MIS",
+                source="engine", reason="Square-off at 3:15 PM.", strategy=trade.get("strategy")), now=now)
+            if result["status"] in ("FILLED", "SENT"):
+                closed.append({"symbol": trade["symbol"], "reason": "square-off", "price": result.get("price")})
+    trades = [t for t in held if t.get("suggestion_id")]
     if not trades:
-        return []
+        return closed
     suggestions = {s["id"]: s for s in await db["suggestions"].find(
         {"user_id": user_id, "id": {"$in": [t["suggestion_id"] for t in trades]}}).to_list(length=None)}
     marks = await mark_prices(db, {t["symbol"] for t in trades})
     reasons = await exit_reasons(db, trades, suggestions, marks, now)
-    closed = []
     for trade in trades:
         why, mark = reasons.get(trade["id"]), marks.get(trade["symbol"])
         if why is None:

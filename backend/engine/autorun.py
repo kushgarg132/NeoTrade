@@ -226,11 +226,13 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
 
     prefs_store = PrefsStore(db)
     # The autopilot acts in this pass (09:20 proposals, its exits), so it
-    # keeps the pass running even with the long-term switch off.
-    for user_id in sorted(
-        doc["user_id"] for doc in await db["user_prefs"].find(
-            {"$or": [{LONGTERM_PREF: True}, {"autopilot_enabled": True}]}).to_list(length=None)
-    ):
+    # keeps the pass running even with the long-term switch off -- and with
+    # both off while it still holds something, so its exits still run.
+    users = {doc["user_id"] for doc in await db["user_prefs"].find(
+        {"$or": [{LONGTERM_PREF: True}, {"autopilot_enabled": True}]}).to_list(length=None)}
+    users |= {u.split(":")[0] for u in await db["paper_trades"].distinct(
+        "user_id", {"status": "OPEN", "via": {"$regex": "^autopilot:"}})}
+    for user_id in sorted(users):
         try:
             if await _longterm_pass(db, redis, user_id, now):
                 done.setdefault("longterm", []).append(user_id)
@@ -290,9 +292,9 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         closed = await check_exits(db, user_id, now=now)
         if closed:
             await notify(db, user_id, exits_text(closed))
-        if (await PrefsStore(db).get(user_id)).get("autopilot_enabled"):
-            from backend.autopilot.service import check_exits as autopilot_exits
-            await autopilot_exits(db, redis, user_id, now=now)
+        # Off or on, the autopilot's open positions keep their exits.
+        from backend.autopilot.service import check_exits as autopilot_exits
+        await autopilot_exits(db, redis, user_id, now=now)
 
     if local.time() >= MORNING and await redis.set(f"longterm:{user_id}:{day}:morning", _TOKEN, nx=True, px=86_400_000):
         did = True

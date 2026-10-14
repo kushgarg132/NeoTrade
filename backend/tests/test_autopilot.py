@@ -60,8 +60,11 @@ def test_zero_trades_per_day_means_no_daily_count():
     assert fence.check(_order(), 100.0, _state(entries_today=50), prefs) is None
 
 
-def test_fence_refuses_everything_when_disabled():
-    assert "off" in fence.check(_order(), 100.0, _state(), {**PREFS, "autopilot_enabled": False})
+def test_fence_off_refuses_entries_but_never_blocks_an_exit():
+    off = {**PREFS, "autopilot_enabled": False}
+    assert "off" in fence.check(_order(), 100.0, _state(), off)
+    held = _state(held={"INFY": (3, "CNC")})
+    assert fence.check(_order(side=Side.SELL, qty=3), 100.0, held, off) is None
 
 
 @pytest.fixture
@@ -246,7 +249,7 @@ async def test_the_engines_practice_trades_do_not_count_against_the_autopilot(wo
     ])
     assert (await service.submit(db, None, "alice", _order(qty=2), now=OPEN))["status"] == "FILLED"
     refused = await service.submit(db, None, "alice", _order(symbol="TCS"), now=OPEN)
-    assert refused["status"] == "REFUSED" and "Practice engine" in refused["reason"]
+    assert refused["status"] == "REFUSED" and "paper engine already holds" in refused["reason"]
 
 
 async def test_venue_must_match_the_autopilot_mode(world, monkeypatch):
@@ -373,3 +376,19 @@ async def test_an_autopilot_trade_counts_for_the_strategy_whose_idea_it_was(worl
     assert trade["strategy"] == "macd_crossover" and trade["via"] == "autopilot:engine"
     checks = (await paper_records(db, "alice", ["macd_crossover"], 25_000.0))["macd_crossover"]["checks"]
     assert next(c for c in checks if c["rule"] == "trades")["have"] == 1
+
+
+
+async def test_intraday_positions_square_off_from_315_even_with_the_autopilot_off(world):
+    from dataclasses import replace
+
+    db, _ = world
+    await _prefs(db)
+    await service.submit(db, None, "alice", replace(_order(qty=2, product="MIS"), source="engine", strategy="orb"), now=OPEN)
+    await db["user_prefs"].update_one({"user_id": "alice"}, {"$set": {"autopilot_enabled": False}})
+
+    assert await service.check_exits(db, None, "alice", now=OPEN) == []  # 11:00: nothing yet
+    closed = await service.check_exits(db, None, "alice", now=OPEN.replace(hour=15, minute=16))
+    assert [c["reason"] for c in closed] == ["square-off"]
+    (trade,) = await db["paper_trades"].find({"user_id": "alice"}).to_list(None)
+    assert trade["status"] == "CLOSED" and trade["strategy"] == "orb"

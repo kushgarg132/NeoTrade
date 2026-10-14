@@ -1,8 +1,9 @@
 """Every autopilot order passes this or is refused. Pure, no I/O.
 
-Entries (buys) must respect every limit; an exit (selling a symbol the
-autopilot holds) only needs the switch on and the market open -- getting
-out is never blocked by a cap. Short selling is not allowed.
+Entries (buys) must respect every limit and need the switch on; an exit
+(selling a symbol the autopilot holds) only needs the market open -- getting
+out is never blocked by a cap or by the switch being off, so turning the
+autopilot off never strands a position. Short selling is not allowed.
 
 The market backdrop only ever tightens entries
 (docs/superpowers/specs/2026-10-05-autopilot-news-design.md): risk-off
@@ -46,8 +47,6 @@ def universe() -> frozenset:
 
 def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
     """None if the order may go, else why not (shown to the user)."""
-    if not prefs.get("autopilot_enabled"):
-        return "The autopilot is off."
     if not state.session_ok:
         return "The market is closed."
     if order.product not in PRODUCTS:
@@ -62,6 +61,8 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
         if order.quantity > quantity or order.product != product:
             return f"The autopilot holds {quantity:g} {order.symbol} ({product}); it can sell at most that."
         return None
+    if not prefs.get("autopilot_enabled"):
+        return "The autopilot is off."
     notional = price * order.quantity
     if state.kill_tripped:
         return "The daily loss limit was hit: no new entries today."
@@ -79,7 +80,7 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
     if order.symbol in state.held:
         return f"The autopilot is already holding {order.symbol}."
     if order.symbol in state.others:
-        return f"The Practice engine already holds {order.symbol}; one owner per position."
+        return f"The AI's paper engine already holds {order.symbol}; one owner per position."
     cap = trade_cap(prefs, state.regime)
     if notional > cap + 1e-6:
         return f"₹{notional:,.0f} is over the per-trade cap of ₹{cap:,.0f}{' (halved: market risk-off)' if state.regime == 'risk_off' else ''}."
