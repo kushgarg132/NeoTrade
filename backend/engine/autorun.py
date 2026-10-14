@@ -33,7 +33,6 @@ import uuid
 from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 
-from backend.brokers.roles import RoleUnavailable, adapter_for
 
 from backend.core.clock import SystemClock
 from backend.engine.session import IST
@@ -47,6 +46,7 @@ INTERVAL_SECONDS = 60
 KEY_TTL_MS = 150_000
 MAX_STARTS_PER_DAY = 5
 SESSION_OPEN, SESSION_CLOSE = time(9, 15), time(15, 30)
+LOGIN_REMIND, LOGIN_REMIND_AGAIN = time(8, 30), time(9, 5)
 POLL_SECONDS = 60.0
 
 # Which pref turns each mode's daily run on.
@@ -204,9 +204,9 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
     }
 
     try:
-        await _autopilot_reminders(db, redis, now)
+        await _login_reminders(db, redis, now)
     except Exception as exc:
-        logger.warning("autopilot reminders failed: %s", exc)
+        logger.warning("login reminders failed: %s", exc)
 
     planned = await _preopen_plans(db, redis, now, sorted(_split(slot)[0] for slot in enabled
                                                          if _split(slot)[1] == "INTRADAY"))
@@ -386,23 +386,41 @@ async def _proven_strategies(db, user_id: str, names: set[str], account_size: fl
     return {n for n in backtested if records[n]["passed"]}
 
 
-async def _autopilot_reminders(db, redis, now: datetime) -> None:
-    """09:00-09:15 IST on weekdays: remind once if the autopilot is on but
-    the AI account is not logged in -- otherwise it cannot trade that day."""
+async def _login_reminders(db, redis, now: datetime, get_adapter=None) -> None:
+    """Weekdays 08:30 and again 09:05 IST: one Telegram message listing each
+    broker not logged in today, with its login link. Without a session
+    nothing runs that day: no holdings prices, journal, plan or AI trading."""
+    from html import escape
+
     from backend.auth.broker_credentials import get_credential_store
+    from backend.brokers.registry import get_broker_adapter
+    from backend.brokers.roles import LABELS
     from backend.suggestions.notify import notify
 
     local = now.astimezone(IST)
-    if local.weekday() >= 5 or not (time(9, 0) <= local.time() < SESSION_OPEN):
+    if local.weekday() >= 5 or not (LOGIN_REMIND <= local.time() < SESSION_OPEN):
         return
-    for doc in await db["user_prefs"].find({"autopilot_enabled": True}).to_list(length=None):
+    slot = "late" if local.time() >= LOGIN_REMIND_AGAIN else "early"
+    get_adapter = get_adapter or get_broker_adapter
+    for doc in await db["user_prefs"].find({"broker_roles": {"$exists": True, "$ne": {}}}).to_list(length=None):
         user_id = doc["user_id"]
-        if not await redis.set(f"autopilot:remind:{user_id}:{local.date()}", _TOKEN, nx=True, px=86_400_000):
+        if not await redis.set(f"login:remind:{user_id}:{local.date()}:{slot}", _TOKEN, nx=True, px=86_400_000):
             continue
-        try:
-            await adapter_for(user_id, "ai", get_credential_store(), redis)
-        except RoleUnavailable as exc:
-            await notify(db, user_id, f"🤖 {exc.reason} Log in before 9:15 AM or the autopilot can't trade today.")
+        lines = []
+        for broker, role in sorted(doc["broker_roles"].items()):
+            try:
+                adapter = await get_adapter(broker, user_id, get_credential_store(), redis)
+                if (await adapter.state()).value == "ACTIVE":
+                    continue
+                url = await adapter.login_url()
+            except Exception as exc:
+                logger.warning("login reminder: %s for %s failed: %s", broker, user_id, exc)
+                continue
+            name = f"{broker.replace('_', ' ').title()} ({LABELS.get(role, role)})"
+            lines.append(f'• <a href="{escape(url)}">{escape(name)}</a>' if url else f"• {escape(name)}: log in under Settings")
+        if lines:
+            await notify(db, user_id, "🔑 Log in before 9:15 so today's prices, analysis and AI trading can run:\n"
+                         + "\n".join(lines))
 
 
 async def autorun_loop(db, redis) -> None:

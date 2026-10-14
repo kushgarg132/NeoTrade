@@ -396,19 +396,28 @@ async def test_proven_strategies_need_both_gates():
 
 
 @pytest.mark.asyncio
-async def test_autopilot_login_reminder_once_before_the_open(world, longterm, monkeypatch):
-    from backend.brokers import roles
+async def test_login_reminder_lists_only_logged_out_brokers_twice_a_morning(world, longterm, monkeypatch):
+    from types import SimpleNamespace
 
-    async def not_logged_in(user_id, role, credentials, redis=None, roles=None, get_adapter=None):
-        raise roles_mod.RoleUnavailable("ai", "The AI account (Kite) is not logged in today.")
+    states = {"kite": "EXPIRED", "upstox": "ACTIVE"}
 
-    roles_mod = roles
-    monkeypatch.setattr(autorun, "adapter_for", not_logged_in)
-    await world.db["user_prefs"].insert_one({"user_id": "alice", "autopilot_enabled": True})
-    await _tick(world, datetime(2026, 9, 28, 9, 2, tzinfo=IST))
-    await _tick(world, datetime(2026, 9, 28, 9, 5, tzinfo=IST))
-    reminders = [t for t in longterm["sent"] if "not logged in" in t]
-    assert len(reminders) == 1 and "9:15 AM" in reminders[0]
+    async def adapter(broker, user_id, credentials, redis):
+        async def state():
+            return SimpleNamespace(value=states[broker])
+
+        async def login_url():
+            return f"https://{broker}.example/login?a=1&b=2"
+        return SimpleNamespace(state=state, login_url=login_url)
+
+    monkeypatch.setattr("backend.brokers.registry.get_broker_adapter", adapter)
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "broker_roles": {"kite": "ai", "upstox": "mine"}})
+    for minute in (25, 31, 40):  # 08:25 too early, 08:31 sends, 08:40 already sent
+        await _tick(world, datetime(2026, 9, 28, 8, minute, tzinfo=IST))
+    await _tick(world, datetime(2026, 9, 28, 9, 6, tzinfo=IST))  # still logged out: one more
+
+    reminders = [t for t in longterm["sent"] if "Log in before 9:15" in t]
+    assert len(reminders) == 2
+    assert 'href="https://kite.example/login?a=1&amp;b=2"' in reminders[0] and "upstox" not in reminders[0].lower()
 
 
 @pytest.mark.asyncio
