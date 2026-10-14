@@ -201,4 +201,12 @@ async def test_live_prices_reprice_keep_the_review_and_store_nothing(monkeypatch
     assert await db["portfolio_snapshots"].count_documents({}) == 1
 
     brokers["upstox"] = _Broker([], fail=True)
+    monkeypatch.setattr(service, "mark_prices", AsyncMock(return_value={}))
     assert await service.with_live_prices(db, "alice", snapshot, None, None) is snapshot
+
+    # A broker logged out: the last holdings, repriced from market quotes.
+    monkeypatch.setattr(service, "mark_prices", AsyncMock(return_value={"A": 250.0}))
+    monkeypatch.setattr(service.bars, "prev_closes", AsyncMock(return_value={"A": 240.0}))
+    quoted = await service.with_live_prices(db, "alice", snapshot, None, None)
+    assert quoted["totals"]["value"] == 2500
+    assert quoted["holdings_as_of"] == snapshot["at"] and quoted["holdings"][0]["verdict"] == "HOLD"

@@ -23,6 +23,7 @@ from backend.brokers.registry import BROKERS, get_broker_adapter
 from backend.datalayer import bars
 from backend.core.models import Holding
 from backend.journal.store import JournalStore
+from backend.marks import mark_prices
 from backend.portfolio.health import stock_health
 from backend.portfolio.review import write_review
 from backend.portfolio.rules import fund_verdict, stock_verdict
@@ -234,13 +235,25 @@ def scorecard_for(snapshot: dict, brokers: set[str], trades: list[dict], nifty: 
 async def with_live_prices(db, user_id: str, snapshot: dict, credentials, redis) -> dict:
     """The snapshot repriced from the brokers right now, for the page's poll.
     Verdicts, notes and the AI review carry over (no AI call); nothing is
-    stored. Any broker down or logged out: the snapshot unchanged."""
+    stored. Any broker down or logged out: the last holdings repriced from
+    market quotes (stocks only), with `holdings_as_of` saying how old the
+    list of holdings is -- never a days-old value shown as today's."""
     holdings, errors = await fetch_holdings(user_id, credentials, redis)
-    if not holdings or errors:
-        return snapshot
-    fresh = {**snapshot, "raw_holdings": [h.model_dump() for h in holdings], "stale_since": None,
-             "at": datetime.now(timezone.utc)}
-    card = scorecard_for(fresh, {h.broker for h in holdings}, await JournalStore(db).list_trades(user_id), await _nifty())
+    now = datetime.now(timezone.utc)
+    if holdings and not errors:
+        fresh = {**snapshot, "raw_holdings": [h.model_dump() for h in holdings], "stale_since": None, "at": now}
+    else:
+        raw = snapshot.get("raw_holdings") or []
+        stocks = [h["symbol"] for h in raw if h.get("kind", "STOCK") != "MF"]
+        marks = await mark_prices(db, stocks)
+        if not marks:
+            return snapshot
+        prev = await bars.prev_closes(db, stocks, bars.today_ist(now))
+        raw = [{**h, "last_price": marks.get(h["symbol"], h.get("last_price")),
+                "close_price": prev.get(h["symbol"], h.get("close_price"))} for h in raw]
+        fresh = {**snapshot, "raw_holdings": raw, "at": now, "holdings_as_of": snapshot.get("at")}
+    brokers = {h["broker"] for h in fresh["raw_holdings"]}
+    card = scorecard_for(fresh, brokers, await JournalStore(db).list_trades(user_id), await _nifty())
     # Correlation needs daily returns the poll does not fetch: keep the analysed one.
     card["concentration"]["correlated"] = (snapshot.get("concentration") or {}).get("correlated", [])
     card.pop("account_view", None)

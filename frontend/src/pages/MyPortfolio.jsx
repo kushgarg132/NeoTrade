@@ -517,7 +517,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
         )}
         <Sheet
           title="Portfolio"
-          meta={snapshot ? (snapshot.stale_since ? `Saved ${formatDateTime(snapshot.stale_since)} · broker logged out` : `${formatDateTime(snapshot.at)}${brokers ? ` · ${brokers}` : ''}`) : null}
+          meta={snapshot ? (snapshot.holdings_as_of || snapshot.stale_since ? `Holdings as of ${formatDateTime(snapshot.holdings_as_of || snapshot.stale_since)} · broker logged out` : `${formatDateTime(snapshot.at)}${brokers ? ` · ${brokers}` : ''}`) : null}
           actions={action}
         >
           {failure && (
@@ -561,10 +561,10 @@ const MyPortfolio = ({ lockedAccount = null }) => {
                 </div>
               </dl>
               <Benchmark benchmark={snapshot.benchmark} />
-              {snapshot.stale_since && (
+              {(snapshot.holdings_as_of || snapshot.stale_since) && (
                 <p className="doc-meta normal-case">
-                  Your broker is logged out: holdings as of {formatDateTime(snapshot.stale_since)}, repriced from the latest
-                  closes. Log in to your broker to refresh them.
+                  Your broker is logged out: holdings as of {formatDateTime(snapshot.holdings_as_of || snapshot.stale_since)}, priced
+                  from market quotes. Log in to your broker to refresh the list.
                 </p>
               )}
               {snapshot.totals.unpriced.length > 0 && (
