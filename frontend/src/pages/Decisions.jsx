@@ -5,6 +5,7 @@ import SectionTabs from '../components/layout/SectionTabs';
 import { AI_TABS } from '../components/layout/sections';
 import SuggestionRecord from '../components/suggestions/SuggestionRecord';
 import useSymbolNews from '../hooks/useSymbolNews';
+import { Link } from 'react-router-dom';
 import { Sheet, Empty, Ruling } from '../components/doc/Doc';
 import WaitingCards from '../components/decisions/WaitingCards';
 import { Button } from '../components/common/Button';
@@ -195,17 +196,17 @@ const Decisions = () => {
         ) : visible.length === 0 ? (
           <Sheet>
             <Empty
-              title={showDecided ? 'Nothing decided yet' : 'You are clear'}
+              title={showDecided ? 'Nothing decided yet' : 'No ideas for your account'}
               detail={
                 showDecided
                   ? 'Approved and declined proposals are kept here.'
-                  : 'The daily scan runs after the close at 4:00 PM IST. Run one now if you would rather not wait.'
+                  : 'An idea reaches your account only once its strategy has earned it on the AI account: a passing backtest, then 20 trading days and 30 paper trades in profit. Until then the AI paper-trades every idea itself.'
               }
               action={
                 !showDecided ? (
-                  <Button variant="secondary" size="sm" onClick={scan} disabled={scanning}>
-                    Scan now
-                  </Button>
+                  <Link to="/practice/strategies" className="field-label text-[var(--stamp)] hover:underline">
+                    What each strategy still needs ›
+                  </Link>
                 ) : null
               }
             />
