@@ -134,7 +134,7 @@ async def test_daily_loss_trips_the_kill_switch(world):
     db, _ = world
     await _prefs(db)
     await db["paper_trades"].insert_one({"user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
-                                         "strategy": "autopilot:chat", "realized_pnl": -1001.0, "venue": "paper",
+                                         "strategy": "autopilot:chat", "via": "autopilot:chat", "realized_pnl": -1001.0, "venue": "paper",
                                          "exit_at": OPEN.replace(hour=10)})
     result = await service.submit(db, None, "alice", _order(), now=OPEN)
     assert result["status"] == "REFUSED" and "loss limit" in result["reason"]
@@ -169,7 +169,7 @@ async def test_chat_order_for_the_ai_account_goes_through_the_autopilot(world, m
     tools = {t.name: t for t in actions.action_tools(db, None, "alice", "buy 2 infy on the AI account")}
     out = await tools["propose_order"].ainvoke({"symbol": "INFY", "side": "BUY", "quantity": 2, "account": "ai"})
     assert not out.startswith("ACTION_CARD:") and "bought 2 INFY" in out
-    assert await db["paper_trades"].count_documents({"strategy": "autopilot:chat"}) == 1
+    assert await db["paper_trades"].count_documents({"strategy": "autopilot:chat", "via": "autopilot:chat"}) == 1
 
 
 async def test_live_mode_places_on_the_ai_adapter_only(world, monkeypatch):
@@ -229,7 +229,7 @@ async def test_paper_autopilot_trades_in_the_practice_book_tagged(world):
     db, _ = world
     await _prefs(db)
     await service.submit(db, None, "alice", _order(qty=2), now=OPEN)
-    assert await db["paper_trades"].count_documents({"user_id": "alice", "strategy": "autopilot:chat"}) == 1
+    assert await db["paper_trades"].count_documents({"user_id": "alice", "strategy": "autopilot:chat", "via": "autopilot:chat"}) == 1
     assert await db["paper_trades"].count_documents({"user_id": "alice:autopilot"}) == 0
 
 
@@ -354,3 +354,22 @@ async def test_max_hold_exit_paper_and_autopilot(world):
     assert await exits.check_exits(db, "alice", now=OPEN + timedelta(days=2), marks_fn=marks) == []
     closed = await exits.check_exits(db, "alice", now=OPEN.replace(hour=15, minute=20) + timedelta(days=3), marks_fn=marks)
     assert [(c["symbol"], c["reason"]) for c in closed] == [("TCS", "max hold")]
+
+
+async def test_an_autopilot_trade_counts_for_the_strategy_whose_idea_it_was(world):
+    # Tagged "autopilot:engine", the paper gate never credited the strategy,
+    # so nothing could ever earn real money (Phase 19.C).
+    from dataclasses import replace
+
+    from backend.risk.paper_gate import paper_records
+
+    db, _ = world
+    await _prefs(db)
+    order = replace(_order(qty=2), source="engine", strategy="macd_crossover")
+    await service.submit(db, None, "alice", order, now=OPEN)
+    await service.submit(db, None, "alice", replace(order, side=Side.SELL), now=OPEN)
+
+    (trade,) = await db["paper_trades"].find({"user_id": "alice"}).to_list(None)
+    assert trade["strategy"] == "macd_crossover" and trade["via"] == "autopilot:engine"
+    checks = (await paper_records(db, "alice", ["macd_crossover"], 25_000.0))["macd_crossover"]["checks"]
+    assert next(c for c in checks if c["rule"] == "trades")["have"] == 1

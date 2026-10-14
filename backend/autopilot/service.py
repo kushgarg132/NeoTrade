@@ -24,7 +24,7 @@ LOCK_MS = 30_000
 _LOCKS: dict[str, asyncio.Lock] = {}  # per user, in this process; Redis covers the other workers
 
 
-TAG = "autopilot:"  # every autopilot order's strategy_name, so its trades carry it
+TAG = "autopilot:"  # every autopilot order's `via`, so its trades carry it
 
 
 def ledger_user(user_id: str) -> str:
@@ -41,7 +41,14 @@ def book(user_id: str, live: bool) -> str:
 
 def trades_query(user_id: str) -> dict:
     """The autopilot's trades, paper and live, and nothing else in those books."""
-    return {"user_id": {"$in": [user_id, ledger_user(user_id)]}, "strategy": {"$regex": f"^{TAG}"}}
+    return {"user_id": {"$in": [user_id, ledger_user(user_id)]}, "via": {"$regex": f"^{TAG}"}}
+
+
+def ai_book_query(user_id: str) -> dict:
+    """Every AI-account trade: the paper book (engine, factor, autopilot)
+    and the live book. Live rows in the paper namespace are older one-tap
+    orders on the user's own account, not the AI's."""
+    return {"$or": [{"user_id": user_id, "venue": {"$ne": "live"}}, {"user_id": ledger_user(user_id)}]}
 
 
 async def open_trades(db, user_id: str) -> list[dict]:
@@ -57,6 +64,7 @@ class AutopilotOrder:
     source: Literal["chat", "engine", "factor", "news"]
     reason: str
     suggestion_id: Optional[str] = None
+    strategy: Optional[str] = None  # whose idea it was; None = the autopilot's own (chat)
 
 
 def _aware(value: Optional[datetime]) -> Optional[datetime]:
@@ -97,11 +105,11 @@ async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime, redis
     day_start = datetime.combine(day, time(0, 0), tzinfo=IST)
     ledger = LedgerStore(db, user_id=book(user_id, venue == "live"))
     trades = await ledger.get_trades(limit=1000, venue=venue)
-    mine = [t for t in trades if (t.get("strategy") or "").startswith(TAG)]
+    mine = [t for t in trades if (t.get("via") or "").startswith(TAG)]
     open_trades = [t for t in mine if t.get("status") == "OPEN"]
     # Symbols another strategy holds in the same (Practice) book: one owner per position.
     others = frozenset(t["symbol"] for t in trades
-                       if t.get("status") == "OPEN" and not (t.get("strategy") or "").startswith(TAG))
+                       if t.get("status") == "OPEN" and not (t.get("via") or "").startswith(TAG))
     marks = await mark_prices(db, {t["symbol"] for t in open_trades}) if open_trades else {}
     deployed = sum(t["quantity"] * marks.get(t["symbol"], t.get("entry_price") or 0) for t in open_trades)
     unrealized = sum((marks.get(t["symbol"], t.get("entry_price") or 0) - (t.get("entry_price") or 0)) * t["quantity"]
@@ -200,7 +208,8 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
 
     ledger = LedgerStore(db, user_id=book(user_id, live))
     placed = Order(id=str(uuid.uuid4()), symbol=order.symbol, side=order.side, quantity=order.quantity,
-                   order_type="MARKET", product=order.product, strategy_name=f"autopilot:{order.source}",
+                   order_type="MARKET", product=order.product,
+                   strategy_name=order.strategy or f"{TAG}{order.source}", via=f"{TAG}{order.source}",
                    suggestion_id=suggestion_id)
     try:
         if live:
@@ -240,7 +249,7 @@ async def check_exits(db, redis, user_id: str, now: Optional[datetime] = None) -
         text = f"Exit at the proposal's {why}." if why in ("stop", "target") else f"Exit: {why}."
         result = await submit(db, redis, user_id, AutopilotOrder(
             symbol=trade["symbol"], side=Side.SELL, quantity=int(trade["quantity"]), product=_product(trade),
-            source="engine", reason=text), now=now, suggestion_id=trade["suggestion_id"])
+            source="engine", reason=text, strategy=trade.get("strategy")), now=now, suggestion_id=trade["suggestion_id"])
         if result["status"] in ("FILLED", "SENT"):
             closed.append({"symbol": trade["symbol"], "reason": why, "price": mark})
     return closed

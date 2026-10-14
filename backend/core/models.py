@@ -106,6 +106,10 @@ class Order(BaseModel):
     # RoutingExecutionClient (backend/engine/execution/routing.py), only
     # to paper. Set by size_intents from owner_by_symbol.
     strategy_name: Optional[str] = None
+    # The path that placed it when that is not the strategy itself, e.g.
+    # "autopilot:engine". strategy_name stays the strategy whose idea it
+    # was, so the paper gate and learning credit the right one.
+    via: Optional[str] = None
     # The proposal an approved order executes; the trade it opens carries it
     # so an exit can find that proposal's stop and target.
     suggestion_id: Optional[str] = None

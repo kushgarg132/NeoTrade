@@ -101,7 +101,7 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
 
 
 async def _pnl_today(user_id: str, roles: dict, now: datetime) -> dict:
-    from backend.autopilot.service import trades_query
+    from backend.autopilot.service import ai_book_query
     from backend.brokers.roles import brokers_for
     from backend.journal.roundtrips import build_round_trips
     from backend.journal import mirror
@@ -121,7 +121,7 @@ async def _pnl_today(user_id: str, roles: dict, now: datetime) -> dict:
     mine_charges = mirror.costs([t for t in trades if t["_id"] in ids], closed, 0)["charges"]
     mine = sum(t["pnl"] for t in closed) - mine_charges
     ai = ai_charges = 0.0
-    async for t in db.db["paper_trades"].find(trades_query(user_id)):
+    async for t in db.db["paper_trades"].find(ai_book_query(user_id)):
         if t.get("status") == "CLOSED" and (_aware(t.get("exit_at")) or day_start) >= day_start:
             ai += t.get("realized_pnl") or 0.0
             ai_charges += t.get("costs") or 0.0

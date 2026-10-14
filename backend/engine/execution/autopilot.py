@@ -26,7 +26,7 @@ class AutopilotExecutionClient:
         result = await service.submit(self._db, self._redis, self._user_id, service.AutopilotOrder(
             symbol=order.symbol, side=order.side, quantity=int(order.quantity),
             product="MIS" if order.product == "MIS" else "CNC", source="engine",
-            reason=f"Engine: {order.strategy_name or 'strategy'} signal",
+            reason=f"Engine: {order.strategy_name or 'strategy'} signal", strategy=order.strategy_name,
         ))
         if result.get("status") not in ("FILLED", "SENT"):
             logger.info("autopilot refused engine order %s %s: %s", order.side.value, order.symbol, result.get("reason"))

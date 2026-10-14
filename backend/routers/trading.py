@@ -447,7 +447,7 @@ async def _launch_run(
             t.get("realized_pnl") or 0.0
             for t in await ledger.get_trades(status="CLOSED", venue="paper", limit=2000)
             if t.get("exit_at") and t["exit_at"] >= day_start
-            and not (t.get("strategy") or "").startswith("autopilot:")
+            and not (t.get("via") or "").startswith("autopilot:")
         )
 
     # INTRADAY orders execute themselves; LONGTERM ones stop at a PENDING

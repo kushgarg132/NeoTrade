@@ -119,7 +119,7 @@ async def check_exits(db, user_id: str, now: Optional[datetime] = None, marks_fn
     trades = [
         t for t in await ledger.get_trades(status="OPEN", venue="paper", mode="LONGTERM", limit=1000)
         # The autopilot's paper trades share this book; it exits its own, through its fence.
-        if t["side"] == "BUY" and t.get("suggestion_id") and not (t.get("strategy") or "").startswith("autopilot:")
+        if t["side"] == "BUY" and t.get("suggestion_id") and not (t.get("via") or "").startswith("autopilot:")
     ]
     if not trades:
         return []

@@ -356,7 +356,8 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
             continue
         result = await service.submit(db, redis, user_id, service.AutopilotOrder(
             symbol=s["symbol"], side=Side(s["side"]), quantity=quantity, product="CNC",
-            source=source, reason=f"{'News' if source == 'news' else 'Engine'} proposal ({s.get('strategy') or 'scan'}): {', '.join(s.get('reason_codes') or [])}"),
+            source=source, reason=f"{'News' if source == 'news' else 'Engine'} proposal ({s.get('strategy') or 'scan'}): {', '.join(s.get('reason_codes') or [])}",
+            strategy=s.get("strategy")),
             now=now, suggestion_id=s["id"], quiet=True)
         if result["status"] in ("FILLED", "SENT"):
             await store.decide(user_id, s["id"], status="EXECUTED", reason="autopilot", now=now)
