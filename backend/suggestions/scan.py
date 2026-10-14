@@ -19,7 +19,6 @@ from backend.core.models import Bar
 from backend.data.feeds.historical import HistoricalFeed
 from backend.data.providers.store import StoreFundamentals, StoreHistoryProvider
 from backend.engine.execution.simulated import SimulatedExecutionClient
-from backend.engine.persistence import LedgerStore
 from backend.engine.portfolio import Portfolio
 from backend.engine.runner import run
 from backend.instruments.master import InstrumentMaster
@@ -157,10 +156,10 @@ async def scan_universe(
         return []
 
     store = SuggestionStore(db)
-    held: dict[str, float] = {}
-    for trade in await LedgerStore(db, user_id=user_id).get_trades(status="OPEN", venue="paper", mode="LONGTERM"):
-        if trade["side"] == "BUY":
-            held[trade["symbol"]] = held.get(trade["symbol"], 0.0) + trade["quantity"]
+    # SELL ideas exit only what the user really holds on their own account;
+    # the AI's paper positions exit through suggestions/exits.py.
+    from backend.portfolio.service import mine_holdings
+    held = await mine_holdings(db, user_id)
     sink = SuggestionSink(store, user_id=user_id, source=source, held=held)
     sink.armed = False
 

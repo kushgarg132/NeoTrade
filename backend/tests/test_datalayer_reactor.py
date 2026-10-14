@@ -55,8 +55,13 @@ async def test_react_alerts_once(monkeypatch):
 
     monkeypatch.setattr(reactor, "_deliver", deliver)
     monkeypatch.setattr("backend.datalayer.news.followed", followed)
-    await db["paper_positions"].insert_many([{"user_id": "u1", "symbol": "TCS.NS", "quantity": 5},
-                                              {"user_id": "u2", "symbol": "TCS", "quantity": 0}])
+    # Held = the user's own account in the latest snapshot; u2's TCS is the AI's.
+    await db["portfolio_snapshots"].insert_many([
+        {"user_id": "u1", "at": NOW, "raw_holdings": [{"symbol": "TCS", "quantity": 5, "broker": "upstox"}]},
+        {"user_id": "u2", "at": NOW, "raw_holdings": [{"symbol": "TCS", "quantity": 5, "broker": "kite"}]},
+    ])
+    await db["user_prefs"].insert_one({"user_id": "u2", "broker_roles": {"kite": "ai", "upstox": "mine"}})
+    await db["paper_positions"].insert_one({"user_id": "u2", "symbol": "TCS", "quantity": 5})  # paper: not held
     await db["user_prefs"].insert_one({"user_id": "u3", "news_alerts": "off"})
     await db["watchlist"].insert_one({"user_id": "u3", "symbols": ["TCS"]})
     await db["news_items"].insert_many([

@@ -110,11 +110,15 @@ def alert_text(item: dict, hits: list[dict]) -> str:
 
 
 async def _audience(db) -> dict[str, tuple[str, set[str], set[str]]]:
-    """user_id -> (news_alerts pref, held symbols, watched symbols), for every
-    user who holds or watches something or asked for all news."""
+    """user_id -> (news_alerts pref, symbols held on their own account,
+    watched symbols), for every user who holds or watches something or
+    asked for all news."""
+    from backend.portfolio.service import mine_holdings
+
     held, watched = defaultdict(set), defaultdict(set)
-    async for row in db["paper_positions"].find({"quantity": {"$ne": 0}}, {"user_id": 1, "symbol": 1}):
-        held[row["user_id"]].add(_bare(row["symbol"]))
+    # "Held" is what the user really owns on their own account, not paper.
+    for user_id in await db["portfolio_snapshots"].distinct("user_id"):
+        held[user_id].update(_bare(s) for s in await mine_holdings(db, user_id))
     async for row in db["watchlist"].find({}, {"user_id": 1, "symbols": 1}):
         watched[row["user_id"]].update(_bare(s) for s in row.get("symbols") or [])
     prefs = {d["user_id"]: d.get("news_alerts", "held")
