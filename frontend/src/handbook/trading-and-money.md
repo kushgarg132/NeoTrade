@@ -1,17 +1,20 @@
 # Trading & Money
 
-Three kinds of money, one decision path, and the rails that sit between a signal and
-a real order.
+Two accounts, one decision path, and the rails that sit between a signal and a real order
+(Phase 19, `docs/superpowers/specs/2026-10-14-two-accounts-reset-design.md`).
 
-## Three kinds of money
+## Two accounts
 
-| Account | What it is | Where in the app | Who can place orders |
+| Account | What it is | Ledger (`paper_*` collections, `user_id` field) | Who can place orders |
 |---|---|---|---|
-| **Mine** (role `mine`) | Your own broker account | Mine → Holdings / Trades / Habits | Only you: chat cards and the order ticket, each confirmed (twice for live) |
-| **AI** (role `ai`) | A separate broker account the autopilot trades | AI → Overview / Activity / Autopilot | The autopilot, without a tap, inside its fence |
-| **Practice** (paper) | The strategy engine's simulated book | More → Practice | The engine on paper; approvals fill on paper or, on a second tap, on your own account |
+| **Mine** (role `mine`) | Your own broker account | `<user>:mine` for orders the app placed (`engine/persistence.py::mine_book`); your real holdings are `portfolio/service.py::mine_holdings` | Only you, for real money: a one-tap approval, a chat card or the order ticket, each confirmed twice. There is no paper venue here |
+| **AI** (role `ai`) | A separate broker account the app runs | paper: `<user>` (the engine, the factor portfolio, the autopilot); live: `<user>:autopilot` | The engine and the autopilot, without a tap, inside the fence |
 
-Nothing routes an AI order to `mine`, and nothing falls back from one account to another.
+"Practice" is the AI account on paper. Every trade keeps `strategy` = the strategy whose idea
+it was and `via` = the path that placed it (e.g. `autopilot:engine`), so the paper gate and
+learning credit the right strategy. The AI book as a whole is
+`autopilot/service.py::ai_book_query`. Nothing routes an AI order to `mine`, and nothing
+falls back from one account to another.
 
 ## The decision path
 
@@ -189,12 +192,13 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
 - Stored by `SuggestionStore.create` with the sized order and the `{rule, ai, final}` breakdown;
   `attach_theses` rescores once research has measured real sentiment.
 - Approve / reject is one atomic `find_one_and_update` gated on PENDING — double approval
-  is impossible. Approval fills against a fresh price, on paper or (second tap) live on `mine`.
+  is impossible. Approval is real money on `mine` (second tap), booked in `<user>:mine`.
+  There is no paper approval: the AI account paper-trades proposals itself.
 - Expire after 3 days (`DEFAULT_TTL`). An equity SELL is proposed only against a held long.
 - At most 5 long-term proposals stay pending, the best by final score: after each scan the rest
   expire as `outranked` (`scan.py::MAX_PENDING_LONGTERM`, `store.py::keep_best`), so theses are
   written only for those. Each must already beat 3× its round-trip charges (`size_intents`).
-- Approved long-term paper positions exit at their stop or target (`suggestions/exits.py`,
+- Long-term paper positions with a proposal exit at their stop or target (`suggestions/exits.py`,
   every 15 min in session). A swing proposal also exits after `max_hold_days` trading days and at
   a trailing stop (highest close since entry − k × 14-day ATR, never lowered, kept as
   `trail_stop`), by `exits.py::exit_reasons`, which the autopilot's exits share; the backtest
@@ -209,13 +213,14 @@ passes `autopilot/fence.py::check` against the shared trading limits (one set fo
 live, edited on AI → Autopilot: `max_exposure`, `per_trade_cap`, `max_trades_per_day`,
 `daily_loss_limit` — the same fields Practice and Watch my broker read; 0 trades or loss is off),
 its own daily-loss trip, the shared kill switch, Nifty 200 names, NSE equity, market hours; exits
-are never blocked. Risk-off halves the per-trade cap and refuses news entries; a high-impact
+are never blocked, not even with the autopilot off. Risk-off halves the per-trade cap and refuses news entries; a high-impact
 event within 30 min refuses all entries; news entries stop at 3 a day. One switch, Off ·
-Paper · Live (Live needs a typed confirmation). On paper it fills in the user's Practice
-book (`autopilot/service.py::book`), every trade tagged `strategy="autopilot:<source>"`; the
-fence counts only tagged trades and refuses a symbol another strategy holds there (one owner
-per position, as in the engine), and the engine's long-term exits skip tagged trades. Live
-fills go to their own `<user>:autopilot` book. Live, it takes a stock proposal (morning pass
+Paper · Live (Live needs a typed confirmation). On paper it fills in the AI paper book
+(`autopilot/service.py::book`), every trade marked `via="autopilot:<source>"` with `strategy`
+the proposal's; the fence counts only `via` trades and refuses a symbol another strategy holds
+there (one owner per position, as in the engine), and the engine's long-term exits skip them.
+Live fills go to their own `<user>:autopilot` book. `autopilot/service.py::check_exits` runs
+for anyone holding autopilot trades, on or off, and squares off intraday positions from 15:15. Live, it takes a stock proposal (morning pass
 or news) only when the proposal's strategy passed both gates, its latest backtest and its
 paper record (`engine/autorun.py::_proven_strategies`); the rest wait for the user. Paper
 takes them all, to build the record. While the autopilot is on (paper or live), the 4 PM scan and the long-term pass run

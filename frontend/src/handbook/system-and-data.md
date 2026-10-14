@@ -73,7 +73,7 @@ The store holds completed bars only, so during the session the newest daily bar 
 ## Where data lives
 
 **Mongo — per user** (every document carries `user_id`):
-`paper_orders`, `paper_fills`, `paper_positions`, `paper_trades`, `paper_limit_orders`,
+`paper_orders`, `paper_fills`, `paper_positions`, `paper_trades` (ledger `user_id` = the AI paper book, `<user>:autopilot`, `<user>:mine`),
 `live_orders`, `suggestions`, `user_prefs`, `trading_runs`, `watchlist`, `journal_trades`,
 `journal_notes`, `journal_opens`, `portfolio_snapshots`, `guardrail_events`, `chat_actions`,
 `user_profiles`, `trade_plans`, `learning_state`, `learning_changes`, `factor_books`,
