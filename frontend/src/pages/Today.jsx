@@ -196,7 +196,7 @@ const Pulse = ({ pulse, failed, now }) => {
                   <span className="block doc-meta normal-case">
                     {m.why?.title
                       ? (m.why.url ? <a href={m.why.url} target="_blank" rel="noreferrer" className="hover:underline">{m.why.title}</a> : m.why.title)
-                      : 'No news on it: a move with the market or its sector.'}
+                      : 'No scored news on it.'}
                   </span>
                 </span>
                 <span className="text-right shrink-0">
