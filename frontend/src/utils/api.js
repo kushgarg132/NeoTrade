@@ -208,7 +208,6 @@ export const endpoints = {
       ).toString();
       return query ? `/suggestions?${query}` : '/suggestions';
     },
-    approve: (id) => `/suggestions/${id}/approve`,
     approveLive: (id) => `/suggestions/${id}/approve-live`,
     reject: (id) => `/suggestions/${id}/reject`,
     scan: '/suggestions/scan',

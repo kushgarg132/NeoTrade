@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 ACTION_TTL = timedelta(minutes=5)
 CARD_PREFIX = "ACTION_CARD:"
+PAPER_APPROVALS_GONE = ("There is no paper approval any more: the AI account paper-trades proposals itself. "
+                        "Approve with real money on your account, or decline.")
 SETTINGS = {
     "daily_loss_limit": float, "per_trade_cap": float, "max_trades_per_day": int,
     "cooldown_after_losses": int, "cooldown_minutes": int,
@@ -262,6 +264,8 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         return CARD_PREFIX + json.dumps(await store.propose(user_id, kind, params, summary, venue, second_tap, message))
 
     async def propose_approve(suggestion_id: str, live: bool = False) -> str:
+        if not live:
+            return PAPER_APPROVALS_GONE
         try:
             s = await _pending_suggestion(db, user_id, suggestion_id, live)
         except ActionRefused as exc:
@@ -404,7 +408,7 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
 
     note = " Only prepares a card; the user must tap Confirm before anything happens."
     return [
-        tool(propose_approve, "Approve a pending proposal by its id (from get_decisions); live=true sends it with real money to the trader's own account." + note),
+        tool(propose_approve, "Approve a pending proposal by its id (from get_decisions) with real money on the trader's own account (live=true). There is no paper approval: the AI account paper-trades proposals itself." + note),
         tool(propose_decline, "Decline a pending proposal by its id, with an optional reason." + note),
         tool(propose_paper_run, "Start or stop the user's intraday paper-trading run." + note),
         tool(propose_setting, "Change one of the user's limits or switches: " + ", ".join(SETTINGS) + "." + note),
@@ -481,16 +485,12 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
                 params["suggestion_id"], routes.RejectRequest(reason=params.get("reason")), user=user, store=store,
             )
             return "Declined."
-        if params.get("live"):
-            done = await routes.approve_suggestion_live(
-                params["suggestion_id"], user=user, store=store, ledger=ledger, options_broker=routes._options_broker,
-                mine_broker=routes._mine_broker, mark_price=_mark_price,
-            )
-        else:
-            done = await routes.approve_suggestion(
-                params["suggestion_id"], user=user, store=store, ledger=ledger,
-                mark_price=_mark_price, option_premium=routes._live_option_premium,
-            )
+        if not params.get("live"):
+            raise ActionRefused(PAPER_APPROVALS_GONE)
+        done = await routes.approve_suggestion_live(
+            params["suggestion_id"], user=user, store=store, ledger=ledger, options_broker=routes._options_broker,
+            mine_broker=routes._mine_broker, mark_price=_mark_price,
+        )
         return f"{done['symbol']}: {done['status'].lower()}" + (f" ({done['reason']})" if done.get("reason") else "")
 
     if kind == "paper_run":

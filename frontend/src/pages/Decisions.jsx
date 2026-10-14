@@ -69,7 +69,6 @@ const Decisions = () => {
 
   const decide = async (suggestion, kind) => {
     const url = {
-      approve: endpoints.suggestions.approve(suggestion.id),
       live: endpoints.suggestions.approveLive(suggestion.id),
       reject: endpoints.suggestions.reject(suggestion.id),
     }[kind];
@@ -217,7 +216,6 @@ const Decisions = () => {
               <SuggestionRecord
                 key={suggestion.id}
                 suggestion={suggestion}
-                onApprove={() => decide(suggestion, 'approve')}
                 onApproveLive={() => decide(suggestion, 'live')}
                 onReject={() => decide(suggestion, 'reject')}
                 hasMine={hasMine}

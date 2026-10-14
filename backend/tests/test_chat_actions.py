@@ -82,7 +82,7 @@ async def _propose(db, tool, args, user="alice"):
 
 async def test_proposing_changes_nothing(env):
     db = env["db"]
-    await _propose(db, "propose_approve", {"suggestion_id": "s-alice"})
+    await _propose(db, "propose_approve", {"suggestion_id": "s-alice", "live": True})
     await _propose(db, "propose_decline", {"suggestion_id": "s-alice"})
     await _propose(db, "propose_setting", {"name": "daily_loss_limit", "value": 5000})
     await _propose(db, "propose_order", {"symbol": "INFY", "side": "BUY", "quantity": 10, "venue": "live"})
@@ -90,6 +90,11 @@ async def test_proposing_changes_nothing(env):
     assert (await PrefsStore(db).get("alice"))["daily_loss_limit"] == 1000.0
     assert env["broker"].placed == []
     assert await db["paper_orders"].count_documents({}) == 0
+
+
+async def test_there_is_no_paper_approval(env):
+    out = await _tools(env["db"])["propose_approve"].ainvoke({"suggestion_id": "s-alice"})
+    assert not out.startswith("ACTION_CARD:") and "paper-trades proposals itself" in out
 
 
 async def test_propose_refuses_unknown_or_others_suggestion(env):

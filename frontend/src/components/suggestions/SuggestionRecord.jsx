@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, X, Loader2, Quote, ChevronDown } from 'lucide-react';
+import { X, Loader2, Quote, ChevronDown } from 'lucide-react';
 import { Money, Stamp, Field, Scrip } from '../doc/Doc';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
@@ -92,7 +92,7 @@ const OptionTerms = ({ contract, quantity }) => (
   </>
 );
 
-const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasMine = true, news }) => {
+const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true, news }) => {
   const [busy, setBusy] = useState(null);
   const [failure, setFailure] = useState(null);
   // Real money takes two taps: the first only says what will be sent.
@@ -111,7 +111,7 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
     setBusy(kind);
     setFailure(null);
     try {
-      await { approve: onApprove, live: onApproveLive, reject: onReject }[kind]();
+      await { live: onApproveLive, reject: onReject }[kind]();
     } catch (err) {
       setFailure(
         err?.response?.data?.detail ||
@@ -258,30 +258,19 @@ const SuggestionRecord = ({ suggestion, onApprove, onApproveLive, onReject, hasM
               {suggestion.symbol} at market on your account. Tap again to send.
             </p>
           )}
-          {/* Decline and Paper share the row; real money sits apart and quiet
-              until armed, so it is never the thumb's default (two taps). */}
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => (confirmLive ? setConfirmLive(false) : act('reject'))}
-              disabled={busy !== null}
-              aria-label={confirmLive ? 'Cancel the real order' : `Decline ${suggestion.symbol}`}
-            >
-              {busy === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-              {confirmLive ? 'Cancel' : 'Decline'}
-            </Button>
-            <Button
-              variant="approve"
-              size="sm"
-              onClick={() => act('approve')}
-              disabled={busy !== null || confirmLive}
-              aria-label={`Approve ${suggestion.symbol} on paper`}
-            >
-              {busy === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-              Paper
-            </Button>
-          </div>
+          {/* No paper approval: the AI account paper-trades proposals itself.
+              Real money sits apart and needs two taps. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full"
+            onClick={() => (confirmLive ? setConfirmLive(false) : act('reject'))}
+            disabled={busy !== null}
+            aria-label={confirmLive ? 'Cancel the real order' : `Decline ${suggestion.symbol}`}
+          >
+            {busy === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+            {confirmLive ? 'Cancel' : 'Decline'}
+          </Button>
             {canGoLive && hasMine ? (
               <Button
                 variant={confirmLive ? 'danger' : 'secondary'}

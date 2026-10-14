@@ -94,51 +94,10 @@ def test_list_returns_the_users_pending_inbox(client, store):
     assert body[0]["score"]["final"] > 0
 
 
-def test_approve_places_the_order_and_opens_a_trade(client, store, ledger):
-    import asyncio
-    suggestion = asyncio.run(_seed(store))
-
-    resp = client.post(f"/api/v1/suggestions/{suggestion['id']}/approve")
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["status"] == "EXECUTED"
-    assert body["order_id"]
-
-    trades = asyncio.run(ledger.get_trades())
-    assert len(trades) == 1
-    assert trades[0]["symbol"] == "RELIANCE"
-    assert trades[0]["quantity"] == 10.0
-    assert trades[0]["entry_price"] == 105.0, "fills at the current mark, not the stale reference"
-    assert trades[0]["status"] == "OPEN"
-
-    positions = asyncio.run(ledger.get_open_positions())
-    assert positions["RELIANCE"].quantity == 10.0
 
 
-def test_a_proposal_with_no_strategy_cannot_be_approved(client, store, ledger):
-    """A fill no strategy owns can never be judged (11 such trades lost
-    ₹16,780 unattributed): approving one is refused and fills nothing."""
-    import asyncio
-    suggestion = asyncio.run(_seed(store, proposal=_proposal(strategy=None)))
-
-    resp = client.post(f"/api/v1/suggestions/{suggestion['id']}/approve")
-
-    assert resp.status_code == 409 and "strategy" in resp.json()["detail"]
-    assert asyncio.run(ledger.get_trades()) == []
-    assert asyncio.run(store.get("alice", suggestion["id"]))["status"] == "PENDING"
 
 
-def test_approving_twice_does_not_place_a_second_order(client, store, ledger):
-    import asyncio
-    suggestion = asyncio.run(_seed(store))
-
-    first = client.post(f"/api/v1/suggestions/{suggestion['id']}/approve")
-    second = client.post(f"/api/v1/suggestions/{suggestion['id']}/approve")
-
-    assert first.status_code == 200
-    assert second.status_code == 409
-    assert len(asyncio.run(ledger.get_trades())) == 1
 
 
 def test_reject_decides_without_touching_the_ledger(client, store, ledger):
@@ -157,7 +116,6 @@ def test_cannot_act_on_another_users_suggestion(client, store):
     import asyncio
     suggestion = asyncio.run(_seed(store, user_id="bob"))
 
-    assert client.post(f"/api/v1/suggestions/{suggestion['id']}/approve").status_code == 404
     assert client.post(f"/api/v1/suggestions/{suggestion['id']}/reject").status_code == 404
 
 
@@ -174,52 +132,8 @@ def _option_proposal() -> Proposal:
     )
 
 
-def test_approving_an_option_fills_at_its_live_premium_not_an_equity_mark(client, store, ledger):
-    """An option's symbol is an NFO contract; pricing it as an NSE equity used
-    to fail with "Unknown instrument", so option proposals could never fill."""
-    import asyncio
-
-    async def premium(user_id, symbol):
-        assert (user_id, symbol) == ("alice", "RELIANCE26OCT2760PE")
-        return 41.35
-
-    async def no_equity_mark(symbol):
-        raise AssertionError("an option must not be priced as an equity")
-
-    client.app.dependency_overrides[suggestions_router.get_option_premium] = lambda: premium
-    client.app.dependency_overrides[suggestions_router.get_mark_price] = lambda: no_equity_mark
-    suggestion = asyncio.run(_seed(store, proposal=_option_proposal()))
-
-    resp = client.post(f"/api/v1/suggestions/{suggestion['id']}/approve")
-
-    assert resp.status_code == 200
-    (fill,) = asyncio.run(ledger.get_fills())
-    assert fill.symbol == "RELIANCE26OCT2760PE" and fill.price == 41.35
 
 
-@pytest.mark.asyncio
-async def test_an_option_cannot_fill_without_a_broker_to_price_it(mongo, monkeypatch):
-    from fastapi import HTTPException
-
-    from backend.instruments.master import InstrumentMaster
-    from backend.instruments.models import Instrument
-
-    await InstrumentMaster(mongo).upsert_many([Instrument(
-        exchange="NFO", tradingsymbol="RELIANCE26OCT2760PE", name="RELIANCE", instrument_token=9,
-        exchange_token=9, instrument_type="PE", segment="NFO-OPT", lot_size=250, tick_size=0.05,
-        expiry=datetime(2026, 10, 27), strike=2760.0,
-    )])
-    monkeypatch.setattr(suggestions_router, "db", type("_Db", (), {"db": mongo, "redis": None})())
-    monkeypatch.setattr(suggestions_router, "get_credential_store", lambda: None)
-
-    async def nobody(*args):
-        return None
-    monkeypatch.setattr(suggestions_router, "live_premium_source", nobody)
-
-    with pytest.raises(HTTPException) as caught:
-        await suggestions_router._live_option_premium("alice", "RELIANCE26OCT2760PE")
-    assert caught.value.status_code == 409
-    assert "Connect Kite or Upstox" in caught.value.detail
 
 
 # --- approve live: a real option order with the user's broker ---------------
@@ -491,45 +405,8 @@ def test_an_option_over_the_per_trade_cap_is_refused(live_client, store, mongo):
     assert broker.placed == []
 
 
-async def test_two_concurrent_paper_approvals_book_one_fill(store, ledger):
-    """A page tap and a chat confirm at once: both passed the PENDING read and
-    both booked a fill before one got 409. Claim first, then fill."""
-    import asyncio
-
-    from fastapi import HTTPException
-
-    suggestion = await _seed(store)
-
-    async def slow_mark(symbol):
-        await asyncio.sleep(0.01)
-        return 105.0
-
-    async def approve():
-        try:
-            return await suggestions_router.approve_suggestion(
-                suggestion["id"], user=_USER, store=store, ledger=ledger, mark_price=slow_mark, option_premium=None)
-        except HTTPException as exc:
-            return exc.status_code
-
-    results = await asyncio.gather(approve(), approve())
-    assert sorted(r if isinstance(r, int) else 200 for r in results) == [200, 409]
-    assert len(await ledger.get_fills()) == 1
 
 
-async def test_a_failed_paper_fill_leaves_the_proposal_pending(store, ledger):
-    from fastapi import HTTPException
-
-    suggestion = await _seed(store)
-
-    async def no_price(symbol):
-        raise HTTPException(status_code=502, detail="no quote")
-
-    try:
-        await suggestions_router.approve_suggestion(
-            suggestion["id"], user=_USER, store=store, ledger=ledger, mark_price=no_price, option_premium=None)
-    except HTTPException:
-        pass
-    assert (await store.get("alice", suggestion["id"]))["status"] == "PENDING"
 
 
 def test_scan_inputs_are_bounded(client, mongo, monkeypatch):
