@@ -129,7 +129,7 @@ Ingest loops in `backend/datalayer/`:
    `sentiment:<SYM>` = 0.6 company + 0.25 sector + 0.15 market (the single `ai_score` the
    composite caps at 30%), plus sector and market sentiment and `analyst_verdict:<SYM>`.
 5. **React** — `news_react` (60 s): each new material item alerts users by their `news_alerts`
-   pref (held / held+watched / all / off), one alert per user and target an hour, by
+   pref (held / held+watched / all / off; held = the own account's real holdings, `mine_holdings`), one alert per user and target an hour, by
    Telegram and an in-app toast. `news_scan` (120 s) re-scans the names it moves for new
    long-term proposals — the autopilot takes only those moved by a proven theme (below),
    the rest stay yours to decide; `news_exits` only shadow-logs what the autopilot would sell.

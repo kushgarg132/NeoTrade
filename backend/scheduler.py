@@ -115,16 +115,16 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
     except Exception as exc:
         logger.warning("could not start the strategy builder: %s", exc)
 
-    # Weekly portfolio review: Friday's pass, after the journal sync, while
-    # that day's broker sessions are still valid.
+    # Daily portfolio review, after the journal sync, while the day's broker
+    # sessions are still valid. The mirror stays weekly (Fridays).
     portfolios = 0
+    from backend.portfolio.service import daily_reviews
+    try:
+        portfolios = await daily_reviews(db, redis)
+    except Exception as exc:
+        logger.exception("daily portfolio reviews failed: %s", exc)
     if now.astimezone(IST).weekday() == 4:
         await _weekly_mirrors(db)
-        from backend.portfolio.service import weekly_reviews
-        try:
-            portfolios = await weekly_reviews(db, redis)
-        except Exception as exc:
-            logger.exception("weekly portfolio reviews failed: %s", exc)
 
     logger.info(
         "daily pass: %d journal trade(s) imported, %d expired, %d option position(s) closed, %d verdict(s) refreshed, "

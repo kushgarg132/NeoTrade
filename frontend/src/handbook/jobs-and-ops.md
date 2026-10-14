@@ -15,7 +15,7 @@ Everything that runs on its own, how code reaches production, and how the doors 
 6. Learning: pause / floor / regime rules from closed paper trades.
 7. Replay the day's game plans against no plan.
 8. First pass of a month: start the re-tune as its own `nice` process.
-9. Fridays: journal mirrors and the weekly portfolio review with worsening-verdict alerts.
+9. Every day: the portfolio review with worsening-verdict alerts. Fridays: journal mirrors.
 
 After the pass, the **data-quality check** (`backend/system/data_quality.py`, `job:last:data_quality`,
 "Data quality found" on the panel below): covered symbols whose newest daily bar is behind the

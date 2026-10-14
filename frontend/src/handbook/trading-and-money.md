@@ -251,5 +251,10 @@ Holdings from every connected broker merged by ISIN (`backend/portfolio/scorecar
 health per stock (`portfolio/health.py`), rule verdicts SELL / HOLD / ADD (funds REVIEW /
 KEEP) scored through `composite.py`, an AI write-up that explains but never decides, and an
 admin-only AI action plan. Verdicts are admin-only until `portfolio_verdicts` is `all`
-(needs SEBI RA registration). Re-reviewed Friday after the close, with a Telegram alert when
-a verdict gets worse.
+(needs SEBI RA registration). The review, its verdicts and its AI text cover the user's own
+(`mine`) account only; the AI account's holdings show without verdicts. Re-reviewed every
+trading day after the close (`portfolio/service.py::daily_reviews`), with a Telegram alert
+when a verdict gets worse. A broker that is logged out keeps its last holdings
+(`fetch_holdings` carries them over), priced from market quotes and marked "holdings as of".
+`portfolio/service.py::mine_holdings` is what the rest of the app means by "held": news
+alerts and the long-term scan's SELL ideas read it, never paper positions.

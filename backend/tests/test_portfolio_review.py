@@ -173,10 +173,10 @@ async def test_weekly_review_alerts_only_on_a_worse_verdict(monkeypatch):
     monkeypatch.setattr(hub, "publish", AsyncMock())
     monkeypatch.setattr("backend.auth.broker_credentials.fernet_from_settings", lambda: None)
 
-    assert await service.weekly_reviews(db, None) == 1
+    assert await service.daily_reviews(db, None) == 1
     ((chat, text),) = sent
     assert chat == 42 and "A: worth a closer look" in text and "SELL" not in text  # not an admin
-    assert await service.weekly_reviews(db, None) == 1 and len(sent) == 1  # still SELL: no repeat alert
+    assert await service.daily_reviews(db, None) == 1 and len(sent) == 1  # still SELL: no repeat alert
 
 
 def test_non_admins_do_not_see_the_action_plan():
