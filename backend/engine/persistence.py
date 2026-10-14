@@ -19,6 +19,14 @@ from typing import Optional
 from backend.core.models import Fill, Order, Position, Venue
 
 
+def mine_book(user_id: str) -> str:
+    """The ledger of real orders the app placed on the user's own (`mine`)
+    account. Apart from `user_id` (the AI account's paper book) and
+    `user_id:autopilot` (its live book), so the AI's record never holds
+    the user's trades."""
+    return f"{user_id}:mine"
+
+
 class LedgerStore:
     def __init__(self, db, user_id: str, run_id: Optional[str] = None, on_change=None) -> None:
         self.user_id = user_id

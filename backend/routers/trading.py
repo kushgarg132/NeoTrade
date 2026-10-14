@@ -49,7 +49,7 @@ from backend.engine.execution.broker import BrokerExecutionClient
 from backend.engine.execution.live_order_store import LiveOrderStore
 from backend.engine.execution.routing import RoutingExecutionClient
 from backend.engine.execution.simulated import SimulatedExecutionClient
-from backend.engine.persistence import LedgerStore
+from backend.engine.persistence import LedgerStore, mine_book
 from backend.ws.hub import hub
 from backend.ws.publish import publisher_for
 from backend.engine.portfolio import Portfolio
@@ -78,8 +78,11 @@ _RUNS: dict[str, asyncio.Task] = {}
 _MODE_TIMEFRAME = {"INTRADAY": "5m", "LONGTERM": "1d"}
 
 
-def get_ledger_store(user: User = Depends(get_current_user)) -> LedgerStore:
-    return LedgerStore(db.db, user_id=user.id, on_change=publisher_for(user.id))
+def get_ledger_store(venue: Optional[Venue] = None, user: User = Depends(get_current_user)) -> LedgerStore:
+    """venue=live reads the user's own account's book of app-placed orders;
+    otherwise the AI account's paper book."""
+    return LedgerStore(db.db, user_id=mine_book(user.id) if venue == "live" else user.id,
+                       on_change=publisher_for(user.id))
 
 
 def get_run_store() -> RunStore:

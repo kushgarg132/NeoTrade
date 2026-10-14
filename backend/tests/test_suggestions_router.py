@@ -433,3 +433,13 @@ def test_scan_past_its_budget_is_429(client, mongo, monkeypatch):
     monkeypatch.setattr(suggestions_router, "allow", over_budget)
     monkeypatch.setattr(suggestions_router, "_scan_and_enrich", fake_scan)
     assert client.post("/api/v1/suggestions/scan", json={"universe": ["ITC"]}).status_code == 429
+
+
+def test_approvals_book_on_the_users_own_account_not_the_ai_book(mongo, monkeypatch):
+    from backend.routers import trading
+
+    for module in (suggestions_router, trading):
+        monkeypatch.setattr(module, "db", type("_Db", (), {"db": mongo, "redis": None})())
+    assert suggestions_router.get_ledger_store(_USER).user_id == "alice:mine"
+    assert trading.get_ledger_store("live", _USER).user_id == "alice:mine"
+    assert trading.get_ledger_store("paper", _USER).user_id == "alice"

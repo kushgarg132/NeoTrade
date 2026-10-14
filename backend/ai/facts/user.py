@@ -49,12 +49,13 @@ async def portfolio(db, redis, user_id, symbol: Optional[str] = None,
     }
 
 
-@fact("positions", "The user's open engine positions (paper or live venue): symbol, quantity, average price.",
+@fact("positions", "Open positions: venue paper = the AI account's paper book, live = real orders the app placed "
+      "on the user's own account. Symbol, quantity, average price.",
       user=True, source="ledger")
 async def positions(db, redis, user_id, venue: Literal["paper", "live"] = "paper") -> dict:
-    from backend.engine.persistence import LedgerStore
+    from backend.engine.persistence import LedgerStore, mine_book
 
-    open_ = await LedgerStore(db, user_id=user_id).get_open_positions(venue=venue)
+    open_ = await LedgerStore(db, user_id=mine_book(user_id) if venue == "live" else user_id).get_open_positions(venue=venue)
     return {"venue": venue, "positions": [{"symbol": s, "quantity": p.quantity, "avg_price": p.avg_price}
                                           for s, p in sorted(open_.items())]}
 

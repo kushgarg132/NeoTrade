@@ -21,7 +21,7 @@ from pymongo import ReturnDocument
 from backend.core.models import Order, Side
 from backend.engine.autorun import in_session
 from backend.engine.execution.live_order_store import LiveOrderStore
-from backend.engine.persistence import LedgerStore
+from backend.engine.persistence import LedgerStore, mine_book
 from backend.engine.session import IST
 from backend.instruments.master import InstrumentMaster
 from backend.prefs import PrefsStore
@@ -470,7 +470,8 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
     from backend.ws.publish import publisher_for
 
     kind, params = action["kind"], action["params"]
-    ledger = LedgerStore(db, user_id=user_id, on_change=publisher_for(user_id))
+    # Approvals and orders here are real orders on the user's own account.
+    ledger = LedgerStore(db, user_id=mine_book(user_id), on_change=publisher_for(user_id))
 
     if kind in ("approve", "decline"):
         await _pending_suggestion(db, user_id, params["suggestion_id"], params.get("live", False))

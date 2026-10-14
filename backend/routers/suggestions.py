@@ -19,7 +19,7 @@ from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.database import db
 from backend.data.providers.yfinance_provider import YFinanceProvider
-from backend.engine.persistence import LedgerStore
+from backend.engine.persistence import LedgerStore, mine_book
 from backend.ws.publish import publisher_for
 from backend.auth.broker_credentials import get_credential_store
 from backend.instruments.master import InstrumentMaster
@@ -46,7 +46,8 @@ def get_suggestion_store() -> SuggestionStore:
 
 
 def get_ledger_store(user: User = Depends(get_current_user)) -> LedgerStore:
-    return LedgerStore(db.db, user_id=user.id, on_change=publisher_for(user.id))
+    """Approvals are real orders on the user's own account: their book."""
+    return LedgerStore(db.db, user_id=mine_book(user.id), on_change=publisher_for(user.id))
 
 
 async def _live_mark_price(symbol: str) -> float:
