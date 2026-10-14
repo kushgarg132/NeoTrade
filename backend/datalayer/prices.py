@@ -72,10 +72,18 @@ def _bare(symbol: str) -> str:
 
 
 async def priority_symbols(db) -> set[str]:
-    """Names someone holds (paper/live ledger) or watches."""
+    """Names someone holds -- in a paper or live ledger, or really, in the
+    latest portfolio read of each user's brokers -- or watches. A real
+    holding outside every scan list (CPPLUS, JINDALSAW) had no stored bars,
+    so its day move was measured from a days-old close."""
     held = await db["paper_positions"].distinct("symbol", {"quantity": {"$ne": 0}})
     watched = await db["watchlist"].distinct("symbols")
-    return {_bare(s) for s in [*held, *watched] if s}
+    real = []
+    for user_id in await db["portfolio_snapshots"].distinct("user_id"):
+        latest = await db["portfolio_snapshots"].find_one(
+            {"user_id": user_id}, {"raw_holdings.symbol": 1, "raw_holdings.kind": 1}, sort=[("at", -1)])
+        real += [h["symbol"] for h in (latest or {}).get("raw_holdings") or [] if h.get("kind", "STOCK") != "MF"]
+    return {_bare(s) for s in [*held, *watched, *real] if s}
 
 
 async def _quote(redis, symbols: set[str], ttl: int) -> int:

@@ -239,17 +239,22 @@ def scorecard_for(snapshot: dict, brokers: set[str], trades: list[dict], nifty: 
     return {**snapshot, **card, "brokers": sorted(brokers), "account_view": True}
 
 
-async def quoted(db, raw: list[dict], now: datetime) -> tuple[list[dict], bool]:
+async def quoted(db, raw: list[dict], now: datetime, read_at: datetime | None = None) -> tuple[list[dict], bool]:
     """Raw holdings repriced from market quotes, no broker call: the last
     price from the quote cache (or yfinance), the day's base from stored
-    daily closes. Funds keep their last price. Second value: any quote came."""
+    daily closes. Funds keep their last price. Rows read on an earlier day
+    (`read_at`) never keep their own close as the base: with no stored
+    close the day move is unknown, not measured from days ago. Second
+    value: any quote came."""
     stocks = [h["symbol"] for h in raw if h.get("kind", "STOCK") != "MF"]
     marks = await mark_prices(db, stocks)
     if not marks:
         return raw, False
-    prev = await bars.prev_closes(db, stocks, bars.today_ist(now))
+    today = bars.today_ist(now)
+    prev = await bars.prev_closes(db, stocks, today)
+    old = read_at is not None and bars.today_ist(read_at) < today
     return [{**h, "last_price": marks.get(h["symbol"], h.get("last_price")),
-             "close_price": prev.get(h["symbol"], h.get("close_price"))} for h in raw], True
+             "close_price": prev.get(h["symbol"], None if old else h.get("close_price"))} for h in raw], True
 
 
 async def with_live_prices(db, user_id: str, snapshot: dict, credentials, redis) -> dict:
@@ -262,7 +267,7 @@ async def with_live_prices(db, user_id: str, snapshot: dict, credentials, redis)
     now = datetime.now(timezone.utc)
     raw = [h.model_dump() for h in carried]
     if raw:
-        raw, priced = await quoted(db, raw, now)
+        raw, priced = await quoted(db, raw, now, snapshot.get("at"))
         if not priced and not holdings:
             return snapshot
     elif not holdings:

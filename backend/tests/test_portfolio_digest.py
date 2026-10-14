@@ -92,3 +92,11 @@ async def test_premarket_goes_once_in_its_window(db, monkeypatch):
 
 async def test_postclose_skips_a_morning_catch_up(db):
     assert await digest.send_postclose(db, NOW.replace(hour=9, minute=20)) == 0
+
+
+async def test_a_holding_with_no_stored_close_has_no_day_move_not_a_days_old_one(db, monkeypatch):
+    # 14 Oct: CPPLUS had no daily bars, so "today" was measured from the 9 Oct snapshot's close.
+    monkeypatch.setattr(service.bars, "prev_closes", AsyncMock(return_value={"DOWN": 100.0, "FLAT": 100.0}))
+    p = await digest.pulse(db, "alice", NOW)
+    assert p["day_change"] == -100  # DOWN only; UP's stale close is not a base
+    assert "UP" not in [m["symbol"] for m in p["movers"]]

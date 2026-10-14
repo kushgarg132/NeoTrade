@@ -60,15 +60,30 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
     """The user's own account right now: value, gain, today's move, the
     biggest movers with the headline behind each, and verdict changes from
     the last review. None before the first portfolio read."""
+    from backend.auth.broker_credentials import get_credential_store
     from backend.brokers.roles import brokers_for
-    from backend.portfolio.service import latest_snapshot, quoted, scorecard_for
+    from backend.database import db as handle
+    from backend.portfolio.service import fetch_holdings, latest_snapshot, quoted, scorecard_for
     from backend.prefs import PrefsStore
 
     now = now or datetime.now(timezone.utc)
     snapshot = await latest_snapshot(db, user_id)
     if not snapshot:
         return None
-    raw, priced = await quoted(db, snapshot.get("raw_holdings") or [], now)
+    # A logged-in broker is read now (its own prices and previous close, as
+    # Mine -> Holdings shows); only a logged-out one is carried and quoted.
+    try:
+        live, _, carried = await fetch_holdings(user_id, get_credential_store(), handle.redis, snapshot)
+    except Exception as exc:
+        logger.warning("pulse: broker read failed for %s, quoting the snapshot: %s", user_id, exc)
+        live, carried = [], None
+    if carried is None:
+        rest = snapshot.get("raw_holdings") or []
+    else:
+        rest = [h.model_dump() for h in carried]
+    rest, priced = await quoted(db, rest, now, _aware(snapshot["at"])) if rest else (rest, False)
+    raw = [h.model_dump() for h in live] + rest
+    priced = priced or bool(live)
     mine = brokers_for((await PrefsStore(db).get(user_id)).get("broker_roles") or {}, "mine")
     card = scorecard_for({**snapshot, "raw_holdings": raw}, mine or {h.get("broker") for h in raw}, [], [])
     totals = card["totals"]
@@ -84,7 +99,8 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
                    for r in card["holdings"] if r.get("previous_verdict") and r.get("verdict")
                    and r["verdict"] != r["previous_verdict"]]
     return {
-        "as_of": now if priced else _aware(snapshot["at"]), "holdings_as_of": _aware(snapshot["at"]),
+        "as_of": now if priced else _aware(snapshot["at"]),
+        "holdings_as_of": _aware(snapshot["at"]) if rest else now,
         "value": round(totals["value"] or 0, 2), "invested": round(totals["invested"] or 0, 2),
         "pnl": round(totals["pnl"] or 0, 2), "pnl_pct": totals["pnl_pct"],
         "day_change": round(totals["day_change"] or 0, 2),
