@@ -10,7 +10,7 @@ import { cn } from '../../utils/cn';
  * long-term pass, so while it is on both run regardless of their own
  * switches (backend/prefs.py::scan_enabled_users, engine/autorun.py::tick);
  * here they show as kept on. Intraday paper is independent. Limits and
- * per-strategy live switches stay in Practice › Setup.
+ * per-strategy live switches stay in AI › Settings.
  */
 
 const SWITCH =
@@ -53,12 +53,12 @@ const EngineSwitches = ({ prefs, save }) => {
         {autopilot
           ? 'Feeds the autopilot: the scan and the long-term pass stay on while it is on. Only intraday paper is your call.'
           : <>The strategy engine on its own. Its long-term proposals wait for you in{' '}
-              <Link to="/ai/decisions" className="underline">Decisions</Link>; turn the autopilot on and it takes them.</>}
+              <Link to="/mine/ideas" className="underline">Decisions</Link>; turn the autopilot on and it takes them.</>}
       </p>
       {switchRow(
         'auto_paper_intraday',
         'Paper-trade intraday every session (experimental)',
-        'Experimental: the intraday strategies lose money after charges in every backtest so far, so this is for watching them, not for results. Starts an intraday paper run at 9:15 AM IST each weekday and stops it at 3:30 PM, with positions squared off at 3:15 PM. It restarts itself after an interruption; stop it on Practice › Engine and it stays off for the rest of that day.'
+        'Experimental: the intraday strategies lose money after charges in every backtest so far, so this is for watching them, not for results. Starts an intraday paper run at 9:15 AM IST each weekday and stops it at 3:30 PM, with positions squared off at 3:15 PM. It restarts itself after an interruption; stop it on AI › Overview and it stays off for the rest of that day.'
       )}
       {switchRow(
         'scan_enabled',
@@ -74,7 +74,7 @@ const EngineSwitches = ({ prefs, save }) => {
       )}
       <p className="pt-3 doc-meta normal-case">
         Which strategies may trade real money:{' '}
-        <Link to="/practice/setup" className="underline">Practice › Setup</Link>.
+        <Link to="/ai/settings" className="underline">AI › Settings</Link>.
       </p>
     </Sheet>
   );

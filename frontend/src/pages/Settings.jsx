@@ -1005,7 +1005,7 @@ const GuardrailsSheet = () => {
 
       <Row
         label="Daily loss limit"
-        hint="Checked against your broker's own day P&L. Reaching it also trips the engine's kill-switch for the day. Shared with Practice and the autopilot (AI › Autopilot › Trading limits)."
+        hint="Checked against your broker's own day P&L. Reaching it also trips the engine's kill-switch for the day. Shared with the AI account (AI › Settings › Trading limits)."
       >
         <NumberField
           value={draft.daily_loss_limit}
@@ -1045,7 +1045,7 @@ const GuardrailsSheet = () => {
         </div>
       )}
 
-      {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this; the autopilot opens no more. Shared with AI › Autopilot › Trading limits. 0 is off.')}
+      {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this; the autopilot opens no more. Shared with AI › Settings › Trading limits. 0 is off.')}
       {numberRow('cooldown_after_losses', 'Cooldown after losses in a row', 'Start a cooldown after this many losses in a row. 0 is off.')}
       {numberRow('cooldown_minutes', 'Cooldown length, minutes', 'Any trade opened inside it is flagged.')}
       {numberRow('max_option_trades_per_day', 'Options trades per day', 'Alert when you open more options trades than this. 0 is off.')}
@@ -1402,21 +1402,6 @@ const ProfileRow = () => {
   );
 };
 
-/** Practice -- the strategy engine -- lives under More: engine, book, library and setup. Its decisions are under AI. */
-const PracticeRow = () => {
-  return (
-    <Link to="/practice" className="flex items-center gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors">
-      <span className="flex-1 min-w-0">
-        <span className="block text-sm font-semibold">
-          Practice
-        </span>
-        <span className="block doc-meta normal-case truncate">The strategy engine: engine, book, library and setup</span>
-      </span>
-      <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
-    </Link>
-  );
-};
-
 const LEGACY_TABS = { broker: 'accounts', guardrails: 'safety', portfolio: 'safety', beta: 'about' };
 
 const Settings = () => {
@@ -1439,7 +1424,6 @@ const Settings = () => {
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
         <ProfileRow />
-        <PracticeRow />
         <div>
           <Tabs tabs={tabs} active={tab} onSelect={setTab} label="Settings sections" />
           <div className="pt-3 sm:pt-4 space-y-3 sm:space-y-4">
@@ -1454,7 +1438,7 @@ const Settings = () => {
               <>
                 <ModelSheet isAdmin={isAdmin} />
                 <Link
-                  to="/ai/autopilot"
+                  to="/ai/settings"
                   className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors"
                 >
                   <span className="text-sm"><span className="field-label">Autopilot</span> switch and limits are under AI → Autopilot</span>

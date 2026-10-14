@@ -523,7 +523,7 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
 
         # The form's own handler: it re-validates the stored spec and applies every limit.
         doc = await routes.submit_strategy(routes.StrategyBody(**params), user=SimpleNamespace(id=user_id))
-        return f"Testing ‘{doc['name']}’ now (about 10 minutes); see Practice › Strategies › Mine."
+        return f"Testing ‘{doc['name']}’ now (about 10 minutes); see AI › Strategies › Mine."
 
     if kind == "setting":
         value = _setting(params["name"], params["value"])

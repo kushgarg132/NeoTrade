@@ -122,7 +122,7 @@ const Portfolio = () => {
         )}
 
         <Sheet
-          title="Practice money"
+          title="Paper money"
           meta={summary.trades ? `${summary.trades} closed · ${Math.round(summary.winRate * 100)}% won` : 'Net of charges'}
         >
           <div className="grid grid-cols-3 border border-[var(--rule-strong)] mb-3" role="tablist" aria-label="Period">

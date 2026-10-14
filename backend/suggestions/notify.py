@@ -23,7 +23,7 @@ def proposals_text(suggestions: list[dict], heading: str) -> str:
         )
     if len(suggestions) > 15:
         lines.append(f"…and {len(suggestions) - 15} more")
-    lines.append("Decide under AI → Decisions.")
+    lines.append("Decide under Mine → Ideas.")
     return "\n".join(lines)
 
 

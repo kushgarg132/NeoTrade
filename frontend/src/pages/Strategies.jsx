@@ -153,7 +153,7 @@ const Strategies = () => {
         <Sheet
           title="Strategies"
           meta={cards ? counts.map(([n, label]) => `${n} ${label}`).join(' · ') : undefined}
-          actions={<Link to="/practice/setup" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Live switches ›</Link>}
+          actions={<Link to="/ai/settings" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Live switches ›</Link>}
         >
           <Tabs tabs={[{ id: 'INTRADAY', label: 'Intraday' }, { id: 'LONGTERM', label: 'Long-term' }]}
                 active={mode} onSelect={setMode} label="Strategy timeframe" className="static z-auto mb-1" />

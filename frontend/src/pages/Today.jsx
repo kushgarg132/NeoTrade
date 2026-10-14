@@ -47,7 +47,7 @@ const StatusStrip = ({ data }) => {
       })}
       {(armed?.autopilot || armed?.strategies?.length > 0) && (
         // Goes where the armed thing is switched off: the autopilot under AI, strategies in Practice setup.
-        <Chip tone="bad" to={armed.autopilot ? '/ai/autopilot' : '/practice/setup'}>
+        <Chip tone="bad" to={armed.autopilot ? '/ai/settings' : '/ai/settings'}>
           ▲ LIVE armed{armed.autopilot ? ' · autopilot' : ''}{armed.strategies?.length ? ` · ${armed.strategies.length} strateg${armed.strategies.length === 1 ? 'y' : 'ies'}` : ''}
         </Chip>
       )}
@@ -100,7 +100,7 @@ const NeedsYou = ({ items, proposalsTotal }) => {
     title="Do today"
     meta={items.length ? String(items.length + Math.max(hidden, 0)) : undefined}
     actions={
-      <Link to="/ai/decisions" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
+      <Link to="/mine/ideas" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
         Ideas ›
       </Link>
     }

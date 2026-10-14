@@ -1,12 +1,9 @@
 import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigationType } from 'react-router-dom';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
-const PaperOverview = lazy(() => import('./pages/PaperOverview'));
-const PaperSettings = lazy(() => import('./pages/PaperSettings'));
 const Strategies = lazy(() => import('./pages/Strategies'));
 const OptionChain = lazy(() => import('./pages/OptionChain'));
 const Decisions = lazy(() => import('./pages/Decisions'));
-const ScannerPage = lazy(() => import('./pages/ScannerPage'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
 const Journal = lazy(() => import('./pages/Journal'));
@@ -99,56 +96,43 @@ const App = () => {
       <Route path="/login" element={<Login />} />
       {/* Today */}
       <Route path="/" element={gated(<Today />)} />
-      {/* Mine: the user's own account */}
+      {/* Mine: the user's own account -- holdings, ideas for it, trades */}
       <Route path="/mine" element={<Navigate to="/mine/holdings" replace />} />
       <Route path="/mine/holdings" element={gated(<MyPortfolio lockedAccount="mine" />)} />
+      <Route path="/mine/ideas" element={gated(<Decisions />)} />
       <Route path="/mine/trades" element={gated(<Journal view="trades" lockedAccount="mine" />)} />
       <Route path="/mine/habits" element={gated(<Journal view="habits" lockedAccount="mine" />)} />
-      {/* AI: the AI account and its autopilot only */}
+      {/* AI: the account the app runs, paper until a strategy earns live */}
       <Route path="/ai" element={gated(<AiOverview />)} />
       <Route path="/ai/activity" element={gated(<AiActivity />)} />
-      <Route path="/ai/autopilot" element={gated(<AiLimits />)} />
+      <Route path="/ai/book" element={gated(<Portfolio />)} />
+      <Route path="/ai/strategies" element={gated(<Strategies />)} />
+      <Route path="/ai/settings" element={gated(<AiLimits />)} />
       {/* Research */}
       <Route path="/research" element={gated(<Dashboard />)} />
       <Route path="/research/stock/:symbol" element={gated(<Dashboard />)} />
       <Route path="/research/news" element={gated(<News />)} />
       <Route path="/research/watchlist" element={gated(<Watchlist />)} />
-      <Route path="/research/scanner" element={gated(<ScannerPage />)} />
+      {/* Not a tab (Upstox-only, no F&O trading here): reached from the NIFTY / BANK NIFTY cards. */}
       <Route path="/research/options" element={gated(<OptionChain />)} />
       {/* More */}
       <Route path="/settings" element={gated(<Settings />)} />
       <Route path="/profile" element={gated(<Profile />)} />
       <Route path="/system" element={gated(<RequireAdmin><Handbook /></RequireAdmin>)} />
       <Route path="/system/future" element={gated(<RequireAdmin><Backlog /></RequireAdmin>)} />
-      {/* Practice (under More): the strategy engine, its decisions and its book */}
-      <Route path="/practice" element={gated(<PaperOverview />)} />
-      <Route path="/practice/decisions" element={<Moved to="/ai/decisions" />} />
-      <Route path="/practice/book" element={gated(<Portfolio />)} />
-      <Route path="/practice/setup" element={gated(<PaperSettings />)} />
-      <Route path="/practice/strategies" element={gated(<Strategies />)} />
-      <Route path="/practice/library" element={<Moved to="/practice/strategies" />} />
       {/* Old links and bookmarks follow the move, query string included. */}
-      <Route path="/portfolio" element={<Moved to="/mine/holdings" />} />
+      {[
+        ['/ai/decisions', '/mine/ideas'], ['/ai/autopilot', '/ai/settings'], ['/ai/limits', '/ai/settings'],
+        ['/practice', '/ai'], ['/practice/book', '/ai/book'], ['/practice/strategies', '/ai/strategies'],
+        ['/practice/setup', '/ai/settings'], ['/practice/decisions', '/mine/ideas'], ['/practice/library', '/ai/strategies'],
+        ['/ai/practice', '/ai'], ['/ai/practice/decisions', '/mine/ideas'], ['/ai/practice/book', '/ai/book'],
+        ['/ai/practice/holdings', '/ai/book'], ['/ai/practice/engine', '/ai'], ['/ai/practice/settings', '/ai/settings'],
+        ['/decisions', '/mine/ideas'], ['/suggestions', '/mine/ideas'], ['/paper', '/ai'], ['/paper/decisions', '/mine/ideas'],
+        ['/paper/holdings', '/ai/book'], ['/paper/engine', '/ai'], ['/paper/settings', '/ai/settings'], ['/trading', '/ai'],
+        ['/portfolio', '/mine/holdings'], ['/watchlist', '/research/watchlist'], ['/options', '/research/options'],
+        ['/scanner', '/research'], ['/research/scanner', '/research'],
+      ].map(([from, to]) => <Route key={from} path={from} element={<Moved to={to} />} />)}
       <Route path="/journal" element={<JournalMoved />} />
-      <Route path="/watchlist" element={<Moved to="/research/watchlist" />} />
-      <Route path="/scanner" element={<Moved to="/research/scanner" />} />
-      <Route path="/options" element={<Moved to="/research/options" />} />
-      <Route path="/ai/limits" element={<Moved to="/ai/autopilot" />} />
-      <Route path="/ai/practice" element={<Moved to="/practice" />} />
-      <Route path="/ai/decisions" element={gated(<Decisions />)} />
-      <Route path="/ai/practice/decisions" element={<Moved to="/ai/decisions" />} />
-      <Route path="/ai/practice/book" element={<Moved to="/practice/book" />} />
-      <Route path="/ai/practice/holdings" element={<Moved to="/practice/book" />} />
-      <Route path="/ai/practice/engine" element={<Moved to="/practice" />} />
-      <Route path="/ai/practice/settings" element={<Moved to="/practice/setup" />} />
-      <Route path="/decisions" element={<Moved to="/ai/decisions" />} />
-      <Route path="/paper" element={<Moved to="/practice" />} />
-      <Route path="/paper/decisions" element={<Moved to="/ai/decisions" />} />
-      <Route path="/paper/holdings" element={<Moved to="/practice/book" />} />
-      <Route path="/paper/engine" element={<Moved to="/practice" />} />
-      <Route path="/paper/settings" element={<Moved to="/practice/setup" />} />
-      <Route path="/suggestions" element={<Moved to="/ai/decisions" />} />
-      <Route path="/trading" element={<Moved to="/practice" />} />
       <Route path="*" element={gated(<NotFound />)} />
     </Routes>
   );

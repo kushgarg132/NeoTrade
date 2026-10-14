@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
-import { AI_TABS } from '../components/layout/sections';
+import { MINE_TABS } from '../components/layout/sections';
 import SuggestionRecord from '../components/suggestions/SuggestionRecord';
 import useSymbolNews from '../hooks/useSymbolNews';
 import { Link } from 'react-router-dom';
@@ -13,10 +13,10 @@ import api, { endpoints, getPreferences } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 
 /**
- * Practice -> Decisions: engine proposals (approve on paper or with real money
- * on the user's own account) and cards from the chat or the order ticket that
- * wait for a Confirm. Nothing here can trade the AI account; what its
- * autopilot did lives under AI.
+ * Mine -> Ideas: the engine's long-term ideas whose strategy is proven on the
+ * AI account (the server filters, risk/paper_gate.py::for_mine) -- approve with
+ * real money on the user's own account or decline -- and cards from the chat
+ * or the order ticket that wait for a Confirm. Nothing here trades the AI account.
  *
  * Long-term proposals only: each waits for an explicit approve or decline.
  * Intraday signals execute themselves — nobody can approve a five-minute
@@ -27,18 +27,17 @@ const Decisions = () => {
   // null until preferences load: no real-money button before we know.
   const [hasMine, setHasMine] = useState(null);
   const [showAll, setShowAll] = useState(false);
+  const [openedAt] = useState(() => Date.now());
   const [showDecided, setShowDecided] = useState(false);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [scanning, setScanning] = useState(false);
-  const [scanNote, setScanNote] = useState(null);
   // Bulk decline takes two taps, like every other irreversible action here.
   const [bulk, setBulk] = useState('idle'); // idle | armed | busy
   const { news } = useSymbolNews(items.map((s) => s.symbol));
 
-  const load = () => {
-    setLoading(true);
+  // Loading starts true, so the first fetch needs no spinner set from the effect.
+  const fetchItems = () =>
     api
       .get(endpoints.suggestions.list({}))
       .then((res) => {
@@ -47,9 +46,14 @@ const Decisions = () => {
       })
       .catch((err) => setError(err?.response?.data?.detail || 'Could not load proposals'))
       .finally(() => setLoading(false));
+  const load = () => {
+    setLoading(true);
+    fetchItems();
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    fetchItems();
+  }, []);
 
   useEffect(() => {
     getPreferences()
@@ -77,29 +81,15 @@ const Decisions = () => {
     setItems((list) => list.map((item) => (item.id === suggestion.id ? res.data : item)));
   };
 
-  const scan = async () => {
-    setScanning(true);
-    setScanNote(null);
-    try {
-      const res = await api.post(endpoints.suggestions.scan, {});
-      setScanNote(
-        `Scanning ${res.data.symbols} scrip. New proposals appear here as they are found.`
-      );
-    } catch (err) {
-      setScanNote(err?.response?.data?.detail || 'Could not start the scan');
-    } finally {
-      setScanning(false);
-    }
-  };
 
   // Long-term proposals only: intraday signals execute themselves and their
-  // fills are on Practice → Book.
+  // fills are on AI → Book.
   const inMode = items.filter((item) => item.mode === 'LONGTERM');
   // Strongest first: the top of the list is the one worth a decision.
   const pending = inMode
     .filter((item) => item.status === 'PENDING')
     .sort((a, b) => (b.score?.final ?? 0) - (a.score?.final ?? 0));
-  const expiring = pending.filter((item) => item.expires_at && new Date(item.expires_at) - Date.now() < 86_400_000);
+  const expiring = pending.filter((item) => item.expires_at && new Date(item.expires_at) - openedAt < 86_400_000);
 
   const declineExpiring = async () => {
     if (bulk === 'idle') return setBulk('armed');
@@ -120,28 +110,17 @@ const Decisions = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4">
-        <SectionTabs tabs={AI_TABS} label="AI account" />
+        <SectionTabs tabs={MINE_TABS} label="My account" />
         <WaitingCards />
 
         <Sheet
-          title="Proposals"
-          meta={`${inMode.filter((i) => i.status === 'PENDING').length} awaiting`}
-          actions={
-            <Button variant="secondary" size="sm" onClick={scan} disabled={scanning}>
-              {scanning ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="w-3.5 h-3.5" />
-              )}
-              <span className="hidden sm:inline">Long-term scan</span>
-              <span className="sm:hidden">Scan</span>
-            </Button>
-          }
+          title="Ideas for your account"
+          meta={`${inMode.filter((i) => i.status === 'PENDING').length} waiting`}
           bodyClassName="p-0"
         >
           <div className="flex items-center justify-between gap-3 px-3 py-2 sm:px-4 sm:py-2.5 bg-[var(--paper-sunk)]">
             <p className="doc-meta normal-case hidden sm:block">
-              Long-term proposals wait for your decision.
+              From strategies proven on the AI account. Approve with real money, or decline.
             </p>
             {!showDecided && expiring.length > 1 && (
               <span className="flex items-center gap-2 ml-auto">
@@ -170,11 +149,6 @@ const Decisions = () => {
             </button>
           </div>
 
-          {scanNote && (
-            <p className="px-4 py-2.5 text-sm text-[var(--ink-soft)] border-b border-[var(--rule)]">
-              {scanNote}
-            </p>
-          )}
         </Sheet>
 
         {loading ? (
@@ -204,7 +178,7 @@ const Decisions = () => {
               }
               action={
                 !showDecided ? (
-                  <Link to="/practice/strategies" className="field-label text-[var(--stamp)] hover:underline">
+                  <Link to="/ai/strategies" className="field-label text-[var(--stamp)] hover:underline">
                     What each strategy still needs ›
                   </Link>
                 ) : null

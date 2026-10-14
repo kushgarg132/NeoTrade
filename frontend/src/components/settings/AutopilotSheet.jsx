@@ -3,7 +3,7 @@ import { Sheet, Ruling } from '../doc/Doc';
 import { Row, NumberField } from './Fields';
 import api, { endpoints, getPreferences } from '../../utils/api';
 import { cn } from '../../utils/cn';
-import { formatDateTime } from '../../utils/formatters';
+import { Link } from 'react-router-dom';
 import EngineSwitches from './EngineSwitches';
 
 // One set for paper and live: Practice, live strategies, the autopilot and
@@ -21,7 +21,6 @@ const LIMITS = [
 const AutopilotSheet = () => {
   const [prefs, setPrefs] = useState(null);
   const [draft, setDraft] = useState({});
-  const [log, setLog] = useState([]);
   const [note, setNote] = useState(null);
   const [confirmLive, setConfirmLive] = useState(null); // typed text while arming live
 
@@ -33,7 +32,6 @@ const AutopilotSheet = () => {
     }).catch(() => setFailed(true));
   useEffect(() => {
     loadPrefs();
-    api.get(endpoints.settings.autopilotLog).then((res) => setLog(res.data.rows)).catch(() => setLog([]));
   }, []);
 
   const save = (patch) => {
@@ -65,7 +63,7 @@ const AutopilotSheet = () => {
     >
       <p className="text-sm text-[var(--ink-soft)]">
         Acts for the AI account{aiBroker ? ` (${aiBroker.charAt(0).toUpperCase() + aiBroker.slice(1)})` : ''} without
-        asking you: it takes the Practice engine's proposals and AI chat ideas and places them, inside the
+        asking you: it takes the engine's proposals and AI chat ideas and places them, inside the
         trading limits below. NSE stocks only, market hours only. Every order and every refusal is sent to you on
         Telegram with a stop button.
       </p>
@@ -76,7 +74,7 @@ const AutopilotSheet = () => {
         label="Autopilot"
         hint={!prefs.autopilot_enabled ? 'Off: places nothing.'
           : prefs.autopilot_live ? 'Live: real orders on the AI account, only from strategies that passed their backtest and their paper record. Other proposals wait for you.'
-          : 'Paper: fills in your Practice book, tagged autopilot. Nothing sent to the broker.'}
+          : 'Paper: fills in the AI account’s paper book. Nothing sent to the broker.'}
       >
         {confirmLive === null ? (
           <span className="inline-flex" role="radiogroup" aria-label="Autopilot mode">
@@ -131,28 +129,12 @@ const AutopilotSheet = () => {
         </button>
       </Row>}
       {note && <p className="doc-meta normal-case text-[var(--loss)] mt-2">{note}</p>}
-      <p className="field-label mt-4 mb-1">Recent activity</p>
-      {log.length === 0 ? (
-        <p className="doc-meta normal-case">Nothing yet.</p>
-      ) : (
-        <ul className="divide-y divide-[var(--rule)]">
-          {log.map((row, i) => (
-            <li key={`${row.at}-${i}`} className="py-2 text-sm">
-              <span className={cn('field-label mr-2', row.status === 'FILLED' ? 'text-[var(--gain)]' : row.status === 'SENT' ? 'text-[var(--ink-soft)]' : 'text-[var(--loss)]')}>
-                {row.status}
-              </span>
-              {row.side} {row.quantity} {row.symbol}
-              <span className="doc-meta normal-case"> · {row.source} · {formatDateTime(row.at)}</span>
-              {row.reason && row.status !== 'FILLED' && <p className="doc-meta normal-case">{row.reason}</p>}
-            </li>
-          ))}
-        </ul>
-      )}
+      <Link to="/ai/activity" className="field-label text-[var(--stamp)] hover:underline inline-block mt-3">What it did ›</Link>
     </Sheet>
     <EngineSwitches prefs={prefs} save={save} />
     <Sheet title="Trading limits" meta="Paper and live" className="mt-3 sm:mt-4">
       <p className="text-sm text-[var(--ink-soft)]">
-        One set for everything: Practice, live strategies, the autopilot, and Watch my broker on your own account.
+        One set for everything: the AI account (paper and live), and Watch my broker on your own account.
       </p>
       {LIMITS.map(([key, label, hint]) => (
         <Row key={key} label={label} hint={hint}>

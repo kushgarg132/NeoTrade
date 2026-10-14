@@ -62,7 +62,7 @@ These make conviction legible. Enforced in code and tests, not by discipline.
 
 Registered in `backend/strategies/registry.py`; each class carries a `CARD`
 (`backend/strategies/card.py`: style, regimes it suits, conditions, best/avoid, typical
-hold), shown in Practice → Strategies with this account's record and what each still needs.
+hold), shown in AI → Strategies with this account's record and what each still needs.
 
 - **Intraday:** `orb_breakout`, `vwap_reversion`, `volume_surge`, `rsi_momentum_scalp`, and the
   news-aware set `gap_and_go`, `gap_fill_fade` (per-day catalyst map,
@@ -101,7 +101,7 @@ validated (`backend/builder/validate.py::validate_spec`, duplicates dropped) and
 2. The last 90 days alone are net-positive (the holdout).
 3. Deflated Sharpe ≥ 0.95 over every draft ever tried, so a lucky draw among many does not pass.
 
-Active strategies appear in Practice → Strategies as `built:<slug>` with a **Built** badge; failures sit
+Active strategies appear in AI → Strategies as `built:<slug>` with a **Built** badge; failures sit
 under "Tried and rejected" with the reason. They trade on paper first, then need both gates to real money
 (above) like any strategy. Each takes at most one entry per symbol per day and exits by its stop, target or the
 15:15 square-off. `backend/strategies/built.py::BlockStrategy` starts each symbol fresh every session, seeded
@@ -132,7 +132,7 @@ are shared across both.
 The chat can do the same: `backend/chat/actions.py::action_tools` offers `propose_strategy`, which validates the
 spec and returns a card; Confirm runs `submit_strategy` itself, so every limit and the test are the form's.
 
-Practice → Strategies → **Mine** → **New strategy** composes a spec from the same blocks. Pick the **Horizon**
+AI → Strategies → **Mine** → **New strategy** composes a spec from the same blocks. Pick the **Horizon**
 (Intraday / Swing) first; Swing hides Short and asks for `Max hold (days)` and an optional
 `Trailing stop (× ATR)`. Rows carry an Intraday / Swing chip. The chat's `propose_strategy` lists both
 vocabularies and takes `"horizon": "swing"` in the spec. (The form reads
@@ -182,7 +182,7 @@ Every run still runs every strategy on paper; the gates decide only where orders
 
 ## Long-term proposals (AI → Decisions)
 
-Decided at `/ai/decisions` (moved from Practice 2026-10-06; old paths redirect). Approving
+Decided at `/mine/ideas` (Mine → Ideas since 2026-10-14; old paths redirect). Approving
 there never trades the AI account: fills go to paper or, on a second tap, to `mine`.
 
 
@@ -219,7 +219,7 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
 exception to the backtest gate and to "model output never places an order". Every entry
 passes `autopilot/fence.py::check` against the shared trading limits (one set for paper and
 live, edited on AI → Autopilot: `max_exposure`, `per_trade_cap`, `max_trades_per_day`,
-`daily_loss_limit` — the same fields Practice and Watch my broker read; 0 trades or loss is off),
+`daily_loss_limit` — the same fields the AI account and Watch my broker read; 0 trades or loss is off),
 its own daily-loss trip, the shared kill switch, Nifty 200 names, NSE equity, market hours; exits
 are never blocked, not even with the autopilot off. Risk-off halves the per-trade cap and refuses news entries; a high-impact
 event within 30 min refuses all entries; news entries stop at 3 a day. One switch, Off ·
@@ -236,11 +236,13 @@ whatever their own switches say (`prefs.py::scan_enabled_users`, `engine/autorun
 trades the scan's proposals and acts in that pass, and used to sit idle with either off. Every order and refusal goes to
 `autopilot_log` and Telegram with a Stop button.
 
-## Practice: runs, books, learning
+## The AI paper book: runs, books, learning
 
-Three tabs, one job each: **Engine** (what it is doing now, today net of charges),
-**Book** (the practice money over Today / Month / All time, net of charges, from closed
-trades), **Strategies** (which strategy is good enough, the track record, learning).
+Under AI, one job per tab: **Overview** (the autopilot and its capital, what the engine is
+doing now, today net of charges, what it traded), **Activity** (every autopilot order and
+refusal), **Book** (the paper money over Today / Month / All time, net of charges, from closed
+trades), **Strategies** (which strategy is good enough, the track record, learning),
+**Settings** (the autopilot, the engine switches, the limits, each strategy's paper / live switch).
 `compute_pnl` reports `costs` and `net` per period and `all_time`.
 
 
@@ -256,7 +258,7 @@ trades), **Strategies** (which strategy is good enough, the track record, learni
   Sharpe guard: daily-bar strategies on three years of yfinance closes, 5-minute ones on a year
   from the admin's Upstox (or Kite) session (`backend/risk/gate_backtest.py::intraday_history`),
   skipped when neither is logged in. The LLM may only *suggest* thresholds, which are tested like
-  any other variant. Shown under Practice → Strategies → What the engine learned.
+  any other variant. Shown under AI → Strategies → What the engine learned.
 
 ## Portfolio (Mine → Holdings)
 

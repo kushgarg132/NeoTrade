@@ -145,7 +145,7 @@ the autopilot fence.
 
 **What you see** — Research → News (`GET /news/feed`: your names by default — paper
 positions, broker holdings and the watchlist — filings that move nothing left out),
-`NewsChip` on Holdings, Watchlist, Scanner and Decisions (`GET /news/symbols`), and Today's
+`NewsChip` on Holdings, Watchlist and Ideas (`GET /news/symbols`), and Today's
 Markets card.
 
 <!-- live:news -->

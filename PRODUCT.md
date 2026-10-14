@@ -6,19 +6,24 @@
 
 ## What it is
 
-**The discipline layer on top of your broker**, for traders in **Indian equities and F&O**.
-Each user connects their own broker account (Zerodha Kite, Upstox, or Angel One). NeoTrade
-journals their real trades automatically, shows the habits that are costing them money, and
-enforces the loss limits they set for themselves.
+**Two broker accounts and one daily answer**, for a trader in **Indian equities** (since
+Phase 19, 2026-10-14; spec `docs/superpowers/specs/2026-10-14-two-accounts-reset-design.md`).
 
-Why this and not "AI trade ideas": SEBI's own studies show roughly nine in ten retail F&O
-traders lose money. What they lack is not ideas but discipline, visibility, and an honest
-review of their own trading. And this product's own strategies currently fail their backtest
-gate (see `docs/ROADMAP.md` Phase 4), so selling their output would be selling losses.
+- **Mine** — the trader's own account (role `mine`). NeoTrade reads its holdings every day,
+  says where the account stands and what moved and why, gives each holding a verdict
+  (hold / add / trim / sell), alerts on exit levels, journals the trades, and enforces the loss
+  limits the trader set. It never trades this account on its own: every order here is the
+  trader's two-tap decision.
+- **AI** — a second broker account the app runs (role `ai`): the strategy engine, the
+  long-term scan, news and the autopilot. It trades **on paper until a strategy earns live
+  money** (a passing backtest plus a passing paper record), then on capped capital.
+- **The link:** an idea reaches the trader's account only from a strategy proven on the AI
+  account (`risk/paper_gate.py::for_mine`). The two accounts compete, AI against the trader,
+  net of charges, on Today.
 
-The strategy engine still exists as a secondary, free feature. It watches a universe of
-instruments, sizes and scores its own trade ideas, and either executes them (intraday) or
-hands them to the trader to approve or reject (long-term), per strategy on paper or live.
+Why: the strategies do not yet pass their gates, so handing their raw output to the trader
+would be handing over losses. The AI account is where an idea earns trust; the trader's own
+account gets the daily review and only the ideas that earned it.
 
 ## The mechanism nobody else has
 
@@ -55,11 +60,13 @@ stop?"*
 
 ## Surfaces
 
-Navigation (since 2026-10-05): **Today · Mine · AI · Research · More**, the same five on the
-phone's bottom bar; old paths redirect. Each kind of money has one home: Mine is the user's own
-account, AI is the AI account plus **Decisions** (since 2026-10-06: the engine's proposals and
-waiting cards, with the pending badge), and **Practice** (the strategy engine and its
-practice-money book) sits under More.
+Navigation (since 2026-10-14): **Today · Mine · AI · Research · More**, the same five on the
+phone's bottom bar; old paths redirect. Mine is the trader's own account (Holdings · Ideas ·
+Trades · Habits, the ideas badge on Mine); AI is the account the app runs (Overview · Activity ·
+Book · Strategies · Settings; "Practice" is gone, it is the AI account on paper); More is setup.
+Rows below that still name Practice, Decisions or the Scanner describe their old place: Decisions
+is Mine → Ideas, Practice → Engine is AI → Overview, Book / Strategies / Setup are AI → Book /
+Strategies / Settings, and the bullish Scanner and paper approvals are gone.
 
 | Surface | Mode | The visitor's success |
 |---|---|---|
