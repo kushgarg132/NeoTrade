@@ -642,7 +642,7 @@ const MyPortfolio = ({ lockedAccount = null }) => {
           </div>
         )}
       </div>
-      {ticket && <OrderTicket {...ticket} venue="mine" onClose={() => setTicket(null)} />}
+      {ticket && <OrderTicket {...ticket} onClose={() => setTicket(null)} />}
     </Layout>
   );
 };

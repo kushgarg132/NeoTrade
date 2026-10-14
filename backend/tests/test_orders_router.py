@@ -12,7 +12,6 @@ from mongomock_motor import AsyncMongoMockClient
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.chat import actions
-from backend.engine import paper_orders
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument
 from backend.prefs import PrefsStore
@@ -38,8 +37,11 @@ async def env(monkeypatch):
     async def mark(symbol):
         return 1500.0
 
+    class _Upstox:
+        SUPPORTS_LIMIT = True
+
     async def broker(user_id, credentials):
-        return object()
+        return _Upstox()
 
     monkeypatch.setattr(actions, "_mark_price", mark)
     monkeypatch.setattr(actions, "_active_broker", broker)
@@ -54,17 +56,21 @@ async def env(monkeypatch):
 
 def _body(**over):
     body = {"symbol": "infy", "side": "BUY", "quantity": 2, "product": "CNC",
-            "order_type": "LIMIT", "limit_price": 1490.0, "venue": "paper"}
+            "order_type": "LIMIT", "limit_price": 1490.0, "venue": "live"}
     body.update(over)
     return body
 
 
-def test_propose_paper_limit_returns_card(env):
+def test_propose_limit_returns_card(env):
     response = env["client"].post("/orders/propose", json=_body())
     assert response.status_code == 200
     card = response.json()
-    assert card["summary"] == "BUY 2 INFY · delivery · limit ₹1,490.00 · ~₹2,980 on paper"
-    assert card["needs_second_tap"] is False
+    assert card["summary"] == "BUY 2 INFY · delivery · limit ₹1,490.00 · ~₹2,980 on your account"
+    assert card["needs_second_tap"] is True
+
+
+def test_there_is_no_paper_venue(env):
+    assert env["client"].post("/orders/propose", json=_body(venue="paper")).status_code == 422
 
 
 def test_propose_live_card_needs_second_tap(env):
@@ -86,17 +92,8 @@ def test_limit_without_price_is_422(env):
     assert env["client"].post("/orders/propose", json=_body(limit_price=None)).status_code == 422
 
 
-async def test_paper_orders_list_and_cancel(env):
-    placed = await paper_orders.place(env["db"], "alice", _body(symbol="INFY"), 1500.0, OPEN)
-    listed = env["client"].get("/orders/paper").json()
-    assert [o["id"] for o in listed] == [placed["id"]]
-    assert env["client"].post(f"/orders/paper/{placed['id']}/cancel").status_code == 200
-    assert env["client"].post(f"/orders/paper/{placed['id']}/cancel").status_code == 404
 
 
-async def test_cannot_cancel_other_users_paper_order(env):
-    placed = await paper_orders.place(env["db"], "bob", _body(symbol="INFY"), 1500.0, OPEN)
-    assert env["client"].post(f"/orders/paper/{placed['id']}/cancel").status_code == 404
 
 
 def test_limit_price_is_rounded_to_the_tick(env):

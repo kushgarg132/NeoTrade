@@ -15,7 +15,6 @@ import { paperPositions } from '../utils/books';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
 import { Badge } from '../components/common/Badge';
 import { periodSummary } from '../utils/practice';
-import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import { stockPath } from '../utils/stocks';
@@ -60,9 +59,7 @@ const Portfolio = () => {
   const [fills, setFills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [ticket, setTicket] = useState(null);
   const [allFills, setAllFills] = useState(false);
-  const [openOrders, setOpenOrders] = useState([]);
 
   const load = () => {
     Promise.all([
@@ -86,26 +83,9 @@ const Portfolio = () => {
 
   useEffect(load, []);
 
-  const loadOpenOrders = () =>
-    api
-      .get(endpoints.orders.paper)
-      .then((res) => setOpenOrders(res.data))
-      .catch(() => {});
-
-  useEffect(() => {
-    loadOpenOrders();
-    const timer = setInterval(() => !document.hidden && loadOpenOrders(), 60000); // not in a hidden tab
-    return () => clearInterval(timer);
-  }, []);
-
-  const cancelOpenOrder = (id) =>
-    api.post(endpoints.orders.cancelPaper(id)).finally(loadOpenOrders);
   useTopic('positions', (message) => setPositions(paperPositions(message.data)));
   useTopic('trades', load);
-  useReconnect(() => {
-    load();
-    loadOpenOrders();
-  });
+  useReconnect(load);
 
   const summary = useMemo(() => periodSummary(trades, period), [trades, period]);
   const curve = useMemo(
@@ -197,7 +177,7 @@ const Portfolio = () => {
             />
           ) : (
             <>
-              {/* One compact row each; a tap reveals Sell / Add, which are rarely used. */}
+              {/* One compact row each; a tap reveals the stock link. The AI trades this book, not you. */}
               <ul className="divide-y divide-[var(--rule)]">
                 {open.map((position) => (
                   <li key={position.symbol} className="py-2">
@@ -217,8 +197,6 @@ const Portfolio = () => {
                     </button>
                     {openRow === position.symbol && (
                       <div className="flex flex-wrap items-center gap-2 pt-1">
-                        <TicketButton label="Sell" tone="loss" onClick={() => setTicket({ symbol: position.symbol, side: 'SELL' })} />
-                        <TicketButton label="Add" onClick={() => setTicket({ symbol: position.symbol })} />
                         <Link to={stockPath(position.symbol)} className="field-label text-[var(--stamp)] hover:underline ml-auto">Stock ›</Link>
                       </div>
                     )}
@@ -232,42 +210,6 @@ const Portfolio = () => {
             </>
           )}
         </Sheet>
-
-        {openOrders.length > 0 && (
-          <Sheet title="Open orders" meta={`${openOrders.length}`}>
-            <Statement
-              columns={[
-                { key: 'scrip', label: 'Scrip' },
-                { key: 'side', label: 'Side' },
-                { key: 'qty', label: 'Qty', align: 'right' },
-                { key: 'limit', label: 'Limit', align: 'right' },
-                { key: 'placed', label: 'Placed', align: 'right' },
-                { key: 'cancel', label: '', align: 'right' },
-              ]}
-            >
-              {openOrders.map((order) => (
-                <Row key={order.id}>
-                  <Cell>
-                    <Scrip symbol={order.symbol} />
-                  </Cell>
-                  <Cell>{order.side === 'BUY' ? 'Buy' : 'Sell'}</Cell>
-                  <Cell align="right" mono>
-                    {formatQuantity(order.quantity)}
-                  </Cell>
-                  <Cell align="right" mono>
-                    {formatCurrency(order.limit_price)}
-                  </Cell>
-                  <Cell align="right" mono>
-                    {formatClock(order.created_at)}
-                  </Cell>
-                  <Cell align="right">
-                    <TicketButton label="Cancel" tone="loss" onClick={() => cancelOpenOrder(order.id)} />
-                  </Cell>
-                </Row>
-              ))}
-            </Statement>
-          </Sheet>
-        )}
 
         <Sheet title="Executions" meta={fills.length > sortedFills.length ? `Latest ${sortedFills.length} of ${fills.length}` : `${fills.length} fills`}>
           {recentFills.length === 0 ? (
@@ -326,17 +268,6 @@ const Portfolio = () => {
         </Sheet>
 
       </PaperShell>
-      {ticket && (
-        <OrderTicket
-          {...ticket}
-          venue="paper"
-          onClose={() => setTicket(null)}
-          onDone={() => {
-            load();
-            loadOpenOrders();
-          }}
-        />
-      )}
     </Layout>
   );
 };

@@ -45,11 +45,11 @@ const Segmented = ({ label, options, value, onChange, disabled = {}, locked = fa
   </div>
 );
 
-const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 'paper', lastPrice, quantity: initialQuantity, limitPrice: initialLimit, onClose, onDone }) => {
+// Your own account only: the AI account's paper book is the AI's to trade.
+const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: initialQuantity, limitPrice: initialLimit, onClose, onDone }) => {
   const titleId = useId();
   const dialogRef = useRef(null);
   const [side, setSide] = useState(initialSide);
-  const [venue, setVenue] = useState(initialVenue);
   const [product, setProduct] = useState('CNC');
   // A suggested trade arrives pre-filled: its quantity, and a limit at its price.
   const [orderType, setOrderType] = useState(initialLimit ? 'LIMIT' : 'MARKET');
@@ -75,12 +75,8 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
       .then((res) => {
         const mine = Object.values(res.data.broker_roles || {}).includes('mine');
         setHasMine(mine);
-        if (!mine) setVenue('paper');
       })
-      .catch(() => {
-        setHasMine(false);
-        setVenue('paper');
-      });
+      .catch(() => setHasMine(false));
   }, []);
 
   // A reviewed card the user walked away from is cancelled, never left live.
@@ -148,7 +144,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
     try {
       const res = await api.post(endpoints.orders.propose, {
         symbol, side, quantity: qty, product, order_type: orderType,
-        limit_price: orderType === 'LIMIT' ? limit : null, venue: venue === 'mine' ? 'live' : 'paper',
+        limit_price: orderType === 'LIMIT' ? limit : null, venue: 'live',
       });
       if (request !== requestRef.current) {
         api.post(endpoints.chat.cancel(res.data.id)).catch(() => {});
@@ -228,18 +224,6 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
                 { id: 'SELL', label: 'Sell', selectedClass: 'bg-[var(--loss)] text-[var(--paper)]' },
               ]}
             />
-            <Segmented
-              label="Account"
-              value={venue}
-              onChange={edit(setVenue)}
-              locked={busy}
-              disabled={{ mine: !hasMine }}
-              options={[
-                // Money colours: Paper is the stamp, Mine is ink (see .badge-paper/.badge-mine).
-                { id: 'paper', label: 'Paper', selectedClass: 'bg-[var(--stamp)] text-[var(--paper)]' },
-                { id: 'mine', label: 'Mine' },
-              ]}
-            />
             {hasMine === false && (
               <p className="doc-meta normal-case">
                 <Link to="/settings?tab=accounts" className="underline" onClick={close}>
@@ -309,7 +293,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', venue: initialVenue = 
             )}
 
             {!card ? (
-              <Button className="w-full" onClick={review} disabled={!valid || busy || hasMine === null}>
+              <Button className="w-full" onClick={review} disabled={!valid || busy || !hasMine}>
                 {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Review
               </Button>

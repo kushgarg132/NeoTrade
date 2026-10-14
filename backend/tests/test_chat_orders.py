@@ -1,4 +1,4 @@
-"""Orders placed from the chat: attributed to "chat" on paper, and placed
+"""Orders placed from the chat: placed
 live through the same path an approved option proposal uses."""
 
 from datetime import datetime, timezone
@@ -8,7 +8,7 @@ from mongomock_motor import AsyncMongoMockClient
 from backend.core.models import BrokerOrderStatus, Order, Side
 from backend.engine.execution.live_order_store import LiveOrderStore
 from backend.engine.persistence import LedgerStore
-from backend.suggestions.service import execute_live_order, execute_suggestion
+from backend.suggestions.service import execute_live_order
 
 
 class _Broker:
@@ -23,15 +23,6 @@ class _Broker:
         return BrokerOrderStatus(broker_order_id=broker_order_id, status="FILLED", filled_quantity=10, average_price=1501.0)
 
 
-async def test_paper_chat_order_is_attributed_to_chat():
-    db = AsyncMongoMockClient()["test_db"]
-    ledger = LedgerStore(db, user_id="alice")
-    order = await execute_suggestion(
-        {"symbol": "INFY", "side": "BUY", "quantity": 10, "mode": "LONGTERM"}, ledger, 1500.0, strategy_name="chat",
-    )
-    trades = await ledger.get_trades()
-    assert order.product == "CNC"
-    assert trades[0]["strategy"] == "chat"
 
 
 async def test_live_equity_order_books_the_broker_fill():

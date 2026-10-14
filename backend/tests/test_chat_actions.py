@@ -118,14 +118,18 @@ async def test_propose_order_refuses_bad_input(env, args):
 
 async def test_confirm_runs_once(env):
     db = env["db"]
-    card = await _propose(db, "propose_order", {"symbol": "INFY", "side": "BUY", "quantity": 10, "venue": "paper"})
-    result = await confirm(db, None, None, "alice", card["id"])
+    card = await _propose(db, "propose_order", {"symbol": "INFY", "side": "BUY", "quantity": 10, "venue": "live"})
+    result = await confirm(db, None, None, "alice", card["id"], second_tap=True)
     assert result["status"] == "CONFIRMED"
-    trades = await db["paper_trades"].find({"user_id": "alice"}).to_list(None)
-    assert len(trades) == 1 and trades[0]["strategy"] == "chat"
     with pytest.raises(ActionRefused):
-        await confirm(db, None, None, "alice", card["id"])
-    assert await db["paper_trades"].count_documents({"user_id": "alice"}) == 1
+        await confirm(db, None, None, "alice", card["id"], second_tap=True)
+    assert len(env["broker"].placed) == 1
+
+
+async def test_there_are_no_paper_orders_on_the_users_account(env):
+    out = await _tools(env["db"])["propose_order"].ainvoke(
+        {"symbol": "INFY", "side": "BUY", "quantity": 1, "venue": "paper"})
+    assert not out.startswith("ACTION_CARD:") and "no paper orders" in out
 
 
 async def test_confirm_refuses_expired_and_other_users(env):
@@ -230,7 +234,7 @@ async def test_several_facts_are_one_card_and_all_saved(env):
 # ---------------------------------------------------------------------------
 
 def _order(**over):
-    params = {"symbol": "INFY", "side": "BUY", "quantity": 2, "product": "CNC", "venue": "paper"}
+    params = {"symbol": "INFY", "side": "BUY", "quantity": 2, "product": "CNC", "venue": "live"}
     params.update(over)
     return params
 
@@ -253,15 +257,6 @@ async def test_cap_uses_limit_price(env):
         await actions._order_checks(env["db"], "alice", _order(quantity=16), None)
 
 
-async def test_cnc_paper_sell_over_held_is_refused(env):
-    from backend.engine.persistence import LedgerStore
-    from backend.suggestions.service import execute_suggestion
-
-    await execute_suggestion({"symbol": "INFY", "side": "BUY", "quantity": 3, "mode": "LONGTERM"},
-                             LedgerStore(env["db"], user_id="alice"), 1500.0)
-    await actions._order_checks(env["db"], "alice", _order(side="SELL", quantity=3), None)
-    with pytest.raises(ActionRefused, match="You hold 3 INFY; a delivery sell can't be more than that."):
-        await actions._order_checks(env["db"], "alice", _order(side="SELL", quantity=4), None)
 
 
 async def test_mis_sell_is_not_capped_by_holdings(env):
@@ -294,24 +289,8 @@ async def test_live_limit_resting_copy(env, monkeypatch):
     assert done["result"].startswith("Resting at your broker: limit ₹1,490.00, 0 of 2 filled.")
 
 
-async def test_market_chat_card_unchanged(env):
-    card = await _card(env["db"], _order())
-    done = await confirm(env["db"], None, None, "alice", card["id"])
-    assert done["result"] == "Paper BUY 2 INFY filled at ₹1,500.00."
 
 
-async def test_paper_limit_card_rests_then_fills(env):
-    from backend.engine import paper_orders
-
-    card = await _card(env["db"], _order(order_type="LIMIT", limit_price=1490.0))
-    done = await confirm(env["db"], None, None, "alice", card["id"])
-    assert done["result"] == "Paper limit ₹1,490.00 is open until 3:30 PM; it fills if the price gets there."
-
-    async def mark(symbol):
-        return 1489.0
-
-    assert await paper_orders.sweep(env["db"], mark, OPEN) == 1
-    assert (await env["db"]["paper_limit_orders"].find_one({"user_id": "alice"}))["status"] == "FILLED"
 
 
 async def test_live_limit_refused_on_a_broker_without_limit_support(env, monkeypatch):

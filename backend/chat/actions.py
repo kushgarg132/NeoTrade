@@ -5,7 +5,7 @@ record in `chat_actions` and returns a card. Only `confirm` executes, after
 an atomic claim (one confirm, by the owner, before expiry) and after running
 every check again from the database -- never trusting the card. Execution
 goes through the app's existing code: the suggestion routes, launch_run,
-PrefsStore, execute_suggestion and execute_live_order.
+PrefsStore and execute_live_order.
 """
 
 import json
@@ -27,13 +27,15 @@ from backend.instruments.master import InstrumentMaster
 from backend.prefs import PrefsStore
 from backend.risk.kill_switch import KillSwitchStore
 from backend.runs import RunStore
-from backend.suggestions.service import execute_live_order, execute_suggestion
+from backend.suggestions.service import execute_live_order
 from backend.suggestions.store import SuggestionStore
 
 logger = logging.getLogger(__name__)
 
 ACTION_TTL = timedelta(minutes=5)
 CARD_PREFIX = "ACTION_CARD:"
+PAPER_ORDERS_GONE = ("There are no paper orders on your account any more. Trade it for real (venue live), "
+                     "or name the AI account (account ai) to have its autopilot trade.")
 PAPER_APPROVALS_GONE = ("There is no paper approval any more: the AI account paper-trades proposals itself. "
                         "Approve with real money on your account, or decline.")
 SETTINGS = {
@@ -189,9 +191,7 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
         raise ActionRefused(f"₹{basis * quantity:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
     delivery_sell = params["side"] == "SELL" and params.get("product", "CNC") == "CNC"
     if params["venue"] != "live":
-        if delivery_sell:
-            _refuse_oversell(symbol, quantity, await _held_on_paper(db, user_id, symbol))
-        return price, None
+        raise ActionRefused(PAPER_ORDERS_GONE)
     now = _now()
     if not in_session(now):
         raise ActionRefused("The market is closed; live orders go only between 9:15 AM and 3:30 PM IST on weekdays.")
@@ -203,7 +203,7 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
     if params.get("order_type") == "LIMIT" and not getattr(adapter, "SUPPORTS_LIMIT", False):
         # Only adapters that send the limit price may take one; another would
         # turn it into a market order (or reject it).
-        raise ActionRefused("Limit orders on your account need Upstox; place a market order or use Paper.")
+        raise ActionRefused("Limit orders on your account need Upstox; place a market order.")
     if delivery_sell:
         from backend.chat.account_actions import _held
 
@@ -235,11 +235,6 @@ async def _modify_checks(db, user_id: str, adapter, params: dict) -> None:
         user_id, _now().astimezone(IST).date()
     ):
         raise ActionRefused("Your daily loss limit was hit today: no extra shares on an open order.")
-
-
-async def _held_on_paper(db, user_id: str, symbol: str) -> int:
-    position = (await LedgerStore(db, user_id=user_id).get_open_positions()).get(symbol)
-    return int(position.quantity) if position is not None and position.quantity > 0 else 0
 
 
 def _refuse_oversell(symbol: str, quantity: int, held: int) -> None:
@@ -303,9 +298,13 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
 
     async def propose_order(
         symbol: str, side: Literal["BUY", "SELL"], quantity: int,
-        product: Literal["CNC", "MIS"] = "CNC", venue: Literal["paper", "live"] = "paper",
+        product: Literal["CNC", "MIS"] = "CNC", venue: Optional[Literal["paper", "live"]] = None,
         account: Literal["mine", "ai"] = "mine",
     ) -> str:
+        # Unnamed venue: real money on the user's own account (still two taps);
+        # on the AI account, paper -- real money there must be named.
+        live_mode = bool((await PrefsStore(db).get(user_id)).get("autopilot_live"))
+        venue = venue or ("live" if account == "mine" else "paper")
         params = {"symbol": symbol.strip().upper().removesuffix(".NS"), "side": side, "quantity": quantity,
                   "product": product, "venue": venue}
         if account == "ai":
@@ -314,7 +313,6 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
             # must match its mode, so "paper" can never become a real order.
             from backend.autopilot.service import AutopilotOrder, submit
 
-            live_mode = bool((await PrefsStore(db).get(user_id)).get("autopilot_live"))
             if (venue == "live") != live_mode:
                 return (f"The AI account's autopilot is in {'live' if live_mode else 'paper'} mode; "
                         f"use venue='{'live' if live_mode else 'paper'}' for it.")
@@ -413,9 +411,9 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         tool(propose_paper_run, "Start or stop the user's intraday paper-trading run." + note),
         tool(propose_setting, "Change one of the user's limits or switches: " + ", ".join(SETTINGS) + "." + note),
         tool(propose_order, "Place a market order for an NSE stock: side BUY or SELL, whole quantity, product CNC "
-                            "(delivery) or MIS (intraday), venue paper or live. Live is real money. account mine "
-                            "(default; a card the trader confirms) or ai (the AI account: the autopilot runs it "
-                            "at once within its limits, no card)." + note),
+                            "(delivery) or MIS (intraday). account mine (default): real money on the trader's own account, "
+                            "venue live, a card the trader confirms twice. account ai: the AI account, venue matching "
+                            "its autopilot mode (paper or live); the autopilot runs it at once within its limits, no card." + note),
         tool(propose_exit, "Sell all (default) or part of a holding in the trader's OWN account at market." + note),
         tool(propose_cancel_order, "Cancel an open order in the trader's own account, by its broker order id." + note),
         tool(propose_modify_order, "Change the price and/or quantity of an open order in the trader's own account." + note),
@@ -534,20 +532,6 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
     if kind == "order":
         price, adapter = await _order_checks(db, user_id, params, credentials)
         product, side = params["product"], params["side"]
-        if adapter is None and params.get("order_type") == "LIMIT":
-            from backend.engine import paper_orders
-
-            placed = await paper_orders.place(db, user_id, params, price, _now())
-            if placed["status"] == "FILLED":
-                return f"Paper {side} {params['quantity']} {params['symbol']} filled at ₹{placed['fill_price']:,.2f}."
-            return f"Paper limit ₹{params['limit_price']:,.2f} is open until 3:30 PM; it fills if the price gets there."
-        if adapter is None:
-            order = await execute_suggestion(
-                {"symbol": params["symbol"], "side": side, "quantity": params["quantity"],
-                 "mode": "INTRADAY" if product == "MIS" else "LONGTERM"},
-                ledger, price, strategy_name="chat",
-            )
-            return f"Paper {side} {params['quantity']} {params['symbol']} filled at ₹{price:,.2f}."
         order_type = params.get("order_type", "MARKET")
         order = Order(id=str(uuid.uuid4()), symbol=params["symbol"], side=Side(side), quantity=params["quantity"],
                       order_type=order_type, limit_price=params.get("limit_price"), product=product,

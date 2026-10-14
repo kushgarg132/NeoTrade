@@ -254,8 +254,6 @@ export const endpoints = {
   },
   orders: {
     propose: '/orders/propose',
-    paper: '/orders/paper',
-    cancelPaper: (id) => `/orders/paper/${encodeURIComponent(id)}/cancel`,
   },
   chat: {
     confirm: (id) => `/chat/actions/${encodeURIComponent(id)}/confirm`,
