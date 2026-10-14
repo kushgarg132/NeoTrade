@@ -135,7 +135,10 @@ class LLMService:
             ]
             
             response = await llm.ainvoke(messages)
-            return response.content
+            content = response.content
+            if isinstance(content, list):  # some providers answer in content blocks
+                content = "".join(b if isinstance(b, str) else b.get("text", "") for b in content)
+            return content
         except Exception as e:
             logger.error(f"LLM Error: {e}")
             return f"Error generating response: {str(e)}"
