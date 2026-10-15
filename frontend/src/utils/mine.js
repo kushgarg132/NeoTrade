@@ -38,3 +38,16 @@ const KEYS = {
 export const sortHoldings = (rows, key = 'weight') => [...rows].sort((a, b) => KEYS[key](a) - KEYS[key](b));
 
 export const formatXirr = (x) => (x == null ? '—' : `${(x * 100).toFixed(1)}%`);
+
+/** Plain-English text for each verdict reason code. */
+export const REASONS = {
+  loss_beyond_limit: 'Further below its cost than your loss limit',
+  earnings_falling_3q: 'Profit fell in each of the last three quarters',
+  earnings_rising_3q: 'Profit rose in each of the last three quarters',
+  below_200dma: 'Price is under its 200-day average',
+  uptrend: 'Price above its 50-day average, which is above its 200-day',
+  overweight: 'A bigger share of your portfolio than your size limit',
+  high_debt: 'Debt is more than twice equity',
+  strong_roe: 'Return on equity of 15% or more',
+  reasonable_valuation: 'Price to earnings under 40',
+};
