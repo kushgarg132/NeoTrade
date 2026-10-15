@@ -129,6 +129,7 @@ async def startup_db_client():
     await builder_store.refresh(db.db)
     await JournalStore(db.db).ensure_indexes()
     await db.db["portfolio_snapshots"].create_index([("user_id", 1), ("at", -1)])
+    await db.db["mine_daily"].create_index([("user_id", 1), ("date", 1)], unique=True)
     await GuardrailStore(db.db).ensure_indexes()
     from backend.chat.actions import ChatActionStore
     await ChatActionStore(db.db).ensure_indexes()
@@ -208,6 +209,8 @@ from backend.routers import profile as profile_router
 app.include_router(profile_router.router, prefix=settings.API_PREFIX, tags=["Profile"], dependencies=[Depends(get_current_user)])
 from backend.routers import today as today_router
 app.include_router(today_router.router, prefix=settings.API_PREFIX, tags=["Today"], dependencies=[Depends(get_current_user)])
+from backend.routers import mine as mine_router
+app.include_router(mine_router.router, prefix=settings.API_PREFIX, tags=["Mine"], dependencies=[Depends(get_current_user)])
 from backend.routers import plan as plan_router
 app.include_router(plan_router.router, prefix=settings.API_PREFIX, tags=["Plan"], dependencies=[Depends(get_current_user)])
 

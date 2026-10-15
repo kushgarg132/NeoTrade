@@ -127,6 +127,12 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         portfolios = await daily_reviews(db, redis)
     except Exception as exc:
         logger.exception("daily portfolio reviews failed: %s", exc)
+    # Today's row of the Mine value curve, from the journal and the day's closes (mine/history.py).
+    try:
+        from backend.mine import history
+        await history.write_all(db, now)
+    except Exception as exc:
+        logger.exception("mine history failed: %s", exc)
     if now.astimezone(IST).weekday() == 4:
         await _weekly_mirrors(db)
     # The evening answer, from the review just done (portfolio/digest.py).
