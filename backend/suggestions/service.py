@@ -89,15 +89,14 @@ async def execute_option_suggestion_live(
     average price (charges are the broker's, as for every live fill).
     Returns the order, the broker's last status, and the quantity filled.
 
-    ponytail: an order still working after the checks is left in
-    live_orders as pending; the next engine run's status poll would book
-    its fill. A dedicated reconciler belongs here if that ever happens."""
+    An order still working after the checks stays in live_orders as
+    pending; engine/sweeps.py books its fill later."""
     order = Order(
         id=str(uuid.uuid4()), symbol=suggestion["symbol"], side=Side(suggestion["side"]),
         quantity=suggestion["quantity"], order_type="MARKET", limit_price=None, product="NRML",
-        contract=contract,
+        contract=contract, suggestion_id=suggestion.get("id"), strategy_name=suggestion.get("strategy"),
     )
-    return await execute_live_order(order, ledger, adapter, orders)
+    return await execute_live_order(order, ledger, adapter, orders, suggestion.get("strategy") or "")
 
 
 async def execute_live_order(
@@ -118,7 +117,7 @@ async def execute_live_order(
         # role + ledger let the reconciler (engine/reconcile.py) ask this
         # order's own broker later and book a late fill to the right ledger.
         await orders.record_submitted(
-            order_id=order.id, broker_order_id=broker_order_id, user_id=owner or ledger.user_id,
+            order_id=order.id, broker_order_id=broker_order_id, user_id=owner or ledger.user_id.split(":")[0],  # the person, not the ledger
             strategy_name=strategy_name, symbol=order.symbol, side=order.side, reason=reason,
             role=role, ledger_user=ledger.user_id,
         )

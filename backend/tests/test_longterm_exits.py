@@ -182,3 +182,14 @@ async def test_a_stock_sold_in_the_broker_app_closes_its_trade():
     assert await check_exits(db, "alice", now=later, marks_fn=_marks({"SOLD": 80.0, "KEPT": 80.0})) != []
     trades = {t["symbol"]: t["status"] for t in await LedgerStore(db, user_id="alice:mine").get_trades()}
     assert trades == {"SOLD": "CLOSED", "KEPT": "OPEN"}
+
+
+@pytest.mark.asyncio
+async def test_a_same_day_buy_missing_from_holdings_is_not_closed_as_sold():
+    # A delivery buy shows under positions, not holdings, until it settles.
+    db = AsyncMongoMockClient()["test_db"]
+    await _approved(db, "TODAY")
+    await db["portfolio_snapshots"].insert_one(
+        {"user_id": "alice", "at": NOW + timedelta(hours=6), "raw_holdings": []})
+    await check_exits(db, "alice", now=NOW + timedelta(hours=7), marks_fn=_marks({"TODAY": 100.0}))
+    assert [t["status"] for t in await LedgerStore(db, user_id="alice:mine").get_trades()] == ["OPEN"]

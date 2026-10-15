@@ -12,6 +12,8 @@ in the moment before it was recorded. Time is passed in.
 import logging
 from datetime import datetime, timedelta, timezone
 
+from backend.engine.persistence import mine_book
+
 logger = logging.getLogger(__name__)
 
 STALE = timedelta(minutes=5)
@@ -29,8 +31,10 @@ async def sweep_stuck(db, now: datetime) -> int:
         claimed = _aware(s.get("decided_at"))
         if claimed is not None and claimed > cutoff:
             continue
+        # Approvals book in the user's own-account ledger (mine_book) since 19.C.
         order = await db["paper_orders"].find_one(
-            {"user_id": s["user_id"], "suggestion_id": s["id"]}, sort=[("_id", -1)])
+            {"user_id": {"$in": [s["user_id"], mine_book(s["user_id"])]}, "suggestion_id": s["id"]},
+            sort=[("_id", -1)])
         if order is not None and await db["live_orders"].find_one({"_id": order["id"]}):
             status, fields = "SENT", {"order_id": order["id"], "venue": "live",
                                       "reason": "Placed with your broker, not filled yet"}

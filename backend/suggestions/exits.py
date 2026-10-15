@@ -128,7 +128,9 @@ async def check_exits(db, user_id: str, now: Optional[datetime] = None, marks_fn
     held = await mine_holdings(db, user_id)
     open_ = []
     for trade in trades:
-        if seen_at is not None and seen_at > _aware(trade["entry_at"]) and trade["symbol"] not in held:
+        # Only a read from a later day: a same-day delivery buy is not in the
+        # broker's holdings yet (it shows under positions until settled).
+        if seen_at is not None and _ist_date(seen_at) > _ist_date(trade["entry_at"]) and trade["symbol"] not in held:
             await db["paper_trades"].update_one(
                 {"id": trade["id"]}, {"$set": {"status": "CLOSED", "exit_at": now, "exit_reason": "sold"}})
             continue

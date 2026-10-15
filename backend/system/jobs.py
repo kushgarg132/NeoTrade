@@ -13,7 +13,7 @@ NOTE_LIMIT = 2000
 DAILY_PASS = "daily_pass"
 DATA_QUALITY = "data_quality"  # backend/system/data_quality.py, after the daily pass
 BUILDER = "strategy_builder"  # backend/builder/draft.py, Friday nights
-LOOPS = ("guardrail_monitor", "paper_orders", "autorun", "telegram")
+LOOPS = ("guardrail_monitor", "order_sweeps", "autorun", "telegram")
 
 
 async def mark(redis, name: str, ok: bool, note: str = "") -> None:

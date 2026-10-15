@@ -119,8 +119,14 @@ async def rebalance(db, user_id: str, now: Optional[datetime] = None, marks_fn=m
     orders.update({s: q for s, q in want.items() if s not in book["shares"]})
 
     ledger = LedgerStore(db, user_id=user_id, on_change=publisher_for(user_id))
+    # One position row per symbol: never open a stock another strategy or the
+    # autopilot holds in this book, or the two would merge into one trade.
+    others = set(await ledger.get_open_positions()) - set(book["shares"])
     bought, sold = [], []
     for symbol, delta in sorted(orders.items(), key=lambda kv: kv[1]):  # sells first
+        if delta > 0 and symbol in others:
+            logger.info("factor skips %s for %s: another strategy holds it", symbol, user_id)
+            continue
         price = marks[symbol]
         quantity = abs(delta)
         if delta > 0:

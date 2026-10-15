@@ -28,7 +28,9 @@ async def adopt_intraday(db, user_id: str, now: datetime) -> tuple[dict[str, Pos
     """(positions, holders, stale): today's open intraday paper trades as
     positions plus their owning strategy; earlier days' as trades to close."""
     open_trades = await db["paper_trades"].find(
-        {"user_id": user_id, "mode": "INTRADAY", "status": "OPEN", "venue": {"$in": ["paper", None]}}
+        # The autopilot's MIS trades in this book are its own to square off.
+        {"user_id": user_id, "mode": "INTRADAY", "status": "OPEN", "venue": {"$in": ["paper", None]},
+         "via": {"$not": {"$regex": "^autopilot:"}}}
     ).to_list(length=None)
     today = now.astimezone(IST).date()
     stale, by_symbol = [], {}

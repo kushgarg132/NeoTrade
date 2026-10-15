@@ -21,6 +21,7 @@ from backend.guardrails.store import GuardrailStore
 from backend.guardrails import monitor as guardrail_monitor
 from backend.guardrails import telegram_bot
 from backend.engine import autorun
+from backend.engine import sweeps as order_sweeps
 from backend import broadcast
 from backend import scheduler
 from backend.ws.hub import hub, handle_broadcast_event
@@ -149,6 +150,7 @@ async def startup_db_client():
     scheduler.start(db.db, db.redis)
     # Live prices and P&L for whoever has a socket open.
     ws_pump.start(db.db)
+    order_sweeps.start(db.db)  # stuck approvals and late live fills (engine/sweeps.py)
     # The user's own limits, checked against their broker once a minute in session.
     guardrail_monitor.start(db.db, db.redis)
     # Resting paper limit orders from the order ticket: fill on cross, expire at 15:30.

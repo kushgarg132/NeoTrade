@@ -574,7 +574,17 @@ async def run(
             closing = {o.symbol for o in orders}
             orders.extend(o for o in plan_orders if o.symbol not in closing)
 
+        booked = None
         for order in orders:
+            held = portfolio.positions.get(order.symbol)
+            if ledger is not None and (held is None or held.quantity == 0):
+                # One position row per symbol in the book: an entry on a stock
+                # someone else holds there (a long-term or autopilot trade bought
+                # after this run started) would overwrite and later close it.
+                booked = booked if booked is not None else await ledger.get_open_positions()
+                if order.symbol in booked:
+                    logger.info("run skips %s %s: the book already holds it", order.side.value, order.symbol)
+                    continue
             # An option has no bar of its own: paper fills it at the
             # premium last read for it.
             if order.symbol in option_legs and hasattr(execution, "mark"):
