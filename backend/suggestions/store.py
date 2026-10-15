@@ -169,8 +169,9 @@ class SuggestionStore:
         best by final score (`expired_reason: outranked`); returns how many.
         A long list nobody reviews is noise (ROADMAP 17.3.5)."""
         now = now or datetime.now(timezone.utc)
+        # One the autopilot already took stays pending for the user, outside the n.
         pending = await self.collection.find(
-            {"user_id": user_id, "mode": mode, "status": PENDING}, {"id": 1, "score": 1},
+            {"user_id": user_id, "mode": mode, "status": PENDING, "ai_order": None}, {"id": 1, "score": 1},
         ).to_list(length=None)
         pending.sort(key=lambda d: (d.get("score") or {}).get("final") or 0.0, reverse=True)
         drop = [d["id"] for d in pending[n:]]
@@ -178,7 +179,8 @@ class SuggestionStore:
             return 0
         result = await self.collection.update_many(
             {"user_id": user_id, "id": {"$in": drop}, "status": PENDING},
-            {"$set": {"status": "EXPIRED", "decided_at": now, "expired_reason": "outranked"}},
+            # The real time: `now` is when the pass started, before these were created.
+            {"$set": {"status": "EXPIRED", "decided_at": datetime.now(timezone.utc), "expired_reason": "outranked"}},
         )
         return result.modified_count
 

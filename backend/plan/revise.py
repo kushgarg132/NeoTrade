@@ -31,7 +31,12 @@ async def _held(db, user_id: str) -> dict[str, float]:
     from backend.engine.persistence import LedgerStore
 
     positions = await LedgerStore(db, user_id=user_id).get_open_positions(venue="paper")
-    return {s: p.quantity for s, p in positions.items()}
+    # The engine's intraday positions only: a long-term or autopilot holding
+    # in the same book is not the plan's to exit (MPHASIS read as a "short").
+    others = set(await db["paper_trades"].distinct("symbol", {
+        "user_id": user_id, "status": "OPEN",
+        "$or": [{"mode": "LONGTERM"}, {"via": {"$regex": "^autopilot:"}}]}))
+    return {s: p.quantity for s, p in positions.items() if s not in others}
 
 
 async def triggers(db, redis, plans: dict[str, dict], now: datetime) -> dict[str, list[tuple[str, str]]]:

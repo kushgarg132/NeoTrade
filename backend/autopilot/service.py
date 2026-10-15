@@ -5,7 +5,7 @@ import asyncio
 import json
 import logging
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, time, timezone
 from typing import Literal, Optional
 
@@ -170,6 +170,8 @@ async def submit(db, redis, user_id: str, order: AutopilotOrder, now: Optional[d
                  suggestion_id: Optional[str] = None, quiet: bool = False) -> dict:
     """Fence -> order -> log, one order at a time per user (the fence reads
     what is held, then the fill changes it: parallel calls must not both pass)."""
+    if suggestion_id and not order.suggestion_id:
+        order = replace(order, suggestion_id=suggestion_id)  # so the log row names the idea
     lock = _LOCKS.setdefault(user_id, asyncio.Lock())
     async with lock:
         key = f"autopilot:lock:{user_id}"

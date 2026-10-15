@@ -47,6 +47,7 @@ KEY_TTL_MS = 150_000
 MAX_STARTS_PER_DAY = 5
 SESSION_OPEN, SESSION_CLOSE = time(9, 15), time(15, 30)
 LOGIN_REMIND, LOGIN_REMIND_AGAIN = time(8, 30), time(9, 5)
+MAX_ENTRY_DRIFT = 0.02  # how far over a proposal's entry the autopilot still buys it
 POLL_SECONDS = 60.0
 
 # Which pref turns each mode's daily run on.
@@ -358,12 +359,29 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
         from backend.risk.paper_gate import proven_strategies
         proven = await proven_strategies(db, user_id, {s.get("strategy") for s in pending} - {None},
                                          prefs["account_size"])
+    from backend.marks import ORDER_MAX_AGE_SECONDS, mark_prices
+
+    marks = await mark_prices(db, {s["symbol"] for s in pending if not s.get("ai_order")},
+                              max_age_seconds=ORDER_MAX_AGE_SECONDS)
     bought, refused = [], []
     for s in sorted(pending, key=lambda s: (s.get("score") or {}).get("final") or 0.0, reverse=True):
-        entry = s.get("entry_ref") or 0
-        quantity = min(int(s["quantity"]), int(cap // entry)) if entry > 0 else 0
-        if s.get("ai_order") or s.get("option_contract") or quantity < 1 or (
+        if s.get("ai_order") or s.get("option_contract") or (
                 proven is not None and s.get("strategy") not in proven):
+            continue
+        entry, price = s.get("entry_ref") or 0, marks.get(s["symbol"])
+        if s["side"] == "BUY" and price and entry > 0:
+            # The idea was priced at yesterday's close: a gap through its stop
+            # (CANBK, 15 Oct: bought under the stop, stopped out ten minutes
+            # later) or a run past its entry is a different trade.
+            if s.get("stop") and price <= s["stop"]:
+                refused.append(f"{s['symbol']} (opened at ₹{price:,.2f}, under its stop ₹{s['stop']:,.2f})")
+                continue
+            if price > entry * (1 + MAX_ENTRY_DRIFT):
+                refused.append(f"{s['symbol']} (₹{price:,.2f}, more than {MAX_ENTRY_DRIFT:.0%} over its entry ₹{entry:,.2f})")
+                continue
+        unit = price or entry
+        quantity = min(int(s["quantity"]), int(cap // unit)) if unit > 0 else 0
+        if quantity < 1:
             continue
         result = await service.submit(db, redis, user_id, service.AutopilotOrder(
             symbol=s["symbol"], side=Side(s["side"]), quantity=quantity, product="CNC",

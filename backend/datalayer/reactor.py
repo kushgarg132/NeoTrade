@@ -210,7 +210,13 @@ async def scan(db, redis, now: Optional[datetime] = None) -> int:
     from backend.datalayer.outcomes import load_weights
     from backend.prefs import PrefsStore
 
+    from backend.engine.autorun import in_session, near_session
+
     now = now or datetime.now(timezone.utc)
+    # A proposal can only be acted on in the session: overnight items wait,
+    # unclaimed, for the pre-open pass instead of burning scans at 1 AM.
+    if not (in_session(now) or near_session(now)):
+        return 0
     items = await _claim(db, "scanned_at", now)
     if not items:
         return 0

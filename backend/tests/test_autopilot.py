@@ -407,3 +407,28 @@ async def test_a_paper_fill_reaches_the_live_socket(world, monkeypatch):
     await service.submit(db, None, "alice", _order(), now=OPEN)
     assert ("alice", "trades", "changed") in published
     assert ("alice", "autopilot", "logged") in published
+
+
+async def test_the_autopilot_skips_ideas_the_open_has_already_broken(world, monkeypatch):
+    from backend.engine import autorun
+    from backend.suggestions.store import SuggestionStore
+
+    db, _ = world
+    await _prefs(db)
+
+    async def marks(db_, symbols, **_):
+        return {s: 1000.0 for s in symbols}
+
+    monkeypatch.setattr("backend.marks.mark_prices", marks)
+    base = {"user_id": "alice", "side": "BUY", "mode": "LONGTERM", "quantity": 4, "status": "PENDING",
+            "strategy": "macd_crossover", "score": {"final": 0.6}}
+    await db["suggestions"].insert_many([
+        {**base, "id": "gap", "symbol": "INFY", "entry_ref": 1050.0, "stop": 1010.0},   # opened under its stop
+        {**base, "id": "chase", "symbol": "TCS", "entry_ref": 900.0, "stop": 850.0},    # 11% past its entry
+        {**base, "id": "ok", "symbol": "HDFCBANK", "entry_ref": 990.0, "stop": 950.0},
+    ])
+    pending = await SuggestionStore(db).list("alice", status="PENDING")
+    await autorun._autopilot_proposals(db, None, SuggestionStore(db), "alice", pending, OPEN)
+
+    taken = {d["id"]: d.get("ai_order") for d in await db["suggestions"].find({}).to_list(None)}
+    assert taken == {"gap": None, "chase": None, "ok": "FILLED"}
