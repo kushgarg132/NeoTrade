@@ -112,6 +112,7 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
         "day_change": round(totals["day_change"] or 0, 2),
         "day_change_pct": (totals["day_change"] or 0) / base * 100 if base else None,
         "count": totals["count"],
+        "pnl_by_symbol": {r["symbol"]: round(r["pnl"], 2) for r in card["holdings"] if r.get("pnl") is not None},
         "movers": [{"symbol": r["symbol"], "move_pct": round(_move_pct(r), 2), "day_change": round(r["day_change"] or 0, 2),
                     "why": why.get(r["symbol"])} for r in top],
         "verdict_changes": changes,

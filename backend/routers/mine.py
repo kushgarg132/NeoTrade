@@ -1,0 +1,88 @@
+"""/mine -- the redesigned Mine page's data: the headline and what drove it,
+and the value curve against NIFTY. Everything is the user's own account
+(`mine` brokers), from the journal and daily history (backend/mine/).
+Later endpoints are appended below; do not reorder these."""
+
+from datetime import datetime, timedelta, timezone
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Query
+
+from backend.auth.dependency import get_current_user
+from backend.auth.models import User
+from backend.database import db
+from backend.engine.session import IST
+
+router = APIRouter(prefix="/mine", tags=["Mine"])
+RANGE_DAYS = {"1M": 31, "6M": 183, "1Y": 366, "ALL": None}
+DRIVERS = 3
+
+
+def _split(contributions: dict[str, float]) -> dict:
+    """The biggest gainers and losers, up to DRIVERS each; zero is neither."""
+    rows = [{"symbol": s, "contribution": round(c, 2)} for s, c in contributions.items() if abs(c) >= 0.005]
+    gain = sorted((r for r in rows if r["contribution"] > 0), key=lambda r: -r["contribution"])
+    loss = sorted((r for r in rows if r["contribution"] < 0), key=lambda r: r["contribution"])
+    return {"top": gain[:DRIVERS], "bottom": loss[:DRIVERS]}
+
+
+async def _month_contributions(user_id: str, today) -> dict[str, float]:
+    """Per symbol: its value now - its value before this month began - what
+    was put in this month (so a purchase is not a gain)."""
+    from backend.mine import history
+    from backend.mine.lots import mine_trades
+
+    first = today.replace(day=1)
+    rows = await history.series(db.db, user_id, None)
+    if not rows:
+        return {}
+    before = [r for r in rows if r["date"] < first.isoformat()]
+    start = before[-1]["by_symbol"] if before else {}
+    now = rows[-1]["by_symbol"]
+    flows: dict[str, float] = {}
+    for t in await mine_trades(db.db, user_id):
+        if t["traded_at"].astimezone(IST).date() >= first:
+            sign = 1 if t["side"] == "BUY" else -1
+            flows[t["symbol"]] = flows.get(t["symbol"], 0.0) + sign * float(t["quantity"]) * float(t["price"])
+    return {s: now.get(s, {}).get("value", 0.0) - start.get(s, {}).get("value", 0.0) - flows.get(s, 0.0)
+            for s in {*now, *start}}
+
+
+@router.get("/history")
+async def mine_history(range_: Literal["1M", "6M", "1Y", "ALL"] = Query("1Y", alias="range"),
+                       user: User = Depends(get_current_user)):
+    from backend.mine import history
+
+    days = RANGE_DAYS[range_]
+    since = datetime.now(timezone.utc).astimezone(IST).date() - timedelta(days=days) if days else None
+    rows = await history.series(db.db, user.id, since)
+    return {
+        "points": [{k: r[k] for k in ("date", "value", "invested", "nifty_value")} for r in rows],
+        "from_date": rows[0]["date"] if rows else None,
+        "partial": any(r.get("partial") for r in rows),
+    }
+
+
+@router.get("/overview")
+async def overview(user: User = Depends(get_current_user)):
+    from backend.mine import history
+    from backend.portfolio import digest
+    from backend.portfolio.service import latest_snapshot
+
+    now = datetime.now(timezone.utc)
+    today = now.astimezone(IST).date()
+    pulse = await digest.pulse(db.db, user.id, now)
+    snapshot = await latest_snapshot(db.db, user.id)
+    headline = None
+    if pulse:
+        ret = await history.returns(db.db, user.id, today)
+        headline = {
+            **{k: pulse[k] for k in ("value", "day_change", "day_change_pct", "pnl", "pnl_pct", "as_of", "holdings_as_of")},
+            "xirr": ret["xirr"], "nifty_xirr": ret["nifty_xirr"],
+        }
+    return {
+        "headline": headline,
+        "drivers": {"month": _split(await _month_contributions(user.id, today)),
+                    "all": _split((pulse or {}).get("pnl_by_symbol") or {})},
+        "mix": (snapshot or {}).get("concentration"),
+    }
