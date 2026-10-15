@@ -81,6 +81,10 @@ async def get_portfolio(
     if visible:
         targets = (await PrefsStore(db.db).get(user.id))["rebalance_targets"]
         snapshot = with_suggestions(snapshot, targets)
+    from backend.mine.thesis import ThesisStore
+    theses = await ThesisStore(db.db).all(user.id)
+    snapshot = {**snapshot, "holdings": [{**r, "thesis_target": (theses.get(r["symbol"]) or {}).get("target")}
+                                         for r in snapshot.get("holdings", [])]}
     return present(snapshot, visible)
 
 
