@@ -3,7 +3,7 @@ and the value curve against NIFTY. Everything is the user's own account
 (`mine` brokers), from the journal and daily history (backend/mine/).
 Later endpoints are appended below; do not reorder these."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -75,7 +75,14 @@ async def overview(user: User = Depends(get_current_user)):
     snapshot = await latest_snapshot(db.db, user.id)
     headline = None
     if pulse:
-        ret = await history.returns(db.db, user.id, today)
+        from backend.mine import events
+        from backend.mine.lots import mine_trades
+
+        trades = await mine_trades(db.db, user.id)
+        divs = [(date.fromisoformat(d["date"]), d["amount"])
+                for sym in {t["symbol"] for t in trades}
+                for d in await events.dividends_received(db.db, trades, sym, today)]
+        ret = await history.returns(db.db, user.id, today, divs)
         headline = {
             **{k: pulse[k] for k in ("value", "day_change", "day_change_pct", "pnl", "pnl_pct", "as_of", "holdings_as_of")},
             "xirr": ret["xirr"], "nifty_xirr": ret["nifty_xirr"],
