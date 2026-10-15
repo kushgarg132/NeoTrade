@@ -221,9 +221,9 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
 
   const importUpstox = () =>
     run(
-      () => api.post(endpoints.journal.importUpstox, { days: 365 }),
+      () => api.post(endpoints.journal.importUpstox, { days: 730 }),
       (result) =>
-        `${result.imported} fill${result.imported === 1 ? '' : 's'} imported from Upstox's last year` +
+        `${result.imported} fill${result.imported === 1 ? '' : 's'} imported from Upstox's last two years` +
         (result.skipped_synced_days ? `; ${result.skipped_synced_days} day(s) already synced were left as they were` : '') +
         '. History has dates but no times, so each day\'s fills are shown at 9:15 AM.'
     );

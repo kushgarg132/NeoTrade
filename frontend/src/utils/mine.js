@@ -39,6 +39,19 @@ export const sortHoldings = (rows, key = 'weight') => [...rows].sort((a, b) => K
 
 export const formatXirr = (x) => (x == null ? '—' : `${(x * 100).toFixed(1)}%`);
 
+/** Holdings older than 36h mean the broker is logged out (same rule as Today). */
+export const STALE_MS = 36 * 3_600_000;
+export const holdingsStale = (holdingsAsOf, now = Date.now()) =>
+  Boolean(holdingsAsOf) && now - new Date(holdingsAsOf) > STALE_MS;
+
+/** The Tax page's FYs: the current one back to FY 2025-26 (earlier years had other rates). */
+export const TAX_FIRST_FY = 2025;
+export const taxYears = (current) => {
+  const out = [];
+  for (let fy = current; fy >= TAX_FIRST_FY; fy -= 1) out.push(fy);
+  return out.length ? out : [TAX_FIRST_FY];
+};
+
 /** Plain-English text for each verdict reason code. */
 export const REASONS = {
   loss_beyond_limit: 'Further below its cost than your loss limit',

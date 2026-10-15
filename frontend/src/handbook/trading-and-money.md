@@ -286,15 +286,20 @@ adds scoring: verdicts stay admin-gated and the one conviction formula is untouc
 Backend, `backend/mine/` behind `backend/routers/mine.py` (`/mine/*`, every record carries `user_id`):
 
 - **Lots** (`backend/mine/lots.py::open_lots`, `::realised`, `::reconcile`): FIFO tax lots from the
-  journal's trades (`::mine_trades`); the shortfall against the broker quantity shows as "unknown".
-- **History** (`backend/mine/history.py::backfill`, `::write_today`, `::series`): `mine_daily` holds the
+  journal's trades (`::mine_trades`); the shortfall against the broker quantity shows as "unknown", and
+  sells with no journal buy come back from `::unmatched`. `::split_ratio` treats a whole-number excess as a
+  split or bonus only when the broker's average price is the journal's divided by that ratio (within 2%).
+- **History** (`backend/mine/history.py::backfill`, `::write_all`, `::series`): `mine_daily` holds the
   account's value, net invested and the NIFTY-equivalent value per day. Backfill replays journal trades
-  over stored closes; the 16:00 pass (`backend/scheduler.py`, via `history.write_all`) adds each day.
+  over stored closes (sells clipped to what the journal holds, split-scaled to match the adjusted bars);
+  the 16:00 pass (`backend/scheduler.py`, via `::write_all`) recomputes every user's whole curve and
+  upserts what changed, so a later import fixes the past.
   `::xirr` is stdlib Newton with a bisection fallback; `::returns` gives the account's and NIFTY's XIRR
   on the same cash flows.
 - **Needs you** (`backend/mine/actions.py::build`): one ranked list of verdict changes, target/stop
   levels, proven ideas, rebalance buys and results dates. `::dismiss` and `::snooze` (7 days) keep state
-  per user; `::level_alerts` feeds Telegram.
+  per user; `::level_alerts` feeds Telegram from its own step in the auto-run tick
+  (`backend/engine/autorun.py::_level_pass`), not the long-term pass.
 - **Thesis** (`backend/mine/thesis.py::ThesisStore`, `::ThesisIn`): why, target, stop and review-by per
   holding, in `holding_theses`.
 - **Events** (`backend/mine/events.py::refresh`, `::loop`): results and ex-dividend dates of held symbols
@@ -302,7 +307,9 @@ Backend, `backend/mine/` behind `backend/routers/mine.py` (`/mine/*`, every reco
   (`backend/datalayer/worker.py`); `::dividends_received` estimates dividends from quantity held on the ex-date.
 - **Tax** (`backend/mine/tax.py::report`): Indian FY realised gains split short/long term, the
   Rs 1.25 lakh exemption (`::est_tax`), unrealised by lot, lots turning long-term soon and the 31 March
-  harvest lists. An estimate, not tax advice; rates live only here.
+  harvest lists (a loss harvest's saving is the drop in this FY's estimated tax; zero is not listed).
+  FY 2025-26 onward only (`/mine/tax` refuses earlier years, which had other rates). An estimate, not
+  tax advice; rates live only here.
 - **Stock** (`backend/mine/stock.py::detail`): position, lots, thesis, verdict history, events, news and
   closes for one symbol; a sold holding still opens.
 

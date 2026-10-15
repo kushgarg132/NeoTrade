@@ -171,7 +171,7 @@ const Scoreboard = ({ board, aiMode }) => (
     ) : (
       <div className="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-2 items-baseline">
         <span />
-        <Link to="/mine/trades" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="mine" /></Link>
+        <Link to="/mine/journal" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="mine" /></Link>
         <Link to="/ai" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="ai" mode={aiMode} /></Link>
         {[['Today', board.today], ['This month', board.month]].map(([label, row]) => (
           <React.Fragment key={label}>

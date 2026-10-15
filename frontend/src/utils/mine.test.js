@@ -1,6 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actionTarget, targetProgress, sortHoldings, formatXirr, RANGES } from './mine.js';
+import { actionTarget, targetProgress, sortHoldings, formatXirr, RANGES, holdingsStale, taxYears } from './mine.js';
+
+test('holdingsStale only past 36 hours (I9: logged in reads as fresh)', () => {
+  const now = Date.parse('2026-10-15T10:00:00Z');
+  assert.equal(holdingsStale('2026-10-15T09:59:00Z', now), false);
+  assert.equal(holdingsStale('2026-10-13T21:00:00Z', now), true);
+  assert.equal(holdingsStale(null, now), false);
+});
+
+test('taxYears runs from the current FY back to 2025 only (I5)', () => {
+  assert.deepEqual(taxYears(2026), [2026, 2025]);
+  assert.deepEqual(taxYears(2025), [2025]);
+});
 
 test('actionTarget maps every type', () => {
   const t = (action) => actionTarget({ symbol: 'TCS', action });

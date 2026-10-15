@@ -5,6 +5,7 @@ import { MINE_TABS } from '../components/layout/sections';
 import { Sheet, Money, Empty, Ruling, Scrip } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatQuantity } from '../utils/formatters';
+import { taxYears } from '../utils/mine';
 
 const EXEMPTION = 125000;
 const fyLabel = (fy) => `FY ${fy}-${String((fy + 1) % 100).padStart(2, '0')}`;
@@ -27,7 +28,7 @@ const Line = ({ symbol, detail, children }) => (
 const None = ({ text }) => <p className="text-sm text-[var(--ink-faint)]">{text}</p>;
 
 const MineTax = () => {
-  const [fy, setFy] = useState(currentFy());
+  const [fy, setFy] = useState(() => taxYears(currentFy())[0]);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -44,16 +45,15 @@ const MineTax = () => {
   const importHistory = () => {
     setBusy(true);
     api
-      .post(endpoints.journal.importUpstox, { days: 365 })
+      .post(endpoints.journal.importUpstox, { days: 730 })
       .then(load)
       .catch((err) => setError(err?.response?.data?.detail || 'Import failed'))
       .finally(() => setBusy(false));
   };
 
-  const now = currentFy();
   const select = (
     <select aria-label="Financial year" value={fy} onChange={(e) => setFy(Number(e.target.value))} className="min-h-9 border border-[var(--rule-strong)] bg-transparent px-2 text-sm">
-      {[0, 1, 2, 3].map((i) => <option key={i} value={now - i}>{fyLabel(now - i)}</option>)}
+      {taxYears(currentFy()).map((y) => <option key={y} value={y}>{fyLabel(y)}</option>)}
     </select>
   );
 
@@ -90,6 +90,11 @@ const MineTax = () => {
             </div>
           </div>
           <p className="doc-meta normal-case mt-2">Charges paid: {formatCurrency(r.charges)}</p>
+          {r.uncertain?.length > 0 && (
+            <p className="doc-meta normal-case mt-2">
+              May be matched to the wrong buy (older shares the journal never saw): {r.uncertain.join(', ')}.
+            </p>
+          )}
         </Sheet>
 
         <Sheet title="Unrealised by lot">
@@ -104,7 +109,7 @@ const MineTax = () => {
           )}
           {unknown.length > 0 && (
             <p className="doc-meta normal-case mt-2">
-              Cannot date: {unknown.map((u) => `${u.symbol} (${formatQuantity(u.qty)})`).join(', ')}. Left out of the figures; import your history to fix.
+              Cannot date: {unknown.map((u) => `${u.symbol} (${formatQuantity(u.qty)}${u.sold ? ' sold, no buy found' : ''})`).join(', ')}. Left out of the figures; import your history to fix.
             </p>
           )}
           {pre.length > 0 && (

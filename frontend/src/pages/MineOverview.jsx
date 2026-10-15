@@ -11,7 +11,7 @@ import Mix from '../components/mine/Mix';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
-import { formatXirr } from '../utils/mine';
+import { formatXirr, holdingsStale } from '../utils/mine';
 import { cn } from '../utils/cn';
 
 const Drivers = ({ drivers }) => {
@@ -68,10 +68,15 @@ const Drivers = ({ drivers }) => {
 const MineOverview = () => {
   const [overview, setOverview] = useState(null);
   const [actions, setActions] = useState([]);
+  const [actionsFailed, setActionsFailed] = useState(false);
   const [error, setError] = useState(null);
 
   const loadActions = useCallback(
-    () => api.get(endpoints.mine.actions).then((res) => setActions(res.data)).catch(() => setActions([])),
+    () =>
+      api
+        .get(endpoints.mine.actions)
+        .then((res) => (setActions(res.data), setActionsFailed(false)))
+        .catch(() => setActionsFailed(true)),
     []
   );
   const load = useCallback(() => {
@@ -91,7 +96,7 @@ const MineOverview = () => {
       <div className="space-y-3 sm:space-y-4">
         <SectionTabs tabs={MINE_TABS} label="My account" />
 
-        <Sheet title="Your account" meta={h?.holdings_as_of ? `Holdings as of ${formatDateTime(h.holdings_as_of)} · broker logged out` : h?.as_of ? formatDateTime(h.as_of) : null}>
+        <Sheet title="Your account" meta={holdingsStale(h?.holdings_as_of) ? `Holdings as of ${formatDateTime(h.holdings_as_of)} · broker logged out` : h?.as_of ? formatDateTime(h.as_of) : null}>
           {error ? (
             <Empty title="Could not load" detail={error} />
           ) : !overview ? (
@@ -125,9 +130,13 @@ const MineOverview = () => {
 
         <ValueCurve />
         <WaitingCards />
-        <NeedsYou actions={actions} onChanged={load} />
+        {actionsFailed ? (
+          <Sheet title="Needs you"><Empty title="Couldn't load" detail="Try again in a moment." /></Sheet>
+        ) : (
+          <NeedsYou actions={actions} onChanged={load} />
+        )}
         {overview?.drivers && <Drivers drivers={overview.drivers} />}
-        {overview?.mix && <Mix concentration={overview.mix} count={overview.mix.count ?? overview.mix.sectors?.length ?? 0} />}
+        {overview?.mix && <Mix concentration={overview.mix} count={overview.mix.count ?? 0} />}
       </div>
     </Layout>
   );
