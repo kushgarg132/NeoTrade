@@ -3,11 +3,13 @@ import { Routes, Route, Link, Navigate, useLocation, useNavigationType } from 'r
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Strategies = lazy(() => import('./pages/Strategies'));
 const OptionChain = lazy(() => import('./pages/OptionChain'));
-const Decisions = lazy(() => import('./pages/Decisions'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
 const Journal = lazy(() => import('./pages/Journal'));
-const MyPortfolio = lazy(() => import('./pages/MyPortfolio'));
+const MineOverview = lazy(() => import('./pages/MineOverview'));
+const MineHoldings = lazy(() => import('./pages/MineHoldings'));
+const MineTax = lazy(() => import('./pages/MineTax'));
+const MineStock = lazy(() => import('./pages/MineStock'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AiLimits = lazy(() => import('./pages/AiLimits'));
@@ -52,7 +54,7 @@ const Moved = ({ to }) => {
 const JournalMoved = () => {
   const { search } = useLocation();
   const tab = new URLSearchParams(search).get('tab');
-  return <Navigate to={`${['patterns', 'learning'].includes(tab) ? '/mine/habits' : '/mine/trades'}${search}`} replace />;
+  return <Navigate to={['patterns', 'learning'].includes(tab) ? '/mine/journal?tab=habits' : `/mine/journal${search}`} replace />;
 };
 
 const App = () => {
@@ -97,11 +99,14 @@ const App = () => {
       {/* Today */}
       <Route path="/" element={gated(<Today />)} />
       {/* Mine: the user's own account -- holdings, ideas for it, trades */}
-      <Route path="/mine" element={<Navigate to="/mine/holdings" replace />} />
-      <Route path="/mine/holdings" element={gated(<MyPortfolio lockedAccount="mine" />)} />
-      <Route path="/mine/ideas" element={gated(<Decisions />)} />
-      <Route path="/mine/trades" element={gated(<Journal view="trades" lockedAccount="mine" />)} />
-      <Route path="/mine/habits" element={gated(<Journal view="habits" lockedAccount="mine" />)} />
+      <Route path="/mine" element={gated(<MineOverview />)} />
+      <Route path="/mine/holdings" element={gated(<MineHoldings />)} />
+      <Route path="/mine/tax" element={gated(<MineTax />)} />
+      <Route path="/mine/stock/:symbol" element={gated(<MineStock />)} />
+      <Route path="/mine/journal" element={gated(<Journal lockedAccount="mine" />)} />
+      <Route path="/mine/ideas" element={<Navigate to="/mine" replace />} />
+      <Route path="/mine/trades" element={<Navigate to="/mine/journal" replace />} />
+      <Route path="/mine/habits" element={<Navigate to="/mine/journal?tab=habits" replace />} />
       {/* AI: the account the app runs, paper until a strategy earns live */}
       <Route path="/ai" element={gated(<AiOverview />)} />
       <Route path="/ai/activity" element={gated(<AiActivity />)} />
@@ -122,12 +127,12 @@ const App = () => {
       <Route path="/system/future" element={gated(<RequireAdmin><Backlog /></RequireAdmin>)} />
       {/* Old links and bookmarks follow the move, query string included. */}
       {[
-        ['/ai/decisions', '/mine/ideas'], ['/ai/autopilot', '/ai/settings'], ['/ai/limits', '/ai/settings'],
+        ['/ai/decisions', '/mine'], ['/ai/autopilot', '/ai/settings'], ['/ai/limits', '/ai/settings'],
         ['/practice', '/ai'], ['/practice/book', '/ai/book'], ['/practice/strategies', '/ai/strategies'],
-        ['/practice/setup', '/ai/settings'], ['/practice/decisions', '/mine/ideas'], ['/practice/library', '/ai/strategies'],
-        ['/ai/practice', '/ai'], ['/ai/practice/decisions', '/mine/ideas'], ['/ai/practice/book', '/ai/book'],
+        ['/practice/setup', '/ai/settings'], ['/practice/decisions', '/mine'], ['/practice/library', '/ai/strategies'],
+        ['/ai/practice', '/ai'], ['/ai/practice/decisions', '/mine'], ['/ai/practice/book', '/ai/book'],
         ['/ai/practice/holdings', '/ai/book'], ['/ai/practice/engine', '/ai'], ['/ai/practice/settings', '/ai/settings'],
-        ['/decisions', '/mine/ideas'], ['/suggestions', '/mine/ideas'], ['/paper', '/ai'], ['/paper/decisions', '/mine/ideas'],
+        ['/decisions', '/mine'], ['/suggestions', '/mine'], ['/paper', '/ai'], ['/paper/decisions', '/mine'],
         ['/paper/holdings', '/ai/book'], ['/paper/engine', '/ai'], ['/paper/settings', '/ai/settings'], ['/trading', '/ai'],
         ['/portfolio', '/mine/holdings'], ['/watchlist', '/research/watchlist'], ['/options', '/research/options'],
         ['/scanner', '/research'], ['/research/scanner', '/research'],

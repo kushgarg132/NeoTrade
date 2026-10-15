@@ -28,7 +28,7 @@ const Layout = ({ children }) => {
 
   const loadPending = () =>
     api
-      .get(endpoints.suggestions.list({ status: 'PENDING', mode: 'LONGTERM' }))
+      .get(endpoints.mine.actions)
       .then((res) => setPending(res.data.length))
       .catch(() => setPending(0));
   useEffect(() => {
@@ -36,8 +36,8 @@ const Layout = ({ children }) => {
   }, []);
   useReconnect(loadPending);
 
-  // Counts what Decisions lists: long-term proposals. Re-counted on each
-  // event, since a failed send can put one back to PENDING.
+  // Counts Mine's Needs-you list. Re-counted on each suggestion event, since
+  // ideas are part of it and a failed send can put one back to PENDING.
   // The nav badge: what needs the user outside practice (GET /today/attention).
   const [attention, setAttention] = useState(0);
   const loadAttention = () =>
@@ -48,7 +48,7 @@ const Layout = ({ children }) => {
   useReconnect(loadAttention);
 
   useTopic('suggestions', (message) => {
-    if (message.data?.mode === 'LONGTERM') loadPending();
+    loadPending();
     loadAttention(); // an interrupted approval lands as NEEDS_REVIEW
   });
 

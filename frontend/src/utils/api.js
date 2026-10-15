@@ -217,6 +217,16 @@ export const endpoints = {
   },
   today: '/today',
   todayAttention: '/today/attention',
+  mine: {
+    overview: '/mine/overview',
+    history: (range) => `/mine/history?range=${range}`,
+    actions: '/mine/actions',
+    dismiss: (id) => `/mine/actions/${encodeURIComponent(id)}/dismiss`,
+    snooze: (id) => `/mine/actions/${encodeURIComponent(id)}/snooze`,
+    stock: (s) => `/mine/stock/${encodeURIComponent(s)}`,
+    thesis: (s) => `/mine/thesis/${encodeURIComponent(s)}`,
+    tax: (fy) => (fy ? `/mine/tax?fy=${encodeURIComponent(fy)}` : '/mine/tax'),
+  },
   profile: {
     get: '/profile',
     memories: '/profile/memories',
