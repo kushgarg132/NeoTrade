@@ -180,9 +180,9 @@ Every run still runs every strategy on paper; the gates decide only where orders
 - **AI game plan only tightens** — `backend/plan/`: may drop opening intents, shrink risk
   (0.25–1.0), cap positions or skip the day; never blocks an exit or touches conviction.
 
-## Long-term ideas (Mine → Ideas)
+## Long-term ideas (Mine → Needs you)
 
-Decided at `/mine/ideas` (Mine → Ideas since 2026-10-14; old paths redirect). Approving
+Decided from the "Needs you" list on `/mine` (there is no Ideas tab since 2026-10-15; `/mine/ideas` redirects). Approving
 there never trades the AI account: fills go to paper or, on a second tap, to `mine`.
 
 
@@ -273,3 +273,44 @@ when a verdict gets worse. A broker that is logged out keeps its last holdings
 (`fetch_holdings` carries them over), priced from market quotes and marked "holdings as of".
 `portfolio/service.py::mine_holdings` is what the rest of the app means by "held": news
 alerts and the long-term scan's SELL ideas read it, never paper positions.
+
+## Mine redesign (Mine → Overview · Holdings · Tax · Journal)
+
+Since 2026-10-15 Mine has four tabs and a stock page; Today is the glance, Mine is the depth.
+Old paths redirect in `frontend/src/App.jsx` (`/mine/ideas` → `/mine`, `/mine/trades` →
+`/mine/journal`, `/mine/habits` → `/mine/journal?tab=habits`). The Plan and Review sub-tabs, the
+"Analyse now" button and the Ideas page are gone; the daily 16:00 review still writes verdicts and the
+per-holding AI note, and `POST /portfolio/refresh` stays for the daily pass and the chat. Nothing here
+adds scoring: verdicts stay admin-gated and the one conviction formula is untouched.
+
+Backend, `backend/mine/` behind `backend/routers/mine.py` (`/mine/*`, every record carries `user_id`):
+
+- **Lots** (`backend/mine/lots.py::open_lots`, `::realised`, `::reconcile`): FIFO tax lots from the
+  journal's trades (`::mine_trades`); the shortfall against the broker quantity shows as "unknown".
+- **History** (`backend/mine/history.py::backfill`, `::write_today`, `::series`): `mine_daily` holds the
+  account's value, net invested and the NIFTY-equivalent value per day. Backfill replays journal trades
+  over stored closes; the 16:00 pass (`backend/scheduler.py`, via `history.write_all`) adds each day.
+  `::xirr` is stdlib Newton with a bisection fallback; `::returns` gives the account's and NIFTY's XIRR
+  on the same cash flows.
+- **Needs you** (`backend/mine/actions.py::build`): one ranked list of verdict changes, target/stop
+  levels, proven ideas, rebalance buys and results dates. `::dismiss` and `::snooze` (7 days) keep state
+  per user; `::level_alerts` feeds Telegram.
+- **Thesis** (`backend/mine/thesis.py::ThesisStore`, `::ThesisIn`): why, target, stop and review-by per
+  holding, in `holding_theses`.
+- **Events** (`backend/mine/events.py::refresh`, `::loop`): results and ex-dividend dates of held symbols
+  into `corporate_events` from yfinance, a 6 hour loop in the ingest worker
+  (`backend/datalayer/worker.py`); `::dividends_received` estimates dividends from quantity held on the ex-date.
+- **Tax** (`backend/mine/tax.py::report`): Indian FY realised gains split short/long term, the
+  Rs 1.25 lakh exemption (`::est_tax`), unrealised by lot, lots turning long-term soon and the 31 March
+  harvest lists. An estimate, not tax advice; rates live only here.
+- **Stock** (`backend/mine/stock.py::detail`): position, lots, thesis, verdict history, events, news and
+  closes for one symbol; a sold holding still opens.
+
+Frontend: `frontend/src/pages/MineOverview.jsx::MineOverview` (headline with XIRR vs NIFTY, value curve
+`frontend/src/components/mine/ValueCurve.jsx`, Needs you `frontend/src/components/mine/NeedsYou.jsx`,
+drivers, mix), `frontend/src/pages/MineHoldings.jsx::MineHoldings` (one line per holding, sort and filter
+chips, "Plan new money" opens `frontend/src/components/portfolio/Rebalance.jsx`),
+`frontend/src/pages/MineStock.jsx::MineStock` (lots, chart with trade markers, thesis editor
+`frontend/src/components/mine/ThesisEditor.jsx`), `frontend/src/pages/MineTax.jsx::MineTax` and
+`frontend/src/pages/Journal.jsx` (Trades and Habits as inner tabs). Where an action opens is decided in
+`frontend/src/utils/mine.js::actionTarget`.

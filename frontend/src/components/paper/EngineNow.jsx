@@ -42,7 +42,7 @@ const EngineNow = ({ prefs }) => {
       .then((res) => setRuns(res.data))
       .catch(() => setRuns([]));
 
-  // Only the open count: pending proposals are counted under AI → Decisions.
+  // Only the open count: pending proposals are counted under Mine → Needs you.
   const loadLongterm = () =>
     api.get(endpoints.trading.trades('OPEN', 'paper', 'LONGTERM'))
       .then((res) => setLongtermOpen(res.data.length))
