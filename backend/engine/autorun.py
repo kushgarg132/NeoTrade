@@ -239,6 +239,9 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
     # Likewise anyone with app-placed positions on their own account: their exit alerts.
     users |= {u.split(":")[0] for u in await db["paper_trades"].distinct(
         "user_id", {"status": "OPEN", "$or": [{"via": {"$regex": "^autopilot:"}}, {"user_id": {"$regex": ":mine$"}}]})}
+    # And anyone with their own stop or target on a holding: those alerts too.
+    users |= set(await db["holding_theses"].distinct(
+        "user_id", {"$or": [{"stop": {"$gt": 0}}, {"target": {"$gt": 0}}]}))
     for user_id in sorted(users):
         try:
             if await _longterm_pass(db, redis, user_id, now):
@@ -299,6 +302,15 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         closed = await check_exits(db, user_id, now=now)
         if closed:
             await notify(db, user_id, exits_text(closed))
+        # The owner's own stop / target on a holding: Telegram once per level.
+        # A failure here must not skip the autopilot's exits below.
+        from backend.mine import actions
+        try:
+            alerts = await actions.level_alerts(db, redis, user_id, now)
+            if alerts:
+                await notify(db, user_id, actions.levels_text(alerts))
+        except Exception as exc:
+            logger.warning("level alerts failed for %s: %s", user_id, exc)
         # Off or on, the autopilot's open positions keep their exits.
         from backend.autopilot.service import check_exits as autopilot_exits
         await autopilot_exits(db, redis, user_id, now=now)

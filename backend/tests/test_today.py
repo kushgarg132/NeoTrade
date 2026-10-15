@@ -59,7 +59,7 @@ def test_login_needed_for_a_role_whose_broker_is_logged_out(monkeypatch):
     assert body["accounts"]["mine"]["state"] == "ACTIVE"
 
 
-def test_needs_you_orders_proposals_by_expiry_and_includes_cards(monkeypatch):
+def test_ideas_are_mine_actions_and_cards_stay_in_needs_you(monkeypatch):
     client, db = _client(monkeypatch)
     _seed(db, suggestions=[
         {"id": "late", "user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "PENDING", "mode": "LONGTERM",
@@ -68,9 +68,10 @@ def test_needs_you_orders_proposals_by_expiry_and_includes_cards(monkeypatch):
          "quantity": 1, "expires_at": NOW + timedelta(days=1), "created_at": NOW},
     ], chat_actions=[{"id": "c1", "user_id": "alice", "status": "PROPOSED", "summary": "Sell 10 INFY",
                       "expires_at": NOW + timedelta(minutes=10), "created_at": NOW}])
-    items = client.get("/api/v1/today").json()["needs_you"]
-    proposals = [n["title"] for n in items if n["kind"] == "proposal"]
-    assert proposals.index(next(t for t in proposals if "SJVN" in t)) < proposals.index(next(t for t in proposals if "TCS" in t))
+    body = client.get("/api/v1/today").json()
+    items = body["needs_you"]
+    assert {a["action"]["suggestion_id"] for a in body["mine_actions"] if a["kind"] == "idea"} == {"late", "soon"}
+    assert not [n for n in items if n["kind"] == "proposal"]
     assert any(n["kind"] == "card" and "Sell 10 INFY" in n["title"] for n in items)
 
 
@@ -83,8 +84,8 @@ def test_needs_you_lists_long_term_proposals_only(monkeypatch):
         {"id": "id", "user_id": "alice", "symbol": "SJVN", "side": "BUY", "status": "PENDING", "mode": "INTRADAY",
          "quantity": 1, "expires_at": NOW + timedelta(days=1), "created_at": NOW},
     ])
-    proposals = [n["title"] for n in client.get("/api/v1/today").json()["needs_you"] if n["kind"] == "proposal"]
-    assert len(proposals) == 1 and "TCS" in proposals[0]
+    ideas = [a["title"] for a in client.get("/api/v1/today").json()["mine_actions"] if a["kind"] == "idea"]
+    assert len(ideas) == 1 and "TCS" in ideas[0]
 
 
 def test_pnl_today_splits_mine_and_ai(monkeypatch):
@@ -175,18 +176,19 @@ def test_a_login_shows_on_the_next_poll(monkeypatch):
 
 
 def test_proposals_carry_their_terms_and_the_full_count(monkeypatch):
-    """Today shows at most a few proposals; each says what approving costs and
-    how sure the engine is, and the header says how many wait in all."""
+    """Today shows the top few of Mine's list; an idea says how sure the engine
+    is and which suggestion to approve, and the totals say how many wait."""
     client, db = _client(monkeypatch)
     _seed(db, suggestions=[
         {"id": f"p{i}", "user_id": "alice", "symbol": f"S{i}", "side": "BUY", "status": "PENDING", "mode": "LONGTERM",
          "quantity": 2, "entry_ref": 100.0, "notional": 200.0, "score": {"final": 0.61},
          "expires_at": NOW + timedelta(days=1), "created_at": NOW} for i in range(7)])
     body = client.get("/api/v1/today").json()
-    proposals = [n for n in body["needs_you"] if n["kind"] == "proposal"]
-    assert len(proposals) == 5 and body["proposals_total"] == 7
-    assert proposals[0]["symbol"].startswith("S") and proposals[0]["entry"] == 100.0
-    assert proposals[0]["notional"] == 200.0 and proposals[0]["conviction"] == 0.61
+    ideas = body["mine_actions"]
+    assert len(ideas) == 3 and body["mine_actions_total"] == 7 and body["proposals_total"] == 7
+    assert ideas[0]["symbol"].startswith("S") and ideas[0]["title"] == f"BUY 2 {ideas[0]['symbol']}"
+    assert ideas[0]["action"] == {"type": "idea", "suggestion_id": ideas[0]["id"].split(":")[2]}
+    assert "conviction 0.61" in ideas[0]["detail"]
 
 
 def test_attention_counts_what_needs_the_user_but_not_practice_proposals(monkeypatch):
