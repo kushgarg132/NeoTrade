@@ -235,3 +235,10 @@ async def test_ai_pick_wins_over_the_same_watchlist_name(mdb, monkeypatch):
     body = _client(_user(role="admin")).get("/api/v1/portfolio/rebalance/candidates").json()
     assert [(c["symbol"], c["source"], c["score"], c["preselect"]) for c in body] == [
         ("W1", "watchlist", None, False), ("P1", "ai", 0.7, True)]
+
+
+async def test_rows_carry_thesis_target(mdb):
+    await _snapshot(mdb)
+    await mdb["holding_theses"].insert_one({"user_id": "alice", "symbol": "A", "why": "", "target": 150.0})
+    rows = {r["symbol"]: r for r in _client(_user()).get("/api/v1/portfolio").json()["holdings"]}
+    assert rows["A"]["thesis_target"] == 150.0 and rows["B"]["thesis_target"] is None
