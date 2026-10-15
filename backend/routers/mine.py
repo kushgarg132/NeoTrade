@@ -138,3 +138,33 @@ async def tax(fy: int | None = None, user: User = Depends(get_current_user)):
             prices[h["symbol"]] = float(h["last_price"])
     return mine_tax.report(await mine_trades(db.db, user.id), held, prices,
                            fy if fy is not None else mine_tax.current_fy(today), today)
+
+
+# ---- Needs you (mine/actions.py). Ids hold ':' so the path converter takes the rest.
+from fastapi import Path  # noqa: E402  (kept with its block: other tasks append here too)
+
+ACTION_ID = Path(..., max_length=300)
+
+
+@router.get("/actions")
+async def mine_actions(user: User = Depends(get_current_user)):
+    from backend.mine import actions
+    from backend.portfolio.digest import verdicts_visible
+
+    return await actions.build(db.db, user.id, datetime.now(timezone.utc), await verdicts_visible(db.db, user.id))
+
+
+@router.post("/actions/{action_id:path}/dismiss")
+async def dismiss_action(action_id: str = ACTION_ID, user: User = Depends(get_current_user)):
+    from backend.mine import actions
+
+    await actions.dismiss(db.db, user.id, action_id)
+    return {"ok": True}
+
+
+@router.post("/actions/{action_id:path}/snooze")
+async def snooze_action(action_id: str = ACTION_ID, user: User = Depends(get_current_user)):
+    from backend.mine import actions
+
+    await actions.snooze(db.db, user.id, action_id, datetime.now(timezone.utc))
+    return {"ok": True}

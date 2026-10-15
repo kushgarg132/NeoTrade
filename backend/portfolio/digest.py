@@ -192,12 +192,23 @@ def _pct(value: Optional[float]) -> str:
     return "" if value is None else f" ({value:+.1f}%)"
 
 
+TOP_ACTIONS = 3
+
+
+def _action_lines(actions: list[dict]) -> list[str]:
+    """The top of Mine's "Needs you" list (mine/actions.py)."""
+    if not actions:
+        return []
+    return [f"Needs you ({len(actions)}):"] + [f"• {escape(a['title'])}" for a in actions[:TOP_ACTIONS]]
+
+
 def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: int, ai: dict,
-                   yesterday: Optional[dict] = None) -> str:
+                   yesterday: Optional[dict] = None, actions: Optional[list[dict]] = None) -> str:
     lines = ["☀️ <b>Before the open</b>"]
     if p:
         moved = f", yesterday {_rupees(yesterday['change'], True)}{_pct(yesterday['pct'])}" if yesterday else ""
         lines.append(f"Your account: {_rupees(p['value'])}{moved}")
+    lines += _action_lines(actions or [])
     if overnight:
         lines.append("News on your holdings since the close:")
         lines += [f"• {escape(sym)}: {escape(n['title'] or '')}" for sym, n in list(overnight.items())[:5]]
@@ -210,7 +221,10 @@ def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: int, ai
     return "\n".join(lines)
 
 
-def postclose_text(p: Optional[dict], today: dict, events: list[dict]) -> str:
+def postclose_text(p: Optional[dict], today: dict, events: list[dict], actions: Optional[list[dict]] = None) -> str:
+    actions = actions or []
+    # A worsened verdict already listed as an action is not repeated below.
+    listed = {a["symbol"] for a in actions[:TOP_ACTIONS] if a["kind"] == "verdict_worse"}
     lines = ["🔔 <b>After the close</b>"]
     if p:
         lines.append(f"Your account: {_rupees(p['value'])}, today {_rupees(p['day_change'], True)}{_pct(p['day_change_pct'])}, "
@@ -221,7 +235,9 @@ def postclose_text(p: Optional[dict], today: dict, events: list[dict]) -> str:
                 why = f" — {escape(m['why']['title'])}" if m.get("why") and m["why"].get("title") else ""
                 lines.append(f"• {escape(m['symbol'])} {m['move_pct']:+.1f}%{why}")
         for c in p["verdict_changes"]:
-            lines.append(f"⚠️ {escape(c['symbol'])}: {c['from']} → {c['to']}")
+            if c["symbol"] not in listed:
+                lines.append(f"⚠️ {escape(c['symbol'])}: {c['from']} → {c['to']}")
+    lines += _action_lines(actions)
     lines.append(f"Closed today, net: you {_rupees(today['mine'], True)} · AI {_rupees(today['ai'], True)}")
     if events:
         lines.append("Tomorrow: " + "; ".join(escape(e.get("event") or e.get("title") or "") for e in events[:3]))
@@ -233,6 +249,17 @@ async def _ai_line(db, user_id: str, prefs: dict) -> dict:
 
     deployed = sum((t.get("quantity") or 0) * (t.get("entry_price") or 0) for t in await open_trades(db, user_id))
     return {"enabled": prefs.get("autopilot_enabled"), "live": prefs.get("autopilot_live"), "deployed": deployed}
+
+
+async def _actions(db, user_id: str, now: datetime) -> list[dict]:
+    """The digest still goes without them if building the list fails."""
+    from backend.mine import actions
+
+    try:
+        return await actions.build(db, user_id, now, await verdicts_visible(db, user_id))
+    except Exception as exc:
+        logger.warning("digest: actions failed for %s: %s", user_id, exc)
+        return []
 
 
 async def _users(db) -> list[str]:
@@ -265,8 +292,9 @@ async def send_premarket(db, redis, now: datetime) -> int:
             ideas = len(await for_mine(db, user_id, await db["suggestions"].find(
                 {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200)))
             moved = await last_session_move(db, await mine_holdings(db, user_id), local.date())
-            await notify(db, user_id, premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs), moved),
-                         html=True)
+            acts = await _actions(db, user_id, now)
+            await notify(db, user_id, premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs), moved,
+                                                     acts), html=True)
             sent += 1
         except Exception as exc:
             logger.exception("pre-market digest failed for %s: %s", user_id, exc)
@@ -287,7 +315,8 @@ async def send_postclose(db, now: datetime) -> int:
     for user_id in await _users(db):
         try:
             roles = (await PrefsStore(db).get(user_id)).get("broker_roles") or {}
-            text = postclose_text(await pulse(db, user_id, now), await pnl_since(db, user_id, roles, day_start(now)), events)
+            text = postclose_text(await pulse(db, user_id, now), await pnl_since(db, user_id, roles, day_start(now)),
+                                  events, await _actions(db, user_id, now))
             await notify(db, user_id, text, html=True)
             sent += 1
         except Exception as exc:

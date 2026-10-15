@@ -20,8 +20,7 @@ from backend.engine.session import IST
 router = APIRouter(prefix="/today", tags=["Today"])
 logger = logging.getLogger(__name__)
 NAMES = {"kite": "Kite", "upstox": "Upstox", "angel_one": "Angel One"}
-MAX_PROPOSALS = 5
-PENDING_PROPOSALS = {"status": "PENDING", "mode": "LONGTERM"}  # what Decisions lists
+TOP_ACTIONS = 3  # Today is the glance; Mine holds the whole list
 STATE_TTL = 60  # seconds a broker-session check is reused: Today polls every minute
 _STATE_CACHE: dict = {}  # user_id -> (checked_at, roles tuple, {role: info})
 
@@ -66,15 +65,15 @@ async def _accounts(roles: dict, user_id: str, broker_states) -> dict:
 
 async def _ideas(user_id: str) -> list[dict]:
     """Pending ideas for the user's own account: proven strategies only."""
-    from backend.risk.paper_gate import for_mine
+    from backend.mine import actions
 
-    return await for_mine(db.db, user_id, await db.db["suggestions"].find(
-        PENDING_PROPOSALS | {"user_id": user_id}).to_list(length=200))
+    return await actions.ideas(db.db, user_id)
 
 
-async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict], now: datetime,
-                     proposals: bool = True, pulse: Optional[dict] = None) -> list[dict]:
-    from backend.engine.persistence import mine_book
+async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict], now: datetime) -> list[dict]:
+    """The app's own nags: logins, the kill switch, interrupted approvals,
+    chat cards, guardrails. Holding items (exits, verdicts, ideas) are
+    Mine's "Needs you" list (mine/actions.py), read as `mine_actions`."""
     from backend.guardrails.store import GuardrailStore
 
     items = []
@@ -89,27 +88,7 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
     async for s in db.db["suggestions"].find({"user_id": user_id, "status": "NEEDS_REVIEW"}):
         items.append({"kind": "review", "title": f"Check {s['symbol']}: an approval was interrupted",
                       "detail": s.get("reason") or "Check your broker's order book before approving again.",
-                      "link": "/mine/trades"})
-    # The user's own positions: an exit level the app alerted on, still held.
-    async for t in db.db["paper_trades"].find({"user_id": mine_book(user_id), "status": "OPEN",
-                                               "alerted.0": {"$exists": True}}):
-        items.append({"kind": "exit", "title": f"Sell {t['symbol']}? Its {t['alerted'][-1]} was hit",
-                      "symbol": t["symbol"], "detail": "The idea's own exit rule. You place the sell.",
-                      "link": "/mine/holdings"})
-    for c in (pulse or {}).get("verdict_changes") or []:
-        items.append({"kind": "verdict", "title": f"{c['symbol']}: {c['from']} → {c['to']}",
-                      "symbol": c["symbol"], "detail": ", ".join(c["reasons"]).replace("_", " "),
-                      "link": "/mine/holdings"})
-    pending = await _ideas(user_id) if proposals else []
-    pending.sort(key=lambda s: _aware(s.get("expires_at")) or now)
-    for s in pending[:MAX_PROPOSALS]:
-        # The terms Decisions shows, so the row says what approving costs and how sure the engine is.
-        items.append({"kind": "proposal", "title": f"{s.get('side', '')} {s.get('quantity', 0):g} {s['symbol']}",
-                      "symbol": s["symbol"], "side": s.get("side"), "quantity": s.get("quantity"),
-                      "entry": s.get("entry_ref"), "notional": s.get("notional"),
-                      "conviction": (s.get("score") or {}).get("final"),
-                      "detail": s.get("mode", "").title(), "expires_at": _aware(s.get("expires_at")),
-                      "link": "/mine/ideas"})
+                      "link": "/mine/journal"})
     async for card in db.db["chat_actions"].find({"user_id": user_id, "status": "PROPOSED"}):
         if (_aware(card.get("expires_at")) or now) >= now:
             items.append({"kind": "card", "title": card.get("summary", "A card waits for you"),
@@ -118,6 +97,13 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
         items.append({"kind": "guardrail", "title": alert.get("title", "Guardrail alert"),
                       "detail": alert.get("detail", ""), "link": "/settings?tab=safety"})
     return items
+
+
+async def _mine_actions(user_id: str, now: datetime) -> list[dict]:
+    from backend.mine import actions
+    from backend.portfolio import digest
+
+    return await actions.build(db.db, user_id, now, await digest.verdicts_visible(db.db, user_id))
 
 
 async def _setup(user_id: str, prefs: dict) -> dict:
@@ -193,8 +179,10 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         "live_armed": {"autopilot": bool(prefs.get("autopilot_enabled") and prefs.get("autopilot_live")),
                        "strategies": prefs.get("live_strategies") or []},
         "kill_switch": kill,
-        "pulse": (pulse := await part("pulse", digest.pulse(db.db, user.id, now))),
-        "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now, pulse=pulse)) or [],
+        "pulse": await part("pulse", digest.pulse(db.db, user.id, now)),
+        "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now)) or [],
+        "mine_actions": (acts := await part("mine_actions", _mine_actions(user.id, now)) or [])[:TOP_ACTIONS],
+        "mine_actions_total": len(acts),
         "scoreboard": await part("scoreboard", digest.scoreboard(db.db, user.id, roles, now)),
         "proposals_total": None if (ideas := await part("proposals_total", _ideas(user.id))) is None else len(ideas),
         "ai_activity": log,
@@ -221,4 +209,4 @@ async def attention(user: User = Depends(get_current_user), broker_states=Depend
         accounts = None
     tripped = await KillSwitchStore(db.db).is_tripped(user.id, now.astimezone(IST).date())
     kill = {"tripped": bool(tripped), "reason": (tripped or {}).get("reason")}
-    return {"count": len(await _needs_you(user.id, accounts, kill, now, proposals=False))}
+    return {"count": len(await _needs_you(user.id, accounts, kill, now))}
