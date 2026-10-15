@@ -6,12 +6,15 @@ Later endpoints are appended below; do not reorder these."""
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+import re
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.database import db
 from backend.engine.session import IST
+from backend.mine.thesis import SYMBOL, ThesisIn, ThesisStore
 
 router = APIRouter(prefix="/mine", tags=["Mine"])
 RANGE_DAYS = {"1M": 31, "6M": 183, "1Y": 366, "ALL": None}
@@ -93,3 +96,20 @@ async def overview(user: User = Depends(get_current_user)):
                     "all": _split((pulse or {}).get("pnl_by_symbol") or {})},
         "mix": (snapshot or {}).get("concentration"),
     }
+
+
+def _thesis_symbol(symbol: str) -> str:
+    symbol = symbol.upper()
+    if not re.match(SYMBOL, symbol):
+        raise HTTPException(status_code=422, detail="Invalid symbol")
+    return symbol
+
+
+@router.get("/thesis/{symbol}")
+async def get_thesis(symbol: str, user: User = Depends(get_current_user)):
+    return await ThesisStore(db.db).get(user.id, _thesis_symbol(symbol)) or {}
+
+
+@router.put("/thesis/{symbol}")
+async def put_thesis(symbol: str, body: ThesisIn, user: User = Depends(get_current_user)):
+    return await ThesisStore(db.db).put(user.id, _thesis_symbol(symbol), body)
