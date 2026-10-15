@@ -311,11 +311,11 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         if last_pass is None or last_pass < missed.isoformat():
             # The whole pass, not just the scan: learning, plan replays, the
             # re-tune and the data check are lost too when a deploy kills 16:00.
-            # Under the daily lock, so other users' morning passes skip it.
-            # ponytail: inline, so this tick waits for it (minutes, one user);
-            # move to a background task if intraday renewals start lapsing.
+            # Under the daily lock, so other users' morning passes skip it. In
+            # the background: inline it held this tick ~7 minutes, the auto-run
+            # key lapsed and the other worker started a second intraday run.
             logger.info("16:00 pass missed (last pass %s); catching up for %s", last_pass, missed)
-            await scheduler._run_locked(db, redis, pass_day=missed)
+            asyncio.create_task(_catch_up(db, redis, missed))
         # The factor portfolio is the automatic long-term strategy: rebalanced
         # on paper at the first morning pass of each month (backend/factor/).
         from backend.factor import paper as factor_paper
@@ -338,6 +338,15 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
             pending.sort(key=lambda s: s["expires_at"])
             await notify(db, user_id, proposals_text(pending, f"Good morning: {len(pending)} idea(s) for your account, from strategies proven on the AI account."))
     return did
+
+
+async def _catch_up(db, redis, day) -> None:
+    from backend import scheduler
+
+    try:
+        await scheduler._run_locked(db, redis, pass_day=day)
+    except Exception as exc:
+        logger.exception("catch-up daily pass for %s failed: %s", day, exc)
 
 
 async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dict], now: datetime,

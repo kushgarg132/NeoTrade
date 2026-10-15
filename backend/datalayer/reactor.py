@@ -170,8 +170,11 @@ async def react(db, redis, now: Optional[datetime] = None) -> int:
             hits = [h for h in hits_for(item, sector_of, pref, held, watched)
                     if await redis.set(ALERT_KEY.format(user_id, h["target"]), "1", ex=ALERT_TTL_SECONDS, nx=True)]
             if hits:
-                await _deliver(db, redis, user_id, item, hits)
-                sent += 1
+                try:  # items are claimed already: one failure must not drop the rest
+                    await _deliver(db, redis, user_id, item, hits)
+                    sent += 1
+                except Exception:
+                    logger.exception("news alert for %s failed", user_id)
     if sent:
         logger.info("news reactor: %d alert(s) from %d item(s)", sent, len(items))
     return sent
@@ -210,13 +213,7 @@ async def scan(db, redis, now: Optional[datetime] = None) -> int:
     from backend.datalayer.outcomes import load_weights
     from backend.prefs import PrefsStore
 
-    from backend.engine.autorun import in_session, near_session
-
     now = now or datetime.now(timezone.utc)
-    # A proposal can only be acted on in the session: overnight items wait,
-    # unclaimed, for the pre-open pass instead of burning scans at 1 AM.
-    if not (in_session(now) or near_session(now)):
-        return 0
     items = await _claim(db, "scanned_at", now)
     if not items:
         return 0

@@ -372,6 +372,10 @@ async def _refresh_analyst_verdicts(redis) -> int:
 async def scheduler_loop(db, redis=None) -> None:
     while True:
         await asyncio.sleep(seconds_until_next_run(datetime.now(timezone.utc)))
+        if datetime.now(timezone.utc).astimezone(IST).weekday() >= 5:
+            # No session, so nothing to scan, review or report -- and a Sunday
+            # last_pass hid a missed Friday from Monday's catch-up.
+            continue
         try:
             await _run_locked(db, redis)
         except Exception as exc:

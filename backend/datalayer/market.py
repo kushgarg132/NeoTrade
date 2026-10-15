@@ -37,6 +37,7 @@ FLOWS_URL = "https://www.nseindia.com/api/fiidiiTradeReact"
 CALENDAR_COUNTRIES = {"USD", "CNY", "EUR", "JPY", "GBP", "All"}
 
 REGIME_KEY, BRIEF_KEY, FLOWS_KEY = "market:regime", "market:brief", "market:flows"
+BRIEF_BACKOFF_KEY, BRIEF_BACKOFF_SECONDS = "market:brief:backoff", 600  # after a failed brief
 REGIME_TTL_SECONDS = 3600
 RISK_OFF, RISK_ON = -0.5, 0.3
 
@@ -215,6 +216,8 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
     regime_now = await _json(redis, REGIME_KEY) or {}
     if not _brief_due(last, material_since, now, regime_changed=(last or {}).get("regime") != regime_now.get("label")):
         return False
+    if await redis.get(BRIEF_BACKOFF_KEY):  # the last attempt failed: no LLM call a minute through an outage
+        return False
 
     items = await top_items(db, hours=24, now=now)
     if not items:
@@ -243,6 +246,7 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
     )
     text = (await _write_brief(system, prompt) or "").strip()
     if not text or text == "LLM_DISABLED" or text.startswith("Error generating response"):
+        await redis.set(BRIEF_BACKOFF_KEY, "1", ex=BRIEF_BACKOFF_SECONDS)
         return False
     doc = {"text": text, "at": now.timestamp(), "regime": regime_now.get("label"),
            "items": [str(d["_id"]) for d in items]}

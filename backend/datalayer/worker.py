@@ -62,8 +62,10 @@ def _loops() -> list[Loop]:
     ]
 
 
-async def beat(redis, name: str) -> None:
-    await redis.set(HEARTBEAT_KEY.format(name), str(int(time.time())), ex=HEARTBEAT_TTL_SECONDS)
+async def beat(redis, name: str, interval_seconds: float = 0) -> None:
+    # Outlives the loop's own interval: a 30-minute loop read as dead after 5.
+    ttl = max(HEARTBEAT_TTL_SECONDS, int(2 * interval_seconds))
+    await redis.set(HEARTBEAT_KEY.format(name), str(int(time.time())), ex=ttl)
 
 
 async def heartbeat_ages(redis) -> dict[str, int]:
@@ -83,7 +85,7 @@ async def _run_loop(db, redis, loop: Loop) -> None:
     while True:
         try:
             await loop.run(db, redis)
-            await beat(redis, loop.name)
+            await beat(redis, loop.name, loop.interval_seconds)
         except asyncio.CancelledError:
             raise
         except Exception as exc:

@@ -275,6 +275,7 @@ async def test_a_missed_close_scan_is_caught_up_at_the_open(world, longterm):
     assert longterm["passes"] == []  # before 09:20
     await _tick(world, datetime(2026, 9, 28, 9, 21, tzinfo=IST))
     await _tick(world, datetime(2026, 9, 28, 11, 0, tzinfo=IST))
+    await asyncio.sleep(0.05)  # the catch-up runs as a background task, off the tick
     # The whole missed pass, once, recorded as Friday's so Monday's 16:00 still runs.
     assert len(longterm["passes"]) == 1
     assert world.redis.data["scheduler:last_pass"] == "2026-09-25"

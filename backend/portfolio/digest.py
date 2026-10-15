@@ -232,7 +232,9 @@ async def send_premarket(db, redis, now: datetime) -> int:
             prefs = await PrefsStore(db).get(user_id)
             p = await pulse(db, user_id, now)
             held = list(await mine_holdings(db, user_id))
-            last_close = datetime.combine(local.date() - timedelta(days=1), time(15, 30), tzinfo=IST)
+            # The previous session's close: on a Monday, Friday's (weekend news counts).
+            from backend.engine.autorun import _previous_weekday
+            last_close = datetime.combine(_previous_weekday(local.date()), time(15, 30), tzinfo=IST)
             overnight = await headlines_for(db, held, last_close)
             ideas = len(await for_mine(db, user_id, await db["suggestions"].find(
                 {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200)))
