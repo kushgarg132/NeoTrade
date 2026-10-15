@@ -3,16 +3,16 @@ import { Sun, Wallet, Bot, Search, Settings } from 'lucide-react';
 /**
  * The sections, shared by the desktop index and the phone's bottom bar,
  * around the trader's two accounts (Phase 19): Today (where am I, what do I
- * do), Mine (my own account: holdings, ideas for it, trades), AI (the account
+ * do), Mine (my own account: holdings, what needs you, tax, journal), AI (the account
  * the app runs, paper until a strategy earns live), Research, More (setup).
  * `match` lists the path prefixes a section owns, so its tab stays lit on
  * every page inside it.
  */
 export const SECTIONS = [
   // Badges: Today counts what needs you outside ideas (logins, waiting
-  // cards, interrupted approvals, guardrail alerts); Mine counts ideas.
+  // cards, interrupted approvals, guardrail alerts); Mine counts its Needs-you list.
   { icon: Sun, label: 'Today', path: '/', match: ['/'], exact: true, primary: true, counter: 'attention' },
-  { icon: Wallet, label: 'Mine', path: '/mine/holdings', match: ['/mine'], primary: true, counter: 'pending' },
+  { icon: Wallet, label: 'Mine', path: '/mine', match: ['/mine'], primary: true, counter: 'pending' },
   { icon: Bot, label: 'AI', path: '/ai', match: ['/ai'], primary: true },
   { icon: Search, label: 'Research', path: '/research', match: ['/research'], primary: true },
   { icon: Settings, label: 'More', path: '/settings', match: ['/settings', '/profile', '/system'], primary: true },
@@ -25,10 +25,10 @@ export const sectionActive = (item, pathname) =>
   item.exact ? pathname === '/' : item.match.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
 export const MINE_TABS = [
+  { to: '/mine', label: 'Overview', end: true, counter: true },
   { to: '/mine/holdings', label: 'Holdings' },
-  { to: '/mine/ideas', label: 'Ideas', counter: true },
-  { to: '/mine/trades', label: 'Trades' },
-  { to: '/mine/habits', label: 'Habits' },
+  { to: '/mine/tax', label: 'Tax' },
+  { to: '/mine/journal', label: 'Journal' },
 ];
 
 /** The AI account: paper until a strategy passes both gates, then live. */
