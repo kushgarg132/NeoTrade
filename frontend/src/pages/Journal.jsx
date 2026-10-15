@@ -148,8 +148,9 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
   const [month, setMonth] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [openTrip, setOpenTrip] = useState(null);
-  // Mine → Trades shows the calendar and the trade list; Mine → Habits the patterns.
-  const [tab, setTab] = useTab(view === 'habits' ? ['patterns'] : ['calendar', 'trades']);
+  // Trades: calendar and trade list. Habits: the patterns. `view` only picks the default.
+  const [tab, setTab] = useTab(view === 'habits' ? ['habits', 'trades'] : ['trades', 'habits']);
+  const habits = tab === 'habits';
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const fileInput = useRef(null);
@@ -184,7 +185,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
   // one exists, since most accounts never switch a strategy live.
   const [liveTrades, setLiveTrades] = useState([]);
   const loadLiveTrades = () =>
-    view === 'habits'
+    habits
       ? Promise.resolve()
       : api
           .get(endpoints.trading.trades(null, 'live'))
@@ -192,7 +193,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
           .catch(() => setLiveTrades([]));
   useEffect(() => {
     loadLiveTrades();
-  }, [view]);
+  }, [habits]);
   useTopic('trades', loadLiveTrades);
   useReconnect(loadLiveTrades);
 
@@ -314,24 +315,21 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
           </Link>
         )}
         <GuardrailAlerts />
-        {view !== 'habits' && <BrokerPnl journal={data} loading={!data && !error} error={error} />}
-        {view !== 'habits' && liveTrades.length > 0 && (
+        {!habits && <BrokerPnl journal={data} loading={!data && !error} error={error} />}
+        {!habits && liveTrades.length > 0 && (
           <TradeLedger title="Orders placed from NeoTrade" trades={liveTrades} loading={false} error={null} />
         )}
 
-        {data && view !== 'habits' && (
+        {data && (
           <Tabs
-            tabs={[
-              { id: 'calendar', label: 'Calendar' },
-              ...(empty ? [] : [{ id: 'trades', label: selectedDay ? `List · ${selectedDay.slice(5)}` : 'List' }]),
-            ]}
+            tabs={[{ id: 'trades', label: 'Trades' }, { id: 'habits', label: 'Habits' }]}
             active={tab}
             onSelect={setTab}
             label="Journal sections"
           />
         )}
 
-        {(tab === 'calendar' || empty) && (
+        {(!habits || empty) && (
         <Sheet
           title="Journal"
           meta={summary ? `${summary.trips} closed` : undefined}
@@ -415,9 +413,9 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
         </Sheet>
         )}
 
-        {!empty && tab === 'patterns' && <MirrorSheet mirror={data?.mirror} />}
+        {!empty && habits && <MirrorSheet mirror={data?.mirror} />}
 
-        {!empty && tab === 'patterns' && (
+        {!empty && habits && (
           <Sheet title="Your patterns" meta="Your own trades, gross">
             {data.insights.length === 0 ? (
               <Empty
@@ -434,7 +432,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
           </Sheet>
         )}
 
-        {!empty && tab === 'trades' && (
+        {!empty && !habits && (
           <Sheet
             title={selectedDay ? `Trades closed ${selectedDay}` : 'Recent round trips'}
             meta="Gross of charges"

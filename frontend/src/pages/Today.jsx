@@ -5,7 +5,8 @@ import Layout from '../components/Layout';
 import Markdown from '../components/common/Markdown';
 import MoneyBadge from '../components/common/MoneyBadge';
 import StopAutopilot from '../components/common/StopAutopilot';
-import { Sheet, Ruling, Money, StockIcon } from '../components/doc/Doc';
+import NeedsYou from '../components/mine/NeedsYou';
+import { Sheet, Ruling, Money } from '../components/doc/Doc';
 import api, { endpoints, getPreferences } from '../utils/api';
 import { useRefetchOn } from '../hooks/useStream';
 import { cn } from '../utils/cn';
@@ -85,67 +86,39 @@ const expiresIn = (iso) => {
   return hours < 24 ? `expires in ${Math.ceil(hours)}h` : `expires in ${Math.ceil(hours / 24)}d`;
 };
 
-/** A proposal's row says what approving costs and how sure the engine is, so a
- *  glance is enough to know whether to open Decisions now. */
-const proposalLine = (item) =>
-  [
-    item.conviction != null && `conviction ${item.conviction.toFixed(2)}`,
-    expiresIn(item.expires_at),
-  ].filter(Boolean).join(' · ');
-
-const NeedsYou = ({ items, proposalsTotal }) => {
-  const shown = items.filter((item) => item.kind === 'proposal').length;
-  const hidden = (proposalsTotal || 0) - shown;
-  return (
-  <Sheet
-    title="Do today"
-    meta={items.length ? String(items.length + Math.max(hidden, 0)) : undefined}
-    actions={
-      <Link to="/mine/ideas" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
-        Ideas ›
-      </Link>
-    }
-  >
-    {items.length === 0 ? (
-      <p className="font-[family-name:var(--font-narrow)] text-2xl font-bold uppercase tracking-[0.06em] py-4">You’re clear.</p>
-    ) : (
-      <ul className="divide-y divide-[var(--rule)]">
-        {items.map((item, i) => {
-          const body = (
-            <>
-              {item.kind === 'proposal' && <StockIcon symbol={item.symbol} />}
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm font-semibold truncate">{item.title}</span>
-                <span className="block doc-meta normal-case truncate">
-                  {item.kind === 'proposal'
-                    ? proposalLine(item)
-                    : [item.detail, expiresIn(item.expires_at)].filter(Boolean).join(' · ')}
-                </span>
+/** The app's own nags (logins, kill switch, interrupted approvals, cards, guardrails).
+ *  Holding decisions (exits, verdicts, ideas) are the Needs you list under Your account. */
+const DoToday = ({ items }) => (items.length === 0 ? null : (
+  <Sheet title="Do today" meta={String(items.length)}>
+    <ul className="divide-y divide-[var(--rule)]">
+      {items.map((item, i) => {
+        const body = (
+          <>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-semibold truncate">{item.title}</span>
+              <span className="block doc-meta normal-case truncate">
+                {[item.detail, expiresIn(item.expires_at)].filter(Boolean).join(' · ')}
               </span>
-              {item.kind === 'proposal' && item.notional != null && (
-                <span className="figure-md text-sm shrink-0">{formatCurrency(item.notional)}</span>
-              )}
-              {item.link && <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />}
-            </>
-          );
-          return (
-            <li key={`${item.kind}-${i}`}>
-              {item.link
-                ? <Link to={item.link} className="flex items-center gap-3 py-2.5 min-h-11 hover:text-[var(--stamp)]">{body}</Link>
-                : <div className="flex items-center gap-3 py-2.5 min-h-11">{body}</div>}
-            </li>
-          );
-        })}
-      </ul>
-    )}
+            </span>
+            {item.link && <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />}
+          </>
+        );
+        return (
+          <li key={`${item.kind}-${i}`}>
+            {item.link
+              ? <Link to={item.link} className="flex items-center gap-3 py-2.5 min-h-11 hover:text-[var(--stamp)]">{body}</Link>
+              : <div className="flex items-center gap-3 py-2.5 min-h-11">{body}</div>}
+          </li>
+        );
+      })}
+    </ul>
   </Sheet>
-  );
-};
+));
 
-/** Your own account right now: value, today's move, the overall gain, and
- *  the stocks that moved most with the headline behind each. Priced from
- *  market quotes, so it is live even when the broker is logged out. */
-const Pulse = ({ pulse, failed, now }) => {
+/** Your own account at a glance: value, today's move, the overall gain, then
+ *  the top of the Needs you list. Priced from market quotes, so it is live even
+ *  when the broker is logged out. Movers live on Mine → Overview. */
+const Pulse = ({ pulse, failed, now, actions, total, onChanged }) => {
   if (failed) {
     return <Sheet title="Your account"><p className="doc-meta normal-case">Couldn’t price your account just now.</p></Sheet>;
   }
@@ -159,57 +132,34 @@ const Pulse = ({ pulse, failed, now }) => {
   }
   const stale = pulse.holdings_as_of && now - new Date(pulse.holdings_as_of) > 36 * 3_600_000;
   return (
-    <Sheet
-      title="Your account"
-      meta={`${pulse.count} holdings · as of ${formatDateTime(pulse.as_of)}`}
-      actions={<Link to="/mine/holdings" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Holdings ›</Link>}
-    >
-      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-        <div>
-          <p className="field-label mb-1">Value</p>
+    <>
+      <Sheet
+        title="Your account"
+        meta={`as of ${formatDateTime(pulse.as_of)}`}
+        actions={<Link to="/mine" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Mine ›</Link>}
+      >
+        <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="figure-lg">{formatCurrency(pulse.value)}</span>
-        </div>
-        <div>
-          <p className="field-label mb-1">Today</p>
-          <Money value={pulse.day_change} size="lg" />
-          {pulse.day_change_pct != null && <span className="doc-meta ml-1.5"><Money value={pulse.day_change_pct} percent className="text-sm" /></span>}
-        </div>
-        <div>
-          <p className="field-label mb-1">Overall</p>
+          <span className="doc-meta">today</span>
+          <Money value={pulse.day_change} />
+          {pulse.day_change_pct != null && <Money value={pulse.day_change_pct} percent className="text-sm" />}
+          <span className="doc-meta">· overall</span>
           <Money value={pulse.pnl} />
-          {pulse.pnl_pct != null && <span className="doc-meta ml-1.5"><Money value={pulse.pnl_pct} percent className="text-sm" /></span>}
-        </div>
-      </div>
-      {stale && (
-        <p className="doc-meta normal-case mt-2">
-          Holdings list from {formatDateTime(pulse.holdings_as_of)}: log in to your broker to refresh it.
+          {pulse.pnl_pct != null && <Money value={pulse.pnl_pct} percent className="text-sm" />}
         </p>
+        {stale && (
+          <p className="doc-meta normal-case mt-2">
+            Holdings list from {formatDateTime(pulse.holdings_as_of)}: log in to your broker to refresh it.
+          </p>
+        )}
+      </Sheet>
+      <NeedsYou actions={actions} limit={3} onChanged={onChanged} />
+      {total > 0 && (
+        <Link to="/mine" className="block field-label text-[var(--stamp)] hover:underline min-h-9">
+          See all {total} in Mine ›
+        </Link>
       )}
-      {pulse.movers?.length > 0 && (
-        <>
-          <p className="field-label mt-3 mb-1">Moved most</p>
-          <ul className="divide-y divide-[var(--rule)]">
-            {pulse.movers.map((m) => (
-              <li key={m.symbol} className="py-2 flex items-start gap-3">
-                <StockIcon symbol={m.symbol} />
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-semibold">{m.symbol}</span>
-                  <span className="block doc-meta normal-case">
-                    {m.why?.title
-                      ? (m.why.url ? <a href={m.why.url} target="_blank" rel="noreferrer" className="hover:underline">{m.why.title}</a> : m.why.title)
-                      : 'No scored news on it.'}
-                  </span>
-                </span>
-                <span className="text-right shrink-0">
-                  <Money value={m.move_pct} percent className="text-sm" />
-                  <span className="block"><Money value={m.day_change} className="text-xs" /></span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </Sheet>
+    </>
   );
 };
 
@@ -377,8 +327,9 @@ const Today = () => {
         <SetupChecklist setup={data.setup} />
         <div className="space-y-3 sm:space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-4 lg:items-start">
           <div className="space-y-3 sm:space-y-4">
-            <Pulse pulse={data.pulse} failed={!!data.errors?.pulse} now={now} />
-            <NeedsYou items={data.needs_you || []} proposalsTotal={data.proposals_total} />
+            <Pulse pulse={data.pulse} failed={!!data.errors?.pulse} now={now}
+                   actions={data.mine_actions || []} total={data.mine_actions_total || 0} onChanged={load} />
+            <DoToday items={data.needs_you || []} />
             <Scoreboard board={data.scoreboard} aiMode={data.autopilot ? (data.autopilot.live ? 'live' : 'paper') : undefined} />
             <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />
           </div>
