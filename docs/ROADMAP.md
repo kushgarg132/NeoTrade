@@ -28,6 +28,7 @@ where to start — nothing else in this repo tracks it.
 | 16 | AI on tools: shared fact layer, capped tool runner, grounding check (16.1 facts+runner+grounding+chat, 16.2 plan, 16.3 analyst, 16.4 review/index/learning, 16.5 single-call sites on facts) | 15 | **16.1 done 2026-10-06** (13 facts in `backend/ai/facts/`, `ai/runner.run_with_tools`, `ai/grounding`, chat read tools on facts); **16.2 done 2026-10-06** (plan builder + revisions on tools, grounded rationale, single-call fallback); 16.3–16.5 not started — spec `docs/superpowers/specs/2026-10-06-ai-tools-fact-layer-design.md` |
 | 17 | Profitability and LLM cost: measure before spending, trade only where there is evidence (17.1 fix what corrupts the evidence, 17.2 LLM cost, 17.3 edge, 17.4 architecture, 17.5 business) | 14–16 | **17.1 done 2026-10-07** (auto intraday waits for a live broker feed, stale seed symbols dropped, untagged approvals refused, long-term gate backtests re-run, Today net of charges, plan replay fixed); 17.2–17.5 planned |
 | 19 | Two accounts, one daily answer: AI (Kite) runs itself on paper until proven, Mine (Upstox) gets proven ideas + daily holdings review; Practice folds into AI (A stop the bleeding, B real holdings are held, C one AI book, D proven-only ideas, E Today + Telegram daily, F nav reset + cuts) | — | **19.A done 2026-10-14** (ledger doubling fix + paper book reset, backup `~/backups/neotrade/paper-book-20261014.json`; LLM content blocks + tiers standard `auto/gemini`, deep `codex/gpt-5.6-luna-low`; 08:30/09:05 login reminder; logged-out holdings priced from quotes); **19.B done 2026-10-14** (logged-out broker keeps its holdings, review + AI text on mine only, `mine_holdings` drives news alerts + scan SELLs, review daily); **19.C done 2026-10-14** (`via` + origin strategy credited, no paper approvals or paper ticket, `<user>:mine` ledger, exits with autopilot off + 15:15 intraday square-off); **19.D done 2026-10-14** (`paper_gate.for_mine`: ideas only from proven strategies everywhere + approve-live 409, `ai_order` keeps the idea pending, exit alerts on `<user>:mine`); **19.E done 2026-10-14** (`portfolio/digest.py`: pulse, movers + headline, verdict changes, you vs AI; Today top section + Do today + scoreboard; Telegram 08:45 + post-close); **19.F done 2026-10-14** (nav: Mine = Holdings · Ideas · Trades · Habits, AI = Overview · Activity · Book · Strategies · Settings, Practice folded in, bullish scanner cut, options off the tabs, docs). **Phase 19 done.** — spec `docs/superpowers/specs/2026-10-14-two-accounts-reset-design.md` |
+| 20 | Mine redesign: the trader's own account gets a past (daily value, XIRR vs NIFTY), a to-do list (Needs you), tax lots and India tax estimates, and a thesis per stock; Mine = Overview · Holdings · Tax · Journal, Ideas/Plan/Review cut | 19 | **done 2026-10-15, built** — spec `docs/superpowers/specs/2026-10-15-mine-redesign-design.md`, plan `docs/superpowers/plans/2026-10-15-mine-redesign.md` |
 
 Two orderings are not negotiable: **Phase 3 before Phase 5** (no real order may be
 placeable before the kill-switch and the gate exist), and **Phase 1 before anything that
@@ -907,6 +908,27 @@ confirmation). The autopilot is a documented, user-approved exception to the bac
 to "model output never places an order" (AGENTS.md, .claude/CLAUDE.md). Spec and plan in
 `docs/superpowers/`. Setup: Kite Connect app; static IP 161.118.167.148 whitelisted with Zerodha
 and Upstox; daily logins (09:00 reminder).
+
+## Phase 20 — Mine redesign — **done 2026-10-15**
+
+Goal: Mine answers four things: how the account did over time, what needs the owner now, what the
+tax position is, and why each stock is held. Spec `docs/superpowers/specs/2026-10-15-mine-redesign-design.md`,
+plan `docs/superpowers/plans/2026-10-15-mine-redesign.md`.
+
+### What landed
+
+- `backend/mine/` (lots, history, actions, thesis, events, tax, stock) behind `backend/routers/mine.py`;
+  collections `mine_daily`, `holding_theses`, `corporate_events`; a `corp_events` ingest loop and a
+  `history.write_all` step in the 16:00 pass.
+- Mine = Overview · Holdings · Tax · Journal + a stock page; Today shows value, move, gain and the top
+  three Needs-you items. Cut: Ideas page, Plan and Review sub-tabs, "Analyse now", Mix and Habits tabs
+  (old paths redirect).
+- Handbook: "Mine redesign" in `trading-and-money.md`; `PRODUCT.md` Surfaces updated.
+
+### Known limits
+
+Trade history is Upstox only (import via `POST /journal/import/upstox-history`); a curve before the first
+known buy uses the snapshot cost as one lot; pre-2018 grandfathering and F&O income are not in the tax figures.
 
 ## Phase 18 — Swing builder
 
