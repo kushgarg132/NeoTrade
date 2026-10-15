@@ -99,14 +99,13 @@ async def mark_prices(db, symbols: Iterable[str], max_age_seconds: float = DEFAU
             logger.warning("no mark price for %s: %s", symbol, exc)
             return symbol, None
 
-    try:
-        results = await asyncio.wait_for(
-            asyncio.gather(*(_one(symbol) for symbol in missing)), timeout=TIMEOUT_SECONDS
-        )
-    except asyncio.TimeoutError:
-        logger.warning("mark prices timed out for %d symbol(s)", len(missing))
-        return found
-
-    fetched = {symbol: float(price) for symbol, price in results if price}
+    # Keep what arrived in time: one slow symbol used to throw away them all.
+    tasks = [asyncio.ensure_future(_one(symbol)) for symbol in missing]
+    done, late = await asyncio.wait(tasks, timeout=TIMEOUT_SECONDS)
+    for task in late:
+        task.cancel()
+    if late:
+        logger.warning("mark prices timed out for %d of %d symbol(s)", len(late), len(missing))
+    fetched = {symbol: float(price) for symbol, price in (t.result() for t in done) if price}
     await store_quotes(redis, {s: (p, None) for s, p in fetched.items()}, WRITE_THROUGH_TTL_SECONDS)
     return {**found, **fetched}

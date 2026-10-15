@@ -123,3 +123,22 @@ async def test_a_delivery_sell_above_the_long_held_is_refused(ledger):
     with pytest.raises(ValueError):
         await fill_on_paper(ledger, sell, 100.0, now)
     assert await ledger.get_open_positions() == {}
+
+
+@pytest.mark.asyncio
+async def test_a_flipped_trade_books_only_its_own_realized_pnl(ledger):
+    from backend.core.models import Order, Side
+    from backend.suggestions.service import fill_on_paper
+
+    now = datetime(2026, 10, 13, 4, 0, tzinfo=timezone.utc)
+
+    def order(side, qty):
+        return Order(id=str(uuid.uuid4()), symbol="X", side=side, quantity=qty, order_type="MARKET",
+                     limit_price=None, product="MIS")
+
+    await fill_on_paper(ledger, order(Side.BUY, 10), 100.0, now)
+    await fill_on_paper(ledger, order(Side.SELL, 20), 110.0, now)  # +100 on the long, then short 10 @110
+    await fill_on_paper(ledger, order(Side.BUY, 10), 105.0, now)   # +50 on the short
+
+    pnl = {t["side"]: t["realized_pnl"] for t in await ledger.get_trades(status="CLOSED")}
+    assert pnl == {"BUY": 100.0, "SELL": 50.0}

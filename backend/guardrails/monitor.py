@@ -151,14 +151,14 @@ async def square_off(redis, credentials, prefs: dict) -> list[dict]:
     return alerts
 
 
-async def run_tick(db, redis, now: datetime | None = None) -> int:
+async def run_tick(db, redis, now: datetime | None = None) -> int | None:
     now = now or datetime.now(timezone.utc)
     if redis is None or not in_session(now):
         return 0
     # One worker per tick: the lock outlives the tick's own interval slightly
     # less than INTERVAL_SECONDS, so it frees itself before the next one.
     if not await redis.set(LOCK_KEY, "1", nx=True, px=(INTERVAL_SECONDS - 5) * 1000):
-        return 0
+        return None  # the other worker has this tick: not "0 checked"
 
     credentials = BrokerCredentialStore(db, fernet_from_settings())
     prefs_store = PrefsStore(db)
@@ -176,7 +176,8 @@ async def monitor_loop(db, redis) -> None:
     while True:
         try:
             checked = await run_tick(db, redis)
-            await mark(redis, "guardrail_monitor", True, f"{checked} checked")
+            if checked is not None:
+                await mark(redis, "guardrail_monitor", True, f"{checked} checked")
         except Exception as exc:
             logger.exception("guardrail tick failed: %s", exc)
             await mark(redis, "guardrail_monitor", False, f"{type(exc).__name__}: {exc}")

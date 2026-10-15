@@ -256,8 +256,11 @@ async def quoted(db, raw: list[dict], now: datetime, read_at: datetime | None = 
     today = bars.today_ist(now)
     prev = await bars.prev_closes(db, stocks, today)
     old = read_at is not None and bars.today_ist(read_at) < today
+    # No quote: the row keeps its own price, so it keeps its own close only if
+    # that read is from today -- an old price against a fresh close is no day move.
     return [{**h, "last_price": marks.get(h["symbol"], h.get("last_price")),
-             "close_price": prev.get(h["symbol"], None if old else h.get("close_price"))} for h in raw], True
+             "close_price": (prev.get(h["symbol"], None if old else h.get("close_price")) if h["symbol"] in marks
+                             else None if old else h.get("close_price"))} for h in raw], True
 
 
 async def with_live_prices(db, user_id: str, snapshot: dict, credentials, redis) -> dict:

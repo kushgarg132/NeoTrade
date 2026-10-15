@@ -69,8 +69,13 @@ async def get_journal(
     capital = prefs["account_size"]  # one account size for both, paper and live
     cost_mirror = mirror.costs(trades, trips, capital)
     first = min((t["traded_at"] for t in trades), default=None)
+    # Realized trading only: P&L of closed round trips net of their own fills'
+    # charges. Charging every buy still held against two closed trips read as
+    # a -10% "return" on a portfolio that was up.
+    closed_ids = {i for trip in trips if trip.get("pnl") is not None for i in trip["trade_ids"]}
+    realized = mirror.costs([t for t in trades if t["_id"] in closed_ids], trips, capital)
     benchmark = mirror.benchmark(
-        cost_mirror["net_pnl"], capital, first.date(), max(d for d, _ in nifty), nifty,
+        realized["net_pnl"], capital, first.date(), max(d for d, _ in nifty), nifty,
     ) if first and nifty else None
     notes = await store.notes_for(user.id)
     for trip in trips:

@@ -141,3 +141,11 @@ async def test_get_portfolio_tool_takes_an_account(monkeypatch):
     tool = next(t for t in read_tools(db, None, "alice") if t.name == "get_portfolio")
     out = json.loads(await tool.ainvoke({"account": "ai"}))
     assert [h["symbol"] for h in out["holdings"]] == ["INFY"] and out["account"] == "ai"
+
+
+def test_a_round_trip_across_months_counts_in_the_month_it_closed():
+    # Built per month, an August buy and a September sell were two open halves: no P&L at all.
+    trades = [_fill(1, "upstox", "BUY", 100.0, T0), _fill(2, "upstox", "SELL", 130.0, T0 + timedelta(days=35))]
+    rows = {r["month"]: r["mine"] for r in accounts.ai_vs_me(trades, ROLES, {"mine": 10_000.0}, [])}
+    assert rows["2026-08"]["gross_pnl"] == 0
+    assert rows["2026-09"]["gross_pnl"] == 300.0

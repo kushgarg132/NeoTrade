@@ -87,13 +87,19 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
     mine = brokers_for((await PrefsStore(db).get(user_id)).get("broker_roles") or {}, "mine")
     card = scorecard_for({**snapshot, "raw_holdings": raw}, mine or {h.get("broker") for h in raw}, [], [])
     totals = card["totals"]
-    base = (totals["value"] or 0) - (totals["day_change"] or 0)
+    # Today's % over holdings whose day move is known: the others' value would dilute it.
+    known = [r for r in card["holdings"] if r.get("close_price") and r.get("value") is not None]
+    base = sum(r["value"] for r in known) - (totals["day_change"] or 0)
     rows = [r for r in card["holdings"] if r.get("kind", "STOCK") == "STOCK" and _move_pct(r) is not None]
     rows.sort(key=lambda r: abs(_move_pct(r)), reverse=True)
     top = rows[:MOVERS]
     why = await headlines_for(db, [r["symbol"] for r in top], now - NEWS_LOOKBACK)
     changes = []
-    if await verdicts_visible(db, user_id):
+    # Only from the latest trading day's review: a failing review must not
+    # replay the same "HOLD -> SELL" in Do today and every evening message.
+    from backend.engine.autorun import _previous_weekday
+    reviewed = _aware(snapshot["at"]).astimezone(IST).date() >= _previous_weekday(now.astimezone(IST).date())
+    if reviewed and await verdicts_visible(db, user_id):
         changes = [{"symbol": r["symbol"], "from": r["previous_verdict"], "to": r["verdict"],
                     "reasons": r.get("reason_codes") or []}
                    for r in card["holdings"] if r.get("previous_verdict") and r.get("verdict")
@@ -110,6 +116,23 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
                     "why": why.get(r["symbol"])} for r in top],
         "verdict_changes": changes,
     }
+
+
+async def last_session_move(db, held: dict[str, float], today) -> Optional[dict]:
+    """The last session's move of `held` (symbol -> quantity) from the stored
+    daily closes. Before the open a quote is still yesterday's close, so a
+    pulse there reads about 0 for 'yesterday'."""
+    from backend.datalayer import bars
+    from backend.engine.autorun import _previous_weekday
+
+    last = await bars.prev_closes(db, held, today)                       # the last session's close
+    before = await bars.prev_closes(db, held, _previous_weekday(today))  # the one before it
+    both = [s for s in held if s in last and s in before]
+    base = sum(held[s] * before[s] for s in both)
+    if not base:
+        return None
+    change = sum(held[s] * (last[s] - before[s]) for s in both)
+    return {"change": round(change, 2), "pct": change / base * 100}
 
 
 async def pnl_since(db, user_id: str, roles: dict, since: datetime) -> dict:
@@ -168,10 +191,12 @@ def _pct(value: Optional[float]) -> str:
     return "" if value is None else f" ({value:+.1f}%)"
 
 
-def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: int, ai: dict) -> str:
+def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: int, ai: dict,
+                   yesterday: Optional[dict] = None) -> str:
     lines = ["☀️ <b>Before the open</b>"]
     if p:
-        lines.append(f"Your account: {_rupees(p['value'])}, yesterday {_rupees(p['day_change'], True)}{_pct(p['day_change_pct'])}")
+        moved = f", yesterday {_rupees(yesterday['change'], True)}{_pct(yesterday['pct'])}" if yesterday else ""
+        lines.append(f"Your account: {_rupees(p['value'])}{moved}")
     if overnight:
         lines.append("News on your holdings since the close:")
         lines += [f"• {escape(sym)}: {escape(n['title'] or '')}" for sym, n in list(overnight.items())[:5]]
@@ -238,7 +263,9 @@ async def send_premarket(db, redis, now: datetime) -> int:
             overnight = await headlines_for(db, held, last_close)
             ideas = len(await for_mine(db, user_id, await db["suggestions"].find(
                 {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200)))
-            await notify(db, user_id, premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs)), html=True)
+            moved = await last_session_move(db, await mine_holdings(db, user_id), local.date())
+            await notify(db, user_id, premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs), moved),
+                         html=True)
             sent += 1
         except Exception as exc:
             logger.exception("pre-market digest failed for %s: %s", user_id, exc)

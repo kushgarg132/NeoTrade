@@ -28,7 +28,7 @@ def merge(holdings: list[Holding]) -> list[dict]:
     rows: dict[str, dict] = {}
     for h in holdings:
         row = rows.setdefault(h.isin or h.symbol, {
-            "symbol": h.symbol, "isin": h.isin, "name": h.name, "kind": h.kind, "brokers": [],
+            "symbol": h.symbol, "isin": h.isin, "name": h.name, "kind": h.kind, "exchange": h.exchange, "brokers": [],
             "quantity": 0.0, "invested": 0.0, "last_price": None, "close_price": None,
         })
         row["quantity"] += h.quantity
@@ -37,6 +37,7 @@ def merge(holdings: list[Holding]) -> list[dict]:
         row["last_price"] = row["last_price"] or h.last_price
         row["close_price"] = row["close_price"] or h.close_price
         row["name"] = row["name"] or h.name
+        row["exchange"] = row["exchange"] or h.exchange  # health reads it: BSE-only names need .BO
     for row in rows.values():
         row["avg_price"] = row["invested"] / row["quantity"] if row["quantity"] else 0.0
     return list(rows.values())

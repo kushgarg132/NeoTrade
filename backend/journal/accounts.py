@@ -1,7 +1,6 @@
 """The journal split by account: the AI's (role "ai") and the user's own
 ("mine"), see backend/brokers/roles.py. Pure, no I/O."""
 
-from collections import defaultdict
 from datetime import date
 from typing import Optional
 
@@ -23,15 +22,23 @@ def brokers_of(roles: dict, account: str) -> Optional[set[str]]:
 def ai_vs_me(trades: list[dict], roles: dict, capital_by_role: dict, nifty: list) -> list[dict]:
     """Per calendar month (IST): each account's P&L before and after estimated
     charges, return on its capital, fills -- and the Nifty's return."""
-    months: dict[str, list[dict]] = defaultdict(list)
-    for t in trades:
-        months[t["traded_at"].astimezone(IST).strftime("%Y-%m")].append(t)
+    def month_of(at) -> str:
+        return at.astimezone(IST).strftime("%Y-%m")
+
+    # Round trips over each account's whole history, then bucketed by the
+    # month they closed: built per month, a January buy and a February sell
+    # were two open halves and their P&L vanished (HINDCOPPER, SILVERBEES).
+    books = {}
+    for role in ("ai", "mine"):
+        fills = filter_trades(trades, brokers_for(roles, role))
+        books[role] = (fills, build_round_trips(fills))
     rows = []
-    for month in sorted(months):
+    for month in sorted({month_of(t["traded_at"]) for t in trades}):
         row = {"month": month}
-        for role in ("ai", "mine"):
-            mine = filter_trades(months[month], brokers_for(roles, role))
-            costs = mirror.costs(mine, build_round_trips(mine), capital_by_role.get(role) or 0)
+        for role, (fills, trips) in books.items():
+            closed = [trip for trip in trips if trip.get("closed_at") and month_of(trip["closed_at"]) == month]
+            costs = mirror.costs([t for t in fills if month_of(t["traded_at"]) == month], closed,
+                                 capital_by_role.get(role) or 0)
             capital = capital_by_role.get(role) or 0
             row[role] = {"gross_pnl": costs["gross_pnl"], "net_pnl": costs["net_pnl"], "charges": costs["charges"],
                          "fills": costs["fills"], "return": costs["net_pnl"] / capital if capital else None}

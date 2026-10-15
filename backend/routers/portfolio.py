@@ -65,14 +65,16 @@ async def get_portfolio(
         raise HTTPException(status_code=404, detail="No portfolio analysed yet")
     if live:
         snapshot = await with_live_prices(db.db, user.id, snapshot, credentials, db.redis)
-    if account != "all":
-        from backend.brokers.roles import brokers_for
-        from backend.journal.store import JournalStore
-        from backend.portfolio.service import _nifty, scorecard_for
+    from backend.brokers.roles import brokers_for
+    from backend.journal.store import JournalStore
+    from backend.portfolio.service import _nifty, scorecard_for
 
-        roles = (await PrefsStore(db.db).get(user.id)).get("broker_roles") or {}
-        snapshot = scorecard_for(snapshot, brokers_for(roles, account), await JournalStore(db.db).list_trades(user.id),
-                                 await _nifty())
+    # Always re-scoped: the stored card covers the user's own account only, so
+    # "all" read it as everything until the first live poll recomputed it.
+    roles = (await PrefsStore(db.db).get(user.id)).get("broker_roles") or {}
+    if account != "all" or snapshot.get("raw_holdings"):
+        brokers = brokers_for(roles, account) if account != "all" else {h.get("broker") for h in snapshot["raw_holdings"]}
+        snapshot = scorecard_for(snapshot, brokers, await JournalStore(db.db).list_trades(user.id), await _nifty())
     visible = await verdicts_visible_to(user)
     if visible:
         targets = (await PrefsStore(db.db).get(user.id))["rebalance_targets"]
@@ -187,8 +189,15 @@ async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_
     from backend.engine.session import IST
     from backend.journal.store import JournalStore
     from backend.portfolio.scorecard import open_lots
-    from backend.portfolio.service import scorecard_for
+    from backend.portfolio.service import quoted, scorecard_for
 
+    # Held stocks priced like the candidates (today's quotes), not at the
+    # snapshot's own days-old prices.
+    now = SystemClock().now()
+    raw = snapshot.get("raw_holdings") or []
+    if raw:
+        raw, _ = await quoted(db.db, raw, now, snapshot.get("at"))
+        snapshot = {**snapshot, "raw_holdings": raw}
     prefs = await PrefsStore(db.db).get(user.id)
     targets = request.targets.model_dump() if request.targets else prefs["rebalance_targets"]
     if targets.get("rule") == "conviction" and not await verdicts_visible_to(user):
@@ -197,8 +206,9 @@ async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_
     # Trades go to the user's own account, so only its holdings are rebalanced:
     # the AI account's book is never mixed in (backend/brokers/roles.py).
     mine = brokers_for(prefs.get("broker_roles") or {}, "mine")
+    if mine or raw:
+        snapshot = scorecard_for(snapshot, mine or {h.get("broker") for h in raw}, trades, [])
     if mine:
-        snapshot = scorecard_for(snapshot, mine, trades, [])
         trades = [t for t in trades if t.get("broker") in mine]
     held = {r["symbol"] for r in snapshot.get("holdings", [])}
     allowed = {s: (source, score) for s, source, score in await _candidate_symbols(user, held)}
@@ -207,6 +217,6 @@ async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_
     candidates = [{"symbol": s, "price": prices[s], "kind": "STOCK", "sector": None,
                    "source": allowed[s][0], "score": allowed[s][1]} for s in wanted if s in prices]
     lots = {s: open_lots(trades, s) for s in held}
-    today = SystemClock().now().astimezone(IST).date()
+    today = now.astimezone(IST).date()
     out = plan_rebalance(snapshot.get("holdings", []), candidates, targets, request.new_money, lots, today)
     return {**out, "stale_since": snapshot.get("stale_since")}

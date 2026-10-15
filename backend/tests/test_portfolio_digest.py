@@ -100,3 +100,16 @@ async def test_a_holding_with_no_stored_close_has_no_day_move_not_a_days_old_one
     p = await digest.pulse(db, "alice", NOW)
     assert p["day_change"] == -100  # DOWN only; UP's stale close is not a base
     assert "UP" not in [m["symbol"] for m in p["movers"]]
+
+
+async def test_the_premarket_yesterday_is_the_last_session_from_stored_closes(db, monkeypatch):
+    calls = []
+
+    async def closes(db_, symbols, day):
+        calls.append(day)
+        return {"UP": 110.0} if len(calls) == 1 else {"UP": 100.0}
+
+    monkeypatch.setattr(service.bars, "prev_closes", closes)
+    moved = await digest.last_session_move(db, {"UP": 10}, NOW.date())
+    assert moved == {"change": 100.0, "pct": 10.0}
+    assert calls[1] < calls[0]  # the session before the last one

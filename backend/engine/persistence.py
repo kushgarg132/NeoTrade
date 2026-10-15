@@ -144,7 +144,7 @@ class LedgerStore:
                     "status": "CLOSED",
                     "exit_price": fill.price,
                     "exit_at": fill.timestamp,
-                    "realized_pnl": position.realized_pnl,
+                    "realized_pnl": position.realized_pnl - open_trade.get("realized_base", 0.0),
                     "costs": open_trade.get("costs", 0.0) + fill.costs,
                 }},
             )
@@ -157,7 +157,7 @@ class LedgerStore:
             {"$set": {
                 "quantity": abs(position.quantity),
                 "entry_price": position.avg_price,
-                "realized_pnl": position.realized_pnl,
+                "realized_pnl": position.realized_pnl - open_trade.get("realized_base", 0.0),
                 "costs": open_trade.get("costs", 0.0) + fill.costs,
             }},
         )
@@ -178,6 +178,9 @@ class LedgerStore:
             "exit_price": None,
             "exit_at": None,
             "realized_pnl": 0.0,
+            # After a flip the position carries the first leg's realized P&L:
+            # this trade's own is what it adds on top (else counted twice).
+            "realized_base": position.realized_pnl,
             "costs": fill.costs,
             "suggestion_id": (order or {}).get("suggestion_id"),
             # Which strategy's signal opened it, for the per-strategy

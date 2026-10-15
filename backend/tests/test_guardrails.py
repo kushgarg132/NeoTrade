@@ -119,7 +119,7 @@ async def test_run_tick_skips_when_another_worker_holds_the_lock(monkeypatch):
     redis.set = AsyncMock(return_value=False)
     check = AsyncMock()
     monkeypatch.setattr(monitor, "check_user", check)
-    assert await monitor.run_tick(AsyncMongoMockClient()["test_db"], redis, now=_ist(10, 0)) == 0
+    assert await monitor.run_tick(AsyncMongoMockClient()["test_db"], redis, now=_ist(10, 0)) is None
     check.assert_not_awaited()
 
 
