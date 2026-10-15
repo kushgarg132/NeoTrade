@@ -113,8 +113,7 @@ def target_gaps(holdings: list[dict], targets: dict) -> tuple[dict[str, float], 
 
 
 MAX_CHARGE_PCT = 1.0  # a trade whose charges exceed this share of its value is not worth making
-LONG_TERM_DAYS = 365
-STCG_RATE, LTCG_RATE = 0.20, 0.125
+from backend.mine.tax import LONG_TERM_DAYS, LTCG_RATE, STCG_RATE  # noqa: E402
 
 
 def charges(side: str, quantity: float, price: float) -> float:

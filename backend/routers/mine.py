@@ -86,3 +86,28 @@ async def overview(user: User = Depends(get_current_user)):
                     "all": _split((pulse or {}).get("pnl_by_symbol") or {})},
         "mix": (snapshot or {}).get("concentration"),
     }
+
+
+@router.get("/tax")
+async def tax(fy: int | None = None, user: User = Depends(get_current_user)):
+    from backend.brokers.roles import brokers_for
+    from backend.mine import tax as mine_tax
+    from backend.mine.lots import mine_trades
+    from backend.portfolio import service
+    from backend.prefs import PrefsStore
+
+    now = datetime.now(timezone.utc)
+    today = now.astimezone(IST).date()
+    snapshot = await service.latest_snapshot(db.db, user.id) or {}
+    mine = brokers_for((await PrefsStore(db.db).get(user.id)).get("broker_roles") or {}, "mine")
+    raw = [h for h in snapshot.get("raw_holdings") or []
+           if h.get("kind", "STOCK") != "MF" and (not mine or h.get("broker") in mine)]
+    priced, _ = await service.quoted(db.db, raw, now)
+    held: dict[str, float] = {}
+    prices: dict[str, float] = {}
+    for h in priced:
+        held[h["symbol"]] = held.get(h["symbol"], 0.0) + h["quantity"]
+        if h.get("last_price"):
+            prices[h["symbol"]] = float(h["last_price"])
+    return mine_tax.report(await mine_trades(db.db, user.id), held, prices,
+                           fy if fy is not None else mine_tax.current_fy(today), today)
