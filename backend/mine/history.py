@@ -65,19 +65,46 @@ def xirr(flows: list[tuple[date, float]]) -> Optional[float]:
 # ------------------------------------------------------------------ inputs
 
 
+def _held(snap: dict, funds: set, mine) -> dict[str, list]:
+    """symbol -> [quantity, cost] of a snapshot's own-account stocks."""
+    held: dict[str, list] = {}
+    for h in snap.get("raw_holdings") or []:
+        if h.get("kind", "STOCK") == "MF" or h["symbol"] in funds or (mine and h.get("broker") not in mine):
+            continue
+        row = held.setdefault(h["symbol"], [0.0, 0.0])
+        row[0] += h["quantity"]
+        row[1] += h["quantity"] * h["avg_price"]
+    return held
+
+
 async def _inputs(db, user_id: str) -> dict:
     """events: (IST date, symbol, signed qty, price), oldest first -- the
-    journal's mine trades plus the unknown-date gap lot. Funds excluded."""
+    journal's mine trades plus the unknown-date gap lot. Funds excluded.
+    A sell of shares bought before the journal is clipped to what the journal
+    holds (as `lots._fifo`), and a split or bonus the journal never saw
+    (`lots.split_ratio`) scales every event of that symbol, since daily_bars
+    are split-adjusted."""
     from backend.brokers.roles import brokers_for
+    from backend.mine.lots import open_lots, split_ratio
     from backend.portfolio.service import latest_snapshot
     from backend.prefs import PrefsStore
 
     latest = await latest_snapshot(db, user_id) or {}
     funds = {h["symbol"] for h in latest.get("raw_holdings") or [] if h.get("kind") == "MF"}
+    mine = brokers_for((await PrefsStore(db).get(user_id)).get("broker_roles") or {}, "mine")
     trades = [t for t in await mine_trades(db, user_id) if t["symbol"] not in funds]
-    events = [(t["traded_at"].astimezone(IST).date(), t["symbol"],
-               float(t["quantity"]) * (1 if t["side"] == "BUY" else -1), float(t["price"])) for t in trades]
-    events.sort(key=lambda e: e[0])
+    ratio = {s: split_ratio(open_lots(trades, s), q, c / q if q else None)
+             for s, (q, c) in _held(latest, funds, mine).items()}
+    events, running = [], {}
+    for t in sorted(trades, key=lambda t: t["traded_at"]):
+        s, r = t["symbol"], ratio.get(t["symbol"], 1)
+        q = float(t["quantity"]) * r
+        if t["side"] != "BUY":
+            q = -min(q, running.get(s, 0.0))
+            if q > -1e-9:
+                continue
+        running[s] = running.get(s, 0.0) + q
+        events.append((t["traded_at"].astimezone(IST).date(), s, q, float(t["price"]) / r))
 
     gap_events = []
     first = await db["portfolio_snapshots"].find({"user_id": user_id}).sort("at", 1).limit(1).to_list(length=1)
@@ -85,15 +112,7 @@ async def _inputs(db, user_id: str) -> dict:
     if first:
         snap = first[0]
         first_day = snap["at"].astimezone(IST).date() if snap["at"].tzinfo else snap["at"].date()
-        mine = brokers_for((await PrefsStore(db).get(user_id)).get("broker_roles") or {}, "mine")
-        held: dict[str, list] = {}
-        for h in snap.get("raw_holdings") or []:
-            if h.get("kind", "STOCK") == "MF" or h["symbol"] in funds or (mine and h.get("broker") not in mine):
-                continue
-            row = held.setdefault(h["symbol"], [0.0, 0.0])
-            row[0] += h["quantity"]
-            row[1] += h["quantity"] * h["avg_price"]
-        for symbol, (qty, cost) in held.items():
+        for symbol, (qty, cost) in _held(snap, funds, mine).items():
             journal = sum(q for d, s, q, _ in events if s == symbol and d <= first_day)
             if qty - journal > 1e-9:
                 gap_events.append((first_day, symbol, qty - journal, cost / qty))
@@ -149,8 +168,14 @@ async def _compute(db, user_id: str, today: date) -> list[dict]:
 
 
 async def _store(db, rows: list[dict]) -> None:
+    """Upserts only the rows that changed: one read, then a write per difference
+    (not bulk_write: see instruments/master.py on the test fake)."""
+    if not rows:
+        return
+    stored = {d["date"]: d async for d in db[COLLECTION].find({"user_id": rows[0]["user_id"]}, {"_id": 0})}
     for row in rows:
-        await db[COLLECTION].update_one({"user_id": row["user_id"], "date": row["date"]}, {"$set": row}, upsert=True)
+        if stored.get(row["date"]) != row:
+            await db[COLLECTION].update_one({"user_id": row["user_id"], "date": row["date"]}, {"$set": row}, upsert=True)
 
 
 # ------------------------------------------------------------------ writes
@@ -162,23 +187,15 @@ async def backfill(db, user_id: str, today: date) -> int:
     return len(rows)
 
 
-async def write_today(db, user_id: str, now: datetime) -> Optional[dict]:
-    # ponytail: recomputes the whole curve to write one row (late-imported trades
-    # change the past anyway); store the running totals if this gets slow.
-    rows = await _compute(db, user_id, bars.today_ist(now))
-    if rows:
-        await _store(db, rows[-1:])
-    return rows[-1] if rows else None
-
-
 async def write_all(db, now: datetime) -> int:
+    """The 16:00 pass: every user's whole curve, recomputed and upserted, so a
+    journal import landing later (older buys, a missed day) fixes the past.
+    One replay over daily_bars per user; only changed rows are written."""
+    # ponytail: full replay per user per day; store running totals if this gets slow.
     written = 0
     for user_id in sorted(await db["portfolio_snapshots"].distinct("user_id")):
         try:
-            if not await db[COLLECTION].find_one({"user_id": user_id}):
-                written += await backfill(db, user_id, bars.today_ist(now))
-            else:
-                written += bool(await write_today(db, user_id, now))
+            written += await backfill(db, user_id, bars.today_ist(now))
         except Exception as exc:
             logger.exception("mine history failed for %s: %s", user_id, exc)
     return written
@@ -207,8 +224,9 @@ async def returns(db, user_id: str, today: date, extra_flows: list[tuple[date, f
            "partial": data["partial"], "funds_excluded": data["funds"]}
     if not rows:
         return out
-    flows = [(d, -q * p) for d, _, q, p in data["events"]]
     end = date.fromisoformat(rows[-1]["date"])
-    out["xirr"] = xirr(flows + [(end, rows[-1]["value"])] + list(extra_flows))
+    # Flows after the newest row have no value in it yet (m1).
+    flows = [(d, -q * p) for d, _, q, p in data["events"] if d <= end]
+    out["xirr"] = xirr(flows + [(end, rows[-1]["value"])] + [f for f in extra_flows if f[0] <= end])
     out["nifty_xirr"] = xirr(flows + [(end, rows[-1]["nifty_value"])])
     return out

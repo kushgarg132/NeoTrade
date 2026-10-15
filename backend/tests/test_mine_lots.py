@@ -38,19 +38,37 @@ def test_open_lots_after_sells():
 
 
 def test_reconcile_journal_short_of_broker_is_unknown():
-    assert lots.reconcile([(D1, 6, 100)], 10) == ([(D1, 6, 100)], 4)
+    assert lots.reconcile([(D1, 6, 100)], 10, 100) == ([(D1, 6, 100)], 4)
 
 
 def test_reconcile_journal_over_broker_drops_oldest():
-    assert lots.reconcile([(D1, 5, 100), (D2, 5, 110)], 7) == ([(D1, 2, 100), (D2, 5, 110)], 0)
+    assert lots.reconcile([(D1, 5, 100), (D2, 5, 110)], 7, 105) == ([(D1, 2, 100), (D2, 5, 110)], 0)
 
 
 def test_reconcile_split_scales_lots():
-    assert lots.reconcile([(D1, 10, 500)], 50) == ([(D1, 50, 100)], 0)
+    assert lots.reconcile([(D1, 10, 500)], 50, 100) == ([(D1, 50, 100)], 0)
 
 
 def test_reconcile_nothing_held_drops_all():
-    assert lots.reconcile([(D1, 5, 100)], 0) == ([], 0)
+    assert lots.reconcile([(D1, 5, 100)], 0, None) == ([], 0)
+
+
+def test_reconcile_pre_journal_lot_is_not_a_split():
+    """I3 probe: journal 10 @1000 (2025), broker 20 at the same average -> 10 bought before the journal."""
+    j = date(2025, 1, 1)
+    assert lots.reconcile([(j, 10, 1000)], 20, 1000) == ([(j, 10, 1000)], 10)
+
+
+def test_reconcile_split_needs_broker_avg_to_match():
+    assert lots.reconcile([(D1, 10, 500)], 50, 101) == ([(D1, 50, 100)], 0)  # within 2%
+    assert lots.reconcile([(D1, 10, 500)], 50, 110) == ([(D1, 10, 500)], 40)  # avg off: unknown
+    assert lots.reconcile([(D1, 10, 500)], 50, None) == ([(D1, 10, 500)], 40)  # no avg: unknown
+
+
+def test_unmatched_sells_are_returned():
+    """I4: a sell with no journal lot left is reported, not silently dropped."""
+    out = lots.unmatched([sell("A", 5, 150, D1), buy("A", 10, 100, D2), sell("A", 12, 160, D3)], "A")
+    assert out == [(D1, 5, 150), (D3, 2, 160)]
 
 
 def test_scorecard_still_uses_open_lots():

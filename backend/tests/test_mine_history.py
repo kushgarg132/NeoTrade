@@ -108,5 +108,42 @@ async def test_write_all_scoped_per_user(db):
     await history.write_all(db, NOW)
     assert await db["mine_daily"].count_documents({"user_id": {"$nin": ["alice", "bob"]}}) == 0
     assert await db["mine_daily"].count_documents({"user_id": "alice"}) == 3
-    await history.write_all(db, NOW)  # second pass only refreshes today's row
+    await history.write_all(db, NOW)  # second pass rewrites the same rows (idempotent)
     assert await db["mine_daily"].count_documents({"user_id": "alice"}) == 3
+
+
+# ---- final-review fixes (C1, I1, I2)
+
+
+async def test_a_later_import_rewrites_the_past(db):
+    """C1 probe: bob's curve starts at his snapshot gap lot (4 @90); importing an
+    older buy must fix the stored past rows, not only today's."""
+    await history.write_all(db, NOW)
+    assert (await db["mine_daily"].find_one({"user_id": "bob", "date": D2.isoformat()}))["invested"] == 360
+    await db["journal_trades"].insert_one(_trade("A", "BUY", 4, 80, D1, user="bob"))
+    await history.write_all(db, NOW)
+    rows = await history.series(db, "bob", None)
+    assert [r["date"] for r in rows] == [D1.isoformat(), D2.isoformat(), D3.isoformat()]
+    assert [r["invested"] for r in rows] == [320, 320, 320] and not rows[1]["partial"]
+
+
+async def test_a_sell_of_pre_journal_shares_is_clipped(db):
+    """I1 probe: SELL 10 before any journal buy, then BUY 10 -> no negative invested or value."""
+    await db["journal_trades"].insert_many([_trade("A", "SELL", 10, 100, D1, user="carol"),
+                                            _trade("A", "BUY", 10, 120, D3, user="carol")])
+    await history.backfill(db, "carol", D3)
+    rows = await history.series(db, "carol", None)
+    # The unmatched sell is dropped, so the curve starts at the buy.
+    assert [(r["date"], r["invested"], r["value"], r["nifty_value"]) for r in rows] == [(D3.isoformat(), 1200, 1200, 1200)]
+    assert rows[-1]["by_symbol"] == {"A": {"qty": 10, "value": 1200}}
+
+
+async def test_a_bonus_scales_journal_events_to_the_adjusted_bars(db):
+    """I2: 10 @200 in the journal, broker now 20 @100 (1:1 bonus), bars split-adjusted."""
+    await db["journal_trades"].insert_one(_trade("A", "BUY", 10, 200, D1, user="carol"))
+    await db["portfolio_snapshots"].insert_one(
+        _snap("carol", D3, [{"symbol": "A", "quantity": 20, "avg_price": 100, "broker": "upstox", "kind": "STOCK"}]))
+    await history.backfill(db, "carol", D3)
+    rows = await history.series(db, "carol", None)
+    assert rows[0]["by_symbol"] == {"A": {"qty": 20, "value": 2000}} and rows[0]["invested"] == 2000
+    assert rows[-1]["invested"] == 2000 and rows[-1]["value"] == 2400 and not rows[-1]["partial"]

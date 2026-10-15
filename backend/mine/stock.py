@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from backend.datalayer import bars
 from backend.engine.session import IST
 from backend.mine import events, history
-from backend.mine.lots import mine_trades, open_lots, realised, reconcile
+from backend.mine.lots import mine_trades, open_lots, realised, reconcile, split_ratio
 from backend.mine.tax import LONG_TERM_DAYS, LTCG_RATE, STCG_RATE, is_long
 from backend.mine.thesis import ThesisStore
 
@@ -60,7 +60,11 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
     closes = [] if frame is None else [{"date": d.date().isoformat(), "close": float(c)} for d, c in frame["close"].items()]
     last = next((h["last_price"] for h in raw if h.get("last_price")), None) or (closes[-1]["close"] if closes else None)
 
-    lots, unknown = reconcile(open_lots(trades, symbol), qty)
+    cost = sum(h["quantity"] * h["avg_price"] for h in raw)
+    broker_avg = cost / qty if qty else None
+    journal_lots = open_lots(trades, symbol)
+    lots, unknown = reconcile(journal_lots, qty, broker_avg)
+    ratio = split_ratio(journal_lots, qty, broker_avg)  # bars are split-adjusted; the journal is not
     lot_rows = []
     for d, q, p in lots:
         gain = None if last is None else (last - p) * q
@@ -70,20 +74,21 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
                          "est_tax": None if gain is None else max(gain, 0) * rate})
 
     value = None if last is None else qty * last
-    cost = sum(h["quantity"] * h["avg_price"] for h in raw)
     pnl = value - cost if qty and value is not None else sum(r["gain"] for r in realised(trades, symbol))
     divs = await events.dividends_received(db, trades, symbol, today)
     flows = [(t["traded_at"].astimezone(IST).date(),
               (-1 if t["side"] == "BUY" else 1) * float(t["quantity"]) * float(t["price"])) for t in trades]
     flows += [(date.fromisoformat(x["date"]), x["amount"]) for x in divs]
-    if value:
-        flows.append((today, value))
+    # Only shares with a known buy flow count at the end: unknown ones have no money in.
+    if value and qty - unknown > 1e-9:
+        flows.append((today, (qty - unknown) * last))
     first = min((d for d, _, _ in lots), default=None) or min((f[0] for f in flows), default=None)
 
     row, hist = await _verdicts(db, user_id, symbol, show_verdicts)
     return {
         "position": {"qty": qty, "avg_price": cost / qty if qty else None, "value": value, "pnl": pnl,
-                     "pnl_pct": pnl / cost * 100 if qty and cost else None, "xirr": history.xirr(flows),
+                     "pnl_pct": pnl / cost * 100 if qty and cost else None,
+                     "xirr": None if unknown > 1e-9 and not lots else history.xirr(flows),
                      "held_since": first.isoformat() if first else None, "sold": qty <= 0},
         "lots": lot_rows, "unknown_qty": unknown,
         "thesis": await ThesisStore(db).get(user_id, symbol) or {},
@@ -94,6 +99,6 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
         "news": await _news(db, symbol),
         "closes": closes,
         "trades": [{"date": t["traded_at"].astimezone(IST).date().isoformat(), "side": t["side"],
-                    "qty": float(t["quantity"]), "price": float(t["price"])}
+                    "qty": float(t["quantity"]) * ratio, "price": float(t["price"]) / ratio}
                    for t in sorted(trades, key=lambda t: t["traded_at"])],
     }

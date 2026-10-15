@@ -11,11 +11,12 @@ EPS = 1e-9
 
 
 def _fifo(trades: list[dict], symbol: str):
-    """Walks the symbol's trades oldest first; returns (matches, open lots),
-    a match being (buy_date, sell_date, qty, buy_price, sell_price). A sell
-    with no lot left (bought before the journal) is ignored."""
+    """Walks the symbol's trades oldest first; returns (matches, open lots,
+    unmatched), a match being (buy_date, sell_date, qty, buy_price,
+    sell_price). The part of a sell with no lot left (shares bought before
+    the journal) goes to unmatched as (sell_date, qty, price)."""
     lots: list[list] = []
-    matches = []
+    matches, unmatched_ = [], []
     for t in sorted((t for t in trades if t["symbol"] == symbol), key=lambda t: t["traded_at"]):
         day = t["traded_at"].astimezone(IST).date()
         if t["side"] == "BUY":
@@ -29,7 +30,9 @@ def _fifo(trades: list[dict], symbol: str):
             left -= used
             if lots[0][1] <= EPS:
                 lots.pop(0)
-    return matches, [(d, q, p) for d, q, p in lots]
+        if left > EPS:
+            unmatched_.append((day, left, float(t["price"])))
+    return matches, [(d, q, p) for d, q, p in lots], unmatched_
 
 
 def open_lots(trades: list[dict], symbol: str) -> list[Lot]:
@@ -47,17 +50,38 @@ def realised(trades: list[dict], symbol: str) -> list[dict]:
     ]
 
 
-def reconcile(lots: list[Lot], broker_qty: float) -> tuple[list[Lot], float]:
-    """(lots, unknown_qty): the journal's lots made to agree with the broker.
-    A whole-number ratio of 2+ is a split or bonus the journal never saw, so
-    lots scale; a journal short of the broker leaves unknown_qty bought
-    before the journal began; a journal over the broker drops the oldest."""
+def unmatched(trades: list[dict], symbol: str) -> list[tuple[date, float, float]]:
+    """(IST sell date, qty, price) of sells the journal has no buy for."""
+    return _fifo(trades, symbol)[2]
+
+
+SPLIT_AVG_TOLERANCE = 0.02
+
+
+def split_ratio(lots: list[Lot], broker_qty: float, broker_avg) -> int:
+    """r >= 2 when the broker holds exactly r times the journal's shares at
+    1/r of its average price (a split or bonus the journal never saw); else 1.
+    Without the price check, shares bought before the journal look like one."""
     held = sum(q for _, q, _ in lots)
-    if held > EPS and broker_qty > held:
-        ratio = broker_qty / held
-        if round(ratio) >= 2 and abs(ratio - round(ratio)) < 1e-6:
-            r = round(ratio)
-            lots, held = [(d, q * r, p / r) for d, q, p in lots], broker_qty
+    if held <= EPS or broker_qty <= held or not broker_avg:
+        return 1
+    ratio = broker_qty / held
+    r = round(ratio)
+    journal_avg = sum(q * p for _, q, p in lots) / held
+    if r >= 2 and abs(ratio - r) < 1e-6 and abs(broker_avg * r / journal_avg - 1) <= SPLIT_AVG_TOLERANCE:
+        return r
+    return 1
+
+
+def reconcile(lots: list[Lot], broker_qty: float, broker_avg) -> tuple[list[Lot], float]:
+    """(lots, unknown_qty): the journal's lots made to agree with the broker.
+    A split or bonus (`split_ratio`) scales the lots; a journal short of the
+    broker leaves unknown_qty bought before the journal began; a journal over
+    the broker drops the oldest."""
+    held = sum(q for _, q, _ in lots)
+    r = split_ratio(lots, broker_qty, broker_avg)
+    if r > 1:
+        lots, held = [(d, q * r, p / r) for d, q, p in lots], broker_qty
     if held <= broker_qty + EPS:
         return list(lots), max(broker_qty - held, 0.0)
     excess, kept = held - broker_qty, []
