@@ -12,6 +12,7 @@ import Markdown from '../components/common/Markdown';
 import { cn } from '../utils/cn';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
+import { useRefetchOn } from '../hooks/useStream';
 import { ticketFrom } from '../utils/ticket';
 import Rebalance from '../components/portfolio/Rebalance';
 import NewsChip from '../components/common/NewsChip';
@@ -464,6 +465,8 @@ const MyPortfolio = ({ lockedAccount = null }) => {
       document.removeEventListener('visibilitychange', fetchLive);
     };
   }, [account]);
+
+  useRefetchOn(['portfolio', 'trades'], () => account && loadSnapshot(() => false, true));
 
   const refresh = async () => {
     setBusy(true);

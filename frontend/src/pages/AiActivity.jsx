@@ -6,6 +6,7 @@ import { Sheet, Ruling } from '../components/doc/Doc';
 import StopAutopilot from '../components/common/StopAutopilot';
 import PlanCard from '../components/plan/PlanCard';
 import api, { endpoints, getPreferences } from '../utils/api';
+import { useRefetchOn } from '../hooks/useStream';
 import { cn } from '../utils/cn';
 import { formatDateTime } from '../utils/formatters';
 
@@ -17,6 +18,7 @@ const AiActivity = () => {
   const load = () => {
     api.get(endpoints.settings.autopilotLog).then((res) => setRows(res.data.rows)).catch(() => setFailed(true));
   };
+  useRefetchOn(['autopilot'], load);
   const retry = () => {
     setFailed(false);
     setRows(null);

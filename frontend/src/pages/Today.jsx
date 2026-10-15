@@ -7,6 +7,7 @@ import MoneyBadge from '../components/common/MoneyBadge';
 import StopAutopilot from '../components/common/StopAutopilot';
 import { Sheet, Ruling, Money, StockIcon } from '../components/doc/Doc';
 import api, { endpoints, getPreferences } from '../utils/api';
+import { useRefetchOn } from '../hooks/useStream';
 import { cn } from '../utils/cn';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
 
@@ -348,6 +349,10 @@ const Today = () => {
       document.removeEventListener('visibilitychange', onShow);
     };
   }, []);
+
+  // A fill, a new idea, an autopilot order or a fresh holdings snapshot shows
+  // now, not at the next minute's poll.
+  useRefetchOn(['trades', 'suggestions', 'autopilot', 'portfolio', 'guardrails'], load);
 
   const stop = () => setAutopilotOn(false);
 

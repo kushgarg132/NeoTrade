@@ -24,7 +24,11 @@ this file is the bug — fix it in the same commit.
 Two uvicorn workers serve the API, so nothing important lives in one process:
 
 - WebSocket fan-out goes through Redis pub/sub (`backend/broadcast.py`, published from `backend/ws/publish.py`), so a socket on
-  worker A sees an event raised on worker B.
+  worker A sees an event raised on worker B. Every `LedgerStore` that writes fills takes
+  `on_change=publisher_for(user)` (autopilot, reconcile, expiry close included), so open pages
+  hear `trades`/`positions`; `autopilot` and `portfolio` fire on each autopilot log row and new
+  holdings snapshot. Pages re-fetch through `frontend/src/hooks/useStream.js::useRefetchOn`;
+  the watchlist reads `prices:<symbol>` ticks from the pump.
 - Each worker writes `worker:alive:<boot id>` every few seconds (`backend/runs.py`); a run
   whose worker stopped beating is marked orphaned, not left RUNNING.
 - The daily pass takes `scheduler:daily_lock` and records `scheduler:last_pass`, so it runs once.

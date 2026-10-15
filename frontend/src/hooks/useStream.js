@@ -29,6 +29,31 @@ export function useReconnect(refetch) {
 }
 
 /**
+ * Re-fetch when any of `topics` fires, and after a reconnect. A burst (one
+ * fill pushes `trades` and `positions` together) collapses into one fetch.
+ */
+export function useRefetchOn(topics, refetch, delayMs = 400) {
+  const latest = useRef(refetch);
+  useLayoutEffect(() => {
+    latest.current = refetch;
+  });
+  const key = topics.join(',');
+  useEffect(() => {
+    let timer = null;
+    const fire = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => latest.current(), delayMs);
+    };
+    const offs = key.split(',').filter(Boolean).map((topic) => stream.subscribe(topic, fire));
+    offs.push(stream.onReconnect(fire));
+    return () => {
+      clearTimeout(timer);
+      offs.forEach((off) => off());
+    };
+  }, [key, delayMs]);
+}
+
+/**
  * Whether what the user is reading is actually current.
  *
  * PRODUCT.md is explicit that a stale number presented as live is this app's

@@ -7,6 +7,7 @@ import { RESEARCH_TABS } from '../components/layout/sections';
 import { Sheet, Statement, Row, Cell, Empty, Ruling, Scrip } from '../components/doc/Doc';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
+import { stream } from '../lib/ws';
 import { formatCurrency, formatSignedPercent } from '../utils/formatters';
 import { cn } from '../utils/cn';
 import { stockPath } from '../utils/stocks';
@@ -28,6 +29,23 @@ const Watchlist = () => {
       .catch((err) => setError(err?.response?.data?.detail || 'Could not load the watchlist'))
       .finally(() => setLoading(false));
   }, []);
+
+  // The server's price pump polls exactly the symbols subscribed here (~15s).
+  const symbolsKey = rows.filter((r) => !r.error).map((r) => r.symbol).join(',');
+  useEffect(() => {
+    const offs = symbolsKey.split(',').filter(Boolean).map((symbol) =>
+      stream.subscribe(`prices:${symbol.toUpperCase().replace(/\.NS$/, '')}`, ({ data }) => {
+        if (!(data?.price > 0)) return;
+        setRows((list) => list.map((r) => {
+          if (r.symbol !== symbol) return r;
+          const prev = r.previous_close;
+          return prev
+            ? { ...r, current_price: data.price, day_change: data.price - prev, day_change_percent: (data.price / prev - 1) * 100 }
+            : { ...r, current_price: data.price };
+        }));
+      }));
+    return () => offs.forEach((off) => off());
+  }, [symbolsKey]);
 
   const remove = async (event, symbol) => {
     event.stopPropagation();
