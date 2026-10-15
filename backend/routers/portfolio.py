@@ -34,7 +34,7 @@ def mask_row(row: dict) -> dict:
         return "REVIEW" if verdict in ("SELL", "REVIEW") else None
 
     return {**row, "verdict": mask(row.get("verdict")), "previous_verdict": mask(row.get("previous_verdict")),
-            "score": None, "suggested": None}
+            "verdict_since": None, "score": None, "suggested": None}
 
 
 def present(snapshot: dict, show_verdicts: bool) -> dict:

@@ -72,7 +72,7 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
     from backend.portfolio.digest import NEWS_LOOKBACK, headlines_for
     from backend.portfolio.rebalance import suggest, target_gaps
     from backend.portfolio.rules import worsened
-    from backend.portfolio.service import latest_snapshot, mine_holdings
+    from backend.portfolio.service import latest_snapshot, mine_avg_prices, mine_holdings
     from backend.engine.persistence import mine_book
     from backend.prefs import PrefsStore
 
@@ -87,7 +87,8 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
     async for t in db["paper_trades"].find({"user_id": mine_book(user_id), "status": "OPEN",
                                             "alerted.0": {"$exists": True}}):
         s = t["symbol"]
-        out.append(_action("idea_exit", s, day, f"Sell {s}? Its {t['alerted'][-1]} was hit",
+        out.append(_action("idea_exit", s, f"{t.get('id') or t['_id']}:{t['alerted'][-1]}",
+                           f"Sell {s}? Its {t['alerted'][-1]} was hit",
                            "The idea's own exit rule. You place the sell.", _aware(t.get("entry_at")) or now,
                            {"type": "ticket", "side": "SELL", "quantity": t.get("quantity"), "price": marks.get(s)}))
 
@@ -102,7 +103,7 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
                                ", ".join(r.get("reason_codes") or []).replace("_", " "), snap_at, {"type": "stock"}))
         if "overweight" in (r.get("reason_codes") or []) and s in held:
             weight = f"{r['weight_pct']:.0f}% of your account. " if r.get("weight_pct") is not None else ""
-            out.append(_action("overweight", s, day, f"{s} is above your size limit",
+            out.append(_action("overweight", s, "limit", f"{s} is above your size limit",
                                f"{weight}Plan new money or trim it.", snap_at, {"type": "rebalance"}))
     if show_verdicts and any(r.get("verdict") == "ADD" for r in rows):
         gaps, total, _ = target_gaps(rows, (await PrefsStore(db).get(user_id))["rebalance_targets"])
@@ -111,7 +112,8 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
                 continue
             buy = suggest({**r, "last_price": marks.get(r["symbol"], r.get("last_price"))}, gaps.get(r["symbol"]), total)
             if buy and buy.get("side") == "BUY":
-                out.append(_action("add", r["symbol"], day, f"Add {buy['quantity']} {r['symbol']}",
+                out.append(_action("add", r["symbol"], r.get("verdict_since") or "ADD",
+                                   f"Add {buy['quantity']} {r['symbol']}",
                                    "An ADD verdict, up to your target weight.", snap_at, {"type": "ticket", **buy}))
 
     for s, n in (await headlines_for(db, list(held), now - NEWS_LOOKBACK)).items():
@@ -141,21 +143,24 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
                                f"{amount}Hold through it to get the dividend.", now, {"type": "none"}))
 
     if held:
+        fy = tax.current_fy(today)
         report = tax.report(await mine_trades(db, user_id), held, {s: p for s, p in marks.items() if s in held},
-                            tax.current_fy(today), today)
+                            fy, today, await mine_avg_prices(db, user_id))
         soon: dict[str, dict] = {}
         for lot in report["turning_long"]:
             if lot["days"] <= LTCG_DAYS:
-                e = soon.setdefault(lot["symbol"], {"days": lot["days"], "saving": 0.0})
+                e = soon.setdefault(lot["symbol"], {"days": lot["days"], "saving": 0.0, "since": lot["buy_date"]})
                 e["days"] = min(e["days"], lot["days"])
+                e["since"] = min(e["since"], lot["buy_date"])
                 e["saving"] += lot["saving"]
         for s, e in soon.items():
-            out.append(_action("ltcg_soon", s, day, f"{s} turns long-term in {e['days']} days",
+            out.append(_action("ltcg_soon", s, e["since"].isoformat(), f"{s} turns long-term in {e['days']} days",
                                f"Selling after that saves about ₹{e['saving']:,.0f} in tax.", now,
                                {"type": "stock", "tab": "lots"}))
         harvest = report["harvest"]
-        if today.month <= 3 and (harvest["loss"] or harvest["gain"]):
-            out.append(_action("harvest", "", day, "Before 31 March: a tax harvest is open",
+        # Only when selling a loser really takes tax off (loss rows with zero saving are dropped).
+        if today.month <= 3 and harvest["loss"]:
+            out.append(_action("harvest", "", fy, "Before 31 March: a tax harvest is open",
                                f"{len(harvest['loss'])} loss and {len(harvest['gain'])} gain harvest(s). Estimate, not tax advice.",
                                now, {"type": "tax"}))
 

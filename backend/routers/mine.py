@@ -18,6 +18,7 @@ from backend.mine.thesis import SYMBOL, ThesisIn, ThesisStore
 
 router = APIRouter(prefix="/mine", tags=["Mine"])
 RANGE_DAYS = {"1M": 31, "6M": 183, "1Y": 366, "ALL": None}
+TAX_FIRST_FY = 2025  # earlier FYs had other rates (15%/10%, Rs 1 lakh; changed 2024-07-23)
 DRIVERS = 3
 
 
@@ -31,9 +32,9 @@ def _split(contributions: dict[str, float]) -> dict:
 
 async def _month_contributions(user_id: str, today) -> dict[str, float]:
     """Per symbol: its value now - its value before this month began - what
-    was put in this month (so a purchase is not a gain)."""
+    was put in this month (so a purchase is not a gain). The month's flows are
+    the curve's own events (clipped sells, split-scaled, the gap lot)."""
     from backend.mine import history
-    from backend.mine.lots import mine_trades
 
     first = today.replace(day=1)
     rows = await history.series(db.db, user_id, None)
@@ -43,10 +44,9 @@ async def _month_contributions(user_id: str, today) -> dict[str, float]:
     start = before[-1]["by_symbol"] if before else {}
     now = rows[-1]["by_symbol"]
     flows: dict[str, float] = {}
-    for t in await mine_trades(db.db, user_id):
-        if t["traded_at"].astimezone(IST).date() >= first:
-            sign = 1 if t["side"] == "BUY" else -1
-            flows[t["symbol"]] = flows.get(t["symbol"], 0.0) + sign * float(t["quantity"]) * float(t["price"])
+    for day, symbol, qty, price in (await history._inputs(db.db, user_id))["events"]:
+        if day >= first:
+            flows[symbol] = flows.get(symbol, 0.0) + qty * price
     return {s: now.get(s, {}).get("value", 0.0) - start.get(s, {}).get("value", 0.0) - flows.get(s, 0.0)
             for s in {*now, *start}}
 
@@ -94,7 +94,9 @@ async def overview(user: User = Depends(get_current_user)):
         "headline": headline,
         "drivers": {"month": _split(await _month_contributions(user.id, today)),
                     "all": _split((pulse or {}).get("pnl_by_symbol") or {})},
-        "mix": (snapshot or {}).get("concentration"),
+        "mix": {**snapshot["concentration"],
+                "count": (snapshot.get("totals") or {}).get("count", len(snapshot.get("holdings") or []))}
+        if (snapshot or {}).get("concentration") else None,
     }
 
 
@@ -116,7 +118,7 @@ async def put_thesis(symbol: str, body: ThesisIn, user: User = Depends(get_curre
 
 
 @router.get("/tax")
-async def tax(fy: int | None = None, user: User = Depends(get_current_user)):
+async def tax(fy: int | None = Query(None, ge=TAX_FIRST_FY, le=2100), user: User = Depends(get_current_user)):
     from backend.brokers.roles import brokers_for
     from backend.mine import tax as mine_tax
     from backend.mine.lots import mine_trades
@@ -131,13 +133,16 @@ async def tax(fy: int | None = None, user: User = Depends(get_current_user)):
            if h.get("kind", "STOCK") != "MF" and (not mine or h.get("broker") in mine)]
     priced, _ = await service.quoted(db.db, raw, now)
     held: dict[str, float] = {}
+    cost: dict[str, float] = {}
     prices: dict[str, float] = {}
     for h in priced:
         held[h["symbol"]] = held.get(h["symbol"], 0.0) + h["quantity"]
+        cost[h["symbol"]] = cost.get(h["symbol"], 0.0) + h["quantity"] * h["avg_price"]
         if h.get("last_price"):
             prices[h["symbol"]] = float(h["last_price"])
+    avgs = {s: cost[s] / q for s, q in held.items() if q}
     return mine_tax.report(await mine_trades(db.db, user.id), held, prices,
-                           fy if fy is not None else mine_tax.current_fy(today), today)
+                           fy if fy is not None else mine_tax.current_fy(today), today, avgs)
 
 
 @router.get("/stock/{symbol}")

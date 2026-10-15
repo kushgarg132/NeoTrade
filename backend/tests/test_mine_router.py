@@ -64,7 +64,8 @@ def test_overview_drivers_month(setup, monkeypatch):
     # B: 5 more shares bought this month at 100 -> 1300 - 1000 - 500 = -200; A: +300.
     _seed(db, "journal_trades", [{"user_id": "alice", "_id": "1", "symbol": "B", "side": "BUY", "quantity": 5, "price": 100,
                                   "broker": "upstox", "traded_at": datetime.combine(TODAY, datetime.min.time(), tzinfo=IST)}])
-    _seed(db, "portfolio_snapshots", [{"user_id": "alice", "at": NOW, "concentration": {"top": 0.5}}])
+    _seed(db, "portfolio_snapshots", [{"user_id": "alice", "at": NOW, "concentration": {"top": 0.5},
+                                       "totals": {"count": 4}}])
     pulse = {"value": 2600.0, "day_change": 10.0, "day_change_pct": 0.4, "pnl": 600.0, "pnl_pct": 30.0,
              "as_of": NOW, "holdings_as_of": NOW, "pnl_by_symbol": {"A": 400.0, "B": 200.0, "C": -50.0}}
     monkeypatch.setattr(digest, "pulse", AsyncMock(return_value=pulse))
@@ -74,7 +75,61 @@ def test_overview_drivers_month(setup, monkeypatch):
     assert [r["symbol"] for r in body["drivers"]["all"]["top"]] == ["A", "B"]
     assert body["drivers"]["all"]["bottom"] == [{"symbol": "C", "contribution": -50.0}]
     assert body["headline"]["value"] == 2600.0 and body["headline"]["xirr"] is None
-    assert body["mix"] == {"top": 0.5}
+    assert body["mix"] == {"top": 0.5, "count": 4}  # the holdings count, not the sectors'
+
+
+def test_month_drivers_do_not_count_the_gap_lot_as_gain(setup, monkeypatch):
+    """I8: history starting this month (snapshot gap lot, no journal) -- the
+    whole holding used to show as 'Added most'."""
+    client, db, _ = setup
+    _seed(db, "mine_daily", [_row("alice", TODAY, 1000, by_symbol={"A": {"qty": 10, "value": 1000}})])
+    _seed(db, "portfolio_snapshots", [{"user_id": "alice", "at": NOW, "raw_holdings": [
+        {"symbol": "A", "quantity": 10, "avg_price": 100, "broker": "upstox", "kind": "STOCK"}]}])
+    monkeypatch.setattr(digest, "pulse", AsyncMock(return_value=None))
+    assert client.get("/api/v1/mine/overview").json()["drivers"]["month"] == {"top": [], "bottom": []}
+
+
+@pytest.fixture
+def taxed(setup, monkeypatch):
+    from backend.portfolio import service
+
+    async def quoted(db_, raw, now, read_at=None):
+        return raw, True
+
+    monkeypatch.setattr(service, "quoted", quoted)
+    client, db, _ = setup
+    _seed(db, "user_prefs", [{"user_id": "alice", "broker_roles": {"upstox": "mine", "kite": "ai"}}])
+    _seed(db, "portfolio_snapshots", [{"user_id": "alice", "at": NOW, "raw_holdings": [
+        # A: 1:1 bonus since the journal's buy (broker 20 @50 vs journal 10 @100).
+        {"symbol": "A", "quantity": 20, "avg_price": 50, "last_price": 60, "broker": "upstox", "kind": "STOCK"},
+        {"symbol": "B", "quantity": 5, "avg_price": 10, "last_price": 9, "broker": "kite", "kind": "STOCK"}]}])
+
+    def t(i, symbol, side, qty, price, at, broker="upstox"):
+        return {"user_id": "alice", "_id": str(i), "symbol": symbol, "side": side, "quantity": qty, "price": price,
+                "broker": broker, "traded_at": at}
+
+    _seed(db, "journal_trades", [t(1, "A", "BUY", 10, 100, NOW - timedelta(days=400)),
+                                 t(2, "Z", "BUY", 1, 100, NOW - timedelta(days=1)), t(3, "Z", "SELL", 1, 150, NOW),
+                                 t(4, "B", "BUY", 5, 10, NOW - timedelta(days=2), broker="kite"),
+                                 t(5, "B", "SELL", 5, 99, NOW, broker="kite"),
+                                 t(6, "bob", "BUY", 1, 1, NOW)])
+    return client
+
+
+def test_tax_wiring_mine_only_split_and_fy_default(taxed):
+    """Deferred must-fix: the money endpoint's wiring -- held from the latest
+    snapshot's mine holdings, broker avg into reconcile, FY default."""
+    body = taxed.get("/api/v1/mine/tax").json()
+    assert [(r["symbol"], r["gain"]) for r in body["realised"]["rows"]] == [("Z", 50)]  # kite's B left out
+    assert [(u["symbol"], u["qty"], u["price"]) for u in body["unrealised"]] == [("A", 20, 50)]
+    assert body["unknown"] == [] and body["has_history"] is True
+
+
+def test_tax_fy_before_2025_or_absurd_is_422(taxed):
+    """I5: past FYs had other rates; m9: ?fy=99999 used to 500."""
+    assert taxed.get("/api/v1/mine/tax?fy=2024").status_code == 422
+    assert taxed.get("/api/v1/mine/tax?fy=99999").status_code == 422
+    assert taxed.get("/api/v1/mine/tax?fy=2025").status_code == 200
 
 
 def test_overview_other_user_sees_nothing(setup, monkeypatch):

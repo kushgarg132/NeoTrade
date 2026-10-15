@@ -88,8 +88,42 @@ async def test_harvest_only_jan_to_mar(db):
                                            "symbol": "A", "side": "BUY", "quantity": 10, "price": 120.0,
                                            "traded_at": datetime(2026, 6, 1, 5, 0, tzinfo=timezone.utc)})
     feb = datetime(2027, 2, 10, 10, 30, tzinfo=IST)
-    assert any(a["id"] == "harvest::2027-02-10" for a in await actions.build(db, "alice", feb, True))
+    # I6: a loss with no gain to offset saves nothing, so no "sell" nudge.
+    assert not any(a["kind"] == "harvest" for a in await actions.build(db, "alice", feb, True))
+    await db["journal_trades"].insert_many([
+        {"_id": f"z{i}", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "Z", "side": side,
+         "quantity": 1, "price": price, "traded_at": datetime(2026, m, 1, 5, 0, tzinfo=timezone.utc)}
+        for i, (side, price, m) in enumerate([("BUY", 100.0, 5), ("SELL", 1100.0, 6)])])
+    # I10: keyed on the FY, so a dismissal holds for the rest of the season.
+    assert any(a["id"] == "harvest::2026" for a in await actions.build(db, "alice", feb, True))
     assert not any(a["kind"] == "harvest" for a in await actions.build(db, "alice", NOW, True))
+
+
+async def test_dismissals_outlast_the_day(db, monkeypatch):
+    """I10: overweight, idea_exit, ltcg_soon and add used to key on the date
+    and come back the next morning."""
+    from backend.portfolio import rebalance
+
+    await _seed(db)
+    await db["portfolio_snapshots"].update_one({"user_id": "alice"}, {"$set": {"holdings": [
+        {"symbol": "A", "verdict": "HOLD", "reason_codes": ["overweight"], "weight_pct": 30.0},
+        {"symbol": "B", "verdict": "ADD", "verdict_since": "2026-10-10", "reason_codes": []}]}})
+    await db["paper_trades"].insert_one({"_id": "p1", "user_id": "alice:mine", "symbol": "B", "status": "OPEN",
+                                         "quantity": 5, "alerted": ["target"]})
+    await db["journal_trades"].insert_one({"_id": "c1", "user_id": "alice", "broker": "upstox", "symbol": "C",
+                                           "side": "BUY", "quantity": 10, "price": 50.0,
+                                           "traded_at": NOW - timedelta(days=350)})
+    monkeypatch.setattr(rebalance, "target_gaps", lambda rows, targets: ({}, 0.0, None))
+    monkeypatch.setattr(rebalance, "suggest", lambda row, gap, total: {"side": "BUY", "quantity": 3, "price": 100.0})
+    kinds = ("overweight", "idea_exit", "ltcg_soon", "add")
+    today = {a["kind"]: a["id"] for a in await actions.build(db, "alice", NOW, True) if a["kind"] in kinds}
+    assert today == {"overweight": "overweight:A:limit", "idea_exit": "idea_exit:B:p1:target",
+                     "ltcg_soon": f"ltcg_soon:C:{(NOW - timedelta(days=350)).date().isoformat()}",
+                     "add": "add:B:2026-10-10"}
+    for action_id in today.values():
+        await actions.dismiss(db, "alice", action_id)
+    tomorrow = NOW + timedelta(days=1)
+    assert not [a for a in await actions.build(db, "alice", tomorrow, True) if a["kind"] in kinds]
 
 
 class _Redis:

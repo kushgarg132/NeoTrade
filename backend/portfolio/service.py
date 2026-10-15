@@ -184,6 +184,9 @@ async def _review(db, user_id: str, redis, card: dict, closes: dict, previous: d
         db, stock_rows, {s: [c for _, c in series] for s, series in closes.items()}, datetime.now(timezone.utc),
     )
     before = {r.get("isin") or r["symbol"]: r.get("verdict") for r in (previous or {}).get("holdings", [])}
+    since = {r.get("isin") or r["symbol"]: r.get("verdict_since") for r in (previous or {}).get("holdings", [])}
+    from backend.engine.session import IST
+    today = datetime.now(timezone.utc).astimezone(IST).date().isoformat()
     for row in card["holdings"]:
         if row["kind"] == "STOCK":
             row["health"] = health.get(row["symbol"], {})
@@ -191,7 +194,10 @@ async def _review(db, user_id: str, redis, card: dict, closes: dict, previous: d
             row.update(stock_verdict(row, row["health"], limits, sentiment))
         else:
             row.update(fund_verdict(row, limits))
-        row["previous_verdict"] = before.get(row.get("isin") or row["symbol"])
+        key = row.get("isin") or row["symbol"]
+        row["previous_verdict"] = before.get(key)
+        # The day this verdict began: Needs-you's `add` keys on it, so a dismissal lasts while it holds.
+        row["verdict_since"] = since.get(key) if before.get(key) == row.get("verdict") and since.get(key) else today
 
     try:
         held = {r["symbol"] for r in card["holdings"]}
@@ -288,19 +294,33 @@ async def with_live_prices(db, user_id: str, snapshot: dict, credentials, redis)
     return card
 
 
-async def mine_holdings(db, user_id: str) -> dict[str, float]:
-    """symbol -> quantity the user really holds on their own (`mine`)
-    account, from the latest snapshot. With no account roles set, every
-    holding is theirs."""
+async def _mine_raw(db, user_id: str) -> list[dict]:
     from backend.brokers.roles import brokers_for
 
     snapshot = await latest_snapshot(db, user_id) or {}
     mine = brokers_for((await PrefsStore(db).get(user_id)).get("broker_roles") or {}, "mine")
+    return [h for h in snapshot.get("raw_holdings") or []
+            if h.get("kind", "STOCK") != "MF" and (not mine or h.get("broker") in mine)]
+
+
+async def mine_holdings(db, user_id: str) -> dict[str, float]:
+    """symbol -> quantity the user really holds on their own (`mine`)
+    account, from the latest snapshot. With no account roles set, every
+    holding is theirs."""
     held: dict[str, float] = {}
-    for h in snapshot.get("raw_holdings") or []:
-        if h.get("kind", "STOCK") != "MF" and (not mine or h.get("broker") in mine):
-            held[h["symbol"]] = held.get(h["symbol"], 0.0) + h["quantity"]
+    for h in await _mine_raw(db, user_id):
+        held[h["symbol"]] = held.get(h["symbol"], 0.0) + h["quantity"]
     return held
+
+
+async def mine_avg_prices(db, user_id: str) -> dict[str, float]:
+    """symbol -> the broker's average buy price on the user's own account."""
+    qty: dict[str, float] = {}
+    cost: dict[str, float] = {}
+    for h in await _mine_raw(db, user_id):
+        qty[h["symbol"]] = qty.get(h["symbol"], 0.0) + h["quantity"]
+        cost[h["symbol"]] = cost.get(h["symbol"], 0.0) + h["quantity"] * h["avg_price"]
+    return {s: cost[s] / q for s, q in qty.items() if q}
 
 
 async def latest_snapshot(db, user_id: str) -> dict | None:

@@ -133,6 +133,11 @@ async def test_refresh_reviews_every_holding_and_remembers_the_last_verdict(monk
 
     second = await service.refresh_portfolio(db, "alice", None, None)
     assert {r["symbol"]: r["previous_verdict"] for r in second["holdings"]} == {"A": "SELL", "B": "HOLD"}
+    # The day each verdict began carries over while it holds (Needs-you `add` keys on it).
+    await db["portfolio_snapshots"].update_many({}, {"$set": {"holdings": [
+        {**r, "verdict_since": "2026-01-01"} for r in second["holdings"]]}})
+    third = await service.refresh_portfolio(db, "alice", None, None)
+    assert {r["verdict_since"] for r in third["holdings"]} == {"2026-01-01"}
 
 
 async def test_without_a_session_the_last_holdings_are_reused_and_repriced(monkeypatch):
