@@ -17,6 +17,8 @@ from backend.engine.persistence import LedgerStore
 from backend.engine.session import IST
 from backend.marks import ORDER_MAX_AGE_SECONDS, mark_prices
 from backend.prefs import PrefsStore
+from backend.ws.hub import hub
+from backend.ws.publish import publisher_for
 
 logger = logging.getLogger(__name__)
 STOP_BUTTON = [[{"text": "🛑 Stop autopilot", "callback_data": "nt:autopilot:off"}]]
@@ -65,6 +67,9 @@ class AutopilotOrder:
     reason: str
     suggestion_id: Optional[str] = None
     strategy: Optional[str] = None  # whose idea it was; None = the autopilot's own (chat)
+    # An exit's own book (True live, False paper); None = the current switch.
+    # Flipping paper <-> live must not strand what the other book holds.
+    live: Optional[bool] = None
 
 
 def _aware(value: Optional[datetime]) -> Optional[datetime]:
@@ -149,6 +154,7 @@ async def _record(db, user_id: str, order: AutopilotOrder, status: str, now: dat
                   **extra) -> dict:
     row = {"user_id": user_id, "at": now, "status": status, **asdict(order), "side": order.side.value, **extra}
     await db["autopilot_log"].insert_one(dict(row))
+    await hub.publish(user_id, "autopilot", "logged", row)
     verb = "bought" if order.side == Side.BUY else "sold"
     if status == "FILLED":
         text = (f"🤖 AI {verb} {order.quantity} {order.symbol} on the AI account"
@@ -190,7 +196,7 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
     from backend.suggestions.service import execute_live_order, fill_on_paper
 
     prefs = await PrefsStore(db).get(user_id)
-    live = bool(prefs.get("autopilot_live"))
+    live = bool(prefs.get("autopilot_live")) if order.live is None else order.live
     mode = "live" if live else "paper"
     price = (await mark_prices(db, {order.symbol}, max_age_seconds=ORDER_MAX_AGE_SECONDS)).get(order.symbol)
     if not price:
@@ -206,7 +212,7 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
     if reason:
         return await _record(db, user_id, order, "REFUSED", now, quiet, reason=reason, mode=mode)
 
-    ledger = LedgerStore(db, user_id=book(user_id, live))
+    ledger = LedgerStore(db, user_id=book(user_id, live), on_change=publisher_for(user_id))
     placed = Order(id=str(uuid.uuid4()), symbol=order.symbol, side=order.side, quantity=order.quantity,
                    order_type="MARKET", product=order.product,
                    strategy_name=order.strategy or f"{TAG}{order.source}", via=f"{TAG}{order.source}",
@@ -245,7 +251,8 @@ async def check_exits(db, redis, user_id: str, now: Optional[datetime] = None) -
         for trade in [t for t in held if t.get("mode") == "INTRADAY" and t["side"] == "BUY"]:
             result = await submit(db, redis, user_id, AutopilotOrder(
                 symbol=trade["symbol"], side=Side.SELL, quantity=int(trade["quantity"]), product="MIS",
-                source="engine", reason="Square-off at 3:15 PM.", strategy=trade.get("strategy")), now=now)
+                source="engine", reason="Square-off at 3:15 PM.", strategy=trade.get("strategy"),
+                live=trade["user_id"] == ledger_user(user_id)), now=now)
             if result["status"] in ("FILLED", "SENT"):
                 closed.append({"symbol": trade["symbol"], "reason": "square-off", "price": result.get("price")})
     trades = [t for t in held if t.get("suggestion_id")]
@@ -262,7 +269,8 @@ async def check_exits(db, redis, user_id: str, now: Optional[datetime] = None) -
         text = f"Exit at the proposal's {why}." if why in ("stop", "target") else f"Exit: {why}."
         result = await submit(db, redis, user_id, AutopilotOrder(
             symbol=trade["symbol"], side=Side.SELL, quantity=int(trade["quantity"]), product=_product(trade),
-            source="engine", reason=text, strategy=trade.get("strategy")), now=now, suggestion_id=trade["suggestion_id"])
+            source="engine", reason=text, strategy=trade.get("strategy"), live=trade["user_id"] == ledger_user(user_id)),
+            now=now, suggestion_id=trade["suggestion_id"])
         if result["status"] in ("FILLED", "SENT"):
             closed.append({"symbol": trade["symbol"], "reason": why, "price": mark})
     return closed

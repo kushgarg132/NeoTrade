@@ -168,6 +168,9 @@ async def refresh_portfolio(db, user_id: str, credentials, redis, analyse: bool 
         "raw_holdings": [h.model_dump() for h in holdings], **card,
     }
     await db["portfolio_snapshots"].insert_one(dict(snapshot))
+    # Open holdings pages re-read; outside market hours they don't poll.
+    from backend.ws.hub import hub
+    await hub.publish(user_id, "portfolio", "refreshed", {"at": snapshot["at"]})
     return snapshot
 
 

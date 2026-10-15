@@ -16,6 +16,7 @@ from typing import Awaitable, Callable, Optional
 from backend.core.models import Fill, Side
 from backend.engine.execution.live_order_store import _PENDING_STATES, LiveOrderStore
 from backend.engine.persistence import LedgerStore
+from backend.ws.publish import publisher_for
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,8 @@ async def reconcile(db, adapter_for: AdapterFor, now: datetime) -> int:
             if not await LiveOrderStore(db).claim(row, status.status, status.filled_quantity, status.average_price):
                 continue
             if new > 0:
-                await _book(LedgerStore(db, user_id=row.get("ledger_user") or row["user_id"]), Fill(
+                await _book(LedgerStore(db, user_id=row.get("ledger_user") or row["user_id"],
+                                         on_change=publisher_for(row["user_id"])), Fill(
                     order_id=row["_id"], symbol=row["symbol"], side=Side(row["side"]), quantity=new,
                     price=status.average_price, timestamp=now, costs=0.0, venue="live",
                 ))

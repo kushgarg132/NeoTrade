@@ -30,6 +30,7 @@ from backend.suggestions.store import SuggestionStore
 from backend.suggestions.thesis import attach_theses
 
 from backend.system.jobs import DAILY_PASS, mark
+from backend.ws.publish import publisher_for
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +260,7 @@ async def close_expired_option_positions(
 
     for prefs in await prefs_store.scan_enabled_users():
         user_id = prefs["user_id"]
-        ledger = LedgerStore(db, user_id=user_id)
+        ledger = LedgerStore(db, user_id=user_id, on_change=publisher_for(user_id))
         positions = await ledger.get_open_positions()
 
         for symbol, position in positions.items():

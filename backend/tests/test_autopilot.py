@@ -392,3 +392,18 @@ async def test_intraday_positions_square_off_from_315_even_with_the_autopilot_of
     assert [c["reason"] for c in closed] == ["square-off"]
     (trade,) = await db["paper_trades"].find({"user_id": "alice"}).to_list(None)
     assert trade["status"] == "CLOSED" and trade["strategy"] == "orb"
+
+
+async def test_a_paper_fill_reaches_the_live_socket(world, monkeypatch):
+    """Open AI pages refresh on these; a ledger without on_change left them stale."""
+    db, _ = world
+    await _prefs(db)
+    published = []
+
+    async def publish(user_id, topic, event, data):
+        published.append((user_id, topic, event))
+
+    monkeypatch.setattr(service.hub, "publish", publish)
+    await service.submit(db, None, "alice", _order(), now=OPEN)
+    assert ("alice", "trades", "changed") in published
+    assert ("alice", "autopilot", "logged") in published
