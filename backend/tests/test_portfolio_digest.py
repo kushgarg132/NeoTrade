@@ -77,7 +77,7 @@ async def test_premarket_goes_once_in_its_window(db, monkeypatch):
 
     sent = []
 
-    async def capture(db_, user_id, text):
+    async def capture(db_, user_id, text, html=False):
         sent.append(text)
         return True
 

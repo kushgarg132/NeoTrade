@@ -6,8 +6,8 @@ who never linked Telegram."""
 from backend.guardrails import telegram
 
 
-async def notify(db, user_id: str, text: str) -> bool:
-    return await telegram.alert(db, user_id, text)
+async def notify(db, user_id: str, text: str, html: bool = False) -> bool:
+    return await telegram.alert(db, user_id, text, html=html)
 
 
 def _money(value) -> str:

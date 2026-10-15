@@ -201,7 +201,7 @@ def longterm(world, monkeypatch):
         calls["scans"].append(kwargs["source"])
         return []
 
-    async def send(db, user_id, text):
+    async def send(db, user_id, text, html=False):
         calls["sent"].append(text)
         return True
 

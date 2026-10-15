@@ -441,7 +441,7 @@ async def _login_reminders(db, redis, now: datetime, get_adapter=None) -> None:
             lines.append(f'• <a href="{escape(url)}">{escape(name)}</a>' if url else f"• {escape(name)}: log in under Settings")
         if lines:
             await notify(db, user_id, "🔑 Log in before 9:15 so today's prices, analysis and AI trading can run:\n"
-                         + "\n".join(lines))
+                         + "\n".join(lines), html=True)
 
 
 async def autorun_loop(db, redis) -> None:

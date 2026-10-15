@@ -34,3 +34,20 @@ def test_websocket_handshake_line_is_redacted(caplog):
         logging.getLogger("uvicorn.error").info('%s - "WebSocket %s" [accepted]', "1.2.3.4:5",
                                                 "/api/v1/ws?token=eyJhbGciOi.secret.sig")
     assert "eyJ" not in caplog.text and "token=REDACTED" in caplog.text
+
+
+def test_telegram_bot_tokens_are_redacted_from_messages_and_tracebacks():
+    import logging
+
+    record = logging.LogRecord("httpx", logging.INFO, __file__, 1,
+                               "HTTP Request: POST %s", ("https://api.telegram.org/bot123456:AAH-x_y/sendMessage",), None)
+    RedactTokens().filter(record)
+    assert record.getMessage() == "HTTP Request: POST https://api.telegram.org/bot123456:REDACTED/sendMessage"
+
+    try:
+        raise RuntimeError("Client error '403' for url 'https://api.telegram.org/bot99:secret-tok/getUpdates'")
+    except RuntimeError:
+        import sys
+        failed = logging.LogRecord("x", logging.ERROR, __file__, 1, "polling failed", None, sys.exc_info())
+    RedactTokens().filter(failed)
+    assert "secret-tok" not in failed.exc_text and "bot99:REDACTED" in failed.exc_text

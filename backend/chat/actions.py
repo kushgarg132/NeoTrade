@@ -310,23 +310,18 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         params = {"symbol": symbol.strip().upper().removesuffix(".NS"), "side": side, "quantity": quantity,
                   "product": product, "venue": venue}
         if account == "ai":
-            # The AI account is the autopilot's: no card -- it goes through the
-            # fence and runs (or is refused) now (backend/autopilot/). The venue
-            # must match its mode, so "paper" can never become a real order.
-            from backend.autopilot.service import AutopilotOrder, submit
-
+            # The AI account is the autopilot's: the order goes through its
+            # fence at confirm. Still a card: the agent also reads news and
+            # stock text, and that text must never place an order on its own
+            # (prompt injection). The venue must match the autopilot's mode,
+            # so "paper" can never become a real order.
             if (venue == "live") != live_mode:
                 return (f"The AI account's autopilot is in {'live' if live_mode else 'paper'} mode; "
                         f"use venue='{'live' if live_mode else 'paper'}' for it.")
-
-            result = await submit(db, redis, user_id, AutopilotOrder(
-                symbol=params["symbol"], side=Side(side), quantity=int(quantity), product=product,
-                source="chat", reason=f"From chat: {message[:160]}"))
-            if result["status"] in ("FILLED", "SENT"):
-                verb = "bought" if side == "BUY" else "sold"
-                return (f"Autopilot {verb} {quantity} {params['symbol']} on the AI account "
-                        f"({result.get('mode')}) at ₹{result.get('price', 0):,.2f}.")
-            return f"The autopilot did not place it: {result.get('reason')}"
+            return await card("ai_order", params,
+                              f"AI account: {side} {quantity} {params['symbol']} · {'delivery' if product == 'CNC' else 'intraday'}"
+                              f" · {'real money' if venue == 'live' else 'paper'}",
+                              venue, second_tap=venue == "live")
         try:
             price, _ = await _order_checks(db, user_id, params, None)
         except ActionRefused as exc:
@@ -415,7 +410,7 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         tool(propose_order, "Place a market order for an NSE stock: side BUY or SELL, whole quantity, product CNC "
                             "(delivery) or MIS (intraday). account mine (default): real money on the trader's own account, "
                             "venue live, a card the trader confirms twice. account ai: the AI account, venue matching "
-                            "its autopilot mode (paper or live); the autopilot runs it at once within its limits, no card." + note),
+                            "its autopilot mode (paper or live); a card the trader confirms, then the autopilot runs it within its limits." + note),
         tool(propose_exit, "Sell all (default) or part of a holding in the trader's OWN account at market." + note),
         tool(propose_cancel_order, "Cancel an open order in the trader's own account, by its broker order id." + note),
         tool(propose_modify_order, "Change the price and/or quantity of an open order in the trader's own account." + note),
@@ -531,6 +526,21 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
         value = _setting(params["name"], params["value"])
         await PrefsStore(db).update(user_id, {params["name"]: value})
         return f"{params['name'].replace('_', ' ')} is now {value}."
+
+    if kind == "ai_order":
+        from backend.autopilot.service import AutopilotOrder, submit
+        from backend.database import db as handle
+
+        if (params["venue"] == "live") != bool((await PrefsStore(db).get(user_id)).get("autopilot_live")):
+            raise ActionRefused("The autopilot's mode changed since this card was made; ask again.")
+        result = await submit(db, handle.redis, user_id, AutopilotOrder(
+            symbol=params["symbol"], side=Side(params["side"]), quantity=int(params["quantity"]),
+            product=params["product"], source="chat", reason=f"From chat: {action['message'][:160]}"))
+        if result["status"] not in ("FILLED", "SENT"):
+            raise ActionRefused(f"The autopilot did not place it: {result.get('reason')}")
+        verb = "bought" if params["side"] == "BUY" else "sold"
+        return (f"Autopilot {verb} {params['quantity']} {params['symbol']} on the AI account "
+                f"({result.get('mode')}) at ₹{result.get('price', 0):,.2f}.")
 
     if kind == "order":
         price, adapter = await _order_checks(db, user_id, params, credentials)

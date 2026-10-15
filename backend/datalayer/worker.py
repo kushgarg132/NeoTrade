@@ -132,4 +132,7 @@ async def main() -> None:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # it logs every request URL, bot tokens included
+    from backend import log_redaction
+    log_redaction.install()
     asyncio.run(main())

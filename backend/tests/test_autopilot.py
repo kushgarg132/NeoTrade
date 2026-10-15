@@ -2,6 +2,7 @@
 refused (logged, never retried), paper first, a one-tap stop on Telegram,
 and it never touches the user's own account."""
 
+import json
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
 
@@ -171,7 +172,12 @@ async def test_chat_order_for_the_ai_account_goes_through_the_autopilot(world, m
     monkeypatch.setattr(service, "in_session", lambda now: True)
     tools = {t.name: t for t in actions.action_tools(db, None, "alice", "buy 2 infy on the AI account")}
     out = await tools["propose_order"].ainvoke({"symbol": "INFY", "side": "BUY", "quantity": 2, "account": "ai"})
-    assert not out.startswith("ACTION_CARD:") and "bought 2 INFY" in out
+    # A card, never an order on the model's word: the agent also reads news text.
+    assert out.startswith("ACTION_CARD:")
+    assert await db["paper_trades"].count_documents({}) == 0
+    card = json.loads(out[len("ACTION_CARD:"):])
+    done = await actions.confirm(db, None, None, "alice", card["id"])
+    assert "bought 2 INFY" in done["result"]
     assert await db["paper_trades"].count_documents({"strategy": "autopilot:chat", "via": "autopilot:chat"}) == 1
 
 

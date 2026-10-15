@@ -236,7 +236,7 @@ async def send_premarket(db, redis, now: datetime) -> int:
             overnight = await headlines_for(db, held, last_close)
             ideas = len(await for_mine(db, user_id, await db["suggestions"].find(
                 {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200)))
-            await notify(db, user_id, premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs)))
+            await notify(db, user_id, premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs)), html=True)
             sent += 1
         except Exception as exc:
             logger.exception("pre-market digest failed for %s: %s", user_id, exc)
@@ -258,7 +258,7 @@ async def send_postclose(db, now: datetime) -> int:
         try:
             roles = (await PrefsStore(db).get(user_id)).get("broker_roles") or {}
             text = postclose_text(await pulse(db, user_id, now), await pnl_since(db, user_id, roles, day_start(now)), events)
-            await notify(db, user_id, text)
+            await notify(db, user_id, text, html=True)
             sent += 1
         except Exception as exc:
             logger.exception("post-close digest failed for %s: %s", user_id, exc)
