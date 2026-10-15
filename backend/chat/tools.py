@@ -50,7 +50,6 @@ USER_DATA = {
 }
 SHARED_DATA = {
     "stock_health": "per-symbol health scores the portfolio rules use",
-    "strategy_backtests": "backtest results per strategy",
     "instrument_sectors": "sector of each instrument",
 }
 _HIDDEN = {"_id", "user_id"}
@@ -171,6 +170,13 @@ def read_tools(db, redis, user_id: str) -> list:
             cursor = cursor.sort(sort_by, -1 if descending else 1)
         rows = await cursor.limit(max(1, min(limit, MAX_ROWS))).to_list(length=MAX_ROWS)
         rows = [{k: v for k, v in r.items() if k not in _HIDDEN} for r in rows]
+        if collection == "portfolio_snapshots":
+            # The same verdict gate as the Portfolio page (SEBI: admin-only until set).
+            from backend.portfolio.digest import verdicts_visible
+            from backend.routers.portfolio import present
+
+            visible = await verdicts_visible(db, user_id)
+            rows = [present(r, visible) for r in rows]
         text = _json({"matched": await db[collection].count_documents(query), "returned": len(rows), "rows": rows})
         # ponytail: hard cut keeps the context bounded; the model narrows with fields/filter/limit.
         return text if len(text) <= MAX_CHARS else text[:MAX_CHARS] + "… (truncated: pass fields or a smaller limit)"

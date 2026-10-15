@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 import logging
+
+from backend.auth.dependency import get_current_user
+from backend.auth.models import User
 
 from backend.research.graph import ResearchAgent, ResearchReport
 from backend.research.quick import QuickAnalysis, quick_analysis
@@ -37,7 +40,7 @@ class AnalyzeRequest(BaseModel):
     current_exposure: float = 0.0
 
 @router.post("/analyze/{symbol}", response_model=ResearchReport)
-async def analyze_stock(symbol: str, request: AnalyzeRequest = None):
+async def analyze_stock(symbol: str, request: AnalyzeRequest = None, user: User = Depends(get_current_user)):
     """
     Generate a research report (company info, news/sentiment, LLM thesis) for
     a given stock symbol. NOTE: this endpoint no longer produces a trade
@@ -47,10 +50,23 @@ async def analyze_stock(symbol: str, request: AnalyzeRequest = None):
     """
     logger.info(f"Received analyze request for {symbol}")
 
+    from backend.database import db
+    from backend.llm import LIMIT_MESSAGE, DailyLimitReached, use_model
+    from backend.prefs import PrefsStore
+    from backend.rate_limit import allow
+
+    # The socket's own limits, which this HTTP fallback skipped: the user's
+    # daily LLM cap (use_model bills the user) and a per-minute budget.
+    if not await allow(db.redis, f"analyze:{user.id}", 10, 60):
+        raise HTTPException(status_code=429, detail="Too many analyses: try again in a minute.")
     try:
-        result = await research_agent.run(symbol)
+        prefs = await PrefsStore(db.db).get(user.id)
+        with use_model(prefs.get("omniroute_model"), user_id=user.id):
+            result = await research_agent.run(symbol)
         logger.info(f"Research report complete for {symbol}")
         return result
+    except DailyLimitReached:
+        raise HTTPException(status_code=429, detail=LIMIT_MESSAGE)
     except Exception as e:
         logger.error(f"Error analyzing {symbol}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="The analysis failed; try again in a minute.")

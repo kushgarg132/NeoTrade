@@ -113,3 +113,13 @@ async def test_the_premarket_yesterday_is_the_last_session_from_stored_closes(db
     moved = await digest.last_session_move(db, {"UP": 10}, NOW.date())
     assert moved == {"change": 100.0, "pct": 10.0}
     assert calls[1] < calls[0]  # the session before the last one
+
+
+async def test_chat_portfolio_fact_hides_verdicts_from_non_admins(db):
+    from backend.ai.facts import user as user_facts
+
+    await db["users"].update_one({"id": "alice"}, {"$set": {"role": "user"}})
+    await db["portfolio_snapshots"].update_one({"user_id": "alice"}, {"$set": {"plan": "### Sell\n- **DOWN**"}})
+    fact = await user_facts.portfolio(db, None, "alice")
+    assert fact["plan"] is None and fact["sell_or_trim"] == []
+    assert {h["symbol"]: h.get("verdict") for h in fact["holdings"]}["DOWN"] == "REVIEW"  # SELL masked

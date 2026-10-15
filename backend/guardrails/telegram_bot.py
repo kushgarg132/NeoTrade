@@ -463,6 +463,10 @@ async def _poll_bot(db, redis, token: Optional[str], chats: dict) -> int:
             callback = update.get("callback_query")
             chat_id = (message or {}).get("chat", {}).get("id") or (callback or {}).get("message", {}).get("chat", {}).get("id")
             text = (message or {}).get("text") or ""
+            if not chat_id or chat_id < 0:
+                # Groups and channels have negative ids: any member could talk
+                # to the account and confirm its real-money cards. Private chats only.
+                continue
             if text.startswith("/start ") and redis is not None:
                 # Consumed updates are gone from getUpdates; keep the
                 # Settings link flow working for a (re)linked chat.
@@ -472,6 +476,10 @@ async def _poll_bot(db, redis, token: Optional[str], chats: dict) -> int:
                 continue
             handled += 1
             if message:
+                from backend.rate_limit import allow
+                if not await allow(redis, f"chat:{user_id}", 20, 60):  # the socket's budget, here too
+                    await telegram.send(chat_id, "Too many messages: give it a minute.", token)
+                    continue
                 await _reply(db, redis, user_id, chat_id, token, text)
             elif callback:
                 await _callback(db, redis, user_id, chat_id, token, callback)

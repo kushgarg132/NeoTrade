@@ -38,11 +38,15 @@ async def _portfolio(db, user_id, now):
     if not snap:
         return {"as_of": None, "none": "No portfolio analysed yet"}
     totals = snap["totals"]
+    from backend.portfolio.digest import verdicts_visible
+
+    visible = await verdicts_visible(db, user_id)  # sell / add are verdicts: same audience
     return {
         "as_of": snap["at"].isoformat() if hasattr(snap["at"], "isoformat") else str(snap["at"]),
         "value": totals.get("value"), "today": totals.get("day_change"), "overall_pct": totals.get("pnl_pct"),
         "holdings": len(snap.get("holdings", [])),
-        "sell_or_trim": plan_names(snap.get("plan"), "sell")[:3], "add": plan_names(snap.get("plan"), "add")[:3],
+        "sell_or_trim": plan_names(snap.get("plan"), "sell")[:3] if visible else [],
+        "add": plan_names(snap.get("plan"), "add")[:3] if visible else [],
     }
 
 

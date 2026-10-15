@@ -511,7 +511,7 @@ async def stop_trading(
     runs: RunStore = Depends(get_run_store),
 ):
     owner = await runs.get(req.run_id)
-    if owner is not None and owner["user_id"] != user.id:
+    if owner is None or owner["user_id"] != user.id:
         raise HTTPException(status_code=404, detail=f"No running trading run {req.run_id!r}")
 
     stopped = await stop_background_run(req.run_id)
