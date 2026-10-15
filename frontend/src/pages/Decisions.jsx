@@ -64,7 +64,9 @@ const Decisions = () => {
   useReconnect(load);
   useTopic('suggestions', (message) => {
     if (message.event === 'created') {
-      setItems((list) => [message.data, ...list]);
+      // Refetch, not prepend: the server shows only proven strategies' ideas
+      // (risk/paper_gate.py::for_mine); the socket carries every new one.
+      fetchItems();
     } else {
       setItems((list) =>
         list.map((item) => (item.id === message.data.id ? message.data : item))

@@ -73,7 +73,7 @@ const AutopilotSheet = () => {
       <Row
         label="Autopilot"
         hint={!prefs.autopilot_enabled ? 'Off: places nothing.'
-          : prefs.autopilot_live ? 'Live: real orders on the AI account, only from strategies that passed their backtest and their paper record. Other proposals wait for you.'
+          : prefs.autopilot_live ? 'Live: real orders on the AI account, only from strategies that passed their backtest and their paper record. Others stay on paper.'
           : 'Paper: fills in the AI account’s paper book. Nothing sent to the broker.'}
       >
         {confirmLive === null ? (

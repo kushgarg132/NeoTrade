@@ -276,8 +276,9 @@ const BrokerSheet = () => {
         {broker === 'angel_one'
           ? 'Intraday runs still use delayed quotes — live ticks from Angel One aren’t supported yet.'
           : 'It also supplies live tick data for intraday runs.'}{' '}
-        Real orders go out only for a strategy you’ve set to live, or a guardrail square-off you’ve
-        set to Live; everything else stays on paper.
+        On your own account a real order goes out only when you confirm one (Ideas, the order
+        ticket, the chat), or from a guardrail square-off you’ve set to Live. On the AI account,
+        only when its autopilot is Live.
       </p>
       {state.state !== 'UNCONFIGURED' && <BrokerRole broker={broker} />}
 
@@ -1441,7 +1442,7 @@ const Settings = () => {
                   to="/ai/settings"
                   className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors"
                 >
-                  <span className="text-sm"><span className="field-label">Autopilot</span> switch and limits are under AI → Autopilot</span>
+                  <span className="text-sm"><span className="field-label">Autopilot</span> switch and limits are under AI › Settings</span>
                   <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
                 </Link>
                 {isAdmin && <UsageSheet />}

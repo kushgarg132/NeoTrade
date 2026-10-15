@@ -255,7 +255,8 @@ def _strategy_vocabulary() -> str:
 def action_tools(db, redis, user_id: str, message: str) -> list:
     store = ChatActionStore(db)
 
-    async def card(kind, params, summary, venue="paper", second_tap=False) -> str:
+    # venue only on cards that trade: a decline or a setting is neither paper nor live.
+    async def card(kind, params, summary, venue=None, second_tap=False) -> str:
         return CARD_PREFIX + json.dumps(await store.propose(user_id, kind, params, summary, venue, second_tap, message))
 
     async def propose_approve(suggestion_id: str, live: bool = False) -> str:
@@ -285,7 +286,8 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
         if action == "stop" and not active:
             return "No intraday paper run is running."
         return await card("paper_run", {"action": action},
-                          "Start an intraday paper run now" if action == "start" else "Stop today's intraday paper run")
+                          "Start an intraday paper run now" if action == "start" else "Stop today's intraday paper run",
+                          venue="paper")
 
     async def propose_setting(name: str, value: Union[float, bool, str]) -> str:
         try:

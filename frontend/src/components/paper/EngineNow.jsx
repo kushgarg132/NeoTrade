@@ -68,7 +68,6 @@ const EngineNow = ({ prefs }) => {
     loadKillSwitch();
     loadLongterm();
   });
-  useTopic('trades', loadLongterm);
   useReconnect(() => {
     loadRuns();
     loadKillSwitch();
@@ -119,14 +118,15 @@ const EngineNow = ({ prefs }) => {
     setScan('starting');
     try {
       const res = await api.post(endpoints.suggestions.scan, {});
-      setScan(`Scanning ${res.data.symbols} scrip. New proposals land under Decisions in a few minutes.`);
+      setScan(`Scanning ${res.data.symbols} scrip. The AI paper-trades the ideas; proven strategies’ ideas reach Mine › Ideas.`);
     } catch (err) {
       setScan(err?.response?.data?.detail || 'Could not start the scan.');
     }
   };
 
-  // Which strategies trade real money when a run starts here.
-  const liveStrategies = prefs?.live_strategies || [];
+  // Which strategies trade real money when a run starts here: only with the
+  // autopilot on and live (routers/trading.py routes nothing live otherwise).
+  const liveStrategies = prefs?.autopilot_enabled && prefs?.autopilot_live ? prefs?.live_strategies || [] : [];
 
   return (
     <>
@@ -135,9 +135,9 @@ const EngineNow = ({ prefs }) => {
             <p className="field-label text-[var(--loss)]">Live mode armed</p>
             <p className="mt-1 text-sm text-[var(--ink)]">
               {liveStrategies.join(', ')} {liveStrategies.length === 1 ? 'trades' : 'trade'} real
-              money when a run starts. Those orders go to your broker and print on the{' '}
-              <Link to="/mine/trades" className="underline decoration-[var(--loss)] underline-offset-2">
-                statement
+              money when a run starts, on the AI account’s broker. They show under{' '}
+              <Link to="/ai/activity" className="underline decoration-[var(--loss)] underline-offset-2">
+                AI › Activity
               </Link>
               , not in this paper book.
             </p>

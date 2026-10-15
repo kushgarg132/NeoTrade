@@ -10,7 +10,7 @@ Two accounts, one decision path, and the rails that sit between a signal and a r
 | **Mine** (role `mine`) | Your own broker account | `<user>:mine` for orders the app placed (`engine/persistence.py::mine_book`); your real holdings are `portfolio/service.py::mine_holdings` | Only you, for real money: a one-tap approval, a chat card or the order ticket, each confirmed twice. There is no paper venue here |
 | **AI** (role `ai`) | A separate broker account the app runs | paper: `<user>` (the engine, the factor portfolio, the autopilot); live: `<user>:autopilot` | The engine and the autopilot, without a tap, inside the fence |
 
-"Practice" is the AI account on paper. Every trade keeps `strategy` = the strategy whose idea
+The AI account on paper is what used to be called Practice. Every trade keeps `strategy` = the strategy whose idea
 it was and `via` = the path that placed it (e.g. `autopilot:engine`), so the paper gate and
 learning credit the right strategy. The AI book as a whole is
 `autopilot/service.py::ai_book_query`. Nothing routes an AI order to `mine`, and nothing
@@ -180,7 +180,7 @@ Every run still runs every strategy on paper; the gates decide only where orders
 - **AI game plan only tightens** — `backend/plan/`: may drop opening intents, shrink risk
   (0.25–1.0), cap positions or skip the day; never blocks an exit or touches conviction.
 
-## Long-term proposals (AI → Decisions)
+## Long-term ideas (Mine → Ideas)
 
 Decided at `/mine/ideas` (Mine → Ideas since 2026-10-14; old paths redirect). Approving
 there never trades the AI account: fills go to paper or, on a second tap, to `mine`.
@@ -200,7 +200,7 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
   written only for those. Each must already beat 3× its round-trip charges (`size_intents`).
 - **Ideas for the user's account come only from proven strategies**
   (`risk/paper_gate.py::for_mine`: a passing backtest and a passing paper record on the AI
-  account). Decisions, Today, the chat, portfolio picks and every proposal Telegram message read
+  account). Mine → Ideas, Today, the chat, portfolio picks and every proposal Telegram message read
   through it, and approve-live refuses an unproven one with a 409. Until a strategy is proven the
   AI paper-trades its ideas alone. A proposal the AI took stays PENDING with `ai_order` set, so
   both accounts can act on the same idea.

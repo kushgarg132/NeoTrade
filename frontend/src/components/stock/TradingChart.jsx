@@ -39,17 +39,18 @@ const CustomTooltip = ({ active, payload, label, currency }) => {
 
 const TradingChart = ({ data, symbol, technicals, className, currency }) => {
   const [timeframe, setTimeframe] = useState('1Y');
-  const [intraday, setIntraday] = useState(null);
+  // Keyed by symbol, so another stock's candles never show while this one's load.
+  const [loaded, setIntraday] = useState(null);
+  const intraday = loaded?.symbol === symbol ? loaded.rows : null;
   const isDay = timeframe === '1D';
 
   // 1D: the latest session's 5-minute candles, refreshed each minute.
   useEffect(() => {
     if (!isDay || !symbol) return undefined;
     let gone = false;
-    setIntraday(null);
     const load = () => api.get(endpoints.intraday(symbol))
-      .then((res) => !gone && setIntraday(res.data))
-      .catch(() => !gone && setIntraday([]));
+      .then((res) => !gone && setIntraday({ symbol, rows: res.data }))
+      .catch(() => !gone && setIntraday({ symbol, rows: [] }));
     load();
     const timer = setInterval(load, INTRADAY_POLL_MS);
     return () => {

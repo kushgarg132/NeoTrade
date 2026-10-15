@@ -316,7 +316,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
         <GuardrailAlerts />
         {view !== 'habits' && <BrokerPnl journal={data} loading={!data && !error} error={error} />}
         {view !== 'habits' && liveTrades.length > 0 && (
-          <TradeLedger title="Live engine orders" trades={liveTrades} loading={false} error={null} />
+          <TradeLedger title="Orders placed from NeoTrade" trades={liveTrades} loading={false} error={null} />
         )}
 
         {data && view !== 'habits' && (

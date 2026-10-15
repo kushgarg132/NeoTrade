@@ -52,8 +52,8 @@ const EngineSwitches = ({ prefs, save }) => {
       <p className="text-sm text-[var(--ink-soft)]">
         {autopilot
           ? 'Feeds the autopilot: the scan and the long-term pass stay on while it is on. Only intraday paper is your call.'
-          : <>The strategy engine on its own. Its long-term proposals wait for you in{' '}
-              <Link to="/mine/ideas" className="underline">Decisions</Link>; turn the autopilot on and it takes them.</>}
+          : <>The strategy engine on its own. Ideas from proven strategies wait for you in{' '}
+              <Link to="/mine/ideas" className="underline">Mine › Ideas</Link>; turn the autopilot on and it paper-trades the rest.</>}
       </p>
       {switchRow(
         'auto_paper_intraday',

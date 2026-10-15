@@ -74,7 +74,7 @@ const IndexCard = ({ detail, loading, error }) => {
       <p className="doc-meta normal-case mt-1">Day change against the previous close</p>
       {CHAINS[detail.symbol] && (
         <Link
-          to={`/options?u=${CHAINS[detail.symbol]}`}
+          to={`/research/options?u=${CHAINS[detail.symbol]}`}
           className="mt-3 inline-flex items-center gap-1.5 min-h-9 field-label text-[var(--stamp)] hover:underline"
         >
           Option chain <ArrowRight className="w-3.5 h-3.5" />

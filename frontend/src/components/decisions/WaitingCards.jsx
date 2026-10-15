@@ -57,7 +57,7 @@ const WaitingCard = ({ card, now, onSettled }) => {
   return (
     <li className="py-3 space-y-2">
       <div className="flex items-baseline gap-2">
-        <MoneyBadge kind={card.venue === 'live' ? 'mine' : 'paper'} />
+        {card.venue && <MoneyBadge kind={card.venue === 'live' ? 'mine' : 'paper'} />}
         <span className="text-sm flex-1 min-w-0">{card.summary}</span>
         <span className="doc-meta shrink-0">{minutesLeft(card.expires_at, now)} min left</span>
       </div>
