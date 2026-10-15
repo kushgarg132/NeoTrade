@@ -15,7 +15,7 @@ from itertools import combinations
 from typing import Optional
 
 from backend.core.models import Holding
-from backend.engine.session import IST
+from backend.mine.lots import open_lots  # noqa: F401 (moved there; scorecard.open_lots stays importable)
 
 # Holdings that move together this closely are one bet, not two.
 CORRELATED = 0.8
@@ -41,24 +41,6 @@ def merge(holdings: list[Holding]) -> list[dict]:
     for row in rows.values():
         row["avg_price"] = row["invested"] / row["quantity"] if row["quantity"] else 0.0
     return list(rows.values())
-
-
-def open_lots(trades: list[dict], symbol: str) -> list[tuple[date, float, float]]:
-    """(IST date, quantity, price) of the journal buys still held, oldest
-    first, after sells have used up the earliest ones."""
-    lots: list[list] = []
-    for t in sorted((t for t in trades if t["symbol"] == symbol), key=lambda t: t["traded_at"]):
-        if t["side"] == "BUY":
-            lots.append([t["traded_at"].astimezone(IST).date(), float(t["quantity"]), float(t["price"])])
-            continue
-        left = float(t["quantity"])
-        while left > 1e-9 and lots:
-            used = min(left, lots[0][1])
-            lots[0][1] -= used
-            left -= used
-            if lots[0][1] <= 1e-9:
-                lots.pop(0)
-    return [(d, q, p) for d, q, p in lots]
 
 
 def _close_on(points: list[tuple[date, float]], day: date) -> Optional[float]:
