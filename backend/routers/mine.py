@@ -138,3 +138,15 @@ async def tax(fy: int | None = None, user: User = Depends(get_current_user)):
             prices[h["symbol"]] = float(h["last_price"])
     return mine_tax.report(await mine_trades(db.db, user.id), held, prices,
                            fy if fy is not None else mine_tax.current_fy(today), today)
+
+
+@router.get("/stock/{symbol}")
+async def stock_detail(symbol: str, user: User = Depends(get_current_user)):
+    from backend.mine import stock
+    from backend.routers.portfolio import verdicts_visible_to
+
+    body = await stock.detail(db.db, user.id, _thesis_symbol(symbol), datetime.now(timezone.utc),
+                              await verdicts_visible_to(user))
+    if body is None:
+        raise HTTPException(status_code=404, detail="Not held and never traded")
+    return body
