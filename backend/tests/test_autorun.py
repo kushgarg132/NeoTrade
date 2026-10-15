@@ -240,6 +240,35 @@ async def test_the_autopilot_keeps_the_long_term_pass_running(world, longterm):
 
 
 @pytest.mark.asyncio
+async def test_a_thesis_level_gets_its_own_alert_step_not_the_long_term_pass(world, longterm, monkeypatch):
+    """I11: a stop or target on a holding used to put its owner in the whole
+    long-term pass (factor book, morning ideas). Now: level alerts only, once
+    per quarter-hour bucket."""
+    from backend.factor import paper
+    from backend.mine import actions
+
+    alerted, books = [], []
+
+    async def level_alerts(db, redis, user_id, now):
+        alerted.append(user_id)
+        return [{"title": "A hit your stop ₹90.00", "detail": "d"}]
+
+    async def due(db, user_id, now):
+        books.append(user_id)
+        return False
+
+    monkeypatch.setattr(actions, "level_alerts", level_alerts)
+    monkeypatch.setattr(paper, "due", due)
+    await world.db["holding_theses"].insert_one({"user_id": "carol", "symbol": "A", "stop": 90.0})
+    world.redis.data["scheduler:last_pass"] = "2026-09-25"
+    result = await _tick(world, MONDAY_10AM)
+    await _tick(world, MONDAY_10AM + timedelta(minutes=5))  # same bucket: not again
+    assert "carol" not in result.get("longterm", [])
+    assert alerted == ["carol"] and books == [] and longterm["scans"] == [] and longterm["exits"] == []
+    assert any("A hit your stop" in text for text in longterm["sent"])
+
+
+@pytest.mark.asyncio
 async def test_the_autopilot_keeps_the_scan_on():
     from backend.prefs import PrefsStore
 
