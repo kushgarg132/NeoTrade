@@ -114,14 +114,17 @@ def test_tagging_finds_names_unique_first_words_and_tickers_only():
 
 
 def test_rss_and_nse_parsing():
+    from email.utils import format_datetime
+
+    fresh = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(microsecond=0)
     xml = b"""<rss><channel>
-      <item><title>Brent jumps 6%</title><link>https://a</link><pubDate>Mon, 05 Oct 2026 07:00:00 GMT</pubDate>
+      <item><title>Brent jumps 6%</title><link>https://a</link><pubDate>""" + format_datetime(fresh, usegmt=True).encode() + b"""</pubDate>
             <description>&lt;p&gt;Oil &lt;b&gt;up&lt;/b&gt;&lt;/p&gt;</description></item>
       <item><title>Old story</title><pubDate>Mon, 01 Jan 2024 07:00:00 GMT</pubDate></item>
     </channel></rss>"""
     [item] = news_sources.parse_rss(xml, "cnbc_world", "GLOBAL")
     assert item["title"] == "Brent jumps 6%" and item["content"] == "Oil up"
-    assert item["published_at"] == datetime(2026, 10, 5, 7, 0, tzinfo=timezone.utc)
+    assert item["published_at"] == fresh
 
     rows = [{"symbol": "TCS", "desc": "Outcome of Board Meeting", "sm_name": "TCS Ltd", "sort_date": "2026-10-05 13:30:00",
              "attchmntText": "Dividend declared", "attchmntFile": "https://f"},
