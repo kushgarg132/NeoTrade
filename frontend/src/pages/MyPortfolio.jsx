@@ -19,6 +19,7 @@ import Rebalance from '../components/portfolio/Rebalance';
 import NewsChip from '../components/common/NewsChip';
 import useSymbolNews from '../hooks/useSymbolNews';
 import { sortByNewsRisk } from '../utils/news';
+import { REASONS } from '../utils/mine';
 import { formatCurrency, formatQuantity, formatPercent, formatDateTime, marketPhase } from '../utils/formatters';
 
 /**
@@ -33,18 +34,6 @@ const BUTTON =
   'inline-flex items-center gap-2 px-3 py-1.5 min-h-9 border border-[var(--rule-strong)] font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] text-[var(--ink-soft)] hover:text-[var(--ink)] hover:border-[var(--ink)] transition-colors disabled:opacity-50';
 
 const BROKER = { kite: 'Kite', upstox: 'Upstox', angel_one: 'Angel One' };
-
-const REASONS = {
-  loss_beyond_limit: 'Further below its cost than your loss limit',
-  earnings_falling_3q: 'Profit fell in each of the last three quarters',
-  earnings_rising_3q: 'Profit rose in each of the last three quarters',
-  below_200dma: 'Price is under its 200-day average',
-  uptrend: 'Price above its 50-day average, which is above its 200-day',
-  overweight: 'A bigger share of your portfolio than your size limit',
-  high_debt: 'Debt is more than twice equity',
-  strong_roe: 'Return on equity of 15% or more',
-  reasonable_valuation: 'Price to earnings under 40',
-};
 
 const TONE = { SELL: 'loss', REVIEW: 'loss', ADD: 'gain' };
 const LABEL = { REVIEW: 'Review first' };
