@@ -51,3 +51,15 @@ def test_telegram_bot_tokens_are_redacted_from_messages_and_tracebacks():
         failed = logging.LogRecord("x", logging.ERROR, __file__, 1, "polling failed", None, sys.exc_info())
     RedactTokens().filter(failed)
     assert "secret-tok" not in failed.exc_text and "bot99:REDACTED" in failed.exc_text
+
+
+def test_uvicorn_access_args_keep_their_shape():
+    import logging
+
+    from uvicorn.logging import AccessFormatter
+
+    record = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d',
+                               ("1.2.3.4:5", "GET", "/ws?token=abc", "1.1", 200), None)
+    RedactTokens().filter(record)
+    line = AccessFormatter('%(client_addr)s - "%(request_line)s" %(status_code)s').format(record)
+    assert "abc" not in line and "token=REDACTED" in line
