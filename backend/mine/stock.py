@@ -7,7 +7,7 @@ from backend.datalayer import bars
 from backend.engine.session import IST
 from backend.mine import events, history
 from backend.mine.lots import mine_trades, open_lots, realised, reconcile, split_ratio
-from backend.mine.tax import LONG_TERM_DAYS, LTCG_RATE, STCG_RATE, is_long
+from backend.mine.tax import LTCG_RATE, STCG_RATE, days_to_long, is_long
 from backend.mine.thesis import ThesisStore
 
 NEWS = 10
@@ -70,7 +70,7 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
         gain = None if last is None else (last - p) * q
         rate = LTCG_RATE if is_long(d, today) else STCG_RATE
         lot_rows.append({"buy_date": d.isoformat(), "qty": q, "price": p, "gain": gain,
-                         "days_to_long": 0 if is_long(d, today) else LONG_TERM_DAYS + 1 - (today - d).days,
+                         "days_to_long": days_to_long(d, today),
                          "est_tax": None if gain is None else max(gain, 0) * rate})
 
     value = None if last is None else qty * last

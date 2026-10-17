@@ -27,6 +27,13 @@ def test_day_365_is_short_366_is_long():
     assert tax.is_long(date(2025, 4, 1), date(2026, 4, 2))
 
 
+def test_long_term_is_12_months_not_365_days_across_29_feb():
+    assert not tax.is_long(date(2027, 3, 1), date(2028, 3, 1))  # 366 days, exactly 12 months: short
+    assert tax.is_long(date(2027, 3, 1), date(2028, 3, 2))
+    assert tax.days_to_long(date(2027, 3, 1), date(2028, 2, 29)) == 2
+    assert tax.long_from(date(2028, 2, 29)) == date(2029, 3, 1)
+
+
 def test_fy():
     assert tax.current_fy(date(2026, 3, 31)) == 2025 and tax.current_fy(date(2026, 4, 1)) == 2026
     assert tax.fy_bounds(2026) == (date(2026, 4, 1), date(2027, 3, 31))
@@ -79,6 +86,13 @@ def test_harvest_loss_and_gain_fill_exemption():
     assert r["harvest"]["loss"] == [{"symbol": "B", "qty": 10, "loss": -200, "saving": pytest.approx(40)}]
     assert r["harvest"]["gain"] == [{"symbol": "A", "qty": 10, "gain": 1000}]
     assert r["realised"]["exemption_left"] == 125_000
+
+
+def test_gain_harvest_is_whole_shares():
+    # 1,000 shares each 300 up (3,00,000 long gain): 1,25,000 of room fits 416 shares, not 416.67.
+    r = tax.report([buy("A", 1000, 100, datetime(2024, 1, 1, tzinfo=IST))], {"A": 1000}, {"A": 400}, 2026,
+                   date(2026, 10, 15))
+    assert r["harvest"]["gain"] == [{"symbol": "A", "qty": 416, "gain": 124_800}]
 
 
 def test_rebalance_uses_same_rates():

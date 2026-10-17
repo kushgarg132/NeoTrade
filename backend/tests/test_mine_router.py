@@ -78,6 +78,16 @@ def test_overview_drivers_month(setup, monkeypatch):
     assert body["mix"] == {"top": 0.5, "count": 4}  # the holdings count, not the sectors'
 
 
+def test_month_drivers_skip_a_buy_newer_than_the_curve(setup, monkeypatch):
+    """A buy today, before the 16:00 pass stores today's row, is not a loss of its cost."""
+    client, db, _ = setup
+    _seed(db, "mine_daily", [_row("alice", MONTH_END_BEFORE, 1000, by_symbol={"A": {"qty": 10, "value": 1000}})])
+    _seed(db, "journal_trades", [{"user_id": "alice", "_id": "1", "symbol": "B", "side": "BUY", "quantity": 5, "price": 100,
+                                  "broker": "upstox", "traded_at": datetime.combine(TODAY, datetime.min.time(), tzinfo=IST)}])
+    monkeypatch.setattr(digest, "pulse", AsyncMock(return_value=None))
+    assert client.get("/api/v1/mine/overview").json()["drivers"]["month"] == {"top": [], "bottom": []}
+
+
 def test_month_drivers_do_not_count_the_gap_lot_as_gain(setup, monkeypatch):
     """I8: history starting this month (snapshot gap lot, no journal) -- the
     whole holding used to show as 'Added most'."""

@@ -127,6 +127,16 @@ async def test_a_later_import_rewrites_the_past(db):
     assert [r["invested"] for r in rows] == [320, 320, 320] and not rows[1]["partial"]
 
 
+async def test_a_removed_trade_drops_its_stored_days(db):
+    """R1: bob's D1 buy is undone; his curve starts at the snapshot again, so the D1 row must go."""
+    await db["journal_trades"].insert_one(_trade("A", "BUY", 4, 80, D1, user="bob"))
+    await history.write_all(db, NOW)
+    await db["journal_trades"].delete_one({"user_id": "bob"})
+    await history.write_all(db, NOW)
+    assert [r["date"] for r in await history.series(db, "bob", None)] == [D2.isoformat(), D3.isoformat()]
+    assert await db["mine_daily"].count_documents({"user_id": "alice"}) == 3  # others untouched
+
+
 async def test_a_sell_of_pre_journal_shares_is_clipped(db):
     """I1 probe: SELL 10 before any journal buy, then BUY 10 -> no negative invested or value."""
     await db["journal_trades"].insert_many([_trade("A", "SELL", 10, 100, D1, user="carol"),
@@ -136,6 +146,14 @@ async def test_a_sell_of_pre_journal_shares_is_clipped(db):
     # The unmatched sell is dropped, so the curve starts at the buy.
     assert [(r["date"], r["invested"], r["value"], r["nifty_value"]) for r in rows] == [(D3.isoformat(), 1200, 1200, 1200)]
     assert rows[-1]["by_symbol"] == {"A": {"qty": 10, "value": 1200}}
+
+
+async def test_a_sell_of_the_gap_lot_leaves_the_curve(db):
+    """bob's 4 shares predate the journal (gap lot at his snapshot); selling them must empty the curve."""
+    await db["journal_trades"].insert_one(_trade("A", "SELL", 4, 120, D3, user="bob"))
+    await history.backfill(db, "bob", D3)
+    rows = await history.series(db, "bob", None)
+    assert rows[-1]["by_symbol"] == {} and rows[-1]["value"] == 0 and rows[-1]["invested"] == -120
 
 
 async def test_a_bonus_scales_journal_events_to_the_adjusted_bars(db):

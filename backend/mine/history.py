@@ -80,8 +80,8 @@ def _held(snap: dict, funds: set, mine) -> dict[str, list]:
 async def _inputs(db, user_id: str) -> dict:
     """events: (IST date, symbol, signed qty, price), oldest first -- the
     journal's mine trades plus the unknown-date gap lot. Funds excluded.
-    A sell of shares bought before the journal is clipped to what the journal
-    holds (as `lots._fifo`), and a split or bonus the journal never saw
+    A sell is clipped to what the curve holds (journal buys plus the gap lot),
+    and a split or bonus the journal never saw
     (`lots.split_ratio`) scales every event of that symbol, since daily_bars
     are split-adjusted."""
     from backend.brokers.roles import brokers_for
@@ -95,17 +95,24 @@ async def _inputs(db, user_id: str) -> dict:
     trades = [t for t in await mine_trades(db, user_id) if t["symbol"] not in funds]
     ratio = {s: split_ratio(open_lots(trades, s), q, c / q if q else None)
              for s, (q, c) in _held(latest, funds, mine).items()}
-    events, running = [], {}
+    raw = []
     for t in sorted(trades, key=lambda t: t["traded_at"]):
         s, r = t["symbol"], ratio.get(t["symbol"], 1)
-        q = float(t["quantity"]) * r
-        if t["side"] != "BUY":
-            q = -min(q, running.get(s, 0.0))
-            if q > -1e-9:
-                continue
-        running[s] = running.get(s, 0.0) + q
-        events.append((t["traded_at"].astimezone(IST).date(), s, q, float(t["price"]) / r))
+        q = float(t["quantity"]) * r * (1 if t["side"] == "BUY" else -1)
+        raw.append((t["traded_at"].astimezone(IST).date(), s, q, float(t["price"]) / r))
 
+    def clip(evs):
+        out, running = [], {}
+        for d, s, q, p in evs:
+            if q < 0:
+                q = -min(-q, running.get(s, 0.0))
+                if q > -1e-9:
+                    continue
+            running[s] = running.get(s, 0.0) + q
+            out.append((d, s, q, p))
+        return out
+
+    events = clip(raw)
     gap_events = []
     first = await db["portfolio_snapshots"].find({"user_id": user_id}).sort("at", 1).limit(1).to_list(length=1)
     first_day = None
@@ -116,7 +123,8 @@ async def _inputs(db, user_id: str) -> dict:
             journal = sum(q for d, s, q, _ in events if s == symbol and d <= first_day)
             if qty - journal > 1e-9:
                 gap_events.append((first_day, symbol, qty - journal, cost / qty))
-    events = sorted(events + gap_events, key=lambda e: e[0])
+    if gap_events:  # re-clip: a later sell of the gap lot's shares must leave the curve too
+        events = clip(sorted(raw + gap_events, key=lambda e: (e[0], e in gap_events)))
     start = min(e[0] for e in events) if events else first_day
     return {"events": events, "partial": bool(gap_events),
             "funds": bool(funds), "start": start}
@@ -169,13 +177,18 @@ async def _compute(db, user_id: str, today: date) -> list[dict]:
 
 async def _store(db, rows: list[dict]) -> None:
     """Upserts only the rows that changed: one read, then a write per difference
-    (not bulk_write: see instruments/master.py on the test fake)."""
+    (not bulk_write: see instruments/master.py on the test fake). Stored days
+    the replay no longer has (a journal trade removed, a later start) go."""
     if not rows:
         return
-    stored = {d["date"]: d async for d in db[COLLECTION].find({"user_id": rows[0]["user_id"]}, {"_id": 0})}
+    user_id = rows[0]["user_id"]
+    stored = {d["date"]: d async for d in db[COLLECTION].find({"user_id": user_id}, {"_id": 0})}
     for row in rows:
         if stored.get(row["date"]) != row:
-            await db[COLLECTION].update_one({"user_id": row["user_id"], "date": row["date"]}, {"$set": row}, upsert=True)
+            await db[COLLECTION].update_one({"user_id": user_id, "date": row["date"]}, {"$set": row}, upsert=True)
+    stale = set(stored) - {r["date"] for r in rows}
+    if stale:
+        await db[COLLECTION].delete_many({"user_id": user_id, "date": {"$in": sorted(stale)}})
 
 
 # ------------------------------------------------------------------ writes
