@@ -35,6 +35,16 @@ def test_verify_google_token_raises_on_invalid_token(monkeypatch):
         asyncio.run(verify_google_token("bad-token"))
 
 
+def test_verify_google_token_refuses_an_unverified_email(monkeypatch):
+    def fake_verify(token, request, audience):
+        return {"sub": "s", "email": "admin@example.com", "email_verified": False}
+
+    monkeypatch.setattr("backend.auth.google.id_token.verify_oauth2_token", fake_verify)
+
+    with pytest.raises(InvalidGoogleToken):
+        asyncio.run(verify_google_token("valid-token"))
+
+
 def test_verify_google_token_defaults_picture_to_none_when_missing(monkeypatch):
     def fake_verify(token, request, audience):
         return {"sub": "google-sub-456", "email": "b@example.com", "name": "Bob"}

@@ -34,6 +34,9 @@ async def verify_google_token(token: str) -> GoogleUserInfo:
     except (GoogleAuthError, ValueError) as e:
         logger.warning(f"Google ID token verification failed: {e}")
         raise InvalidGoogleToken(str(e))
+    # The email decides the admin role (ADMIN_EMAILS): never trust one Google has not verified.
+    if payload.get("email_verified") is False:
+        raise InvalidGoogleToken("email not verified")
 
     return GoogleUserInfo(
         sub=payload["sub"],
