@@ -229,10 +229,15 @@ async def loop(db, redis, now: Optional[datetime] = None) -> None:
         ("1mo", [ticker(s) for s in wanted if s in known]),
         ("1mo" if NIFTY in known else "10y", [NIFTY]),
     ]
+    # Upstox's daily history stops at yesterday until the next day, so a
+    # broker frame without the latest session's bar is topped up from Yahoo
+    # (2026-10-15: every stock's close was a day late). Holidays refetch too.
+    session = pd.bdate_range(end=today, periods=1)[0].date()
     written = stored = 0
     for period, tickers in batches:
         frames = await _broker_download(db, redis, tickers, period)
-        frames |= await asyncio.to_thread(_download, [t for t in tickers if t not in frames], period)
+        behind = [t for t in tickers if t not in frames or frames[t].index[-1].date() < session]
+        frames |= await asyncio.to_thread(_download, behind, period)
         for t, df in frames.items():
             written += await write(db, t.removesuffix(".NS"), df)
             stored += 1

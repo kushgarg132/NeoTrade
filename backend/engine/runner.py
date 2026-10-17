@@ -3,6 +3,7 @@ trading. Only the injected DataFeed/ExecutionClient/Clock differ between
 them -- this function and the Strategy contract it drives don't change.
 """
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
@@ -79,6 +80,9 @@ OrderSink = Callable[[Proposal], Awaitable[bool]]
 # % of account risked per trade at full conviction (scored.final == 1.0),
 # scaled linearly down to 0 as conviction falls -- see size_intents' docstring.
 BASE_RISK_PCT = 1.0
+# Bars between yields to the event loop in run().
+YIELD_EVERY_BARS = 200
+
 # An entry must expect at least this multiple of its round-trip friction.
 COST_MULTIPLE = 3
 FILTER_SLIPPAGE_BPS = 10.0  # per side, as the backtester assumes
@@ -494,7 +498,14 @@ async def run(
     known_symbols = set(owner_by_symbol)  # symbols some strategy trades
     progress = {"bars": 0, "signals": 0, "orders": 0, "below_cost": 0, "last_symbol": None, "last_bar_at": None}
 
+    seen = 0
     async for bar in feed:
+        # A replayed feed (scan, backtest) never suspends: without this a year of
+        # bars held the event loop ~40s, the ingest worker's 30s leader lock
+        # lapsed and every ingest loop stopped (2026-10-15).
+        seen += 1
+        if seen % YIELD_EVERY_BARS == 0:
+            await asyncio.sleep(0)
         if isinstance(clock, SimClock):
             clock.advance(bar.timestamp)
         ctx.update(bar)

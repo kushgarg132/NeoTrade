@@ -398,3 +398,17 @@ async def test_telegram_calls_share_one_keep_alive_client(monkeypatch):
     await telegram.chat_action(42, "tok")
     await telegram.answer_callback("c2", "", "tok")
     assert len(made) == 1  # no new TLS handshake per call
+
+
+async def test_failed_poll_backs_off_instead_of_hammering(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = AsyncMock()
+    redis.get.return_value = None
+    monkeypatch.setattr(telegram_bot.GuardrailStore, "telegram_routes", AsyncMock(return_value=[("tok", {42: "alice"})]))
+    monkeypatch.setattr(telegram_bot.telegram, "updates", AsyncMock(side_effect=RuntimeError("502 Bad Gateway")))
+    monkeypatch.setattr(telegram_bot.telegram, "set_commands", AsyncMock(return_value=True))
+    sleep = AsyncMock()
+    monkeypatch.setattr(telegram_bot.asyncio, "sleep", sleep)
+
+    assert await telegram_bot.poll_once(db, redis) == 0
+    sleep.assert_awaited_once_with(telegram_bot.FAIL_BACKOFF_SECONDS)

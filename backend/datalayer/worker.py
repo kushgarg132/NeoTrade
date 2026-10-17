@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 LEADER_KEY = "ingest:leader"
 LEADER_TTL_MS = 30_000
 RENEW_SECONDS = 10
+SHUTDOWN_SECONDS = 10  # max wait for loops and the lock release once leadership is lost
 HEARTBEAT_KEY = "ingest:heartbeat:{}"
 HEARTBEAT_TTL_SECONDS = 300
 
@@ -115,8 +116,13 @@ async def run(db, redis, loops: list[Loop]) -> None:
     finally:
         for task in tasks:
             task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        await locks.release(redis, LEADER_KEY, token)
+        # Bounded: on 2026-10-15 some loops outlived their cancel, gather() never
+        # returned, and the worker sat idle for days instead of exiting.
+        await asyncio.wait(tasks, timeout=SHUTDOWN_SECONDS)
+        try:
+            await asyncio.wait_for(locks.release(redis, LEADER_KEY, token), SHUTDOWN_SECONDS)
+        except Exception as exc:  # the TTL frees it anyway
+            logger.warning("ingest: could not release leadership: %s", exc)
 
 
 async def main() -> None:
@@ -126,7 +132,10 @@ async def main() -> None:
     try:
         await run(db.db, db.redis, _loops())
     finally:
-        await db.close_database_connection()
+        try:
+            await asyncio.wait_for(db.close_database_connection(), SHUTDOWN_SECONDS)
+        except Exception as exc:
+            logger.warning("ingest: closing connections failed: %s", exc)
     # Only reached when leadership was lost: let Docker restart us. Exit hard, because
     # asyncio.run() on 3.11 waits forever for a to_thread call stuck in a blocking read,
     # which left the worker alive but idle (no news, quotes or plans) on 2026-10-08.

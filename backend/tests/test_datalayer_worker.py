@@ -84,3 +84,23 @@ async def test_a_failing_loop_does_not_beat(monkeypatch):
     assert not task.done()  # kept running instead of raising out
     task.cancel()
     assert "news" not in await worker.heartbeat_ages(redis)
+
+
+async def test_lost_leadership_returns_even_if_a_loop_ignores_cancel(monkeypatch):
+    monkeypatch.setattr(worker, "RENEW_SECONDS", 0.01)
+    monkeypatch.setattr(worker, "SHUTDOWN_SECONDS", 0.05)
+    redis, done = FakeRedis(), asyncio.Event()
+
+    async def stubborn(db, r):
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            await done.wait()  # what some loop did on 2026-10-15: outlived its cancel
+
+    task = asyncio.create_task(worker.run(None, redis, [worker.Loop("stubborn", 0.01, stubborn)]))
+    await asyncio.sleep(0.05)
+    redis.data[worker.LEADER_KEY] = "stolen"
+    try:
+        await asyncio.wait_for(task, 1)  # returned, so main() reaches os._exit
+    finally:
+        done.set()

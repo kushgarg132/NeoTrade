@@ -430,3 +430,23 @@ async def test_get_positions_null_fields_do_not_raise(monkeypatch):
     assert positions["RELIANCE"].avg_price == 0
     assert positions["RELIANCE"].realized_pnl == 0
     assert positions["RELIANCE"].unrealized_pnl == 0
+
+
+async def test_instruments_keeps_only_cash_equities_of_the_dump(monkeypatch):
+    eq = {"segment": "NSE_EQ", "exchange": "NSE", "instrument_type": "EQ", "lot_size": 1, "exchange_token": "2885",
+          "tick_size": 0.05, "trading_symbol": "RELIANCE", "name": "RELIANCE INDUSTRIES"}
+    index = {"segment": "NSE_INDEX", "exchange": "NSE", "instrument_type": "INDEX", "exchange_token": "26000",
+             "trading_symbol": "NIFTY 50", "name": "Nifty 50"}  # no lot_size: used to raise KeyError
+    fo = {**eq, "segment": "NSE_FO", "instrument_type": "CE", "lot_size": 75, "exchange_token": "1",
+          "trading_symbol": "NIFTY 24000 CE"}
+
+    async def fake_get(self, url, **kwargs):
+        return httpx.Response(
+            200, content=gzip.compress(json.dumps([eq, index, fo]).encode()), request=httpx.Request("GET", url),
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    result = await _adapter().instruments(exchanges=("NSE",))
+
+    assert [i.tradingsymbol for i in result] == ["RELIANCE"]

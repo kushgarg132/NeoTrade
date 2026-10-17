@@ -344,6 +344,11 @@ class UpstoxAdapter:
         for exchange in exchanges:
             scrip = await self._load_scrip(exchange)
             for row in scrip.values():
+                # The NSE dump also carries F&O, commodity and index rows, all
+                # labelled exchange "NSE"; indices have no lot_size, and one
+                # KeyError dropped the whole refresh (seen 2026-10-16).
+                if row.get("segment") != f"{exchange}_EQ":
+                    continue
                 result.append(Instrument(
                     exchange=row["exchange"], tradingsymbol=row["trading_symbol"], name=row["name"],
                     instrument_token=int(row["exchange_token"]), exchange_token=int(row["exchange_token"]),
