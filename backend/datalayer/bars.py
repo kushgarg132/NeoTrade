@@ -7,10 +7,12 @@ from the admin's broker session (Upstox, else Kite) when one is up: Yahoo
 misdates some corporate actions (TRENT's 1.5 split, adjusted from the wrong
 day, read as a 33% one-day fall) and keeps bars for exchange holidays. Yahoo
 fills whatever the broker did not serve, and NIFTY. A new
-symbol gets five years (swing strategies test on 3 years plus warm-up);
-a known one the last month (cheap, and it heals a missed day). Once a week every symbol is re-downloaded in full, because
-adjusted prices shift back in time after a split or dividend. NIFTY (^NSEI)
-keeps ten years for the portfolio benchmark.
+symbol (NIFTY too) gets everything since DEEP_START (2009) from Yahoo --
+brokers serve about five years, so their frame only overwrites the recent
+part; a known one the last month (cheap, and it heals a missed day). Once a
+week every symbol is re-downloaded in full, because adjusted prices shift
+back in time after a split or dividend. Downloads and writes go CHUNK
+tickers at a time.
 
 Fundamentals: Mongo `fundamentals`, one doc per symbol (`_id`) holding the
 FundamentalSnapshot fields plus `as_of`, refreshed once a day.
@@ -40,8 +42,13 @@ AFTER_CLOSE = time(15, 45)
 STALE_DAYS = 4  # newest bar older than this = stale (a weekend plus one holiday)
 FUNDAMENTALS_MAX_AGE = timedelta(days=3)
 FULL_EVERY = timedelta(days=7)
+DEEP_START = "2009-01-01"  # a full pass's Yahoo start date
+CHUNK = 50  # tickers per download + write round: bounds memory, logs progress
 BARS_AS_OF_KEY = "bars:as_of"  # IST date of the last finished daily pass
-BARS_FULL_KEY = "bars:full_at"  # IST date of the last full re-download
+# IST date of the last full re-download. Versioned by DEEP_START: a new
+# start date makes the next after-close pass a full one, even on a day whose
+# daily pass already ran; then the weekly cadence resumes.
+BARS_FULL_KEY = f"bars:full_at:{DEEP_START}"
 FUNDAMENTALS_AS_OF_KEY = "fundamentals:as_of"
 _FUNDAMENTALS_CONCURRENCY = 4
 
@@ -70,11 +77,13 @@ async def symbols(db) -> set[str]:
 # --- store ---------------------------------------------------------------
 
 def _download(tickers: list[str], period: str) -> dict[str, pd.DataFrame]:
-    """ticker -> frame with lower-case ohlcv columns, from one batched call."""
+    """ticker -> frame with lower-case ohlcv columns, from one batched call.
+    `period` is a Yahoo period ("1mo") or a start date ("2009-01-01")."""
     if not tickers:
         return {}
+    span = {"start": period} if "-" in period else {"period": period}
     raw = yf.download(
-        tickers, period=period, interval="1d", group_by="ticker",
+        tickers, **span, interval="1d", group_by="ticker",
         auto_adjust=True, threads=True, progress=False,
     )
     frames = {}
@@ -206,41 +215,54 @@ async def nifty_closes(db, since: date) -> list[tuple[date, float]]:
 
 # --- ingest loops ----------------------------------------------------------
 
-def _due(as_of: Optional[str], now: datetime) -> bool:
+def _due(as_of: Optional[str], now: datetime, full_at: Optional[str] = "") -> bool:
     if as_of is None:
         return True  # never filled: fill now, whatever the time
     local = now.astimezone(IST)
-    return as_of < local.date().isoformat() and local.time() >= AFTER_CLOSE
+    if local.time() < AFTER_CLOSE:
+        return False
+    return as_of < local.date().isoformat() or full_at is None  # a new BARS_FULL_KEY: run again today
 
 
 async def loop(db, redis, now: Optional[datetime] = None) -> None:
     now = now or datetime.now(timezone.utc)
-    if not _due(await redis.get(BARS_AS_OF_KEY), now):
+    full_at = await redis.get(BARS_FULL_KEY)
+    if not _due(await redis.get(BARS_AS_OF_KEY), now, full_at):
         return
     await ensure_indexes(db)
     today = today_ist(now)
-    full_at = await redis.get(BARS_FULL_KEY)
     full = full_at is None or date.fromisoformat(full_at) <= today - FULL_EVERY
     known = set() if full else set(await db[BARS].distinct("symbol"))
 
     wanted = await symbols(db)
-    batches = [
-        ("5y", [ticker(s) for s in wanted if s not in known]),
-        ("1mo", [ticker(s) for s in wanted if s in known]),
-        ("1mo" if NIFTY in known else "10y", [NIFTY]),
+    batches = [  # (broker period, Yahoo period or start, tickers)
+        ("5y", DEEP_START, [ticker(s) for s in sorted(wanted) if s not in known]),
+        ("1mo", "1mo", [ticker(s) for s in sorted(wanted) if s in known]),
+        ("1mo", "1mo" if NIFTY in known else DEEP_START, [NIFTY]),
     ]
     # Upstox's daily history stops at yesterday until the next day, so a
     # broker frame without the latest session's bar is topped up from Yahoo
     # (2026-10-15: every stock's close was a day late). Holidays refetch too.
+    # A deep batch takes Yahoo for every ticker, then lays a current broker
+    # frame (about five years) over its recent part: `write` replaces from
+    # the frame's first date on.
     session = pd.bdate_range(end=today, periods=1)[0].date()
     written = stored = 0
-    for period, tickers in batches:
-        frames = await _broker_download(db, redis, tickers, period)
-        behind = [t for t in tickers if t not in frames or frames[t].index[-1].date() < session]
-        frames |= await asyncio.to_thread(_download, behind, period)
-        for t, df in frames.items():
-            written += await write(db, t.removesuffix(".NS"), df)
-            stored += 1
+    for broker_period, yahoo_period, all_tickers in batches:
+        for i in range(0, len(all_tickers), CHUNK):
+            tickers = all_tickers[i:i + CHUNK]
+            broker = await _broker_download(db, redis, tickers, broker_period)
+            broker = {t: df for t, df in broker.items() if df.index[-1].date() >= session}
+            fetch = tickers if yahoo_period == DEEP_START else [t for t in tickers if t not in broker]
+            yahoo = await asyncio.to_thread(_download, fetch, yahoo_period)
+            for t in tickers:
+                frames = [df for df in (yahoo.get(t), broker.get(t)) if df is not None]
+                for df in frames:
+                    written += await write(db, t.removesuffix(".NS"), df)
+                stored += bool(frames)
+            if len(all_tickers) > CHUNK:
+                logger.info("ingest bars: %s %d/%d ticker(s), %d bar(s) so far",
+                            yahoo_period, i + len(tickers), len(all_tickers), written)
     if not stored:
         raise RuntimeError(f"bars: no data for any of {len(wanted)} symbol(s)")  # retry next pass
     await redis.set(BARS_AS_OF_KEY, today.isoformat())

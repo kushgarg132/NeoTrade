@@ -98,7 +98,7 @@ async def test_loop_backfills_new_symbols_and_tops_up_known_ones(mongo, monkeypa
     redis = FakeRedis({bars.BARS_FULL_KEY: TODAY.isoformat()})
     await bars.loop(mongo, redis, now=AFTER_CLOSE)
 
-    assert downloads == [("5y", ["NEW.NS"]), ("1mo", ["KNOWN.NS"]), ("1mo", [bars.NIFTY])]
+    assert downloads == [(bars.DEEP_START, ["NEW.NS"]), ("1mo", ["KNOWN.NS"]), ("1mo", [bars.NIFTY])]
     assert redis.data[bars.BARS_AS_OF_KEY] == TODAY.isoformat()
     assert set(await mongo[bars.BARS].distinct("symbol")) == {"KNOWN", "NEW", bars.NIFTY}
 
@@ -146,7 +146,7 @@ async def test_loop_takes_stocks_from_the_broker_and_the_rest_from_yahoo(mongo, 
     downloads = _broker_loop_setup(monkeypatch, FakeBroker(), {"AAA", "UNLISTED"})
     await bars.loop(mongo, FakeRedis(), now=AFTER_CLOSE)
 
-    assert downloads == [("5y", ["UNLISTED.NS"]), ("1mo", []), ("10y", [bars.NIFTY])]
+    assert downloads == [(bars.DEEP_START, ["AAA.NS", "UNLISTED.NS"]), (bars.DEEP_START, [bars.NIFTY])]
     frames = await bars.read(mongo, ["AAA", "UNLISTED"], TODAY - timedelta(days=10))
     assert list(frames["AAA"]["close"]) == [50.0] * 3  # broker
     assert frames["UNLISTED"]["close"].iloc[0] == 100.0  # yahoo
@@ -157,7 +157,7 @@ async def test_loop_tops_up_from_yahoo_when_the_broker_lacks_the_latest_session(
     downloads = _broker_loop_setup(monkeypatch, FakeBroker(end=session - timedelta(days=1)), {"AAA"})
     await bars.loop(mongo, FakeRedis(), now=AFTER_CLOSE)
 
-    assert downloads[0] == ("5y", ["AAA.NS"])
+    assert downloads[0] == (bars.DEEP_START, ["AAA.NS"])
     frames = await bars.read(mongo, ["AAA"], TODAY - timedelta(days=10))
     assert frames["AAA"].index[-1].date() == session  # yahoo's frame, with the latest close
 
@@ -166,7 +166,7 @@ async def test_loop_falls_back_to_yahoo_when_the_first_broker_call_fails(mongo, 
     downloads = _broker_loop_setup(monkeypatch, FakeBroker(fail={"AAA"}), {"AAA"})
     await bars.loop(mongo, FakeRedis(), now=AFTER_CLOSE)
 
-    assert downloads[0] == ("5y", ["AAA.NS"])
+    assert downloads[0] == (bars.DEEP_START, ["AAA.NS"])
 
 
 async def test_weekly_pass_redownloads_everything(mongo, monkeypatch):
@@ -180,7 +180,7 @@ async def test_weekly_pass_redownloads_everything(mongo, monkeypatch):
     monkeypatch.setattr(bars, "symbols", fake_symbols)
     redis = FakeRedis({bars.BARS_FULL_KEY: (TODAY - timedelta(days=8)).isoformat()})
     await bars.loop(mongo, redis, now=AFTER_CLOSE)
-    assert downloads == [("5y", ["KNOWN.NS"]), ("1mo", []), ("10y", [bars.NIFTY])]
+    assert downloads == [(bars.DEEP_START, ["KNOWN.NS"]), (bars.DEEP_START, [bars.NIFTY])]
     assert redis.data[bars.BARS_FULL_KEY] == TODAY.isoformat()
 
 
@@ -255,3 +255,42 @@ async def test_store_provider_serves_five_years(mongo):
     fallback = Fallback()
     candles = await StoreHistoryProvider(mongo, fallback).history(_instrument(), "1d", "5y")
     assert fallback.calls == [] and candles[0].timestamp.date() <= TODAY - timedelta(days=1826 - 10)
+
+
+@pytest.mark.parametrize("ist_time,due", [((10, 0), False), ((15, 50), True)])
+def test_a_new_full_key_reruns_a_day_already_done_after_the_close(ist_time, due):
+    now = datetime.combine(TODAY, time(*ist_time), bars.IST)
+    assert bars._due(TODAY.isoformat(), now, full_at=None) is due
+    assert bars._due(TODAY.isoformat(), now, full_at=TODAY.isoformat()) is False
+
+
+async def test_deploying_the_deep_start_triggers_exactly_one_deep_pass(mongo, monkeypatch):
+    """A store filled under the old 5-year key: the first after-close pass
+    re-downloads everything from DEEP_START, even though today's pass ran."""
+    await bars.write(mongo, "KNOWN", _frame(5))
+    await bars.write(mongo, bars.NIFTY, _frame(5))
+    downloads = []
+    monkeypatch.setattr(bars, "_download", lambda t, p: downloads.append((p, sorted(t))) or {x: _frame(3) for x in t})
+
+    async def fake_symbols(db):
+        return {"KNOWN"}
+
+    monkeypatch.setattr(bars, "symbols", fake_symbols)
+    redis = FakeRedis({bars.BARS_AS_OF_KEY: TODAY.isoformat(), "bars:full_at": TODAY.isoformat()})
+    await bars.loop(mongo, redis, now=AFTER_CLOSE)
+    await bars.loop(mongo, redis, now=AFTER_CLOSE)  # done: the next full pass is the weekly one
+
+    assert downloads == [(bars.DEEP_START, ["KNOWN.NS"]), (bars.DEEP_START, [bars.NIFTY])]
+    assert redis.data[bars.BARS_FULL_KEY] == TODAY.isoformat()
+
+
+async def test_a_deep_pass_goes_in_chunks_and_keeps_yahoo_history_under_the_broker(mongo, monkeypatch):
+    monkeypatch.setattr(bars, "CHUNK", 2)
+    downloads = _broker_loop_setup(monkeypatch, FakeBroker(), {"AAA", "BBB", "CCC"})
+    monkeypatch.setattr(bars, "_download", lambda t, p: downloads.append((p, sorted(t))) or {x: _frame(10) for x in t})
+    await bars.loop(mongo, FakeRedis(), now=AFTER_CLOSE)
+
+    assert downloads == [(bars.DEEP_START, ["AAA.NS", "BBB.NS"]), (bars.DEEP_START, ["CCC.NS"]),
+                         (bars.DEEP_START, [bars.NIFTY])]
+    closes = list((await bars.read(mongo, ["AAA"], TODAY - timedelta(days=30)))["AAA"]["close"])
+    assert closes == [100.0 + i for i in range(7)] + [50.0] * 3  # yahoo's past, the broker's last 3 sessions
