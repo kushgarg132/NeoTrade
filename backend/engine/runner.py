@@ -236,6 +236,7 @@ async def size_intents(
             orders.append(result.order)
             continue
 
+        opens = _opens(intent, portfolio, mode)
         if intent.stop_hint is None:
             logger.info("skipping intent for %s: strategy supplied no stop_hint", intent.symbol)
             continue
@@ -243,6 +244,10 @@ async def size_intents(
         history = ctx.history(intent.symbol, 1)
         if not history:
             logger.info("skipping intent for %s: no known price yet this run", intent.symbol)
+            continue
+        # MIS entries stop with the square-off, as option entries do: one
+        # placed after 15:15 is closed on the next bar (or the next morning).
+        if opens and mode == "INTRADAY" and is_past_square_off_time(ctx.now()):
             continue
         entry = history[-1].close
         stop = intent.stop_hint
@@ -253,6 +258,11 @@ async def size_intents(
         raw_size = RiskRules.calculate_position_size(account_size, risk_pct, entry, stop)
         # NSE cash equity delivery/intraday trades in whole shares only.
         size = float(int(raw_size))
+        held_pos = portfolio.positions.get(intent.symbol)
+        if not opens and held_pos is not None and held_pos.quantity != 0:
+            # An exit closes what is held: risk-sized, it flipped a long into a
+            # bigger short that skipped every entry check.
+            size = abs(held_pos.quantity)
         if size <= 0:
             continue
 
