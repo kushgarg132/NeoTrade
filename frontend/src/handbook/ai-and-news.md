@@ -70,6 +70,13 @@ Each feature row has an **On/Off switch** (admin, `POST /settings/llm-feature`,
 returns nothing for that feature, so every caller takes its "LLM disabled" path: chat says the
 AI is unavailable, the plan falls back, research notes and the brief are skipped, and news
 stops triaging and scoring (items wait, then go STALE).
+Beside them, the **Lab** switch (admin, `POST /settings/lab`, `app_settings.lab_enabled`, **off by
+default**, read through `app_settings.py::lab_on`) is one outer gate on the experimental jobs: the
+intraday auto-run (`engine/autorun.py::tick`), news-triggered autopilot entries
+(`datalayer/reactor.py::_scan_user`), the game plan build and revisions (`autorun.py::_preopen_plans`,
+`plan/revise.py::loop`), the weekly strategy builder (`builder/draft.py::start_if_due`), the monthly
+re-tune (`learning/retune.py::start_if_due`) and nightly learning (`scheduler.py::_learn`). Off, each
+skips with one info log line a day; per-user switches still apply inside it.
 
 <!-- live:ai -->
 

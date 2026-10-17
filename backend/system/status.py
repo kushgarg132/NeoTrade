@@ -108,6 +108,7 @@ async def _ai(db, redis) -> dict:
         "usage": usage,
         "features": await fetch_feature_usage(),
         "features_off": await AppSettingsStore(db).get_features_off(),
+        "lab_enabled": await AppSettingsStore(db).get_lab_enabled(),
     }
 
 

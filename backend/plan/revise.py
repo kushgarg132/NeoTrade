@@ -181,6 +181,9 @@ async def loop(db, redis, now: Optional[datetime] = None) -> int:
     now = now or datetime.now(timezone.utc)
     if not in_session(now):
         return 0
+    from backend import app_settings
+    if not await app_settings.lab_on("AI game plan revisions", db):
+        return 0
     day = now.astimezone(IST).date()
     plans = {}
     for user_id in await db[store.COLLECTION].distinct("user_id", {"date": day.isoformat()}):

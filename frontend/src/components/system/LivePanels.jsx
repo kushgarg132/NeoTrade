@@ -11,13 +11,13 @@ import { formatDateTime, formatQuantity, formatTimeAgo } from '../../utils/forma
 
 // Phase 17.4.2: an LLM feature's switch sits beside its cost. Optimistic: the
 // panel's status is cached 30 s server-side, the switch answers at once.
-const FeatureSwitch = ({ feature, on: initial }) => {
+const FeatureSwitch = ({ feature, on: initial, save = (enabled) => api.post(endpoints.settings.llmFeature, { feature, enabled }) }) => {
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
   const flip = async () => {
     setBusy(true);
     try {
-      await api.post(endpoints.settings.llmFeature, { feature, enabled: !on });
+      await save(!on);
       setOn(!on);
     } catch {
       /* unchanged: the label still says what is true */
@@ -101,6 +101,10 @@ const ROWS = {
   ai: (b) => [
     ['News scoring calls today', `${b.news_calls_today} of ${b.news_calls_limit}`],
     ['Plan calls today', `${b.plan_calls_today} of ${b.plan_calls_limit}`],
+    // The Lab: one outer switch on the experimental AI jobs (backend/app_settings.py::lab_on).
+    ['Lab: intraday auto-run, news entries, game plan, builder, re-tune, learning',
+      <FeatureSwitch key="lab" feature="lab" on={!!b.lab_enabled}
+        save={(enabled) => api.post(endpoints.settings.lab, { enabled })} />],
     ['Gateway this month', b.usage.error ? b.usage.error : `${formatQuantity(b.usage.tokens.total)} tokens · $${Number(b.usage.cost.used_usd || 0).toFixed(2)}`],
     // One gateway key per feature; with a daily limit on the key, the figures are today's.
     ...Object.entries(b.features || {}).map(([name, f]) => [

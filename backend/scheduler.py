@@ -317,7 +317,10 @@ async def _learn(db, now: datetime) -> int:
     from backend.learning.report import weekly_text
     from backend.portfolio.service import _nifty
     from backend.suggestions.notify import notify
+    from backend import app_settings
 
+    if not await app_settings.lab_on("nightly learning", db):
+        return 0
     users = await db["paper_trades"].distinct("user_id")
     nifty = await _nifty() if users else []
     total = 0

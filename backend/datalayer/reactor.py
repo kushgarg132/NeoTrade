@@ -193,7 +193,9 @@ async def _scan_user(db, redis, prefs: dict, symbols: list[str], now: datetime,
     await attach_theses(db, prefs["user_id"], created)
     left = created
     for_ai = [p for p in created if p["symbol"] in ai_symbols]
-    if for_ai and prefs.get("autopilot_enabled") and prefs.get("autopilot_news"):
+    from backend import app_settings
+    if (for_ai and prefs.get("autopilot_enabled") and prefs.get("autopilot_news")
+            and await app_settings.lab_on("news-triggered autopilot entries", db)):
         from backend.engine.autorun import _autopilot_proposals
         from backend.suggestions.store import SuggestionStore
 

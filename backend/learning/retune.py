@@ -221,6 +221,9 @@ async def start_if_due(db, now: datetime) -> bool:
     month = now.strftime("%Y-%m")
     if await db["retune_runs"].find_one({"month": month}):
         return False
+    from backend import app_settings
+    if not await app_settings.lab_on("the monthly re-tune", db):
+        return False
     await db["retune_runs"].insert_one({"month": month, "started_at": now})
     await spawn()
     return True

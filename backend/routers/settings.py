@@ -695,6 +695,24 @@ async def set_llm_feature(
     return {"feature": update.feature, "enabled": update.enabled}
 
 
+class LabSwitch(BaseModel):
+    enabled: bool
+
+
+@router.post("/settings/lab")
+async def set_lab(
+    update: LabSwitch,
+    _admin: User = Depends(require_admin),
+    app_settings: AppSettingsStore = Depends(get_app_settings_store),
+):
+    """The Lab switch (app_settings.lab_on): the intraday auto-run, news
+    entries, the game plan, the strategy builder, the re-tune and nightly
+    learning run only while it is on. Other workers see it within 30 s."""
+    await app_settings.set_lab_enabled(update.enabled)
+    logger.info(f"Lab {'on' if update.enabled else 'off'}.")
+    return {"enabled": update.enabled}
+
+
 # Angel One's REST flow needs no long-lived secret: the account password and
 # TOTP are supplied fresh at connect time (backend/brokers/angel_one.py),
 # never stored. Every other broker needs a real secret.

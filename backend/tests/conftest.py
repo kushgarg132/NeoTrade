@@ -23,6 +23,21 @@ import pytest
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "real_gate: run risk/paper_gate.proven_strategies for real")
+    config.addinivalue_line("markers", "real_lab: read the admin Lab switch (app_settings.lab_on) for real")
+
+
+@pytest.fixture(autouse=True)
+def _lab_on(request, monkeypatch):
+    """The Lab switch defaults off in production; tests of the jobs it gates
+    see it on, tests of the switch itself are marked real_lab."""
+    if request.node.get_closest_marker("real_lab"):
+        return
+    from backend import app_settings
+
+    async def on(job, db=None):
+        return True
+
+    monkeypatch.setattr(app_settings, "lab_on", on)
 
 
 @pytest.fixture(autouse=True)

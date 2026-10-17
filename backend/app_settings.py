@@ -14,9 +14,12 @@ has a short TTL (re-read Mongo at most once every 30s) instead of relying
 purely on a local write to invalidate it.
 """
 
+import logging
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 _DOC_ID = "singleton"
 _TTL_SECONDS = 30
@@ -30,12 +33,17 @@ _cached_tiers: dict = {}
 # `feature=` every call site passes (backend/tests/test_llm_call_tiers.py).
 FEATURES = ("news", "plan", "research", "chat", "portfolio", "learning")
 _cached_off: set = set()
+# The admin Lab switch: the experimental AI jobs (the intraday auto-run, news
+# entries, the game plan, the strategy builder, the re-tune, nightly learning)
+# run only while it is on. Off by default; each per-user pref still applies inside it.
+_cached_lab: bool = False
+_lab_logged: set = set()  # (job, day): one info line per skipped job per day
 _cache_loaded_at: float = 0.0
 
 
 async def _refresh(db=None) -> None:
     """Re-reads the settings at most once per _TTL_SECONDS per process."""
-    global _cached_llm_model, _cached_tiers, _cached_off, _cache_loaded_at
+    global _cached_llm_model, _cached_tiers, _cached_off, _cached_lab, _cache_loaded_at
 
     if time.monotonic() - _cache_loaded_at >= _TTL_SECONDS:
         if db is None:
@@ -47,7 +55,20 @@ async def _refresh(db=None) -> None:
         _cached_llm_model = await store.get_llm_model()
         _cached_tiers = await store.get_llm_tiers()
         _cached_off = set(await store.get_features_off())
+        _cached_lab = await store.get_lab_enabled()
         _cache_loaded_at = time.monotonic()
+
+
+async def lab_on(job: str, db=None) -> bool:
+    """Whether the Lab switch lets `job` run; when off, says so once a day."""
+    await _refresh(db)
+    if _cached_lab:
+        return True
+    key = (job, date.today())
+    if key not in _lab_logged:
+        _lab_logged.add(key)
+        logger.info("Lab is off: skipping %s.", job)
+    return False
 
 
 async def feature_enabled(feature: Optional[str], db=None) -> bool:
@@ -128,9 +149,22 @@ class AppSettingsStore:
             upsert=True,
         )
 
+    async def get_lab_enabled(self) -> bool:
+        doc = await self.collection.find_one({"_id": _DOC_ID})
+        return bool((doc or {}).get("lab_enabled"))
+
+    async def set_lab_enabled(self, enabled: bool) -> None:
+        global _cached_lab
+        await self.collection.update_one(
+            {"_id": _DOC_ID}, {"$set": {"lab_enabled": enabled, "updated_at": datetime.now(timezone.utc)}},
+            upsert=True,
+        )
+        _cached_lab = enabled
+
     async def load_into_cache(self) -> None:
-        global _cached_llm_model, _cached_tiers, _cached_off, _cache_loaded_at
+        global _cached_llm_model, _cached_tiers, _cached_off, _cached_lab, _cache_loaded_at
         _cached_llm_model = await self.get_llm_model()
         _cached_tiers = await self.get_llm_tiers()
         _cached_off = set(await self.get_features_off())
+        _cached_lab = await self.get_lab_enabled()
         _cache_loaded_at = time.monotonic()

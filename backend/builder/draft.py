@@ -500,6 +500,9 @@ async def start_if_due(db, now: datetime) -> bool:
     local = now.astimezone(IST)
     if local.weekday() != 4:
         return False
+    from backend import app_settings
+    if not await app_settings.lab_on("the weekly strategy builder", db):
+        return False
     week = local.strftime("%G-W%V")
     from pymongo.errors import DuplicateKeyError
 

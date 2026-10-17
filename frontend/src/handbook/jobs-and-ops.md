@@ -12,12 +12,12 @@ Everything that runs on its own, how code reaches production, and how the doors 
 3. Refresh analyst verdicts.
 4. Long-term scan for every scan-enabled user → proposals, theses, Telegram.
 5. Journal sync from every connected broker.
-6. Learning: pause / floor / regime rules from closed paper trades.
+6. Learning: pause / floor / regime rules from closed paper trades (Lab only).
 7. Replay the day's game plans against no plan.
-8. First pass of a month: start the re-tune as its own `nice` process.
+8. First pass of a month: start the re-tune as its own `nice` process (Lab only).
 9. Every day: the portfolio review with worsening-verdict alerts. Fridays: journal mirrors.
 10. The post-close Telegram (`portfolio/digest.py::send_postclose`): your account's value and
-    day move, the movers with their headline, verdict changes, you vs the AI today, tomorrow's
+    day move, the movers with their headline, verdict changes, you vs the AI account today, tomorrow's
     events. Skipped when the pass runs as the 09:20 catch-up.
 
 Before the open, the autorun tick sends the 08:30 / 09:05 login reminder and, from 08:45, the
@@ -36,7 +36,7 @@ under the missed day so that day's own 4:00 PM pass still runs.
 
 ## The strategy builder — Fridays
 
-Spawned from Friday's 4:00 PM pass (`backend/builder/draft.py::start_if_due`, once per ISO week), as its own
+Spawned from Friday's 4:00 PM pass while the admin Lab switch is on (`backend/builder/draft.py::start_if_due`, once per ISO week), as its own
 `nice` process (`python -m backend.builder`) so minutes of backtesting never stall the API. One run at a
 time (Redis lock `builder:lock`, `draft.py::LOCK`). It needs the admin's Upstox session for a year of
 5-minute history; without a source the run drafts nothing and waits for next week. Swing drafts test on the

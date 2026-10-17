@@ -115,7 +115,10 @@ async def _preopen_plans(db, redis, now: datetime, user_ids: list[str]) -> list[
 
     local = now.astimezone(IST)
     # Until the close: a broker login after the open still gets its plan before the run starts.
-    if local.weekday() >= 5 or not (PLAN_AT <= local.time() < SESSION_CLOSE):
+    if local.weekday() >= 5 or not (PLAN_AT <= local.time() < SESSION_CLOSE) or not user_ids:
+        return []
+    from backend import app_settings
+    if not await app_settings.lab_on("the AI game plan build", db):
         return []
     built = []
     for user_id in user_ids:
@@ -203,6 +206,9 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
         for mode, pref in MODES.items()
         for doc in await db["user_prefs"].find({pref: True}).to_list(length=None)
     }
+    from backend import app_settings
+    if enabled and not await app_settings.lab_on("the intraday auto-run", db):
+        enabled = set()  # running slots stop below, as if turned off mid-session
 
     try:
         await _login_reminders(db, redis, now)
