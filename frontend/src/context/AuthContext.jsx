@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
             // No early-return on a missing/expired local access token: the
             // long-lived refresh cookie may still be good from a previous
             // visit, and api.js's response interceptor silently refreshes
-            // and retries this call on a 401/403 -- that's the whole
+            // and retries this call on a 401 -- that's the whole
             // mechanism that keeps a returning user from seeing the Google
             // button again.
             try {

@@ -90,7 +90,10 @@ api.interceptors.response.use(
       response.data.detail = detailToText(response.data.detail);
     }
     const status = response?.status;
-    const isAuthFailure = status === 401 || status === 403;
+    // Only 401 means the session is gone. A 403 is a signed-in user refused one
+    // thing (require_admin, a gated rule): refreshing cannot fix it, and
+    // treating it as expiry signed the user out.
+    const isAuthFailure = status === 401;
     const eligibleForRefresh = config && !NO_REFRESH_PATHS.includes(config.url) && !config._retriedAfterRefresh;
 
     if (isAuthFailure && eligibleForRefresh) {
