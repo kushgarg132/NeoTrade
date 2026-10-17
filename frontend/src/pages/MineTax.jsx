@@ -14,7 +14,7 @@ const currentFy = () => {
   return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
 };
 const BUTTON = 'min-h-11 px-4 border border-[var(--ink)] font-[family-name:var(--font-narrow)] text-xs font-semibold uppercase tracking-[0.11em] disabled:opacity-50';
-const day = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+const day = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' });
 
 const Line = ({ symbol, detail, children }) => (
   <li className="flex items-center justify-between gap-3 py-1.5 border-b border-[var(--rule)]">

@@ -11,8 +11,8 @@ import api, { endpoints } from '../utils/api';
 import { REASONS, formatXirr } from '../utils/mine';
 import { bareSymbol, formatCurrency, formatPercent, formatQuantity, formatTimeAgo } from '../utils/formatters';
 
-const short = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-const day = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+const short = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const day = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—');
 const TONE = { SELL: 'loss', REVIEW: 'loss', ADD: 'gain' };
 
 // Buys are filled circles, sells hollow squares: identity is never colour alone.
