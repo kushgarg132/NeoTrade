@@ -55,7 +55,7 @@ const ActionCard = ({ action, onUpdate }) => {
       }
     } catch (err) {
       // No response at all: the confirm may have run. Never call that a failure.
-      if (kind !== 'cancel' && !err?.response) onUpdate({ state: 'UNKNOWN', note: 'No answer from the server. The order may have gone through: check Trades before trying again.' });
+      if (kind !== 'cancel' && !err?.response) onUpdate({ state: 'UNKNOWN', note: 'No answer from the server. The order may have gone through: check Mine › Journal before trying again.' });
       else onUpdate({ state: 'FAILED', note: err?.response?.data?.detail || 'That did not go through.' });
     } finally {
       setBusy(false);

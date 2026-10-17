@@ -173,7 +173,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
       }
     } catch (err) {
       // No response at all: the order may be placed. Never say it was not.
-      setError(err?.response ? detailText(err, 'The order was not placed.') : 'No answer from the server. The order may have gone through: check Trades before trying again.');
+      setError(err?.response ? detailText(err, 'The order was not placed.') : 'No answer from the server. The order may have gone through: check Mine › Journal before trying again.');
       setCard(null);
       setNeedsSecondTap(false);
     } finally {

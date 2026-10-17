@@ -55,6 +55,7 @@ const MineHoldings = () => {
   const [sort, setSort] = useState('weight');
   const [filters, setFilters] = useState([]);
   const [ticket, setTicket] = useState(null);
+  const [reading, setReading] = useState(null);
   const plan = params.get('plan') === '1';
 
   // A failed poll keeps what is on screen.
@@ -103,6 +104,13 @@ const MineHoldings = () => {
       sort
     );
   }, [all, actions, filters, sort]);
+  // Before the first daily review there is no snapshot (GET /portfolio is 404): read it now.
+  const readNow = () => {
+    setReading('busy');
+    api.post(endpoints.portfolio.refresh)
+      .then(() => { setReading(null); return load(); })
+      .catch((err) => setReading(err?.response?.data?.detail || 'Could not read your holdings.'));
+  };
   const toggle = (f) => setFilters((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]));
   const open = (r) => r.kind !== 'MF' && navigate(`/mine/stock/${encodeURIComponent(r.symbol)}`);
   const closePlan = () => setParams({}, { replace: true });
@@ -126,7 +134,15 @@ const MineHoldings = () => {
           {loading ? (
             <Ruling rows={4} />
           ) : !snapshot ? (
-            <Empty title="No holdings yet" detail="Connect your broker in Settings to read your holdings." />
+            <Empty
+              title="No holdings yet"
+              detail={reading && reading !== 'busy' ? reading : 'Connect your broker in Settings, then read your holdings.'}
+              action={
+                <button type="button" onClick={readNow} disabled={reading === 'busy'} className={cn(CHIP, 'border-[var(--ink)] text-[var(--ink)]')}>
+                  {reading === 'busy' ? 'Reading…' : 'Read holdings now'}
+                </button>
+              }
+            />
           ) : (
             <>
               {asOf && (

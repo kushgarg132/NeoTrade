@@ -14,15 +14,17 @@ const TradedToday = () => {
   const [failed, setFailed] = useState(false);
   const [all, setAll] = useState(false);
 
-  const load = () =>
-    api.get(endpoints.trading.fills('paper'))
+  const load = () => {
+    const today = istDay(Date.now());
+    // Only today's: the whole fill history grows without bound.
+    return api.get(endpoints.trading.fills('paper'), { params: { since: `${today}T00:00:00+05:30` } })
       .then((res) => {
-        const today = istDay(Date.now());
         setFills(res.data.filter((f) => istDay(f.timestamp) === today)
           .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
         setFailed(false);
       })
       .catch(() => setFailed(true));
+  };
   useEffect(() => {
     load();
   }, []);

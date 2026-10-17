@@ -11,7 +11,6 @@ import {
 } from 'recharts';
 import Layout from '../components/Layout';
 import PaperShell from '../components/paper/PaperShell';
-import { paperPositions } from '../utils/books';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, NetLine, Scrip } from '../components/doc/Doc';
 import { Badge } from '../components/common/Badge';
 import { periodSummary } from '../utils/practice';
@@ -83,7 +82,11 @@ const Portfolio = () => {
 
   useEffect(load, []);
 
-  useTopic('positions', (message) => setPositions(paperPositions(message.data)));
+  // The push carries the raw book (flattened rows at 0, unrealised unmarked,
+  // both venues); the REST read filters and marks it, so re-read instead.
+  useTopic('positions', () =>
+    api.get(endpoints.trading.positions('paper')).then((res) => setPositions(res.data)).catch(() => {})
+  );
   useTopic('trades', load);
   useReconnect(load);
 

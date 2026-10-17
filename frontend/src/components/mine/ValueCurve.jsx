@@ -14,7 +14,7 @@ const SERIES = [
 ];
 
 const compact = (v) => (v >= 1e7 ? `${(v / 1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v / 1e5).toFixed(1)}L` : `${Math.round(v / 1e3)}k`);
-const short = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+const short = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 const CurveTip = ({ active, payload, label }) =>
   active && payload?.length ? (

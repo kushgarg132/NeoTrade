@@ -52,15 +52,18 @@ const NoteEditor = ({ trip, onSaved }) => {
   const [note, setNote] = useState(trip.note || '');
   const [tags, setTags] = useState((trip.tags || []).join(', '));
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(null);
 
   const save = () => {
     setBusy(true);
+    setFailed(null);
     api
       .put(endpoints.journal.note(trip.id), {
         note,
         tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean),
       })
       .then((res) => onSaved(trip.id, res.data))
+      .catch((err) => setFailed(err?.response?.data?.detail || 'The note was not saved.'))
       .finally(() => setBusy(false));
   };
 
@@ -94,6 +97,7 @@ const NoteEditor = ({ trip, onSaved }) => {
       <button type="button" className={BUTTON} onClick={save} disabled={busy}>
         {busy ? 'Saving' : 'Save note'}
       </button>
+      {failed && <p role="alert" className="text-sm text-[var(--loss)]">{failed}</p>}
     </div>
   );
 };

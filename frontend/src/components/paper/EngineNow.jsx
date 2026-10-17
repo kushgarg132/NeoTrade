@@ -21,8 +21,6 @@ const EngineNow = ({ prefs }) => {
   const [runs, setRuns] = useState([]);
   const [universeSymbols, setUniverseSymbols] = useState([]);
   const [runSettings, setRunSettings] = useState(false);
-  const [accountSize, setAccountSize] = useState(1_000_000);
-  const [maxExposure, setMaxExposure] = useState(1_000_000);
   const [busy, setBusy] = useState(false);
   const [startError, setStartError] = useState(null);
   const [killSwitch, setKillSwitch] = useState(null);
@@ -87,9 +85,8 @@ const EngineNow = ({ prefs }) => {
     try {
       await api.post(endpoints.trading.start, {
         mode: 'INTRADAY',
+        // Sizing is not sent: the server takes it from saved preferences (AI → Settings).
         universe: universeSymbols.length > 0 ? universeSymbols : undefined,
-        account_size: accountSize,
-        max_exposure: maxExposure,
       });
       await loadRuns();
     } catch (err) {
@@ -118,7 +115,7 @@ const EngineNow = ({ prefs }) => {
     setScan('starting');
     try {
       const res = await api.post(endpoints.suggestions.scan, {});
-      setScan(`Scanning ${res.data.symbols} scrip. The AI paper-trades the ideas; proven strategies’ ideas reach Mine › Ideas.`);
+      setScan(`Scanning ${res.data.symbols} scrip. The AI paper-trades the ideas; proven strategies’ ideas reach Mine › Needs you.`);
     } catch (err) {
       setScan(err?.response?.data?.detail || 'Could not start the scan.');
     }
@@ -195,7 +192,7 @@ const EngineNow = ({ prefs }) => {
               aria-expanded={runSettings}
               className={cn('field-label text-[var(--stamp)] hover:underline min-h-11 sm:min-h-0', running.length > 0 && 'mt-3')}
             >
-              {runSettings ? 'Hide run settings' : `Run settings · ${universeSymbols.length || 'default'} scrip, ₹${Number(accountSize || 0).toLocaleString('en-IN')}`}
+              {runSettings ? 'Hide run settings' : `Run settings · ${universeSymbols.length || 'default'} scrip${prefs?.account_size ? `, ₹${Number(prefs.account_size).toLocaleString('en-IN')}` : ''}`}
             </button>
           )}
           {!intradayActive && (runSettings || startError) && (
@@ -203,10 +200,6 @@ const EngineNow = ({ prefs }) => {
               <TradingControlBar
                 universeSymbols={universeSymbols}
                 onUniverseChange={setUniverseSymbols}
-                accountSize={accountSize}
-                onAccountSizeChange={setAccountSize}
-                maxExposure={maxExposure}
-                onMaxExposureChange={setMaxExposure}
                 startError={startError}
               />
             </div>
