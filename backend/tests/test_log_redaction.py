@@ -53,6 +53,15 @@ def test_telegram_bot_tokens_are_redacted_from_messages_and_tracebacks():
     assert "secret-tok" not in failed.exc_text and "bot99:REDACTED" in failed.exc_text
 
 
+def test_non_string_message_and_mapping_args_are_redacted():
+    url = "https://api.telegram.org/bot42:sekret/getMe"
+    as_msg = logging.LogRecord("x", logging.WARNING, __file__, 1, RuntimeError(f"failed for url '{url}'"), None, None)
+    as_map = logging.LogRecord("x", logging.INFO, __file__, 1, "GET %(url)s", ({"url": url},), None)
+    for record in (as_msg, as_map):
+        RedactTokens().filter(record)
+        assert "sekret" not in record.getMessage() and "bot42:REDACTED" in record.getMessage()
+
+
 def test_uvicorn_access_args_keep_their_shape():
     import logging
 

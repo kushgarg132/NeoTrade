@@ -36,10 +36,11 @@ def _arg(value):
 
 class RedactTokens(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        if isinstance(record.msg, str):
-            record.msg = redact(record.msg)
+        record.msg = _arg(record.msg)  # logger.warning(exc) passes an exception as the message
         if isinstance(record.args, tuple):
             record.args = tuple(_arg(a) for a in record.args)
+        elif isinstance(record.args, dict):  # logger.info("%(url)s", {"url": ...})
+            record.args = {k: _arg(v) for k, v in record.args.items()}
         if record.exc_info and not record.exc_text:
             record.exc_text = redact(logging.Formatter().formatException(record.exc_info))
         return True
