@@ -1,11 +1,10 @@
 """FY capital-gains report for the user's own account: realised gains split
 short/long term, estimated tax, and what to do about it. Pure. Estimates."""
 
-from datetime import date
+from datetime import date, timedelta
 
 from backend.engine.session import IST
 
-LONG_TERM_DAYS = 365
 STCG_RATE, LTCG_RATE = 0.20, 0.125  # rates effective 2024-07-23
 LTCG_EXEMPTION = 125_000
 GRANDFATHER_DATE = date(2018, 2, 1)  # holdings bought before this have a stepped-up cost basis
@@ -20,8 +19,22 @@ def fy_bounds(fy: int) -> tuple[date, date]:
     return date(fy, 4, 1), date(fy + 1, 3, 31)
 
 
+def long_from(buy: date) -> date:
+    """The first day a sale is long-term: held more than 12 months, counted
+    in months, not 365 days (a year spanning 29 Feb has 366)."""
+    try:
+        anniversary = buy.replace(year=buy.year + 1)
+    except ValueError:  # bought 29 Feb
+        anniversary = date(buy.year + 1, 2, 28)
+    return anniversary + timedelta(days=1)
+
+
 def is_long(buy: date, sell: date) -> bool:
-    return (sell - buy).days > LONG_TERM_DAYS
+    return sell >= long_from(buy)
+
+
+def days_to_long(buy: date, today: date) -> int:
+    return max((long_from(buy) - today).days, 0)
 
 
 def _set_off(short: float, long: float) -> tuple[float, float]:
@@ -68,11 +81,10 @@ def report(trades: list[dict], held: dict[str, float], prices: dict[str, float],
         if last is None:
             continue
         for d, q, p in lots:
-            age = (today - d).days
-            lng = age > LONG_TERM_DAYS
+            lng = is_long(d, today)
             unrealised.append({"symbol": s, "buy_date": d, "qty": q, "price": p, "last": last,
                                "gain": (last - p) * q, "term": "long" if lng else "short",
-                               "days_to_long": 0 if lng else LONG_TERM_DAYS + 1 - age})
+                               "days_to_long": days_to_long(d, today)})
 
     turning = [{"symbol": u["symbol"], "buy_date": u["buy_date"], "qty": u["qty"], "gain": u["gain"],
                 "days": u["days_to_long"], "saving": (STCG_RATE - LTCG_RATE) * u["gain"]}

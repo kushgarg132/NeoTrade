@@ -27,6 +27,13 @@ def test_day_365_is_short_366_is_long():
     assert tax.is_long(date(2025, 4, 1), date(2026, 4, 2))
 
 
+def test_long_term_is_12_months_not_365_days_across_29_feb():
+    assert not tax.is_long(date(2027, 3, 1), date(2028, 3, 1))  # 366 days, exactly 12 months: short
+    assert tax.is_long(date(2027, 3, 1), date(2028, 3, 2))
+    assert tax.days_to_long(date(2027, 3, 1), date(2028, 2, 29)) == 2
+    assert tax.long_from(date(2028, 2, 29)) == date(2029, 3, 1)
+
+
 def test_fy():
     assert tax.current_fy(date(2026, 3, 31)) == 2025 and tax.current_fy(date(2026, 4, 1)) == 2026
     assert tax.fy_bounds(2026) == (date(2026, 4, 1), date(2027, 3, 31))

@@ -113,7 +113,7 @@ def target_gaps(holdings: list[dict], targets: dict) -> tuple[dict[str, float], 
 
 
 MAX_CHARGE_PCT = 1.0  # a trade whose charges exceed this share of its value is not worth making
-from backend.mine.tax import LONG_TERM_DAYS, LTCG_RATE, STCG_RATE  # noqa: E402
+from backend.mine.tax import LTCG_RATE, STCG_RATE, is_long  # noqa: E402
 
 
 def charges(side: str, quantity: float, price: float) -> float:
@@ -132,7 +132,7 @@ def sell_tax(quantity: float, price: float, lots: list[tuple], today) -> dict:
             break
         take = min(left, lot_qty)
         gain = (price - lot_price) * take
-        if (today - day).days > LONG_TERM_DAYS:
+        if is_long(day, today):
             long_gain += gain
         else:
             short_gain += gain
