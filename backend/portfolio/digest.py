@@ -136,10 +136,11 @@ async def last_session_move(db, held: dict[str, float], today) -> Optional[dict]
     return {"change": round(change, 2), "pct": change / base * 100}
 
 
-async def pnl_since(db, user_id: str, roles: dict, since: datetime) -> dict:
+async def pnl_since(db, user_id: str, roles: dict, since: datetime, picks_only: bool = False) -> dict:
     """Closed P&L since `since`, net of charges on both sides: the user's own
     account from the journal (charges estimated as the journal mirror does,
-    since a broker's trade book carries none) and the whole AI book."""
+    since a broker's trade book carries none) and the whole AI book -- or,
+    with `picks_only`, only its trades credited to a pick (autopilot/picks.py)."""
     from backend.autopilot.service import ai_book_query
     from backend.brokers.roles import brokers_for
     from backend.journal import mirror
@@ -157,7 +158,10 @@ async def pnl_since(db, user_id: str, roles: dict, since: datetime) -> dict:
     mine_charges = mirror.costs([t for t in trades if t["_id"] in ids], closed, 0)["charges"]
     mine = sum(t["pnl"] for t in closed) - mine_charges
     ai = ai_charges = 0.0
-    async for t in db["paper_trades"].find(ai_book_query(user_id)):
+    query = ai_book_query(user_id)
+    if picks_only:
+        query = {"$and": [query, {"strategy": {"$regex": "^picks:"}}]}
+    async for t in db["paper_trades"].find(query):
         if t.get("status") == "CLOSED" and (_aware(t.get("exit_at")) or since) >= since:
             ai += t.get("realized_pnl") or 0.0
             ai_charges += t.get("costs") or 0.0
@@ -174,9 +178,11 @@ def month_start(now: datetime) -> datetime:
 
 
 async def scoreboard(db, user_id: str, roles: dict, now: datetime) -> dict:
-    """AI against the user, closed and net of charges: today and this month."""
-    return {"today": await pnl_since(db, user_id, roles, day_start(now)),
-            "month": await pnl_since(db, user_id, roles, month_start(now))}
+    """You vs Picks: the user's account against the AI book's trades credited
+    to a pick, closed and net of charges, today and this month. The `ai` key
+    keeps its name so the shape is unchanged."""
+    return {"today": await pnl_since(db, user_id, roles, day_start(now), picks_only=True),
+            "month": await pnl_since(db, user_id, roles, month_start(now), picks_only=True)}
 
 
 # ------------------------------------------------------------------ Telegram

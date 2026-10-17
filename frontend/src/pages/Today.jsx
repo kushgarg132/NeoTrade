@@ -163,16 +163,17 @@ const Pulse = ({ pulse, failed, now, actions, total, onChanged }) => {
   );
 };
 
-/** AI against you: closed trades, net of charges, today and this month. */
-const Scoreboard = ({ board, aiMode }) => (
-  <Sheet title="You vs the AI" meta="closed trades, net of charges">
+/** Your account against the AI account's Picks trades: closed, net of charges,
+    today and this month. Admin-only while Picks is: null for anyone else. */
+const Scoreboard = ({ board }) => (
+  <Sheet title="You vs Picks" meta="closed trades, net of charges">
     {!board ? (
       <p className="doc-meta normal-case">Couldn’t load the scoreboard.</p>
     ) : (
       <div className="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-2 items-baseline">
         <span />
         <Link to="/mine/journal" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="mine" /></Link>
-        <Link to="/ai" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="ai" mode={aiMode} /></Link>
+        <Link to="/research/picks" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="ai" mode="picks" /></Link>
         {[['Today', board.today], ['This month', board.month]].map(([label, row]) => (
           <React.Fragment key={label}>
             <span className="field-label">{label}</span>
@@ -330,7 +331,7 @@ const Today = () => {
             <Pulse pulse={data.pulse} failed={!!data.errors?.pulse} now={now}
                    actions={data.mine_actions || []} total={data.mine_actions_total || 0} onChanged={load} />
             <DoToday items={data.needs_you || []} />
-            <Scoreboard board={data.scoreboard} aiMode={data.autopilot ? (data.autopilot.live ? 'live' : 'paper') : undefined} />
+            {(data.scoreboard || data.errors?.scoreboard) && <Scoreboard board={data.scoreboard} />}
             <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />
           </div>
           <div className="space-y-3 sm:space-y-4">

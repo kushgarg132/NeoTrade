@@ -18,7 +18,7 @@ from backend.engine.session import IST  # noqa: E402
 DAY = datetime.combine(NOW.astimezone(IST).date(), datetime.min.time(), tzinfo=IST)
 
 
-def _client(monkeypatch, states=None, broken=False):
+def _client(monkeypatch, states=None, broken=False, role="user"):
     db = AsyncMongoMockClient()["test_db"]
     monkeypatch.setattr(today_router.db, "db", db)
     monkeypatch.setattr(today_router.db, "redis", None)
@@ -31,7 +31,7 @@ def _client(monkeypatch, states=None, broken=False):
     app = FastAPI()
     app.include_router(today_router.router, prefix="/api/v1")
     app.dependency_overrides[get_current_user] = lambda: User(
-        id="alice", google_sub="g", email="a@x.io", name="A", created_at=NOW)
+        id="alice", google_sub="g", email="a@x.io", name="A", created_at=NOW, role=role)
     app.dependency_overrides[today_router.get_broker_states] = lambda: broker_states
     return TestClient(app), db
 
@@ -88,8 +88,8 @@ def test_needs_you_lists_long_term_proposals_only(monkeypatch):
     assert len(ideas) == 1 and "TCS" in ideas[0]
 
 
-def test_pnl_today_splits_mine_and_ai(monkeypatch):
-    client, db = _client(monkeypatch)
+def test_you_vs_picks_counts_only_the_ai_books_pick_trades(monkeypatch):
+    client, db = _client(monkeypatch, role="admin")
     _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"kite": "ai", "upstox": "mine"}}],
           journal_trades=[
               {"_id": "t1", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "INFY",
@@ -97,7 +97,9 @@ def test_pnl_today_splits_mine_and_ai(monkeypatch):
               {"_id": "t2", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "INFY",
                "side": "SELL", "quantity": 10, "price": 110.0, "traded_at": DAY + timedelta(minutes=2)}],
           paper_trades=[{"user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
-                         "strategy": "autopilot:chat", "via": "autopilot:chat", "realized_pnl": -50.0, "costs": 5.0, "exit_at": DAY + timedelta(minutes=3), "venue": "paper"}])
+                         "strategy": "picks:momentum", "via": "autopilot:picks", "realized_pnl": -50.0, "costs": 5.0, "exit_at": DAY + timedelta(minutes=3), "venue": "paper"},
+                        {"user_id": "alice", "symbol": "SBIN", "side": "BUY", "status": "CLOSED",  # not a pick
+                         "strategy": "autopilot:chat", "via": "autopilot:chat", "realized_pnl": 900.0, "costs": 5.0, "exit_at": DAY + timedelta(minutes=3), "venue": "paper"}])
     pnl = client.get("/api/v1/today").json()["scoreboard"]["today"]
     # Both sides net of charges: the broker book carries none, so Mine's are estimated.
     assert pnl["ai"] == -55.0 and pnl["ai_charges"] == 5.0
@@ -123,8 +125,14 @@ def test_autopilot_summary_counts_open_positions_against_capital(monkeypatch):
     assert summary == {"enabled": True, "live": False, "capital": 15000.0, "deployed": 4500.0}
 
 
+def test_you_vs_picks_is_admin_only(monkeypatch):
+    client, _ = _client(monkeypatch)
+    body = client.get("/api/v1/today").json()
+    assert body["scoreboard"] is None and "scoreboard" not in body["errors"]
+
+
 def test_selling_a_position_bought_before_today_counts_its_pnl(monkeypatch):
-    client, db = _client(monkeypatch)
+    client, db = _client(monkeypatch, role="admin")
     _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"upstox": "mine"}}], journal_trades=[
         {"_id": "y1", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": "RELIANCE",
          "side": "BUY", "quantity": 10, "price": 90.0, "traded_at": DAY - timedelta(days=2)},

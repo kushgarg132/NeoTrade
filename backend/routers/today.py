@@ -183,7 +183,9 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now)) or [],
         "mine_actions": (acts := await part("mine_actions", _mine_actions(user.id, now)) or [])[:TOP_ACTIONS],
         "mine_actions_total": len(acts),
-        "scoreboard": await part("scoreboard", digest.scoreboard(db.db, user.id, roles, now)),
+        # You vs Picks: admin-only while Picks is (routers/picks.py).
+        "scoreboard": await part("scoreboard", digest.scoreboard(db.db, user.id, roles, now))
+        if user.role == "admin" else None,
         "proposals_total": None if (ideas := await part("proposals_total", _ideas(user.id))) is None else len(ideas),
         "ai_activity": log,
         "autopilot": await part("autopilot", _autopilot(user.id, prefs)),
