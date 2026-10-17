@@ -322,3 +322,28 @@ chips, "Plan new money" opens `frontend/src/components/portfolio/Rebalance.jsx`)
 `frontend/src/components/mine/ThesisEditor.jsx`), `frontend/src/pages/MineTax.jsx::MineTax` and
 `frontend/src/pages/Journal.jsx` (Trades and Habits as inner tabs). Where an action opens is decided in
 `frontend/src/utils/mine.js::actionTarget`.
+
+## Picks (Research → Picks, admin-only)
+
+Which stocks fired a setup at the last close, and what that setup has done before — every
+number a measured base rate, never a model's opinion. Admin-only everywhere until the owner's
+SEBI Research Analyst registration exists: the router takes `require_admin`
+(`backend/routers/picks.py::router`), the tab is dropped for non-admins
+(`frontend/src/components/layout/SectionTabs.jsx::SectionTabs`, `admin: true`), and nothing
+reaches Telegram, digests or chat.
+
+- **Setups** (`backend/forecast/setups.py::SETUPS`): momentum leader and low-volatility leader
+  (top decile of `factor/model.py::scores`, re-ranked on the first trading day of each month),
+  52-week-high close on ≥1.5x 20-day average volume, and close above the 200-day SMA with
+  RSI(14) < 35. Each has a fixed horizon. A signal on day t reads rows up to t only.
+- **Events** (`backend/forecast/study.py::events`): entry t+1 open, exit close of t+1+H; net of
+  CNC charges from `engine/execution/costs.py::calculate_indian_costs` on a ₹1L position; NIFTY
+  over the same window. `study.py::kept` drops signals inside an open event's window.
+- **Walk-forward** (`study.py::walk_forward`): each year's P(up) is predicted only from events
+  that matured before it began, then scored (realised hit rate, Brier). Out-of-sample excess
+  over NIFTY ≤ 0 marks the setup "no edge"; its picks still show, badged.
+- **Daily job** (`backend/forecast/picks.py::run`, in the 16:00 pass): stores today's picks in
+  `picks` before the outcome exists (top 10 by median excess × P(beat NIFTY), setups with
+  n ≥ 100 only), scores matured ones, and writes the study to `picks_study`. The forward record
+  (`picks.py::forward`) stays "unproven" until 100 picks are scored.
+- **Caveat**: the universe is today's stock list (survivorship); the payload says so.

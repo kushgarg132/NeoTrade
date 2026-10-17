@@ -2,14 +2,17 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { usePendingCount } from '../../context/pendingContext';
+import { useAuth } from '../../context/AuthContext';
 
 /** The tabs inside a section (e.g. Mine: Holdings · Trades · Habits). Each tab
     is its own route, so Back and deep links work. */
 const SectionTabs = ({ tabs, label }) => {
   const pending = usePendingCount();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   return (
   <nav aria-label={label} className="flex gap-1 overflow-x-auto border-b border-[var(--rule-strong)] -mx-1 px-1">
-    {tabs.map((tab) => (
+    {tabs.filter((tab) => !tab.admin || isAdmin).map((tab) => (
       <NavLink
         key={tab.to}
         to={tab.to}

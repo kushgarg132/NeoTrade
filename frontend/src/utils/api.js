@@ -183,6 +183,10 @@ export const endpoints = {
   newsFeed: '/news/feed',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
   planToday: '/plan/today',
+  picks: {
+    today: '/picks',
+    history: (days = 90) => `/picks/history?days=${days}`,
+  },
   builtStrategies: '/strategies/built',
   strategyVocabulary: '/strategies/vocabulary',
   describeStrategy: '/strategies/describe',

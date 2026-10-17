@@ -20,6 +20,7 @@ const AiActivity = lazy(() => import('./pages/AiActivity'));
 import Login from './pages/Login';
 const Handbook = lazy(() => import('./pages/Handbook'));
 const Backlog = lazy(() => import('./pages/Backlog'));
+const Picks = lazy(() => import('./pages/Picks'));
 import RequireAuth from './components/RequireAuth';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -118,6 +119,7 @@ const App = () => {
       <Route path="/research/stock/:symbol" element={gated(<Dashboard />)} />
       <Route path="/research/news" element={gated(<News />)} />
       <Route path="/research/watchlist" element={gated(<Watchlist />)} />
+      <Route path="/research/picks" element={gated(<RequireAdmin><Picks /></RequireAdmin>)} />
       {/* Not a tab (Upstox-only, no F&O trading here): reached from the NIFTY / BANK NIFTY cards. */}
       <Route path="/research/options" element={gated(<OptionChain />)} />
       {/* More */}

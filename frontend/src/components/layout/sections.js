@@ -44,4 +44,6 @@ export const RESEARCH_TABS = [
   { to: '/research', label: 'Search', end: true },
   { to: '/research/news', label: 'News' },
   { to: '/research/watchlist', label: 'Watchlist' },
+  // Admin-only until the SEBI RA registration exists (SectionTabs drops it for everyone else).
+  { to: '/research/picks', label: 'Picks', admin: true },
 ];
