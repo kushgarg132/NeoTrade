@@ -133,6 +133,12 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         await history.write_all(db, now)
     except Exception as exc:
         logger.exception("mine history failed: %s", exc)
+    # Picks: today's setups stored before their outcome, matured ones scored (forecast/picks.py).
+    try:
+        from backend.forecast import picks
+        await picks.run(db, now)
+    except Exception as exc:
+        logger.exception("picks failed: %s", exc)
     if now.astimezone(IST).weekday() == 4:
         await _weekly_mirrors(db)
     # The evening answer, from the review just done (portfolio/digest.py).
