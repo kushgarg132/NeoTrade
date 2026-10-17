@@ -157,3 +157,32 @@ async def test_swing_gap_through_stop_fills_at_the_open_intraday_at_the_level():
     intraday = await _run([(100, 101, 99, 100), (102, 103, 101, 102), (90, 92, 88, 90)],
                           account_size=25_000.0, max_exposure=15_000.0, per_trade_cap=5_000.0)
     assert intraday.trades[1]["price"] == pytest.approx(95 * 0.999)  # unchanged: the stop level
+
+
+class _BuyTwice:
+    """Buys on bars 0 and 3, a 95 stop each time."""
+
+    def __init__(self):
+        self.spec = StrategySpec(name="buy-twice", mode="INTRADAY", timeframe="5m", warmup_bars=0, universe=["ITC"])
+        self.seen = 0
+
+    def on_start(self, ctx): ...
+    def on_fill(self, ctx, fill): ...
+
+    def on_bar(self, ctx, bar):
+        if self.seen in (0, 3):
+            ctx.submit(Intent(symbol="ITC", side=Side.BUY, strength=1.0, reason_codes=["t"], stop_hint=95.0))
+        self.seen += 1
+
+
+@pytest.mark.asyncio
+async def test_a_second_round_trip_does_not_erase_the_first():
+    instrument = Instrument(exchange="NSE", tradingsymbol="ITC", name="ITC", instrument_token=1, exchange_token=1,
+                            instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)
+    flat, stop = (100, 101, 99, 100), (100, 100, 94, 95)
+    candles = _candles([flat, flat, stop, flat, flat, stop, flat])
+    result = await run_backtest([_BuyTwice()], _Provider(candles), [instrument], candles[0].timestamp,
+                                candles[-1].timestamp, "5m", account_size=25_000.0, max_exposure=15_000.0,
+                                per_trade_cap=5_000.0)
+    assert result.total_trades == 2
+    assert all(t["gross_pnl"] <= 0 for t in result.trades)  # two losers, no phantom win on the re-entry

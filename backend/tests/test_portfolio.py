@@ -51,3 +51,14 @@ def test_equity_sums_realized_and_unrealized():
     equity = pf.equity({"TEST": 120.0})
     # realized 40.0 + unrealized 6 * (120 - 100) = 120.0 -> 160.0 total
     assert equity == pytest.approx(160.0)
+
+
+def test_reopening_a_symbol_keeps_what_it_already_realized():
+    # A fresh Position on reopen used to zero realized_pnl, so the backtest
+    # booked the earlier round trip's P&L back out on the next entry.
+    pf = Portfolio()
+    pf.apply(_fill(Side.BUY, 10, 100.0))
+    pf.apply(_fill(Side.SELL, 10, 90.0))
+    pf.apply(_fill(Side.BUY, 10, 100.0))
+    assert pf.positions["TEST"].realized_pnl == pytest.approx(-100.0)
+    assert pf.equity({"TEST": 100.0}) == pytest.approx(-100.0)
