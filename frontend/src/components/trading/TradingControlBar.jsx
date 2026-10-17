@@ -13,10 +13,6 @@ import api, { endpoints } from '../../utils/api';
 const TradingControlBar = ({
   universeSymbols,
   onUniverseChange,
-  accountSize,
-  onAccountSizeChange,
-  maxExposure,
-  onMaxExposureChange,
   startError,
 }) => {
   const [query, setQuery] = useState('');
@@ -105,35 +101,6 @@ const TradingControlBar = ({
             ))}
           </div>
         )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="account-size" className="field-label block mb-1.5">
-            Account size
-          </label>
-          <input
-            id="account-size"
-            type="number"
-            inputMode="numeric"
-            value={accountSize}
-            onChange={(event) => onAccountSizeChange(Number(event.target.value))}
-            className="w-full bg-transparent border-b border-[var(--rule-strong)] py-1.5 figure-md text-sm focus:outline-none focus:border-[var(--stamp)]"
-          />
-        </div>
-        <div>
-          <label htmlFor="max-exposure" className="field-label block mb-1.5">
-            Max exposure
-          </label>
-          <input
-            id="max-exposure"
-            type="number"
-            inputMode="numeric"
-            value={maxExposure}
-            onChange={(event) => onMaxExposureChange(Number(event.target.value))}
-            className="w-full bg-transparent border-b border-[var(--rule-strong)] py-1.5 figure-md text-sm focus:outline-none focus:border-[var(--stamp)]"
-          />
-        </div>
       </div>
 
       {startError && (
