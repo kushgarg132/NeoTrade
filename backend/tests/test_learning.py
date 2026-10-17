@@ -61,6 +61,16 @@ def test_attribution_is_net_of_costs_and_groups_by_setup():
     assert _row(rows, "vwap", "regime", "up")["trades"] == 24
 
 
+def test_a_trade_is_judged_by_the_regime_its_run_saw_not_its_own_days_close():
+    # Day 300's own close crashes under the 200-DMA; a trade entered that morning
+    # traded on day 299's "up" regime, and must be learned from as one.
+    nifty = _nifty(days=301)
+    nifty[-1] = (nifty[-1][0], 1000.0)
+    rows = attribute([_trade(-100.0, day=300)] * 12, nifty)
+    assert _row(rows, "vwap", "regime", "up")["trades"] == 12
+    assert not [r for r in rows if r["by"] == "regime" and r["group"] == "down"]
+
+
 def test_small_groups_are_not_reported():
     rows = attribute([_trade(100.0)] * 12 + [_trade(-50.0, reason="rare")] * 3, _nifty())
     assert not [r for r in rows if r["group"] == "rare"]
