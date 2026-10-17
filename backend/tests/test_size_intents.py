@@ -33,6 +33,11 @@ class _FakeCtx:
             return []
         return [SimpleNamespace(close=self._prices[symbol])]
 
+    def now(self) -> datetime:
+        return self.NOW
+
+    NOW = datetime(2026, 9, 1, 4, 30, tzinfo=timezone.utc)  # 10:00 IST, mid-session
+
 
 class _FakeStrategy:
     def __init__(self, mode: str, name: str = "fake") -> None:
@@ -407,7 +412,35 @@ async def test_the_cap_never_trims_an_exit():
         {"RELIANCE": _FakeStrategy("INTRADAY")}, _no_sentiment_redis(),
         account_size=1_000_000.0, max_exposure=1_000_000.0, per_trade_cap=5_000.0,
     )
-    assert len(orders) == 1 and orders[0].quantity > 50  # risk-sized, not cut to 5,000 / 100
+    assert [o.quantity for o in orders] == [80]  # all of it, not cut to 5,000 / 100
+
+
+@pytest.mark.asyncio
+async def test_an_exit_closes_what_is_held_and_never_flips_it():
+    # Risk-sized, this SELL was 1,000 shares against 10 held: a 990-share short
+    # that skipped the cap, the cost filter and the learned rules.
+    intent = Intent(symbol="RELIANCE", side=Side.SELL, strength=1.0, reason_codes=["exit"], stop_hint=110.0)
+    orders = await size_intents(
+        [intent], _held("RELIANCE", 10.0, 100.0), _FakeCtx({"RELIANCE": 100.0}),
+        {"RELIANCE": _FakeStrategy("INTRADAY")}, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=1_000_000.0,
+    )
+    assert [o.quantity for o in orders] == [10]
+
+
+@pytest.mark.asyncio
+async def test_no_intraday_entry_after_the_square_off_but_exits_still_go():
+    class _Late(_FakeCtx):
+        NOW = datetime(2026, 9, 1, 9, 50, tzinfo=timezone.utc)  # 15:20 IST
+
+    owner = {"RELIANCE": _FakeStrategy("INTRADAY")}
+    buy = Intent(symbol="RELIANCE", side=Side.BUY, strength=1.0, reason_codes=["x"], stop_hint=95.0)
+    assert await size_intents([buy], Portfolio(), _Late({"RELIANCE": 100.0}), owner, _no_sentiment_redis(),
+                              account_size=1_000_000.0, max_exposure=1_000_000.0) == []
+    sell = Intent(symbol="RELIANCE", side=Side.SELL, strength=1.0, reason_codes=["x"], stop_hint=105.0)
+    orders = await size_intents([sell], _held("RELIANCE", 10.0, 100.0), _Late({"RELIANCE": 100.0}), owner,
+                                _no_sentiment_redis(), account_size=1_000_000.0, max_exposure=1_000_000.0)
+    assert [o.quantity for o in orders] == [10]
 
 
 # Cost filter: an entry whose target can't beat ~3x its round-trip friction

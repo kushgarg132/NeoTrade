@@ -9,7 +9,7 @@ shrunk toward zero, so a small lucky group does not look like an edge.
 
 from bisect import bisect_right
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 from backend.analytics import _summary
@@ -59,7 +59,9 @@ def attribute(trades: list[dict], nifty: list) -> list[dict]:
     for t in sorted(trades, key=lambda t: t["exit_at"]):
         name, n = t["strategy"], net(t)
         groups[(name, "all", None)].append(n)
-        regime = regime_on(t["entry_at"].date(), nifty)
+        # The regime the run that took it saw: closes before its entry day
+        # (load_rules' regime is set the evening before), not that day's own close.
+        regime = regime_on(t["entry_at"].date() - timedelta(days=1), nifty)
         if regime:
             groups[(name, "regime", regime)].append(n)
         ctx = t.get("context") or {}

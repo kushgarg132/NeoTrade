@@ -150,10 +150,110 @@ async def test_backtest_trail_never_falls_when_atr_widens():
 
 
 @pytest.mark.asyncio
-async def test_swing_gap_through_stop_fills_at_the_open_intraday_at_the_level():
+async def test_a_gap_through_the_stop_fills_at_the_open():
     flat = (100, 102.5, 97.5, 100)
     swing = await _run_daily(_SwingBuy(0, 20, None), [flat, flat, (40, 45, 35, 42), flat])
     assert swing.trades[1]["price"] == pytest.approx(40 * 0.999)  # opened under the stop of 50
     intraday = await _run([(100, 101, 99, 100), (102, 103, 101, 102), (90, 92, 88, 90)],
                           account_size=25_000.0, max_exposure=15_000.0, per_trade_cap=5_000.0)
-    assert intraday.trades[1]["price"] == pytest.approx(95 * 0.999)  # unchanged: the stop level
+    assert intraday.trades[1]["price"] == pytest.approx(90 * 0.999)  # the open too: no fill at a level never traded
+
+
+class _BuyTwice:
+    """Buys on bars 0 and 3, a 95 stop each time."""
+
+    def __init__(self):
+        self.spec = StrategySpec(name="buy-twice", mode="INTRADAY", timeframe="5m", warmup_bars=0, universe=["ITC"])
+        self.seen = 0
+
+    def on_start(self, ctx): ...
+    def on_fill(self, ctx, fill): ...
+
+    def on_bar(self, ctx, bar):
+        if self.seen in (0, 3):
+            ctx.submit(Intent(symbol="ITC", side=Side.BUY, strength=1.0, reason_codes=["t"], stop_hint=95.0))
+        self.seen += 1
+
+
+@pytest.mark.asyncio
+async def test_a_second_round_trip_does_not_erase_the_first():
+    instrument = Instrument(exchange="NSE", tradingsymbol="ITC", name="ITC", instrument_token=1, exchange_token=1,
+                            instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)
+    flat, stop = (100, 101, 99, 100), (100, 100, 94, 95)
+    candles = _candles([flat, flat, stop, flat, flat, stop, flat])
+    result = await run_backtest([_BuyTwice()], _Provider(candles), [instrument], candles[0].timestamp,
+                                candles[-1].timestamp, "5m", account_size=25_000.0, max_exposure=15_000.0,
+                                per_trade_cap=5_000.0)
+    assert result.total_trades == 2
+    assert all(t["gross_pnl"] <= 0 for t in result.trades)  # two losers, no phantom win on the re-entry
+
+
+@pytest.mark.asyncio
+async def test_the_entry_bar_itself_can_stop_the_trade_out():
+    # Filled at bar 1's open (102), bar 1 then trades down to 94: stopped at 95 there,
+    # not carried to a later bar that never revisits the stop.
+    result = await _run([(100, 101, 99, 100), (102, 103, 94, 101), (101, 110, 100, 108)],
+                        account_size=25_000.0, max_exposure=15_000.0, per_trade_cap=5_000.0)
+    sell = result.trades[1]
+    assert sell["price"] == pytest.approx(95 * 0.999)
+    assert sell["timestamp"] == (T0 + timedelta(minutes=5)).isoformat()
+
+
+@pytest.mark.asyncio
+async def test_square_off_closes_once_and_never_opens_the_other_side():
+    # 09:30..15:25 IST, then the next session from 09:15. The square-off used to
+    # fire again on the bar its first order filled, opening a short at 15:25.
+    times = ([T0 + timedelta(minutes=5 * i) for i in range(72)]
+             + [T0 + timedelta(days=1, minutes=-15 + 5 * i) for i in range(10)])
+    candles = [PriceCandle(symbol="ITC", timestamp=t, open=100, high=101, low=99, close=100, volume=1000)
+               for t in times]
+    instrument = Instrument(exchange="NSE", tradingsymbol="ITC", name="ITC", instrument_token=1, exchange_token=1,
+                            instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)
+    result = await run_backtest([_BuyOnce()], _Provider(candles), [instrument], candles[0].timestamp,
+                                candles[-1].timestamp, "5m", account_size=25_000.0, max_exposure=15_000.0,
+                                per_trade_cap=5_000.0)
+    assert [t["side"] for t in result.trades] == ["BUY", "SELL"]
+    assert result.total_trades == 1
+
+
+class _LongTermSell:
+    def __init__(self):
+        self.spec = StrategySpec(name="lt-sell", mode="LONGTERM", timeframe="1d", warmup_bars=0, universe=["ITC"])
+
+    def on_start(self, ctx): ...
+    def on_fill(self, ctx, fill): ...
+
+    def on_bar(self, ctx, bar):
+        ctx.submit(Intent(symbol="ITC", side=Side.SELL, strength=1.0, reason_codes=["t"], stop_hint=110.0,
+                          target_hint=80.0))
+
+
+@pytest.mark.asyncio
+async def test_a_long_term_sell_with_nothing_held_is_not_a_short():
+    flat = (100, 102.5, 97.5, 100)
+    result = await _run_daily(_LongTermSell(), [flat, flat, (90, 91, 79, 80), flat])
+    assert result.trades == []
+
+
+@pytest.mark.asyncio
+async def test_profit_factor_is_over_round_trips():
+    # One winner (entry 102, out at the 130 target) and one stopped loser.
+    instrument = Instrument(exchange="NSE", tradingsymbol="ITC", name="ITC", instrument_token=1, exchange_token=1,
+                            instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)
+
+    class _TwoTrades(_BuyTwice):
+        def on_bar(self, ctx, bar):
+            if self.seen in (0, 3):
+                ctx.submit(Intent(symbol="ITC", side=Side.BUY, strength=1.0, reason_codes=["t"], stop_hint=95.0,
+                                  target_hint=130.0))
+            self.seen += 1
+
+    flat = (100, 101, 99, 100)
+    candles = _candles([flat, flat, (110, 131, 109, 125), flat, flat, (100, 100, 94, 95), flat])
+    result = await run_backtest([_TwoTrades()], _Provider(candles), [instrument], candles[0].timestamp,
+                                candles[-1].timestamp, "5m", account_size=25_000.0, max_exposure=15_000.0,
+                                per_trade_cap=5_000.0)
+    buy1, sell1, buy2, sell2 = result.trades
+    win = sell1["gross_pnl"] - buy1["costs"] - sell1["costs"]
+    loss = -(sell2["gross_pnl"] - buy2["costs"] - sell2["costs"])
+    assert result.profit_factor == pytest.approx(win / loss)

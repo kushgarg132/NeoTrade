@@ -240,6 +240,7 @@ async def size_intents(
             orders.append(result.order)
             continue
 
+        opens = _opens(intent, portfolio, mode)
         if intent.stop_hint is None:
             logger.info("skipping intent for %s: strategy supplied no stop_hint", intent.symbol)
             continue
@@ -247,6 +248,10 @@ async def size_intents(
         history = ctx.history(intent.symbol, 1)
         if not history:
             logger.info("skipping intent for %s: no known price yet this run", intent.symbol)
+            continue
+        # MIS entries stop with the square-off, as option entries do: one
+        # placed after 15:15 is closed on the next bar (or the next morning).
+        if opens and mode == "INTRADAY" and is_past_square_off_time(ctx.now()):
             continue
         entry = history[-1].close
         stop = intent.stop_hint
@@ -257,6 +262,11 @@ async def size_intents(
         raw_size = RiskRules.calculate_position_size(account_size, risk_pct, entry, stop)
         # NSE cash equity delivery/intraday trades in whole shares only.
         size = float(int(raw_size))
+        held_pos = portfolio.positions.get(intent.symbol)
+        if not opens and held_pos is not None and held_pos.quantity != 0:
+            # An exit closes what is held: risk-sized, it flipped a long into a
+            # bigger short that skipped every entry check.
+            size = abs(held_pos.quantity)
         if size <= 0:
             continue
 
@@ -499,6 +509,24 @@ async def run(
     progress = {"bars": 0, "signals": 0, "orders": 0, "below_cost": 0, "last_symbol": None, "last_bar_at": None}
 
     seen = 0
+
+    async def apply_fills() -> None:
+        async for fill in execution.fills():
+            quantity_before = portfolio.positions[fill.symbol].quantity if fill.symbol in portfolio.positions else 0.0
+            portfolio.apply(fill)
+            if ledger is not None:
+                await ledger.on_fill(fill, quantity_before, portfolio.positions[fill.symbol])
+            name = strategy_of_order.get(fill.order_id) or holders.get(fill.symbol)
+            after = portfolio.positions[fill.symbol].quantity
+            if after == 0:
+                holders.pop(fill.symbol, None)
+            elif quantity_before == 0 or (quantity_before > 0) != (after > 0):
+                if name is not None:
+                    holders[fill.symbol] = name  # opened (or flipped) by this strategy
+            owning_strategy = strategies_by_name.get(name) or owner_by_symbol.get(fill.symbol)
+            if owning_strategy is not None:
+                owning_strategy.on_fill(ctx, fill)
+
     async for bar in feed:
         # A replayed feed (scan, backtest) never suspends: without this a year of
         # bars held the event loop ~40s, the ingest worker's 30s leader lock
@@ -540,6 +568,11 @@ async def run(
         # it, so it's a best-effort duck-typed hook.
         if symbol is not None and hasattr(execution, "on_bar"):
             execution.on_bar(symbol, bar)
+            # What filled at this bar's open (or at a backtest stop inside it)
+            # is booked before anything decides on the bar: a position still
+            # open on paper drew a second square-off / exit order that then
+            # opened the opposite side on the next bar.
+            await apply_fills()
 
         if symbol is not None:
             for strategy in strategies:
@@ -617,21 +650,7 @@ async def run(
         if hasattr(execution, "poll_once"):
             await execution.poll_once()
 
-        async for fill in execution.fills():
-            quantity_before = portfolio.positions[fill.symbol].quantity if fill.symbol in portfolio.positions else 0.0
-            portfolio.apply(fill)
-            if ledger is not None:
-                await ledger.on_fill(fill, quantity_before, portfolio.positions[fill.symbol])
-            name = strategy_of_order.get(fill.order_id) or holders.get(fill.symbol)
-            after = portfolio.positions[fill.symbol].quantity
-            if after == 0:
-                holders.pop(fill.symbol, None)
-            elif quantity_before == 0 or (quantity_before > 0) != (after > 0):
-                if name is not None:
-                    holders[fill.symbol] = name  # opened (or flipped) by this strategy
-            owning_strategy = strategies_by_name.get(name) or owner_by_symbol.get(fill.symbol)
-            if owning_strategy is not None:
-                owning_strategy.on_fill(ctx, fill)
+        await apply_fills()
 
         if ledger is not None:
             await ledger.snapshot_positions(portfolio.positions)

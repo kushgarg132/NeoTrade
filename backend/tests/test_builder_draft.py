@@ -726,3 +726,18 @@ async def test_invalid_swing_draft_counts_as_swing(env, monkeypatch):
     await draft.run(db, redis, NOW, llm=llm, backtest=backtest_of(result()))
     horizons = sorted(store.horizon_of(d) for d in (await _drafts(db)).values())
     assert horizons == ["intraday", "swing"]
+
+
+def test_since_profit_factor_is_over_round_trips():
+    # A winner (+100 gross, 10 + 10 charges) and a loser (-50 gross, 10 + 10): 80 / 70, not the
+    # per-fill 90 / (10 + 10 + 60).
+    t0 = datetime(2026, 1, 5, 4, 0, tzinfo=timezone.utc)
+
+    def fill(i, side, net):
+        return {"symbol": "ITC", "side": side, "quantity": 10, "timestamp": (t0 + timedelta(minutes=5 * i)).isoformat(),
+                "net_pnl": net, "realized_pnl": net}
+
+    trades = [fill(0, "BUY", -10), fill(1, "SELL", 90), fill(2, "BUY", -10), fill(3, "SELL", -60)]
+    r = BacktestResult(symbol="ITC", start_date=t0, end_date=t0 + timedelta(days=1), total_trades=2, win_rate=0.5,
+                       profit_factor=0.0, total_pnl=10.0, max_drawdown=0.0, sharpe_ratio=0.0, trades=trades)
+    assert draft._since(r, t0, 25_000.0).profit_factor == pytest.approx(80 / 70)

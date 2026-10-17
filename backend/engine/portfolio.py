@@ -16,8 +16,12 @@ class Portfolio:
         pos = self.positions.get(fill.symbol)
 
         if pos is None or pos.quantity == 0:
+            # Reopening keeps what the symbol already realized: dropping it
+            # erased every earlier round trip from the backtest's P&L and
+            # from the kill-switch's equity.
             self.positions[fill.symbol] = Position(
                 symbol=fill.symbol, quantity=delta, avg_price=fill.price, venue=fill.venue,
+                realized_pnl=pos.realized_pnl if pos is not None else 0.0,
             )
             return
 

@@ -233,5 +233,6 @@ async def test_a_long_term_buy_is_sold_at_its_target_when_a_bar_reaches_it():
 async def test_a_long_term_buy_is_sold_at_its_stop_when_a_bar_breaks_it():
     result = await _levels_backtest([100, 98, 95, 89, 85], stop=90.0, target=120.0)
     assert [t["side"] for t in result.trades] == ["BUY", "SELL"]
-    assert result.trades[1]["price"] == pytest.approx(90 * (1 - BACKTEST_SLIPPAGE_BPS / 10_000))  # the stop level
+    # day 4 opens at 89, under the 90 stop: it fills at that open, not at a level never traded
+    assert result.trades[1]["price"] == pytest.approx(89 * (1 - BACKTEST_SLIPPAGE_BPS / 10_000))
     assert result.trades[1]["gross_pnl"] < 0
