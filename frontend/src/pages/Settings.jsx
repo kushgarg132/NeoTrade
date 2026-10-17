@@ -227,6 +227,8 @@ const BrokerSheet = () => {
     try {
       await api.post(endpoints.broker.disconnect(broker));
       await refresh(broker);
+    } catch (err) {
+      setNote(err?.response?.data?.detail || 'Could not disconnect');
     } finally {
       setBusy(false);
     }
@@ -1285,7 +1287,10 @@ const PortfolioSheet = ({ isAdmin }) => {
 
   const commit = (key) => {
     const value = Math.min(100, Math.max(1, Number(draft[key]) || prefs[key]));
-    api.put(endpoints.settings.preferences, { [key]: value }).then((res) => setPrefs(res.data));
+    api
+      .put(endpoints.settings.preferences, { [key]: value })
+      .then((res) => setPrefs(res.data))
+      .catch(() => setDraft((d) => ({ ...d, [key]: prefs[key] })));
   };
 
   const setVerdicts = (next) => {
@@ -1297,7 +1302,10 @@ const PortfolioSheet = ({ isAdmin }) => {
     ) {
       return;
     }
-    api.put(endpoints.settings.portfolioVerdicts, { audience: next }).then((res) => setAudience(res.data.audience));
+    api
+      .put(endpoints.settings.portfolioVerdicts, { audience: next })
+      .then((res) => setAudience(res.data.audience))
+      .catch((err) => window.alert(err?.response?.data?.detail || 'That was not saved.'));
   };
 
   return (
