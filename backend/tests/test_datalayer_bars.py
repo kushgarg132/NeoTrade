@@ -104,8 +104,9 @@ async def test_loop_backfills_new_symbols_and_tops_up_known_ones(mongo, monkeypa
 
 
 class FakeBroker:
-    def __init__(self, fail=()):
+    def __init__(self, fail=(), end=TODAY):
         self.fail = set(fail)
+        self.end = end
 
     async def history(self, instrument, interval, period):
         from backend.components.shared.models import PriceCandle
@@ -115,7 +116,7 @@ class FakeBroker:
         return [
             PriceCandle(symbol=instrument.tradingsymbol, timestamp=datetime.combine(d, time(), bars.IST),
                         open=50.0, high=51.0, low=49.0, close=50.0, adj_close=50.0, volume=10)
-            for d in pd.bdate_range(end=TODAY, periods=3).date
+            for d in pd.bdate_range(end=self.end, periods=3).date
         ]
 
 
@@ -149,6 +150,16 @@ async def test_loop_takes_stocks_from_the_broker_and_the_rest_from_yahoo(mongo, 
     frames = await bars.read(mongo, ["AAA", "UNLISTED"], TODAY - timedelta(days=10))
     assert list(frames["AAA"]["close"]) == [50.0] * 3  # broker
     assert frames["UNLISTED"]["close"].iloc[0] == 100.0  # yahoo
+
+
+async def test_loop_tops_up_from_yahoo_when_the_broker_lacks_the_latest_session(mongo, monkeypatch):
+    session = pd.bdate_range(end=TODAY, periods=1)[0].date()
+    downloads = _broker_loop_setup(monkeypatch, FakeBroker(end=session - timedelta(days=1)), {"AAA"})
+    await bars.loop(mongo, FakeRedis(), now=AFTER_CLOSE)
+
+    assert downloads[0] == ("5y", ["AAA.NS"])
+    frames = await bars.read(mongo, ["AAA"], TODAY - timedelta(days=10))
+    assert frames["AAA"].index[-1].date() == session  # yahoo's frame, with the latest close
 
 
 async def test_loop_falls_back_to_yahoo_when_the_first_broker_call_fails(mongo, monkeypatch):
