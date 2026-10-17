@@ -138,6 +138,14 @@ async def test_a_sell_of_pre_journal_shares_is_clipped(db):
     assert rows[-1]["by_symbol"] == {"A": {"qty": 10, "value": 1200}}
 
 
+async def test_a_sell_of_the_gap_lot_leaves_the_curve(db):
+    """bob's 4 shares predate the journal (gap lot at his snapshot); selling them must empty the curve."""
+    await db["journal_trades"].insert_one(_trade("A", "SELL", 4, 120, D3, user="bob"))
+    await history.backfill(db, "bob", D3)
+    rows = await history.series(db, "bob", None)
+    assert rows[-1]["by_symbol"] == {} and rows[-1]["value"] == 0 and rows[-1]["invested"] == -120
+
+
 async def test_a_bonus_scales_journal_events_to_the_adjusted_bars(db):
     """I2: 10 @200 in the journal, broker now 20 @100 (1:1 bonus), bars split-adjusted."""
     await db["journal_trades"].insert_one(_trade("A", "BUY", 10, 200, D1, user="carol"))
