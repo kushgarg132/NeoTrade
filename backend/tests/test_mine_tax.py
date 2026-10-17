@@ -88,6 +88,13 @@ def test_harvest_loss_and_gain_fill_exemption():
     assert r["realised"]["exemption_left"] == 125_000
 
 
+def test_gain_harvest_is_whole_shares():
+    # 1,000 shares each 300 up (3,00,000 long gain): 1,25,000 of room fits 416 shares, not 416.67.
+    r = tax.report([buy("A", 1000, 100, datetime(2024, 1, 1, tzinfo=IST))], {"A": 1000}, {"A": 400}, 2026,
+                   date(2026, 10, 15))
+    assert r["harvest"]["gain"] == [{"symbol": "A", "qty": 416, "gain": 124_800}]
+
+
 def test_rebalance_uses_same_rates():
     from backend.portfolio import rebalance
     assert rebalance.STCG_RATE is tax.STCG_RATE

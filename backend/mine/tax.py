@@ -1,6 +1,7 @@
 """FY capital-gains report for the user's own account: realised gains split
 short/long term, estimated tax, and what to do about it. Pure. Estimates."""
 
+import math
 from datetime import date, timedelta
 
 from backend.engine.session import IST
@@ -110,13 +111,14 @@ def report(trades: list[dict], held: dict[str, float], prices: dict[str, float],
     gain: dict[str, dict] = {}
     room = left
     for u in sorted((u for u in unrealised if u["term"] == "long" and u["gain"] > 0), key=lambda u: -u["gain"]):
-        if room <= 1e-9:
-            break
-        frac = min(1.0, room / u["gain"])
+        per_share = u["gain"] / u["qty"]
+        n = min(u["qty"], math.floor(room / per_share + 1e-9))  # whole shares only: a lot can't be sold in part-shares
+        if n <= 0:
+            continue
         e = gain.setdefault(u["symbol"], {"symbol": u["symbol"], "qty": 0.0, "gain": 0.0})
-        e["qty"] += u["qty"] * frac
-        e["gain"] += u["gain"] * frac
-        room -= u["gain"] * frac
+        e["qty"] += n
+        e["gain"] += per_share * n
+        room -= per_share * n
 
     return {
         "realised": {"short_gain": short, "long_gain": long, "exemption_used": used, "exemption_left": left,
