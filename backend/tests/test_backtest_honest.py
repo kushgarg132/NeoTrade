@@ -233,3 +233,27 @@ async def test_a_long_term_sell_with_nothing_held_is_not_a_short():
     flat = (100, 102.5, 97.5, 100)
     result = await _run_daily(_LongTermSell(), [flat, flat, (90, 91, 79, 80), flat])
     assert result.trades == []
+
+
+@pytest.mark.asyncio
+async def test_profit_factor_is_over_round_trips():
+    # One winner (entry 102, out at the 130 target) and one stopped loser.
+    instrument = Instrument(exchange="NSE", tradingsymbol="ITC", name="ITC", instrument_token=1, exchange_token=1,
+                            instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)
+
+    class _TwoTrades(_BuyTwice):
+        def on_bar(self, ctx, bar):
+            if self.seen in (0, 3):
+                ctx.submit(Intent(symbol="ITC", side=Side.BUY, strength=1.0, reason_codes=["t"], stop_hint=95.0,
+                                  target_hint=130.0))
+            self.seen += 1
+
+    flat = (100, 101, 99, 100)
+    candles = _candles([flat, flat, (110, 131, 109, 125), flat, flat, (100, 100, 94, 95), flat])
+    result = await run_backtest([_TwoTrades()], _Provider(candles), [instrument], candles[0].timestamp,
+                                candles[-1].timestamp, "5m", account_size=25_000.0, max_exposure=15_000.0,
+                                per_trade_cap=5_000.0)
+    buy1, sell1, buy2, sell2 = result.trades
+    win = sell1["gross_pnl"] - buy1["costs"] - sell1["costs"]
+    loss = -(sell2["gross_pnl"] - buy2["costs"] - sell2["costs"])
+    assert result.profit_factor == pytest.approx(win / loss)

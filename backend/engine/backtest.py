@@ -212,10 +212,11 @@ async def run_backtest(
 
     total_trades = len(round_trips)
     total_pnl = sum(t["realized_pnl"] for t in trades)
-    closed_trades = [t for t in trades if t["realized_pnl"] != 0.0]
     win_rate = sum(1 for pnl in round_trips if pnl > 0) / len(round_trips) if round_trips else 0.0
-    gross_profit = sum(t["realized_pnl"] for t in closed_trades if t["realized_pnl"] > 0)
-    gross_loss = -sum(t["realized_pnl"] for t in closed_trades if t["realized_pnl"] < 0)
+    # Over round trips, net of both legs' charges, as the paper gate counts
+    # them: per fill, every winner's entry charges were booked as a loss.
+    gross_profit = sum(pnl for pnl in round_trips if pnl > 0)
+    gross_loss = -sum(pnl for pnl in round_trips if pnl < 0)
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else 0.0
 
     return BacktestResult(
