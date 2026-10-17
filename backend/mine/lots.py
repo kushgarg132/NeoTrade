@@ -94,11 +94,15 @@ def reconcile(lots: list[Lot], broker_qty: float, broker_avg) -> tuple[list[Lot]
 
 
 async def mine_trades(db, user_id: str) -> list[dict]:
-    """Journal trades on the user's own brokers; with no roles set, all of them."""
+    """Journal equity trades on the user's own brokers; with no roles set, all
+    of them. Options and futures are left out: they are not holdings, and their
+    gains are business income, not the capital gains Mine's tax page estimates."""
     from backend.brokers.roles import brokers_for
     from backend.journal.accounts import filter_trades
+    from backend.journal.roundtrips import instrument_kind
     from backend.journal.store import JournalStore
     from backend.prefs import PrefsStore
 
     mine = brokers_for((await PrefsStore(db).get(user_id)).get("broker_roles") or {}, "mine")
-    return filter_trades(await JournalStore(db).list_trades(user_id), mine or None)
+    return [t for t in filter_trades(await JournalStore(db).list_trades(user_id), mine or None)
+            if instrument_kind(t["symbol"], t.get("exchange")) == "STOCK"]

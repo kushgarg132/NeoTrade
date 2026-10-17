@@ -91,3 +91,12 @@ async def db():
 async def test_mine_trades_only_mine_brokers(db):
     assert {t["broker"] for t in await lots.mine_trades(db, "alice")} == {"upstox"}
     assert {t["symbol"] for t in await lots.mine_trades(db, "alice")} == {"A"}
+
+
+async def test_mine_trades_leave_out_options_and_futures(db):
+    """F&O round trips are not holdings and not capital gains: Tax must not tax them at 20% STCG."""
+    await db["journal_trades"].insert_many([
+        {**buy("NIFTY24OCT25000CE", 50, 100, D1, "upstox"), "exchange": "NFO", "user_id": "alice", "_id": "4"},
+        {**buy("RELIANCE24OCTFUT", 250, 3000, D1, "upstox"), "exchange": "NFO", "user_id": "alice", "_id": "5"},
+    ])
+    assert {t["symbol"] for t in await lots.mine_trades(db, "alice")} == {"A"}
