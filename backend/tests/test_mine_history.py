@@ -127,6 +127,16 @@ async def test_a_later_import_rewrites_the_past(db):
     assert [r["invested"] for r in rows] == [320, 320, 320] and not rows[1]["partial"]
 
 
+async def test_a_removed_trade_drops_its_stored_days(db):
+    """R1: bob's D1 buy is undone; his curve starts at the snapshot again, so the D1 row must go."""
+    await db["journal_trades"].insert_one(_trade("A", "BUY", 4, 80, D1, user="bob"))
+    await history.write_all(db, NOW)
+    await db["journal_trades"].delete_one({"user_id": "bob"})
+    await history.write_all(db, NOW)
+    assert [r["date"] for r in await history.series(db, "bob", None)] == [D2.isoformat(), D3.isoformat()]
+    assert await db["mine_daily"].count_documents({"user_id": "alice"}) == 3  # others untouched
+
+
 async def test_a_sell_of_pre_journal_shares_is_clipped(db):
     """I1 probe: SELL 10 before any journal buy, then BUY 10 -> no negative invested or value."""
     await db["journal_trades"].insert_many([_trade("A", "SELL", 10, 100, D1, user="carol"),
