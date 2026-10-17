@@ -335,8 +335,11 @@ reaches Telegram, digests or chat.
 
 - **Setups** (`backend/forecast/setups.py::SETUPS`): momentum leader and low-volatility leader
   (top decile of `factor/model.py::scores`, re-ranked on the first trading day of each month),
-  52-week-high close on ≥1.5x 20-day average volume, and close above the 200-day SMA with
-  RSI(14) < 35. Each has a fixed horizon. A signal on day t reads rows up to t only.
+  momentum over volatility (`setups.py::momentum_vol`: 12-1 month return over 60-day volatility,
+  top decile on each month's first trading day, held 60 days), 52-week-high close on ≥1.5x
+  20-day average volume, and close above the 200-day SMA with RSI(14) < 35. Each has a fixed
+  horizon. A signal on day t reads rows up to t only. The study reads every stored bar (from 2009,
+  `picks.py::HISTORY_START`).
 - **Events** (`backend/forecast/study.py::events`): entry t+1 open, exit close of t+1+H; net of
   CNC charges from `engine/execution/costs.py::calculate_indian_costs` on a ₹1L position; NIFTY
   over the same window. `study.py::kept` drops signals inside an open event's window.

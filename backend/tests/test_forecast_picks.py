@@ -45,6 +45,20 @@ def test_a_signal_on_day_t_cannot_see_day_t_plus_one(setup):
         pd.testing.assert_frame_equal(truncated, full.loc[:day])
 
 
+def test_momentum_vol_takes_the_top_decile_of_12_1_momentum_over_60_day_vol_on_month_starts():
+    t = setups.table(_frames(n=40))
+    close = t["close"]
+    fires = setups.momentum_vol(t)
+    score = (close.shift(21) / close.shift(252) - 1) / close.pct_change(fill_method=None).rolling(60).std()
+    days = fires.index[fires.notna().any(axis=1)]
+    assert len(days) >= 5 and all(d.month != fires.index[fires.index.get_loc(d) - 1].month for d in days)
+    for day in days:
+        assert set(fires.loc[day].dropna().index) == set(score.loc[day].nlargest(4).index)  # 40 names -> 4
+    symbol = fires.loc[days[-1]].dropna().idxmax()
+    text = setups.BY_NAME["momentum_vol_60"].explain(t, symbol, days[-1])
+    assert text.startswith("12-month return skipping the last month") and "#1 of 40" in text
+
+
 def test_entry_is_next_open_and_exit_is_close_after_horizon():
     t = setups.table(_frames())
     entry_day, exit_day, gross, net, nifty = study.outcome(t, "S0", 300, 20)

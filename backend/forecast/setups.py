@@ -18,7 +18,7 @@ import pandas as pd
 
 from backend.components.quant.indicators import Indicators
 from backend.datalayer.bars import NIFTY
-from backend.factor.model import YEAR, Params, scores, volatility
+from backend.factor.model import MONTH, YEAR, Params, scores, volatility
 
 FIELDS = ("open", "high", "close", "volume")
 
@@ -39,15 +39,19 @@ def _month_starts(days: pd.DatetimeIndex) -> list:
     return [d for prev, d in zip(days[:-1], days[1:]) if d.month != prev.month]
 
 
-def _ranked(t: dict, params: Params) -> pd.DataFrame:
-    close = t["close"]
+def _top_decile(close: pd.DataFrame, rank: Callable[[object], pd.Series]) -> pd.DataFrame:
+    """The top tenth of `rank(day)` (best first) on each month's first trading day."""
     out = pd.DataFrame(np.nan, index=close.index, columns=close.columns)
     for day in _month_starts(close.index):
-        ranked = scores(close, day, params)
+        ranked = rank(day)
         if len(ranked) >= 10:
             top = ranked.iloc[: len(ranked) // 10]
             out.loc[day, top.index] = top.values
     return out
+
+
+def _ranked(t: dict, params: Params) -> pd.DataFrame:
+    return _top_decile(t["close"], lambda day: scores(t["close"], day, params))
 
 
 def momentum(t: dict) -> pd.DataFrame:
@@ -56,6 +60,21 @@ def momentum(t: dict) -> pd.DataFrame:
 
 def low_vol(t: dict) -> pd.DataFrame:
     return _ranked(t, Params(momentum_weight=0.0))
+
+
+VOL_DAYS = 60
+
+
+def _mom_vol_parts(close: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """12-1 month return (the last month skipped) and 60-day daily volatility."""
+    r12_1 = close.shift(MONTH) / close.shift(YEAR) - 1
+    return r12_1, close.pct_change(fill_method=None).rolling(VOL_DAYS).std()
+
+
+def momentum_vol(t: dict) -> pd.DataFrame:
+    r12_1, vol = _mom_vol_parts(t["close"])
+    score = r12_1 / vol.replace(0, np.nan)
+    return _top_decile(t["close"], lambda day: score.loc[day].dropna().sort_values(ascending=False))
 
 
 def breakout(t: dict) -> pd.DataFrame:
@@ -100,6 +119,16 @@ def _explain_low_vol(t: dict, symbol: str, day) -> str:
     return f"1-year volatility {vol.get(symbol, np.nan):.0%}, #{rank} lowest of {len(vol)} (re-ranked each month)"
 
 
+def _explain_momentum_vol(t: dict, symbol: str, day) -> str:
+    close = t["close"].loc[:day]
+    r12_1, vol = (part.iloc[-1] for part in _mom_vol_parts(close))
+    ranked = (r12_1 / vol.replace(0, np.nan)).dropna().sort_values(ascending=False)
+    rank = list(ranked.index).index(symbol) + 1 if symbol in ranked.index else None
+    return (f"12-month return skipping the last month {r12_1[symbol]:+.0%} over 60-day volatility "
+            f"{vol[symbol] * np.sqrt(YEAR):.0%} (annualised): #{rank} of {len(ranked)} "
+            f"(top decile, re-ranked each month)")
+
+
 @dataclass(frozen=True)
 class Setup:
     name: str
@@ -115,5 +144,6 @@ SETUPS = (
     Setup("breakout", "52-week-high breakout", 60, breakout, _explain_breakout),
     Setup("pullback", "Pullback in uptrend", 20, pullback, _explain_pullback),
     Setup("low_vol", "Low-volatility leader", 60, low_vol, _explain_low_vol),
+    Setup("momentum_vol_60", "Momentum over volatility", 60, momentum_vol, _explain_momentum_vol),
 )
 BY_NAME = {s.name: s for s in SETUPS}

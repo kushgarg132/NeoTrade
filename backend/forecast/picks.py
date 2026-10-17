@@ -12,7 +12,7 @@ stats and walk-forward calibration from the last run).
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 import pandas as pd
@@ -26,7 +26,10 @@ PICKS = "picks"
 STUDY = "picks_study"
 MAX_PICKS = 10
 MIN_FORWARD = 100  # scored forward picks before the forward record counts
-HISTORY_YEARS = 6
+# Every stored bar (bars.DEEP_START, 2009 on): ~850k bars, a ~15s read and
+# ~4s of study on the VM (estimated 2026-10-17 from 280k bars read in 4.6s;
+# the study measured 1.3s over 6 years, 3.9s since 2009).
+HISTORY_START = date.fromisoformat(bars.DEEP_START)
 CAVEATS = [
     "Survivorship: the universe is today's stock list, so names that were delisted or dropped out are missing "
     "from history, which flatters past returns.",
@@ -124,7 +127,7 @@ def live_refusal(scored: list[dict]) -> Optional[str]:
 async def load(db, now: datetime) -> Optional[dict]:
     today = bars.today_ist(now)
     universe = set(await db[bars.BARS].distinct("symbol")) | {bars.NIFTY}
-    frames = await bars.read(db, universe, today - timedelta(days=365 * HISTORY_YEARS), today)
+    frames = await bars.read(db, universe, HISTORY_START, today)
     if bars.NIFTY not in frames or len(frames) < 2:
         return None
     return setups.table(frames)
