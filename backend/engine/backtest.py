@@ -91,14 +91,16 @@ async def run_backtest(
         finally:
             past.append(bar)
 
-    async def exit_at_level(symbol, bar, past) -> None:
+    async def exit_at_level(symbol, bar, past, entry_bar: bool = False) -> None:
+        """`entry_bar`: the position filled at this bar's open, so the rest of
+        the bar can still reach its stop or target (no trail, no hold count)."""
         position = portfolio.positions.get(symbol)
         if symbol not in levels or position is None or position.quantity == 0:
             return
         lv = levels[symbol]
         stop, target = lv["stop"], lv["target"]
         long = position.quantity > 0
-        if long and lv["k"]:  # past[-1] is the entry bar on the first bar held
+        if long and lv["k"] and not entry_bar:  # past[-1] is the entry bar on the first bar held
             lv["high"] = max(lv["high"] or past[-1].close, past[-1].close)
             atr = Indicators.atr(*(pd.Series([getattr(b, f) for b in past]) for f in ("high", "low", "close"))).iloc[-1]
             if not pd.isna(atr):  # kept: a widening ATR never lowers it
@@ -109,11 +111,12 @@ async def run_backtest(
         else:
             level = stop if bar.high >= stop else (target if target is not None and bar.low <= target else None)
             gapped = bar.open >= stop
-        if level == stop and gapped and lv["hold"]:
-            level = bar.open  # a swing position held overnight gets the gap, not its stop
-        lv["bars"] += 1
-        if level is None and lv["hold"] and lv["bars"] >= lv["hold"]:
-            level = bar.close
+        if level == stop and gapped:
+            level = bar.open  # a stop cannot fill better than the first price traded through it
+        if not entry_bar:
+            lv["bars"] += 1
+            if level is None and lv["hold"] and lv["bars"] >= lv["hold"]:
+                level = bar.close
         if level is None:
             return
         del levels[symbol]
@@ -134,10 +137,16 @@ async def run_backtest(
             if len(bar_timestamps) % PROGRESS_EVERY == 0:
                 logger.info("backtest %s: %d bars, at %s, %d fills, %.0fs",
                             names, len(bar_timestamps), bar.timestamp, len(trades), time.monotonic() - began)
+            symbol = feed.symbol_for_token.get(bar.instrument_token)
+            held = portfolio.positions.get(symbol)
+            flat = held is None or held.quantity == 0
             await exit_on_levels(bar)
             if model_options is not None:
                 model_options.observe(feed.symbol_for_token[bar.instrument_token], bar)
             yield bar
+            held = portfolio.positions.get(symbol)
+            if flat and held is not None and held.quantity != 0:
+                await exit_at_level(symbol, bar, None, entry_bar=True)
 
     trades: list[dict] = []
     # A round trip: from the fill that opens a position to the one that
@@ -161,6 +170,7 @@ async def run_backtest(
             open_pnl[fill.symbol] = open_pnl.get(fill.symbol, 0.0) + gross - fill.costs
             if post.quantity == 0:
                 round_trips.append(open_pnl.pop(fill.symbol))
+                levels.pop(fill.symbol, None)  # closed some other way: its stop is gone with it
             trades.append({
                 "order_id": fill.order_id,
                 "symbol": fill.symbol,

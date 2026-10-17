@@ -150,13 +150,13 @@ async def test_backtest_trail_never_falls_when_atr_widens():
 
 
 @pytest.mark.asyncio
-async def test_swing_gap_through_stop_fills_at_the_open_intraday_at_the_level():
+async def test_a_gap_through_the_stop_fills_at_the_open():
     flat = (100, 102.5, 97.5, 100)
     swing = await _run_daily(_SwingBuy(0, 20, None), [flat, flat, (40, 45, 35, 42), flat])
     assert swing.trades[1]["price"] == pytest.approx(40 * 0.999)  # opened under the stop of 50
     intraday = await _run([(100, 101, 99, 100), (102, 103, 101, 102), (90, 92, 88, 90)],
                           account_size=25_000.0, max_exposure=15_000.0, per_trade_cap=5_000.0)
-    assert intraday.trades[1]["price"] == pytest.approx(95 * 0.999)  # unchanged: the stop level
+    assert intraday.trades[1]["price"] == pytest.approx(90 * 0.999)  # the open too: no fill at a level never traded
 
 
 class _BuyTwice:
@@ -186,6 +186,17 @@ async def test_a_second_round_trip_does_not_erase_the_first():
                                 per_trade_cap=5_000.0)
     assert result.total_trades == 2
     assert all(t["gross_pnl"] <= 0 for t in result.trades)  # two losers, no phantom win on the re-entry
+
+
+@pytest.mark.asyncio
+async def test_the_entry_bar_itself_can_stop_the_trade_out():
+    # Filled at bar 1's open (102), bar 1 then trades down to 94: stopped at 95 there,
+    # not carried to a later bar that never revisits the stop.
+    result = await _run([(100, 101, 99, 100), (102, 103, 94, 101), (101, 110, 100, 108)],
+                        account_size=25_000.0, max_exposure=15_000.0, per_trade_cap=5_000.0)
+    sell = result.trades[1]
+    assert sell["price"] == pytest.approx(95 * 0.999)
+    assert sell["timestamp"] == (T0 + timedelta(minutes=5)).isoformat()
 
 
 @pytest.mark.asyncio
