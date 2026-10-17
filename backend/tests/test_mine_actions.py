@@ -176,6 +176,11 @@ def test_today_mine_actions_top3_and_no_duplicate_holding_items(monkeypatch):
     monkeypatch.setattr(service, "mark_prices", AsyncMock(return_value=MARKS))
     monkeypatch.setattr(service.bars, "prev_closes", AsyncMock(return_value={}))
     asyncio.run(_seed(db, ("HOLD", "SELL")))
+    # /today reads the real clock: keep the news and the ex-date near it, not near NOW.
+    real = datetime.now(timezone.utc)
+    asyncio.run(db["news_items"].update_many({}, {"$set": {"published_at": real - timedelta(hours=3)}}))
+    asyncio.run(db["corporate_events"].update_many(
+        {}, {"$set": {"date": (real.astimezone(IST).date() + timedelta(days=3)).isoformat()}}))
     asyncio.run(db["paper_trades"].insert_one({"user_id": "alice:mine", "symbol": "B", "status": "OPEN",
                                                "quantity": 5, "alerted": ["target"]}))
     client = _client(monkeypatch, today_router, db, "alice")
