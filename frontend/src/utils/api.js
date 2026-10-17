@@ -154,14 +154,12 @@ export const endpoints = {
   analyze: (symbol) => `/agents/analyze/${symbol}`,
   quickAnalyze: (symbol) => `/agents/quick-analyze/${symbol}`,
   intraday: (symbol) => `/agents/intraday/${symbol}`,
-  stockInfo: (symbol) => `/stock_info/${symbol}`,
   marketIndices: '/market/indices',
   trendingStocks: '/market/trending',
   marketQuotes: (symbols) => `/market/quotes?symbols=${encodeURIComponent(symbols.join(','))}`,
   // The backend derives the owner from the session token; there is no user
   // id in these paths any more.
   watchlist: {
-    get: '/watchlist',
     add: (symbol) => `/watchlist/add?symbol=${encodeURIComponent(symbol)}`,
     remove: (symbol) => `/watchlist/remove/${encodeURIComponent(symbol)}`,
     details: '/watchlist/details',
@@ -173,7 +171,6 @@ export const endpoints = {
     expiries: (underlying) => `/options/expiries?underlying=${underlying}`,
     chain: (underlying, expiry) => `/options/chain?underlying=${underlying}&expiry=${expiry}`,
   },
-  marketNews: '/news/market',
   system: {
     status: '/system/status',
     backlog: '/system/backlog',
@@ -193,7 +190,6 @@ export const endpoints = {
     runs: '/trading/runs',
     positions: (venue) => inBook('/trading/positions', venue),
     fills: (venue) => inBook('/trading/fills', venue),
-    equity: (venue) => inBook('/trading/equity', venue),
     killSwitch: '/trading/kill-switch',
     backtest: (name) => `/trading/backtests/${name}`,
     trades: (status, venue, mode) =>
@@ -254,7 +250,6 @@ export const endpoints = {
     learning: '/journal/learning',
   },
   broker: {
-    list: '/broker/list',
     status: (broker) => `/broker/${broker}/status`,
     loginUrl: (broker) => `/broker/${broker}/login-url`,
     connect: (broker) => `/broker/${broker}/connect`,
