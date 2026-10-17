@@ -100,6 +100,27 @@ def forward(scored: list[dict]) -> dict:
     }
 
 
+CALIBRATION_GAP = 0.05  # live needs predicted P(up) within 5 points of the realised win rate
+
+
+def live_refusal(scored: list[dict]) -> Optional[str]:
+    """Why the forward record does not yet allow real money for Picks, or
+    None: at least MIN_FORWARD scored picks, calibrated within
+    CALIBRATION_GAP (bucket gaps weighted by count) and a positive mean net
+    excess over the Nifty."""
+    record = forward(scored)
+    n = record["n"]
+    if n < MIN_FORWARD:
+        return f"Picks has {n} scored picks; real money needs {MIN_FORWARD}."
+    gap = sum(abs(b["predicted"] - b["realised"]) * b["n"] for b in record["buckets"]) / n
+    if gap > CALIBRATION_GAP:
+        return f"Picks is {gap:.0%} off calibration; real money needs {CALIBRATION_GAP:.0%} or less."
+    excess = sum(p["outcome"]["net"] - p["outcome"]["nifty"] for p in scored) / n
+    if excess <= 0:
+        return f"Picks averages {excess:+.2%} against the Nifty; real money needs a positive excess."
+    return None
+
+
 async def load(db, now: datetime) -> Optional[dict]:
     today = bars.today_ist(now)
     universe = set(await db[bars.BARS].distinct("symbol")) | {bars.NIFTY}

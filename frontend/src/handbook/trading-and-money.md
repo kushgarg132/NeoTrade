@@ -235,7 +235,8 @@ paper record (`risk/paper_gate.py::proven_strategies`). Paper takes them all, to
 record that decides what reaches the user. While the autopilot is on (paper or live), the 4 PM scan and the long-term pass run
 whatever their own switches say (`prefs.py::scan_enabled_users`, `engine/autorun.py::tick`): it
 trades the scan's proposals and acts in that pass, and used to sit idle with either off. Every order and refusal goes to
-`autopilot_log` and Telegram with a Stop button.
+`autopilot_log` and Telegram with a Stop button. It also trades Picks (`source="picks"`, quietly;
+see Picks below).
 
 ## The AI paper book: runs, books, learning
 
@@ -346,4 +347,15 @@ reaches Telegram, digests or chat.
   `picks` before the outcome exists (top 10 by median excess × P(beat NIFTY), setups with
   n ≥ 100 only), scores matured ones, and writes the study to `picks_study`. The forward record
   (`picks.py::forward`) stays "unproven" until 100 picks are scored.
+- **The AI account trades them** (`backend/autopilot/picks.py`, owner decision 2026-10-17), as the
+  forward track record, for admins only: `picks.py::enter` buys the last session's picks at the
+  first long-term pass after the open (09:20), best first, each sized to the per-trade cap in force,
+  through `autopilot/service.py::submit` (fence, kill switch, max invested, trades a day), CNC, long
+  only; `picks.py::exit_due` sells from 15:15 on the pick's `due_date` (the close of its horizon),
+  exits never blocked. Each trade carries `strategy="picks:<setup>"`, `via="autopilot:picks"` and
+  the pick's id in `context`. Nothing goes to Telegram. Paper only until the forward record passes
+  `forecast/picks.py::live_refusal` (≥100 scored, calibration within 5 points, positive mean excess
+  over NIFTY) and the owner turns on both `picks_live` and the autopilot's Live mode; AI → Autopilot
+  shows that row disabled. Today's **You vs Picks** (`portfolio/digest.py::scoreboard`, admin-only)
+  sets your account against these trades, net of charges.
 - **Caveat**: the universe is today's stock list (survivorship); the payload says so.

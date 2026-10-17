@@ -332,6 +332,11 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         # Off or on, the autopilot's open positions keep their exits.
         from backend.autopilot.service import check_exits as autopilot_exits
         await autopilot_exits(db, redis, user_id, now=now)
+        from backend.autopilot import picks as picks_trading
+        try:  # Picks held to the close of their horizon (backend/autopilot/picks.py)
+            await picks_trading.exit_due(db, redis, user_id, now)
+        except Exception as exc:
+            logger.exception("picks exits failed for %s: %s", user_id, exc)
 
     if local.time() >= MORNING and await redis.set(f"longterm:{user_id}:{day}:morning", _TOKEN, nx=True, px=86_400_000):
         did = True
@@ -355,6 +360,12 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
                 await notify(db, user_id, factor_paper.summary_text(summary))
             except Exception as exc:
                 logger.exception("factor rebalance failed for %s: %s", user_id, exc)
+        # Yesterday's Picks, bought on the AI account at this first pass after the open.
+        from backend.autopilot import picks as picks_trading
+        try:
+            await picks_trading.enter(db, redis, user_id, now)
+        except Exception as exc:
+            logger.exception("picks entries failed for %s: %s", user_id, exc)
         # Per-symbol proposals have no backtest evidence: they wait for the
         # user -- unless the user turned the autopilot on for its AI account.
         store = SuggestionStore(db)

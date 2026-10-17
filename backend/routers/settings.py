@@ -85,6 +85,7 @@ class PreferencesPatch(BaseModel):
     autopilot_enabled: Optional[bool] = None
     autopilot_live: Optional[bool] = None
     autopilot_news: Optional[bool] = None
+    picks_live: Optional[bool] = None
     rebalance_targets: Optional[RebalanceTargets] = None
     news_alerts: Optional[Literal["held", "held+watched", "all", "off"]] = None
 

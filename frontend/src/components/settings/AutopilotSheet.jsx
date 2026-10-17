@@ -5,6 +5,7 @@ import api, { endpoints, getPreferences } from '../../utils/api';
 import { cn } from '../../utils/cn';
 import { Link } from 'react-router-dom';
 import EngineSwitches from './EngineSwitches';
+import { useAuth } from '../../context/AuthContext';
 
 // One set for paper and live: Practice, live strategies, the autopilot and
 // Watch my broker all read these fields.
@@ -25,6 +26,7 @@ const AutopilotSheet = () => {
   const [confirmLive, setConfirmLive] = useState(null); // typed text while arming live
 
   const [failed, setFailed] = useState(false);
+  const isAdmin = useAuth().user?.role === 'admin';
   const loadPrefs = () =>
     getPreferences().then((res) => {
       setPrefs(res.data);
@@ -126,6 +128,14 @@ const AutopilotSheet = () => {
             prefs.autopilot_news ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]' : 'border-[var(--rule-strong)]')}
         >
           {prefs.autopilot_news ? 'On' : 'Off'}
+        </button>
+      </Row>}
+      {isAdmin && <Row
+        label="Picks with real money"
+        hint="Picks trade the AI account on paper as their forward record. Real money waits until 100 picks are scored, their calibration is within 5 points and they beat the Nifty after charges; then the owner turns on picks_live."
+      >
+        <button type="button" disabled className="h-11 sm:h-8 px-4 text-xs border border-[var(--rule-strong)] disabled:opacity-40">
+          Off
         </button>
       </Row>}
       {note && <p className="doc-meta normal-case text-[var(--loss)] mt-2">{note}</p>}

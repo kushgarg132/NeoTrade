@@ -63,13 +63,14 @@ class AutopilotOrder:
     side: Side
     quantity: int
     product: Literal["CNC", "MIS"]
-    source: Literal["chat", "engine", "factor", "news"]
+    source: Literal["chat", "engine", "factor", "news", "picks"]
     reason: str
     suggestion_id: Optional[str] = None
     strategy: Optional[str] = None  # whose idea it was; None = the autopilot's own (chat)
     # An exit's own book (True live, False paper); None = the current switch.
     # Flipping paper <-> live must not strand what the other book holds.
     live: Optional[bool] = None
+    context: Optional[dict] = None  # copied onto the trade it opens (a pick's id and due date)
 
 
 def _aware(value: Optional[datetime]) -> Optional[datetime]:
@@ -218,7 +219,7 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
     placed = Order(id=str(uuid.uuid4()), symbol=order.symbol, side=order.side, quantity=order.quantity,
                    order_type="MARKET", product=order.product,
                    strategy_name=order.strategy or f"{TAG}{order.source}", via=f"{TAG}{order.source}",
-                   suggestion_id=suggestion_id)
+                   suggestion_id=suggestion_id, context=order.context)
     try:
         if live:
             from backend.engine.execution.live_order_store import LiveOrderStore

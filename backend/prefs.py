@@ -50,6 +50,9 @@ DEFAULTS = {
     # Hand news-triggered proposals to the autopilot at once
     # (docs/superpowers/specs/2026-10-05-autopilot-news-design.md). Off until turned on.
     "autopilot_news": False,
+    # Picks (backend/autopilot/picks.py) trade the AI account on paper; real
+    # money also needs the forward record to pass (forecast/picks.py::live_refusal).
+    "picks_live": False,
     # Rebalance helper targets (backend/portfolio/rebalance.py).
     "rebalance_targets": {"rule": "cap", "max_stock_pct": 15, "max_sector_pct": 30, "overrides": {}},
     # Start an intraday / long-term paper run by itself every trading day at
