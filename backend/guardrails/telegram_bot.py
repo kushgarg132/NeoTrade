@@ -31,6 +31,7 @@ from backend.routers.settings import UsageUnavailable, fetch_usage
 
 logger = logging.getLogger(__name__)
 POLL_SECONDS = 0.5  # pause between polls; the long poll itself does the waiting
+FAIL_BACKOFF_SECONDS = 10  # pause after a failed getUpdates (< LOCK_SECONDS)
 LONG_POLL_SECONDS = 25  # Telegram holds getUpdates open until a message arrives
 OFFSET_PREFIX = "telegram:ai:offset:"
 LOCK_PREFIX = "telegram:ai:poll-lock:"
@@ -445,8 +446,11 @@ async def _poll_bot(db, redis, token: Optional[str], chats: dict) -> int:
         offset = int(raw_offset) if raw_offset is not None else None
         try:
             updates = await telegram.updates(offset, token, LONG_POLL_SECONDS)
-        except Exception:
-            logger.exception("telegram polling failed")
+        except Exception as exc:
+            # Telegram 502s for minutes at a time (01:11 UTC 2026-10-16/17): one line
+            # per failure and a pause, not two tracebacks a second. The lock is held.
+            logger.warning("telegram polling failed: %s: %s", type(exc).__name__, exc)
+            await asyncio.sleep(FAIL_BACKOFF_SECONDS)
             return 0
         for update in updates:
             sent_at = ((update.get("message") or {}).get("date"))
