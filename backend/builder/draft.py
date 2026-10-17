@@ -203,8 +203,8 @@ def _since(r, cut: datetime, account_size: float):
         open_net[s] = open_net.get(s, 0.0) + t["net_pnl"]
         if abs(held[s]) < 1e-9:
             trips.append(open_net.pop(s))
-    gain = sum(t["net_pnl"] for t in kept if t["net_pnl"] > 0)
-    loss = -sum(t["net_pnl"] for t in kept if t["net_pnl"] < 0)
+    gain = sum(p for p in trips if p > 0)
+    loss = -sum(p for p in trips if p < 0)
     return r.model_copy(update={
         "start_date": max(r.start_date, cut), "total_trades": len(trips),
         "win_rate": sum(p > 0 for p in trips) / len(trips) if trips else 0.0,
