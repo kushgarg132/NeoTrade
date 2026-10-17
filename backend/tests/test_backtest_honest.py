@@ -214,3 +214,22 @@ async def test_square_off_closes_once_and_never_opens_the_other_side():
                                 per_trade_cap=5_000.0)
     assert [t["side"] for t in result.trades] == ["BUY", "SELL"]
     assert result.total_trades == 1
+
+
+class _LongTermSell:
+    def __init__(self):
+        self.spec = StrategySpec(name="lt-sell", mode="LONGTERM", timeframe="1d", warmup_bars=0, universe=["ITC"])
+
+    def on_start(self, ctx): ...
+    def on_fill(self, ctx, fill): ...
+
+    def on_bar(self, ctx, bar):
+        ctx.submit(Intent(symbol="ITC", side=Side.SELL, strength=1.0, reason_codes=["t"], stop_hint=110.0,
+                          target_hint=80.0))
+
+
+@pytest.mark.asyncio
+async def test_a_long_term_sell_with_nothing_held_is_not_a_short():
+    flat = (100, 102.5, 97.5, 100)
+    result = await _run_daily(_LongTermSell(), [flat, flat, (90, 91, 79, 80), flat])
+    assert result.trades == []

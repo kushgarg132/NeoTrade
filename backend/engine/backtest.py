@@ -75,6 +75,8 @@ async def run_backtest(
     async def submit_noting_levels(order: Order) -> str:
         context = order.context or {}
         held = portfolio.positions.get(order.symbol)
+        if order.product == "CNC" and order.side == Side.SELL and (held is None or held.quantity < order.quantity):
+            return order.id  # a delivery account cannot short (suggestions/service.py refuses it too)
         if order.contract is None and context.get("stop") is not None and (held is None or held.quantity == 0):
             levels[order.symbol] = {
                 "stop": context["stop"], "target": context.get("target"), "product": order.product,
