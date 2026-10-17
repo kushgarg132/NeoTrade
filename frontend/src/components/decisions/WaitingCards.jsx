@@ -41,7 +41,7 @@ const WaitingCard = ({ card, now, onSettled }) => {
         later(onSettled, 1500);
       }
     } catch (err) {
-      setNote(err?.response ? detailText(err, 'This card could not be confirmed.') : 'No answer from the server. The order may have gone through: check Trades before trying again.');
+      setNote(err?.response ? detailText(err, 'This card could not be confirmed.') : 'No answer from the server. The order may have gone through: check Mine › Journal before trying again.');
       later(onSettled, 2500);
     } finally {
       setBusy(null);
