@@ -43,9 +43,10 @@ async def _month_contributions(user_id: str, today) -> dict[str, float]:
     before = [r for r in rows if r["date"] < first.isoformat()]
     start = before[-1]["by_symbol"] if before else {}
     now = rows[-1]["by_symbol"]
+    last = date.fromisoformat(rows[-1]["date"])
     flows: dict[str, float] = {}
     for day, symbol, qty, price in (await history._inputs(db.db, user_id))["events"]:
-        if day >= first:
+        if first <= day <= last:  # a trade after the newest row is not in its value yet (as returns, m1)
             flows[symbol] = flows.get(symbol, 0.0) + qty * price
     return {s: now.get(s, {}).get("value", 0.0) - start.get(s, {}).get("value", 0.0) - flows.get(s, 0.0)
             for s in {*now, *start}}
