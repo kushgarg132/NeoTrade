@@ -186,3 +186,20 @@ async def test_a_second_round_trip_does_not_erase_the_first():
                                 per_trade_cap=5_000.0)
     assert result.total_trades == 2
     assert all(t["gross_pnl"] <= 0 for t in result.trades)  # two losers, no phantom win on the re-entry
+
+
+@pytest.mark.asyncio
+async def test_square_off_closes_once_and_never_opens_the_other_side():
+    # 09:30..15:25 IST, then the next session from 09:15. The square-off used to
+    # fire again on the bar its first order filled, opening a short at 15:25.
+    times = ([T0 + timedelta(minutes=5 * i) for i in range(72)]
+             + [T0 + timedelta(days=1, minutes=-15 + 5 * i) for i in range(10)])
+    candles = [PriceCandle(symbol="ITC", timestamp=t, open=100, high=101, low=99, close=100, volume=1000)
+               for t in times]
+    instrument = Instrument(exchange="NSE", tradingsymbol="ITC", name="ITC", instrument_token=1, exchange_token=1,
+                            instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05)
+    result = await run_backtest([_BuyOnce()], _Provider(candles), [instrument], candles[0].timestamp,
+                                candles[-1].timestamp, "5m", account_size=25_000.0, max_exposure=15_000.0,
+                                per_trade_cap=5_000.0)
+    assert [t["side"] for t in result.trades] == ["BUY", "SELL"]
+    assert result.total_trades == 1
