@@ -124,7 +124,7 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
 
     for i in await ideas(db, user_id):
         conviction = (i.get("score") or {}).get("final")
-        out.append(_action("idea", i["symbol"], i["id"], f"{i.get('side', '')} {i.get('quantity', 0):g} {i['symbol']}",
+        out.append(_action("idea", i["symbol"], i["id"], f"{i.get('side', '')} {i.get('quantity') or 0:g} {i['symbol']}",
                            "Proven idea" + (f" · conviction {conviction:.2f}" if conviction is not None else ""),
                            _aware(i.get("created_at")) or now, {"type": "idea", "suggestion_id": i["id"]}))
 
