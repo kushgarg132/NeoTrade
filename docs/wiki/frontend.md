@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html, frontend/nginx.conf, frontend/Dockerfile]
-verified_at: 0865567
+verified_at: 9e01520
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -118,7 +118,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 ### 8. More: Settings, Profile, System
 1. `pages/Settings.jsx` tabs (`useTab`): `accounts` (`BrokerSheet`: `GET /broker/{broker}/status`, `GET .../login-url`, `POST .../connect {request_token}` or `{client_code,password,totp}`, `POST .../disconnect`, `POST /settings/broker-credentials {api_key,...}`; role radio writes prefs `broker_roles`), `safety` (`GuardrailsSheet`: prefs + `/guardrails/telegram/{link,verify,bot}`; `PortfolioSheet`: `portfolio_max_*_pct`, admin `GET/PUT /settings/portfolio-verdicts {audience}`), `ai` (`ModelSheet` `omniroute-model|tiers|models|catalog|model/test` (writes admin-only), admin `UsageSheet` `omniroute-usage` retried 5x/4 s), `about` (admin: links to `/system`, `/system/future`, `BetaSheet` -> `GET /journal/beta-metrics`). `LEGACY_TABS` maps old `?tab=broker|guardrails|portfolio|beta`. A broker redirect lands as `?code=` (Upstox) or `?request_token=` (Kite) and is auto-submitted then stripped from the URL.
 2. `pages/Profile.jsx`: `GET/PUT /profile` (`{profile{display_name,risk_appetite,horizon,goals,constraints,about_me,answer_style,memories[]},account{name,created_at}}`), `POST /profile/memories {text}` (max 50), `DELETE /profile/memories/{id}`.
-3. `pages/Handbook.jsx` (admin, `/system`): five `?raw` markdown files, `utils/handbook.js::splitLive` swaps `<!-- live:deploy|jobs|news|data|ai -->` markers for `components/system/LivePanels.jsx` fed by `GET /system/status`; panel actions: `POST /settings/llm-feature {feature,enabled}`, `POST /settings/lab {enabled}`, `POST /system/builder/run` (409 = already running).
+3. `pages/Handbook.jsx` (admin, `/system`): five `?raw` markdown files, `utils/handbook.js::splitLive` swaps `<!-- live:deploy|jobs|news|data|ai -->` markers for `components/system/LivePanels.jsx` fed by `GET /system/status` (Jobs panel shows `data_alerts` as "Data alerts now"); panel actions: `POST /settings/llm-feature {feature,enabled}`, `POST /settings/lab {enabled}`, `POST /system/builder/run` (409 = already running).
 4. `pages/Backlog.jsx` (admin, `/system/future`): `GET/POST /system/backlog`, `PATCH/DELETE /system/backlog/{id}`; optimistic writes roll back with the API message; reorder swaps `rank`.
 
 ### 9. Order ticket / chat actions (the only path to real orders from the UI)

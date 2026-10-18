@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 7c0918b
+verified_at: 9e01520
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -34,10 +34,10 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/prefs.py` | per-user preferences with defaults | `DEFAULTS`, `EDITABLE`, `PrefsStore` |
 | `backend/app_settings.py` | deployment-wide settings + 30 s in-process cache | `AppSettingsStore`, `lab_on`, `feature_enabled`, `current_llm_model`, `TIERS`, `FEATURES` |
 | `backend/profile/{models,store}.py` | what a user tells the AI about themselves + memories | `ProfileUpdate`, `ProfileStore`, `MemoryRefused` |
-| `backend/system/router.py` | admin-only status, builder trigger, backlog CRUD | `system_status`, `run_builder`, `*_backlog_item` |
+| `backend/system/router.py` | admin-only status, builder trigger, broker reconciliation read, backlog CRUD | `system_status`, `run_builder`, `reconciliation`, `*_backlog_item` |
 | `backend/system/status.py` | handbook live-panel data, 5 blocks, cached 30 s | `build_status`, `cached_status`, `BLOCKS` |
 | `backend/system/jobs.py` | `job:last:<name>` Redis hash writer/reader | `mark`, `last_runs`, `LOOPS` |
-| `backend/system/data_quality.py` | nightly stale-bars / unlisted / silent-feed check | `check` |
+| `backend/system/data_quality.py` | nightly check (stale bars vs the last weekday's session from 15:45, unlisted, silent feeds; `failures`) + live truth checks (ingest heartbeats > 2x interval (min 120 s) or gone, quotes loop, `scheduler:last_pass`, Picks study, due by 18:00 of the last weekday) | `check`, `live`, `alerts` (admin Today item, silent Sat/Sun), `last_weekday_at` |
 | `backend/system/backlog.py`, `seed_backlog.py` | admin backlog store; one-time seed | `ItemIn`, `ItemPatch`, `list_items/create/update/delete`, `seed` |
 | `backend/locks.py` | token-checked Redis lock (used by the ingest worker only) | `acquire`, `renew`, `release` |
 | `backend/rate_limit.py` | fixed-window per-key limiter, fails open | `allow` |
@@ -102,8 +102,8 @@ In-process caches: `routers/settings.py::_USAGE_CACHE` (60 s, stale-while-revali
 9. **Admin LLM controls.** `POST /settings/omniroute-model|omniroute-tiers|llm-feature|lab` and `PUT /settings/portfolio-verdicts` write `app_settings`; `POST /settings/omniroute-model/test` sends one prompt (`prompts/model_test`) direct to the gateway with a 30 s timeout. `current_llm_model(tier)` resolves tier -> single model -> `OMNIROUTE_MODEL`.
 10. **Strategy submit/retest** (`settings.py::submit_strategy`, `retest_strategy`): validate spec -> `_check_caps` (5 active per horizon, one `testing` at a time, `account_size > 0`) -> insert as `testing` (slug retry x3 on `DuplicateKeyError`) -> `_spend_slot` (3 per IST day; over limit deletes the draft / restores `rejected`) -> `draft.spawn_test`.
 11. **Start a paper run** (`trading.py::launch_run` -> `_launch_run`): Redis `launch:` lock + one active run per mode -> resolve instruments (intraday adds game-plan symbols, drops long-term holdings) -> build strategies -> backtest gate + paper gate decide which may route live -> `build_feed` (broker ticks if streaming, else yfinance) -> `RunStore.create` -> `start_background_run` task in the module dict `_RUNS` -> hub `runs/started`. Stop: `stop_trading` -> `_cancel_local` or publish `runs:cancel` for the owning worker.
-12. **Today page** (`routers/today.py::today`): each part wrapped by `part()` so one failure returns null plus `errors[name]`; `scoreboard` only for admins; `attention` returns `{count}` from `_needs_you`.
-13. **Admin status** (`GET /system/status` -> `system/status.py::cached_status`): gathers `deploy` (`GIT_SHA`, start time), `jobs`, `news`, `data`, `ai` blocks with `return_exceptions`, a failing block becomes `{error}`.
+12. **Today page** (`routers/today.py::today`): each part wrapped by `part()` so one failure returns null plus `errors[name]`; `scoreboard` only for admins; `attention` returns `{count}` from `_needs_you` (admin flag passed, so data-quality items count for the admin).
+13. **Admin status** (`GET /system/status` -> `system/status.py::cached_status`): gathers `deploy` (`GIT_SHA`, start time), `jobs` (incl. `data_alerts` = `data_quality.live`), `news`, `data`, `ai` blocks with `return_exceptions`, a failing block becomes `{error}`.
 
 ## Jobs and schedules
 
@@ -111,7 +111,7 @@ All times IST. Loops start in `startup_db_client` on every uvicorn worker (`--wo
 
 | what | when | where | lock / guard |
 |---|---|---|---|
-| daily pass | 16:00 Mon-Fri (`RUN_HOUR`) | `scheduler.py::scheduler_loop` -> `_run_locked` -> `run_daily_jobs` | `scheduler:daily_lock` 2 h; skip if `scheduler:last_pass` >= day; then `_data_quality` -> `job:last:data_quality` |
+| daily pass | 16:00 Mon-Fri (`RUN_HOUR`) | `scheduler.py::scheduler_loop` -> `_run_locked` -> `run_daily_jobs` | `scheduler:daily_lock` 2 h; skip if `scheduler:last_pass` >= day; then `_data_quality` -> `job:last:data_quality` (ok=0 when `failures`) |
 | 09:20 catch-up of a missed pass | weekdays | `engine/autorun.py` (other page) | same lock/last_pass |
 | price + P&L pump | every 15 s | `ws/pump.py::pump_loop` | none (each worker serves its own sockets) |
 | worker heartbeat | every 30 s (`ALIVE_TTL_SECONDS // 3`) | `server.py::_heartbeat` | writes `worker:alive:<BOOT_ID>` |
@@ -187,6 +187,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | DELETE | `/api/v1/settings/broker-credentials` | `backend/routers/settings.py::delete_broker_credentials` | user |
 | GET | `/api/v1/system/status` | `backend/system/router.py::system_status` | admin |
 | POST | `/api/v1/system/builder/run` | `backend/system/router.py::run_builder` | admin |
+| GET | `/api/v1/system/reconciliation?days=3` | `backend/system/router.py::reconciliation` | admin |
 | GET | `/api/v1/system/backlog` | `backend/system/router.py::list_backlog` | admin |
 | POST | `/api/v1/system/backlog` | `backend/system/router.py::create_backlog_item` | admin |
 | PATCH | `/api/v1/system/backlog/{item_id}` | `backend/system/router.py::update_backlog_item` | admin |
@@ -197,6 +198,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | DELETE | `/api/v1/profile/memories/{memory_id}` | `backend/routers/profile.py::delete_memory` | user |
 | GET | `/api/v1/today` | `backend/routers/today.py::today` | user |
 | GET | `/api/v1/today/attention` | `backend/routers/today.py::attention` | user |
+| GET | `/api/v1/today/reconciliation?days=7` | `backend/routers/today.py::reconciliation` | user |
 | GET | `/api/v1/mine/history` | `backend/routers/mine.py::mine_history` | user |
 | GET | `/api/v1/mine/overview` | `backend/routers/mine.py::overview` | user |
 | GET | `/api/v1/mine/thesis/{symbol}` | `backend/routers/mine.py::get_thesis` | user |
