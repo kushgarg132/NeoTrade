@@ -98,6 +98,7 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
                 await notify(db, user_id, proposals_text(mine, f"{len(mine)} new idea(s) for your account from today's close:"))
 
     journal_imported = await _sync_journals(db, redis)
+    reconcile_mismatches = await _reconcile_brokers(db, redis, now, pass_day)
     learning_changes = await _learn(db, now)
     # The day's game plans against no plan, on the same bars (backend/plan/replay.py).
     plan_replays = 0
@@ -162,6 +163,7 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
         "users": scanned_users, "created": created_total,
         "journal_imported": journal_imported, "portfolios_reviewed": portfolios,
         "learning_changes": learning_changes, "plan_replays": plan_replays,
+        "reconcile_mismatches": reconcile_mismatches,
     }
 
 
@@ -181,13 +183,30 @@ async def _sync_journals(db, redis) -> int:
     return total
 
 
+async def _reconcile_brokers(db, redis, now: datetime, pass_day: date) -> Optional[int]:
+    """Broker trades and holdings vs the ledger and journal (engine/broker_recon.py),
+    right after the journal sync. Brokers serve only today's book, so a catch-up
+    pass for an earlier day skips it (None)."""
+    if redis is None or pass_day != now.astimezone(IST).date():
+        return None
+    from backend.engine import broker_recon
+
+    try:
+        return await broker_recon.run_all(db, redis, pass_day, now)
+    except Exception as exc:
+        logger.exception("broker reconciliation failed: %s", exc)
+        return None
+
+
 async def _data_quality(db, redis) -> None:
-    """Never fails the pass: the check reports, it does not gate."""
+    """Never fails the pass: the check reports, it does not gate. Marked failed
+    when it finds a failure (stale bars, dead ingest, missed pass or picks)."""
     from backend.system.data_quality import check
     from backend.system.jobs import DATA_QUALITY
 
     try:
-        await mark(redis, DATA_QUALITY, True, json.dumps(await check(db)))
+        report = await check(db, redis)
+        await mark(redis, DATA_QUALITY, not report["failures"], json.dumps(report))
     except Exception as exc:
         logger.exception("data quality check failed: %s", exc)
         await mark(redis, DATA_QUALITY, False, f"{type(exc).__name__}: {exc}")

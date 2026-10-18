@@ -11,7 +11,17 @@ Everything that runs on its own, how code reaches production, and how the doors 
 2. Close expired option positions.
 3. Refresh analyst verdicts.
 4. Long-term scan for every scan-enabled user → proposals, theses, Telegram.
-5. Journal sync from every connected broker.
+5. Journal sync from every connected broker, then the **broker reconciliation**
+   (`backend/engine/broker_recon.py::run_all`, read-only, skipped on a catch-up pass): per user and
+   role (`mine`, `ai`), the broker's trades today against the role's ledger book (`<uid>:mine`,
+   `<uid>:autopilot`, matched through `live_orders.broker_order_id`) and the journal, and broker
+   holdings + positions against the book's open quantities (the AI account must match exactly;
+   your own may hold more than the app placed). Mismatches are named `missing_in_ledger`,
+   `missing_at_broker`, `quantity_differs`, `price_differs` or `unknown_order` (an AI-account
+   order the app never placed). One doc per user/day/role in `broker_reconciliation`, replaced
+   on re-run; a logged-out broker is stored as "not checked: logged out". Shown on Today's Do
+   today and in the post-close Telegram only when something differs; read at
+   `GET /today/reconciliation` (yours) and `GET /system/reconciliation` (admin).
 6. Learning: pause / floor / regime rules from closed paper trades (Lab only).
 7. Replay the day's game plans against no plan.
 8. First pass of a month: start the re-tune as its own `nice` process (Lab only).
@@ -25,9 +35,15 @@ pre-market Telegram (`digest.py::send_premarket`, once a day): value and yesterd
 news on your holdings since the close, ideas for your account, the autopilot's mode.
 
 After the pass, the **data-quality check** (`backend/system/data_quality.py`, `job:last:data_quality`,
-"Data quality found" on the panel below): covered symbols whose newest daily bar is behind the
-rest (a quote that keeps failing), universe symbols with no NSE instrument, and news feeds with no
-new item for 3 days. It reports; it never fails or gates the pass.
+"Data quality found" on the panel below). Failures (the job is marked failed, never the pass):
+covered symbols whose newest daily bar is behind the last weekday's session once its bars are due
+at 15:45 (a delisted name, or every stock a day late as on 2026-10-15), plus the live checks below.
+Informational only: universe symbols with no NSE instrument, and news feeds with no new item for 3
+days. The **live checks** (`data_quality.py::live`, "Data alerts now" on the panel, and a Do today
+item for the admin on weekdays, `::alerts`): an ingest loop whose heartbeat is older than twice its
+interval (at least 2 min) or gone, the quotes loop failing (no cached quote for the first Nifty 200
+names), `scheduler:last_pass` behind the last weekday whose pass should be done (by 18:00), and the
+Picks study not written for that day. No holiday calendar exists: only Saturday and Sunday are gaps.
 
 A worker that wakes late after the pass already ran skips it. If no pass finished for the
 previous weekday (a deploy restarted the backend during it), the long-term engine's 9:20 AM

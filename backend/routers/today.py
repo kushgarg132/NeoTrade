@@ -7,7 +7,7 @@ the rest still render."""
 
 import logging
 import time as clock
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -70,11 +70,18 @@ async def _ideas(user_id: str) -> list[dict]:
     return await actions.ideas(db.db, user_id)
 
 
-async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict], now: datetime) -> list[dict]:
+RECON_FRESH_DAYS = 4  # a weekend plus a day: older results are not today's truth
+
+
+async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict], now: datetime,
+                     admin: bool = False) -> list[dict]:
     """The app's own nags: logins, the kill switch, interrupted approvals,
-    chat cards, guardrails. Holding items (exits, verdicts, ideas) are
-    Mine's "Needs you" list (mine/actions.py), read as `mine_actions`."""
+    chat cards, guardrails, broker reconciliation, and (admin) data quality.
+    Holding items (exits, verdicts, ideas) are Mine's "Needs you" list
+    (mine/actions.py), read as `mine_actions`."""
+    from backend.engine import broker_recon
     from backend.guardrails.store import GuardrailStore
+    from backend.system import data_quality
 
     items = []
     for role, info in (accounts or {}).items():
@@ -96,6 +103,18 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
     for alert in await GuardrailStore(db.db).events_for(user_id, now.astimezone(IST).date()):
         items.append({"kind": "guardrail", "title": alert.get("title", "Guardrail alert"),
                       "detail": alert.get("detail", ""), "link": "/settings?tab=safety"})
+    since = now.astimezone(IST).date() - timedelta(days=RECON_FRESH_DAYS)
+    if line := broker_recon.summary(await broker_recon.latest(db.db, user_id, since)):
+        items.append({"kind": "reconcile", "title": "Reconciliation: broker and app records differ",
+                      "detail": line, "link": "/mine/journal"})
+    if admin:
+        try:  # a broken check must not hide the user's other nags
+            failures = await data_quality.alerts(db.db, db.redis, now)
+        except Exception as exc:
+            logger.warning("today: data-quality alerts failed: %s", exc)
+            failures = [f"Data-quality checks could not run: {type(exc).__name__}"]
+        for failure in failures:
+            items.append({"kind": "data_quality", "title": failure, "detail": "Data quality", "link": "/system"})
     return items
 
 
@@ -185,7 +204,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
                        "strategies": prefs.get("live_strategies") or []},
         "kill_switch": kill,
         "pulse": await part("pulse", digest.pulse(db.db, user.id, now)),
-        "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now)) or [],
+        "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now, user.role == "admin")) or [],
         "mine_actions": (acts := await part("mine_actions", _mine_actions(user.id, now)) or [])[:TOP_ACTIONS],
         "mine_actions_total": len(acts),
         # You vs Picks: admin-only while Picks is (routers/picks.py).
@@ -216,4 +235,17 @@ async def attention(user: User = Depends(get_current_user), broker_states=Depend
         accounts = None
     tripped = await KillSwitchStore(db.db).is_tripped(user.id, now.astimezone(IST).date())
     kill = {"tripped": bool(tripped), "reason": (tripped or {}).get("reason")}
-    return {"count": len(await _needs_you(user.id, accounts, kill, now))}
+    return {"count": len(await _needs_you(user.id, accounts, kill, now, user.role == "admin"))}
+
+
+@router.get("/reconciliation")
+async def reconciliation(user: User = Depends(get_current_user), days: int = 7):
+    """The user's own broker-to-ledger results, newest day first (engine/broker_recon.py). Read-only."""
+    from backend.engine.broker_recon import COLLECTION
+
+    since = (datetime.now(timezone.utc).astimezone(IST).date() - timedelta(days=max(1, min(days, 60)))).isoformat()
+    rows = await db.db[COLLECTION].find({"user_id": user.id, "day": {"$gte": since}}, {"_id": 0}) \
+        .sort([("day", -1), ("role", 1)]).to_list(length=None)
+    for row in rows:
+        row["checked_at"] = _aware(row.get("checked_at"))
+    return {"results": rows}

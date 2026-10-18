@@ -79,6 +79,7 @@ const ROWS = {
     ['Next daily pass', formatDateTime(b.next_daily_pass_at)],
     ['Data quality', run(b.data_quality)],
     ...(b.data_quality?.note ? [['Data quality found', summary(b.data_quality.note)]] : []),
+    ['Data alerts now', b.data_alerts?.length ? b.data_alerts.join(' · ') : 'none'],
     ...Object.entries(b.loops).map(([name, record]) => [name.replace(/_/g, ' '), run(record)]),
     ...Object.entries(b.ingest).map(([name, age]) => [`ingest ${name.replace(/_/g, ' ')}`, `${age}s ago`]),
     ['Strategy builder', <span key="builder" className="inline-flex items-center gap-2 justify-end flex-wrap">{run(b.builder)}<BuilderRun /></span>],

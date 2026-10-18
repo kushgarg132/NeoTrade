@@ -49,7 +49,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/routers/mine.py | `/mine/*` | `mine.py::overview`, `::mine_history`, `::tax`, `::stock_detail`, `::get_thesis`, `::put_thesis`, `::mine_actions`, `::dismiss_action`, `::snooze_action`, `::_month_contributions`, `TAX_FIRST_FY` |
 | backend/routers/portfolio.py | `/portfolio*`; verdict masking | `portfolio.py::get_portfolio`, `::refresh`, `::rebalance`, `::rebalance_candidates`, `::present`, `::mask_row`, `::verdicts_visible_to`, `::with_suggestions`, `::_candidate_symbols` |
 | backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::ai_vs_me`, `::get_learning`, `::get_beta_metrics` |
-| backend/routers/today.py | `/today`, `/today/attention` | `today.py::today`, `::attention`, `::_accounts`, `::_needs_you`, `::_mine_actions`, `::_setup`, `::_autopilot`, `::_backdrop`, `_STATE_CACHE` |
+| backend/routers/today.py | `/today`, `/today/attention`, `/today/reconciliation` | `today.py::today`, `::attention`, `::reconciliation`, `::_accounts`, `::_needs_you`, `::_mine_actions`, `::_setup`, `::_autopilot`, `::_backdrop`, `_STATE_CACHE` |
 
 ## Data
 
@@ -185,7 +185,10 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
     - kill switch
     - `autopilot_log` top 5
     - `digest.pulse`
-    - `_needs_you` (logins, kill switch, NEEDS_REVIEW suggestions, PROPOSED chat cards, today's guardrail events)
+    - `_needs_you` (logins, kill switch, NEEDS_REVIEW suggestions, PROPOSED chat cards, today's guardrail events, a
+      `reconcile` item when the latest `broker_reconciliation` day (within `RECON_FRESH_DAYS`=4) has a mismatch
+      (`engine/broker_recon.py::summary`), and for admins `data_quality` items from `system/data_quality.py::alerts`,
+      link `/system`, guarded so a failing check never blanks the list)
     - `_mine_actions` top 3, plus the total
     - `scoreboard` (admin only)
     - `proposals_total`
@@ -201,7 +204,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | `portfolio/service.py::daily_reviews`, then a Telegram alert plus `hub` "worsened" when `rules.worsened` | daily pass, after the journal sync | `scheduler.py::run_daily_jobs` | daily lock |
 | `mine/history.py::write_all` | daily pass, after reviews | `scheduler.py::run_daily_jobs` | daily lock |
 | Weekly mirror Telegram (`mirror.text`, `accounts.ai_vs_me`) | Fridays, in the daily pass | `scheduler.py::_weekly_mirrors` | daily lock |
-| `digest.py::send_postclose` | end of the daily pass; skipped if local time < 15:30 (09:20 catch-up) | `scheduler.py::run_daily_jobs` | daily lock |
+| `digest.py::send_postclose` | end of the daily pass; skipped if local time < 15:30 (09:20 catch-up); adds a "⚠️ Reconciliation" line only when today's `broker_reconciliation` has a mismatch | `scheduler.py::run_daily_jobs` | daily lock |
 | `digest.py::send_premarket` | every auto-run tick; acts only on weekdays 08:45–09:15 | `engine/autorun.py::tick` | `digest:pre:{user}:{date}` NX |
 | `mine/actions.py::level_alerts` | auto-run tick in session, every 15-minute bucket (`EXIT_CHECK_MINUTES`) for users with a thesis stop or target | `engine/autorun.py::_level_pass` | `levels:…` NX, plus `mine:alert:…` NX per level |
 | `mine/events.py::loop` | every 6h, ingest worker | `datalayer/worker.py::_loops` (`corp_events`) | `corporate_events_meta.checked` per day |

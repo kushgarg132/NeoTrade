@@ -227,7 +227,8 @@ def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: int, ai
     return "\n".join(lines)
 
 
-def postclose_text(p: Optional[dict], today: dict, events: list[dict], actions: Optional[list[dict]] = None) -> str:
+def postclose_text(p: Optional[dict], today: dict, events: list[dict], actions: Optional[list[dict]] = None,
+                   recon: Optional[str] = None) -> str:
     actions = actions or []
     # A worsened verdict already listed as an action is not repeated below.
     listed = {a["symbol"] for a in actions[:TOP_ACTIONS] if a["kind"] == "verdict_worse"}
@@ -245,6 +246,8 @@ def postclose_text(p: Optional[dict], today: dict, events: list[dict], actions: 
                 lines.append(f"⚠️ {escape(c['symbol'])}: {c['from']} → {c['to']}")
     lines += _action_lines(actions)
     lines.append(f"Closed today, net: you {_rupees(today['mine'], True)} · AI {_rupees(today['ai'], True)}")
+    if recon:  # only when the broker and the app's records disagree (engine/broker_recon.py)
+        lines.append(f"⚠️ Reconciliation: {escape(recon)}")
     if events:
         lines.append("Tomorrow: " + "; ".join(escape(e.get("event") or e.get("title") or "") for e in events[:3]))
     return "\n".join(lines)
@@ -312,6 +315,7 @@ async def send_postclose(db, now: datetime) -> int:
     """After the 16:00 pass's review (backend/scheduler.py). Skipped when the
     pass runs as the next morning's catch-up: an evening message at 9 AM is noise."""
     from backend.datalayer import market
+    from backend.engine import broker_recon
     from backend.prefs import PrefsStore
     from backend.suggestions.notify import notify
 
@@ -322,8 +326,9 @@ async def send_postclose(db, now: datetime) -> int:
     for user_id in await _users(db):
         try:
             roles = (await PrefsStore(db).get(user_id)).get("broker_roles") or {}
+            recon = broker_recon.summary(await broker_recon.latest(db, user_id, now.astimezone(IST).date()))
             text = postclose_text(await pulse(db, user_id, now), await pnl_since(db, user_id, roles, day_start(now)),
-                                  events, await _actions(db, user_id, now))
+                                  events, await _actions(db, user_id, now), recon)
             await notify(db, user_id, text, html=True)
             sent += 1
         except Exception as exc:

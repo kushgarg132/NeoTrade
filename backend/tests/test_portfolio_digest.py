@@ -61,6 +61,13 @@ async def test_messages_escape_headlines_for_telegram_html(db):
     assert "no strategy has earned it yet" in pre and "autopilot paper" in pre
 
 
+def test_post_close_names_a_reconciliation_mismatch_only_when_there_is_one():
+    clean = digest.postclose_text(None, {"mine": 0.0, "ai": 0.0}, [])
+    assert "Reconciliation" not in clean
+    text = digest.postclose_text(None, {"mine": 0.0, "ai": 0.0}, [], recon="AI account: 1 (M&M)")
+    assert text.splitlines()[-1] == "⚠️ Reconciliation: AI account: 1 (M&amp;M)"
+
+
 class _Redis:
     def __init__(self):
         self.keys = set()
