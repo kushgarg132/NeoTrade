@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ThemeContext } from './themeContext';
+import { safeGet, safeSet } from '../utils/storage';
 
 /**
  * Light is the original note; dark is its carbon copy. The scene decides the
@@ -8,7 +9,7 @@ import { ThemeContext } from './themeContext';
  */
 const STORAGE_KEY = 'asi_sheet';
 const initialTheme = () => {
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = safeGet(STORAGE_KEY);
   if (stored === 'light' || stored === 'dark') return stored;
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 };
@@ -18,7 +19,7 @@ export const ThemeProvider = ({ children }) => {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem(STORAGE_KEY, theme);
+    safeSet(STORAGE_KEY, theme);
   }, [theme]);
 
   return (

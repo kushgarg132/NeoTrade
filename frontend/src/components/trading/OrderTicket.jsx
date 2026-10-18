@@ -7,8 +7,8 @@ import { formatCurrency } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 
 /**
- * The order ticket: Buy or Sell, on Paper (the practice book) or Mine (the
- * user's own broker account), market or limit. Review stores the same order
+ * The order ticket: Buy or Sell, on Mine (the user's own broker
+ * account, real money), market or limit. Review stores the same order
  * card the chat makes, after the same checks; Confirm runs it through
  * /chat/actions, and real money needs a second tap. The AI account is not
  * an option here. Closing after Review cancels the card so it does not sit

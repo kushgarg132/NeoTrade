@@ -24,7 +24,10 @@ const isExpired = (token) => {
  */
 
 const SOCKET_URL = (() => {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:8001/api/v1';
+  // Vercel can't proxy a WebSocket, so a production build with no VITE_API_URL
+  // goes straight to the backend, not localhost.
+  const base = import.meta.env.VITE_API_URL
+    || (import.meta.env.PROD ? 'https://neotrade.161.118.167.148.nip.io/api/v1' : 'http://localhost:8001/api/v1');
   const normalised = base.replace(/\/$/, '');
   const withPrefix = normalised.endsWith('/api/v1') ? normalised : `${normalised}/api/v1`;
   return `${withPrefix.replace(/^http/, 'ws')}/ws`;
