@@ -26,3 +26,5 @@ langgraph
 langchain-google-genai
 langchain-openai
 websockets>=14.0  # Upstox v3 market-data feed (backend/data/feeds/live_upstox.py)
+casparser==1.4.1  # CAMS/KFintech CAS PDF parser (MIT, backend/mine/cas_import.py); pypdfium2 + casparser-isin
+python-multipart>=0.0.9  # multipart upload of the CAS PDF
