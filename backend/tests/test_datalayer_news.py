@@ -270,9 +270,7 @@ async def test_aggregate_blends_company_sector_and_market(mongo):
     assert out["symbols"]["TCS"] == pytest.approx(0.6 * 0.9 + 0.15 * -0.5)
     assert float(redis.data["sentiment:IOC"]) == pytest.approx(-0.275)
     assert json.loads(redis.data["sector_sentiment:Oil Gas & Consumable Fuels"])["score"] == pytest.approx(-0.8)
-    verdict = json.loads(redis.data["analyst_verdict:TCS"])
-    assert verdict["label"] == "bullish" and verdict["impact_score"] == 8 and verdict["top_reason"] == "TCS big win"
-    assert "analyst_verdict:IOC" not in redis.data  # no company news, no verdict
+    assert not [k for k in redis.data if k.startswith("analyst_verdict:")]  # the daily refresh owns that key
 
     # A name with no news at any level is "no data", not a 0.0 neutral reading.
     empty = FakeRedis()

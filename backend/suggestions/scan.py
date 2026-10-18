@@ -108,8 +108,8 @@ async def scan_universe(
 
     symbol_for_token = {i.instrument_token: i.tradingsymbol for i in instruments}
 
-    # The ingest worker keeps a verdict for every followed name
-    # (backend/datalayer/news.py), so each scanned symbol may have one.
+    # The daily refresh (backend/scheduler.py) writes verdicts for the curated
+    # symbols only, so a scanned symbol may have none.
     analyst_verdicts = {}
     if redis is not None:
         for symbol in symbol_for_token.values():

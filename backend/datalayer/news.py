@@ -6,7 +6,7 @@ and keep per-symbol, per-sector and market-wide sentiment fresh.
                    TRIAGED -> score (ONE deep call, up to 40 items, NEWS_LLM_CALLS_PER_DAY)
                            -> SCORED with impacts[] on market/sectors/symbols
                    -> aggregate -> Redis sentiment:{SYM}, sector_sentiment:{S},
-                      market:sentiment, analyst_verdict:{SYM}
+                      market:sentiment
 
 `sentiment:{SYM}` is what the engine and scans already read for the AI half
 of conviction (backend/ai/sentiment.py): 0.6 * company + 0.25 * the stock's
@@ -66,10 +66,8 @@ OFF_PROCESS_SECONDS = 60 * 60
 OFF_TRIAGE_CALLS = 2  # ~110 headlines/hour off-hours, one batch is usually enough
 
 WINDOW = timedelta(days=60)
-VERDICT_WINDOW = timedelta(days=14)
 COMPANY_WEIGHT, SECTOR_WEIGHT, MARKET_WEIGHT = 0.6, 0.25, 0.15
 SENTIMENT_TTL_SECONDS = 24 * 3600
-VERDICT_TTL_SECONDS = 25 * 3600
 AGGREGATE_EVERY_SECONDS = 10 * 60
 
 
@@ -399,7 +397,6 @@ async def aggregate(db, redis, names: dict[str, str], sector_of: dict[str, str],
     now = now or datetime.now(timezone.utc)
     weights = await load_weights(redis)
     points = defaultdict(list)
-    top = {}  # symbol -> (impact, event) of its biggest company item in VERDICT_WINDOW
     cursor = db[COLLECTION].find({"status": SCORED, "published_at": {"$gte": now - WINDOW}},
                                  {"impacts": 1, "published_at": 1, "event": 1, "title": 1, "scope": 1, "themes": 1})
     async for doc in cursor:
@@ -409,8 +406,6 @@ async def aggregate(db, redis, names: dict[str, str], sector_of: dict[str, str],
         for i in doc.get("impacts", []):
             weight = item_weight(weights, doc.get("scope"), doc.get("themes"), i["direction"])
             points[(i["type"], i["target"])].append((published, i["direction"], i["impact"] * weight))
-            if i["type"] == "symbol" and published >= now - VERDICT_WINDOW and i["impact"] > top.get(i["target"], (-1,))[0]:
-                top[i["target"]] = (i["impact"], doc.get("event") or doc.get("title", ""))
 
     def mean(key):
         return weighted_sentiment(points.get(key, []), now)
@@ -433,15 +428,6 @@ async def aggregate(db, redis, names: dict[str, str], sector_of: dict[str, str],
                 ex=SENTIMENT_TTL_SECONDS)
         for symbol, value in symbols.items():
             pipe.set(f"sentiment:{symbol}", value, ex=SENTIMENT_TTL_SECONDS)
-        for symbol, (impact, reason) in top.items():
-            if symbol not in symbols:
-                continue
-            value = symbols[symbol]
-            pipe.set(f"analyst_verdict:{symbol}", json.dumps({
-                "sentiment_score": value, "impact_score": int(round(impact)),
-                "label": "bullish" if value > 0.15 else "bearish" if value < -0.15 else "neutral",
-                "top_reason": reason[:200],
-            }), ex=VERDICT_TTL_SECONDS)
         await pipe.execute()
     return {"market": market, "sectors": sectors, "symbols": symbols}
 

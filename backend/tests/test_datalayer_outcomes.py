@@ -62,3 +62,66 @@ async def test_record_then_measure_against_nifty(monkeypatch):
     assert docs["market"]["move_1h"] == pytest.approx(0.01)
     assert await outcomes.measure(db, redis, NOW + timedelta(hours=1)) == 0  # measured once
     assert await outcomes.measure(db, redis, NOW + timedelta(days=1)) == 3
+
+
+@pytest.mark.asyncio
+async def test_record_catches_up_old_items_after_an_outage(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = Redis()
+
+    async def followed(db):
+        return {}, SECTORS
+
+    monkeypatch.setattr("backend.datalayer.news.followed", followed)
+    await db["news_items"].insert_one({
+        "_id": "old", "title": "T", "status": "SCORED", "material": True, "scored_at": NOW - timedelta(hours=20),
+        "published_at": NOW - timedelta(hours=21), "scope": "COMPANY", "themes": ["earnings"],
+        "impacts": [{"type": "symbol", "target": "TCS", "direction": 0.7, "impact": 7}]})
+    redis.prices(20000, TCS=100)
+    from backend.datalayer import reactor
+    assert await reactor._claim(db, "reacted_at", NOW) == []  # too old for an alert
+    assert await outcomes.record(db, redis, NOW) == 1  # but its outcome is still recorded
+    assert await outcomes.record(db, redis, NOW) == 0  # once
+
+
+async def _late_item(db, redis, monkeypatch):
+    async def followed(db):
+        return {}, SECTORS
+
+    monkeypatch.setattr("backend.datalayer.news.followed", followed)
+    await db["news_items"].insert_one({
+        "_id": "old", "title": "T", "status": "SCORED", "material": True, "scored_at": NOW - timedelta(hours=20),
+        "published_at": NOW - timedelta(hours=21), "scope": "COMPANY", "themes": ["earnings"],  # 13:30 IST the day before, before the close
+        "impacts": [{"type": "symbol", "target": "TCS", "direction": 0.7, "impact": 7},
+                    {"type": "market", "target": "INDIA", "direction": 0.2, "impact": 6}]})
+    redis.prices(20500, TCS=110)
+
+
+@pytest.mark.asyncio
+async def test_late_item_is_priced_from_the_bars_at_publication(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = Redis()
+    await _late_item(db, redis, monkeypatch)
+    for symbol, close in (("TCS", 100.0), ("^NSEI", 20000.0)):
+        await db["daily_bars"].insert_many([
+            {"symbol": symbol, "date": "2026-10-02", "close": close - 5},
+            {"symbol": symbol, "date": "2026-10-04", "close": close},  # that day's close came after publication: ignored
+            {"symbol": symbol, "date": "2026-10-05", "close": close + 50}])  # after publication: ignored
+    assert await outcomes.record(db, redis, NOW) == 2
+    docs = {d["type"]: d async for d in db["news_outcomes"].find()}
+    assert docs["symbol"]["base"] == {"TCS": 95.0} and docs["symbol"]["bench"] == 19995.0
+    assert docs["market"]["bench"] == 19995.0 and not docs["symbol"].get("late")
+    assert docs["symbol"]["in_session"] is False
+
+
+@pytest.mark.asyncio
+async def test_late_item_without_bars_is_flagged_and_kept_out_of_the_weights(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = Redis()
+    await _late_item(db, redis, monkeypatch)
+    assert await outcomes.record(db, redis, NOW) == 2
+    docs = [d async for d in db["news_outcomes"].find()]
+    assert all(d["late"] for d in docs) and docs[0]["bench"] == 20500
+
+    rows = [{"scope": "COMPANY", "themes": ["earnings"], "direction": 0.8, "move_1d": 0.02, "late": True}] * 20
+    assert outcomes.compute_weights(rows) == {}

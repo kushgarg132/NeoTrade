@@ -141,13 +141,15 @@ async def _deliver(db, redis, user_id: str, item: dict, hits: list[dict]) -> Non
         logger.warning("news alert telegram for %s failed: %s", user_id, exc)
 
 
-async def _claim(db, field: str, now: datetime) -> list[dict]:
-    """Newly scored material items not yet handled by `field`'s reaction,
-    marked handled before anything is done with them."""
-    items = await db[COLLECTION].find({
-        "status": SCORED, "material": True, field: {"$exists": False},
-        "scored_at": {"$gte": now - SCORED_WITHIN}, "published_at": {"$gte": now - MAX_NEWS_AGE},
-    }).to_list(length=200)
+async def _claim(db, field: str, now: datetime, fresh_only: bool = True) -> list[dict]:
+    """Material items not yet handled by `field`'s reaction, marked handled
+    before anything is done with them. User-facing reactions take only fresh
+    items (scored in SCORED_WITHIN, published in MAX_NEWS_AGE); bookkeeping
+    (`fresh_only=False`) takes every one, so an outage is caught up."""
+    query = {"status": SCORED, "material": True, field: {"$exists": False}}
+    if fresh_only:
+        query |= {"scored_at": {"$gte": now - SCORED_WITHIN}, "published_at": {"$gte": now - MAX_NEWS_AGE}}
+    items = await db[COLLECTION].find(query).to_list(length=200)
     if items:
         await db[COLLECTION].update_many({"_id": {"$in": [i["_id"] for i in items]}}, {"$set": {field: now}})
     return items
