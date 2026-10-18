@@ -72,14 +72,18 @@ class MultiKeyChain(Runnable):
 
     async def astream_events(self, input: Any, config: Optional[RunnableConfig] = None, **kwargs) -> AsyncIterator[Any]:
         errors = []
+        started = False
         for i, llm in enumerate(self.llms):
             try:
                 if i > 0:
                     logger.info(f"Fallback: Switching to API Key #{i+1}")
                 async for event in llm.astream_events(input, config, **kwargs):
+                    started = True
                     yield event
                 return
             except Exception as e:
+                if started:
+                    raise  # a restart on another key would replay content the caller already has
                 logger.warning(f"Error with API Key #{i+1}: {e}")
                 errors.append(e)
         
