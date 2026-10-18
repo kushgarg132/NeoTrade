@@ -417,7 +417,12 @@ async def aggregate(db, redis, names: dict[str, str], sector_of: dict[str, str],
 
     market = mean(("market", MARKET_TARGET))
     sectors = {s: mean(("sector", s)) for s in news_sources.sectors()}
-    symbols = {s: _blend(mean(("symbol", s)), sectors.get(sector_of.get(s)), market) for s in names}
+    # No company, sector or market news at all is "no data" (key absent), not a 0.0 neutral reading.
+    symbols = {}
+    for s in names:
+        parts = (mean(("symbol", s)), sectors.get(sector_of.get(s)), market)
+        if any(v is not None for v in parts):
+            symbols[s] = _blend(*parts)
 
     async with redis.pipeline(transaction=False) as pipe:
         pipe.set("market:sentiment", json.dumps({"score": market, "n": len(points.get(("market", MARKET_TARGET), [])),
