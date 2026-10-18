@@ -30,7 +30,11 @@ def ai_vs_me(trades: list[dict], roles: dict, capital_by_role: dict, nifty: list
     # were two open halves and their P&L vanished (HINDCOPPER, SILVERBEES).
     books = {}
     for role in ("ai", "mine"):
-        fills = filter_trades(trades, brokers_for(roles, role))
+        brokers = brokers_for(roles, role)
+        if role == "mine" and not brokers:  # no roles set: every non-AI broker is mine, as elsewhere
+            fills = [t for t in trades if t.get("broker") not in brokers_for(roles, "ai")]
+        else:
+            fills = filter_trades(trades, brokers)
         books[role] = (fills, build_round_trips(fills))
     rows = []
     for month in sorted({month_of(t["traded_at"]) for t in trades}):

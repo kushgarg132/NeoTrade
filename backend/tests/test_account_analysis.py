@@ -149,3 +149,9 @@ def test_a_round_trip_across_months_counts_in_the_month_it_closed():
     rows = {r["month"]: r["mine"] for r in accounts.ai_vs_me(trades, ROLES, {"mine": 10_000.0}, [])}
     assert rows["2026-08"]["gross_pnl"] == 0
     assert rows["2026-09"]["gross_pnl"] == 300.0
+
+
+def test_ai_vs_me_without_roles_treats_every_broker_as_mine():
+    rows = accounts.ai_vs_me(_trades(), {}, {"mine": 100_000.0}, [])
+    aug = {r["month"]: r for r in rows}["2026-08"]
+    assert aug["mine"]["fills"] == 4 and aug["ai"]["fills"] == 0
