@@ -114,13 +114,12 @@ async def ensure_collection_indexes(d) -> None:
         await d["plan_scorecards"].create_index([("user_id", 1), ("date", 1)])
         await d["econ_calendar"].create_index("at")
         await d["macro_series"].create_index([("ticker", 1), ("date", -1)])
-        # Keyed by _id (replace_one upserts), so it needs no secondary index.
-        # These two helpers land from main; skip until they exist on this branch.
-        import importlib
-        for mod in ("backend.learning.retune", "backend.forecast.picks"):
-            ensure = getattr(importlib.import_module(mod), "ensure_indexes", None)
-            if ensure is not None:
-                await ensure(d)
+        # news_theme_weights is keyed by _id (replace_one upserts): no secondary index.
+        from backend.forecast import picks as forecast_picks
+        from backend.learning import retune
+
+        await retune.ensure_indexes(d)
+        await forecast_picks.ensure_indexes(d)
     except Exception as exc:
         logger.error("collection indexes not created: %s", exc)
 
