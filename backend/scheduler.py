@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Awaitable, Callable, Optional
 
 from backend.ai.analyst_verdict import refresh_analyst_verdict
@@ -60,8 +60,11 @@ def seconds_until_next_run(now: datetime) -> float:
     return (target - now_ist).total_seconds()
 
 
-async def run_daily_jobs(db, redis=None, now=None) -> dict:
+async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = None) -> dict:
     now = now or datetime.now(timezone.utc)
+    # The IST day the pass counts for: a Monday catch-up for Friday still does Friday's weekly work.
+    pass_day = pass_day or now.astimezone(IST).date()
+    pass_at = datetime.combine(pass_day, time(RUN_HOUR, RUN_MINUTE), tzinfo=IST)
     prefs_store = PrefsStore(db)
 
     from backend.builder import store as builder_store
@@ -115,7 +118,7 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
     try:
         from backend.builder import draft
 
-        await draft.start_if_due(db, now)
+        await draft.start_if_due(db, pass_at)
     except Exception as exc:
         logger.warning("could not start the strategy builder: %s", exc)
 
@@ -139,7 +142,7 @@ async def run_daily_jobs(db, redis=None, now=None) -> dict:
         await picks.run(db, now)
     except Exception as exc:
         logger.exception("picks failed: %s", exc)
-    if now.astimezone(IST).weekday() == 4:
+    if pass_day.weekday() == 4:
         await _weekly_mirrors(db)
     # The evening answer, from the review just done (portfolio/digest.py).
     from backend.portfolio.digest import send_postclose
@@ -200,7 +203,7 @@ async def _run_locked(db, redis, pass_day: Optional[date] = None) -> Optional[di
     missed day when 09:20 catches up (backend/engine/autorun.py), so that
     day's own 16:00 pass still runs."""
     if redis is None:
-        return await run_daily_jobs(db, redis=redis)
+        return await run_daily_jobs(db, redis=redis, pass_day=pass_day)
 
     token = str(uuid.uuid4())
     acquired = await redis.set(LOCK_KEY, token, nx=True, px=LOCK_TTL_MS)
@@ -218,7 +221,7 @@ async def _run_locked(db, redis, pass_day: Optional[date] = None) -> Optional[di
             logger.info("daily pass for %s already done, skipping", day)
             return None
         try:
-            result = await run_daily_jobs(db, redis=redis)
+            result = await run_daily_jobs(db, redis=redis, pass_day=pass_day)
         except Exception as exc:
             await mark(redis, DAILY_PASS, False, f"{type(exc).__name__}: {exc}")
             raise
