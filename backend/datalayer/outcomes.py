@@ -22,10 +22,13 @@ noisiest for it.
 import json
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 
+import pandas as pd
+
 from backend.datalayer.prices import MACRO_KEY
+from backend.engine.session import IST
 from backend.marks import QUOTE_KEY
 
 logger = logging.getLogger(__name__)
@@ -40,6 +43,8 @@ WEIGHTS_KEY = "news:theme_weights"
 WEIGHTS_DUE_KEY = "news:theme_weights:due"
 WEIGHTS_EVERY_SECONDS = 7 * 86400
 WEIGHTS_LOOKBACK = timedelta(days=180)
+LATE_AFTER = timedelta(minutes=30)  # recorded this long after scoring, the live quote is not the price the news met
+CLOSE = time(15, 30)
 
 
 def _sign(x: float) -> int:
@@ -60,7 +65,7 @@ def compute_weights(rows: list[dict]) -> dict[str, dict]:
     """rows: outcomes with scope, themes, direction and move_1d."""
     tally = defaultdict(lambda: [0, 0])  # key -> [hits, n]
     for row in rows:
-        if row.get("move_1d") is None or not _sign(row["direction"]):
+        if row.get("move_1d") is None or row.get("late") or not _sign(row["direction"]):
             continue
         hit = _sign(row["move_1d"]) == _sign(row["direction"])
         for theme in row.get("themes") or []:
@@ -85,6 +90,23 @@ def proven(weights: dict[str, float], scope: Optional[str], themes: list[str], d
 def basket_return(base: dict[str, float], now: dict[str, float]) -> Optional[float]:
     returns = [now[s] / p - 1 for s, p in base.items() if p and now.get(s)]
     return sum(returns) / len(returns) if returns else None
+
+
+async def _closes_at(db, symbols: list[str], published_at: datetime) -> dict[str, float]:
+    """symbol -> last stored daily close at or before `published_at` (IST): that
+    day's close if published after 15:30, else the day before's."""
+    from backend.datalayer import bars
+
+    if published_at.tzinfo is None:
+        published_at = published_at.replace(tzinfo=timezone.utc)
+    at = published_at.astimezone(IST)
+    day = at.date() if at.time() >= CLOSE else at.date() - timedelta(days=1)
+    out = {}
+    for symbol, frame in (await bars.read(db, symbols, day - timedelta(days=7), today=day)).items():
+        frame = frame[frame.index <= pd.Timestamp(day)]
+        if len(frame):
+            out[symbol] = float(frame["close"].iloc[-1])
+    return out
 
 
 async def _prices(redis, symbols: list[str]) -> dict[str, float]:
@@ -122,15 +144,30 @@ async def record(db, redis, now: Optional[datetime] = None) -> int:
     _, sector_of = await followed(db)
     stored = 0
     for item in items:
+        scored_at = item.get("scored_at")
+        if scored_at is not None and scored_at.tzinfo is None:
+            scored_at = scored_at.replace(tzinfo=timezone.utc)
+        late = scored_at is not None and scored_at < now - LATE_AFTER
+        # An outage backlog is priced at the news's publication, from stored bars.
+        bench_bar = (await _closes_at(db, [BENCH], item["published_at"])).get(BENCH) if late else None
         for i in item.get("impacts", []):
-            base = await _prices(redis, _members(i["type"], i["target"], sector_of))
+            members = _members(i["type"], i["target"], sector_of)
+            base, bench_base, flag = None, bench, {}
+            if late:
+                base = await _closes_at(db, members, item["published_at"])
+                if bench_bar is not None and (base or i["type"] == "market"):
+                    bench_base = bench_bar
+                else:  # no bars: the live snapshot is biased, so keep it out of the weights
+                    base, flag = None, {"late": True}
+            if base is None:
+                base = await _prices(redis, members)
             if i["type"] != "market" and not base:
                 continue
             await db[COLLECTION].update_one({"_id": f"{item['_id']}:{i['type']}:{i['target']}"}, {"$setOnInsert": {
                 "item_id": item["_id"], "type": i["type"], "target": i["target"], "scope": item.get("scope"),
                 "themes": item.get("themes") or [], "direction": i["direction"], "impact": i["impact"],
-                "published_at": item["published_at"], "base_at": now, "in_session": in_session(now),
-                "base": base, "bench": bench}}, upsert=True)
+                "published_at": item["published_at"], "base_at": now, "in_session": in_session(now) and not late,
+                "base": base, "bench": bench_base, **flag}}, upsert=True)
             stored += 1
     return stored
 
@@ -165,7 +202,7 @@ async def weights(db, redis, now: Optional[datetime] = None) -> Optional[dict]:
         return None
     rows = await db[COLLECTION].find(
         {"move_1d": {"$ne": None}, "base_at": {"$gte": now - WEIGHTS_LOOKBACK}},
-        {"scope": 1, "themes": 1, "direction": 1, "move_1d": 1}).to_list(length=None)
+        {"scope": 1, "themes": 1, "direction": 1, "move_1d": 1, "late": 1}).to_list(length=None)
     table = compute_weights(rows)
     for key, value in table.items():
         await db["news_theme_weights"].replace_one({"_id": key}, {**value, "at": now}, upsert=True)
