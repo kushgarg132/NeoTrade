@@ -18,7 +18,7 @@ async def picks_today():
     latest = await db.db[PICKS].find_one({}, {"date": 1}, sort=[("date", -1)])
     picks = await db.db[PICKS].find({"date": latest["date"]}).to_list(length=None) if latest else []
     picks.sort(key=lambda p: (p["median_excess"] * p["p_beat_nifty"], p["strength"]), reverse=True)
-    scored = await db.db[PICKS].find({"outcome": {"$ne": None}}).to_list(length=None)
+    scored = await db.db[PICKS].find({"outcome": {"$ne": None}}, {"p_up": 1, "outcome": 1}).to_list(length=None)
     study = await db.db[STUDY].find_one({"_id": "latest"}) or {}
     return {
         "date": latest and latest["date"],
