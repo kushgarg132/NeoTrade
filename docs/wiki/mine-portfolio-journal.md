@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py]
-verified_at: a51584a
+verified_at: 7d0f313
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -274,34 +274,32 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 
 ## Gotchas and known issues
 
-- **Test the broker-roles default.** With no `broker_roles` set, `brokers_for` returns `set()`. Most code treats
-  that as "all brokers are mine". `journal/accounts.py::ai_vs_me` does not: it passes `set()` to `filter_trades`, so
-  both accounts are empty.
+- **Broker-roles default.** With no `broker_roles` set, `brokers_for` returns `set()`. Most code treats that as "all
+  brokers are mine"; `journal/accounts.py::ai_vs_me` now does too (mine = every non-AI broker, AI book empty).
 - **Snapshots versus scorecard_for.** The stored card's `holdings` are mine-only, while `raw_holdings` cover all
   brokers. `GET /portfolio` always re-scopes. `scorecard_for` copies verdict, health and note by symbol only, and it
   does not copy `verdict_since`.
 - **Action ids contain `:`.** That is why the route uses `{action_id:path}`, with `ACTION_ID` capped at 300 characters.
   Ids pin each instance (`kind:symbol:key`), so a dismissal lasts until the key changes. For `add` the key is
   `verdict_since`.
-- **The pre-market digest NX key is set before the work** (`digest.py::send_premarket`). An exception for one user
-  means no digest for them that day.
+- **The pre-market digest NX key is set before the work** (`digest.py::send_premarket`) to stop duplicates; a failure
+  deletes it again so the next tick retries.
 - **Post-close skips the morning catch-up.** `send_postclose` returns 0 before 15:30 IST, so a 09:20 catch-up pass
   sends no evening message.
 - **The Today broker-state cache is per process** (`today.py::_STATE_CACHE`) and is kept only when all sessions are
   ACTIVE.
-- **Possible ingest bug.** yfinance `t.dividends` are split-adjusted, but `events.py::dividends_received` multiplies
-  them by unadjusted journal quantities. After a split, dividends received are understated.
+- **Dividends and splits.** yfinance `t.dividends` are split-adjusted, so `events.py::dividends_received` takes a
+  `ratio` (`lots.split_ratio`) and scales the journal quantity; `mine/stock.py` and `GET /mine/overview` pass it.
 - **Gaps in the curve.** `history._compute` drops trades dated after the last NIFTY bar. Funds are excluded
   (`funds_excluded`). Unknown shares enter as a gap lot (`partial`).
-- **Possible guardrails bug.** `guardrails/monitor.py::check_user` builds trips only from fills since IST midnight
-  (`list_trades(since=start_of_day)`). Closing a position opened on an earlier day therefore shows as a new trip
-  opened today (a SELL becomes a SHORT trip). That counts toward `max_trades` and can raise a false `naked_option`.
+- **Guardrail trips use the whole journal.** `guardrails/monitor.py::check_user` builds round trips from all fills,
+  then keeps trips opened since IST midnight, so closing an older position is not a new (SHORT) trip.
 - **Naked-option hedge matching is loose.** Any long option on the same underlying counts as a hedge
   (`guardrails/rules.py::_is_hedged`, `ponytail:` note).
 - **Missing indexes.** `mine_action_state`, `corporate_events` and `corporate_events_meta` get none at startup. The
   upserts by `(user_id, action_id)` and `(symbol, kind, date)` are unindexed and have no unique guard.
-- **Stock pnl without a price.** `stock.py::detail` reports `pnl` as the realised sum when the symbol is held but
-  has no price (`value is None`), which mixes two meanings.
+- **Stock pnl without a price.** `stock.py::detail` reports `pnl` and `pnl_pct` as None when the symbol is held but
+  has no price; the realised sum is only used for a fully sold symbol.
 - **Past fixes:**
   - 52cc74c: Needs you crashed on an idea with `quantity` None.
   - dbeeff5: the gain harvest suggests whole shares only.
