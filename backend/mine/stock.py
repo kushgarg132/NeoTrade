@@ -74,8 +74,9 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
                          "est_tax": None if gain is None else max(gain, 0) * rate})
 
     value = None if last is None else qty * last
-    pnl = value - cost if qty and value is not None else sum(r["gain"] for r in realised(trades, symbol))
-    divs = await events.dividends_received(db, trades, symbol, today)
+    # Held but unpriced: unknown, not the realised sum (a different thing).
+    pnl = (value - cost if value is not None else None) if qty else sum(r["gain"] for r in realised(trades, symbol))
+    divs = await events.dividends_received(db, trades, symbol, today, ratio)
     flows = [(t["traded_at"].astimezone(IST).date(),
               (-1 if t["side"] == "BUY" else 1) * float(t["quantity"]) * float(t["price"])) for t in trades]
     flows += [(date.fromisoformat(x["date"]), x["amount"]) for x in divs]
@@ -87,7 +88,7 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
     row, hist = await _verdicts(db, user_id, symbol, show_verdicts)
     return {
         "position": {"qty": qty, "avg_price": cost / qty if qty else None, "value": value, "pnl": pnl,
-                     "pnl_pct": pnl / cost * 100 if qty and cost else None,
+                     "pnl_pct": pnl / cost * 100 if qty and cost and pnl is not None else None,
                      "xirr": None if unknown > 1e-9 and not lots else history.xirr(flows),
                      "held_since": first.isoformat() if first else None, "sold": qty <= 0},
         "lots": lot_rows, "unknown_qty": unknown,

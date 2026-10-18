@@ -149,3 +149,11 @@ def test_bonus_scales_lots_and_trade_markers(setup):
     body = client.get("/api/v1/mine/stock/INFY").json()
     assert body["unknown_qty"] == 0 and body["lots"][0]["qty"] == 20 and body["lots"][0]["price"] == 100
     assert body["trades"] == [{"date": body["trades"][0]["date"], "side": "BUY", "qty": 20, "price": 100}]
+
+
+def test_held_without_a_price_has_unknown_pnl_not_realised(setup):
+    client, seed, _ = setup
+    seed("journal_trades", [_trade("BUY", 10, 100, 400), _trade("SELL", 5, 150, 300)])
+    seed("portfolio_snapshots", [_held(5, 100, None)])
+    body = client.get("/api/v1/mine/stock/INFY").json()["position"]
+    assert body["value"] is None and body["pnl"] is None and body["pnl_pct"] is None

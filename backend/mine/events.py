@@ -78,10 +78,11 @@ async def upcoming(db, symbols, today: date, days: int) -> list[dict]:
     return sorted(await cur.to_list(None), key=lambda e: (e["date"], e["symbol"]))
 
 
-async def dividends_received(db, trades: list[dict], symbol: str, until: date) -> list[dict]:
+async def dividends_received(db, trades: list[dict], symbol: str, until: date, ratio: int = 1) -> list[dict]:
     """Dividends the journal's holding earned: quantity held before each
-    ex-date (buys minus sells) times the per-share amount."""
-    mine = [(t["traded_at"].astimezone(IST).date().isoformat(), float(t["quantity"]) * (1 if t["side"] == "BUY" else -1))
+    ex-date (buys minus sells) times the per-share amount. yfinance amounts are
+    split-adjusted, so `ratio` (lots.split_ratio) scales the journal quantity."""
+    mine = [(t["traded_at"].astimezone(IST).date().isoformat(), float(t["quantity"]) * ratio * (1 if t["side"] == "BUY" else -1))
             for t in trades if t["symbol"] == symbol]
     cur = db[EVENTS].find({"symbol": symbol, "kind": "ex_dividend", "amount": {"$ne": None},
                            "date": {"$lte": until.isoformat()}}, {"_id": 0})

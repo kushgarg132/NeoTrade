@@ -66,3 +66,13 @@ async def test_fetch_failure_skips_symbol(db, monkeypatch):
 
 def test_worker_registers_corp_events():
     assert "corp_events" in [l.name for l in worker._loops()]
+
+
+async def test_dividends_scale_journal_qty_by_split_ratio(db, monkeypatch):
+    # yfinance amounts are split-adjusted; a 1:2 split the journal never saw doubles its quantity.
+    _patch(monkeypatch, {"TCS.NS": [{"kind": "ex_dividend", "date": "2026-06-10", "amount": 5.0}]})
+    await events.refresh(db, {"TCS"}, TODAY)
+    buy = {"symbol": "TCS", "side": "BUY", "quantity": 10, "price": 100.0,
+           "traded_at": datetime.fromisoformat("2026-01-01").replace(tzinfo=timezone.utc)}
+    out = await events.dividends_received(db, [buy], "TCS", TODAY, ratio=2)
+    assert out[0]["qty"] == 20 and out[0]["amount"] == 100.0

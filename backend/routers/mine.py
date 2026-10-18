@@ -82,10 +82,15 @@ async def overview(user: User = Depends(get_current_user)):
         from backend.mine import events
         from backend.mine.lots import mine_trades
 
+        from backend.mine.lots import open_lots, split_ratio
+        from backend.portfolio.service import mine_avg_prices, mine_holdings
+
         trades = await mine_trades(db.db, user.id)
+        held, avg = await mine_holdings(db.db, user.id), await mine_avg_prices(db.db, user.id)
         divs = [(date.fromisoformat(d["date"]), d["amount"])
                 for sym in {t["symbol"] for t in trades}
-                for d in await events.dividends_received(db.db, trades, sym, today)]
+                for d in await events.dividends_received(
+                    db.db, trades, sym, today, split_ratio(open_lots(trades, sym), held.get(sym, 0.0), avg.get(sym)))]
         ret = await history.returns(db.db, user.id, today, divs)
         headline = {
             **{k: pulse[k] for k in ("value", "day_change", "day_change_pct", "pnl", "pnl_pct", "as_of", "holdings_as_of")},
