@@ -76,7 +76,8 @@ async def get_portfolio(
     roles = (await PrefsStore(db.db).get(user.id)).get("broker_roles") or {}
     if account != "all" or snapshot.get("raw_holdings"):
         brokers = brokers_for(roles, account) if account != "all" else {h.get("broker") for h in snapshot["raw_holdings"]}
-        snapshot = scorecard_for(snapshot, brokers, await JournalStore(db.db).list_trades(user.id), await _nifty())
+        snapshot = scorecard_for(snapshot, brokers, await JournalStore(db.db).list_trades(user.id), await _nifty(),
+                                 verdicts=account != "ai")
     visible = await verdicts_visible_to(user)
     if visible:
         targets = (await PrefsStore(db.db).get(user.id))["rebalance_targets"]

@@ -33,7 +33,7 @@ async def portfolio(db, redis, user_id, symbol: Optional[str] = None,
 
         roles = (await PrefsStore(db).get(user_id)).get("broker_roles") or {}
         snap = scorecard_for(snap, brokers_for(roles, account), await JournalStore(db).list_trades(user_id),
-                             await _nifty())
+                             await _nifty(), verdicts=account != "ai")
     from backend.portfolio.digest import verdicts_visible
     from backend.routers.portfolio import present
 

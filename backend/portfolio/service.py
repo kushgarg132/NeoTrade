@@ -231,17 +231,20 @@ async def add_candidates(db, user_id: str, held: set, now: datetime | None = Non
     return list(best.values())[:MAX_CANDIDATES]
 
 
-def scorecard_for(snapshot: dict, brokers: set[str], trades: list[dict], nifty: list) -> dict:
+def scorecard_for(snapshot: dict, brokers: set[str], trades: list[dict], nifty: list,
+                  verdicts: bool = True) -> dict:
     """One account's view of a snapshot: the scorecard re-run on that
     account's holdings and trades only. The full review's per-holding
-    verdicts and sectors carry over by symbol (no new AI call)."""
+    verdicts and sectors carry over by symbol (no new AI call). The AI
+    account's view passes `verdicts=False`: the review judges the user's own
+    account only, so a symbol both accounts hold must not show it there."""
     from backend.portfolio.scorecard import build_scorecard
 
     holdings = [Holding(**h) for h in snapshot.get("raw_holdings", []) if h.get("broker") in brokers]
     full = {r["symbol"]: r for r in snapshot.get("holdings", [])}
     sectors = {s: r.get("sector") for s, r in full.items()}
     card = build_scorecard(holdings, [t for t in trades if t.get("broker") in brokers], nifty, sectors, {})
-    for row in card["holdings"]:
+    for row in card["holdings"] if verdicts else []:
         for key in ("verdict", "reason_codes", "health", "score", "note", "previous_verdict"):
             if key in full.get(row["symbol"], {}):
                 row[key] = full[row["symbol"]][key]

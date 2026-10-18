@@ -59,6 +59,8 @@ def test_portfolio_account_view_keeps_only_that_brokers_holdings():
     assert [r["symbol"] for r in view["holdings"]] == ["TCS"]
     assert view["totals"]["value"] == pytest.approx(15_500.0)
     assert view["holdings"][0]["verdict"] == "ADD"  # the full review's verdict carries over
+    ai_view = scorecard_for(snapshot, {"upstox"}, trades=[], nifty=[], verdicts=False)
+    assert "verdict" not in ai_view["holdings"][0]  # the AI account's view never shows the review's verdict
 
 
 def _journal_app(monkeypatch, trades):
