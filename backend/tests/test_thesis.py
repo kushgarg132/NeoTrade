@@ -117,3 +117,13 @@ async def test_no_sentiment_reading_leaves_the_score_alone():
     await attach_theses(mongo, "alice", [suggestion], agent=_RecordingAgent())
 
     assert (await SuggestionStore(mongo).get("alice", "s1"))["score"]["final"] == 0.71
+
+
+def test_good_news_lowers_conviction_on_an_equity_sell_and_raises_it_on_a_buy():
+    from types import SimpleNamespace
+    from backend.suggestions.thesis import _rescored
+    report = SimpleNamespace(sentiment_score=1.0)
+    score = {"rule": 0.6, "ai": 0.0, "final": 0.0}
+    assert _rescored(score, report, {"side": "BUY"})["ai"] == 1.0
+    assert _rescored(score, report, {"side": "SELL"})["ai"] == -1.0
+    assert _rescored(score, report, {"side": "SELL", "option_contract": "X"})["ai"] == 1.0  # CSP wins when it rises

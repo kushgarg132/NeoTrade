@@ -52,7 +52,7 @@ async def attach_theses(db, user_id: str, suggestions: list[dict], agent=None, l
                 logger.warning("no thesis for %s: %s", suggestion["symbol"], exc)
                 continue
             thesis = _thesis_text(report)
-            score = _rescored(suggestion.get("score"), report)
+            score = _rescored(suggestion.get("score"), report, suggestion)
             await store.attach_thesis(user_id, suggestion["id"], thesis, score=score)
             if thesis:
                 attached += 1
@@ -67,11 +67,15 @@ def _thesis_text(report) -> Optional[str]:
     return thesis
 
 
-def _rescored(score: Optional[dict], report) -> Optional[dict]:
+def _rescored(score: Optional[dict], report, suggestion: dict) -> Optional[dict]:
     """The stored score with its AI half set from this report's sentiment.
     None when there is nothing to update: no stored score, or no reading."""
     sentiment = getattr(report, "sentiment_score", None)
     if not score or sentiment is None:
         return None
-    composite = CompositeScore(rule_score=score["rule"], ai_score=max(-1.0, min(1.0, float(sentiment))))
+    ai = max(-1.0, min(1.0, float(sentiment)))
+    # Sentiment is about the stock; a trade that wins when it falls takes the opposite side of it.
+    # (An option suggestion is a cash-secured put, which wins when it rises.)
+    bearish = suggestion.get("side") == "SELL" and not suggestion.get("option_contract")
+    composite = CompositeScore(rule_score=score["rule"], ai_score=-ai if bearish else ai)
     return {"rule": composite.rule_score, "ai": composite.ai_score, "final": composite.final}
