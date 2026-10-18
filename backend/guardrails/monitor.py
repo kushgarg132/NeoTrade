@@ -66,7 +66,8 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
 
     day = now.astimezone(IST).date()
     start_of_day = datetime.combine(day, time(0, 0), tzinfo=IST).astimezone(timezone.utc)
-    trades = [t for t in await JournalStore(db).list_trades(user_id, since=start_of_day) if t.get("broker") not in ai]
+    # Whole history, so closing an older position pairs with its buy instead of opening a SHORT trip today.
+    trades = [t for t in await JournalStore(db).list_trades(user_id) if t.get("broker") not in ai]
     trips = [t for t in build_round_trips(trades) if t["opened_at"] >= start_of_day]
 
     store = GuardrailStore(db)

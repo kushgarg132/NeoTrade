@@ -200,3 +200,17 @@ async def test_sync_skips_the_brokers_it_is_told_to(monkeypatch):
     result = await journal_sync.sync_user_trades(db, None, None, "alice", include_pnl=True, skip={"kite"})
     assert result["brokers"] == ["upstox"]
     assert [c.args[0] for c in get.await_args_list] == ["upstox"]
+
+
+async def test_closing_an_older_position_is_not_a_new_trip(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    yesterday = _ist(10, 0) - timedelta(days=1)
+    await JournalStore(db).add_trades("alice", "kite", [
+        BrokerTrade(trade_id="1", symbol="SBIN", side=Side.BUY, quantity=100, price=800.0, traded_at=yesterday),
+        BrokerTrade(trade_id="2", symbol="SBIN", side=Side.SELL, quantity=100, price=790.0, traded_at=_ist(10, 30)),
+    ], source="sync")
+    monkeypatch.setattr(monitor, "sync_user_trades", AsyncMock(return_value={
+        "imported": 0, "brokers": ["kite"], "failed": [], "day_pnl": 0.0}))
+    monkeypatch.setattr(monitor.hub, "publish", AsyncMock())
+    prefs = {**PREFS, "user_id": "alice", "max_trades_per_day": 1}
+    assert await monitor.check_user(db, None, None, prefs, _ist(10, 31)) == []
