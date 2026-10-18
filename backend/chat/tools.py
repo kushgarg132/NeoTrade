@@ -9,7 +9,7 @@ from typing import Literal, Optional, Union
 
 from langchain_core.tools import StructuredTool
 
-from backend.agents.tools import fetch_price_history_tool, fetch_stock_info_tool, resolve_symbol_tool
+from backend.chat.lc_tools import fetch_price_history_tool, fetch_stock_info_tool, resolve_symbol_tool
 from backend.ai.facts import market as market_facts
 from backend.ai.facts import user as user_facts
 from backend.analytics import compute_scorecard
@@ -191,7 +191,7 @@ def read_tools(db, redis, user_id: str) -> list:
             return _json(found)
         if not found.get("items") and symbol:
             # Not a followed stock (or nothing stored yet): search on demand.
-            from backend.components.analyst.news import fetch_news_logic
+            from backend.routers.news import fetch_news_logic
 
             web = await fetch_news_logic([symbol.upper()], max(1, min(limit, 30)))
             return _json({"stored": False, "articles": [{"title": a.title, "source": a.source, "url": a.url,

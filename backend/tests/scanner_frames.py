@@ -10,7 +10,7 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 
 END = date(2026, 10, 2)  # a Friday
 

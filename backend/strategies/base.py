@@ -1,5 +1,5 @@
 """Shared helpers for porting the legacy pandas-based strategies
-(backend/components/quant/strategies.py) onto the Strategy protocol
+(backend/strategies/indicators.pystrategies.py) onto the Strategy protocol
 (backend/engine/protocols.py). No I/O, no wall-clock reads, no network calls
 belong in this module or anything under backend/strategies/ -- see
 backend/tests/test_no_datetime_now.py and test_no_network_in_strategies.py.
@@ -15,7 +15,7 @@ from backend.core.models import Bar
 def bars_to_dataframe(bars: list[Bar]) -> pd.DataFrame:
     """Adapts `ctx.history(...)`'s bar list (oldest first) into the OHLCV
     DataFrame shape `Indicators.calculate_all` / `SupportResistance` /
-    `TrendDetector` (backend/components/quant/) already expect -- those are
+    `TrendDetector` (backend/strategies/indicators.py) already expect -- those are
     pure pandas and there's no reason to reimplement the math bar-by-bar."""
     return pd.DataFrame({
         "timestamp": [b.timestamp for b in bars],

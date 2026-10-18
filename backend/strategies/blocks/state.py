@@ -1,6 +1,6 @@
 """Incremental per-symbol indicator state: one O(1) update per bar.
 
-Every value mirrors components/quant/indicators.py (same seeding), so a block
+Every value mirrors strategies/indicators.py (same seeding), so a block
 reading it agrees with the batch indicators and the backtester. Pure: no I/O,
 no clock.
 """

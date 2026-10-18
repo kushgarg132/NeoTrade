@@ -32,8 +32,8 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.ai.sentiment import weighted_sentiment
-from backend.components.analyst.news import fetch_news_logic
-from backend.components.shared.models import FinancialEvent, NewsArticle
+from backend.routers.news import fetch_news_logic
+from backend.core.models import FinancialEvent, NewsArticle
 from backend.llm import llm_service
 from backend.prompts import render
 

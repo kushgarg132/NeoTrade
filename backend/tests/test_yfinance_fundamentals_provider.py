@@ -3,11 +3,11 @@ FundamentalSnapshot mapping, including the debt_to_equity guard."""
 
 from unittest.mock import AsyncMock, patch
 
-from backend.components.shared.models import CompanyInfo
+from backend.core.models import CompanyInfo
 from backend.instruments.models import Instrument
-from backend.screening.providers.yfinance_fundamentals import YFinanceFundamentalsProvider
+from backend.data.fundamentals.yfinance import YFinanceFundamentalsProvider
 
-MODULE = "backend.screening.providers.yfinance_fundamentals"
+MODULE = "backend.data.fundamentals.yfinance"
 
 
 def _instrument() -> Instrument:

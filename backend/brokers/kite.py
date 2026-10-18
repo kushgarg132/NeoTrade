@@ -11,7 +11,7 @@ from typing import Optional
 
 from backend.auth.kite_session import KiteSessionManager, KiteSessionState
 from backend.brokers.kite_orders import KiteOrderClient
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.core.models import BrokerOrderStatus, BrokerTrade, Holding, Order, Position
 from backend.data.feeds.live_kite import KiteTickerFeed
 from backend.data.providers.kite_provider import KiteProvider

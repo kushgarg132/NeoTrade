@@ -89,8 +89,8 @@ async def from_layer(symbol: str, read_cached: Callable[[str], Awaitable[Optiona
 
 
 async def _build(symbol, docs, sentiment, sector, redis) -> Dict[str, Any]:
-    from backend.components.analyst.agent import AnalystOutput, _report
-    from backend.components.shared.models import FinancialEvent, NewsArticle
+    from backend.ai.analyst import AnalystOutput, _report
+    from backend.core.models import FinancialEvent, NewsArticle
 
     articles, events, lines = [], [], []
     for doc in docs:

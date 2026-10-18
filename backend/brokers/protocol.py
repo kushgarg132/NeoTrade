@@ -18,7 +18,7 @@ already-covered tests for a rename with no behavioral change.
 from typing import Optional, Protocol
 
 from backend.auth.kite_session import KiteSessionState as BrokerSessionState
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.core.models import BrokerOrderStatus, BrokerTrade, Holding, Order, Position
 from backend.engine.protocols import DataFeed
 from backend.instruments.models import Instrument

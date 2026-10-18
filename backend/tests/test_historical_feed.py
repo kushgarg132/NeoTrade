@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.data.feeds.historical import HistoricalFeed
 from backend.instruments.models import Instrument
 

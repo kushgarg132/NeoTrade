@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from mongomock_motor import AsyncMongoMockClient
 
-from backend.components.shared.models import BacktestResult
+from backend.core.models import BacktestResult
 from backend.risk.backtest_gate import BacktestGateStore, passes_gate
 
 

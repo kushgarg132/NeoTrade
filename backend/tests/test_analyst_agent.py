@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from backend.components.analyst import agent as agent_module
-from backend.components.analyst.agent import AnalystAgent, _weighted_sentiment, _ArticleScore
-from backend.components.shared.models import NewsArticle
+from backend.ai import analyst as agent_module
+from backend.ai.analyst import AnalystAgent, _weighted_sentiment, _ArticleScore
+from backend.core.models import NewsArticle
 
 NOW = datetime.now(timezone.utc)
 

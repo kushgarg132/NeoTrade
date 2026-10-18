@@ -28,7 +28,7 @@ def _text(message) -> str:
 
 
 def _parse(schema: type[BaseModel], text: str) -> Optional[BaseModel]:
-    from backend.components.analyst.agent import _extract_json
+    from backend.ai.analyst import _extract_json
 
     try:
         return schema.model_validate(json.loads(_extract_json(text)))

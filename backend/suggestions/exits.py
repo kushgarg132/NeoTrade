@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 from backend.datalayer import bars
 from backend.engine.persistence import LedgerStore, mine_book
 from backend.engine.session import IST

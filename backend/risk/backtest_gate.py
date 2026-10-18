@@ -7,7 +7,7 @@ gate doing its job, not a bug to work around.
 
 from datetime import datetime, timezone
 
-from backend.components.shared.models import BacktestResult
+from backend.core.models import BacktestResult
 
 MIN_WINDOW_DAYS = 365
 # What a gate backtest asks for: the actual span runs from the first bar to the

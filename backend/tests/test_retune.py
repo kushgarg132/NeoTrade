@@ -133,8 +133,8 @@ async def test_the_daily_pass_starts_one_retune_a_month(monkeypatch):
 async def test_run_all_retunes_the_daily_strategies_on_real_backtests(monkeypatch):
     """Wiring only: real strategies and run_backtest over a short synthetic
     history, one fetch per symbol, one record per daily strategy."""
-    from backend.components.quant import indian_stocks
-    from backend.components.shared.models import PriceCandle
+    from backend.instruments import indian_stocks
+    from backend.core.models import PriceCandle
     from backend.instruments.master import InstrumentMaster
     from backend.instruments.models import Instrument
 
@@ -177,8 +177,8 @@ async def test_run_all_retunes_5_minute_strategies_only_with_an_intraday_source(
     """Wiring only: with a 5-minute history source every intraday strategy
     with a GRID gets a record; without one they are skipped, not run on
     yfinance's ~60 days."""
-    from backend.components.quant import indian_stocks
-    from backend.components.shared.models import PriceCandle
+    from backend.instruments import indian_stocks
+    from backend.core.models import PriceCandle
     from backend.instruments.master import InstrumentMaster
     from backend.instruments.models import Instrument
 

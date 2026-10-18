@@ -12,8 +12,8 @@ from fastapi import APIRouter, Depends, Query
 
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
-from backend.components.master.stock_info import fetch_stock_info_logic
-from backend.components.shared.models import Watchlist
+from backend.datalayer.stock_info import fetch_stock_info_logic
+from backend.core.models import Watchlist
 from backend.database import db
 
 router = APIRouter(prefix="/watchlist", tags=["Watchlist"])

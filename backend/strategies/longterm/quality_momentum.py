@@ -1,11 +1,11 @@
 """The plan's actual new long-term strategy (not a port): momentum-timed
 entry on top of a fundamentals-screened universe. Universe + quality scores
-are precomputed by backend/screening/universe.py::build_quality_universe and
+are precomputed by backend/data/fundamentals/universe.py::build_quality_universe and
 handed in at construction -- this strategy does NO I/O of its own, per the
 project's no-I/O-in-strategies rule (backend/tests/test_no_network_in_strategies.py).
 """
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe

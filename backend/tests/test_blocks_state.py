@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 from backend.core.models import Bar
 from backend.engine.session import IST
 from backend.strategies.blocks.state import SymbolState

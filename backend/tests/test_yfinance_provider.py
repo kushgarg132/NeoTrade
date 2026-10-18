@@ -86,7 +86,7 @@ async def test_unsupported_exchange_raises():
 def test_no_suffix_loop_in_price_and_stock_info_source():
     """Regression guard: the [".NS", ".BO"] brute-force loop that used to try
     suffixes one by one until something stuck must not reappear."""
-    for rel_path in ("components/quant/price.py", "components/master/stock_info.py"):
+    for rel_path in ("datalayer/stock_info.py",):
         source = (_BACKEND_DIR / rel_path).read_text()
         assert '".NS", ".BO"' not in source
         assert "suffixes = [" not in source

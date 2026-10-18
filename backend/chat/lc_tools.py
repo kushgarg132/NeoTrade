@@ -2,10 +2,9 @@ from langchain_core.tools import tool
 from typing import List, Optional
 import logging
 
-# Import logic from existing components
-from backend.components.master.stock_info import fetch_stock_info_logic
-from backend.components.quant.price import fetch_price_history_logic
-from backend.components.master.search import resolve_company_query
+from backend.datalayer.stock_info import fetch_stock_info_logic
+from backend.datalayer.stock_info import fetch_price_history_logic
+from backend.research.search import resolve_company_query
 
 logger = logging.getLogger(__name__)
 

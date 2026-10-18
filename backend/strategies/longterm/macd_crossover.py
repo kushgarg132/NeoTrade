@@ -1,11 +1,11 @@
-"""Ported from backend/components/quant/strategies.py::MACDCrossover. Same
+"""Ported from backend/strategies/indicators.pystrategies.py::MACDCrossover. Same
 logic and thresholds -- structural port, not a redesign.
 
 Strength is graded 0.5..0.9 (was a flat 0.75): whether the crossover agrees
 with the 200-day trend, how much momentum the histogram already has (full
 at 0.25 ATR), and how much room RSI has before overbought/oversold."""
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe

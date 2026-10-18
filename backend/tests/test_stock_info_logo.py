@@ -2,7 +2,7 @@
 dead (DNS doesn't resolve at all), which is what made every stock's logo
 render as a broken image."""
 
-from backend.components.master.stock_info import _favicon_url
+from backend.datalayer.stock_info import _favicon_url
 
 
 def test_favicon_url_never_uses_the_dead_clearbit_host():
@@ -25,7 +25,7 @@ def test_favicon_url_accepts_a_bare_guessed_domain():
 def test_dividend_yield_arrives_in_percent_and_is_stored_as_a_fraction():
     # yfinance 1.x reports dividendYield in percent (ITC.NS: 6.25), unlike its
     # margins and ROE, which stay fractions.
-    from backend.components.master.stock_info import _dividend_fraction
+    from backend.datalayer.stock_info import _dividend_fraction
 
     assert _dividend_fraction({"dividendYield": 6.25}) == 0.0625
     assert _dividend_fraction({}) is None

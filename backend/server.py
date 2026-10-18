@@ -40,8 +40,7 @@ from backend.instruments.loader import (
 
 # Setup Logging
 logger = setup_logging()
-from backend.components.analyst import news
-from backend.components.master import stock_info
+from backend.routers import news
 
 
 # Session tokens ride the socket URL (?token=); keep them out of the access log.
@@ -223,7 +222,6 @@ async def shutdown_db_client():
 
 # Include Routers
 app.include_router(news.router, prefix=settings.API_PREFIX, tags=["News"], dependencies=[Depends(get_current_user)])
-app.include_router(stock_info.router, prefix=settings.API_PREFIX, tags=["Market Data"], dependencies=[Depends(get_current_user)])
 
 # Agents Router
 from backend.routers import agents

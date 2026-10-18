@@ -9,9 +9,9 @@ callers, since they only depend on the `FundamentalsProvider` protocol.
 
 import logging
 
-from backend.components.master.stock_info import fetch_stock_info_logic
+from backend.datalayer.stock_info import fetch_stock_info_logic
 from backend.instruments.models import Instrument
-from backend.screening.protocols import FundamentalSnapshot
+from backend.data.fundamentals.protocols import FundamentalSnapshot
 
 logger = logging.getLogger(__name__)
 

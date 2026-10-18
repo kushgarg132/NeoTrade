@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 
 import yfinance as yf
 
-from backend.components.analyst.news import fresh_headlines
+from backend.routers.news import fresh_headlines
 from backend.engine.session import IST
 from backend.llm import llm_service
 from backend.prompts import render

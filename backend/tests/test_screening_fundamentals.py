@@ -1,8 +1,8 @@
-"""Pure-function tests for backend/screening/fundamentals.py -- no network,
+"""Pure-function tests for backend/data/fundamentals/scores.py -- no network,
 constructed FundamentalSnapshot fixtures only."""
 
-from backend.screening.fundamentals import piotroski_lite_score, quality_score
-from backend.screening.protocols import FundamentalSnapshot
+from backend.data.fundamentals.scores import piotroski_lite_score, quality_score
+from backend.data.fundamentals.protocols import FundamentalSnapshot
 
 
 def _snapshot(**overrides) -> FundamentalSnapshot:

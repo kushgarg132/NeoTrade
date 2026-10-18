@@ -1,6 +1,6 @@
 """Per-symbol daily-bar indicator state for swing blocks: one update per trading day.
 
-SMA / ATR / RSI 2 mirror components/quant/indicators.py (same seeding), so a block
+SMA / ATR / RSI 2 mirror strategies/indicators.py (same seeding), so a block
 reading it agrees with the batch indicators. Pure: no I/O, no clock.
 """
 from collections import deque

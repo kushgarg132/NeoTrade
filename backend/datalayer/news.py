@@ -29,8 +29,8 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ValidationError
 
 from backend.ai.sentiment import weighted_sentiment
-from backend.components.analyst.agent import _extract_json
-from backend.components.analyst.news import _title_key
+from backend.ai.analyst import _extract_json
+from backend.routers.news import _title_key
 from backend.configs.settings import settings
 from backend.datalayer import news_sources
 from backend.datalayer.prices import priority_symbols

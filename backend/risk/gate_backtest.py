@@ -12,8 +12,8 @@ import logging
 from datetime import datetime, timedelta
 
 from backend.learning.retune import current_params
-from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
-from backend.components.shared.models import BacktestResult
+from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
+from backend.core.models import BacktestResult
 from backend.engine.backtest import run_backtest
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument

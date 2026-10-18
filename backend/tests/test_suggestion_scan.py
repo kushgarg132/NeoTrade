@@ -99,7 +99,7 @@ class _RisingHistoryProvider:
     """
 
     async def history(self, instrument, interval, period):
-        from backend.components.shared.models import PriceCandle
+        from backend.core.models import PriceCandle
 
         first_day = datetime.now(timezone.utc) - timedelta(days=DAYS)
         candles = []
@@ -398,7 +398,7 @@ class _BreakoutTodayProvider:
     """Flat at 100 for 59 days, then today's close at 105: a 10-day breakout on the final session."""
 
     async def history(self, instrument, interval, period):
-        from backend.components.shared.models import PriceCandle
+        from backend.core.models import PriceCandle
 
         first_day = datetime.now(timezone.utc) - timedelta(days=60)  # last candle yesterday: a closed session
         return [PriceCandle(symbol=instrument.tradingsymbol, timestamp=first_day + timedelta(days=d),

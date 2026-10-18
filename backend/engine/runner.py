@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
 from backend.ai.sentiment import get_cached_sentiment
-from backend.components.risk.risk import RiskRules
+from backend.risk.rules import RiskRules
 from backend.core.clock import Clock, SimClock
 from backend.core.models import Intent, Order, Side
 from backend.engine.context import SimpleStrategyContext

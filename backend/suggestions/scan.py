@@ -26,7 +26,7 @@ from backend.builder import store as builder_store
 from backend.datalayer.news_sources import nifty200_sectors
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
 from backend.options.premiums import live_premium_source
-from backend.screening.universe import build_quality_universe
+from backend.data.fundamentals.universe import build_quality_universe
 from backend.strategies.registry import build_default_strategies
 from backend.suggestions.sink import SuggestionSink
 from backend.suggestions.store import SuggestionStore

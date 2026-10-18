@@ -9,16 +9,12 @@ from backend.configs.settings import settings
 
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
-from backend.market_cache import cached
-from backend.components.shared.models import NewsArticle
+from backend.core.models import NewsArticle
 import random
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-class NewsFetchResponse(BaseModel):
-    articles: List[NewsArticle]
 
 # What an Indian trader checks before and during the session: the market
 # itself, then the macro that moves it. Google News' `when:1d` keeps each
@@ -31,7 +27,6 @@ MARKET_QUERIES = [
     ("RBI rupee crude oil FII markets when:1d", "IN", "en-IN"),
 ]
 HEADLINE_MAX_AGE = timedelta(hours=36)
-MARKET_NEWS_TTL_SECONDS = 10 * 60
 
 
 def _title_key(title: str) -> str:
@@ -64,16 +59,6 @@ async def fresh_headlines(
     fresh.sort(key=lambda a: a.published_at, reverse=True)
     return fresh[:limit]
 
-
-@router.get("/news/market", response_model=NewsFetchResponse)
-async def fetch_market_news():
-    """Today's Indian market headlines, newest first. Refreshed every ten
-    minutes behind a stale-while-revalidate cache (backend/market_cache.py):
-    every statement view asks, and none should wait on Google News."""
-    async def fetch():
-        return [a.model_dump(mode="json") for a in await fresh_headlines(MARKET_QUERIES)]
-
-    return NewsFetchResponse(articles=await cached("news", MARKET_NEWS_TTL_SECONDS, fetch))
 
 async def fetch_news_logic(symbols: List[str], limit: int = 10) -> List[NewsArticle]:
     """Recent news per symbol from Google News India. Used on demand for

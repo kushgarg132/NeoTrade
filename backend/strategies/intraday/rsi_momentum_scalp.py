@@ -7,7 +7,7 @@ scalp, not a reversal play (that's mean_reversion.py's job).
 
 import pandas as pd
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe

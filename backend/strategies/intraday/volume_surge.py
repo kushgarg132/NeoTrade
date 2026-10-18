@@ -1,4 +1,4 @@
-"""Ported from backend/components/quant/strategies.py::VolumeSurge. Same
+"""Ported from backend/strategies/indicators.pystrategies.py::VolumeSurge. Same
 logic and thresholds -- structural port, not a redesign.
 
 `warmup_bars=20` matches the original's 20-period rolling volume average

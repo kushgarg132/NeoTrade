@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.instruments.models import Instrument
 
 

@@ -57,7 +57,7 @@ class _FakeAnalystAgent:
 
 @pytest.mark.asyncio
 async def test_refresh_analyst_verdict_caches_and_returns(monkeypatch):
-    monkeypatch.setattr("backend.components.analyst.agent.AnalystAgent", _FakeAnalystAgent)
+    monkeypatch.setattr("backend.ai.analyst.AnalystAgent", _FakeAnalystAgent)
     redis = AsyncMock()
 
     verdict = await refresh_analyst_verdict("RELIANCE", redis)
@@ -84,7 +84,7 @@ class _NoEventsAgent:
 
 @pytest.mark.asyncio
 async def test_refresh_analyst_verdict_falls_back_to_summary_without_events(monkeypatch):
-    monkeypatch.setattr("backend.components.analyst.agent.AnalystAgent", _NoEventsAgent)
+    monkeypatch.setattr("backend.ai.analyst.AnalystAgent", _NoEventsAgent)
     redis = AsyncMock()
 
     verdict = await refresh_analyst_verdict("TCS", redis)

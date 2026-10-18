@@ -3,7 +3,7 @@ just arithmetic over already-fetched data. See the Task 7 report for the
 exact weighting rationale.
 """
 
-from backend.screening.protocols import FundamentalSnapshot
+from backend.data.fundamentals.protocols import FundamentalSnapshot
 
 _DEBT_TO_EQUITY_THRESHOLD = 2.0
 # PE <= 10 (earnings_yield >= 10%) is treated as "maximally cheap" for the

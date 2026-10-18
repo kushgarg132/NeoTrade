@@ -156,7 +156,7 @@ def variant(strategy, universe: list[str], symbol_for_token: dict[int, str], par
 
 async def run_all(db, provider, now: datetime, intraday=None) -> list[dict]:
     """`provider` serves daily bars; `intraday` (or None, skipping them) 5-minute ones."""
-    from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+    from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
     from backend.engine.backtest import run_backtest
     from backend.instruments.master import InstrumentMaster
     from backend.builder import store

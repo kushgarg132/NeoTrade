@@ -3,7 +3,7 @@
 The engine loop (backend/engine/runner.py, Task 6) must never await an LLM
 round-trip synchronously -- a per-bar decision blocking on an LLM call is a
 latency and reliability risk no trading loop should carry. So sentiment is
-computed out-of-band -- by AnalystAgent (backend/components/analyst/agent.py),
+computed out-of-band -- by AnalystAgent (backend/ai/analyst.py),
 which writes `sentiment:{symbol}` whenever it analyses a stock -- and the
 engine only ever reads the cache (`get_cached_sentiment`), which returns None on a miss rather than
 blocking or raising. backend.scoring.composite.score_intent already treats
@@ -34,7 +34,7 @@ async def get_cached_sentiment(symbol: str, redis) -> Optional[float]:
 
 # 30-day half-life: news on Indian mid-caps arrives weeks apart, and a
 # 3-day one let a fresh puff piece outvote a two-month-old 23% profit drop
-# (see backend/components/analyst/agent.py).
+# (see backend/ai/analyst.py).
 RECENCY_HALF_LIFE_DAYS = 30.0
 
 

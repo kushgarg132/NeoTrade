@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 
 
 @pytest.fixture

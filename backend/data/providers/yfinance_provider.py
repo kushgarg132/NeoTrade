@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 import yfinance as yf
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.instruments.models import Instrument
 
 logger = logging.getLogger(__name__)

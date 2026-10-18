@@ -16,7 +16,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 from backend.datalayer.bars import NIFTY
 from backend.factor.model import MONTH, YEAR, Params, scores, volatility
 

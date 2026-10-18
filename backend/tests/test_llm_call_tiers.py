@@ -7,12 +7,12 @@ from pathlib import Path
 
 BACKEND = Path(__file__).parents[1]
 EXPECTED = {
-    "components/analyst/agent.py": ["deep", "standard"],   # news scoring feeds trade scores; report
+    "ai/analyst.py": ["deep", "standard"],   # news scoring feeds trade scores; report
     "datalayer/news.py": ["fast", "deep"],
     "datalayer/market.py": ["standard"],                 # the market brief                # triage; impacts feed trade scores
     "plan/builder.py": ["deep", "deep"],                  # the per-user game plan (single call; tool loop)
     "plan/revise.py": ["deep"],                           # revisions: tool loop; single call via builder._llm
-    "components/master/search.py": ["deep"],                # Indian peers came out wrong on Flash
+    "research/search.py": ["deep"],                # Indian peers came out wrong on Flash
     "instruments/resolve.py": ["fast"],
     "research/index_move.py": ["standard"],
     "portfolio/review.py": ["deep"],
@@ -23,7 +23,7 @@ EXPECTED = {
 }
 
 FEATURE = {
-    "components/analyst/agent.py": "research", "components/master/search.py": "research",
+    "ai/analyst.py": "research", "research/search.py": "research",
     "instruments/resolve.py": "research", "research/index_move.py": "research",
     "datalayer/news.py": "news", "datalayer/market.py": "news",
     "plan/builder.py": "plan", "plan/revise.py": "plan",

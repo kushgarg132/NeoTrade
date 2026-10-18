@@ -288,7 +288,7 @@ async def test_aggregate_blends_company_sector_and_market(mongo):
 async def test_analysis_reads_the_layer_and_reuses_an_up_to_date_note(mongo, monkeypatch):
     from backend.database import db
     from backend.datalayer import analysis
-    from backend.components.analyst import agent
+    from backend.ai import analyst as agent
 
     redis = FakeRedis()
     monkeypatch.setattr(db, "db", mongo)

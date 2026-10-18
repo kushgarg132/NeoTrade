@@ -9,10 +9,10 @@ period reaching further back than the store holds all go to the fallback.
 from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.datalayer import bars
 from backend.engine.session import IST
-from backend.screening.protocols import FundamentalSnapshot
+from backend.data.fundamentals.protocols import FundamentalSnapshot
 
 _PERIOD_DAYS = {"1mo": 30, "3mo": 91, "6mo": 182, "1y": 365, "2y": 730, "5y": 1826}
 _COVER_SLACK = timedelta(days=10)  # the first trading day after `since` can be a week+ later
@@ -48,7 +48,7 @@ class StoreHistoryProvider:
 
 class StoreFundamentals:
     def __init__(self, db, fallback=None) -> None:
-        from backend.screening.providers.yfinance_fundamentals import YFinanceFundamentalsProvider
+        from backend.data.fundamentals.yfinance import YFinanceFundamentalsProvider
 
         self._db = db
         self._fallback = fallback or YFinanceFundamentalsProvider()

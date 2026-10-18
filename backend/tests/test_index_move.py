@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.components.shared.models import NewsArticle
+from backend.core.models import NewsArticle
 from backend.research import index_move
 from backend.routers import market_data
 
@@ -57,7 +57,7 @@ def world(monkeypatch):
         return "### What happened\nIt rose."
 
     monkeypatch.setattr(index_move.yf, "Ticker", _FakeTicker)
-    from backend.components.analyst import news as news_module
+    from backend.routers import news as news_module
     monkeypatch.setattr(news_module, "fetch_google_news", news)
     monkeypatch.setattr(market_data, "fetch_ticker_data", peers)
     monkeypatch.setattr(market_data, "get_trending_stocks", trending)

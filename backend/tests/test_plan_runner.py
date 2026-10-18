@@ -132,7 +132,7 @@ async def test_expand_error_is_logged_and_the_run_continues():
 
 from datetime import date  # noqa: E402
 
-from backend.components.shared.models import PriceCandle  # noqa: E402
+from backend.core.models import PriceCandle  # noqa: E402
 from backend.instruments.models import Instrument  # noqa: E402
 from backend.plan.expand import make_expand  # noqa: E402
 from backend.strategies.intraday.orb_breakout import ORBStrategy  # noqa: E402

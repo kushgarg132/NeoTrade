@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 from mongomock_motor import AsyncMongoMockClient
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument
 from backend.plan import replay

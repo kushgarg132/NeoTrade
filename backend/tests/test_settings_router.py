@@ -280,7 +280,7 @@ def test_strategy_promotion_includes_the_last_backtest_and_the_options_strategy(
     import asyncio
     from datetime import datetime, timezone
 
-    from backend.components.shared.models import BacktestResult
+    from backend.core.models import BacktestResult
     from backend.risk.backtest_gate import BacktestGateStore
 
     monkeypatch.setattr(settings_router, "db", type("_Db", (), {"db": db})())

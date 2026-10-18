@@ -1,5 +1,5 @@
 """New intraday strategy (SPEC-intraday-strategies-expansion, CAP-1). Reuses
-Indicators.calculate_all's vwap/atr_14 columns (backend/components/quant/
+Indicators.calculate_all's vwap/atr_14 columns (backend/strategies/indicators.py
 indicators.py) -- vwap was already implemented there but unused by any
 Strategy subclass before this.
 
@@ -13,7 +13,7 @@ compare deviation).
 
 import pandas as pd
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe

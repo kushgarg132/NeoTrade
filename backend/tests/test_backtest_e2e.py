@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.core.clock import SimClock
 from backend.core.models import Intent, Side
 from backend.data.feeds.historical import HistoricalFeed

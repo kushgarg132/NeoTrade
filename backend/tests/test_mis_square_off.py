@@ -12,7 +12,7 @@ from typing import AsyncIterator
 
 import pytest
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.core.clock import SimClock
 from backend.core.models import Bar, Intent, Side
 from backend.data.feeds.historical import HistoricalFeed

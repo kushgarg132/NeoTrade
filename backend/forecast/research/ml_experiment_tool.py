@@ -22,7 +22,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 from backend.core.models import Side
 from backend.datalayer.bars import NIFTY
 from backend.engine.execution.costs import calculate_indian_costs

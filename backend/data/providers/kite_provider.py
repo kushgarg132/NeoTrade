@@ -21,7 +21,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.instruments.models import Instrument
 
 # This project's interval convention (see YFinanceProvider/strategies) is

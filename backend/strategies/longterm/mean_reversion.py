@@ -1,4 +1,4 @@
-"""Ported from backend/components/quant/strategies.py::MeanReversion. Same
+"""Ported from backend/strategies/indicators.pystrategies.py::MeanReversion. Same
 logic and thresholds -- structural port, not a redesign.
 
 Note: the original's target formula checked for a `sma_20` column that
@@ -13,7 +13,7 @@ whether the 200-day trend is still up -- a dip in an uptrend reverts more
 reliably than a fall in a downtrend.
 """
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.core.models import Intent, Side
 from backend.engine.backtest import run_backtest
 from backend.engine.protocols import StrategySpec

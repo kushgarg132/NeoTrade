@@ -13,7 +13,7 @@ from backend.scoring.composite import AI_CAP, RULE_FLOOR
 from backend.strategies.base import TokenResolvingStrategy
 from backend.strategies.card import StrategyCard
 
-# 1-10 scale (backend.components.shared.models.NewsArticle.impact_score's own range) -- below
+# 1-10 scale (backend.core.models.NewsArticle.impact_score's own range) -- below
 # this, routine/low-consequence news shouldn't be enough to trigger a trade.
 MATERIALITY_THRESHOLD = 6
 

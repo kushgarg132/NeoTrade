@@ -70,7 +70,7 @@ import httpx
 
 from backend.brokers.expiry import next_fixed_time_ist
 from backend.brokers.protocol import BrokerSessionState
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.brokers.trades import parse_ist, today_ist
 from backend.brokers.holdings import kind_of
 from backend.core.models import BrokerOrderStatus, BrokerTrade, Holding, Order, Position, Side

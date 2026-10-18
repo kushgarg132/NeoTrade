@@ -5,7 +5,7 @@
 import logging
 from typing import Callable, Optional
 
-from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
 from backend.engine.protocols import Strategy
 from backend.strategies.built import BlockStrategy, active, load_ok
 from backend.strategies.intraday.gap_and_go import GapAndGoStrategy
@@ -57,7 +57,7 @@ def build_default_strategies(
     silent, rather than fabricating a fake token mapping.
 
     `quality_universe`/`quality_scores` (Task 7) are the pre-built output of
-    `backend.screening.universe.build_quality_universe` -- building that
+    `backend.data.fundamentals.universe.build_quality_universe` -- building that
     universe requires an async fundamentals fetch, and this factory, like
     everything under backend/strategies/, must stay I/O-free, so it can't
     build them itself. Default `None` means "don't include

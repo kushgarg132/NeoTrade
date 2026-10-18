@@ -37,7 +37,7 @@ from backend.risk.backtest_gate import BacktestGateStore
 from backend.risk.kill_switch import KillSwitchStore
 from backend.risk.paper_gate import paper_records
 from backend.risk.gate_backtest import backtest_for_gate
-from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
 from backend.core.clock import SystemClock
 from backend.database import db
 from backend.data.providers.yfinance_provider import YFinanceProvider

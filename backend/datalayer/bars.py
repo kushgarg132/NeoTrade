@@ -66,7 +66,7 @@ async def ensure_indexes(db) -> None:
 
 
 async def symbols(db) -> set[str]:
-    from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+    from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
     from backend.datalayer.prices import _bare, priority_symbols
     from backend.factor.data import universe
 
@@ -272,7 +272,7 @@ async def loop(db, redis, now: Optional[datetime] = None) -> None:
 
 
 async def fundamentals_loop(db, redis, now: Optional[datetime] = None) -> None:
-    from backend.screening.providers.yfinance_fundamentals import YFinanceFundamentalsProvider
+    from backend.data.fundamentals.yfinance import YFinanceFundamentalsProvider
 
     now = now or datetime.now(timezone.utc)
     today = today_ist(now).isoformat()

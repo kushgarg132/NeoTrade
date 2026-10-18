@@ -1,4 +1,4 @@
-"""Ported from backend/components/quant/strategies.py::TechnicalBreakout.
+"""Ported from backend/strategies/indicators.pystrategies.py::TechnicalBreakout.
 Same logic, thresholds, and stop/target formulas -- structural port onto the
 Strategy protocol, not a redesign.
 
@@ -6,8 +6,8 @@ Strength is graded 0.55..0.95 (was a flat 0.8): how far volume exceeds the
 1.5x confirmation (full at 3x), how decisively price cleared resistance
 (full at 1 ATR above), and whether the 200-day trend is up."""
 
-from backend.components.quant.indicators import Indicators
-from backend.components.quant.support import SupportResistance
+from backend.strategies.indicators import Indicators
+from backend.strategies.indicators import SupportResistance
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe

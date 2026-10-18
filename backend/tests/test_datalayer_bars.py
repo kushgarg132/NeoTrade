@@ -7,7 +7,7 @@ from mongomock_motor import AsyncMongoMockClient
 from backend.data.providers.store import StoreFundamentals, StoreHistoryProvider
 from backend.datalayer import bars
 from backend.instruments.models import Instrument
-from backend.screening.protocols import FundamentalSnapshot
+from backend.data.fundamentals.protocols import FundamentalSnapshot
 
 TODAY = bars.today_ist()
 AFTER_CLOSE = datetime.combine(TODAY, time(16, 30), bars.IST)
@@ -109,7 +109,7 @@ class FakeBroker:
         self.end = end
 
     async def history(self, instrument, interval, period):
-        from backend.components.shared.models import PriceCandle
+        from backend.core.models import PriceCandle
 
         if instrument.tradingsymbol in self.fail:
             raise ValueError("no daily history")

@@ -17,8 +17,8 @@ import logging
 
 from langgraph.graph import StateGraph, END
 
-from backend.components.analyst.agent import AnalystAgent
-from backend.components.master.search import resolve_company_query
+from backend.ai.analyst import AnalystAgent
+from backend.research.search import resolve_company_query
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ class ResearchAgent:
     async def company_info_node(self, state: AgentState):
         logger.info("Fetching company info...")
         try:
-            from backend.components.master.stock_info import fetch_stock_info_logic
+            from backend.datalayer.stock_info import fetch_stock_info_logic
             info_obj = await fetch_stock_info_logic(state["symbol"])
             return {"company_info": info_obj.model_dump(mode="json")}
         except Exception as e:
@@ -106,7 +106,7 @@ class ResearchAgent:
 
     async def synthesize_node(self, state: AgentState):
         """The thesis is written in the same LLM call as the analyst's
-        summary (backend/components/analyst/agent.py) -- no second call."""
+        summary (backend/ai/analyst.py) -- no second call."""
         return {"thesis": (state.get("analyst_output") or {}).get("thesis", "")}
 
     async def run(self, symbol: str) -> ResearchReport:

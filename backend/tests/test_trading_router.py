@@ -276,7 +276,7 @@ def test_search_instruments_no_matches_returns_empty_list(instruments_client):
 
 
 async def _seed_passing_backtest(strategy_name: str) -> None:
-    from backend.components.shared.models import BacktestResult
+    from backend.core.models import BacktestResult
     from backend.risk.backtest_gate import BacktestGateStore
 
     await BacktestGateStore(_FakeDb.db).record(strategy_name, BacktestResult(
@@ -492,7 +492,7 @@ def test_a_strategy_toggled_live_routes_live_only_after_passing_the_gate(monkeyp
     session is ACTIVE; only the one with a passing backtest and a paper
     record may route live. The rest stay on paper."""
     from backend.brokers.protocol import BrokerSessionState
-    from backend.components.shared.models import BacktestResult
+    from backend.core.models import BacktestResult
     from backend.prefs import PrefsStore
     from backend.risk.backtest_gate import BacktestGateStore
 
@@ -517,7 +517,7 @@ def test_a_strategy_toggled_live_routes_live_only_after_passing_the_gate(monkeyp
 
 @pytest.mark.asyncio
 async def test_live_eligible_strategies_keeps_only_the_ones_that_passed():
-    from backend.components.shared.models import BacktestResult
+    from backend.core.models import BacktestResult
     from backend.risk.backtest_gate import BacktestGateStore
 
     class _Strategy:
@@ -626,7 +626,7 @@ def _fresh_fake_db():
 
 
 async def _seed_gate_and_prefs(fake_db, live_strategies, autopilot=True):
-    from backend.components.shared.models import BacktestResult
+    from backend.core.models import BacktestResult
     from backend.prefs import PrefsStore
     from backend.risk.backtest_gate import BacktestGateStore
 

@@ -151,7 +151,7 @@ async def _swing_history(db):
     session, no network), or None while fewer than MIN_SWING_SYMBOLS of the scan universe have bars
     covering the period the feed asks for. kwargs["bars"] (the backtested symbols' bars) is what the
     buy-and-hold benchmark is computed from."""
-    from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+    from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
     from backend.data.feeds.historical import period_for
     from backend.data.providers.store import _COVER_SLACK, _PERIOD_DAYS, StoreHistoryProvider
     from backend.datalayer import bars

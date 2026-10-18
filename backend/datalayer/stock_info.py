@@ -1,16 +1,14 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import HTTPException
+from typing import List
 import logging
 
-from backend.components.shared.models import CompanyInfo
+from backend.core.models import CompanyInfo, PriceCandle
 from backend.data.providers.yfinance_provider import YFinanceProvider
 from backend.database import get_database
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.resolve import SymbolNotFoundError, resolve_symbol
 
 logger = logging.getLogger(__name__)
-
-router = APIRouter()
 
 _provider = YFinanceProvider()
 
@@ -35,22 +33,6 @@ def _favicon_url(website_or_domain: str) -> str:
     )
     return f"https://www.google.com/s2/favicons?sz=128&domain={domain}"
 
-
-class StockInfoRequest(BaseModel):
-    symbol: str
-
-
-class StockInfoResponse(BaseModel):
-    company_info: CompanyInfo
-
-
-@router.post("/stock_info", response_model=StockInfoResponse)
-async def fetch_stock_info(request: StockInfoRequest):
-    """
-    Fetches comprehensive stock/company information using yfinance.
-    """
-    company_info = await fetch_stock_info_logic(request.symbol)
-    return StockInfoResponse(company_info=company_info)
 
 async def fetch_stock_info_logic(symbol: str) -> CompanyInfo:
     """
@@ -142,7 +124,19 @@ async def fetch_stock_info_logic(symbol: str) -> CompanyInfo:
     return company_info
 
 
-@router.get("/stock_info/{symbol}", response_model=StockInfoResponse)
-async def fetch_stock_info_get(symbol: str):
-    """GET endpoint for fetching stock info."""
-    return await fetch_stock_info(StockInfoRequest(symbol=symbol))
+async def fetch_price_history_logic(symbol: str, period: str = "1mo", interval: str = "1d") -> tuple[List[PriceCandle], str]:
+    """Price history: resolve `symbol` to an exact instrument, then fetch via
+    YFinanceProvider. No suffix guessing."""
+    master = InstrumentMaster(await get_database())
+    try:
+        instrument = await resolve_symbol(symbol, master)
+    except SymbolNotFoundError as e:
+        logger.error(f"Failed to resolve symbol {symbol}: {e}")
+        raise HTTPException(status_code=404, detail=f"No data found for symbol {symbol}: {e}")
+
+    try:
+        candles = await _provider.history(instrument, interval=interval, period=period)
+    except ValueError as e:
+        logger.error(f"Failed to fetch price history for {symbol} ({instrument.tradingsymbol}): {e}")
+        raise HTTPException(status_code=404, detail=str(e))
+    return candles, "yfinance"

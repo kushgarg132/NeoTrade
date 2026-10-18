@@ -8,7 +8,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from backend.components.analyst.agent import _extract_json
+from backend.ai.analyst import _extract_json
 
 MAX_PLAN_POSITIONS = 10  # no per-user positions pref exists; the plan's own ceiling
 MAX_ADDS = 10

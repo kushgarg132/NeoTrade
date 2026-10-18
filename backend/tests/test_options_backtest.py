@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from mongomock_motor import AsyncMongoMockClient
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.data.providers.kite_provider import KiteProvider
 from backend.engine.backtest import run_backtest
 from backend.instruments.master import InstrumentMaster

@@ -5,9 +5,9 @@ network."""
 import asyncio
 
 from backend.instruments.models import Instrument
-from backend.screening.fundamentals import quality_score
-from backend.screening.protocols import FundamentalSnapshot
-from backend.screening.universe import build_quality_universe
+from backend.data.fundamentals.scores import quality_score
+from backend.data.fundamentals.protocols import FundamentalSnapshot
+from backend.data.fundamentals.universe import build_quality_universe
 
 
 def _instrument(symbol: str) -> Instrument:

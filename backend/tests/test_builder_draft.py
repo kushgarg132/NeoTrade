@@ -6,7 +6,7 @@ import pytest
 from mongomock_motor import AsyncMongoMockClient
 
 from backend.builder import draft, store
-from backend.components.shared.models import BacktestResult
+from backend.core.models import BacktestResult
 from backend.strategies.built import set_active
 
 NOW = datetime(2026, 10, 9, 10, 30, tzinfo=timezone.utc)  # Friday 16:00 IST
@@ -615,7 +615,7 @@ async def test_swing_holdout_is_180_days(env, monkeypatch):
 
 
 async def test_swing_waits_with_too_few_symbols(env):
-    from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+    from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
     from backend.datalayer import bars
 
     db, redis, _ = env
@@ -672,7 +672,7 @@ async def test_make_room_per_horizon(env):
 async def test_swing_history_skips_uncovered_and_unresolved_symbols(env, monkeypatch):
     """Only symbols the store covers and gate_universe resolves are backtested and benchmarked;
     nothing is fetched from yfinance."""
-    from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+    from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
     from backend.datalayer import bars
     from backend.instruments.models import Instrument
 

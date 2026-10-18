@@ -11,8 +11,8 @@ from datetime import datetime
 
 import pandas as pd
 
-from backend.components.quant.indicators import Indicators
-from backend.components.shared.models import BacktestResult
+from backend.strategies.indicators import Indicators
+from backend.core.models import BacktestResult
 from backend.core.clock import SimClock
 from backend.core.models import Order, Side
 from backend.data.feeds.historical import HistoricalFeed

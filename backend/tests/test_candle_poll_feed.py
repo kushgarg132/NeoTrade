@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from backend.components.shared.models import PriceCandle
+from backend.core.models import PriceCandle
 from backend.data.feeds.candle_poll import CandlePollingFeed
 from backend.engine.session import IST
 from backend.instruments.models import Instrument

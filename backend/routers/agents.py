@@ -35,7 +35,7 @@ async def quick_analyze_stock(symbol: str, user: User = Depends(get_current_user
 async def intraday_candles(symbol: str):
     """The latest session's 5-minute candles (today's while the market is
     open, else the last trading day's): the stock page's 1D chart."""
-    from backend.components.quant.price import fetch_price_history_logic
+    from backend.datalayer.stock_info import fetch_price_history_logic
 
     candles, _ = await fetch_price_history_logic(symbol, period="1d", interval="5m")
     return [c.model_dump(mode="json") for c in candles]

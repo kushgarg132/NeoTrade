@@ -3,7 +3,7 @@
 Same shape as Task 5's Kite scaffolding: one Protocol, one real implementation
 backed by whatever data source is actually available in this session
 (yfinance-derived `CompanyInfo`, free, no key needed -- see
-backend/screening/providers/yfinance_fundamentals.py), with room for a second
+backend/data/fundamentals/yfinance.py), with room for a second
 implementation against a paid provider's schema later without touching any
 caller.
 """

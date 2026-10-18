@@ -18,11 +18,11 @@ from typing import Any, Dict, List
 import pandas as pd
 from pydantic import BaseModel
 
-from backend.components.master.search import resolve_company_query
-from backend.components.master.stock_info import fetch_stock_info_logic
-from backend.components.quant.indicators import Indicators
-from backend.components.quant.support import SupportResistance
-from backend.components.quant.trend import TrendDetector
+from backend.research.search import resolve_company_query
+from backend.datalayer.stock_info import fetch_stock_info_logic
+from backend.strategies.indicators import Indicators
+from backend.strategies.indicators import SupportResistance
+from backend.strategies.indicators import TrendDetector
 from backend.data.providers.store import StoreHistoryProvider
 from backend.database import get_database
 from backend.instruments.master import InstrumentMaster

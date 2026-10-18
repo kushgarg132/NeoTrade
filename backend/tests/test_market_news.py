@@ -1,5 +1,5 @@
 """Statement headlines: today's Indian market news, newest first, each story
-once, nothing older than a day and a half, cached briefly."""
+once, nothing older than a day and a half."""
 
 from datetime import datetime, timedelta, timezone
 
@@ -8,8 +8,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend import market_cache
-from backend.components.analyst import news
-from backend.components.shared.models import NewsArticle
+from backend.routers import news
+from backend.core.models import NewsArticle
 
 
 def _article(title, hours_ago):
@@ -43,30 +43,6 @@ async def test_fresh_headlines_are_newest_first_deduped_and_recent(searches):
         "Sensex ends 400 points lower as banks drag - Mint",
     ]
     assert all(region == "IN" and "when:1d" in q for q, region, _ in searches)
-
-
-def test_market_route_is_cached_and_never_searches_ticker_codes(searches):
-    app = FastAPI()
-    app.include_router(news.router, prefix="/api/v1")
-    client = TestClient(app)
-
-    first = client.get("/api/v1/news/market").json()["articles"]
-    second = client.get("/api/v1/news/market").json()["articles"]
-
-    assert first == second and len(first) == 2
-    assert len(searches) == len(news.MARKET_QUERIES)  # second call served from cache
-    assert not any("^" in q for q, _, _ in searches)
-
-
-def test_an_empty_answer_is_not_cached(monkeypatch):
-    async def nothing(query, region="US", lang="en-US", limit=10):
-        return []
-    monkeypatch.setattr(news, "fetch_google_news", nothing)
-    monkeypatch.setattr(market_cache, "_local", {})
-    app = FastAPI()
-    app.include_router(news.router, prefix="/api/v1")
-    TestClient(app).get("/api/v1/news/market")
-    assert "news" not in market_cache._local
 
 
 def test_news_feed_filters_to_the_users_names(monkeypatch):

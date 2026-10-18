@@ -9,8 +9,8 @@ plain data.
 import asyncio
 
 from backend.instruments.models import Instrument
-from backend.screening.fundamentals import quality_score
-from backend.screening.protocols import FundamentalsProvider
+from backend.data.fundamentals.scores import quality_score
+from backend.data.fundamentals.protocols import FundamentalsProvider
 
 _MAX_CONCURRENT_FETCHES = 10
 

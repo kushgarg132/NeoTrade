@@ -10,7 +10,7 @@ eligible list -- most of the mid/small-cap scan universe has no listed
 F&O contract at all.
 """
 
-from backend.components.quant.indicators import Indicators
+from backend.strategies.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
 from backend.options.resolver import is_fo_eligible

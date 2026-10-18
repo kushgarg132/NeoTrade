@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.components.shared.models import CompanyInfo, PriceCandle
+from backend.core.models import CompanyInfo, PriceCandle
 from backend.instruments.models import Instrument
 from backend.research import quick as quick_module
 
@@ -85,7 +85,7 @@ async def test_quick_analysis_handles_no_price_history(wired, monkeypatch):
 async def test_resolving_a_stock_makes_no_llm_call_unless_peers_are_asked_for():
     """The LLM peer lookup was ~10s of a ~11s stock search, for data no
     screen displays. It must stay opt-in."""
-    from backend.components.master import search
+    from backend.research import search
 
     instrument = MagicMock(tradingsymbol="RELIANCE", name="Reliance Industries")
     with patch(f"{search.__name__}.resolve_symbol", AsyncMock(return_value=instrument)), \

@@ -9,7 +9,7 @@ scheduled scan with nothing to go on.
 from datetime import datetime, timezone
 from typing import Optional
 
-from backend.components.quant.indian_stocks import ALL_SCAN_STOCKS
+from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
 
 DEFAULTS = {
     "universe": list(ALL_SCAN_STOCKS),

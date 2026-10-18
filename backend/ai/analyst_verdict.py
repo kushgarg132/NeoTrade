@@ -45,7 +45,7 @@ async def refresh_analyst_verdict(symbol: str, redis, ttl_seconds: int = 90000) 
     event's description if any events were classified, otherwise the first non-empty line of
     the summary (truncated to 200 chars).
     """
-    from backend.components.analyst.agent import AnalystAgent
+    from backend.ai.analyst import AnalystAgent
 
     output = await AnalystAgent().analyze({"symbol": symbol})
 

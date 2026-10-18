@@ -72,7 +72,7 @@ SEED = [
     _item("Cache the quality universe once a day", "Data",
           "scan_universe rebuilds it per user per scan with fresh yfinance calls.", "ROADMAP Phase 6 deferred", effort="S"),
     _item("Remove orphaned TradeSignal / SignalType models", "System",
-          "Dead code in backend/components/shared/models.py.", "ROADMAP Phase 6 deferred", effort="S"),
+          "Dead code in backend/core/models.py.", "ROADMAP Phase 6 deferred", effort="S"),
     _item("Reconcile live orders per broker role (audit M3)", "Trading",
           "Live orders from approve-live, chat and autopilot are never re-polled; the engine poller reads every row vs the AI adapter.",
           "audit 2026-10-05", "next", "M"),
