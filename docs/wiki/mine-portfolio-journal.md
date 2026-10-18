@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py]
-verified_at: 44ab59f
+verified_at: 7d4f868
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -44,8 +44,8 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/guardrails/monitor.py | 60s in-session loop; kill-switch trip; square-off | `guardrails/monitor.py::run_tick`, `::check_user`, `::square_off`, `::monitor_loop`, `::start`, `LOCK_KEY` |
 | backend/guardrails/square_off.py | Position book to MIS exit orders (pure) | `guardrails/square_off.py::exit_orders`, `::describe` |
 | backend/guardrails/store.py | Breach dedupe; alert channel and encrypted user bot token | `guardrails/store.py::GuardrailStore.record`, `.events_for`, `.telegram_channel`, `.telegram_routes`, `.set_telegram_bot` |
-| backend/guardrails/telegram.py | Bot API client: send, HTML, drafts, `alert` | `telegram.py::alert`, `::send`, `::send_html`, `::to_html`, `::find_chat`, `::updates` |
-| backend/guardrails/telegram_bot.py | Inbound long-poll bridge to the chat agent and action cards | `telegram_bot.py::poll_loop`, `::poll_once`, `::_poll_bot`, `::_reply`, `::_callback`, `::_ask`, `SHORTCUTS` |
+| backend/guardrails/telegram.py | Bot API client over aiogram 3.31 (one `Bot` per token per event loop; dicts in and out): send, HTML, drafts, `alert` | `telegram.py::alert`, `::_bot`, `::_call`, `::send`, `::send_html`, `::to_html`, `::find_chat`, `::updates` |
+| backend/guardrails/telegram_bot.py | Inbound long-poll bridge to the chat agent and action cards | `telegram_bot.py::poll_loop`, `::poll_once`, `::_poll_bot`, `::_reply`, `::_callback`, `::_ask`, `::Tap`, `SHORTCUTS` |
 | backend/routers/mine.py | `/mine/*` | `mine.py::overview`, `::mine_history`, `::tax`, `::stock_detail`, `::get_thesis`, `::put_thesis`, `::mine_actions`, `::dismiss_action`, `::snooze_action`, `::_month_contributions`, `TAX_FIRST_FY` |
 | backend/routers/portfolio.py | `/portfolio*`; verdict masking | `portfolio.py::get_portfolio`, `::refresh`, `::rebalance`, `::rebalance_candidates`, `::present`, `::mask_row`, `::verdicts_visible_to`, `::with_suggestions`, `::_candidate_symbols` |
 | backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::ai_vs_me`, `::get_learning`, `::get_beta_metrics` |
@@ -175,7 +175,9 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 14. **Telegram inbound**: `telegram_bot.py::poll_loop` calls `::poll_once`, which runs `::_poll_bot` per bot route
     (`GuardrailStore.telegram_routes`). It takes a lock and long-polls (25s). It commits the offset before handling.
     It ignores chats with negative ids, then dispatches to `::_reply` (shortcut commands, then `chat.agent.stream_chat`
-    with a live draft) or `::_callback` (confirm/confirm2/cancel through `chat.actions.confirm`).
+    with a live draft) or `::_callback` (confirm/confirm2/cancel through `chat.actions.confirm`). Button data is
+    `nt:<command>:<id>`, packed and parsed by the aiogram `CallbackData` `::Tap`; data that does not parse is ignored.
+    A failed getUpdates logs one line (aiogram errors carry no token) and sleeps `FAIL_BACKOFF_SECONDS` (10) holding the lock.
 15. **GET /today**: `routers/today.py::today`. Each part is wrapped in `part()`, which on failure returns None and
     records `errors[name]`. Parts:
     - `_accounts` (60s cache only when every session is ACTIVE)
@@ -347,3 +349,4 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | backend/tests/test_guardrails.py | `rules.evaluate`, once-per-breach alerting, daily-loss kill-switch trip |
 | backend/tests/test_square_off.py | `exit_orders`, preview never places, live once a day, AI broker untouched |
 | backend/tests/test_telegram_bot.py | inbound bridge: commands, callbacks, private-only, locks/offsets, HTML rendering |
+| backend/tests/test_telegram_transport.py (+ `telegram_wire.py`) | Bot API wire: getMe/linking, Start-code scan, 409, long-poll params, sends, HTML fallback, edits, drafts, menu, token-free failure logs |
