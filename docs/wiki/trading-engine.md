@@ -22,7 +22,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/engine/autorun.py` | Minute tick: daily intraday auto-run, long-term pass, plan build, reminders | `autorun.py::tick`, `::_may_start`, `::_longterm_pass`, `::_autopilot_proposals`, `::live_feed_ready`, `::in_session`, `::start` |
 | `backend/engine/adopt.py` | New run inherits today's open intraday trades; closes stale | `adopt.py::adopt_intraday`, `::close_stale` |
 | `backend/engine/sweeps.py` | 60 s loop: stuck rows + late live fills | `sweeps.py::_loop`, `::start` |
-| `backend/engine/stuck.py` | Settle SENDING/FILLING rows a crash left | `stuck.py::sweep_stuck`, `::STALE` |
+| `backend/engine/stuck.py` | Settle approve-live proposals a crash left SENDING | `stuck.py::sweep_stuck`, `::STALE` |
 | `backend/engine/reconcile.py` | Book live orders that filled after first checks | `reconcile.py::reconcile` |
 | `backend/engine/execution/simulated.py` | Paper/backtest fills (MARKET only) | `simulated.py::SimulatedExecutionClient` (`on_bar`, `mark`, `fill_now`) |
 | `backend/engine/execution/routing.py` | Per-strategy live/paper dispatch | `routing.py::RoutingExecutionClient._client_for` |
@@ -83,7 +83,7 @@ Mongo (all per-account rows carry `user_id`; every `LedgerStore` read filters on
 | `trading_runs` | via `RunStore` (`runs.py`): `run_id`, `user_id`, `mode`, `status` RUNNING/STOPPED/error, `params.origin` manual/auto, `progress` | `launch_run`, autorun `_may_start` |
 | `instruments` | `Instrument` fields; unique `(exchange,tradingsymbol)` and `instrument_token` | `InstrumentMaster` |
 | `instrument_meta` | `_id=free_source_refresh`, `last_refreshed_at` (20 h throttle) | `loader.py::refresh_from_free_public_sources` |
-| `suggestions`, `user_prefs`, `holding_theses`, `paper_limit_orders` | read/updated here (`ai_order`, `status` SENDING->SENT/EXECUTED/PENDING/NEEDS_REVIEW; prefs below) | autorun, stuck, reconcile |
+| `suggestions`, `user_prefs`, `holding_theses` | read/updated here (`ai_order`, `status` SENDING->SENT/EXECUTED/NEEDS_REVIEW; prefs below) | autorun, stuck, reconcile |
 
 Redis:
 
@@ -240,7 +240,7 @@ Behaviour that surprises:
 
 Open issues / possible bugs found while reading (not fixed):
 - `backend/data/feeds/live_upstox.py::UpstoxMarketFeed` has no `add()`; `plan/expand.py:15` (`hasattr(feed, "add")`) therefore skips every mid-run plan add on an Upstox tick feed (logs "cannot add symbols mid-run").
-- `backend/engine/stuck.py:54-64` and `backend/server.py:147` still sweep/index `paper_limit_orders`, but no module writes that collection (`backend/engine/paper_orders.py`, named in the docstring, does not exist): dead code left from the removed paper ticket. The `reason == "paper"` branch (`stuck.py:43`) is the same remnant.
+- `backend/server.py:147` still indexes `paper_limit_orders`, which nothing reads or writes since the paper ticket was removed (the stuck sweep for it is gone).
 - `risk/backtest_gate.py::BacktestGateStore.ensure_indexes` (line 44) and `risk/kill_switch.py::KillSwitchStore.ensure_indexes` (line 30) are defined but never called at startup; `paper_trades` has no index at all (`persistence.py:50-53` indexes only orders, fills, positions).
 - `risk/backtest_gate.py:50` and `risk/kill_switch.py:48` call `datetime.now(...)` directly (allowed: `risk/` is outside the grep test), unlike `engine/`.
 - ROADMAP lists "`owner_by_symbol` last-writer-wins" as an old bug; `size_intents` now prefers `strategies_by_name[intent.strategy]`, but `_square_off_orders` and `run` still build `owner_by_symbol` last-writer-wins for symbols shared by several strategies (`runner.py:492`, `:615`).
