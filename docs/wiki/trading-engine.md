@@ -225,7 +225,7 @@ Behaviour that surprises:
 - Live fill charges are modelled, not the broker's contract note: live P&L is net of the paper schedule, so it can differ from the broker's by a few rupees.
 - Live engine orders report no fill back to the run (`AutopilotExecutionClient.fills` yields nothing); the autopilot's own 15:15 `check_exits` is the only square-off for them (`service.py::check_exits`).
 - Daily/swing runs (LONGTERM) never trade: they create suggestions; the `scan` (outside this page) reuses `run` over ~400 days with the sink.
-- `HistoricalFeed` filters candles by `_naive()` (drops tzinfo without converting), so mixed-timezone `start`/`end` vs candle timestamps compare wall-clock values (`data/feeds/historical.py:358`). Callers pass IST `now` in the gate path, which matches broker candles.
+- `HistoricalFeed` filters candles with `historical.py::_within`: aware times compare as instants; if any of `start`/`end`/candle is naive it falls back to wall-clock.
 - `PollingLiveFeed` (daily quote as a bar) is wrong for intraday; `CandlePollingFeed` yields closed yfinance 5m candles ~15 min late and marks all but the newest as `warmup` on the first poll or after `add()` (`candle_poll.py`).
 - Mid-run plan adds (`plan/expand.py`) need `feed.add`: Kite and Upstox tick feeds have it (`live_upstox.py::UpstoxMarketFeed.add` resolves keys from the adapter's loaded scrip dump; unresolved symbols are logged, not added); polling feeds skip.
 - `TickBarAggregator` bars are clock-driven: a quiet symbol still emits a flat zero-volume bar; first window's volume is 0 (no baseline).
@@ -243,7 +243,7 @@ Open issues / possible bugs found while reading (not fixed):
 - `backend/server.py:147` still indexes `paper_limit_orders`, which nothing reads or writes since the paper ticket was removed (the stuck sweep for it is gone).
 - `risk/backtest_gate.py::BacktestGateStore.ensure_indexes` (line 44) and `risk/kill_switch.py::KillSwitchStore.ensure_indexes` (line 30) are defined but never called at startup; `paper_trades` has no index at all (`persistence.py:50-53` indexes only orders, fills, positions).
 - `risk/backtest_gate.py:50` and `risk/kill_switch.py:48` call `datetime.now(...)` directly (allowed: `risk/` is outside the grep test), unlike `engine/`.
-- ROADMAP lists "`owner_by_symbol` last-writer-wins" as an old bug; `size_intents` now prefers `strategies_by_name[intent.strategy]`, but `_square_off_orders` and `run` still build `owner_by_symbol` last-writer-wins for symbols shared by several strategies (`runner.py:492`, `:615`).
+- `run` still builds `owner_by_symbol` last-writer-wins (`runner.py:492`, `:605`), but it is only a fallback (`size_intents` prefers `strategies_by_name[intent.strategy]`, square-off prefers `holders`) and every run's strategies share one mode (`trading.py` filters by `spec.mode`), so the fallback only ever yields the right mode. Harmless unless a mixed-mode run is introduced.
 
 ## Tests
 
