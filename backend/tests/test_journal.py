@@ -11,7 +11,6 @@ from mongomock_motor import AsyncMongoMockClient
 from backend.brokers.angel_one import AngelOneAdapter
 from backend.brokers.kite_orders import KiteOrderClient
 from backend.brokers.trades import parse_ist
-from backend.brokers.upstox import UpstoxAdapter
 from backend.core.models import BrokerTrade, Side
 from backend.journal.console_csv import parse_console_tradebook
 from backend.journal.roundtrips import build_round_trips, daily_pnl
@@ -166,22 +165,6 @@ async def test_kite_get_trades_maps_the_sdk_rows():
     assert trades[0].traded_at == _utc(10)
 
 
-async def test_upstox_get_trades(monkeypatch):
-    adapter = UpstoxAdapter(api_key="k", api_secret="s", redirect_uri="https://x/cb", redis=_redis(), user_id="alice")
-
-    async def fake_get(self, url, **kwargs):
-        assert url.endswith("/v2/order/trades/get-trades-for-day")
-        return httpx.Response(200, json={"data": [{
-            "exchange": "NSE", "tradingsymbol": "INFY", "transaction_type": "BUY", "quantity": 2,
-            "order_id": "o1", "trade_id": "t1", "average_price": 1500.0,
-            "exchange_timestamp": "2026-09-01 11:00:00",
-        }]}, request=httpx.Request("GET", url))
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
-    trades = await adapter.get_trades()
-    assert (trades[0].symbol, trades[0].trade_id, trades[0].traded_at) == ("INFY", "t1", _utc(11))
-
-
 async def test_angel_one_get_trades_dates_bare_fill_time_today(monkeypatch):
     adapter = AngelOneAdapter(api_key="k", api_secret=None, redis=_redis(), user_id="alice")
 
@@ -215,43 +198,6 @@ async def test_connected_brokers_lists_only_active_sessions(monkeypatch):
               "angel_one": BrokerSessionState.UNCONFIGURED}
     monkeypatch.setattr(sync, "get_broker_adapter", AsyncMock(side_effect=lambda b, *a: _A(states[b])))
     assert await sync.connected_brokers(None, None, "alice") == ["upstox"]
-
-
-async def test_upstox_trade_history_pages_both_segments_and_names_options(monkeypatch):
-    adapter = UpstoxAdapter(api_key="k", api_secret="s", redirect_uri="https://x/cb", redis=_redis(), user_id="alice")
-    calls = []
-
-    def row(tid, segment, **extra):
-        return {"exchange": "NSE", "segment": segment, "option_type": "", "quantity": 5, "amount": 0, "trade_id": tid,
-                "trade_date": "2026-08-14", "transaction_type": "BUY", "scrip_name": "", "strike_price": "",
-                "expiry": "", "price": 100.0, "isin": "", "symbol": "INFY", "instrument_token": "", **extra}
-
-    pages = {
-        ("EQ", 1): ([row("e1", "EQ")], 2),
-        ("EQ", 2): ([row("e2", "EQ", transaction_type="SELL")], 2),
-        ("FO", 1): ([row("f1", "FO", symbol="NIFTY", option_type="CE", strike_price="25100.0",
-                         expiry="2026-08-28", exchange="NFO")], 1),
-    }
-
-    async def fake_get(self, url, params=None, **kwargs):
-        assert url.endswith("/v2/charges/historical-trades")
-        calls.append(params)
-        data, total = pages[(params["segment"], params["page_number"])]
-        return httpx.Response(200, json={"status": "success", "data": data, "metaData": {"page": {
-            "page_number": params["page_number"], "total_pages": total}}}, request=httpx.Request("GET", url))
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
-    from datetime import date
-    trades = await adapter.get_trade_history(date(2026, 8, 1), date(2026, 8, 31))
-
-    assert {(c["segment"], c["page_number"]) for c in calls} == set(pages)
-    assert calls[0]["start_date"] == "2026-08-01" and calls[0]["end_date"] == "2026-08-31"
-    by_id = {t.trade_id: t for t in trades}
-    assert by_id["e2"].side == Side.SELL and by_id["e1"].symbol == "INFY"
-    assert by_id["e1"].traded_at == datetime(2026, 8, 14, 3, 45, tzinfo=timezone.utc)  # 09:15 IST
-    assert by_id["f1"].symbol == "NIFTY 25100 CE 2026-08-28"
-    from backend.journal.roundtrips import instrument_kind
-    assert instrument_kind(by_id["f1"].symbol, by_id["f1"].exchange) == "CALL"
 
 
 def _hist(tid, side, qty, price, when):

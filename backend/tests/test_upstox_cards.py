@@ -5,7 +5,6 @@ must still hold what the card is about, and only the user's account is used."""
 import json
 from datetime import datetime
 
-import httpx
 import pytest
 from mongomock_motor import AsyncMongoMockClient
 
@@ -13,6 +12,7 @@ from backend.chat import account_actions, actions
 from backend.chat.actions import ActionRefused, action_tools, confirm
 from backend.core.models import Holding, Position, Side
 from backend.engine.session import IST
+from backend.tests.upstox_wire import UpstoxWire
 
 OPEN = datetime(2026, 10, 6, 11, 0, tzinfo=IST)  # a Tuesday, in session
 
@@ -122,12 +122,7 @@ async def test_upstox_place_order_sends_sl_m_fields(monkeypatch):
     from backend.brokers.upstox import UpstoxAdapter
     from backend.core.models import Order
 
-    sent = {}
-
-    def handler(request):
-        sent.update(json.loads(request.content))
-        return httpx.Response(200, json={"data": {"order_id": "U1"}})
-
+    wire = UpstoxWire(monkeypatch).on("POST", "/v2/order/place", {"data": {"order_id": "U1"}})
     adapter = UpstoxAdapter(api_key="k", api_secret="s", redirect_uri="r", redis=None, user_id="alice")
 
     async def token():
@@ -138,11 +133,10 @@ async def test_upstox_place_order_sends_sl_m_fields(monkeypatch):
 
     monkeypatch.setattr(adapter, "get_access_token", token)
     monkeypatch.setattr(adapter, "_resolve", resolve)
-    real_client = httpx.AsyncClient
-    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(handler)))
     order = Order(id="x", symbol="INFY", side=Side.SELL, quantity=10, order_type="SL-M", trigger_price=1400.0,
                   product="CNC")
     assert await adapter.place_order(order) == "U1"
+    sent = wire.last("/v2/order/place").json
     assert sent["order_type"] == "SL-M" and sent["trigger_price"] == 1400.0
 
 

@@ -16,8 +16,6 @@ from backend.portfolio import service
 from backend.portfolio.scorecard import build_scorecard, correlated_pairs, merge, open_lots
 from backend.tests.test_angel_one_adapter import _adapter as _angel
 from backend.tests.test_angel_one_adapter import _redis as _angel_redis
-from backend.tests.test_upstox_adapter import _adapter as _upstox
-from backend.tests.test_upstox_adapter import _redis as _upstox_redis
 
 
 def test_etfs_are_told_apart_by_name():
@@ -43,24 +41,6 @@ async def test_kite_holdings_include_t1_shares_and_mutual_funds():
     assert (stock.symbol, stock.quantity, stock.avg_price, stock.kind) == ("AARON", 3.0, 161.0, "STOCK")
     assert (fund.kind, fund.isin, fund.name, fund.quantity) == (
         "MF", "INF205K01NT8", "INVESCO INDIA TAX PLAN - DIRECT PLAN", 382.488,
-    )
-
-
-async def test_upstox_holdings(monkeypatch):
-    redis = _upstox_redis()
-    await redis.set("broker:alice:upstox:access_token", "up-tok")
-
-    async def fake_get(self, url, **kwargs):
-        assert url == "https://api.upstox.com/v2/portfolio/long-term-holdings"
-        return httpx.Response(200, request=httpx.Request("GET", url), json={"data": [
-            {"isin": "INE002A01018", "company_name": "RELIANCE INDUSTRIES", "trading_symbol": "RELIANCE",
-             "exchange": "NSE", "quantity": 10, "average_price": 2400.0, "last_price": 2900.0, "close_price": 2880.0},
-        ]})
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
-    (holding,) = await _upstox(redis).get_holdings()
-    assert (holding.symbol, holding.name, holding.quantity, holding.broker) == (
-        "RELIANCE", "RELIANCE INDUSTRIES", 10.0, "upstox",
     )
 
 

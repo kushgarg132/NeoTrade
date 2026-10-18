@@ -88,6 +88,14 @@ def test_decodes_first_level_with_greeks():
     assert decode_feed_response(_response({KEY: _len(3, greeks)})) == {KEY: (88.0, 500)}
 
 
+def test_omitted_zero_fields_mean_no_tick_and_no_volume():
+    """proto3 leaves zero values off the wire: a feed with no ltp is no tick,
+    and a market feed with no vtt (nothing traded yet) has no volume."""
+    no_ltp = _len(2, _len(1, _len(1, _int(2, 1)) + _int(6, 50)))
+    no_vtt = _len(2, _len(1, _len(1, _ltpc(10.0))))
+    assert decode_feed_response(_response({KEY: no_ltp, "NSE_EQ|B": no_vtt})) == {"NSE_EQ|B": (10.0, None)}
+
+
 def test_market_info_message_has_no_ticks():
     market_info = _len(4, _len(1, _len(1, b"NSE_EQ") + _int(2, 2)))
     assert decode_feed_response(_int(1, 2) + market_info) == {}

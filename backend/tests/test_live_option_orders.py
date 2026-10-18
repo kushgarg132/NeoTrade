@@ -2,12 +2,9 @@
 Angel One refuses, and routing sends an option order live only through a
 broker that supports it. Every broker call is mocked."""
 
-import gzip
-import json
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 from backend.brokers.angel_one import AngelOneAdapter
@@ -17,6 +14,7 @@ from backend.engine.execution.routing import RoutingExecutionClient
 from backend.engine.execution.simulated import SimulatedExecutionClient
 from backend.instruments.models import Instrument
 from backend.tests.test_upstox_adapter import _adapter, _redis, _scrip
+from backend.tests.upstox_wire import UpstoxWire
 
 CONTRACT = Instrument(
     exchange="NFO", tradingsymbol="RELIANCE24DEC1300CE", name="RELIANCE", instrument_token=11,
@@ -45,48 +43,26 @@ async def test_kite_places_an_option_order_on_nfo():
 async def test_upstox_finds_the_contracts_instrument_key_on_the_option_chain(monkeypatch):
     redis = _redis()
     await redis.set("broker:alice:upstox:access_token", "up-tok")
-    adapter = _adapter(redis)
-    captured = {}
+    leg = lambda key: {"instrument_key": key, "market_data": {"ltp": 12.0}}  # noqa: E731
+    wire = UpstoxWire(monkeypatch).scrip(_scrip()).on("GET", "/v2/option/chain", {"data": [
+        {"strike_price": 1280.0, "call_options": leg("NSE_FO|1"), "put_options": leg("NSE_FO|2")},
+        {"strike_price": 1300.0, "call_options": leg("NSE_FO|3"), "put_options": leg("NSE_FO|4")},
+    ]}).on("POST", "/v2/order/place", {"data": {"order_id": "u1"}})
 
-    async def fake_get(self, url, params=None, **kwargs):
-        request = httpx.Request("GET", url)
-        if "option/chain" in url:
-            captured["chain_params"] = params
-            leg = lambda key: {"instrument_key": key, "market_data": {"ltp": 12.0}}  # noqa: E731
-            return httpx.Response(200, request=request, json={"data": [
-                {"strike_price": 1280.0, "call_options": leg("NSE_FO|1"), "put_options": leg("NSE_FO|2")},
-                {"strike_price": 1300.0, "call_options": leg("NSE_FO|3"), "put_options": leg("NSE_FO|4")},
-            ]})
-        return httpx.Response(200, request=request, content=gzip.compress(json.dumps(_scrip()).encode()))
-
-    async def fake_post(self, url, json=None, headers=None, **kwargs):
-        captured["json"] = json
-        return httpx.Response(200, request=httpx.Request("POST", url), json={"data": {"order_id": "u1"}})
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
-
-    assert await adapter.place_order(_order(product="NRML")) == "u1"
-    assert captured["chain_params"] == {"instrument_key": "NSE_EQ|INE002A01018", "expiry_date": "2024-12-26"}
-    assert captured["json"]["instrument_token"] == "NSE_FO|3"
-    assert (captured["json"]["quantity"], captured["json"]["product"]) == (500, "D")
+    assert await _adapter(redis).place_order(_order(product="NRML")) == "u1"
+    assert wire.last("/v2/option/chain").query == {"instrument_key": "NSE_EQ|INE002A01018", "expiry_date": "2024-12-26"}
+    body = wire.last("/v2/order/place").json
+    assert body["instrument_token"] == "NSE_FO|3"
+    assert (body["quantity"], body["product"]) == (500, "D")
 
 
 async def test_upstox_refuses_a_contract_missing_from_its_chain(monkeypatch):
     redis = _redis()
     await redis.set("broker:alice:upstox:access_token", "up-tok")
-    adapter = _adapter(redis)
-
-    async def fake_get(self, url, params=None, **kwargs):
-        request = httpx.Request("GET", url)
-        if "option/chain" in url:
-            return httpx.Response(200, request=request, json={"data": []})
-        return httpx.Response(200, request=request, content=gzip.compress(json.dumps(_scrip()).encode()))
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
-    monkeypatch.setattr(httpx.AsyncClient, "post", AsyncMock(side_effect=AssertionError("order placed")))
+    wire = UpstoxWire(monkeypatch).scrip(_scrip()).on("GET", "/v2/option/chain", {"data": []})
     with pytest.raises(ValueError, match="not found on Upstox's option chain"):
-        await adapter.place_order(_order())
+        await _adapter(redis).place_order(_order())
+    assert not [c for c in wire.calls if c.path == "/v2/order/place"]
 
 
 async def test_angel_one_refuses_option_orders():
