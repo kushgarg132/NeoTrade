@@ -41,11 +41,14 @@ That cap is not a policy, it is enforced in the type system and covered by tests
 Today: one person, the operator, who is also the developer — experienced enough to read a
 stop-loss and an R:R ratio without explanation, running this alongside a day job.
 
-Where it is going: other traders, on their own broker accounts, with their own portfolios.
-The trajectory is deliberate — auth, per-user data scoping, and per-user broker sessions are
-built for it rather than retrofitted. The plan is freemium: the journal is free to start; history
-beyond 30 days, insights, guardrails, and multiple brokers are paid. Billing is not built
-until a free beta shows traders come back weekly (see `docs/ROADMAP.md` Phase 12).
+Current priority: the operator's own private trading workstation. NeoTrade must first become
+dependable in daily use: broker and ledger records reconcile, every strategy is reproducible,
+live actions are protected, and AI/model claims are backed by stored forward evidence.
+
+Potential future use by other traders is deliberately deferred. The existing per-user auth,
+data scoping and broker sessions preserve that option, but billing, public onboarding,
+registration and commercial positioning are not current product work. When the workstation
+phase is done, revenue comes without RA registration (`docs/ROADMAP.md` Phase 22).
 
 ## The real scene
 

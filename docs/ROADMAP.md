@@ -29,6 +29,8 @@ where to start — nothing else in this repo tracks it.
 | 17 | Profitability and LLM cost: measure before spending, trade only where there is evidence (17.1 fix what corrupts the evidence, 17.2 LLM cost, 17.3 edge, 17.4 architecture, 17.5 business) | 14–16 | **17.1 done 2026-10-07** (auto intraday waits for a live broker feed, stale seed symbols dropped, untagged approvals refused, long-term gate backtests re-run, Today net of charges, plan replay fixed); 17.2–17.5 planned |
 | 19 | Two accounts, one daily answer: AI (Kite) runs itself on paper until proven, Mine (Upstox) gets proven ideas + daily holdings review; Practice folds into AI (A stop the bleeding, B real holdings are held, C one AI book, D proven-only ideas, E Today + Telegram daily, F nav reset + cuts) | — | **19.A done 2026-10-14** (ledger doubling fix + paper book reset, backup `~/backups/neotrade/paper-book-20261014.json`; LLM content blocks + tiers standard `auto/gemini`, deep `codex/gpt-5.6-luna-low`; 08:30/09:05 login reminder; logged-out holdings priced from quotes); **19.B done 2026-10-14** (logged-out broker keeps its holdings, review + AI text on mine only, `mine_holdings` drives news alerts + scan SELLs, review daily); **19.C done 2026-10-14** (`via` + origin strategy credited, no paper approvals or paper ticket, `<user>:mine` ledger, exits with autopilot off + 15:15 intraday square-off); **19.D done 2026-10-14** (`paper_gate.for_mine`: ideas only from proven strategies everywhere + approve-live 409, `ai_order` keeps the idea pending, exit alerts on `<user>:mine`); **19.E done 2026-10-14** (`portfolio/digest.py`: pulse, movers + headline, verdict changes, you vs AI; Today top section + Do today + scoreboard; Telegram 08:45 + post-close); **19.F done 2026-10-14** (nav: Mine = Holdings · Ideas · Trades · Habits, AI = Overview · Activity · Book · Strategies · Settings, Practice folded in, bullish scanner cut, options off the tabs, docs). **Phase 19 done.** — spec `docs/superpowers/specs/2026-10-14-two-accounts-reset-design.md` |
 | 20 | Mine redesign: the trader's own account gets a past (daily value, XIRR vs NIFTY), a to-do list (Needs you), tax lots and India tax estimates, and a thesis per stock; Mine = Overview · Holdings · Tax · Journal, Ideas/Plan/Review cut | 19 | **done 2026-10-15, built** — spec `docs/superpowers/specs/2026-10-15-mine-redesign-design.md`, plan `docs/superpowers/plans/2026-10-15-mine-redesign.md` |
+| 21 | Private trading workstation: make NeoTrade dependable for its owner before any commercial, registration or public-user work. Truth/safety → daily workflow → Research Lab → forward record → ML ranking → isolated RL experiments. | 20 | **active 2026-10-18** |
+| 22 | Revenue without SEBI registration: back office Pro for traders + the Picks engine as research software for registered analyst firms (lawyer's review, five design-partner firms, analyst workbench with compliance kit, billing, launch) | 21 | planned — plan doc https://claude.ai/code/artifact/7e6019ff-c866-47da-9f27-fcbe90ab52b5 |
 
 Two orderings are not negotiable: **Phase 3 before Phase 5** (no real order may be
 placeable before the kill-switch and the gate exist), and **Phase 1 before anything that
@@ -908,6 +910,54 @@ confirmation). The autopilot is a documented, user-approved exception to the bac
 to "model output never places an order" (AGENTS.md, .claude/CLAUDE.md). Spec and plan in
 `docs/superpowers/`. Setup: Kite Connect app; static IP 161.118.167.148 whitelisted with Zerodha
 and Upstox; daily logins (09:00 reminder).
+
+## Phase 21 — Private trading workstation — **active 2026-10-18**
+
+**Goal:** Make NeoTrade the owner's dependable private system for operating a trading day,
+researching strategies and evaluating AI/ML/RL experiments. Sales, analyst-firm pilots,
+registration and public onboarding are deferred, not cancelled.
+
+**Ordering:**
+
+1. **Truth and safety:** finish the server-enforced second tap for live orders; verify broker
+   sync; add daily broker-to-ledger reconciliation and data-quality monitoring. Retain the kill
+   switch, caps, and separate `mine`/`ai` accounts.
+2. **Daily workstation:** consolidate Today, Portfolio, Journal, AI and Lab around pre-market,
+   market-hours and post-market decisions.
+3. **Research Lab:** make experiment definitions, point-in-time inputs, costs/slippage,
+   backtests, purged walk-forward reports and comparisons first-class and reproducible.
+4. **Forward record:** paper-trade and score every rule candidate before outcome; compare net
+   returns and calibration to NIFTY. An unproven result stays labelled unproven.
+5. **ML ranking:** let a passing model rank or filter candidates, never own sizing or exits at
+   first. It must beat simple rule baselines after turnover in yearly purged walk-forward tests,
+   have calibration better than the base rate, then earn a paper record.
+6. **RL sandbox:** keep RL entirely isolated from live trading. Consider execution, sizing or
+   exit experiments only after the simulator and data history are trustworthy; require the same
+   out-of-sample and paper gates before any further decision.
+
+**Done when:** Every live trade reconciles to the broker; each strategy/model run can be
+reproduced from stored inputs and configuration; every personal live order has an explicit,
+server-verified second confirmation; and every AI/ML/RL claim links to a stored forward record.
+
+**Explicitly out of scope until this phase is complete:** billing, public onboarding, analyst
+design partners, marketing, registration and any paid recommendation workflow.
+
+## Phase 22 — Revenue without registration — **planned, after Phase 21**
+
+**Goal:** Earn without registering as a SEBI Research Analyst (decided 2026-10-18: the RA trading
+window, Reg 16(2), would bar the owner trading anything he recommends or follows). Two products:
+the back office for traders (free + Pro ₹249/month, tax pass ₹999) and the Picks engine sold as
+research software to registered analyst firms (₹3–15k/month), who review, sign and publish calls
+under their own registration. Picks stays the owner's admin-only tool.
+
+**Ordering:** lawyer's review (vendor is not an RA "associate"; no-advice wording; DPDP) → five
+design-partner firms → back office Pro (MF tax lots, F&O/intraday business-income tax, ITR export,
+billing) → analyst workbench (firm tenants, signed rationale, compliance kit, branded delivery) →
+launch-ready (domain, legal pages, DPDP consent/deletion, Google sign-in published).
+
+**Never build:** a call published to someone who pays the owner, a public track record of his
+picks, or auto-execution for other people. Architecture stays a modular monolith (one repo, one
+image, `api` / `jobs` / `ingest` processes, one MongoDB with a tenant on every row).
 
 ## Phase 20 — Mine redesign — **done 2026-10-15**
 
