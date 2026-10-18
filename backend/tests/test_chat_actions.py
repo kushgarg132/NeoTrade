@@ -1,6 +1,7 @@
 """Chat actions: a proposal changes nothing; only a confirm executes, once,
 for its owner, before it expires, after every check is run again."""
 
+import asyncio
 import json
 from datetime import date, datetime, timedelta, timezone
 
@@ -15,6 +16,7 @@ from backend.core.models import BrokerOrderStatus, Holding
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument
 from backend.prefs import PrefsStore
+from backend.risk import live_confirm
 from backend.risk.kill_switch import KillSwitchStore
 
 OPEN = datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc)  # Monday 10:30 IST
@@ -76,6 +78,14 @@ def _tools(db, user="alice", message="do it"):
     return {t.name: t for t in action_tools(db, None, user, message)}
 
 
+async def confirm_twice(db, user, action_id, credentials=None, redis=None):
+    """Both taps of a real-money card: the second presents the first's token."""
+    first = await confirm(db, redis, credentials, user, action_id)
+    if first["status"] != "NEEDS_SECOND_TAP":
+        return first
+    return await confirm(db, redis, credentials, user, action_id, confirm_token=first["confirm_token"])
+
+
 async def _propose(db, tool, args, user="alice"):
     out = await _tools(db, user)[tool].ainvoke(args)
     assert out.startswith("ACTION_CARD:"), out
@@ -121,10 +131,10 @@ async def test_propose_order_refuses_bad_input(env, args):
 async def test_confirm_runs_once(env):
     db = env["db"]
     card = await _propose(db, "propose_order", {"symbol": "INFY", "side": "BUY", "quantity": 10, "venue": "live"})
-    result = await confirm(db, None, None, "alice", card["id"], second_tap=True)
+    result = await confirm_twice(db, "alice", card["id"])
     assert result["status"] == "CONFIRMED"
     with pytest.raises(ActionRefused):
-        await confirm(db, None, None, "alice", card["id"], second_tap=True)
+        await confirm_twice(db, "alice", card["id"])
     assert len(env["broker"].placed) == 1
 
 
@@ -153,9 +163,85 @@ async def test_live_order_needs_second_tap(env):
     first = await confirm(db, None, None, "alice", card["id"])
     assert first["status"] == "NEEDS_SECOND_TAP" and env["broker"].placed == []
     assert (await ChatActionStore(db).get("alice", card["id"]))["status"] == "PROPOSED"
-    second = await confirm(db, None, None, "alice", card["id"], second_tap=True)
+    second = await confirm(db, None, None, "alice", card["id"], confirm_token=first["confirm_token"])
     assert second["status"] == "CONFIRMED" and len(env["broker"].placed) == 1
     assert env["broker"].placed[0].strategy_name == "chat"
+
+
+async def _live_card(env, user="alice"):
+    return await _propose(env["db"], "propose_order", {"symbol": "INFY", "side": "BUY", "quantity": 10, "venue": "live"}, user)
+
+
+async def test_live_order_without_a_token_never_places(env):
+    """The old client-only second tap (second_tap=true) is gone: a confirm with
+    no token only ever re-arms the card."""
+    db = env["db"]
+    card = await _live_card(env)
+    for _ in range(3):
+        assert (await confirm(db, None, None, "alice", card["id"]))["status"] == "NEEDS_SECOND_TAP"
+    with pytest.raises(live_confirm.TokenRefused):
+        await confirm(db, None, None, "alice", card["id"], confirm_token="made-up")
+    assert env["broker"].placed == []
+    assert (await ChatActionStore(db).get("alice", card["id"]))["status"] == "PROPOSED"
+
+
+async def test_live_token_is_single_use(env):
+    db = env["db"]
+    first, second = await _live_card(env), await _live_card(env)
+    token = (await confirm(db, None, None, "alice", first["id"]))["confirm_token"]
+    taps = await asyncio.gather(*(confirm(db, None, None, "alice", first["id"], confirm_token=token) for _ in range(2)),
+                                return_exceptions=True)
+    assert sum(isinstance(t, dict) for t in taps) == 1 and len(env["broker"].placed) == 1
+    await confirm(db, None, None, "alice", second["id"])
+    with pytest.raises(live_confirm.TokenRefused, match="already used"):
+        await confirm(db, None, None, "alice", second["id"], confirm_token=token)
+    assert len(env["broker"].placed) == 1
+
+
+async def test_live_token_refused_when_expired_mismatched_or_foreign(env, monkeypatch):
+    db = env["db"]
+    await PrefsStore(db).update("bob", {"per_trade_cap": 20000.0})
+    mine, also_mine, bobs = await _live_card(env), await _live_card(env), await _live_card(env, "bob")
+    token = (await confirm(db, None, None, "alice", mine["id"]))["confirm_token"]
+    # Another user's card: 403, and the token survives for its owner.
+    await confirm(db, None, None, "bob", bobs["id"])
+    with pytest.raises(live_confirm.TokenRefused) as foreign:
+        await confirm(db, None, None, "bob", bobs["id"], confirm_token=token)
+    assert foreign.value.status == 403
+    # Bound to its card: spent on the wrong one, then refused on its own.
+    await confirm(db, None, None, "alice", also_mine["id"])
+    with pytest.raises(live_confirm.TokenRefused, match="different order"):
+        await confirm(db, None, None, "alice", also_mine["id"], confirm_token=token)
+    with pytest.raises(live_confirm.TokenRefused, match="already used"):
+        await confirm(db, None, None, "alice", mine["id"], confirm_token=token)
+    # Expired after a minute.
+    token = (await confirm(db, None, None, "alice", mine["id"]))["confirm_token"]
+    later = live_confirm.time.monotonic() + live_confirm.TTL_SECONDS + 1
+    monkeypatch.setattr(live_confirm.time, "monotonic", lambda: later)
+    with pytest.raises(live_confirm.TokenRefused, match="expired"):
+        await confirm(db, None, None, "alice", mine["id"], confirm_token=token)
+    assert env["broker"].placed == []
+    for card, user in ((mine, "alice"), (also_mine, "alice"), (bobs, "bob")):
+        assert (await ChatActionStore(db).get(user, card["id"]))["status"] == "PROPOSED"
+
+
+async def test_live_token_lives_in_redis_with_a_ttl(env):
+    from backend.tests.test_datalayer_news import FakeRedis
+
+    class Redis(FakeRedis):
+        async def set(self, key, value, ex=None, **kw):
+            self.ttl = ex
+            return await super().set(key, value, ex=ex, **kw)
+
+        async def delete(self, key):
+            return 1 if self.data.pop(key, None) is not None else 0
+
+    redis = Redis()
+    card = await _live_card(env)
+    token = (await confirm(env["db"], redis, None, "alice", card["id"]))["confirm_token"]
+    assert list(redis.data) == [live_confirm.PREFIX + token] and redis.ttl == 60
+    await confirm(env["db"], redis, None, "alice", card["id"], confirm_token=token)
+    assert redis.data == {} and len(env["broker"].placed) == 1
 
 
 @pytest.mark.parametrize("breaks", ["kill_switch", "market_closed", "no_broker"])
@@ -171,7 +257,7 @@ async def test_live_order_rechecks_at_confirm(env, monkeypatch, breaks):
             return None
         monkeypatch.setattr(actions, "_active_broker", none)
     with pytest.raises(ActionRefused):
-        await confirm(db, None, None, "alice", card["id"], second_tap=True)
+        await confirm_twice(db, "alice", card["id"])
     assert env["broker"].placed == []
 
 
@@ -273,7 +359,7 @@ async def test_cnc_live_sell_over_held_is_refused(env):
 
 async def test_live_limit_reaches_broker_as_limit(env):
     card = await _card(env["db"], _order(venue="live", order_type="LIMIT", limit_price=1490.0))
-    await confirm(env["db"], None, None, "alice", card["id"], second_tap=True)
+    await confirm_twice(env["db"], "alice", card["id"])
     placed = env["broker"].placed[0]
     assert (placed.order_type, placed.limit_price) == ("LIMIT", 1490.0)
 
@@ -287,7 +373,7 @@ async def test_live_limit_resting_copy(env, monkeypatch):
     monkeypatch.setattr(env["broker"], "get_order_status", resting)
     monkeypatch.setattr(service, "LIVE_FILL_CHECKS", 1)
     card = await _card(env["db"], _order(venue="live", order_type="LIMIT", limit_price=1490.0))
-    done = await confirm(env["db"], None, None, "alice", card["id"], second_tap=True)
+    done = await confirm_twice(env["db"], "alice", card["id"])
     assert done["result"].startswith("Resting at your broker: limit ₹1,490.00, 0 of 2 filled.")
 
 
@@ -315,7 +401,7 @@ async def test_live_limit_rejected_is_not_reported_resting(env, monkeypatch, sta
 
     monkeypatch.setattr(env["broker"], "get_order_status", refused)
     card = await _card(env["db"], _order(venue="live", order_type="LIMIT", limit_price=1490.0))
-    done = await confirm(env["db"], None, None, "alice", card["id"], second_tap=True)
+    done = await confirm_twice(env["db"], "alice", card["id"])
     assert done["result"].startswith(f"Your broker {status.lower()} the limit order")
     assert "Resting" not in done["result"]
 
@@ -331,7 +417,7 @@ async def test_equity_approve_card_live_reaches_mine(env, monkeypatch):
     monkeypatch.setattr(routes, "db", type("_Db", (), {"db": env["db"], "redis": None})())
     card = await _propose(env["db"], "propose_approve", {"suggestion_id": "s-alice", "live": True})
     assert card["needs_second_tap"] is True
-    done = await confirm(env["db"], None, None, "alice", card["id"], second_tap=True)
+    done = await confirm_twice(env["db"], "alice", card["id"])
     assert done["status"] == "CONFIRMED"
     assert env["broker"].placed[0].symbol == "INFY"
 

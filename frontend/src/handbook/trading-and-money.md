@@ -193,6 +193,10 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
   `attach_theses` rescores once research has measured real sentiment.
 - Approve / reject is one atomic `find_one_and_update` gated on PENDING — double approval
   is impossible. Approval is real money on `mine` (second tap), booked in `<user>:mine`.
+  The second tap is checked by the server: `approve-live` without a token only returns a
+  one-time `confirm_token` (`backend/risk/live_confirm.py::issue`, 60 s, bound to the user,
+  the proposal and its terms); the call that presents it places the order
+  (`routers/suggestions.py::approve_suggestion_live`). The same token guards chat, ticket and Telegram cards.
   There is no paper approval: the AI account paper-trades proposals itself.
 - Expire after 3 days (`DEFAULT_TTL`). An equity SELL is proposed only against a held long.
 - At most 5 long-term proposals stay pending, the best by final score: after each scan the rest

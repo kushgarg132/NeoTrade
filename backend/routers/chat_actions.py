@@ -1,6 +1,8 @@
 """/chat/actions/* -- the only way an action the chat proposed gets run:
 the user's Confirm (or Cancel) on its card. See backend/chat/actions.py."""
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -9,6 +11,7 @@ from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.chat.actions import ActionRefused, ChatActionStore, confirm
 from backend.database import db
+from backend.risk.live_confirm import TokenRefused
 
 router = APIRouter(prefix="/chat/actions", tags=["Chat"])
 
@@ -18,7 +21,7 @@ def _db():
 
 
 class ConfirmRequest(BaseModel):
-    second_tap: bool = False
+    confirm_token: Optional[str] = None  # from the first call on a real-money card
 
 
 @router.get("/pending")
@@ -33,7 +36,9 @@ async def confirm_action(
     user: User = Depends(get_current_user), credentials=Depends(get_credential_store),
 ):
     try:
-        return await confirm(_db(), db.redis, credentials, user.id, action_id, second_tap=body.second_tap)
+        return await confirm(_db(), db.redis, credentials, user.id, action_id, confirm_token=body.confirm_token)
+    except TokenRefused as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
     except ActionRefused as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 

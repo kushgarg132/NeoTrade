@@ -12,6 +12,7 @@ from backend.chat import account_actions, actions
 from backend.chat.actions import ActionRefused, action_tools, confirm
 from backend.core.models import Holding, Position, Side
 from backend.engine.session import IST
+from backend.tests.test_chat_actions import confirm_twice
 from backend.tests.upstox_wire import UpstoxWire
 
 OPEN = datetime(2026, 10, 6, 11, 0, tzinfo=IST)  # a Tuesday, in session
@@ -81,7 +82,7 @@ async def test_exit_card_checks_holding_at_propose_and_confirm(env):
     assert (await confirm(db, None, None, "alice", card["id"]))["status"] == "NEEDS_SECOND_TAP"
     mine.holdings = []  # sold elsewhere before the second tap
     with pytest.raises(ActionRefused):
-        await confirm(db, None, None, "alice", card["id"], second_tap=True)
+        await confirm_twice(db, "alice", card["id"])
     assert mine.calls == []
 
 
@@ -89,7 +90,7 @@ async def test_exit_sells_on_the_users_account(env):
     db, mine = env["db"], env["mine"]
     card = await _card(db, "propose_exit", {"symbol": "INFY", "quantity": 4})
     await confirm(db, None, None, "alice", card["id"])
-    result = await confirm(db, None, None, "alice", card["id"], second_tap=True)
+    result = await confirm_twice(db, "alice", card["id"])
     assert result["status"] == "CONFIRMED"
     (kind, order), = mine.calls
     assert kind == "place" and order.side == Side.SELL and order.quantity == 4 and order.product == "CNC"
@@ -102,7 +103,7 @@ async def test_cancel_and_modify_reach_only_the_mine_adapter(env):
                        ("propose_modify_order", {"order_id": "O1", "price": 2990.0})):
         card = await _card(db, tool, args)
         await confirm(db, None, None, "alice", card["id"])
-        await confirm(db, None, None, "alice", card["id"], second_tap=True)
+        await confirm_twice(db, "alice", card["id"])
     assert mine.calls == [("cancel", "O1"), ("modify", "O1", None, 2990.0)]
     assert ai.calls == []
 
@@ -112,7 +113,7 @@ async def test_stop_loss_refuses_a_trigger_above_the_price_for_a_long(env):
     assert "below" in (await _tools(db)["propose_stop_loss"].ainvoke({"symbol": "INFY", "trigger_price": 1600.0})).lower()
     card = await _card(db, "propose_stop_loss", {"symbol": "INFY", "trigger_price": 1400.0})
     await confirm(db, None, None, "alice", card["id"])
-    await confirm(db, None, None, "alice", card["id"], second_tap=True)
+    await confirm_twice(db, "alice", card["id"])
     (kind, order), = mine.calls
     assert order.order_type == "SL-M" and order.trigger_price == 1400.0 and order.side == Side.SELL
     assert order.quantity == 10
@@ -147,6 +148,6 @@ async def test_exit_of_a_todays_delivery_buy_keeps_cnc(env):
     mine.positions = {"INFY": Position(symbol="INFY", quantity=10, avg_price=1500.0, product="CNC")}
     card = await _card(db, "propose_exit", {"symbol": "INFY"})
     await confirm(db, None, None, "alice", card["id"])
-    await confirm(db, None, None, "alice", card["id"], second_tap=True)
+    await confirm_twice(db, "alice", card["id"])
     (kind, order), = mine.calls
     assert order.product == "CNC"  # selling MIS would open an intraday short
