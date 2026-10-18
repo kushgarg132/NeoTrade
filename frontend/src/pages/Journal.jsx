@@ -346,6 +346,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
             <Empty
               title="No trades in the journal yet"
               detail="Sync pulls today's fills from every connected broker, and it runs on its own after the close each day. For older history, download your tradebook from Zerodha Console (Reports → Tradebook) and import the CSV."
+              action={<Link to="/import" className="field-label text-[var(--stamp)] hover:underline min-h-11 inline-flex items-center">Import files ›</Link>}
             />
           ) : (
             <>

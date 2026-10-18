@@ -102,7 +102,11 @@ const MineOverview = () => {
           ) : !overview ? (
             <Ruling rows={3} />
           ) : !h ? (
-            <Empty title="Nothing here yet" detail="Connect your broker and import your trades to see your account." />
+            <Empty
+              title="Nothing here yet"
+              detail="Connect your broker, or import your trades and mutual funds from files."
+              action={<Link to="/import" className="field-label text-[var(--stamp)] hover:underline min-h-11 inline-flex items-center">Import files ›</Link>}
+            />
           ) : (
             <>
               <p className="figure-lg text-[clamp(1.75rem,8vw,2.5rem)]">{formatCurrency(h.value)}</p>

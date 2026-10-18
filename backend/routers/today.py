@@ -113,7 +113,12 @@ async def _setup(user_id: str, prefs: dict) -> dict:
     has_creds = {d["broker"] async for d in db.db["broker_credentials"].find({"user_id": user_id}, {"broker": 1})}
     channel = await db.db["alert_channels"].find_one({"_id": user_id}) or {}
     profile = await ProfileStore(db.db).get(user_id)
+    # No broker needed: files give holdings, journal and tax (/import).
+    has_trades = await db.db["journal_trades"].find_one({"user_id": user_id}, {"_id": 1}) is not None
+    has_funds = await db.db["mf_imports"].find_one({"_id": user_id}, {"_id": 1}) is not None
     steps = [
+        ("import_trades", "Import your trades from a Zerodha Console file", has_trades, "/import"),
+        ("import_funds", "Import your mutual funds from a CAS statement", has_funds, "/import"),
         ("connect_mine", "Connect your broker", any(b in has_creds for b, r in roles.items() if r == "mine"), "/settings?tab=accounts"),
         ("connect_ai", "Connect the AI's broker", any(b in has_creds for b, r in roles.items() if r == "ai"), "/settings?tab=accounts"),
         ("roles", "Choose which account is yours and which is the AI's", {"ai", "mine"} <= set(roles.values()), "/settings?tab=accounts"),

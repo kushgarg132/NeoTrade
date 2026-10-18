@@ -14,6 +14,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AiLimits = lazy(() => import('./pages/AiLimits'));
 const Today = lazy(() => import('./pages/Today'));
+const Import = lazy(() => import('./pages/Import'));
 const News = lazy(() => import('./pages/News'));
 const AiOverview = lazy(() => import('./pages/AiOverview'));
 const AiActivity = lazy(() => import('./pages/AiActivity'));
@@ -125,6 +126,7 @@ const App = () => {
       {/* More */}
       <Route path="/settings" element={gated(<Settings />)} />
       <Route path="/profile" element={gated(<Profile />)} />
+      <Route path="/import" element={gated(<Import />)} />
       <Route path="/system" element={gated(<RequireAdmin><Handbook /></RequireAdmin>)} />
       <Route path="/system/future" element={gated(<RequireAdmin><Backlog /></RequireAdmin>)} />
       {/* Old links and bookmarks follow the move, query string included. */}

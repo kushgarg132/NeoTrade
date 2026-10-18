@@ -44,7 +44,7 @@ def _seed(db, **docs):
 def test_fresh_user_has_an_empty_setup_and_no_login_nags(monkeypatch):
     client, _ = _client(monkeypatch)
     body = client.get("/api/v1/today").json()
-    assert body["setup"]["done"] == 0 and body["setup"]["total"] == 6
+    assert body["setup"]["done"] == 0 and body["setup"]["total"] == 8
     assert not [n for n in body["needs_you"] if n["kind"] == "login"]
     assert body["accounts"] == {}
 

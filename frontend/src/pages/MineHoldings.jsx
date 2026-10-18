@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { X } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
@@ -136,11 +136,14 @@ const MineHoldings = () => {
           ) : !snapshot ? (
             <Empty
               title="No holdings yet"
-              detail={reading && reading !== 'busy' ? reading : 'Connect your broker in Settings, then read your holdings.'}
+              detail={reading && reading !== 'busy' ? reading : 'Connect your broker in Settings and read your holdings, or import your mutual funds from a CAS statement.'}
               action={
+                <span className="flex flex-wrap justify-center gap-2">
                 <button type="button" onClick={readNow} disabled={reading === 'busy'} className={cn(CHIP, 'border-[var(--ink)] text-[var(--ink)]')}>
                   {reading === 'busy' ? 'Reading…' : 'Read holdings now'}
                 </button>
+                <Link to="/import" className={cn(CHIP, 'border-[var(--ink)] text-[var(--ink)]')}>Import files</Link>
+              </span>
               }
             />
           ) : (
