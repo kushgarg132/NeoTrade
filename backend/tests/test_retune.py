@@ -227,3 +227,18 @@ def test_a_variant_keeps_the_strategys_news_and_sector_inputs():
     assert gap.catalysts == catalysts and gap.prev_closes == closes and gap.p["gap_pct"] == 3.0
     assert variant(by_name["relative_strength_sector"], ["TCS"], {1: "TCS"}, {}).sector_of == sectors
     assert variant(by_name["orb_breakout"], ["TCS"], {1: "TCS"}, {"volume_mult": 2.0}).p["volume_mult"] == 2.0
+
+
+@pytest.mark.asyncio
+async def test_two_concurrent_passes_start_one_retune(monkeypatch):
+    import asyncio
+    db = AsyncMongoMockClient()["t"]
+    await retune.ensure_indexes(db)
+    started = []
+
+    async def spawn():
+        started.append(1)
+    monkeypatch.setattr(retune, "spawn", spawn)
+    now = datetime(2026, 11, 2, 11, tzinfo=timezone.utc)
+    results = await asyncio.gather(retune.start_if_due(db, now), retune.start_if_due(db, now))
+    assert sorted(results) == [False, True] and len(started) == 1
