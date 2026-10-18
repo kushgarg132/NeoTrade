@@ -31,8 +31,15 @@ def validate_roles(roles: dict) -> dict:
     return dict(roles)
 
 
+# File imports (the mutual-fund CAS statement) are always the user's own money.
+FILE_SOURCES = frozenset({"cas"})
+
+
 def brokers_for(roles: dict, role: str) -> set[str]:
-    return {broker for broker, r in (roles or {}).items() if r == role}
+    """The holding sources that belong to `role`. With no roles set this stays
+    empty, which callers read as "every broker is mine"."""
+    brokers = {broker for broker, r in (roles or {}).items() if r == role}
+    return brokers | FILE_SOURCES if role == "mine" and brokers else brokers
 
 
 async def adapter_for(user_id: str, role: Role, credentials, redis=None, roles: Optional[dict] = None,
@@ -45,7 +52,7 @@ async def adapter_for(user_id: str, role: Role, credentials, redis=None, roles: 
 
         roles = (await PrefsStore(db.db).get(user_id)).get("broker_roles") or {}
         redis = redis if redis is not None else db.redis
-    brokers = sorted(brokers_for(roles, role))
+    brokers = sorted(brokers_for(roles, role) - FILE_SOURCES)  # a file has no adapter
     if not brokers:
         raise RoleUnavailable(role, f"{LABELS[role]} is not set: choose it in Settings → Broker.")
     for broker in brokers:

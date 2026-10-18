@@ -29,7 +29,7 @@ def test_validate_roles_allows_one_ai_and_known_brokers():
     for bad in ({"kite": "ai", "upstox": "ai"}, {"zerodha": "ai"}, {"kite": "boss"}):
         with pytest.raises(ValueError):
             roles.validate_roles(bad)
-    assert roles.brokers_for({"kite": "ai", "upstox": "mine"}, "mine") == {"upstox"}
+    assert roles.brokers_for({"kite": "ai", "upstox": "mine"}, "mine") == {"upstox", "cas"}
 
 
 async def test_adapter_for_returns_only_the_brokers_role_and_never_falls_back(monkeypatch):
@@ -89,3 +89,11 @@ def test_autopilot_log_endpoint_lists_newest_first(monkeypatch):
     ]))
     rows = _client(db).get("/api/v1/settings/autopilot/log").json()["rows"]
     assert [r["symbol"] for r in rows] == ["TCS", "INFY"]
+
+
+def test_cas_funds_count_as_mine_only_when_roles_are_set():
+    from backend.brokers.roles import brokers_for
+
+    assert brokers_for({"upstox": "mine", "kite": "ai"}, "mine") == {"upstox", "cas"}
+    assert brokers_for({"upstox": "mine", "kite": "ai"}, "ai") == {"kite"}
+    assert brokers_for({}, "mine") == set()  # no roles: callers treat it as every broker

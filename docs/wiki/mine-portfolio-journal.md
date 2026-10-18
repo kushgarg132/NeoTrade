@@ -278,7 +278,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 
 ## Gotchas and known issues
 
-- **CAS funds and broker roles.** `cas` is not a role-assignable broker, so once `broker_roles` has a `mine` broker, `brokers_for(roles, "mine")` excludes the `cas` funds from the Mine views. Fine for the no-broker user this is for; fix when a roles user imports a CAS. A CAS with no cost for a scheme gets cost = current value (no gain shown). `today.py::_setup` has two import steps (`import_trades`, `import_funds`) linking `/import`.
+- **CAS funds and broker roles.** `cas` is not a role-assignable broker; `backend/brokers/roles.py::brokers_for` adds `FILE_SOURCES` (`cas`) to the `mine` set whenever roles are set (empty roles still mean "every broker"), and `adapter_for` subtracts it (a file has no adapter). A CAS with no cost for a scheme gets cost = current value (no gain shown). `today.py::_setup` has two import steps (`import_trades`, `import_funds`) linking `/import`.
 - **Broker-roles default.** With no `broker_roles` set, `brokers_for` returns `set()`. Most code treats that as "all
   brokers are mine"; `journal/accounts.py::ai_vs_me` now does too (mine = every non-AI broker, AI book empty).
 - **Snapshots versus scorecard_for.** The stored card's `holdings` are mine-only, while `raw_holdings` cover all
