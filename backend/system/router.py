@@ -26,6 +26,20 @@ async def run_builder(_admin: User = Depends(require_admin)):
     return {"started": True}
 
 
+@router.get("/system/reconciliation")
+async def reconciliation(_admin: User = Depends(require_admin), days: int = 3):
+    """Every user's broker-to-ledger results for the last `days` (engine/broker_recon.py). Read-only."""
+    from datetime import datetime, timedelta, timezone
+
+    from backend.engine.broker_recon import COLLECTION
+    from backend.engine.session import IST
+
+    since = (datetime.now(timezone.utc).astimezone(IST).date() - timedelta(days=max(1, min(days, 60)))).isoformat()
+    rows = await db.db[COLLECTION].find({"day": {"$gte": since}}, {"_id": 0}) \
+        .sort([("day", -1), ("user_id", 1), ("role", 1)]).to_list(length=None)
+    return {"results": rows}
+
+
 @router.get("/system/backlog")
 async def list_backlog(_admin: User = Depends(require_admin)):
     return {"items": await backlog.list_items(db.db)}

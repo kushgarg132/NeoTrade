@@ -207,3 +207,32 @@ def test_attention_counts_what_needs_the_user_but_not_practice_proposals(monkeyp
           chat_actions=[{"id": "c1", "user_id": "alice", "status": "PROPOSED", "summary": "Sell 10 INFY",
                          "expires_at": NOW + timedelta(minutes=10), "created_at": NOW}])
     assert client.get("/api/v1/today/attention").json() == {"count": 2}  # Kite login + the card
+
+
+def test_a_broker_reconciliation_mismatch_is_a_do_today_item(monkeypatch):
+    client, db = _client(monkeypatch)
+    day = NOW.astimezone(IST).date().isoformat()
+    _seed(db, broker_reconciliation=[
+        {"_id": f"alice:{day}:ai", "user_id": "alice", "day": day, "role": "ai", "status": "mismatch",
+         "checked_at": NOW, "mismatches": [{"kind": "unknown_order", "where": "ledger", "symbol": "ITC"}]},
+        {"_id": f"alice:{day}:mine", "user_id": "alice", "day": day, "role": "mine", "status": "ok",
+         "checked_at": NOW, "mismatches": []},
+        {"_id": "bob:x:ai", "user_id": "bob", "day": day, "role": "ai", "status": "mismatch", "mismatches": []},
+    ])
+    items = [n for n in client.get("/api/v1/today").json()["needs_you"] if n["kind"] == "reconcile"]
+    assert len(items) == 1 and items[0]["detail"] == "AI account: 1 (ITC)"
+    rows = client.get("/api/v1/today/reconciliation").json()["results"]
+    assert [(r["user_id"], r["role"]) for r in rows] == [("alice", "ai"), ("alice", "mine")]
+
+
+def test_data_quality_alerts_show_only_to_the_admin(monkeypatch):
+    from backend.system import data_quality
+
+    async def alerts(db, redis, now):
+        return ["Ingest loop quotes last beat 60 min ago"]
+    monkeypatch.setattr(data_quality, "alerts", alerts)
+    user, _ = _client(monkeypatch)
+    assert not [n for n in user.get("/api/v1/today").json()["needs_you"] if n["kind"] == "data_quality"]
+    admin, _ = _client(monkeypatch, role="admin")
+    items = [n for n in admin.get("/api/v1/today").json()["needs_you"] if n["kind"] == "data_quality"]
+    assert [(i["title"], i["link"]) for i in items] == [("Ingest loop quotes last beat 60 min ago", "/system")]

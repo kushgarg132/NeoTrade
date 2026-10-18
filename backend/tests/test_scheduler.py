@@ -408,3 +408,21 @@ async def test_monday_catch_up_for_friday_runs_fridays_weekly_work(mongo, monkey
     assert mirrors == []
     await scheduler.run_daily_jobs(mongo, now=monday, pass_day=date(2026, 9, 25))  # the Friday it missed
     assert mirrors == [1]
+
+
+async def test_broker_reconciliation_runs_for_todays_pass_only(mongo, monkeypatch):
+    """Brokers serve only today's trade book: a catch-up pass for an earlier day can't reconcile it."""
+    from backend.engine import broker_recon
+
+    days = []
+
+    async def fake_run_all(db, redis, day, now):
+        days.append(day)
+        return 2
+    monkeypatch.setattr(broker_recon, "run_all", fake_run_all)
+    now = datetime(2026, 10, 16, 10, 30, tzinfo=timezone.utc)  # 16:00 IST Friday
+
+    assert await scheduler._reconcile_brokers(mongo, AsyncMock(), now, date(2026, 10, 16)) == 2
+    assert await scheduler._reconcile_brokers(mongo, AsyncMock(), now, date(2026, 10, 15)) is None
+    assert await scheduler._reconcile_brokers(mongo, None, now, date(2026, 10, 16)) is None
+    assert days == [date(2026, 10, 16)]
