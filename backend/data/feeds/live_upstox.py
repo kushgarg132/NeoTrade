@@ -179,14 +179,36 @@ class UpstoxMarketFeed(TickBarAggregator):
         now_fn: Callable[[], float] = None,
         sleep_fn: Callable[[float], "asyncio.Future"] = asyncio.sleep,
         connect_fn: Callable[[str], object] = _default_connect,
+        key_for: Callable[[object], Optional[str]] = lambda instrument: None,
     ) -> None:
         """`token_for_key` maps each Upstox instrument_key to the
         instrument_token the rest of the app knows it by; bars carry the
-        latter."""
+        latter. `key_for` resolves an Instrument's key for `add`."""
         super().__init__(timeframe, timeframe_seconds, tick_check_seconds, now_fn, sleep_fn)
         self._access_token = access_token
         self._token_for_key = token_for_key
         self._connect_fn = connect_fn
+        self._key_for = key_for
+        self._ws = None
+        self._subscribing: set[asyncio.Task] = set()
+
+    def add(self, instruments) -> bool:
+        """Subscribes to more instruments on the open socket (a reconnect
+        resubscribes every key). Ticks start now, so the caller backfills the
+        day so far (True)."""
+        new = []
+        for instrument in instruments:
+            key = self._key_for(instrument)
+            if key is None:
+                logger.warning("upstox feed: no instrument_key for %s; not added", instrument.tradingsymbol)
+            elif key not in self._token_for_key:
+                self._token_for_key[key] = instrument.instrument_token
+                new.append(key)
+        if new and self._ws is not None:
+            task = asyncio.get_running_loop().create_task(self._ws.send(subscribe_request(new)))
+            self._subscribing.add(task)
+            task.add_done_callback(self._subscribing.discard)
+        return True
 
     def on_message(self, message: bytes) -> None:
         ticks = []
@@ -207,6 +229,7 @@ class UpstoxMarketFeed(TickBarAggregator):
             try:
                 async with self._connect_fn(self._access_token) as ws:
                     await ws.send(subscribe_request(list(self._token_for_key)))
+                    self._ws = ws
                     backoff = 1.0
                     async for message in ws:
                         if isinstance(message, bytes):
@@ -218,6 +241,8 @@ class UpstoxMarketFeed(TickBarAggregator):
                 raise
             except Exception as exc:
                 logger.warning("upstox feed dropped (%s); reconnecting in %.0fs", exc, backoff)
+            finally:
+                self._ws = None
             await self._sleep_fn(backoff)
             backoff = min(backoff * 2, _MAX_BACKOFF_SECONDS)
 

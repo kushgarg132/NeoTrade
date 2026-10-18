@@ -194,3 +194,31 @@ async def test_stream_subscribes_ingests_and_reconnects_after_a_drop():
     assert json.loads(connections[0].sent[0])["data"]["instrumentKeys"] == [KEY]
     assert sleeps[0] == 1.0  # backoff after the first drop
     assert feed._windows[16927].close == 101.0
+
+
+class _OpenConnection(_FakeConnection):
+    async def _iterate(self):
+        await asyncio.Event().wait()  # stays open until cancelled
+        yield b""
+
+
+async def test_add_subscribes_new_keys_on_the_open_socket():
+    """plan/expand.py skipped every mid-run add on an Upstox feed: it had no add()."""
+    from types import SimpleNamespace
+
+    other = "NSE_EQ|INE467B01029"
+    conn = _OpenConnection([])
+    feed = UpstoxMarketFeed("tok", {KEY: 16927}, now_fn=lambda: 0.0, connect_fn=lambda token: conn,
+                            key_for=lambda i: {"TCS": other}.get(i.tradingsymbol))
+    task = asyncio.create_task(feed._stream())
+    for _ in range(3):
+        await asyncio.sleep(0)
+
+    assert feed.add([SimpleNamespace(tradingsymbol="TCS", instrument_token=2953),
+                     SimpleNamespace(tradingsymbol="NOSUCH", instrument_token=1)]) is True
+    for _ in range(3):
+        await asyncio.sleep(0)
+    task.cancel()
+
+    assert feed._token_for_key == {KEY: 16927, other: 2953}
+    assert json.loads(conn.sent[-1])["data"]["instrumentKeys"] == [other]

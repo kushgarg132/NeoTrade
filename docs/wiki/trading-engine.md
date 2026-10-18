@@ -227,6 +227,7 @@ Behaviour that surprises:
 - Daily/swing runs (LONGTERM) never trade: they create suggestions; the `scan` (outside this page) reuses `run` over ~400 days with the sink.
 - `HistoricalFeed` filters candles by `_naive()` (drops tzinfo without converting), so mixed-timezone `start`/`end` vs candle timestamps compare wall-clock values (`data/feeds/historical.py:358`). Callers pass IST `now` in the gate path, which matches broker candles.
 - `PollingLiveFeed` (daily quote as a bar) is wrong for intraday; `CandlePollingFeed` yields closed yfinance 5m candles ~15 min late and marks all but the newest as `warmup` on the first poll or after `add()` (`candle_poll.py`).
+- Mid-run plan adds (`plan/expand.py`) need `feed.add`: Kite and Upstox tick feeds have it (`live_upstox.py::UpstoxMarketFeed.add` resolves keys from the adapter's loaded scrip dump; unresolved symbols are logged, not added); polling feeds skip.
 - `TickBarAggregator` bars are clock-driven: a quiet symbol still emits a flat zero-volume bar; first window's volume is 0 (no baseline).
 - Kite `ticker_feed` probes `ltp` first; a Kite Connect app without market-data permission returns None so `build_feed` falls through to Upstox/polling (`kite.py::ticker_feed`).
 - Upstox history is rate-limited by a per-process 0.5 s spacing and 28-day chunks for minute data (`upstox.py::_space_history_call`, `_CHUNK_DAYS`); a gate backtest is ~975 calls.
@@ -239,7 +240,6 @@ Behaviour that surprises:
 - Instrument tokens from NSE/BSE free lists are synthetic and cannot subscribe to ticks; a Kite sync overwrites them in place (`free_source.py::_synthetic_token`).
 
 Open issues / possible bugs found while reading (not fixed):
-- `backend/data/feeds/live_upstox.py::UpstoxMarketFeed` has no `add()`; `plan/expand.py:15` (`hasattr(feed, "add")`) therefore skips every mid-run plan add on an Upstox tick feed (logs "cannot add symbols mid-run").
 - `backend/server.py:147` still indexes `paper_limit_orders`, which nothing reads or writes since the paper ticket was removed (the stuck sweep for it is gone).
 - `risk/backtest_gate.py::BacktestGateStore.ensure_indexes` (line 44) and `risk/kill_switch.py::KillSwitchStore.ensure_indexes` (line 30) are defined but never called at startup; `paper_trades` has no index at all (`persistence.py:50-53` indexes only orders, fills, positions).
 - `risk/backtest_gate.py:50` and `risk/kill_switch.py:48` call `datetime.now(...)` directly (allowed: `risk/` is outside the grep test), unlike `engine/`.

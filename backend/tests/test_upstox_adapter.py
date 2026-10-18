@@ -264,6 +264,8 @@ async def test_ticker_feed_subscribes_by_instrument_key_and_keeps_the_app_token(
     assert isinstance(feed, UpstoxMarketFeed)
     assert feed._token_for_key == {"NSE_EQ|INE002A01018": 16927}
     assert feed._access_token == "up-tok"
+    assert feed._key_for(_instrument()) == "NSE_EQ|INE002A01018"  # mid-run add() resolves from the dump
+    assert feed._key_for(_instrument("NOSUCH")) is None
 
 
 async def test_ticker_feed_is_none_when_nothing_resolves():
