@@ -237,8 +237,10 @@ class AnalystAgent:
             return
         try:
             await redis.set(f"analyst:{symbol}", json.dumps(output), ex=CACHE_TTL_SECONDS)
-            # The engine and scan read this for the AI half of conviction.
-            await redis.set(f"sentiment:{symbol}", output["sentiment_score"], ex=CACHE_TTL_SECONDS)
+            # The engine and scan read this for the AI half of conviction. The ingest
+            # worker's blend lives 24h: never overwrite it with this 4h copy.
+            if await redis.ttl(f"sentiment:{symbol}") <= CACHE_TTL_SECONDS:
+                await redis.set(f"sentiment:{symbol}", output["sentiment_score"], ex=CACHE_TTL_SECONDS)
         except Exception as exc:
             logger.warning("analyst cache write failed for %s: %s", symbol, exc)
 
