@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
-covers: [backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/screening/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 44ab59f
+covers: [backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
+verified_at: b491ac1
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -12,7 +12,7 @@ portfolio** (`backend/factor/`) is a monthly Nifty-200 momentum/low-vol paper bo
 (`backend/suggestions/`) are LONGTERM engine proposals held for a human, with exit rules and alerts.
 **Learning** (`backend/learning/`) judges closed paper trades, adds bounded rules, re-tunes params monthly
 and asks the LLM for queued ideas. **Builder** (`backend/builder/`) drafts block-spec strategies weekly and
-gates them. **Screening** (`backend/screening/`) gives the fundamentals quality universe for
+gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the fundamentals quality universe for
 `quality_momentum`. The code wins over this page. The handbook section is `frontend/src/handbook/trading-and-money.md`
 ("Long-term ideas", "Strategy builder", "Picks").
 
@@ -53,10 +53,10 @@ gates them. **Screening** (`backend/screening/`) gives the fundamentals quality 
 | backend/builder/validate.py | Only gate between model output and the interpreter | `validate.py::validate_spec`, `::_validate_swing`, `::_is_dup`, `::slugify`, `::describe` |
 | backend/builder/store.py | `built_strategies` + `builder_runs`, active-spec cache refresh | `store.py::refresh`, `::ensure_indexes`, `::visible`, `::trial_sharpes`, `::history_of`, `::horizon_of`, `::regime_of`, `::set_status` |
 | backend/builder/__main__.py | `python -m backend.builder [--test <slug>]` | `__main__.py::_main` |
-| backend/screening/fundamentals.py | Pure Piotroski-lite (0–5) + quality score | `fundamentals.py::piotroski_lite_score`, `::quality_score` |
-| backend/screening/universe.py | Concurrent snapshot fetch → {symbol: score ≥ 0.5} | `universe.py::build_quality_universe` |
-| backend/screening/protocols.py | Snapshot model + provider protocol | `protocols.py::FundamentalSnapshot`, `::FundamentalsProvider` |
-| backend/screening/providers/yfinance_fundamentals.py | yfinance-backed provider; D/E is really debt/cash | `yfinance_fundamentals.py::YFinanceFundamentalsProvider`, `::_debt_to_equity` |
+| backend/data/fundamentals/scores.py | Pure Piotroski-lite (0–5) + quality score | `scores.py::piotroski_lite_score`, `::quality_score` |
+| backend/data/fundamentals/universe.py | Concurrent snapshot fetch → {symbol: score ≥ 0.5} | `universe.py::build_quality_universe` |
+| backend/data/fundamentals/protocols.py | Snapshot model + provider protocol | `protocols.py::FundamentalSnapshot`, `::FundamentalsProvider` |
+| backend/data/fundamentals/yfinance.py | yfinance-backed provider; D/E is really debt/cash | `yfinance.py::YFinanceFundamentalsProvider`, `::_debt_to_equity` |
 
 ## Data
 
@@ -98,7 +98,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 
 **2. Long-term scan → suggestion**
 1. Triggers: `scheduler.py::run_daily_jobs` (source `scheduler`, users from `prefs_store.scan_enabled_users`), `routers/suggestions.py::scan_now` (`manual`, background task), `datalayer/reactor.py::_scan_user` (`news`), and `engine/autorun.py` catch-up.
-2. `scan.py::scan_universe`: resolves instruments, then cached analyst verdicts, `screening/universe.py::build_quality_universe(StoreFundamentals)`, `nifty200_sectors()` (failure → `{}`), and builds the LONGTERM strategies with `learning/retune.py::current_params` and `builder_store.regime_of`.
+2. `scan.py::scan_universe`: resolves instruments, then cached analyst verdicts, `data/fundamentals/universe.py::build_quality_universe(StoreFundamentals)`, `nifty200_sectors()` (failure → `{}`), and builds the LONGTERM strategies with `learning/retune.py::current_params` and `builder_store.regime_of`.
 3. Bars come from `HistoricalFeed(StoreHistoryProvider)` over `LOOKBACK` (400 d). `engine/runner.py::run` replays with `order_sink=SuggestionSink(held=mine_holdings)` and `learned=adapt.load_rules`.
 4. In the runner, `scoring/composite.py::score_intent` (None below RULE_FLOOR) and `LearnedRules.blocks` apply. `SuggestionSink.__call__` records only when `armed` (final session). An equity SELL is allowed only up to `held`. One PENDING per (user, symbol, mode) (`store.has_pending`). → `SuggestionStore.create` (+ WS `suggestions/created`).
 5. `store.keep_best(user, "LONGTERM", 5)` expires the rest as `outranked`. It skips docs with `ai_order` set.
@@ -196,7 +196,7 @@ Related, outside the globs: `/strategies/built*`, `/strategies/library` (→ `le
 - `builder/draft.py::run` drops `builder:lock` in `finally`. A run past 6 h may delete a newer run's lock (`ponytail:` note at `draft.py::run`).
 - The builder's gateway response cache replays cut-off replies, hence the single retry with a timestamped line (ac1b363).
 - Factor survivorship: backtest results are flattered ~4–8 %/yr (`factor/survivorship.py`, ROADMAP 17.3.1, f5e2044). `factor/data.py` notes NIFTYBEES' bad split, so price indices are the benchmarks.
-- The screening "debt_to_equity" is actually debt/cash (`yfinance_fundamentals.py::_debt_to_equity`).
+- The screening "debt_to_equity" is actually debt/cash (`data/fundamentals/yfinance.py::_debt_to_equity`).
 - History (recent fixes):
   - a51584a: momentum-over-volatility setup; study reads from 2009.
   - 13b499c: the AI account paper-trades every stored pick.

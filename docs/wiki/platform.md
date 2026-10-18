@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 44ab59f
+verified_at: b491ac1
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -24,7 +24,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/auth/broker_credentials.py` | per-user Fernet-encrypted broker API keys | `BrokerCredentialStore`, `get_credential_store`, `fernet_from_settings`, `CredentialEncryptionUnavailable` |
 | `backend/auth/kite_session.py` | Kite login/token lifecycle, token cached in Redis to 06:00 IST | `KiteSessionManager`, `next_6am_ist`, `_redis_key` |
 | `backend/core/clock.py` | `Clock` protocol; engine code must not call `datetime.now` | `SystemClock`, `SimClock` |
-| `backend/core/models.py` | engine value types (no I/O) | `Side`, `Bar`, `Intent`, `Order`, `Fill`, `Position`, `BrokerOrderStatus`, `BrokerTrade`, `Holding`, `Venue` |
+| `backend/core/models.py` | engine value types (no I/O) plus market/research models | `Side`, `Bar`, `Intent`, `Order`, `Fill`, `Position`, `BrokerOrderStatus`, `BrokerTrade`, `Holding`, `Venue`; `NewsArticle`, `FinancialEvent`, `CompanyInfo`, `PriceCandle`, `BacktestResult`, `Watchlist`, `Trend` |
 | `backend/ws/hub.py` | per-connection bounded queues, topic fan-out, Redis-backed publish | `Hub`, `Connection`, `hub`, `handle_broadcast_event` |
 | `backend/ws/routes.py` | `/api/v1/ws` endpoint, actions, streamed LLM work | `stream`, `_handle`, `authenticate_token`, `origin_allowed`, `_BUDGETS`, `_stream_analysis/_quick_analysis/_chat` |
 | `backend/ws/pump.py` | 15 s price + P&L push loop | `push_once`, `pump_loop`, `start`, `PNL_TOPIC` |
@@ -149,11 +149,8 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | POST | `/api/v1/auth/refresh` | `backend/routers/auth.py::refresh` | none |
 | POST | `/api/v1/auth/logout` | `backend/routers/auth.py::logout` | none |
 | GET | `/api/v1/auth/me` | `backend/routers/auth.py::get_me` | user |
-| GET | `/api/v1/news/market` | `backend/components/analyst/news.py::fetch_market_news` | user |
-| GET | `/api/v1/news/feed` | `backend/components/analyst/news.py::news_feed` | user |
-| GET | `/api/v1/news/symbols` | `backend/components/analyst/news.py::symbol_news` | user |
-| POST | `/api/v1/stock_info` | `backend/components/master/stock_info.py::fetch_stock_info` | user |
-| GET | `/api/v1/stock_info/{symbol}` | `backend/components/master/stock_info.py::fetch_stock_info_get` | user |
+| GET | `/api/v1/news/feed` | `backend/routers/news.py::news_feed` | user |
+| GET | `/api/v1/news/symbols` | `backend/routers/news.py::symbol_news` | user |
 | POST | `/api/v1/agents/quick-analyze/{symbol}` | `backend/routers/agents.py::quick_analyze_stock` | user |
 | GET | `/api/v1/agents/intraday/{symbol}` | `backend/routers/agents.py::intraday_candles` | user |
 | POST | `/api/v1/agents/analyze/{symbol}` | `backend/routers/agents.py::analyze_stock` | user |

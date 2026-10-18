@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: 44ab59f
+verified_at: b491ac1
 ---
 # Trading engine
 
@@ -32,6 +32,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/engine/execution/costs.py` / `options_costs.py` | Indian equity / option charges | `costs.py::calculate_indian_costs`, `::DP_CHARGE`; `options_costs.py::calculate_options_costs` |
 | `backend/strategies/base.py` | Strategy base: params, universe, token map | `base.py::TokenResolvingStrategy`, `::bars_to_dataframe` |
 | `backend/strategies/registry.py` | Builds the default set + active built specs | `registry.py::build_default_strategies` |
+| `backend/strategies/indicators.py` | Pandas indicators, support/resistance levels, SMA-alignment trend (strategies and `research/quick.py` share it) | `indicators.py::Indicators`, `::SupportResistance`, `::TrendDetector` |
 | `backend/strategies/card.py` / `strength.py` | Strategy card model; strength grading math | `card.py::StrategyCard`; `strength.py::ramp`, `::graded` |
 | `backend/strategies/intraday/*.py` | 9 intraday strategies (5m) + `gaps.py` helpers | see Strategies table |
 | `backend/strategies/longterm/*.py` | 6 long-term strategies (1d) | see Strategies table |
@@ -40,6 +41,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/risk/backtest_gate.py` | Gate 1: stored backtest meets thresholds | `backtest_gate.py::passes_gate`, `::BacktestGateStore` |
 | `backend/risk/paper_gate.py` | Gate 2: user's own paper record | `paper_gate.py::paper_record`, `::proven_strategies`, `::for_mine` |
 | `backend/risk/gate_backtest.py` | Runs a 1y gate backtest and records it | `gate_backtest.py::backtest_for_gate`, `::intraday_history`, `::backtest_account` |
+| `backend/risk/rules.py` | Position-size and exposure helpers used by `size_intents` | `rules.py::RiskRules` |
 | `backend/risk/kill_switch.py` | Daily loss trip, persisted | `kill_switch.py::should_trip`, `::KillSwitchStore` |
 | `backend/autopilot/fence.py` | Pure order fence (every autopilot order) | `fence.py::check`, `::FenceState`, `::trade_cap` |
 | `backend/autopilot/service.py` | Fence -> fill (paper/live) -> log -> Telegram | `service.py::submit`, `::_submit`, `::_state`, `::check_exits`, `::ledger_user`, `::book`, `::ai_book_query` |
@@ -59,6 +61,8 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/data/protocols.py` | `MarketDataProvider` | `data/protocols.py::MarketDataProvider` |
 | `backend/data/providers/` | yfinance, Kite REST, daily-bar store | `yfinance_provider.py::YFinanceProvider`, `kite_provider.py::KiteProvider`, `store.py::StoreHistoryProvider` |
 | `backend/data/feeds/` | Replay, polling, tick->bar feeds | `historical.py::HistoricalFeed`, `candle_poll.py::CandlePollingFeed`, `polling_live.py::PollingLiveFeed`, `tick_bars.py::TickBarAggregator`, `live_kite.py::KiteTickerFeed`, `live_upstox.py::UpstoxMarketFeed` |
+| `backend/instruments/indian_stocks.py` | Default scan universe (mid + small cap lists) | `indian_stocks.py::ALL_SCAN_STOCKS` |
+| `backend/data/fundamentals/` | Fundamentals snapshots and quality score (see picks-and-signals) | `universe.py::build_quality_universe` |
 | `backend/instruments/` | Mongo instrument master + sources | `master.py::InstrumentMaster`, `loader.py::refresh_instruments*`, `free_source.py::NseEquityListSource`, `kite_source.py::KiteInstrumentSource`, `resolve.py::resolve_symbol`, `models.py::Instrument` |
 | `backend/routers/trading.py` | `/trading/*` control plane + `launch_run` | `trading.py::launch_run`, `::_launch_run`, `::build_feed`, `::start_background_run`, `::stop_background_run`, `::_RUNS` |
 | `backend/routers/broker.py` | `/broker/*` connect/status | `broker.py::broker_connect`, `::_refresh_instruments` |

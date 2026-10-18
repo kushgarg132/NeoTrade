@@ -1,13 +1,13 @@
 ---
 page: data-ai-jobs
-covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/components/**, backend/agents/**, backend/mcp_tools/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py]
-verified_at: 44ab59f
+covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py]
+verified_at: b491ac1
 ---
 # Data layer, AI and background jobs
 
-The ingest worker (`backend/datalayer/`) keeps shared market, macro and news data fresh in Mongo/Redis; the AI features (`ai/`, `chat/`, `plan/`, `research/`, `components/`) read it through the fact layer and call models only via `llm.py` (OmniRoute gateway, per-feature keys, per-tier models). `scheduler.py` runs the 16:00 IST daily pass. "Jobs and schedules" is the single table of every timer in the backend. AI explains and scores; it never sizes or approves a trade (conviction cap lives in `backend/scoring/composite.py`, not here).
+The ingest worker (`backend/datalayer/`) keeps shared market, macro and news data fresh in Mongo/Redis; the AI features (`ai/`, `chat/`, `plan/`, `research/`) read it through the fact layer and call models only via `llm.py` (OmniRoute gateway, per-feature keys, per-tier models). `scheduler.py` runs the 16:00 IST daily pass. "Jobs and schedules" is the single table of every timer in the backend. AI explains and scores; it never sizes or approves a trade (conviction cap lives in `backend/scoring/composite.py`, not here).
 
-Path notes: `backend/routers/news.py` and `backend/routers/chat.py` do NOT exist. The news HTTP router is `backend/components/analyst/news.py::router`; chat streaming is the WebSocket action `chat` in `backend/ws/routes.py::_stream_chat` (outside this page's globs); chat confirms are `backend/routers/chat_actions.py`. `backend/mcp_tools/__init__.py` is empty. `backend/agents/` holds only `tools.py` (no `__init__.py`; `backend/routers/agents.py` is unrelated). `backend/components/**` has no `__init__.py` (namespace packages).
+Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `backend/routers/news.py::router`; chat streaming is the WebSocket action `chat` in `backend/ws/routes.py::_stream_chat` (outside this page's globs); chat confirms are `backend/routers/chat_actions.py`. The 2025 `components/`, `agents/`, `mcp_tools/` and `screening/` packages were retired; their live code moved to `ai/analyst.py`, `routers/news.py`, `research/search.py`, `datalayer/stock_info.py`, `chat/lc_tools.py`, `strategies/indicators.py`, `risk/rules.py`, `instruments/indian_stocks.py`, `core/models.py` and `data/fundamentals/`.
 
 ## Files
 
@@ -59,28 +59,25 @@ Path notes: `backend/routers/news.py` and `backend/routers/chat.py` do NOT exist
 | `backend/plan/notify.py` | Telegram text for plans (not for fallback) | `notify.py::plan_text`, `::notify_plan` |
 | `backend/routers/plan.py` | `GET /plan/today` | `plan.py::plan_today` |
 
-### research, components, agents, llm, scheduler
+### research, analyst, llm, scheduler
 | path | role | key symbols |
 |---|---|---|
 | `backend/research/graph.py` | LangGraph report: resolve, info, analyst, thesis; no signal | `graph.py::ResearchAgent`, `::ResearchReport` |
 | `backend/research/quick.py` | non-AI snapshot (info, 1y bars, technicals, flags) | `quick.py::quick_analysis`, `::_compute_technicals`, `::QuickAnalysis` |
 | `backend/research/flags.py` | plain-fact chips, never buy/sell | `flags.py::stock_flags` |
 | `backend/research/index_move.py` | AI "why did the index move", Redis-cached | `index_move.py::explain_index_move`, `::_ttl`, `::CACHE_KEY`, `::ExplanationUnavailable` |
-| `backend/components/analyst/agent.py` | per-stock news score + note (2 LLM calls), 4h cache | `agent.py::AnalystAgent`, `::_score_news`, `::_report`, `::_extract_json`, `::CACHE_TTL_SECONDS` |
-| `backend/components/analyst/news.py` | news HTTP router + Google News helpers | `news.py::fetch_market_news`, `::news_feed`, `::symbol_news`, `::fetch_news_logic`, `::fresh_headlines`, `::fetch_google_news`, `::_title_key` |
-| `backend/components/master/search.py` | query to instrument; optional LLM peers | `search.py::resolve_company_query`, `::_find_peers` |
-| `backend/components/master/stock_info.py` | yfinance company info + router | `stock_info.py::fetch_stock_info_logic`, `::fetch_stock_info`, `::fetch_stock_info_get` |
-| `backend/components/quant/*.py` | indicators, S/R, trend, price history, scan lists | `indicators.py::Indicators`, `support.py::SupportResistance`, `trend.py::TrendDetector`, `price.py::fetch_price_history_logic`, `indian_stocks.py::ALL_SCAN_STOCKS` |
-| `backend/components/risk/risk.py` | position-size and exposure helpers | `risk.py::RiskRules` |
-| `backend/components/shared/models.py` | shared pydantic models | `NewsArticle`, `FinancialEvent`, `CompanyInfo`, `PriceCandle`, `Trend` |
-| `backend/agents/tools.py` | LangChain tools for the chat agent | `tools.py::fetch_stock_info_tool`, `::fetch_price_history_tool`, `::resolve_symbol_tool` |
+| `backend/ai/analyst.py` | per-stock news score + note (2 LLM calls), 4h cache | `analyst.py::AnalystAgent`, `::_score_news`, `::_report`, `::_extract_json`, `::CACHE_TTL_SECONDS` |
+| `backend/routers/news.py` | news HTTP router (`/news/feed`, `/news/symbols`) + Google News helpers | `news.py::news_feed`, `::symbol_news`, `::fetch_news_logic`, `::fresh_headlines`, `::fetch_google_news`, `::_title_key` |
+| `backend/research/search.py` | query to instrument; optional LLM peers | `search.py::resolve_company_query`, `::_find_peers` |
+| `backend/datalayer/stock_info.py` | yfinance company info and price history (logic only, no routes) | `stock_info.py::fetch_stock_info_logic`, `::fetch_price_history_logic` |
+| `backend/chat/lc_tools.py` | LangChain tools (stock info, price history, symbol resolve) | `lc_tools.py::fetch_stock_info_tool`, `::fetch_price_history_tool`, `::resolve_symbol_tool` |
 | `backend/llm.py` | gateway client, tiers/features, per-user daily cap, key rotation | `llm.py::LLMService`, `::llm_service`, `::get_llm`, `::get_completion`, `::keys_for`, `::_charge`, `::use_model`, `::MultiKeyChain`, `::USER_FEATURES`, `::DailyLimitReached` |
 | `backend/model_catalog.py` | gateway model list to Family/Line/Version tree (pure) | `model_catalog.py::build_catalog`, `::FAMILIES`, `::LINES` |
 | `backend/market_cache.py` | stale-while-revalidate cache for home feeds | `market_cache.py::cached`, `::_refresh`, `::_claim` |
 | `backend/prompts/__init__.py` | `render(name, **values)` strict placeholder check | `prompts/__init__.py::render`, `::_load` |
 | `backend/scheduler.py` | 16:00 IST daily pass + lock + catch-up entry | `scheduler.py::scheduler_loop`, `::run_daily_jobs`, `::_run_locked`, `::close_expired_option_positions`, `::_learn`, `::_weekly_mirrors`, `::_sync_journals`, `::LOCK_KEY`, `::LAST_PASS_KEY` |
 
-Prompts (`backend/prompts/*.md`, front matter `system:`; caller in parens): `triage_news`, `score_market_news` (datalayer/news.py); `score_news`, `research_report` (components/analyst/agent.py); `market_brief` (datalayer/market.py); `index_move` (research/index_move.py); `game_plan`, `game_plan_tools` (plan/builder.py); `game_plan_revision`, `game_plan_revision_tools` (plan/revise.py); `chat`, `chat_followups` (chat/agent.py); `peers` (components/master/search.py); `resolve_instrument` (instruments/resolve.py); `model_test` (routers/settings.py); `final_turn` (ai/runner.py); `portfolio_review` (portfolio/review.py); `learning_review` (learning/report.py); `strategy_hypotheses` (learning/hypotheses.py); `strategy_builder`, `strategy_builder_swing` (builder/draft.py).
+Prompts (`backend/prompts/*.md`, front matter `system:`; caller in parens): `triage_news`, `score_market_news` (datalayer/news.py); `score_news`, `research_report` (ai/analyst.py); `market_brief` (datalayer/market.py); `index_move` (research/index_move.py); `game_plan`, `game_plan_tools` (plan/builder.py); `game_plan_revision`, `game_plan_revision_tools` (plan/revise.py); `chat`, `chat_followups` (chat/agent.py); `peers` (research/search.py); `resolve_instrument` (instruments/resolve.py); `model_test` (routers/settings.py); `final_turn` (ai/runner.py); `portfolio_review` (portfolio/review.py); `learning_review` (learning/report.py); `strategy_hypotheses` (learning/hypotheses.py); `strategy_builder`, `strategy_builder_swing` (builder/draft.py).
 
 ## Data
 
@@ -200,7 +197,7 @@ All times IST. `in_session` = Mon-Fri 09:15 to <15:30, no holiday calendar (`eng
 | Worker heartbeat | API | `worker:alive:{boot}` every 30s (TTL 90s) | `server.py::_heartbeat` | none |
 | Instrument expand | API | once at startup (20h marker) | `server.py::_expand_instruments` | none |
 | Home feeds cache | API (on request) | SWR: indices/global 60s, movers 300s, market news 600s; refresh claim 60s | `market_cache.py::cached` | `market:{key}:refreshing` |
-| Analyst note cache | API (on request) | 4h per symbol | `components/analyst/agent.py` | `analyst:lock:{SYM}` 120s |
+| Analyst note cache | API (on request) | 4h per symbol | `ai/analyst.py` | `analyst:lock:{SYM}` 120s |
 | User LLM allowance | API (on request) | 150 chat/research LLM calls per user per IST day; WS limits analyze 10/min, quick 60/min, chat 20/min | `llm.py::_charge`, `ws/routes.py::_BUDGETS` | |
 
 Lab switch (`app_settings.lab_enabled`, default off, seen by every process within 30 s; `app_settings.py::lab_on` logs one info line per job per day when skipping): gates exactly seven call sites: `scheduler.py::_learn`, `autorun.py::_preopen_plans`, `autorun.py::tick` (intraday auto-run; running slots stop as if turned off), `reactor.py::_scan_user` (only the autopilot hand-off; the scan and its proposals still happen), `learning/retune.py::start_if_due`, `plan/revise.py::loop`, `builder/draft.py::start_if_due`. NOT Lab-gated: news pipeline, brief, regime, daily scan, analyst verdicts, plan replay, chat, research. The per-feature switch (`feature_enabled`) is separate: it makes `get_llm` return None and stops `process_loop` triage/scoring.
@@ -226,10 +223,8 @@ All behind `get_current_user` (router-level dependency in `backend/server.py`, p
 
 | Method path | handler | response keys the frontend reads |
 |---|---|---|
-| GET `/news/market` | `components/analyst/news.py::fetch_market_news` | `articles[]` |
-| GET `/news/feed?scope&mine&material&before&limit<=100` | `news.py::news_feed` | `items[]`: `id,title,url,source,published_at,scope,themes,event,impacts,symbols,material,status` (`frontend/src/utils/api.js::newsFeed`) |
+| GET `/news/feed?scope&mine&material&before&limit<=100` | `routers/news.py::news_feed` | `items[]`: `id,title,url,source,published_at,scope,themes,event,impacts,symbols,material,status` (`frontend/src/utils/api.js::newsFeed`) |
 | GET `/news/symbols?symbols=A,B` (<=100) | `news.py::symbol_news` | `symbols{SYM:{sentiment,headline,url,direction,impact,material,published_at}}` (72h window) |
-| POST `/stock_info`, GET `/stock_info/{symbol}` | `components/master/stock_info.py` | `company_info{...}` |
 | GET `/plan/today` | `routers/plan.py::plan_today` | `plan, versions[{version,at,trigger,risk_multiplier,skip_day,rationale}], scorecards[{date,a,b,plan_versions}], weeks_beating` (`frontend/src/utils/plan.js`) |
 | GET `/chat/actions/pending` | `chat_actions.py::pending_actions` | `[{id,kind,summary,venue,needs_second_tap,expires_at}]` |
 | POST `/chat/actions/{id}/confirm` body `{second_tap}` | `chat_actions.py::confirm_action` | `status` CONFIRMED / NEEDS_SECOND_TAP, `result`; 409 `detail` on `ActionRefused` |
