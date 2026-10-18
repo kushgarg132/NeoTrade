@@ -100,7 +100,8 @@ are bound to the caller's `user_id`; `query_my_data` reads allow-listed collecti
 with that id and never secrets (`broker_credentials`, `alert_channels`, `refresh_tokens`,
 `users`, `app_settings`). Actions are **cards**: a record in `chat_actions` that does
 nothing until `POST /chat/actions/{id}/confirm`, which re-runs every check (twice for a
-live order). Cards on your own account go to `mine` only. The same agent answers your
+live order: the first call returns a one-time `confirm_token`, `backend/risk/live_confirm.py`,
+that the second must send). Cards on your own account go to `mine` only. The same agent answers your
 linked Telegram chat (`backend/guardrails/telegram_bot.py`): one long-poller per bot under
 a Redis lock, streamed replies, Confirm / Cancel buttons through the same confirm path.
 

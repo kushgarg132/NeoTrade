@@ -176,6 +176,16 @@ def live_client(client, mongo, monkeypatch):
     return client
 
 
+def _approve_live(client, suggestion):
+    """Both taps: the first returns a token, the second presents it."""
+    url = f"/api/v1/suggestions/{suggestion['id']}/approve-live"
+    first = client.post(url)
+    if first.status_code != 200:
+        return first
+    assert first.json()["status"] == "NEEDS_SECOND_TAP", first.text
+    return client.post(url, json={"confirm_token": first.json()["confirm_token"]})
+
+
 def _with_broker(client, broker):
     async def find(user_id):
         return broker
@@ -188,7 +198,7 @@ def test_approve_live_places_a_real_option_order_and_books_a_live_fill(live_clie
     _with_broker(live_client, broker)
     suggestion = asyncio.run(_seed(store, proposal=_option_proposal()))
 
-    resp = live_client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
+    resp = _approve_live(live_client, suggestion)
 
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] == "EXECUTED" and resp.json()["venue"] == "live"
@@ -197,7 +207,7 @@ def test_approve_live_places_a_real_option_order_and_books_a_live_fill(live_clie
     (fill,) = asyncio.run(ledger.get_fills())
     assert (fill.venue, fill.price, fill.quantity) == ("live", 40.5, 250.0)
 
-    again = live_client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
+    again = _approve_live(live_client, suggestion)
     assert again.status_code == 409 and len(broker.placed) == 1
 
 
@@ -206,7 +216,7 @@ def test_approve_live_refused_by_the_broker_goes_back_to_pending(live_client, st
     _with_broker(live_client, _FakeBroker(fail="insufficient margin"))
     suggestion = asyncio.run(_seed(store, proposal=_option_proposal()))
 
-    resp = live_client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
+    resp = _approve_live(live_client, suggestion)
 
     assert resp.status_code == 502 and "insufficient margin" in resp.json()["detail"]
     assert asyncio.run(store.get("alice", suggestion["id"]))["status"] == "PENDING"
@@ -221,7 +231,7 @@ def test_approve_live_needs_an_option_a_broker_and_no_kill_switch(live_client, s
 
     _with_broker(live_client, None)
     option = asyncio.run(_seed(store, proposal=_option_proposal()))
-    resp = live_client.post(f"/api/v1/suggestions/{option['id']}/approve-live")
+    resp = _approve_live(live_client, option)
     assert resp.status_code == 409 and "Connect Kite or Upstox" in resp.json()["detail"]
 
     broker = _FakeBroker()
@@ -229,7 +239,7 @@ def test_approve_live_needs_an_option_a_broker_and_no_kill_switch(live_client, s
     # The route's own (patched) clock decides "today", not the wall clock.
     today = suggestions_router._now().astimezone(IST).date()
     asyncio.run(KillSwitchStore(mongo).trip("alice", today, reason="test", equity=-1.0))
-    resp = live_client.post(f"/api/v1/suggestions/{option['id']}/approve-live")
+    resp = _approve_live(live_client, option)
     assert resp.status_code == 409 and "Daily loss limit" in resp.json()["detail"]
     assert broker.placed == []
 
@@ -260,10 +270,6 @@ def _with_mine(client, broker):
     async def find(user_id):
         return broker
     client.app.dependency_overrides[suggestions_router.get_mine_broker] = lambda: find
-
-
-def _approve_live(client, suggestion):
-    return client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
 
 
 def test_equity_approve_live_places_a_market_order_on_mine(mine_client, store, ledger):
@@ -337,6 +343,44 @@ def test_equity_approve_live_twice_places_one_order(mine_client, store):
     assert len(broker.placed) == 1
 
 
+def test_approve_live_places_only_with_a_valid_second_tap_token(mine_client, store, mongo, monkeypatch):
+    """One request never places a real order: the first returns a token, and
+    a missing, made-up, foreign, reused, expired or stale token places nothing."""
+    import asyncio
+
+    from backend.risk import live_confirm
+
+    broker = _FakeMine()
+    _with_mine(mine_client, broker)
+    suggestion = asyncio.run(_seed(store))
+    url = f"/api/v1/suggestions/{suggestion['id']}/approve-live"
+    tap = lambda token=None: mine_client.post(url, json={"confirm_token": token} if token else None)  # noqa: E731
+
+    first = tap().json()
+    assert first["status"] == "NEEDS_SECOND_TAP" and first["expires_in"] == 60 and broker.placed == []
+    assert tap("made-up").status_code == 409
+    # Another user's token for this very proposal: 403.
+    bobs = asyncio.run(live_confirm.issue(None, "bob", f"suggestion:{suggestion['id']}",
+                                          suggestions_router._order_terms(suggestion)))
+    assert tap(bobs).status_code == 403
+    # Terms changed between the taps: the token is void.
+    asyncio.run(mongo["suggestions"].update_one({"id": suggestion["id"]}, {"$set": {"quantity": 50}}))
+    stale = tap(first["confirm_token"])
+    assert stale.status_code == 409 and "different order" in stale.json()["detail"]
+    asyncio.run(mongo["suggestions"].update_one({"id": suggestion["id"]}, {"$set": {"quantity": 10}}))
+    # Expired.
+    token = tap().json()["confirm_token"]
+    later = live_confirm.time.monotonic() + 61
+    with monkeypatch.context() as m:
+        m.setattr(live_confirm.time, "monotonic", lambda: later)
+        assert tap(token).status_code == 409
+    assert broker.placed == [] and asyncio.run(store.get("alice", suggestion["id"]))["status"] == "PENDING"
+    # Happy path: exactly one order; the token cannot be spent again.
+    token = tap().json()["confirm_token"]
+    assert tap(token).json()["status"] == "EXECUTED"
+    assert tap(token).status_code == 409 and len(broker.placed) == 1
+
+
 def test_equity_sell_cannot_be_approved_with_real_money(mine_client, store, mongo):
     """A SELL proposal exits a paper position; approved live it would sell the
     user's own shares, which the paper position never bought."""
@@ -385,7 +429,7 @@ def test_an_option_cannot_be_approved_live_outside_market_hours(live_client, sto
     _with_broker(live_client, broker)
     monkeypatch.setattr(suggestions_router, "_now", lambda: datetime(2026, 10, 4, 5, 0, tzinfo=timezone.utc))  # Sunday
     option = asyncio.run(_seed(store, proposal=_option_proposal()))
-    resp = live_client.post(f"/api/v1/suggestions/{option['id']}/approve-live")
+    resp = _approve_live(live_client, option)
     assert resp.status_code == 409 and "market is closed" in resp.json()["detail"]
     assert broker.placed == []
 
@@ -400,7 +444,7 @@ def test_an_option_over_the_per_trade_cap_is_refused(live_client, store, mongo):
     suggestion = asyncio.run(_seed(store, proposal=proposal))
     asyncio.run(mongo["suggestions"].update_one(
         {"id": suggestion["id"]}, {"$set": {"option_contract.margin_estimate": 80_000.0}}))
-    resp = live_client.post(f"/api/v1/suggestions/{suggestion['id']}/approve-live")
+    resp = _approve_live(live_client, suggestion)
     assert resp.status_code == 409 and "per-trade cap" in resp.json()["detail"]
     assert broker.placed == []
 

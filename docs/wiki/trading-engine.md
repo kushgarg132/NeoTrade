@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: 7c0918b
+verified_at: 38465c2
 ---
 # Trading engine
 
@@ -43,6 +43,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/risk/gate_backtest.py` | Runs a 1y gate backtest and records it | `gate_backtest.py::backtest_for_gate`, `::intraday_history`, `::backtest_account` |
 | `backend/risk/rules.py` | Position-size and exposure helpers used by `size_intents` | `rules.py::RiskRules` |
 | `backend/risk/kill_switch.py` | Daily loss trip, persisted | `kill_switch.py::should_trip`, `::KillSwitchStore` |
+| `backend/risk/live_confirm.py` | Server-checked second tap for real money on `mine`: one-time 60 s token bound to user, subject, terms hash | `live_confirm.py::issue`, `::redeem`, `::TokenRefused` |
 | `backend/autopilot/fence.py` | Pure order fence (every autopilot order) | `fence.py::check`, `::FenceState`, `::trade_cap` |
 | `backend/autopilot/service.py` | Fence -> fill (paper/live) -> log -> Telegram | `service.py::submit`, `::_submit`, `::_state`, `::check_exits`, `::ledger_user`, `::book`, `::ai_book_query` |
 | `backend/autopilot/picks.py` | AI account trades stored Picks | `picks.py::enter`, `::exit_due`, `::live_allowed` |

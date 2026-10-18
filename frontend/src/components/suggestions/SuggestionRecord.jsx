@@ -98,6 +98,7 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
   // Real money takes two taps: the first only says what will be sent.
   const [confirmLive, setConfirmLive] = useState(false);
   const liveArmedAt = useRef(0);
+  const liveToken = useRef(null); // the server's one-time token from the first tap
   // Grounds and thesis are a tap away: the terms, risk and score are what Approve needs.
   const [why, setWhy] = useState(false);
   const canGoLive = Boolean(onApproveLive);
@@ -111,7 +112,7 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
     setBusy(kind);
     setFailure(null);
     try {
-      await { live: onApproveLive, reject: onReject }[kind]();
+      await { live: () => onApproveLive(liveToken.current), reject: onReject }[kind]();
     } catch (err) {
       setFailure(
         err?.response?.data?.detail ||
@@ -276,9 +277,20 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
                 variant={confirmLive ? 'danger' : 'secondary'}
                 size="sm"
                 className="mt-2 w-full"
-                onClick={() => {
+                onClick={async () => {
                   // A fast double tap is one gesture, not two taps: the send arms after 600ms.
                   if (confirmLive) return Date.now() >= liveArmedAt.current && act('live');
+                  // First tap: the server returns the token the second must send.
+                  setBusy('live');
+                  setFailure(null);
+                  try {
+                    liveToken.current = (await onApproveLive()).confirm_token;
+                  } catch (err) {
+                    setFailure(err?.response?.data?.detail || 'Could not place the order');
+                    return;
+                  } finally {
+                    setBusy(null);
+                  }
                   // The second tap sends real money: show the risk, premium and
                   // margin (all under Why) before it.
                   liveArmedAt.current = Date.now() + 600;

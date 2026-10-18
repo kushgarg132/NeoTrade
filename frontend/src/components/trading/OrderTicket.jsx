@@ -57,7 +57,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
   const [quantity, setQuantity] = useState(String(initialQuantity ?? 1));
   const [hasMine, setHasMine] = useState(null);
   const [card, setCard] = useState(null);
-  const [needsSecondTap, setNeedsSecondTap] = useState(false);
+  const [confirmToken, setConfirmToken] = useState(null); // set by the first tap on real money
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -133,7 +133,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
     setter(value);
     if (card) api.post(endpoints.chat.cancel(card.id)).catch(() => {});
     setCard(null);
-    setNeedsSecondTap(false);
+    setConfirmToken(null);
     setError(null);
   };
 
@@ -162,9 +162,9 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
     setBusy(true);
     setError(null);
     try {
-      const res = await api.post(endpoints.chat.confirm(card.id), { second_tap: needsSecondTap });
+      const res = await api.post(endpoints.chat.confirm(card.id), { confirm_token: confirmToken });
       if (res.data.status === 'NEEDS_SECOND_TAP') {
-        setNeedsSecondTap(true);
+        setConfirmToken(res.data.confirm_token);
         setArming(true);
         setTimeout(() => setArming(false), 600);
       } else {
@@ -175,7 +175,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
       // No response at all: the order may be placed. Never say it was not.
       setError(err?.response ? detailText(err, 'The order was not placed.') : 'No answer from the server. The order may have gone through: check Mine › Journal before trying again.');
       setCard(null);
-      setNeedsSecondTap(false);
+      setConfirmToken(null);
     } finally {
       setBusy(false);
     }
@@ -299,12 +299,12 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
               </Button>
             ) : (
               <Button
-                className={cn('w-full', needsSecondTap && 'bg-[var(--stamp)] border-[var(--stamp)]')}
+                className={cn('w-full', confirmToken && 'bg-[var(--stamp)] border-[var(--stamp)]')}
                 onClick={confirm}
                 disabled={busy || arming}
               >
                 {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {needsSecondTap ? 'Real money. Tap Confirm again' : 'Confirm'}
+                {confirmToken ? 'Real money. Tap Confirm again' : 'Confirm'}
               </Button>
             )}
           </>

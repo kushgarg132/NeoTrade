@@ -4,6 +4,7 @@ import pytest
 from mongomock_motor import AsyncMongoMockClient
 
 from backend.guardrails import telegram_bot
+from backend.tests.test_chat_actions import _propose, env  # noqa: F401 (fixture)
 
 
 async def test_poll_only_answers_a_chat_linked_to_that_bot(monkeypatch):
@@ -156,29 +157,36 @@ async def test_callback_uses_existing_confirm_path(monkeypatch):
     send.assert_not_awaited()
 
 
-async def test_live_card_asks_for_a_second_tap_then_sends(monkeypatch):
-    """Real money takes two taps in Telegram too: the first re-arms the card
-    with a Send button, the second confirms with second_tap."""
-    db = AsyncMongoMockClient()["test_db"]
-    confirmed = AsyncMock(side_effect=[
-        {"status": "NEEDS_SECOND_TAP", "result": "Real money. Tap Confirm again to send it."},
-        {"status": "CONFIRMED", "result": "Live BUY INFY sent."},
-    ])
-    monkeypatch.setattr(telegram_bot, "confirm", confirmed)
+async def test_live_card_needs_two_server_checked_taps(env, monkeypatch):
+    """End to end with the real confirm: the first tap places nothing and
+    re-arms the card with a Send button carrying a one-time token; a second
+    tap without that token, or with a forged one, places nothing; the real
+    one places exactly one order and cannot be replayed."""
+    db = env["db"]
+    card = await _propose(db, "propose_order", {"symbol": "INFY", "side": "BUY", "quantity": 10, "venue": "live"})
+    monkeypatch.setattr(telegram_bot, "get_credential_store", lambda: None)
     monkeypatch.setattr(telegram_bot.telegram, "answer_callback", AsyncMock())
     edit = AsyncMock()
     monkeypatch.setattr(telegram_bot.telegram, "edit_html", edit)
-    card = {"message_id": 7, "text": "Buy 10 INFY with real money"}
+    message = {"message_id": 7, "text": "Buy 10 INFY with real money"}
 
-    await telegram_bot._callback(db, None, "alice", 42, "token", {"id": "cb1", "data": "nt:confirm:a1", "message": card})
-    assert confirmed.await_args_list[0].kwargs.get("second_tap", False) is False
-    text, markup = edit.await_args.args[2], edit.await_args.kwargs["reply_markup"]
-    assert "✅" not in text and "Real money" in text
-    assert markup["inline_keyboard"][0][0]["callback_data"] == "nt:confirm2:a1"
+    async def tap(data):
+        await telegram_bot._callback(db, None, "alice", 42, "token", {"id": "cb", "data": data, "message": message})
+        return edit.await_args
 
-    await telegram_bot._callback(db, None, "alice", 42, "token", {"id": "cb2", "data": "nt:confirm2:a1", "message": card})
-    assert confirmed.await_args_list[1].kwargs["second_tap"] is True
-    assert edit.await_args.args[2].endswith("✅ Live BUY INFY sent.")
+    first = await tap(f"nt:confirm:{card['id']}")
+    send = first.kwargs["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
+    assert "Real money" in first.args[2] and env["broker"].placed == []
+    assert send.startswith(f"nt:confirm2:{card['id']}.") and len(send.encode()) <= 64
+
+    await tap(f"nt:confirm2:{card['id']}")  # no token: just re-armed
+    forged = await tap(f"nt:confirm2:{card['id']}.forged")
+    assert env["broker"].placed == []
+    assert forged.kwargs["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == f"nt:confirm:{card['id']}"
+
+    assert (await tap(send)).args[2].endswith("✅ Sent to your broker: filled, 10 of 10 filled.")
+    await tap(send)
+    assert len(env["broker"].placed) == 1
 
 
 async def test_start_code_is_stashed_for_settings_link_flow(monkeypatch):

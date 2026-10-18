@@ -25,6 +25,7 @@ from backend.engine.persistence import LedgerStore, mine_book
 from backend.engine.session import IST
 from backend.instruments.master import InstrumentMaster
 from backend.prefs import PrefsStore
+from backend.risk import live_confirm
 from backend.risk.kill_switch import KillSwitchStore
 from backend.runs import RunStore
 from backend.suggestions.service import execute_live_order
@@ -433,7 +434,11 @@ def action_tools(db, redis, user_id: str, message: str) -> list:
 # Confirm: the only place an action runs.
 # ---------------------------------------------------------------------------
 
-async def confirm(db, redis, credentials, user_id: str, action_id: str, second_tap: bool = False) -> dict:
+async def confirm(db, redis, credentials, user_id: str, action_id: str, confirm_token: Optional[str] = None) -> dict:
+    """A real-money card runs in two calls: the first returns NEEDS_SECOND_TAP
+    and a `confirm_token` (backend/risk/live_confirm.py), the second must
+    present it. Anything wrong with the token: the card stays PROPOSED and
+    TokenRefused is raised before any check or order."""
     store = ChatActionStore(db)
     action = await store.claim(user_id, action_id)
     if action is None:
@@ -445,9 +450,18 @@ async def confirm(db, redis, credentials, user_id: str, action_id: str, second_t
             raise ActionRefused("This card expired. Ask again for a fresh one.")
         raise ActionRefused(f"This action is already {existing['status'].lower()}.")
 
-    if action["needs_second_tap"] and not second_tap:
-        await store.set_status(action_id, "PROPOSED")
-        return {"status": "NEEDS_SECOND_TAP", "result": "Real money. Tap Confirm again to send it."}
+    if action["needs_second_tap"]:
+        subject = f"action:{action_id}"
+        if not confirm_token:
+            await store.set_status(action_id, "PROPOSED")
+            token = await live_confirm.issue(redis, user_id, subject, action["params"])
+            return {"status": "NEEDS_SECOND_TAP", "result": "Real money. Tap Confirm again to send it.",
+                    "confirm_token": token, "expires_in": live_confirm.TTL_SECONDS}
+        try:
+            await live_confirm.redeem(redis, user_id, subject, action["params"], confirm_token)
+        except live_confirm.TokenRefused:
+            await store.set_status(action_id, "PROPOSED")
+            raise
 
     try:
         result = await _execute(db, credentials, user_id, action)
@@ -483,7 +497,8 @@ async def _execute(db, credentials, user_id: str, action: dict) -> str:
             return "Declined."
         if not params.get("live"):
             raise ActionRefused(PAPER_APPROVALS_GONE)
-        done = await routes.approve_suggestion_live(
+        # The card's own token was just spent: place it (every check runs again there).
+        done = await routes.place_live_approval(
             params["suggestion_id"], user=user, store=store, ledger=ledger, options_broker=routes._options_broker,
             mine_broker=routes._mine_broker, mark_price=_mark_price,
         )

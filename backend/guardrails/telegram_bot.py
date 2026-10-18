@@ -22,6 +22,7 @@ from aiogram.filters.callback_data import CallbackData
 from backend.auth.broker_credentials import get_credential_store
 from backend.chat import agent
 from backend.chat.actions import ActionRefused, ChatActionStore, confirm
+from backend.risk.live_confirm import TokenRefused
 from backend.guardrails import telegram
 from backend.guardrails.store import GuardrailStore
 from backend.llm import LIMIT_MESSAGE, DailyLimitReached, use_model
@@ -76,8 +77,9 @@ TELEGRAM_CONTEXT = {"page": "Telegram chat on a phone (action cards appear right
 
 
 class Tap(CallbackData, prefix="nt"):
-    """Every NeoTrade button's callback data, "nt:<command>:<id>": confirm,
-    confirm2 (the real-money second tap), cancel and an action id; ask and a
+    """Every NeoTrade button's callback data, "nt:<command>:<id>": confirm or
+    cancel and an action id; confirm2 (the real-money second tap) and
+    "<action id>.<confirm token>" from the first tap; ask and a
     suggestion index; autopilot and "off" (autopilot/service.STOP_BUTTON)."""
     command: str
     id: str
@@ -382,13 +384,14 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
         return
     done = False
     card = callback.get("message") or {}
+    action_id, _, confirm_token = action_id.partition(".")
     try:
         if command == "cancel":
             changed = await ChatActionStore(db).cancel(user_id, action_id)
             result = "Cancelled." if changed else "That action can no longer be cancelled."
         else:
             outcome = await confirm(db, redis, get_credential_store(), user_id, action_id,
-                                    second_tap=command == "confirm2")
+                                    confirm_token=confirm_token if command == "confirm2" else None)
             result = outcome["result"]
             if outcome["status"] == "NEEDS_SECOND_TAP" and card.get("message_id"):
                 # Real money: the card re-arms with a Send button; that tap is the second.
@@ -397,11 +400,20 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
                     chat_id, card["message_id"],
                     f"{html.escape(card.get('text') or '', quote=False)}\n\n⚠️ Real money. Tap Send real order to place it.",
                     token, reply_markup={"inline_keyboard": [[
-                        {"text": "Send real order", "callback_data": Tap(command="confirm2", id=action_id).pack()},
+                        {"text": "Send real order", "callback_data": Tap(
+                            command="confirm2", id=f"{action_id}.{outcome['confirm_token']}").pack()},
                         {"text": "Cancel", "callback_data": Tap(command="cancel", id=action_id).pack()},
                     ]]})
                 return
             done = True
+    except TokenRefused as exc:
+        # Nothing sent and the card is still open: offer Confirm again for a fresh token.
+        await telegram.answer_callback(callback_id, str(exc)[:180], token)
+        if card.get("message_id"):
+            await telegram.edit_html(chat_id, card["message_id"],
+                                     f"{html.escape(card.get('text') or '', quote=False)}\n\n✖ {html.escape(str(exc), quote=False)}",
+                                     token, reply_markup={"inline_keyboard": _buttons({"id": action_id})})
+        return
     except ActionRefused as exc:
         result = str(exc)
     except Exception:

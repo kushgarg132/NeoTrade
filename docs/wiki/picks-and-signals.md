@@ -180,7 +180,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 | POST `/suggestions/scan` 202 | `routers/suggestions.py::scan_now` | user | `{started, symbols}`; body `universe` ≤300 |
 | GET `/suggestions?mode&status&limit` | `::list_suggestions` | user | suggestion docs filtered by `for_mine` |
 | POST `/suggestions/{id}/reject` | `::reject_suggestion` | user | decided doc; 404 if not pending |
-| POST `/suggestions/{id}/approve-live` | `::approve_suggestion_live` | user | settled doc (`status`, `reason`, `order_id`, `venue`, `filled_quantity`); 409/400/502/503 errors |
+| POST `/suggestions/{id}/approve-live` body `{confirm_token}` | `::approve_suggestion_live` -> `::place_live_approval` | user | no token: `{status:'NEEDS_SECOND_TAP', confirm_token, expires_in}`; with it: settled doc (`status`, `reason`, `order_id`, `venue`, `filled_quantity`); 409/400/502/503 errors (403 another user's token) |
 
 Related, outside the globs: `/strategies/built*`, `/strategies/library` (→ `learning/library.py::catalog`), `/strategies/vocabulary`, `/strategies/describe` in `routers/settings.py`; `GET /journal/learning` (→ `learning/report.py::snapshot`, `routers/journal.py::get_learning`); `POST /system/builder/run` (`system/router.py`). Frontend paths: `frontend/src/utils/api.js` `picks`, `suggestions`.
 

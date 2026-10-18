@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 7c0918b
+verified_at: 38465c2
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -177,7 +177,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
     (`GuardrailStore.telegram_routes`). It takes a lock and long-polls (25s). It commits the offset before handling.
     It ignores chats with negative ids, then dispatches to `::_reply` (shortcut commands, then `chat.agent.stream_chat`
     with a live draft) or `::_callback` (confirm/confirm2/cancel through `chat.actions.confirm`). Button data is
-    `nt:<command>:<id>`, packed and parsed by the aiogram `CallbackData` `::Tap`; data that does not parse is ignored.
+    `nt:<command>:<id>`; confirm2's id is `<action id>.<confirm_token>` from the first tap (60 bytes, under Telegram's 64), packed and parsed by the aiogram `CallbackData` `::Tap`; data that does not parse is ignored.
     A failed getUpdates logs one line (aiogram errors carry no token) and sleeps `FAIL_BACKOFF_SECONDS` (10) holding the lock.
 15. **GET /today**: `routers/today.py::today`. Each part is wrapped in `part()`, which on failure returns None and
     records `errors[name]`. Parts:
@@ -241,7 +241,8 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
   (`set_round_trip_note` returns 404 otherwise).
 - **Telegram safety.** Only private chats (positive id) are accepted (`_poll_bot`). Bot tokens are Fernet-encrypted
   and never returned. Redis keys hash the token. Storing a token without `CREDENTIAL_ENCRYPTION_KEY` raises
-  (`guardrails/store.py::set_telegram_bot`). Real-money cards need a second tap (`confirm2`).
+  (`guardrails/store.py::set_telegram_bot`). Real-money cards need a second tap (`confirm2`) carrying the server's one-time token; a refused token
+  re-arms the card with Confirm/Cancel and sends nothing.
 - **Tax rates live only in `mine/tax.py`** (STCG 20%, LTCG 12.5% above Rs 1.25 lakh). `/mine/tax` rejects
   `fy < 2025` (`routers/mine.py::TAX_FIRST_FY`). Long-term means held more than 12 calendar months
   (`tax.py::long_from`).

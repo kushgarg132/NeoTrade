@@ -31,6 +31,7 @@ from backend.core.models import Order, Side
 from backend.brokers.registry import BROKERS, get_broker_adapter
 from backend.engine.execution.live_order_store import LiveOrderStore
 from backend.engine.session import IST
+from backend.risk import live_confirm
 from backend.risk.kill_switch import KillSwitchStore
 from backend.suggestions.service import execute_option_suggestion_live
 from backend.suggestions.store import SuggestionStore
@@ -175,9 +176,20 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class ApproveLiveRequest(BaseModel):
+    confirm_token: Optional[str] = None  # from the first call
+
+
+def _order_terms(suggestion: dict) -> dict:
+    """What the second tap is bound to: a change to any of these between the
+    taps voids the token."""
+    return {k: suggestion.get(k) for k in ("symbol", "side", "quantity", "mode", "option_contract")}
+
+
 @router.post("/{suggestion_id}/approve-live")
 async def approve_suggestion_live(
     suggestion_id: str,
+    body: ApproveLiveRequest = ApproveLiveRequest(),
     user: User = Depends(get_current_user),
     store: SuggestionStore = Depends(get_suggestion_store),
     ledger: LedgerStore = Depends(get_ledger_store),
@@ -185,6 +197,27 @@ async def approve_suggestion_live(
     mine_broker=Depends(get_mine_broker),
     mark_price=Depends(get_mark_price),
 ):
+    """Two calls, both server-checked: without `confirm_token` it returns
+    NEEDS_SECOND_TAP and a token (backend/risk/live_confirm.py); with it,
+    the token is spent and the order is placed with every check run again."""
+    suggestion = await store.get(user.id, suggestion_id)
+    if suggestion is None:
+        raise HTTPException(status_code=404, detail="No such suggestion")
+    if suggestion["status"] != "PENDING":
+        raise HTTPException(status_code=409, detail=f"Suggestion already {suggestion['status'].lower()}")
+    subject, terms = f"suggestion:{suggestion_id}", _order_terms(suggestion)
+    if not body.confirm_token:
+        token = await live_confirm.issue(db.redis, user.id, subject, terms)
+        return {"status": "NEEDS_SECOND_TAP", "result": live_confirm.NEEDS_SECOND_TAP,
+                "confirm_token": token, "expires_in": live_confirm.TTL_SECONDS}
+    try:
+        await live_confirm.redeem(db.redis, user.id, subject, terms, body.confirm_token)
+    except live_confirm.TokenRefused as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    return await place_live_approval(suggestion_id, user, store, ledger, options_broker, mine_broker, mark_price)
+
+
+async def place_live_approval(suggestion_id: str, user, store, ledger, options_broker, mine_broker, mark_price):
     """Sends a proposal to the user's own broker account as a real order --
     a person's tap placing real money, so: never the AI account, not on a day
     the kill-switch tripped, and claimed before the order goes out so a
