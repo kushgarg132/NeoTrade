@@ -12,7 +12,7 @@ entirely (the hub interface stays the same).
 import asyncio
 import logging
 
-from backend.analytics import compute_pnl
+from backend.analytics import compute_live_pnl, compute_pnl
 from backend.engine.persistence import LedgerStore
 from backend.marks import mark_prices
 from backend.ws.hub import hub
@@ -40,13 +40,15 @@ async def push_once(db) -> dict:
         missing = [s for s in positions if s not in marks]
         user_marks = {**marks, **(await mark_prices(db, missing) if missing else {})}
         # Both books in one message, keyed by venue: the Paper tab reads
-        # `paper`, the real-money statement reads `live`, and neither ever
-        # shows the other's figures. The combined figures stay at the top
+        # `paper`, the real-money statement reads `live.mine` / `live.ai`, and
+        # neither ever shows the other's figures. The combined figures stay at the top
         # level for a browser still running the build from before venues,
         # which reads `today`/`month`/`open` there and would crash without.
         await hub.publish(user_id, PNL_TOPIC, "updated", {
             **await compute_pnl(ledger, user_marks),
-            **{venue: await compute_pnl(ledger, user_marks, venue=venue) for venue in ("paper", "live")},
+            "paper": await compute_pnl(ledger, user_marks, venue="paper"),
+            # {mine, ai}: separate real-money books, see compute_live_pnl.
+            "live": await compute_live_pnl(db, user_id, user_marks, marks_fn=mark_prices),
         })
 
     return {"symbols": len(marks), "pnl_users": len(pnl_users)}

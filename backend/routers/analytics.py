@@ -7,7 +7,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends
 
-from backend.analytics import compute_pnl, compute_scorecard
+from backend.analytics import compute_live_pnl, compute_pnl, compute_scorecard
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.core.models import Venue
@@ -33,7 +33,11 @@ async def get_pnl(
     ledger: LedgerStore = Depends(get_ledger_store),
 ):
     """`venue=paper` is the Paper tab's book, `venue=live` real engine orders;
-    omitted, both combined. `mode` narrows to the intraday or long-term engine."""
+    omitted, both combined. `mode` narrows to the intraday or long-term engine.
+    `venue=live` returns `{mine: <pnl>, ai: <pnl>}`: the two real-money books
+    (your account, the AI account) are separate and never summed."""
+    if venue == "live":
+        return await compute_live_pnl(db.db, ledger.user_id, {}, mode=mode)
     positions = await ledger.get_open_positions(venue=venue)
     marks = await mark_prices(db.db, positions.keys())
     return await compute_pnl(ledger, marks, venue=venue, mode=mode)

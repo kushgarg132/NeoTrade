@@ -89,17 +89,24 @@ async def test_pnl_subscribers_get_a_recomputed_snapshot(mongo, hub, quotes):
     # An untagged position is paper, so it lands in that book only.
     assert message["data"]["paper"]["today"]["unrealized"] == pytest.approx(110.0)
     assert message["data"]["paper"]["open"]["positions"] == 1
-    assert message["data"]["live"]["open"]["positions"] == 0
+    assert message["data"]["live"]["mine"]["open"]["positions"] == 0
+    assert message["data"]["live"]["ai"]["open"]["positions"] == 0
     # A pre-venue browser still finds the combined figures where it looks.
     assert message["data"]["open"]["positions"] == 1
 
 
 @pytest.mark.asyncio
 async def test_pnl_keeps_live_and_paper_books_apart(mongo, hub, quotes):
-    ledger = LedgerStore(mongo, user_id="alice")
-    await ledger.snapshot_positions({
-        "RELIANCE": Position(symbol="RELIANCE", quantity=10.0, avg_price=100.0, venue="live"),
+    await LedgerStore(mongo, user_id="alice").snapshot_positions({
         "TCS": Position(symbol="TCS", quantity=5.0, avg_price=100.0, venue="paper"),
+    })
+    # Live fills land in the user's own book and the AI account's live book,
+    # reported as two figures, never one.
+    await LedgerStore(mongo, user_id="alice:mine").snapshot_positions({
+        "RELIANCE": Position(symbol="RELIANCE", quantity=10.0, avg_price=100.0, venue="live"),
+    })
+    await LedgerStore(mongo, user_id="alice:autopilot").snapshot_positions({
+        "INFY": Position(symbol="INFY", quantity=2.0, avg_price=100.0, venue="live"),
     })
     connection = hub.connect("alice")
     connection.subscribe(["pnl"])
@@ -107,8 +114,10 @@ async def test_pnl_keeps_live_and_paper_books_apart(mongo, hub, quotes):
     await pump_module.push_once(mongo)
 
     data = connection.queue.get_nowait()["data"]
-    assert data["live"]["open"]["positions"] == 1
-    assert data["live"]["today"]["unrealized"] == pytest.approx(110.0)
+    assert data["live"]["mine"]["open"]["positions"] == 1
+    assert data["live"]["mine"]["today"]["unrealized"] == pytest.approx(110.0)
+    assert data["live"]["ai"]["open"]["positions"] == 1
+    assert data["live"]["ai"]["today"]["unrealized"] == pytest.approx(22.0)
     assert data["paper"]["open"]["positions"] == 1
     assert data["paper"]["today"]["unrealized"] == pytest.approx(55.0)
 
@@ -124,4 +133,4 @@ async def test_pnl_does_not_leak_between_users(mongo, hub, quotes):
 
     data = bob.queue.get_nowait()["data"]
     assert data["paper"]["open"]["positions"] == 0
-    assert data["live"]["open"]["positions"] == 0
+    assert data["live"]["mine"]["open"]["positions"] == 0

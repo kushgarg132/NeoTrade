@@ -6,6 +6,7 @@ import SectionTabs from '../components/layout/SectionTabs';
 import { MINE_TABS } from '../components/layout/sections';
 import GuardrailAlerts from '../components/journal/GuardrailAlerts';
 import BrokerPnl from '../components/dashboard/BrokerPnl';
+import LivePnl from '../components/journal/LivePnl';
 import TradeLedger from '../components/dashboard/TradeLedger';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import MonthGrid from '../components/journal/MonthGrid';
@@ -199,6 +200,18 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
     loadLiveTrades();
   }, [habits]);
   useTopic('trades', loadLiveTrades);
+  // Real-money P&L, your account and the AI account as separate figures.
+  const [livePnl, setLivePnl] = useState(null);
+  const loadLivePnl = () =>
+    api
+      .get(endpoints.analytics.pnl('live'))
+      .then((res) => setLivePnl(res.data))
+      .catch(() => setLivePnl(null));
+  useEffect(() => {
+    loadLivePnl();
+  }, []);
+  useReconnect(loadLivePnl);
+  useTopic('pnl', (message) => message.data?.live && setLivePnl(message.data.live));
   useReconnect(loadLiveTrades);
 
   const run = (request, describe) => {
@@ -320,6 +333,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
         )}
         <GuardrailAlerts />
         {!habits && <BrokerPnl journal={data} loading={!data && !error} error={error} />}
+        {!habits && <LivePnl live={livePnl} />}
         {!habits && liveTrades.length > 0 && (
           <TradeLedger title="Orders placed from NeoTrade" trades={liveTrades} loading={false} error={null} />
         )}

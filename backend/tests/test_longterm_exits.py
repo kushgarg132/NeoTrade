@@ -182,6 +182,8 @@ async def test_a_stock_sold_in_the_broker_app_closes_its_trade():
     assert await check_exits(db, "alice", now=later, marks_fn=_marks({"SOLD": 80.0, "KEPT": 80.0})) != []
     trades = {t["symbol"]: t["status"] for t in await LedgerStore(db, user_id="alice:mine").get_trades()}
     assert trades == {"SOLD": "CLOSED", "KEPT": "OPEN"}
+    sold = await db["paper_trades"].find_one({"symbol": "SOLD"})
+    assert sold["closed_by"] == "inferred_from_holdings"
 
 
 @pytest.mark.asyncio

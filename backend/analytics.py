@@ -110,6 +110,25 @@ async def compute_pnl(
     }
 
 
+async def compute_live_pnl(db, user_id: str, marks: dict[str, float], mode: Optional[str] = None,
+                           marks_fn=None) -> dict:
+    """Real-money figures as two separate books, never summed: `mine` (orders
+    placed on the user's own account, `<uid>:mine`) and `ai` (the live
+    autopilot's `<uid>:autopilot`). Fills land in those namespaces, not in
+    `<uid>`, so reading `<uid>` with venue=live always came back empty.
+    `marks` may lack symbols held only live; the gap is fetched here."""
+    from backend.autopilot.service import ledger_user
+    from backend.engine.persistence import mine_book
+    from backend.marks import mark_prices
+
+    marks_fn = marks_fn or mark_prices
+    books = {"mine": LedgerStore(db, user_id=mine_book(user_id)),
+             "ai": LedgerStore(db, user_id=ledger_user(user_id))}
+    held = {s for b in books.values() for s in await b.get_open_positions(venue="live")}
+    marks = {**marks, **(await marks_fn(db, [s for s in held if s not in marks]) if held - marks.keys() else {})}
+    return {name: await compute_pnl(b, marks, venue="live", mode=mode) for name, b in books.items()}
+
+
 # ---------------------------------------------------------------------------
 # Scorecard: the track record a strategy is judged on before real money.
 # Every figure is net of charges (realized_pnl - costs): a strategy that only
