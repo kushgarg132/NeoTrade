@@ -13,8 +13,15 @@ FastAPI + MongoDB + Redis backend on this VM; React 19 + Vite frontend on Vercel
 
 ## Read these, in this order
 
+**Agents: start with the wiki, not the code.** `docs/wiki/INDEX.md` maps every area to a
+code-anchored page. Run `python3 docs/wiki/stale.py` first: trust current pages and open only
+the files you will change; for stale pages read only the changed files it lists. Before a
+whole-app scan or audit, run the `wiki-sync` skill. A code change updates its page's section
+and `verified_at` in the same commit.
+
 | Question | Document |
 |---|---|
+| Where is X, what calls Y, what runs when? | `docs/wiki/` (agent wiki, see above) |
 | What is this product, who uses it, what are the states that matter? | `PRODUCT.md` |
 | How does the code actually work? | `frontend/src/handbook/*.md` — the handbook, also in the app at `/system` |
 | **What should I work on right now?** | `docs/ROADMAP.md` — check the Status column |
