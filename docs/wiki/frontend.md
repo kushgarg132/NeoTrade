@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html, frontend/nginx.conf, frontend/Dockerfile]
-verified_at: 33b7971
+verified_at: 0865567
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -152,6 +152,7 @@ Source: `src/App.jsx::App`. `gated(x)` = `RequireAuth > ErrorBoundary > Suspense
 | `/research/options` | `OptionChain` | no | not a tab; `?u=NIFTY\|BANKNIFTY` |
 | `/settings` | `Settings` | no | `?tab=accounts\|safety\|ai\|about` |
 | `/profile` | `Profile` | no | |
+| `/import` | `Import` | no | no-broker onboarding: Console CSV (`POST /journal/import/zerodha-console`), CAS PDF + password (`POST /imports/cas`, multipart), consent note, `DELETE /imports`; linked from the Today setup checklist (`import_trades`, `import_funds`) and the empty Today/Mine/Journal states |
 | `/system` | `Handbook` | **yes** | `?tab=system\|trading\|ai\|ops\|journey` |
 | `/system/future` | `Backlog` | **yes** | |
 | `*` | `NotFound` (inside `Layout`) | no | gated |

@@ -24,6 +24,8 @@ from backend.datalayer import bars
 from backend.core.models import Holding
 from backend.journal.store import JournalStore
 from backend.marks import mark_prices
+from backend.mine import cas_import
+from backend.mine.cas_import import CAS_BROKER
 from backend.portfolio.health import stock_health
 from backend.portfolio.review import write_review
 from backend.portfolio.rules import fund_verdict, stock_verdict
@@ -115,7 +117,7 @@ def _returns(closes: list[tuple]) -> dict:
     return {day: close / prev - 1 for (_, prev), (day, close) in zip(closes, closes[1:]) if prev}
 
 
-async def fetch_holdings(user_id: str, credentials, redis, previous: dict | None = None) -> tuple[list, dict, list]:
+async def fetch_holdings(user_id: str, credentials, redis, previous: dict | None = None, db=None) -> tuple[list, dict, list]:
     """(holdings read now, the error per broker that failed, holdings carried
     over from `previous` for every broker not read now). A logged-out broker
     must not drop its holdings: with only Kite logged in, the Upstox account
@@ -131,13 +133,18 @@ async def fetch_holdings(user_id: str, credentials, redis, previous: dict | None
         except Exception as exc:
             logger.warning("portfolio: %s holdings failed for %s: %s", broker, user_id, exc)
             errors[broker] = str(exc)
+    # Funds the user uploaded from a CAS PDF (no broker needed). Always "read":
+    # deleting the upload must not leave the last snapshot's copy carried.
+    read.add(CAS_BROKER)
+    if db is not None:
+        holdings += [Holding(**h) for h in await cas_import.holdings_of(db, user_id)]
     carried = [Holding(**h) for h in (previous or {}).get("raw_holdings") or [] if h.get("broker") not in read]
     return holdings, errors, carried
 
 
 async def refresh_portfolio(db, user_id: str, credentials, redis, analyse: bool = True) -> dict:
     previous = await latest_snapshot(db, user_id)
-    holdings, errors, carried = await fetch_holdings(user_id, credentials, redis, previous)
+    holdings, errors, carried = await fetch_holdings(user_id, credentials, redis, previous, db)
     stale_since = (previous.get("stale_since") or previous["at"]) if carried else None
 
     listed = sorted({(h.symbol, h.exchange) for h in holdings + carried if h.kind != "MF"})
@@ -278,7 +285,7 @@ async def with_live_prices(db, user_id: str, snapshot: dict, credentials, redis)
     stored. Any broker down or logged out: the last holdings repriced from
     market quotes (stocks only), with `holdings_as_of` saying how old the
     list of holdings is -- never a days-old value shown as today's."""
-    holdings, _, carried = await fetch_holdings(user_id, credentials, redis, snapshot)
+    holdings, _, carried = await fetch_holdings(user_id, credentials, redis, snapshot, db)
     now = datetime.now(timezone.utc)
     raw = [h.model_dump() for h in carried]
     if raw:

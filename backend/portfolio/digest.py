@@ -73,7 +73,7 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
     # A logged-in broker is read now (its own prices and previous close, as
     # Mine -> Holdings shows); only a logged-out one is carried and quoted.
     try:
-        live, _, carried = await fetch_holdings(user_id, get_credential_store(), handle.redis, snapshot)
+        live, _, carried = await fetch_holdings(user_id, get_credential_store(), handle.redis, snapshot, db)
     except Exception as exc:
         logger.warning("pulse: broker read failed for %s, quoting the snapshot: %s", user_id, exc)
         live, carried = [], None

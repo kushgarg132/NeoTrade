@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
-covers: [backend/mine/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py]
-verified_at: b491ac1
+covers: [backend/mine/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
+verified_at: 0865567
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -54,6 +54,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 ## Data
 
 **Mongo**
+- `mf_imports` (`_id = user_id`: `holdings[]` as `Holding` dicts with `kind=MF, broker="cas", symbol=isin`, `period`, `imported_at`) and `mf_transactions` (`_id = "{user}:{n}"`: folio, isin, scheme, date, type, units, nav, amount): a CAMS/KFintech CAS PDF parsed by casparser in memory (`mine/cas_import.py::parse_cas`, `::from_cas`, `::save`); the PDF and its password are never stored or logged. A new upload replaces the last. `portfolio/service.py::fetch_holdings(..., db)` appends these holdings (broker `cas` is always "read", so deleting the upload drops them from the next snapshot). Not in `mine/lots` or `mine/tax` (stock trades only): MF capital gains are not built.
 - `journal_trades`: one doc per broker fill. `_id = "{user}:{broker}:{trade_id}"`, fields `user_id, broker, source`
   (`sync` / `console_csv` / `upstox_history`), `side` ("BUY"/"SELL"), `quantity, price, traded_at, symbol, exchange,
   imported_at`. Index `(user_id, traded_at)` (`journal/store.py::JournalStore.ensure_indexes`). It is written only
@@ -264,6 +265,9 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | GET /journal?account= | `routers/journal.py::get_journal` | user | `account,round_trips,calendar,insights,brokers_connected,summary{trips,pnl,wins,by_kind},mirror{costs,benchmark}` |
 | GET /journal/ai-vs-me | `::ai_vs_me` | user | monthly rows; no caller in `frontend/src/utils/api.js` |
 | POST /journal/sync | `::sync_journal` | user | `{imported,brokers,failed}` |
+| POST /imports/cas (multipart `file`,`password`) | `routers/imports.py::import_cas` | user | `{funds,transactions,period}`; 422 on wrong password / non-PDF / over 10 MB / NSDL-CDSL |
+| GET /imports | `::imported` | user | `{funds,period,imported_at,transactions,trades}` |
+| DELETE /imports | `::delete_imported` | user | `{transactions,trades}`: erases the CAS funds, their transactions and this user's `source=console_csv` fills, then re-reads holdings (DPDP) |
 | POST /journal/import/zerodha-console | `::import_console_csv` | user | `{imported,duplicates,skipped}` |
 | POST /journal/import/upstox-history | `::import_upstox` | user | `{imported,fetched,skipped_synced_days}`; 409 if not logged in, 502 if Upstox fails |
 | PUT /journal/round-trips/{id}/note | `::set_round_trip_note` | user (owner prefix) | `{note,tags}` |
@@ -274,6 +278,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 
 ## Gotchas and known issues
 
+- **CAS funds and broker roles.** `cas` is not a role-assignable broker, so once `broker_roles` has a `mine` broker, `brokers_for(roles, "mine")` excludes the `cas` funds from the Mine views. Fine for the no-broker user this is for; fix when a roles user imports a CAS. A CAS with no cost for a scheme gets cost = current value (no gain shown). `today.py::_setup` has two import steps (`import_trades`, `import_funds`) linking `/import`.
 - **Broker-roles default.** With no `broker_roles` set, `brokers_for` returns `set()`. Most code treats that as "all
   brokers are mine"; `journal/accounts.py::ai_vs_me` now does too (mine = every non-AI broker, AI book empty).
 - **Snapshots versus scorecard_for.** The stored card's `holdings` are mine-only, while `raw_holdings` cover all
@@ -326,6 +331,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 
 | file | covers |
 |---|---|
+| backend/tests/test_cas_import.py | CAS mapping (folio merge, zero balance, no cost), upload validation (password, non-PDF, size, NSDL), per-user scoping, delete, empty pages with no broker |
 | backend/tests/test_mine_actions.py | Needs-you ranking, stable ids, dismiss/snooze, verdict gate, Jan–Mar harvest, level alerts once, /today reading the list |
 | backend/tests/test_mine_history.py | xirr, replay inputs (clip, split, gap lot), `_store` diff and delete, `returns` |
 | backend/tests/test_mine_lots.py | FIFO, realised, unmatched, `split_ratio`, `reconcile`, `mine_trades` |

@@ -127,6 +127,7 @@ const Pulse = ({ pulse, failed, now, actions, total, onChanged }) => {
       <Sheet title="Your account">
         <p className="text-sm">No portfolio read yet.</p>
         <Link to="/mine/holdings" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Read it from your broker ›</Link>
+        <Link to="/import" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center ml-4">Or import your files ›</Link>
       </Sheet>
     );
   }

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
 import { MINE_TABS } from '../components/layout/sections';
@@ -64,9 +65,14 @@ const MineTax = () => {
     body = (
       <Sheet title="Tax">
         <Empty
-          title="Import your Upstox history to see tax"
-          detail="Tax is worked out from your trades, so it needs them first."
-          action={<button type="button" className={BUTTON} onClick={importHistory} disabled={busy}>{busy ? 'Importing…' : 'Import Upstox history'}</button>}
+          title="Import your trades to see tax"
+          detail="Tax is worked out from your trades, so it needs them first: a Zerodha Console tradebook CSV, or your Upstox history."
+          action={
+            <span className="flex flex-wrap justify-center gap-2">
+              <Link to="/import" className={`${BUTTON} inline-flex items-center`}>Import a tradebook</Link>
+              <button type="button" className={BUTTON} onClick={importHistory} disabled={busy}>{busy ? 'Importing…' : 'Import Upstox history'}</button>
+            </span>
+          }
         />
       </Sheet>
     );

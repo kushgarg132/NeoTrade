@@ -250,6 +250,10 @@ export const endpoints = {
     rebalance: '/portfolio/rebalance',
     candidates: '/portfolio/rebalance/candidates',
   },
+  imports: {
+    status: '/imports',
+    cas: '/imports/cas',
+  },
   journal: {
     get: '/journal',
     sync: '/journal/sync',
