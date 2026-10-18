@@ -11,7 +11,7 @@ they hold whichever client makes a given call. Nothing here touches a network.
 import gzip
 import json
 from dataclasses import dataclass, field
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 import httpx
 import urllib3
@@ -29,7 +29,8 @@ class Call:
 
     def __post_init__(self):
         parts = urlsplit(self.url)
-        self.host, self.path, self.query = parts.netloc, parts.path, dict(parse_qsl(parts.query))
+        # unquoted: "NSE_EQ|..." and "NSE_EQ%7C..." are the same path to Upstox
+        self.host, self.path, self.query = parts.netloc, unquote(parts.path), dict(parse_qsl(parts.query))
 
     @property
     def json(self):

@@ -1,10 +1,12 @@
-"""BrokerAdapter over Upstox's v2 REST API -- verified 2026-09-09 against
-https://upstox.com/developer/api-documentation (fetched live; no Upstox
-account exists to test against for real, matching this codebase's existing
-posture for Kite -- see backend/auth/kite_session.py's own docstring).
+"""BrokerAdapter over Upstox's v2/v3 REST API, through the official
+upstox-python SDK (upstox_client, pinned in requirements.txt). No Upstox
+account exists to test against for real; tests/test_upstox_adapter.py pins
+every request and mapping at the wire.
 
-No SDK: plain httpx calls, following the pattern the settings router already
-uses for the OmniRoute gateway.
+The SDK is synchronous (urllib3), so each call runs in a worker thread
+(`_call`), on one SDK client per access token. Two calls stay on httpx:
+the quote (the SDK sends `?symbol=`, this API documents `?instrument_key=`)
+and the instrument dumps (static files, not an API the SDK wraps).
 
 Real API surface used:
 - Authorize:  GET https://api.upstox.com/v2/login/authorization/dialog
@@ -83,9 +85,13 @@ import gzip
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Optional
 
 import httpx
+import upstox_client
+import urllib3
+from upstox_client.rest import ApiException
 
 from backend.brokers.expiry import ttl_seconds_until
 from backend.brokers.protocol import BrokerSessionState
@@ -97,26 +103,12 @@ from backend.data.feeds.live_upstox import UpstoxMarketFeed
 from backend.instruments.models import Instrument
 
 _AUTHORIZE_URL = "https://api.upstox.com/v2/login/authorization/dialog"
-_TOKEN_URL = "https://api.upstox.com/v2/login/authorization/token"
 _QUOTE_URL = "https://api.upstox.com/v2/market-quote/quotes"
-# v3: any minute interval (v2 had only 1m and 30m), from Jan 2022, free.
-_HISTORY_URL = "https://api.upstox.com/v3/historical-candle/{key}/{unit}/{n}/{to_date}/{from_date}"
 _SCRIP_URL = "https://assets.upstox.com/market-quote/instruments/exchange/{exchange}.json.gz"
-_PLACE_ORDER_URL = "https://api-hft.upstox.com/v2/order/place"
-_CANCEL_ORDER_URL = "https://api-hft.upstox.com/v2/order/cancel"
-_MODIFY_ORDER_URL = "https://api-hft.upstox.com/v2/order/modify"
-_ORDER_BOOK_URL = "https://api.upstox.com/v2/order/retrieve-all"
-_ORDER_DETAILS_URL = "https://api.upstox.com/v2/order/details"
-_POSITIONS_URL = "https://api.upstox.com/v2/portfolio/short-term-positions"
-_TRADES_URL = "https://api.upstox.com/v2/order/trades/get-trades-for-day"
-# Past trades by date range. Path, params and row fields from the official
-# upstox-python-sdk 2.30.0 (PostTradeApi.get_trades_by_date_range,
-# TradeHistoryResponseTradeData); not yet called against a real account.
-_TRADE_HISTORY_URL = "https://api.upstox.com/v2/charges/historical-trades"
+_API_VERSION = "2.0"
+# Past trades by date range (PostTradeApi.get_trades_by_date_range); not yet
+# called against a real account.
 _TRADE_HISTORY_PAGE_SIZE = 100
-_HOLDINGS_URL = "https://api.upstox.com/v2/portfolio/long-term-holdings"
-_OPTION_CONTRACT_URL = "https://api.upstox.com/v2/option/contract"
-_OPTION_CHAIN_URL = "https://api.upstox.com/v2/option/chain"
 
 _INTERVAL_MAP = {"1m": ("minutes", 1), "5m": ("minutes", 5), "15m": ("minutes", 15),
                  "30m": ("minutes", 30), "1d": ("days", 1)}
@@ -145,6 +137,31 @@ _PRODUCT_FROM_UPSTOX = {"I": "MIS", "D": "CNC"}
 _PRODUCT_MAP = {"MIS": "I", "CNC": "D", "NRML": "D"}
 
 logger = logging.getLogger(__name__)
+
+
+class UpstoxHTTPError(httpx.HTTPError):
+    """A failed SDK call. An httpx.HTTPError, so callers handle SDK and httpx
+    calls alike (the options router answers 502 for either)."""
+
+    def __init__(self, message: str, status: Optional[int] = None) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+@lru_cache(maxsize=8)
+def _sdk_client(token: str) -> "upstox_client.ApiClient":
+    # ponytail: one SDK client per live token, each with its own idle thread
+    # pool; 8 covers this deployment's users, raise it if more trade at once.
+    config = upstox_client.Configuration()
+    config.access_token = token
+    client = upstox_client.ApiClient(config)
+    # Default headers beat the SDK's per-call Accept (some methods send */*),
+    # and carry the session to calls the SDK sends without one (v3 history),
+    # as this adapter always has.
+    client.set_default_header("Accept", "application/json")
+    if token:
+        client.set_default_header("Authorization", f"Bearer {token}")
+    return client
 
 
 class UpstoxAdapter:
@@ -178,15 +195,10 @@ class UpstoxAdapter:
         if not self._api_key or not self._api_secret:
             raise RuntimeError("Cannot connect to Upstox: client id/secret not configured")
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(_TOKEN_URL, data={
-                "code": fields["request_token"], "client_id": self._api_key,
-                "client_secret": self._api_secret, "redirect_uri": self._redirect_uri,
-                "grant_type": "authorization_code",
-            })
-            resp.raise_for_status()
-
-        access_token = resp.json()["access_token"]
+        access_token = (await self._call(
+            "LoginApi", "token", _API_VERSION, token="", code=fields["request_token"], client_id=self._api_key,
+            client_secret=self._api_secret, redirect_uri=self._redirect_uri, grant_type="authorization_code",
+        ))["access_token"]
         now = datetime.now(timezone.utc)
         await self._redis.set(self._key, access_token, ex=ttl_seconds_until(now, hour=3, minute=30))
         return access_token
@@ -244,18 +256,26 @@ class UpstoxAdapter:
             "volume": data.get("volume", 0),
         }
 
-    async def _get_data(self, url: str, params: dict):
-        token = await self.get_access_token()
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url, params=params, headers=self._headers(token))
-            resp.raise_for_status()
-        return resp.json().get("data") or []
+    async def _call(self, api: str, method: str, *args, token: Optional[str] = None, timeout: float = 10.0,
+                    **kwargs) -> dict:
+        """One SDK call, off the event loop; the response as a plain dict.
+        `token` defaults to this user's session ("" sends no Bearer)."""
+        if token is None:
+            token = await self.get_access_token() or ""
+        call = getattr(getattr(upstox_client, api)(_sdk_client(token)), method)
+        try:
+            response = await asyncio.to_thread(call, *args, _request_timeout=timeout, **kwargs)
+        except ApiException as exc:
+            raise UpstoxHTTPError(f"Upstox {method} failed: HTTP {exc.status} {exc.reason}", exc.status) from None
+        except urllib3.exceptions.HTTPError as exc:
+            raise UpstoxHTTPError(f"Upstox {method} failed: {type(exc).__name__}") from None
+        return response.to_dict()
 
     async def option_expiries(self, underlying_key: str) -> list[str]:
         """Every listed expiry for `underlying_key`, soonest first, as
         YYYY-MM-DD -- read from the exchange's own contract list rather than
         computed, so an expiry-day change never needs a code change."""
-        rows = await self._get_data(_OPTION_CONTRACT_URL, {"instrument_key": underlying_key})
+        rows = (await self._call("OptionsApi", "get_option_contracts", underlying_key, timeout=15.0))["data"] or []
         return sorted({str(row["expiry"])[:10] for row in rows if row.get("expiry")})
 
     async def option_chain(self, underlying_key: str, expiry: str) -> list[dict]:
@@ -280,9 +300,8 @@ class UpstoxAdapter:
                 "theta": greeks.get("theta"),
             }
 
-        rows = await self._get_data(
-            _OPTION_CHAIN_URL, {"instrument_key": underlying_key, "expiry_date": expiry},
-        )
+        rows = (await self._call("OptionsApi", "get_put_call_option_chain", underlying_key, expiry,
+                                 timeout=15.0))["data"] or []
         return sorted(
             (
                 {
@@ -310,25 +329,26 @@ class UpstoxAdapter:
             raise ValueError(f"Unsupported period for Upstox: {period!r}. Supported: {sorted(_PERIOD_DAYS)}") from None
 
         row = await self._resolve(instrument)
-        token = await self.get_access_token()
+        token = await self.get_access_token() or ""
         unit, n = upstox_interval
         end = datetime.now(timezone.utc).date()
         start = end - timedelta(days=days)
         candles = []
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            while end > start:
-                chunk_from = max(start, end - timedelta(days=_CHUNK_DAYS[unit]))
-                url = _HISTORY_URL.format(key=row["instrument_key"], unit=unit, n=n,
-                                          to_date=end.isoformat(), from_date=chunk_from.isoformat())
-                for attempt in range(_RETRIES_429 + 1):
-                    await _space_history_call()
-                    resp = await client.get(url, headers=self._headers(token))
-                    if resp.status_code != 429 or attempt == _RETRIES_429:
-                        break
-                    await asyncio.sleep(2 ** attempt)  # per-second/minute limits: back off
-                resp.raise_for_status()
-                candles += resp.json()["data"]["candles"]
-                end = chunk_from - timedelta(days=1)
+        while end > start:
+            chunk_from = max(start, end - timedelta(days=_CHUNK_DAYS[unit]))
+            for attempt in range(_RETRIES_429 + 1):
+                await _space_history_call()
+                try:
+                    # v3: any minute interval (v2 had only 1m and 30m), from Jan 2022, free.
+                    body = await self._call("HistoryV3Api", "get_historical_candle_data1", row["instrument_key"],
+                                            unit, n, end.isoformat(), chunk_from.isoformat(), token=token, timeout=20.0)
+                    break
+                except UpstoxHTTPError as exc:
+                    if exc.status != 429 or attempt == _RETRIES_429:
+                        raise
+                await asyncio.sleep(2 ** attempt)  # per-second/minute limits: back off
+            candles += body["data"]["candles"]
+            end = chunk_from - timedelta(days=1)
 
         candles.sort(key=lambda c: c[0])  # Upstox answers newest first
         return [
@@ -425,70 +445,42 @@ class UpstoxAdapter:
                 instrument_token=0, exchange_token=0, instrument_type="EQ",
                 segment="NSE_EQ", lot_size=1, tick_size=0.05,
             )))["instrument_key"]
-        token = await self.get_access_token()
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(_PLACE_ORDER_URL, json={
-                "quantity": order.whole_quantity(),
-                "product": _PRODUCT_MAP[order.product],
-                "order_type": order.order_type,
-                "transaction_type": order.side.value,
-                "validity": "DAY",
-                "price": order.limit_price or 0,
-                "instrument_token": instrument_key,
-                "trigger_price": order.trigger_price or 0,
-                "disclosed_quantity": 0,
-            }, headers=self._headers(token))
-            resp.raise_for_status()
-
-        return resp.json()["data"]["order_id"]
+        body = upstox_client.PlaceOrderRequest(
+            quantity=order.whole_quantity(), product=_PRODUCT_MAP[order.product], order_type=order.order_type,
+            transaction_type=order.side.value, validity="DAY", price=order.limit_price or 0,
+            instrument_token=instrument_key, trigger_price=order.trigger_price or 0, disclosed_quantity=0,
+            is_amo=False,  # the SDK model requires it; false is the API's own default
+        )
+        return (await self._call("OrderApi", "place_order", body, _API_VERSION))["data"]["order_id"]
 
     async def cancel_order(self, broker_order_id: str) -> None:
-        token = await self.get_access_token()
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.delete(
-                f"{_CANCEL_ORDER_URL}?order_id={broker_order_id}", headers=self._headers(token),
-            )
-            resp.raise_for_status()
+        await self._call("OrderApi", "cancel_order", broker_order_id, _API_VERSION)
 
     async def modify_order(self, broker_order_id: str, quantity: Optional[int] = None, price: Optional[float] = None,
                            trigger_price: Optional[float] = None) -> None:
         current = next((o for o in await self.get_orders() if o["order_id"] == broker_order_id), None)
         if current is None:
             raise ValueError(f"No order {broker_order_id} at Upstox")
-        token = await self.get_access_token()
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.put(_MODIFY_ORDER_URL, json={
-                "order_id": broker_order_id, "validity": "DAY", "disclosed_quantity": 0,
-                "quantity": quantity or int(current["quantity"]),
-                "price": price if price is not None else current["price"],
-                "trigger_price": trigger_price if trigger_price is not None else current["trigger_price"],
-                "order_type": current.get("order_type") or ("LIMIT" if (price or current["price"]) else "MARKET"),
-            }, headers=self._headers(token))
-            resp.raise_for_status()
+        await self._call("OrderApi", "modify_order", upstox_client.ModifyOrderRequest(
+            order_id=broker_order_id, validity="DAY", disclosed_quantity=0,
+            quantity=quantity or int(current["quantity"]),
+            price=price if price is not None else current["price"],
+            trigger_price=trigger_price if trigger_price is not None else current["trigger_price"],
+            order_type=current.get("order_type") or ("LIMIT" if (price or current["price"]) else "MARKET"),
+        ), _API_VERSION)
 
     async def get_orders(self) -> list[dict]:
         """Today's order book, normalised."""
-        token = await self.get_access_token()
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(_ORDER_BOOK_URL, headers=self._headers(token))
-            resp.raise_for_status()
         return [{
             "order_id": o.get("order_id"), "symbol": o.get("trading_symbol") or o.get("tradingsymbol"),
             "side": o.get("transaction_type"), "quantity": float(o.get("quantity") or 0),
             "price": float(o.get("price") or 0), "trigger_price": float(o.get("trigger_price") or 0),
             "order_type": o.get("order_type"), "status": o.get("status"),
-        } for o in resp.json().get("data") or []]
+        } for o in (await self._call("OrderApi", "get_order_book", _API_VERSION))["data"] or []]
 
     async def get_order_status(self, broker_order_id: str) -> BrokerOrderStatus:
-        token = await self.get_access_token()
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                _ORDER_DETAILS_URL, params={"order_id": broker_order_id}, headers=self._headers(token),
-            )
-            resp.raise_for_status()
-
-        data = resp.json()["data"]
+        # The SDK's get_order_details is /order/history; /order/details is get_order_status.
+        data = (await self._call("OrderApi", "get_order_status", order_id=broker_order_id))["data"]
         return BrokerOrderStatus(
             broker_order_id=broker_order_id,
             status=self._map_status(data["status"]),
@@ -497,11 +489,6 @@ class UpstoxAdapter:
         )
 
     async def get_positions(self) -> dict[str, Position]:
-        token = await self.get_access_token()
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(_POSITIONS_URL, headers=self._headers(token))
-            resp.raise_for_status()
-
         return {
             row["trading_symbol"]: Position(
                 symbol=row["trading_symbol"],
@@ -514,17 +501,12 @@ class UpstoxAdapter:
                 exchange="NSE" if row.get("exchange") in ("NSE", "NSE_EQ") else row.get("exchange"),
                 product=_PRODUCT_FROM_UPSTOX.get(row.get("product")),
             )
-            for row in resp.json()["data"]
+            for row in (await self._call("PortfolioApi", "get_positions", _API_VERSION))["data"] or []
         }
 
     async def get_holdings(self) -> list[Holding]:
-        token = await self.get_access_token()
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(_HOLDINGS_URL, headers=self._headers(token))
-            resp.raise_for_status()
-
         holdings = []
-        for row in resp.json().get("data") or []:
+        for row in (await self._call("PortfolioApi", "get_holdings", _API_VERSION))["data"] or []:
             symbol = row.get("trading_symbol") or row.get("tradingsymbol")
             quantity = float(row.get("quantity") or 0)
             if not symbol or quantity <= 0:
@@ -542,29 +524,18 @@ class UpstoxAdapter:
         """Equity and F&O trades between two dates (inclusive). The history
         carries a date but no time, so every fill is stamped 09:15 IST that
         day: daily P&L holds, intraday order within a day does not."""
-        token = await self.get_access_token()
         trades = []
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            for segment in ("EQ", "FO"):
-                page, total = 1, 1
-                while page <= total:
-                    resp = await client.get(_TRADE_HISTORY_URL, params={
-                        "segment": segment, "start_date": start.isoformat(), "end_date": end.isoformat(),
-                        "page_number": page, "page_size": _TRADE_HISTORY_PAGE_SIZE,
-                    }, headers=self._headers(token))
-                    resp.raise_for_status()
-                    body = resp.json()
-                    trades += [_history_trade(row) for row in body.get("data") or []]
-                    total = ((body.get("metaData") or {}).get("page") or {}).get("total_pages") or 1
-                    page += 1
+        for segment in ("EQ", "FO"):
+            page, total = 1, 1
+            while page <= total:
+                body = await self._call("PostTradeApi", "get_trades_by_date_range", start.isoformat(), end.isoformat(),
+                                        page, _TRADE_HISTORY_PAGE_SIZE, segment=segment, timeout=20.0)
+                trades += [_history_trade(row) for row in body["data"] or []]
+                total = ((body["meta_data"] or {}).get("page") or {}).get("total_pages") or 1
+                page += 1
         return trades
 
     async def get_trades(self) -> list[BrokerTrade]:
-        token = await self.get_access_token()
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(_TRADES_URL, headers=self._headers(token))
-            resp.raise_for_status()
-
         return [
             BrokerTrade(
                 trade_id=str(row["trade_id"]), order_id=str(row.get("order_id") or ""),
@@ -573,7 +544,7 @@ class UpstoxAdapter:
                 quantity=float(row["quantity"]), price=float(row["average_price"]),
                 traded_at=parse_ist(row.get("exchange_timestamp") or row["order_timestamp"]),
             )
-            for row in resp.json().get("data") or []
+            for row in (await self._call("OrderApi", "get_trade_history", _API_VERSION))["data"] or []
         ]
 
 

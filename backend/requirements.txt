@@ -21,6 +21,7 @@ httpx>=0.24.0
 mongomock-motor>=0.0.34  # test-only: in-memory motor-compatible Mongo for InstrumentMaster tests
 yfinance>=0.2.0
 kiteconnect>=5.0.0  # Zerodha Kite Connect SDK -- Task 5, mocked in all tests, no live account exists
+upstox-python-sdk==2.30.0  # official Upstox SDK (backend/brokers/upstox.py REST calls, feed protobuf); pinned, its models are generated per release
 langchain
 langgraph
 langchain-google-genai
