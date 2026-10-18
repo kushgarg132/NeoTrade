@@ -7,6 +7,7 @@ description: Bring NeoTrade's agent wiki (docs/wiki/) up to date with HEAD by re
 
 Goal: every page in `docs/wiki/` matches HEAD, at the lowest token cost.
 
+0. In a fresh agent worktree, first `git merge --ff-only main`: worktrees start from the pushed commit, so unpushed fixes on local `main` would otherwise be invisible and every page would look current.
 1. Run `python3 docs/wiki/stale.py --orphans`. Exit 0 and no orphans: say "wiki current at <sha>" and stop.
 2. For each stale page (in parallel when there are several, one agent per page, each in its own worktree):
    - Read the page, then `git diff <verified_at>..HEAD -- <each changed file>`. Read whole files only where the diff is not enough to judge.
