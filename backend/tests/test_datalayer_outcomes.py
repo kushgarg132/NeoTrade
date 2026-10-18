@@ -62,3 +62,23 @@ async def test_record_then_measure_against_nifty(monkeypatch):
     assert docs["market"]["move_1h"] == pytest.approx(0.01)
     assert await outcomes.measure(db, redis, NOW + timedelta(hours=1)) == 0  # measured once
     assert await outcomes.measure(db, redis, NOW + timedelta(days=1)) == 3
+
+
+@pytest.mark.asyncio
+async def test_record_catches_up_old_items_after_an_outage(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = Redis()
+
+    async def followed(db):
+        return {}, SECTORS
+
+    monkeypatch.setattr("backend.datalayer.news.followed", followed)
+    await db["news_items"].insert_one({
+        "_id": "old", "title": "T", "status": "SCORED", "material": True, "scored_at": NOW - timedelta(hours=20),
+        "published_at": NOW - timedelta(hours=21), "scope": "COMPANY", "themes": ["earnings"],
+        "impacts": [{"type": "symbol", "target": "TCS", "direction": 0.7, "impact": 7}]})
+    redis.prices(20000, TCS=100)
+    from backend.datalayer import reactor
+    assert await reactor._claim(db, "reacted_at", NOW) == []  # too old for an alert
+    assert await outcomes.record(db, redis, NOW) == 1  # but its outcome is still recorded
+    assert await outcomes.record(db, redis, NOW) == 0  # once

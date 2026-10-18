@@ -6,6 +6,8 @@ import json
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
+from pymongo.errors import DuplicateKeyError
+
 from backend.configs.settings import settings
 from backend.engine.session import IST
 from backend.plan.validate import TradePlan
@@ -21,10 +23,16 @@ def _ttl(day: date, now: datetime) -> int:
 
 
 async def save(db, redis, user_id: str, day: date, plan: TradePlan, now: datetime) -> dict:
-    last = await db[COLLECTION].find_one({"user_id": user_id, "date": day.isoformat()}, sort=[("version", -1)])
-    doc = {"user_id": user_id, "date": day.isoformat(), "version": (last["version"] + 1) if last else 1,
-           "at": now, **plan.model_dump()}
-    await db[COLLECTION].insert_one(dict(doc))
+    for attempt in (1, 2):  # the unique (user_id, date, version) index rejects a racing writer: re-read once
+        last = await db[COLLECTION].find_one({"user_id": user_id, "date": day.isoformat()}, sort=[("version", -1)])
+        doc = {"user_id": user_id, "date": day.isoformat(), "version": (last["version"] + 1) if last else 1,
+               "at": now, **plan.model_dump()}
+        try:
+            await db[COLLECTION].insert_one(dict(doc))
+            break
+        except DuplicateKeyError:
+            if attempt == 2:
+                raise
     if redis is not None:
         await redis.set(KEY.format(user_id, day.isoformat()), json.dumps({**doc, "at": now.isoformat()}),
                         ex=_ttl(day, now))

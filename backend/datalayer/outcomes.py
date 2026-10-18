@@ -116,7 +116,7 @@ async def record(db, redis, now: Optional[datetime] = None) -> int:
     bench = await _bench(redis)
     if bench is None:
         return 0  # nothing to measure against: leave the items for the next pass
-    items = await _claim(db, "outcome_at", now)
+    items = await _claim(db, "outcome_at", now, fresh_only=False)  # catch up after an outage
     if not items:
         return 0
     _, sector_of = await followed(db)
