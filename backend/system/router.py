@@ -5,9 +5,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from backend.auth.dependency import require_admin
 from backend.auth.models import User
 from backend.database import db
-from backend.system import backlog, status
+from backend.system import backlog, schedule, status
 
 router = APIRouter()
+
+
+@router.get("/system/schedule")
+async def system_schedule():
+    """Job times for UI copy (any signed-in user; the router mount requires login)."""
+    return schedule.get()
 
 
 @router.get("/system/status")

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Sheet } from '../doc/Doc';
 import { Row } from './Fields';
 import { cn } from '../../utils/cn';
+import useSchedule from '../../hooks/useSchedule';
 
 /**
  * What the strategy engine does by itself, under the autopilot (AI ›
@@ -17,6 +18,7 @@ const SWITCH =
   'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors';
 
 const EngineSwitches = ({ prefs, save }) => {
+  const { t, raw } = useSchedule();
   const autopilot = Boolean(prefs.autopilot_enabled);
   const on = (key, byAutopilot) => (byAutopilot && autopilot) || Boolean(prefs[key]);
 
@@ -58,18 +60,18 @@ const EngineSwitches = ({ prefs, save }) => {
       {switchRow(
         'auto_paper_intraday',
         'Paper-trade intraday every session (experimental)',
-        'Experimental: the intraday strategies lose money after charges in every backtest so far, so this is for watching them, not for results. Starts an intraday paper run at 9:15 AM IST each weekday and stops it at 3:30 PM, with positions squared off at 3:15 PM. It restarts itself after an interruption; stop it on AI › Overview and it stays off for the rest of that day.'
+        `Experimental: the intraday strategies lose money after charges in every backtest so far, so this is for watching them, not for results. Starts an intraday paper run at ${t.session_open} IST each weekday and stops it at ${t.session_close}, with positions squared off at ${t.square_off}. It restarts itself after an interruption; stop it on AI › Overview and it stays off for the rest of that day.`
       )}
       {switchRow(
         'scan_enabled',
         'Daily long-term scan',
-        `Runs after the close at 4:00 PM IST over your ${prefs.universe.length} scrip and files long-term proposals.`,
+        `Runs after the close at ${t.daily_pass} IST over your ${prefs.universe.length} scrip and files long-term proposals.`,
         true
       )}
       {switchRow(
         'auto_paper_longterm',
         'Long-term paper book',
-        'Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at 9:20 AM on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term paper position at its stop or target (checked every 15 minutes in session) and sends a Telegram digest.',
+        `Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at ${t.morning} on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term paper position at its stop or target (checked every ${raw.exit_check_minutes} minutes in session) and sends a Telegram digest.`,
         true
       )}
       <p className="pt-3 doc-meta normal-case">

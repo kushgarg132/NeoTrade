@@ -4,9 +4,11 @@ import api, { endpoints } from '../../utils/api';
 import { formatClock } from '../../utils/formatters';
 import { allowSummary, scoreLine, triggerLabel } from '../../utils/plan';
 import { strategyName } from '../../utils/library';
+import useSchedule from '../../hooks/useSchedule';
 
 /** AI → Activity: today's game plan (backend/plan/), its revisions, and how plans score against no plan. */
 const PlanCard = () => {
+  const { t } = useSchedule();
   const [data, setData] = useState(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -19,7 +21,7 @@ const PlanCard = () => {
   return (
     <Sheet title="Today's plan" meta={meta}>
       {data === null ? <Ruling rows={3} /> : !plan ? (
-        <p className="doc-meta normal-case">No plan today. Plans are made at 8:45 AM IST for auto-run intraday accounts.</p>
+        <p className="doc-meta normal-case">No plan today. Plans are made at {t.plan} IST for auto-run intraday accounts.</p>
       ) : (
         <div className="space-y-3 text-sm">
           {plan.skip_day && <p className="field-label text-down">Sitting today out: no new intraday entries.</p>}

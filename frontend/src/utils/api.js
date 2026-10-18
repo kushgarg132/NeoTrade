@@ -179,6 +179,7 @@ export const endpoints = {
   },
   system: {
     status: '/system/status',
+    schedule: '/system/schedule',
     backlog: '/system/backlog',
     item: (id) => `/system/backlog/${id}`,
     builderRun: '/system/builder/run',

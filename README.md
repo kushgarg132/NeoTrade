@@ -66,8 +66,7 @@ MongoDB and Redis are external (managed) services, not compose containers — po
 LLM. `KITE_API_KEY`/`KITE_API_SECRET` are optional — the app treats an unconfigured broker as
 a normal state, not an error.
 
-The compose file also defines a `frontend` service for local development; production
-frontend is Vercel, so don't start it on the deployment host.
+The frontend is served by Vercel; compose runs only `backend` and `ingest`.
 
 ### Manual
 

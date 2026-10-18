@@ -35,6 +35,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/app_settings.py` | deployment-wide settings + 30 s in-process cache | `AppSettingsStore`, `lab_on`, `feature_enabled`, `current_llm_model`, `TIERS`, `FEATURES` |
 | `backend/profile/{models,store}.py` | what a user tells the AI about themselves + memories | `ProfileUpdate`, `ProfileStore`, `MemoryRefused` |
 | `backend/system/router.py` | admin-only status, builder trigger, backlog CRUD | `system_status`, `run_builder`, `*_backlog_item` |
+| `backend/system/schedule.py` | job clock times for UI copy, read from `scheduler.RUN_HOUR/RUN_MINUTE`, `autorun.PLAN_AT/SESSION_OPEN/SESSION_CLOSE/MORNING/EXIT_CHECK_MINUTES`, `session.SQUARE_OFF_*`, `monitor.SESSION_*`; `GET /system/schedule` returns "HH:MM" IST strings | `get` |
 | `backend/system/status.py` | handbook live-panel data, 5 blocks, cached 30 s | `build_status`, `cached_status`, `BLOCKS` |
 | `backend/system/jobs.py` | `job:last:<name>` Redis hash writer/reader | `mark`, `last_runs`, `LOOPS` |
 | `backend/system/data_quality.py` | nightly stale-bars / unlisted / silent-feed check | `check` |
@@ -45,7 +46,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/marks.py` | best-effort current prices (Redis `quote:` then yfinance) | `mark_prices`, `cached_quotes`, `store_quotes` |
 | `backend/analytics.py` | P&L cards and the scorecard maths | `compute_pnl`, `compute_scorecard` |
 | `backend/routers/*.py` | HTTP handlers (map below) | one module per area |
-| `docker-compose.yml`, `backend/Dockerfile`, `backend/requirements.txt` | runtime image and stack; pinned SDKs `upstox-python-sdk==2.30.0`, `aiogram==3.31.0` (caps pydantic below 2.14) | services `backend`, `ingest`, `frontend` |
+| `docker-compose.yml`, `backend/Dockerfile`, `backend/requirements.txt` | runtime image and stack; pinned SDKs `upstox-python-sdk==2.30.0`, `aiogram==3.31.0` (caps pydantic below 2.14) | services `backend`, `ingest` (no frontend service; Vercel serves it) |
 | `.github/workflows/ci.yml`, `deploy-backend.yml` | CI and push-to-deploy caller | see Deploy |
 
 Router modules by area (handlers in the table): `auth`, `settings` (prefs, strategies, OmniRoute admin, broker creds), `trading`, `suggestions`, `orders`, `chat_actions`, `analytics`, `broker`, `journal`, `guardrails`, `portfolio`, `mine`, `today`, `plan`, `picks`, `profile`, `watchlist`, `options`, `market_data`, `agents`. `backend/__init__.py` is a one-line package marker.
@@ -185,6 +186,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/settings/broker-credentials` | `backend/routers/settings.py::get_broker_credentials` | user |
 | POST | `/api/v1/settings/broker-credentials` | `backend/routers/settings.py::set_broker_credentials` | user |
 | DELETE | `/api/v1/settings/broker-credentials` | `backend/routers/settings.py::delete_broker_credentials` | user |
+| GET | `/api/v1/system/schedule` | `backend/system/router.py::system_schedule` | user |
 | GET | `/api/v1/system/status` | `backend/system/router.py::system_status` | admin |
 | POST | `/api/v1/system/builder/run` | `backend/system/router.py::run_builder` | admin |
 | GET | `/api/v1/system/backlog` | `backend/system/router.py::list_backlog` | admin |
@@ -287,7 +289,7 @@ Two supported paths, chosen once per session (host `/home/ubuntu/CLAUDE.md`, "De
 
 - **CI/CD (default).** Push to `main`. `.github/workflows/ci.yml` (`CI`): path filter, then backend job (`pytest -q` from repo root per `pytest.ini` `testpaths = backend/tests`, then `docker build ./backend`) and frontend job (`npm ci`, `lint`, `build`, Node 22). On CI success for a push, `deploy-backend.yml` (`workflow_run`, also `workflow_dispatch` with `force`) calls `kushgarg132/ci-workflows/.github/workflows/deploy-backend.yml@main` on the self-hosted runner label `neotrade`: updates the deploy clone `/home/ubuntu/deploys/NeoTrade` (real `.env`, gitignored), skips unless `backend/**` or `docker-compose.yml` changed (or `force`), runs `docker compose up -d --build backend` with `GIT_SHA` exported (also rebuilds `ingest`, via `depends_on`), health-checks `http://127.0.0.1:8000/` and container `neotrade-backend`. Verify with `gh run watch <id> --exit-status` plus a health check; do not also build by hand. Vercel builds the frontend (root `frontend/`) from the same push.
 - **Direct.** End the HEAD commit subject with `[skip ci]` and push (no workflow runs, no deploy). Then in `/home/ubuntu/deploys/NeoTrade`: `git pull --ff-only && GIT_SHA=$(git rev-parse HEAD) docker compose build backend && docker compose up -d backend`. Vercel still auto-builds the frontend (it ignores `[skip ci]`); do not run `vercel deploy`.
-- Container: image `python:3.11-slim`, `CMD uvicorn backend.server:app --port 8000 --workers 2`, `GIT_SHA` baked as env (shown in `/system/status` `deploy.backend_sha`). Compose publishes `127.0.0.1:${BACKEND_PORT:-8000}:8000`; Nginx + Let's Encrypt on the VM fronts `https://neotrade.161.118.167.148.nip.io`. Mongo (Atlas) and Redis (Upstash) are remote, no containers. Services: `backend`, `ingest` (same image, no port), `frontend` (nginx on :80; not used by the pipeline, which names only `backend`).
+- Container: image `python:3.11-slim`, `CMD uvicorn backend.server:app --port 8000 --workers 2`, `GIT_SHA` baked as env (shown in `/system/status` `deploy.backend_sha`). Compose publishes `127.0.0.1:${BACKEND_PORT:-8000}:8000`; Nginx + Let's Encrypt on the VM fronts `https://neotrade.161.118.167.148.nip.io`. Mongo (Atlas) and Redis (Upstash) are remote, no containers. Services: `backend`, `ingest` (same image, no port).
 - One-time: `docker exec neotrade-backend python -m backend.system.seed_backlog`.
 - Env var NAMES read by the backend (`configs/settings.py::Settings`; compose passes the first group through `environment`): `MONGODB_URL`, `DATABASE_NAME`, `REDIS_URL`, `OMNIROUTE_API_KEY`, `OMNIROUTE_FEATURE_KEYS`, `FINNHUB_API_KEY`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, `CREDENTIAL_ENCRYPTION_KEY`, `TELEGRAM_BOT_TOKEN`, `ADMIN_EMAILS`, `GIT_SHA`, `BACKEND_PORT` (compose-only). Settings with defaults not in compose (set only if the `.env` is read some other way): `OMNIROUTE_API_KEYS`, `OMNIROUTE_BASE_URL`, `OMNIROUTE_MODEL`, `NEWS_LLM_CALLS_PER_DAY` (200), `USER_LLM_CALLS_PER_DAY` (150), `PLAN_LLM_CALLS_PER_DAY` (100), `AI_TOOLS_ENABLED`, `SESSION_MAX_AGE_SECONDS` (1800), `REFRESH_TOKEN_MAX_AGE_SECONDS`, `REFRESH_COOKIE_NAME`, `PROJECT_NAME`, `VERSION`, `API_PREFIX`, `SERVER_PORT`, `LOG_LEVEL`. `ADMIN_EMAILS` and `CORS_ALLOWED_ORIGINS` are comma-separated; `OMNIROUTE_FEATURE_KEYS` is a JSON object.
 

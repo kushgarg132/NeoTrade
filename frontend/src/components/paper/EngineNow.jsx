@@ -9,6 +9,7 @@ import api, { endpoints } from '../../utils/api';
 import { cn } from '../../utils/cn';
 import { useReconnect, useTopic } from '../../hooks/useStream';
 import { formatClock, formatTimeAgo } from '../../utils/formatters';
+import useSchedule from '../../hooks/useSchedule';
 
 /**
  * What the strategy engine is doing now: the live-mode warning, the intraday
@@ -18,6 +19,7 @@ import { formatClock, formatTimeAgo } from '../../utils/formatters';
  * loaded or when the fetch failed).
  */
 const EngineNow = ({ prefs }) => {
+  const { t } = useSchedule();
   const [runs, setRuns] = useState([]);
   const [universeSymbols, setUniverseSymbols] = useState([]);
   const [runSettings, setRunSettings] = useState(false);
@@ -218,7 +220,7 @@ const EngineNow = ({ prefs }) => {
           }
         >
           <p className="text-sm">
-            Next scan 4:00 PM IST · {longtermOpen} open long-term position{longtermOpen === 1 ? '' : 's'}
+            Next scan {t.daily_pass} IST · {longtermOpen} open long-term position{longtermOpen === 1 ? '' : 's'}
             {prefs && !prefs.auto_paper_longterm && ' · stops and targets are not watched while it is off'}
           </p>
           {scan && scan !== 'starting' && <p className="mt-2 text-sm text-[var(--ink-soft)]">{scan}</p>}

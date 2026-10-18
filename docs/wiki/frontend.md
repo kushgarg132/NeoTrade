@@ -1,6 +1,6 @@
 ---
 page: frontend
-covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html, frontend/nginx.conf, frontend/Dockerfile]
+covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
 verified_at: 0865567
 ---
 # Frontend (React 19 + Vite SPA)
@@ -14,7 +14,6 @@ The whole UI: a plain-JSX (no TypeScript) React 19 / React Router 7 / Tailwind v
 | `frontend/package.json` | deps and scripts (`dev`, `build`, `lint`, `preview`); no `test` script | scripts `build`=`vite build`, `lint`=`eslint .` |
 | `frontend/vite.config.js` | react plugin; bakes `VERCEL_GIT_COMMIT_SHA` into `import.meta.env.VITE_GIT_SHA`; `manualChunks` puts react/router/clsx/tailwind-merge in a `vendor` chunk | `define`, `manualChunks` |
 | `frontend/index.html` | PWA meta, manifest link, theme-color per scheme; loads `/src/main.jsx` | `#root` |
-| `frontend/nginx.conf`, `frontend/Dockerfile` | self-hosted container path (node:20 build, nginx serves `dist`, proxies `/api/` to `backend:8000`). Not the production path (Vercel is) | `location /api/` |
 | `frontend/vercel.json` (outside globs) | `/api/:path*` -> backend nip.io host; SPA fallback `/(.*)` -> `/index.html`; `no-cache` on `/sw.js` | `rewrites`, `headers` |
 | `frontend/public/sw.js` (outside globs) | service worker: network-first navigations, never caches `/api/` | `VERSION`, `PRECACHE` |
 | `src/main.jsx` | provider stack and SW registration (PROD only) | `GoogleOAuthProvider > BrowserRouter > ThemeProvider > AuthProvider > App` |
@@ -28,6 +27,7 @@ The whole UI: a plain-JSX (no TypeScript) React 19 / React Router 7 / Tailwind v
 | `src/hooks/useAccount.js` | which account a page shows (`all`/`ai`/`mine`), from prefs `broker_roles` | `useAccount` |
 | `src/hooks/useTab.js` | `?tab=` state for tabbed pages | `useTab` |
 | `src/hooks/usePrivacy.js` | "hide amounts" flag on `<html data-private>` | `togglePrivacy`, `usePrivacy` |
+| `src/hooks/useSchedule.js`, `src/utils/schedule.js` | job times in copy (`EngineNow`, `EngineSwitches`, `PlanCard`, `TradingControlBar`, Settings guardrails hint) from `GET /system/schedule`; `utils/schedule.js::FALLBACK_SCHEDULE` shows until it loads | `useSchedule`, `clock12`, `FALLBACK_SCHEDULE` |
 | `src/hooks/useSymbolNews.js` | `GET /news/symbols` per distinct symbol list | `useSymbolNews` |
 | `src/components/Layout.jsx` | shell every page renders inside; loads nav counts; news toast | `Layout` |
 | `src/components/layout/{sections.js,Sidebar,BottomNav,SectionTabs,Masthead}.jsx` | nav model and chrome | `SECTIONS`, `MINE_TABS`, `AI_TABS`, `RESEARCH_TABS`, `sectionActive` |
@@ -204,7 +204,7 @@ The frontend serves none. Full list of backend routes it calls (all via `utils/a
 - **Tests are `node:test`, not vitest.** Run `cd frontend && node --test src/utils/*.test.js` (45 tests, 10 files, no install needed). `npx vitest run` finds none. There is no `test` script. The real gate is `npm run lint && npm run build` (CI does both on Node 22); vitest/node tests do not type-check or compile JSX. `node_modules` is not committed, so run `npm ci` before lint/build.
 - Only `src/utils/*.js` is covered; components, pages, hooks, `api.js`, `ws.js` have no tests.
 - Vite 8 + `@vitejs/plugin-react` 6, Tailwind v4 via `@tailwindcss/postcss`, ESLint 9 flat config with `react-hooks` and `react-refresh`; `no-unused-vars` ignores names starting with a capital or `_` (`eslint.config.js`).
-- `frontend/Dockerfile` builds on `node:20-alpine` while CI uses Node 22 (verify Vite 8 supports the Node 20 minor in the image before relying on the container path). `nginx.conf` proxies `/api/` without WebSocket upgrade headers, so the self-hosted container cannot carry `/api/v1/ws`; Vercel + `VITE_API_URL` is the real path. `docker-compose.yml` still defines a `frontend` service.
+- The frontend ships only via Vercel (+ `VITE_API_URL`); there is no self-hosted container path (Dockerfile, nginx.conf and the compose `frontend` service were deleted 2026-10-18).
 - Deploy from the repo root, not `frontend/` (Vercel Root Directory is already `frontend`; see host CLAUDE.md). `VITE_GIT_SHA` is empty on non-Vercel builds ("unknown" in the Deployed-now panel).
 - `VITE_API_URL` and `VITE_GOOGLE_CLIENT_ID` must be set in the Vercel project; if `VITE_API_URL` is missing a production build's socket uses the hard-coded backend host (`ws.js::SOCKET_URL`).
 - The response interceptor calls `hardLogout` only when the refresh itself returns 401; a network error or 5xx rejects the original request and keeps the session.
@@ -212,7 +212,7 @@ The frontend serves none. Full list of backend routes it calls (all via `utils/a
 - `useAccount()` returns `account: null` until prefs load; pages must not fetch until it is non-null (`Journal.jsx` effect guard).
 - Router quirks: `/research/stock/:symbol` and `/research` share one `Dashboard`; an index detail has no URL (state only). `Journal`'s `view` prop is never passed by `App` (default `'trades'`). The old `Sidebar` supports `item.divider` but no `SECTIONS` entry sets it (left in place).
 - Past fixes worth knowing: 62bac34 403 no longer logs out; fddec62 failed settings saves/broker disconnect no longer silent; 57829a6 journal note save failure is shown; c2a47ed "order may have gone through" points at Mine > Journal; 1c98111 date-only fields as calendar dates; 63e529b new account can read holdings from the empty state; 1997d25 run settings drop sizing fields the server ignores; bb1aebe AI book re-reads positions on push (push carries the raw book); 023008f AI overview asks `/trading/fills` for today only; 0404502 stale-holdings rule (36 h, `utils/mine.js::STALE_MS`), FY 2025+ select.
-- Open (found while documenting, not fixed): hard-coded scan times in copy (`EngineNow`/`EngineSwitches`).
+- Job times in copy come from `GET /system/schedule` (fixed 2026-10-18); the handbook markdown still quotes times in prose.
 
 ## Tests
 

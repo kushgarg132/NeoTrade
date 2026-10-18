@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
 import { formatCurrency, formatQuantity, formatDateTime, formatTimeAgo, formatClock } from '../utils/formatters';
 import { Avatar } from '../components/common/Avatar';
+import useSchedule from '../hooks/useSchedule';
 
 /**
  * Standing instructions for the real account: who the broker is, the limits
@@ -902,6 +903,7 @@ const GUARD_FIELDS = [
 ];
 
 const GuardrailsSheet = () => {
+  const { t } = useSchedule();
   const [prefs, setPrefs] = useState(null);
   const [draft, setDraft] = useState({});
   const [telegram, setTelegram] = useState(null);
@@ -989,7 +991,7 @@ const GuardrailsSheet = () => {
         own app.
       </p>
 
-      <Row label="Watch my broker" hint="Checks every connected broker from 9:15 AM to 3:35 PM IST.">
+      <Row label="Watch my broker" hint={`Checks every connected broker from ${t.monitor_open} to ${t.monitor_close} IST.`}>
         <button
           type="button"
           role="switch"

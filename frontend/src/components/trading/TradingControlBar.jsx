@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react';
 import { Badge } from '../common/Badge';
 import { StockIcon } from '../doc/Doc';
 import api, { endpoints } from '../../utils/api';
+import useSchedule from '../../hooks/useSchedule';
 
 
 /**
@@ -15,6 +16,7 @@ const TradingControlBar = ({
   onUniverseChange,
   startError,
 }) => {
+  const { t } = useSchedule();
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState([]);
 
@@ -43,7 +45,7 @@ const TradingControlBar = ({
 
   return (
     <div className="space-y-5">
-      <p className="doc-meta normal-case">Intraday · signals execute without approval, squared off by 3:15 PM.</p>
+      <p className="doc-meta normal-case">Intraday · signals execute without approval, squared off by {t.square_off}.</p>
 
       <div className="relative">
         <label htmlFor="universe-search" className="field-label block mb-1.5">
