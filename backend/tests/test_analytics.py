@@ -172,3 +172,21 @@ async def test_missing_costs_count_as_zero(ledger):
     await _closed_trade(ledger, realized=50.0, exit_at=NOW - timedelta(hours=1), costs=None)
     pnl = await compute_pnl(ledger, mark_prices={}, now=NOW)
     assert pnl["today"]["net"] == 50.0 and pnl["all_time"]["net"] == 50.0
+
+
+@pytest.mark.asyncio
+async def test_live_pnl_keeps_your_account_and_the_ai_account_apart(mongo):
+    from backend.analytics import compute_live_pnl
+
+    when = datetime.now(timezone.utc)
+    for book, realized in (("alice:mine", 300.0), ("alice:autopilot", -50.0)):
+        ledger = LedgerStore(mongo, user_id=book)
+        await _closed_trade(ledger, realized=realized, exit_at=when)
+        await ledger.trades.update_many({"user_id": "alice"}, {"$set": {"venue": "live", "user_id": book}})
+    # A paper trade in the plain book must not leak into either live figure.
+    await _closed_trade(LedgerStore(mongo, user_id="alice"), realized=9999.0, exit_at=when)
+
+    live = await compute_live_pnl(mongo, "alice", {})
+
+    assert live["mine"]["all_time"]["realized"] == 300.0
+    assert live["ai"]["all_time"]["realized"] == -50.0

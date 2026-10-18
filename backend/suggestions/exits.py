@@ -132,7 +132,9 @@ async def check_exits(db, user_id: str, now: Optional[datetime] = None, marks_fn
         # broker's holdings yet (it shows under positions until settled).
         if seen_at is not None and _ist_date(seen_at) > _ist_date(trade["entry_at"]) and trade["symbol"] not in held:
             await db["paper_trades"].update_one(
-                {"id": trade["id"]}, {"$set": {"status": "CLOSED", "exit_at": now, "exit_reason": "sold"}})
+                {"id": trade["id"]}, {"$set": {"status": "CLOSED", "exit_at": now, "exit_reason": "sold",
+                          # Inferred from a holdings snapshot, not a fill: shown as such in the UI.
+                          "closed_by": "inferred_from_holdings"}})
             continue
         open_.append(trade)
     if not open_:

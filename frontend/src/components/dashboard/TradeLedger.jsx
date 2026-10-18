@@ -25,6 +25,12 @@ const ModeMark = ({ mode }) => (
   </Mark>
 );
 
+/** A trade closed because the stock left the user's holdings, not by a fill we saw. */
+const Inferred = ({ trade }) =>
+  trade.closed_by === 'inferred_from_holdings' ? (
+    <span className="doc-meta normal-case text-[var(--ink-faint)]"> · inferred from your holdings</span>
+  ) : null;
+
 const OpenRecord = ({ trade }) => (
   <li className="py-3 border-b border-[var(--rule)] last:border-b-0">
     <div className="flex items-baseline justify-between gap-3">
@@ -105,6 +111,7 @@ const TradeLedger = ({ trades, loading, error, title = 'Trades', emptyOpen, empt
                   <div className="mt-1.5 flex items-center justify-between gap-3 doc-meta normal-case">
                     <span>
                       {formatCurrency(trade.entry_price)} → {formatCurrency(trade.exit_price)}
+                      <Inferred trade={trade} />
                     </span>
                     <span>{formatNoteDate(new Date(trade.exit_at))}</span>
                   </div>
@@ -141,6 +148,7 @@ const TradeLedger = ({ trades, loading, error, title = 'Trades', emptyOpen, empt
                   <Cell>
                     <Scrip symbol={trade.symbol} />{' '}
                     <ModeMark mode={trade.mode} />
+                    {tab === 'CLOSED' && <Inferred trade={trade} />}
                   </Cell>
                   {tab === 'OPEN' && <Cell>{trade.side}</Cell>}
                   <Cell align="right" mono>
