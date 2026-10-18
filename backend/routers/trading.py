@@ -54,7 +54,7 @@ from backend.ws.hub import hub
 from backend.ws.publish import publisher_for
 from backend.engine.portfolio import Portfolio
 from backend.engine.runner import run
-from backend.runs import RunStore
+from backend.runs import ACTIVE, RunStore
 from backend.instruments.master import InstrumentMaster
 from backend.marks import mark_prices
 from backend.options.premiums import live_premium_source
@@ -511,7 +511,7 @@ async def stop_trading(
     runs: RunStore = Depends(get_run_store),
 ):
     owner = await runs.get(req.run_id)
-    if owner is None or owner["user_id"] != user.id:
+    if owner is None or owner["user_id"] != user.id or owner.get("status") != ACTIVE:
         raise HTTPException(status_code=404, detail=f"No running trading run {req.run_id!r}")
 
     stopped = await stop_background_run(req.run_id)

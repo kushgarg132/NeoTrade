@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html, frontend/nginx.conf, frontend/Dockerfile]
-verified_at: a51584a
+verified_at: 33b7971
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -73,7 +73,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 
 ### 2. Live socket (`src/lib/ws.js`)
 1. `Stream.connect()` takes `neotrade_token`; if missing or `isExpired` (own `exp` minus 30 s) it first calls `refreshAccessToken()`; on failure it stays disconnected.
-2. `_open(token)` connects to `<VITE_API_URL>/api/v1/ws?token=<jwt>` (token in query because browsers cannot set WS headers). URL base falls back to `http://localhost:8001/api/v1` when `VITE_API_URL` is unset (`ws.js::SOCKET_URL`); unlike axios it is NOT same-origin in production.
+2. `_open(token)` connects to `<VITE_API_URL>/api/v1/ws?token=<jwt>` (token in query because browsers cannot set WS headers). URL base is `VITE_API_URL`, else the production backend host in a PROD build or `http://localhost:8001/api/v1` in dev (`ws.js::SOCKET_URL`); unlike axios it is NOT same-origin in production.
 3. Status machine (`useStreamStatus`): `idle` -> `connecting` -> `live`; drop -> `offline` + `scheduleReconnect` (1 s doubling to 30 s) -> `reconnecting`. `Masthead::FeedStatus` shows it.
 4. `subscribe(topic, fn)` keeps handlers in a `Map`; first handler sends `{action:'subscribe',topics:[t]}`; `flushSubscriptions()` re-sends all non-`__` topics on every open; a reopen after having been live fires `onReconnect` handlers so pages refetch.
 5. Frame shape: `{topic, event, data}`; `event:'ping'` is dropped.
@@ -188,7 +188,7 @@ None run in the frontend build. Client-side timers: Today polls `/today` every 6
 - API `detail` is always text by the time a page reads it (interceptor), so pages may render `err.response.data.detail` directly.
 - Dates: IST day boundaries (`utils/months.js::todayIst`, `utils/practice.js`), naive API timestamps are treated as UTC (`practice.js::toDate`); INR formatting via `utils/formatters.js`. Date-only fields are shown as calendar dates, not local midnight (commit 1c98111).
 - LLM/Markdown text is only rendered through `common/Markdown.jsx` (marked + DOMPurify).
-- localStorage access outside `ThemeContext`/`api.js` is wrapped in try/catch (private mode).
+- localStorage access is wrapped: `utils/storage.js::safeGet/safeSet` in `ThemeContext` and the `api.js` request interceptor, try/catch elsewhere (private mode).
 - The handbook (`src/handbook/*.md`) is verified against code with `file::symbol` anchors; if code and handbook disagree the code is right and the handbook is fixed in the same commit (`.claude/CLAUDE.md`).
 
 ## Endpoints
@@ -205,14 +205,13 @@ The frontend serves none. Full list of backend routes it calls (all via `utils/a
 - Vite 8 + `@vitejs/plugin-react` 6, Tailwind v4 via `@tailwindcss/postcss`, ESLint 9 flat config with `react-hooks` and `react-refresh`; `no-unused-vars` ignores names starting with a capital or `_` (`eslint.config.js`).
 - `frontend/Dockerfile` builds on `node:20-alpine` while CI uses Node 22 (verify Vite 8 supports the Node 20 minor in the image before relying on the container path). `nginx.conf` proxies `/api/` without WebSocket upgrade headers, so the self-hosted container cannot carry `/api/v1/ws`; Vercel + `VITE_API_URL` is the real path. `docker-compose.yml` still defines a `frontend` service.
 - Deploy from the repo root, not `frontend/` (Vercel Root Directory is already `frontend`; see host CLAUDE.md). `VITE_GIT_SHA` is empty on non-Vercel builds ("unknown" in the Deployed-now panel).
-- `VITE_API_URL` and `VITE_GOOGLE_CLIENT_ID` must be set in the Vercel project; if `VITE_API_URL` is missing the socket points at `localhost:8001` while HTTP still works, so the feed shows "Feed down" with a working UI.
-- `refreshAccessToken` rejection of any kind (network blip, 5xx) triggers `hardLogout` in the response interceptor (`utils/api.js` catch block), not just an invalid cookie.
+- `VITE_API_URL` and `VITE_GOOGLE_CLIENT_ID` must be set in the Vercel project; if `VITE_API_URL` is missing a production build's socket uses the hard-coded backend host (`ws.js::SOCKET_URL`).
+- The response interceptor calls `hardLogout` only when the refresh itself returns 401; a network error or 5xx rejects the original request and keeps the session.
 - `getPreferences()` is cached 5 s and shared; a component that needs fresh prefs right after writing elsewhere must write through `api.put(endpoints.settings.preferences, ...)` (which clears the cache) and use the PUT response (`AutopilotSheet`, `EngineSettings` do).
 - `useAccount()` returns `account: null` until prefs load; pages must not fetch until it is non-null (`Journal.jsx` effect guard).
-- Router quirks: `/research/stock/:symbol` and `/research` share one `Dashboard`; an index detail has no URL (state only). `Journal`'s `view` prop is never passed by `App` (default `'trades'`). The old `Sidebar` supports `item.divider` but no `SECTIONS` entry sets it.
-- Stale comments (code is right): `Dashboard.jsx` header says broker statement lives on "Mine -> Trades"; `OrderTicket.jsx` header mentions a Paper option (ticket is real money only since 9ff8471); `EngineSwitches.jsx` header says "AI > Autopilot" (now AI > Settings); `PRODUCT.md` lists `framer-motion` as an existing dep but `frontend/package.json` has none.
+- Router quirks: `/research/stock/:symbol` and `/research` share one `Dashboard`; an index detail has no URL (state only). `Journal`'s `view` prop is never passed by `App` (default `'trades'`). The old `Sidebar` supports `item.divider` but no `SECTIONS` entry sets it (left in place).
 - Past fixes worth knowing: 62bac34 403 no longer logs out; fddec62 failed settings saves/broker disconnect no longer silent; 57829a6 journal note save failure is shown; c2a47ed "order may have gone through" points at Mine > Journal; 1c98111 date-only fields as calendar dates; 63e529b new account can read holdings from the empty state; 1997d25 run settings drop sizing fields the server ignores; bb1aebe AI book re-reads positions on push (push carries the raw book); 023008f AI overview asks `/trading/fills` for today only; 0404502 stale-holdings rule (36 h, `utils/mine.js::STALE_MS`), FY 2025+ select.
-- Open (found while documenting, not fixed): see the bug list in the report. Highlights: unguarded `localStorage` in `ThemeContext.jsx` and `utils/api.js` request interceptor; hard-coded scan times in copy.
+- Open (found while documenting, not fixed): hard-coded scan times in copy (`EngineNow`/`EngineSwitches`).
 
 ## Tests
 

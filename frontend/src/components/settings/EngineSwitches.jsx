@@ -5,8 +5,8 @@ import { Row } from './Fields';
 import { cn } from '../../utils/cn';
 
 /**
- * What the strategy engine does by itself, under the autopilot on AI ›
- * Autopilot. The autopilot trades the 4 PM scan's proposals and acts in the
+ * What the strategy engine does by itself, under the autopilot (AI ›
+ * Settings). The autopilot trades the 4 PM scan's proposals and acts in the
  * long-term pass, so while it is on both run regardless of their own
  * switches (backend/prefs.py::scan_enabled_users, engine/autorun.py::tick);
  * here they show as kept on. Intraday paper is independent. Limits and

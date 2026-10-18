@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { detailToText } from './errors';
+import { safeGet } from './storage';
 
 // In production this must be same-origin (relative), not the backend's own
 // nip.io host: the refresh-token cookie is SameSite=None, which browsers
@@ -42,7 +43,7 @@ const TOKEN_STORAGE_KEY = 'neotrade_token';
 const NO_REFRESH_PATHS = ['/auth/google', '/auth/refresh'];
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+  const token = safeGet(TOKEN_STORAGE_KEY);
   if (token && !NO_REFRESH_PATHS.includes(config.url)) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -102,8 +103,10 @@ api.interceptors.response.use(
         config._retriedAfterRefresh = true;
         config.headers.Authorization = `Bearer ${newToken}`;
         return api.request(config);
-      } catch {
-        hardLogout();
+      } catch (refreshError) {
+        // Only the server saying the refresh token is dead ends the session;
+        // a network blip or 5xx must not sign the user out.
+        if (refreshError?.response?.status === 401) hardLogout();
         return Promise.reject(error);
       }
     }

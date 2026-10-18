@@ -116,7 +116,7 @@ Strategies / Settings, and the bullish Scanner and paper approvals are gone.
 ## Constraints
 
 - React 19 + Vite, plain JSX (no TypeScript), Tailwind v4, React Router 7.
-- Existing deps that stay: recharts, framer-motion, lucide-react, axios.
+- Existing deps that stay: recharts, lucide-react, axios.
 - No component library and no test runner on the frontend.
 - Bearer token in `localStorage`; refresh token in an httpOnly cookie, kept first-party by a
   Vercel rewrite. Backend on `*.nip.io`, frontend on Vercel.

@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.auth.dependency import get_current_user
 from backend.auth.refresh_store import RefreshTokenStore
 from backend.auth.store import UserStore
-from backend.configs.settings import settings
+from backend.configs.settings import settings, require_jwt_secret
 from backend.runs import RunStore
 from backend.suggestions.store import SuggestionStore
 from backend.prefs import PrefsStore
@@ -95,15 +95,46 @@ async def _heartbeat(redis) -> None:
         await asyncio.sleep(ALIVE_TTL_SECONDS // 3)
 
 
+async def ensure_collection_indexes(d) -> None:
+    """Indexes for collections whose stores have no ensure_indexes of their
+    own. Unique ones back upserts that otherwise race into duplicates."""
+    from backend.risk.backtest_gate import BacktestGateStore
+    from backend.risk.kill_switch import KillSwitchStore
+
+    try:
+        await BacktestGateStore(d).ensure_indexes()
+        await KillSwitchStore(d).ensure_indexes()
+        await d["mine_action_state"].create_index([("user_id", 1), ("action_id", 1)], unique=True)
+        await d["corporate_events"].create_index([("symbol", 1), ("kind", 1), ("date", 1)], unique=True)
+        await d["corporate_events_meta"].create_index("symbol", unique=True)
+        await d["watchlist"].create_index("user_id", unique=True)
+        await d["paper_trades"].create_index([("user_id", 1), ("status", 1), ("entry_at", -1)])
+        await d["paper_trades"].create_index("id")
+        await d["trade_plans"].create_index([("user_id", 1), ("date", 1), ("version", 1)], unique=True)
+        await d["plan_scorecards"].create_index([("user_id", 1), ("date", 1)])
+        await d["econ_calendar"].create_index("at")
+        await d["macro_series"].create_index([("ticker", 1), ("date", -1)])
+        # Keyed by _id (replace_one upserts), so it needs no secondary index.
+        # These two helpers land from main; skip until they exist on this branch.
+        import importlib
+        for mod in ("backend.learning.retune", "backend.forecast.picks"):
+            ensure = getattr(importlib.import_module(mod), "ensure_indexes", None)
+            if ensure is not None:
+                await ensure(d)
+    except Exception as exc:
+        logger.error("collection indexes not created: %s", exc)
+
+
 @app.on_event("startup")
 async def startup_db_client():
+    require_jwt_secret()
     logger.info("Starting up NeoTrade API...")
     await db.connect_to_database()
     logger.info("Database connected.")
 
     hub.attach_redis(db.redis)
     from backend.routers.trading import handle_cancel_broadcast
-    asyncio.create_task(broadcast.listen(db.redis, {
+    asyncio.create_task(broadcast.listen_forever(db.redis, {
         "ws:events": handle_broadcast_event,
         "runs:cancel": handle_cancel_broadcast,
     }))
@@ -147,6 +178,7 @@ async def startup_db_client():
         await db.db["paper_limit_orders"].create_index([("user_id", 1), ("status", 1)])
     except Exception as exc:
         logger.error("ledger indexes not created: %s", exc)
+    await ensure_collection_indexes(db.db)
     await AppSettingsStore(db.db).load_into_cache()
 
     # Post-close scan, sentiment refresh and suggestion expiry.

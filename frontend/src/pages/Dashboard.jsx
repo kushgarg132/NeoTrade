@@ -21,7 +21,7 @@ import { clearRecentStocks, recentStocks, rememberStock, stockPath } from '../ut
  * stock's page: the instant snapshot, and the AI analysis only once its tab
  * is opened. Without one it is the front page: search, the stocks opened
  * recently on this device and the markets (the watchlist has its own tab). The user's broker
- * statement lives on Mine → Trades, not here.
+ * statement is not here; it lives under Mine.
  *
  * Analysis streams over the socket; the HTTP route is the fallback.
  */

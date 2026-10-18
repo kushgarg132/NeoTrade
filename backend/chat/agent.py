@@ -157,7 +157,7 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
                     yield {"type": "content", "data": text}
     except Exception as exc:
         logger.error("chat agent failed for %s: %s", user_id, exc)
-        yield {"type": "content", "data": f"Something went wrong answering that: {exc}"}
+        yield {"type": "content", "data": "Something went wrong answering that; try again in a minute."}
         return
 
     if split.trailer is not None:

@@ -10,11 +10,14 @@ same "degrade, don't crash" posture backend/ai/analyst_verdict.py's
 get_cached_verdict already established for a missing cache.
 """
 
+import asyncio
 import json
 import logging
 from typing import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
+
+RECONNECT_SECONDS = 5
 
 
 async def publish(redis, channel: str, payload: dict) -> bool:
@@ -60,3 +63,14 @@ async def listen(redis, handlers: dict[str, Callable[[dict], Awaitable[None]]]) 
                 logger.exception("broadcast handler for %s failed: %s", message["channel"], exc)
     finally:
         await pubsub.close()
+
+
+async def listen_forever(redis, handlers) -> None:
+    """`listen`, resubscribing after a Redis drop (the subscription dies with
+    the connection, which silently ended ws fan-out and run cancellation)."""
+    while redis is not None:
+        try:
+            await listen(redis, handlers)
+        except Exception as exc:
+            logger.warning("broadcast listener lost Redis: %s", exc)
+        await asyncio.sleep(RECONNECT_SECONDS)
