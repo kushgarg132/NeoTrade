@@ -152,3 +152,12 @@ async def test_suggestions_ride_in_the_same_call_and_never_reach_the_user(monkey
     assert shown.strip() == "Card ready." and "<<<" not in shown
     assert events[-1] == {"type": "suggestions", "data": ["👍 Yes, approve it", "🔍 Why SJVN?", "📊 Compare with Nifty"]}
     assert {"type": "answer_end", "data": None} in events
+
+
+def test_every_chat_tool_has_a_label():
+    from backend.chat.actions import action_tools
+    from backend.chat.tools import read_tools
+
+    db = AsyncMongoMockClient()["test_db"]
+    names = {t.name for t in read_tools(db, None, "u") + action_tools(db, None, "u", "m")}
+    assert names - agent.TOOL_LABELS.keys() == set()

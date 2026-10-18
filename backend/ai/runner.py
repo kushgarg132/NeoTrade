@@ -15,9 +15,9 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel, ValidationError
 
 from backend.configs.settings import settings
+from backend.prompts import render
 
 logger = logging.getLogger(__name__)
-FINAL_TURN = "Answer now from what you have; no more tools."
 
 
 def _text(message) -> str:
@@ -100,7 +100,7 @@ async def run_with_tools(task: str, *, system: str, prompt: str, tools: list, ti
                 return result
             # Still the tool-bound model: some providers reject tool history
             # with no tools defined. Any further tool calls are ignored.
-            final = await bound.ainvoke(messages + [HumanMessage(content=FINAL_TURN)])
+            final = await bound.ainvoke(messages + [HumanMessage(content=render("final_turn")[1])])
             result["rounds"] += 1
             messages.append(final)
         text = _text(final)

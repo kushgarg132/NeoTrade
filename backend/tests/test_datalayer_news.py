@@ -43,8 +43,9 @@ class FakeRedis:
     async def mget(self, keys):
         return [self.data.get(k) for k in keys]
 
-    async def delete(self, key):
-        self.data.pop(key, None)
+    async def delete(self, *keys):
+        for key in keys:
+            self.data.pop(key, None)
 
     async def incrby(self, key, n):
         self.data[key] = int(self.data.get(key, 0)) + n
@@ -272,6 +273,12 @@ async def test_aggregate_blends_company_sector_and_market(mongo):
     verdict = json.loads(redis.data["analyst_verdict:TCS"])
     assert verdict["label"] == "bullish" and verdict["impact_score"] == 8 and verdict["top_reason"] == "TCS big win"
     assert "analyst_verdict:IOC" not in redis.data  # no company news, no verdict
+
+    # A name with no news at any level is "no data", not a 0.0 neutral reading.
+    empty = FakeRedis()
+    await mongo[news.COLLECTION].delete_many({})
+    out = await news.aggregate(mongo, empty, NAMES, SECTOR_OF, now=NOW)
+    assert out["symbols"] == {} and not [k for k in empty.data if k.startswith("sentiment:")]
 
     # Still one capped ai_score: a maximal blend moves conviction by at most AI_CAP.
     intent = Intent(symbol="TCS", side=Side.BUY, strength=0.5, reason_codes=["x"])

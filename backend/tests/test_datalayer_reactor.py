@@ -75,6 +75,27 @@ async def test_react_alerts_once(monkeypatch):
     assert await reactor.react(db, redis, NOW) == 0  # claimed: never twice
 
 
+@pytest.mark.asyncio
+async def test_failed_delivery_releases_the_hourly_throttle(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = FakeRedis()
+
+    async def deliver(db, redis, user_id, item, hits):
+        raise RuntimeError("hub down")
+
+    async def followed(db):
+        return {}, SECTORS
+
+    monkeypatch.setattr(reactor, "_deliver", deliver)
+    monkeypatch.setattr("backend.datalayer.news.followed", followed)
+    await db["portfolio_snapshots"].insert_one(
+        {"user_id": "u1", "at": NOW, "raw_holdings": [{"symbol": "TCS", "quantity": 5, "broker": "upstox"}]})
+    await db["news_items"].insert_one(_item(("symbol", "TCS", -0.8, 8)))
+
+    assert await reactor.react(db, redis, NOW) == 0
+    assert not [k for k in redis.data if k.startswith("news:alerted:")]
+
+
 def test_alert_text():
     text = reactor.alert_text({"title": "T", "event": "TCS cuts guidance", "url": "https://x"},
                               [{"target": "TCS", "direction": -0.8, "impact": 8.0}, {"target": "INDIA", "direction": -0.5, "impact": 7.0}])

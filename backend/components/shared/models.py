@@ -103,8 +103,6 @@ class CompanyInfo(BaseModel):
     operating_margins: Optional[float] = None
     gross_margins: Optional[float] = None
 
-    gross_margins: Optional[float] = None
-
 
 class Watchlist(BaseModel):
     model_config = ConfigDict(use_enum_values=True)

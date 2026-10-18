@@ -32,7 +32,7 @@ def test_mark_failure_never_breaks_the_job():
 def test_daily_pass_records_success_and_failure(monkeypatch):
     redis = FakeRedis()
 
-    async def ok(db, redis=None, now=None):
+    async def ok(db, redis=None, now=None, pass_day=None):
         return {"created": 2}
 
     monkeypatch.setattr(scheduler, "run_daily_jobs", ok)
@@ -40,7 +40,7 @@ def test_daily_pass_records_success_and_failure(monkeypatch):
     run = asyncio.run(last_runs(redis, [DAILY_PASS]))[DAILY_PASS]
     assert run["ok"] is True and '"created": 2' in run["note"]
 
-    async def boom(db, redis=None, now=None):
+    async def boom(db, redis=None, now=None, pass_day=None):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(scheduler, "run_daily_jobs", boom)

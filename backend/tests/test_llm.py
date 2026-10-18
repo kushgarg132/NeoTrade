@@ -84,3 +84,24 @@ async def test_override_set_in_a_parent_task_is_visible_in_a_child_task(service)
         await asyncio.create_task(child())
 
     assert seen["model"] == "parent/model"
+
+
+def test_stream_falls_back_only_before_any_event():
+    class Key:
+        def __init__(self, events, fail):
+            self.events, self.fail = events, fail
+
+        async def astream_events(self, *a, **k):
+            for e in self.events:
+                yield e
+            if self.fail:
+                raise RuntimeError("boom")
+
+    async def collect(chain):
+        return [e async for e in chain.astream_events("x")]
+
+    # fails before the first event: next key serves the whole stream
+    assert asyncio.run(collect(llm_module.MultiKeyChain([Key([], True), Key(["a", "b"], False)]))) == ["a", "b"]
+    # fails mid-stream: raise, never replay "a" from the second key
+    with pytest.raises(RuntimeError):
+        asyncio.run(collect(llm_module.MultiKeyChain([Key(["a"], True), Key(["a", "b"], False)])))

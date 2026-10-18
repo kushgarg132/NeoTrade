@@ -208,7 +208,7 @@ def longterm(world, monkeypatch):
     async def not_due(db, user_id, now):
         return False  # the factor rebalance downloads market data; tested on its own
 
-    async def daily_pass(db, redis=None, now=None):
+    async def daily_pass(db, redis=None, now=None, pass_day=None):
         calls["passes"].append(now)
         return {}
 

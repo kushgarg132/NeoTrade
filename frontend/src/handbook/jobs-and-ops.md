@@ -52,7 +52,7 @@ stored daily bars instead (no session needed). The result is `job:last:strategy_
 | Auto run | 60 s | keeps auto paper runs alive, builds game plans, long-term passes, exits | `backend/engine/autorun.py` |
 | Telegram | long poll | answers linked chats, one poller per bot | `backend/guardrails/telegram_bot.py` |
 | Price pump | 15 s | publishes marks and P&L to sockets | `backend/ws/pump.py` |
-| Worker heartbeat | ~10 s | `worker:alive:<boot>` | `backend/server.py::_heartbeat` |
+| Worker heartbeat | 30 s (90 s TTL) | `worker:alive:<boot>` | `backend/server.py::_heartbeat` |
 
 Each loop tick writes `job:last:<name>` through `backend/system/jobs.py::mark`, which never
 raises.
@@ -66,7 +66,7 @@ reports their ages.
 `quotes` 15 s · `macro` 60 s · `news_poll` 60 s · `news_process` 5 min · `calendar` 6 h ·
 `flows` 30 min · `regime` 60 s · `brief` 60 s (writes hourly in session if the regime moved, sooner on material news) ·
 `news_react` 60 s · `news_scan` 120 s · `news_exits` 60 s · `news_outcomes` 5 min ·
-`bars` 15 min (works after 3:45 PM IST) · `fundamentals` 30 min · `plan_revise` 60 s.
+`bars` 15 min (works after 3:45 PM IST) · `fundamentals` 30 min · `plan_revise` 60 s · `corp_events` 6 h (`backend/mine/events.py`).
 
 <!-- live:jobs -->
 
@@ -114,5 +114,5 @@ reports their ages.
 
 ## Health
 
-`GET /health` on the API: Mongo, Redis and ingest heartbeat ages. This page's live panels
+`GET /health` on the API: `{api: "ok", ingest: {<loop>: age in seconds}}` (`ingest` is empty when the worker is down, null if Redis could not be read); it does not probe Mongo or Redis itself. This page's live panels
 come from the admin-only `GET /api/v1/system/status` (`backend/system/status.py`, cached 30 s).

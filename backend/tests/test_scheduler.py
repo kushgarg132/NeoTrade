@@ -5,7 +5,7 @@ on a clock. The scheduling arithmetic is tested separately -- getting "next
 16:00 IST" wrong by a day is the kind of bug that only shows up as silence.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -382,7 +382,7 @@ async def test_a_catch_up_pass_counts_for_the_day_it_missed(mongo, monkeypatch):
 
     passes = []
 
-    async def fake_pass(db, redis=None, now=None):
+    async def fake_pass(db, redis=None, now=None, pass_day=None):
         passes.append(now)
         return {}
     monkeypatch.setattr(scheduler, "run_daily_jobs", fake_pass)
@@ -393,3 +393,18 @@ async def test_a_catch_up_pass_counts_for_the_day_it_missed(mongo, monkeypatch):
     assert redis.data[scheduler.LAST_PASS_KEY] == "2026-09-25"
     assert await scheduler._run_locked(mongo, redis, pass_day=date(2026, 9, 25)) is None
     assert len(passes) == 1
+
+
+@pytest.mark.asyncio
+async def test_monday_catch_up_for_friday_runs_fridays_weekly_work(mongo, monkeypatch):
+    mirrors = []
+
+    async def fake_mirrors(db):
+        mirrors.append(1)
+    monkeypatch.setattr(scheduler, "_weekly_mirrors", fake_mirrors)
+    monday = datetime(2026, 9, 28, 4, tzinfo=timezone.utc)  # 09:30 IST
+
+    await scheduler.run_daily_jobs(mongo, now=monday)
+    assert mirrors == []
+    await scheduler.run_daily_jobs(mongo, now=monday, pass_day=date(2026, 9, 25))  # the Friday it missed
+    assert mirrors == [1]

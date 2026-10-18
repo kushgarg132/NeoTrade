@@ -34,12 +34,17 @@ REPORT = "### Market Sentiment\nBullish.\n===THESIS===\nA strong quarter."
 class _Redis:
     def __init__(self):
         self.store = {}
+        self.ttls = {}
 
     async def get(self, key):
         return self.store.get(key)
 
     async def set(self, key, value, ex=None):
         self.store[key] = value
+        self.ttls[key] = ex
+
+    async def ttl(self, key):
+        return self.ttls.get(key) or -2
 
 
 @pytest.fixture
@@ -78,6 +83,14 @@ async def test_result_is_cached_and_feeds_the_engine_sentiment_cache(wired):
     assert llm.await_count == 2  # the second analysis made no calls
     assert second == first
     assert float(redis.store["sentiment:SBIN"]) == pytest.approx(49.6 / 68)
+
+
+async def test_a_longer_lived_ingest_sentiment_is_not_overwritten(wired):
+    _, redis = wired
+    redis.store["sentiment:SBIN"] = "0.123"
+    redis.ttls["sentiment:SBIN"] = 20 * 3600
+    await AnalystAgent().analyze({"symbol": "SBIN"})
+    assert redis.store["sentiment:SBIN"] == "0.123"
 
 
 async def test_invalid_json_is_retried_once(monkeypatch, wired):
