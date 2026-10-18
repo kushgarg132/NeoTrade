@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Awaitable, Callable, Optional
 
 from backend.core.models import Fill, Side
-from backend.engine.execution.live_order_store import _PENDING_STATES, LiveOrderStore
+from backend.engine.execution.live_order_store import _PENDING_STATES, LiveOrderStore, fill_row_costs
 from backend.engine.persistence import LedgerStore
 from backend.ws.publish import publisher_for
 
@@ -51,7 +51,8 @@ async def reconcile(db, adapter_for: AdapterFor, now: datetime) -> int:
                 await _book(LedgerStore(db, user_id=row.get("ledger_user") or row["user_id"],
                                          on_change=publisher_for(row["user_id"])), Fill(
                     order_id=row["_id"], symbol=row["symbol"], side=Side(row["side"]), quantity=new,
-                    price=status.average_price, timestamp=now, costs=0.0, venue="live",
+                    price=status.average_price, timestamp=now, venue="live",
+                    costs=fill_row_costs(row, status.average_price, new),
                 ))
             changed += 1
             logger.info("live order %s now %s (%s filled)", row["_id"], status.status, status.filled_quantity)

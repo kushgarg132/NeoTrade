@@ -16,8 +16,7 @@ from typing import Optional
 from backend.core.models import Fill, Order, Side
 from backend.engine.execution.live_order_store import LiveOrderStore
 from backend.instruments.models import Instrument
-from backend.engine.execution.costs import calculate_indian_costs
-from backend.engine.execution.options_costs import calculate_options_costs
+from backend.engine.execution.costs import fill_costs
 from backend.engine.persistence import LedgerStore
 from backend.engine.portfolio import Portfolio
 
@@ -58,10 +57,7 @@ async def fill_on_paper(
         if held is None or held.quantity < order.quantity:
             raise ValueError(f"sell {order.quantity:g} {order.symbol}: only {held.quantity if held else 0:g} held")
     await ledger.record_order(order)
-    costs = (
-        calculate_options_costs(price, order.quantity, order.side) if is_option
-        else calculate_indian_costs(price, order.quantity, order.side, order.product)
-    )
+    costs = fill_costs(price, order.quantity, order.side, order.product, is_option)
     fill = Fill(
         order_id=order.id, symbol=order.symbol, side=order.side, quantity=order.quantity, price=price,
         timestamp=now, costs=costs,
@@ -86,7 +82,7 @@ async def execute_option_suggestion_live(
     """Places an approved option proposal as a real MARKET order with the
     user's broker, then checks its status for up to LIVE_FILL_CHECKS
     seconds. Whatever filled is booked as a live fill at the broker's own
-    average price (charges are the broker's, as for every live fill).
+    average price, net of the same modelled charges as a paper fill.
     Returns the order, the broker's last status, and the quantity filled.
 
     An order still working after the checks stays in live_orders as
@@ -119,7 +115,7 @@ async def execute_live_order(
         await orders.record_submitted(
             order_id=order.id, broker_order_id=broker_order_id, user_id=owner or ledger.user_id.split(":")[0],  # the person, not the ledger
             strategy_name=strategy_name, symbol=order.symbol, side=order.side, reason=reason,
-            role=role, ledger_user=ledger.user_id,
+            role=role, ledger_user=ledger.user_id, product=order.product, option=order.contract is not None,
         )
     except Exception as exc:
         logger.error("live order %s placed as %s but not recorded: %s", order.id, broker_order_id, exc)
@@ -146,7 +142,9 @@ async def execute_live_order(
         if claimed and status.filled_quantity > 0:
             await _book(ledger, Fill(
                 order_id=order.id, symbol=order.symbol, side=order.side, quantity=status.filled_quantity,
-                price=status.average_price, timestamp=datetime.now(timezone.utc), costs=0.0, venue="live",
+                price=status.average_price, timestamp=datetime.now(timezone.utc), venue="live",
+                costs=fill_costs(status.average_price, status.filled_quantity, order.side, order.product,
+                                 order.contract is not None),
             ))
     except Exception as exc:
         logger.error("live order %s (%s) filled %s but not booked: %s",
