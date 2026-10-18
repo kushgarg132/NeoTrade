@@ -304,7 +304,7 @@ async def test_live_limit_refused_on_a_broker_without_limit_support(env, monkeyp
         return _MarketOnly()
 
     monkeypatch.setattr(actions, "_active_broker", market_only)
-    with pytest.raises(ActionRefused, match="Limit orders on your account need Upstox"):
+    with pytest.raises(ActionRefused, match="does not take limit orders"):
         await actions._order_checks(env["db"], "alice", _order(venue="live", order_type="LIMIT", limit_price=1490.0), None)
 
 

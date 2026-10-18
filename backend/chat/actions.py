@@ -203,7 +203,7 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
     if params.get("order_type") == "LIMIT" and not getattr(adapter, "SUPPORTS_LIMIT", False):
         # Only adapters that send the limit price may take one; another would
         # turn it into a market order (or reject it).
-        raise ActionRefused("Limit orders on your account need Upstox; place a market order.")
+        raise ActionRefused("Your broker does not take limit orders here; place a market order.")
     if delivery_sell:
         from backend.chat.account_actions import _held
 

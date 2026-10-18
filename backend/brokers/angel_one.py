@@ -95,6 +95,9 @@ _PRODUCT_FROM_ANGEL = {"INTRADAY": "MIS", "DELIVERY": "CNC", "CARRYFORWARD": "NR
 
 
 class AngelOneAdapter:
+    # place_order sends a LIMIT order's ordertype and price (chat/actions.py checks this).
+    SUPPORTS_LIMIT = True
+
     def __init__(
         self, api_key: Optional[str], api_secret: Optional[str], redis, user_id: str,
     ) -> None:
@@ -255,6 +258,7 @@ class AngelOneAdapter:
             segment="NSE", lot_size=1, tick_size=0.05,
         ))
         token = await self.get_access_token()
+        is_limit = order.order_type == "LIMIT"
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(_PLACE_ORDER_URL, json={
@@ -263,10 +267,10 @@ class AngelOneAdapter:
                 "symboltoken": row["token"],
                 "transactiontype": order.side.value,
                 "exchange": "NSE",
-                "ordertype": "MARKET",
+                "ordertype": "LIMIT" if is_limit else "MARKET",
                 "producttype": _PRODUCT_MAP[order.product],
                 "duration": "DAY",
-                "price": "0",
+                "price": str(order.limit_price) if is_limit else "0",
                 "squareoff": "0",
                 "stoploss": "0",
                 "quantity": str(order.whole_quantity()),

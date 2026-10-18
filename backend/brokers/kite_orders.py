@@ -60,6 +60,8 @@ class KiteOrderClient:
             quantity=order.whole_quantity(),
             product=order.product,
             order_type=order.order_type,
+            # The SDK drops None params, so a market order sends no price.
+            price=order.limit_price if order.order_type == "LIMIT" else None,
         )
 
     async def cancel_order(self, broker_order_id: str) -> None:

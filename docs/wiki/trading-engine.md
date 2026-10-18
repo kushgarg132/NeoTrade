@@ -230,6 +230,7 @@ Behaviour that surprises:
 - `TickBarAggregator` bars are clock-driven: a quiet symbol still emits a flat zero-volume bar; first window's volume is 0 (no baseline).
 - Kite `ticker_feed` probes `ltp` first; a Kite Connect app without market-data permission returns None so `build_feed` falls through to Upstox/polling (`kite.py::ticker_feed`).
 - Upstox history is rate-limited by a per-process 0.5 s spacing and 28-day chunks for minute data (`upstox.py::_space_history_call`, `_CHUNK_DAYS`); a gate backtest is ~975 calls.
+- LIMIT orders: all three adapters set `SUPPORTS_LIMIT` and send the price (Kite `price`, Angel One `ordertype: LIMIT` + `price`, Upstox); `chat/actions.py::_order_checks` refuses LIMIT on any adapter without it. Kite/Angel One payloads are unit-tested only (no live account).
 - Upstox `_PRODUCT_MAP` maps NRML to `D` (delivery/carry-forward); `place_order` for options resolves the key via the option chain, refuses rather than guesses (`_option_key`).
 - Position `unrealized_pnl` is never stored non-zero; reads mark at request time (`trading.py::get_positions`), `/trading/equity` does not mark.
 - `autopilot/service.py::_state` reads only the latest 1000 trades of the book and counts a SENT (unconfirmed) BUY as deployed/held until reconciled.
@@ -241,7 +242,6 @@ Open issues / possible bugs found while reading (not fixed):
 - `backend/data/feeds/live_upstox.py::UpstoxMarketFeed` has no `add()`; `plan/expand.py:15` (`hasattr(feed, "add")`) therefore skips every mid-run plan add on an Upstox tick feed (logs "cannot add symbols mid-run").
 - `backend/engine/stuck.py:54-64` and `backend/server.py:147` still sweep/index `paper_limit_orders`, but no module writes that collection (`backend/engine/paper_orders.py`, named in the docstring, does not exist): dead code left from the removed paper ticket. The `reason == "paper"` branch (`stuck.py:43`) is the same remnant.
 - `risk/backtest_gate.py::BacktestGateStore.ensure_indexes` (line 44) and `risk/kill_switch.py::KillSwitchStore.ensure_indexes` (line 30) are defined but never called at startup; `paper_trades` has no index at all (`persistence.py:50-53` indexes only orders, fills, positions).
-- `brokers/angel_one.py:266` always sends `ordertype: MARKET` and `kite_orders.py:61` sends `order_type` but no `price`, so a LIMIT order only works on Upstox (`UpstoxAdapter.SUPPORTS_LIMIT`, `upstox.py:152`).
 - `risk/backtest_gate.py:50` and `risk/kill_switch.py:48` call `datetime.now(...)` directly (allowed: `risk/` is outside the grep test), unlike `engine/`.
 - ROADMAP lists "`owner_by_symbol` last-writer-wins" as an old bug; `size_intents` now prefers `strategies_by_name[intent.strategy]`, but `_square_off_orders` and `run` still build `owner_by_symbol` last-writer-wins for symbols shared by several strategies (`runner.py:492`, `:615`).
 
