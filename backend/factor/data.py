@@ -3,6 +3,7 @@ NSE, today's list -- see the survivorship note in backtest.py) and their
 adjusted daily closes from yfinance, cached on disk for a day."""
 
 import csv
+import hashlib
 import logging
 import os
 import time
@@ -38,7 +39,7 @@ def _download(tickers: list[str], start: str) -> pd.DataFrame:
 def closes(symbols: list[str], start: str = "2008-01-01") -> pd.DataFrame:
     """Adjusted closes, one column per NSE symbol (no .NS suffix)."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path = CACHE_DIR / f"closes-{start}-{abs(hash(tuple(sorted(symbols))))}.pkl"
+    path = CACHE_DIR / f"closes-{start}-{hashlib.sha1(",".join(sorted(symbols)).encode()).hexdigest()[:16]}.pkl"
     if path.exists() and time.time() - path.stat().st_mtime < CACHE_SECONDS:
         return pd.read_pickle(path)
     frame = _download([f"{s}.NS" for s in symbols], start)

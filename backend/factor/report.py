@@ -74,8 +74,8 @@ async def _save(report: dict) -> None:
     from backend.database import db
     await db.connect_to_database()
     await db.db["strategy_backtests"].insert_one({
-        "strategy": STRATEGY_NAME, "passed": report["verdict"]["passed"], "kind": "factor_walk_forward",
-        "ran_at": datetime.now(timezone.utc), "report": json.loads(json.dumps(report, default=str)),
+        "strategy_name": STRATEGY_NAME, "passed": report["verdict"]["passed"], "kind": "factor_walk_forward",
+        "run_at": datetime.now(timezone.utc), "report": json.loads(json.dumps(report, default=str)),
     })
 
 
