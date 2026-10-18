@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 7855e08
+verified_at: 6eca5d0
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -191,7 +191,7 @@ Related, outside the globs: `/strategies/built*`, `/strategies/library` (→ `le
 - `/picks` loads every scored pick on each call (`picks_today` `find({"outcome":{"$ne":None}})`). the scan projects only `p_up` and `outcome`. `picks` has indexes on `date` and `outcome` (`picks.py::ensure_indexes`, called at startup).
 - At scan time sentiment is usually not cached, so `final ≤ 0.7·rule + 0.15` until `attach_theses` rescores (`thesis.py` docstring).
 - `keep_best` uses wall-clock `decided_at`, not `now` (`store.py::keep_best` comment).
-- `check_exits` closes a trade as `sold` by writing `paper_trades` directly: the ledger only closes via fills, and this is an inferred broker-side sale with no fill (left as is). A same-day buy is not checked against holdings (only a snapshot from a later IST day).
+- `check_exits` closes a trade as `sold` by writing `paper_trades` directly: the ledger only closes via fills, and this is an inferred broker-side sale with no fill (owner decision: stays out of the ledger). The row is stamped `closed_by:"inferred_from_holdings"` and `TradeLedger` shows "inferred from your holdings". A same-day buy is not checked against holdings (only a snapshot from a later IST day).
 - `SuggestionStore.DECIDED_STATUSES` doesn't list `SENDING`/`SENT`. Nothing reads it for those.
 - `builder/draft.py::run` drops `builder:lock` in `finally`. A run past 6 h may delete a newer run's lock (`ponytail:` note at `draft.py::run`).
 - The builder's gateway response cache replays cut-off replies, hence the single retry with a timestamped line (ac1b363).
