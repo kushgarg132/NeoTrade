@@ -42,6 +42,14 @@ def _naive(dt: datetime) -> datetime:
     return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
 
 
+def _within(start: datetime, ts: datetime, end: datetime) -> bool:
+    """Aware times compare as instants (a UTC window vs IST candles); only a
+    naive one among them falls back to wall-clock."""
+    if start.tzinfo and ts.tzinfo and end.tzinfo:
+        return start <= ts <= end
+    return _naive(start) <= _naive(ts) <= _naive(end)
+
+
 class HistoricalFeed:
     def __init__(
         self,
@@ -86,7 +94,7 @@ class HistoricalFeed:
         bars: list[Bar] = []
         for instrument, candles in fetched:
             for candle in candles:
-                if not (_naive(self._start) <= _naive(candle.timestamp) <= _naive(self._end)):
+                if not _within(self._start, candle.timestamp, self._end):
                     continue
                 bars.append(Bar(
                     instrument_token=instrument.instrument_token,

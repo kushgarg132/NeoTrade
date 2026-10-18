@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: a51584a
+verified_at: de65474
 ---
 # Trading engine
 
@@ -22,7 +22,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/engine/autorun.py` | Minute tick: daily intraday auto-run, long-term pass, plan build, reminders | `autorun.py::tick`, `::_may_start`, `::_longterm_pass`, `::_autopilot_proposals`, `::live_feed_ready`, `::in_session`, `::start` |
 | `backend/engine/adopt.py` | New run inherits today's open intraday trades; closes stale | `adopt.py::adopt_intraday`, `::close_stale` |
 | `backend/engine/sweeps.py` | 60 s loop: stuck rows + late live fills | `sweeps.py::_loop`, `::start` |
-| `backend/engine/stuck.py` | Settle SENDING/FILLING rows a crash left | `stuck.py::sweep_stuck`, `::STALE` |
+| `backend/engine/stuck.py` | Settle approve-live proposals a crash left SENDING | `stuck.py::sweep_stuck`, `::STALE` |
 | `backend/engine/reconcile.py` | Book live orders that filled after first checks | `reconcile.py::reconcile` |
 | `backend/engine/execution/simulated.py` | Paper/backtest fills (MARKET only) | `simulated.py::SimulatedExecutionClient` (`on_bar`, `mark`, `fill_now`) |
 | `backend/engine/execution/routing.py` | Per-strategy live/paper dispatch | `routing.py::RoutingExecutionClient._client_for` |
@@ -83,7 +83,7 @@ Mongo (all per-account rows carry `user_id`; every `LedgerStore` read filters on
 | `trading_runs` | via `RunStore` (`runs.py`): `run_id`, `user_id`, `mode`, `status` RUNNING/STOPPED/error, `params.origin` manual/auto, `progress` | `launch_run`, autorun `_may_start` |
 | `instruments` | `Instrument` fields; unique `(exchange,tradingsymbol)` and `instrument_token` | `InstrumentMaster` |
 | `instrument_meta` | `_id=free_source_refresh`, `last_refreshed_at` (20 h throttle) | `loader.py::refresh_from_free_public_sources` |
-| `suggestions`, `user_prefs`, `holding_theses`, `paper_limit_orders` | read/updated here (`ai_order`, `status` SENDING->SENT/EXECUTED/PENDING/NEEDS_REVIEW; prefs below) | autorun, stuck, reconcile |
+| `suggestions`, `user_prefs`, `holding_theses` | read/updated here (`ai_order`, `status` SENDING->SENT/EXECUTED/NEEDS_REVIEW; prefs below) | autorun, stuck, reconcile |
 
 Redis:
 
@@ -186,7 +186,7 @@ All IST; weekdays only (no holiday calendar: `autorun.py::in_session` ponytail).
 - Kill switch trips once per user per IST day and never re-arms (`$setOnInsert`); blocks INTRADAY entries only; `daily_loss_limit` 0 = off; `day_realized` carried across restarts.
 - One run per `(user, mode)` (Redis lock + `RunStore.list_active`); one auto-run owner per slot (`autorun:*`); one open position row per `(user,symbol)` (unique index) so an entry on a held symbol is skipped (`run` step 6).
 - Position ownership: only `holders[symbol]`'s strategy may add/exit (`size_intents`); exits close what is held, never flip (`size = abs(held)`).
-- Cost realism: backtest 10 bps adverse slippage, next-bar-open fills for equity; live fills carry `costs=0.0` (see gotchas).
+- Cost realism: backtest 10 bps adverse slippage, next-bar-open fills for equity; live fills are charged the same modelled schedule as paper (`costs.py::fill_costs`; `live_orders` rows store `product`/`option` for late fills, `live_order_store.py::fill_row_costs`; rows from before that book 0).
 - Gate thresholds: backtest `MIN_WINDOW_DAYS=365`, `MIN_TRADES=30`, `MIN_PROFIT_FACTOR=1.3`, `MAX_DRAWDOWN=0.15` (`backtest_gate.py`); paper `MIN_PAPER_DAYS=20`, `MIN_PAPER_TRADES=30`, PF 1.3 (None = no losers = pass), net > 0, DD <= 5% of `account_size` (`paper_gate.py::paper_record`).
 - Idea gate for the user: `paper_gate.py::for_mine` shows a pending LONGTERM idea only when `proven_strategies`; decided rows always show.
 - `venue_filter`: "paper" means "not live", so untagged old rows never leak into the live book (`persistence.py::venue_filter`).
@@ -222,14 +222,16 @@ All behind `get_current_user` at include time (`server.py`: trading, broker, opt
 Past fixes (from `git log`): `76c312c` reopening keeps a symbol's realized P&L; `45ef82c` next-open fills booked before the bar is decided on; `4107135` backtest stops fill at the gap and on the entry bar; `a6aedf0` replay yields every 200 bars (a year of bars held the loop ~40 s and lapsed the ingest leader lock, 2026-10-15); `216c7ba` exits close what is held, no MIS entry after 15:15; `e5c8d6d` long-term SELL with nothing held is not a short; `3e72111` profit factor over round trips; `73b9b83` option charges at the current NSE schedule; `0ff159b` Upstox refresh keeps only `{exchange}_EQ` rows (a lot-size-less index row KeyError dropped the whole refresh); `86938d2` a 0 loss limit is off and restarts keep the day's realized loss; `1b2c566` late live fills booked, one owner per position; `f490f00` level alerts in their own step; `4ca649a` autopilot exits run with it off, intraday squares off at 15:15; BHEL 2026-10-13: the open trade is matched by side so a SELL does not grow a stale BUY (`persistence.py::_advance_trade`); cap on starts excludes orphaned (deploy-swept) runs so deploys do not strand positions (`autorun.py::_may_start`).
 
 Behaviour that surprises:
-- `poll_once` and `reconcile` book live fills with `costs=0.0` (`execution/broker.py:86`, `engine/reconcile.py:54`): live P&L is gross of charges.
+- Live fill charges are modelled, not the broker's contract note: live P&L is net of the paper schedule, so it can differ from the broker's by a few rupees.
 - Live engine orders report no fill back to the run (`AutopilotExecutionClient.fills` yields nothing); the autopilot's own 15:15 `check_exits` is the only square-off for them (`service.py::check_exits`).
 - Daily/swing runs (LONGTERM) never trade: they create suggestions; the `scan` (outside this page) reuses `run` over ~400 days with the sink.
-- `HistoricalFeed` filters candles by `_naive()` (drops tzinfo without converting), so mixed-timezone `start`/`end` vs candle timestamps compare wall-clock values (`data/feeds/historical.py:358`). Callers pass IST `now` in the gate path, which matches broker candles.
+- `HistoricalFeed` filters candles with `historical.py::_within`: aware times compare as instants; if any of `start`/`end`/candle is naive it falls back to wall-clock.
 - `PollingLiveFeed` (daily quote as a bar) is wrong for intraday; `CandlePollingFeed` yields closed yfinance 5m candles ~15 min late and marks all but the newest as `warmup` on the first poll or after `add()` (`candle_poll.py`).
+- Mid-run plan adds (`plan/expand.py`) need `feed.add`: Kite and Upstox tick feeds have it (`live_upstox.py::UpstoxMarketFeed.add` resolves keys from the adapter's loaded scrip dump; unresolved symbols are logged, not added); polling feeds skip.
 - `TickBarAggregator` bars are clock-driven: a quiet symbol still emits a flat zero-volume bar; first window's volume is 0 (no baseline).
 - Kite `ticker_feed` probes `ltp` first; a Kite Connect app without market-data permission returns None so `build_feed` falls through to Upstox/polling (`kite.py::ticker_feed`).
 - Upstox history is rate-limited by a per-process 0.5 s spacing and 28-day chunks for minute data (`upstox.py::_space_history_call`, `_CHUNK_DAYS`); a gate backtest is ~975 calls.
+- LIMIT orders: all three adapters set `SUPPORTS_LIMIT` and send the price (Kite `price`, Angel One `ordertype: LIMIT` + `price`, Upstox); `chat/actions.py::_order_checks` refuses LIMIT on any adapter without it. Kite/Angel One payloads are unit-tested only (no live account).
 - Upstox `_PRODUCT_MAP` maps NRML to `D` (delivery/carry-forward); `place_order` for options resolves the key via the option chain, refuses rather than guesses (`_option_key`).
 - Position `unrealized_pnl` is never stored non-zero; reads mark at request time (`trading.py::get_positions`), `/trading/equity` does not mark.
 - `autopilot/service.py::_state` reads only the latest 1000 trades of the book and counts a SENT (unconfirmed) BUY as deployed/held until reconciled.
@@ -238,12 +240,10 @@ Behaviour that surprises:
 - Instrument tokens from NSE/BSE free lists are synthetic and cannot subscribe to ticks; a Kite sync overwrites them in place (`free_source.py::_synthetic_token`).
 
 Open issues / possible bugs found while reading (not fixed):
-- `backend/data/feeds/live_upstox.py::UpstoxMarketFeed` has no `add()`; `plan/expand.py:15` (`hasattr(feed, "add")`) therefore skips every mid-run plan add on an Upstox tick feed (logs "cannot add symbols mid-run").
-- `backend/engine/stuck.py:54-64` and `backend/server.py:147` still sweep/index `paper_limit_orders`, but no module writes that collection (`backend/engine/paper_orders.py`, named in the docstring, does not exist): dead code left from the removed paper ticket. The `reason == "paper"` branch (`stuck.py:43`) is the same remnant.
+- `backend/server.py:147` still indexes `paper_limit_orders`, which nothing reads or writes since the paper ticket was removed (the stuck sweep for it is gone).
 - `risk/backtest_gate.py::BacktestGateStore.ensure_indexes` (line 44) and `risk/kill_switch.py::KillSwitchStore.ensure_indexes` (line 30) are defined but never called at startup; `paper_trades` has no index at all (`persistence.py:50-53` indexes only orders, fills, positions).
-- `brokers/angel_one.py:266` always sends `ordertype: MARKET` and `kite_orders.py:61` sends `order_type` but no `price`, so a LIMIT order only works on Upstox (`UpstoxAdapter.SUPPORTS_LIMIT`, `upstox.py:152`).
 - `risk/backtest_gate.py:50` and `risk/kill_switch.py:48` call `datetime.now(...)` directly (allowed: `risk/` is outside the grep test), unlike `engine/`.
-- ROADMAP lists "`owner_by_symbol` last-writer-wins" as an old bug; `size_intents` now prefers `strategies_by_name[intent.strategy]`, but `_square_off_orders` and `run` still build `owner_by_symbol` last-writer-wins for symbols shared by several strategies (`runner.py:492`, `:615`).
+- `run` still builds `owner_by_symbol` last-writer-wins (`runner.py:492`, `:605`), but it is only a fallback (`size_intents` prefers `strategies_by_name[intent.strategy]`, square-off prefers `holders`) and every run's strategies share one mode (`trading.py` filters by `spec.mode`), so the fallback only ever yields the right mode. Harmless unless a mixed-mode run is introduced.
 
 ## Tests
 

@@ -11,8 +11,7 @@ second "paper" implementation.
 from typing import AsyncIterator
 
 from backend.core.models import Bar, Fill, Order, Position
-from backend.engine.execution.costs import calculate_indian_costs
-from backend.engine.execution.options_costs import calculate_options_costs
+from backend.engine.execution.costs import fill_costs
 
 
 class SimulatedExecutionClient:
@@ -73,10 +72,7 @@ class SimulatedExecutionClient:
     def _book(self, order: Order, price: float, timestamp) -> None:
         if self.slippage_bps:
             price *= 1 + (self.slippage_bps if order.side.value == "BUY" else -self.slippage_bps) / 10_000
-        costs = (
-            calculate_options_costs(price, order.quantity, order.side) if order.contract is not None
-            else calculate_indian_costs(price, order.quantity, order.side, order.product)
-        )
+        costs = fill_costs(price, order.quantity, order.side, order.product, order.contract is not None)
         self._pending_fills.append(Fill(
             order_id=order.id,
             symbol=order.symbol,

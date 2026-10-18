@@ -376,8 +376,12 @@ class UpstoxAdapter:
         if not token_for_key:
             return None
 
+        # Mid-run adds (plan/expand.py) look up the scrip dumps already loaded above.
+        def key_for(instrument):
+            return self._scrip_cache.get(instrument.exchange, {}).get(instrument.tradingsymbol, {}).get("instrument_key")
+
         return UpstoxMarketFeed(
-            token, token_for_key, timeframe=timeframe, timeframe_seconds=timeframe_seconds,
+            token, token_for_key, timeframe=timeframe, timeframe_seconds=timeframe_seconds, key_for=key_for,
         )
 
     @staticmethod

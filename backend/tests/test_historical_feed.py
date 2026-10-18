@@ -91,3 +91,22 @@ async def test_no_failures_behaves_exactly_as_before():
     bars = [bar async for bar in feed]
 
     assert len(bars) == 6
+
+
+@pytest.mark.asyncio
+async def test_window_compares_aware_times_as_instants():
+    """_naive stripped tzinfo without converting: an IST candle at 09:15
+    (03:45 UTC) fell outside a UTC window ending 04:00 by wall clock."""
+    from datetime import timedelta
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+
+    class _IstProvider(_PartiallyFailingProvider):
+        async def history(self, instrument, interval, period):
+            return [PriceCandle(symbol="TCS", timestamp=datetime(2024, 1, 2, 9, 15, tzinfo=ist),
+                                open=1, high=1, low=1, close=1, volume=1)]
+
+    feed = HistoricalFeed(_IstProvider([]), [_instrument("TCS", 3)],
+                          start=datetime(2024, 1, 2, 3, 0, tzinfo=timezone.utc),
+                          end=datetime(2024, 1, 2, 4, 0, tzinfo=timezone.utc), timeframe="5m")
+    assert len([bar async for bar in feed]) == 1

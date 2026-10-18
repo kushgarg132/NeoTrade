@@ -37,6 +37,18 @@ async def test_place_order_maps_fields_and_returns_broker_order_id():
     assert call_kwargs["order_type"] == "MARKET"
     assert call_kwargs["exchange"] == "NSE"
     assert call_kwargs["variety"] == "regular"
+    assert call_kwargs["price"] is None  # the SDK drops None params
+
+
+async def test_limit_order_sends_its_price():
+    mock_kite = MagicMock()
+    client = KiteOrderClient(kite_client_factory=lambda: mock_kite)
+
+    with patch("backend.brokers.kite_orders.asyncio.to_thread", new=AsyncMock(side_effect=lambda fn, **kw: fn(**kw))):
+        await client.place_order(_order(order_type="LIMIT", limit_price=1490.5))
+
+    call_kwargs = mock_kite.place_order.call_args.kwargs
+    assert (call_kwargs["order_type"], call_kwargs["price"]) == ("LIMIT", 1490.5)
 
 
 async def test_cancel_order_calls_sdk_with_regular_variety():

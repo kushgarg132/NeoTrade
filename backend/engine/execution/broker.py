@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from typing import AsyncIterator
 
 from backend.core.models import Fill, Order, Position, Side
-from backend.engine.execution.live_order_store import LiveOrderStore
+from backend.engine.execution.live_order_store import LiveOrderStore, fill_row_costs
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,7 @@ class BrokerExecutionClient:
         await self._store.record_submitted(
             order_id=order.id, broker_order_id=broker_order_id, user_id=self._user_id,
             strategy_name=order.strategy_name or "", symbol=order.symbol, side=order.side,
+            product=order.product, option=order.contract is not None,
         )
         return order.id
 
@@ -83,7 +84,8 @@ class BrokerExecutionClient:
                     self._pending_fills.append(Fill(
                         order_id=row["_id"], symbol=row["symbol"], side=Side(row["side"]),
                         quantity=newly_filled, price=status.average_price,
-                        timestamp=_now(), costs=0.0, venue="live",
+                        timestamp=_now(), venue="live",
+                        costs=fill_row_costs(row, status.average_price, newly_filled),
                     ))
             except Exception:
                 # One broker hiccup on one order must not stall status

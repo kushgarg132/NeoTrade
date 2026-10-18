@@ -232,6 +232,10 @@ async def test_place_order_posts_mapped_fields(monkeypatch):
     assert captured["json"]["transactiontype"] == "BUY"
     assert captured["json"]["producttype"] == "INTRADAY"
     assert captured["json"]["quantity"] == "10"
+    assert (captured["json"]["ordertype"], captured["json"]["price"]) == ("MARKET", "0")
+
+    await adapter.place_order(order.model_copy(update={"order_type": "LIMIT", "limit_price": 1490.5}))
+    assert (captured["json"]["ordertype"], captured["json"]["price"]) == ("LIMIT", "1490.5")
 
 
 async def test_cancel_order_posts_variety_and_orderid(monkeypatch):

@@ -22,6 +22,7 @@ authoritative; flagged in task-6-report.md per the brief's ask.
 from typing import Literal
 
 from backend.core.models import Side
+from backend.engine.execution.options_costs import calculate_options_costs
 
 _BROKERAGE_FLAT = 20.0
 _BROKERAGE_PCT = 0.0003
@@ -65,3 +66,11 @@ def calculate_indian_costs(
 
     total = brokerage + stt + exchange_txn_charges + sebi_charges + stamp_duty + gst + dp
     return round(total, 2)
+
+
+def fill_costs(price: float, quantity: float, side: Side, product: str, is_option: bool = False) -> float:
+    """Charges for one fill: the option schedule for a contract, else equity
+    (any product but MIS is charged as delivery)."""
+    if is_option:
+        return calculate_options_costs(price, quantity, side)
+    return calculate_indian_costs(price, quantity, side, "MIS" if product == "MIS" else "CNC")

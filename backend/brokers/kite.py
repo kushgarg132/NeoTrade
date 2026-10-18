@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 class KiteAdapter:
     # Places NFO option orders (Order.contract) as well as NSE equity.
     supports_options = True
+    # place_order sends a LIMIT order's price (kite_orders.py; chat/actions.py checks this).
+    SUPPORTS_LIMIT = True
 
     def __init__(self, api_key: Optional[str], api_secret: Optional[str], redis, user_id: str) -> None:
         self._api_key = api_key

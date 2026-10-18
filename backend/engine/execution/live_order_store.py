@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from backend.core.models import LiveOrderState, Side
+from backend.engine.execution.costs import fill_costs
 
 _PENDING_STATES = ("SUBMITTED", "ACKNOWLEDGED", "PARTIALLY_FILLED")
 
@@ -21,6 +22,14 @@ def _now() -> datetime:
     """Real wall-clock time, constructed to satisfy the grep check in
     test_no_datetime_now.py (must avoid literal 'datetime.now' pattern)."""
     return datetime.fromtimestamp(time.time(), tz=timezone.utc)
+
+
+def fill_row_costs(row: dict, price: float, quantity: float) -> float:
+    """Modelled charges for a fill of a `live_orders` row, so live P&L is net
+    like paper. Rows from before `product` was recorded book 0.0."""
+    if not row.get("product"):
+        return 0.0
+    return fill_costs(price, quantity, Side(row["side"]), row["product"], bool(row.get("option")))
 
 
 class LiveOrderStore:
@@ -40,6 +49,7 @@ class LiveOrderStore:
     async def record_submitted(
         self, order_id: str, broker_order_id: str, user_id: str, strategy_name: str, symbol: str, side: Side,
         reason: str | None = None, role: str | None = None, ledger_user: str | None = None,
+        product: str | None = None, option: bool = False,
     ) -> None:
         await self.collection.insert_one({
             "_id": order_id,
@@ -58,6 +68,9 @@ class LiveOrderStore:
             # Which broker (mine / ai) holds it and which ledger books its fills.
             "role": role,
             "ledger_user": ledger_user or user_id,
+            # What a late fill is charged as (fill_row_costs).
+            "product": product,
+            "option": option,
         })
 
     async def get_broker_order_id(self, order_id: str) -> Optional[str]:
