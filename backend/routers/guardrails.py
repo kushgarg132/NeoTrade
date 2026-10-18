@@ -4,7 +4,8 @@ alerts. The rules themselves are ordinary preferences (/settings/preferences).""
 import secrets
 from datetime import datetime, timezone
 
-import httpx
+from aiogram.exceptions import TelegramAPIError
+from aiogram.utils.token import TokenValidationError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -59,7 +60,7 @@ async def telegram_set_bot(
     The token is checked with Telegram before it is stored, encrypted."""
     try:
         username = await telegram.bot_username(req.token)
-    except httpx.HTTPError:
+    except (TelegramAPIError, TokenValidationError):
         raise HTTPException(status_code=400, detail="Telegram did not accept that token. Copy it again from @BotFather.")
     await store.set_telegram_bot(user.id, req.token, username)
     return {"own_bot": username, "linked": False}

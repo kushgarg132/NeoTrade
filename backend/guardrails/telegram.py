@@ -6,8 +6,11 @@ a one-time code, the user taps Start, and `find_chat` reads that bot's
 recent updates for the code. Every function takes the bot `token`; None
 means the deployment-wide bot.
 
-Bot API used (https://core.telegram.org/bots/api): getMe, getUpdates,
-sendMessage -- all GET/POST on https://api.telegram.org/bot<token>/<method>.
+The Bot API transport is aiogram (https://docs.aiogram.dev): one `Bot`, and
+so one keep-alive aiohttp session, per token per event loop. Updates and
+keyboards cross this module as plain Bot API dicts, so callers never see
+aiogram types. A failed call raises aiogram's TelegramAPIError (network
+errors included), whose messages carry no token.
 """
 
 import asyncio
@@ -17,61 +20,40 @@ import weakref
 import re
 from typing import Optional
 
-import httpx
+from aiogram import Bot
+from aiogram.exceptions import TelegramAPIError, TelegramConflictError
+from aiogram.methods import (
+    AnswerCallbackQuery, DeleteMyCommands, EditMessageReplyMarkup, EditMessageText, SendChatAction, SendMessage,
+    SendMessageDraft, SetMyCommands, TelegramMethod,
+)
 
 from backend.configs.settings import settings
 
 logger = logging.getLogger(__name__)
+TIMEOUT = 10  # seconds per Bot API call; a long poll adds its own wait
 
 
 def configured() -> bool:
     return bool(settings.TELEGRAM_BOT_TOKEN)
 
 
-_CLIENTS: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()  # event loop -> client
+_BOTS: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()  # event loop -> {token: Bot}
 
 
-def _new_client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(limits=httpx.Limits(max_keepalive_connections=10, keepalive_expiry=60))
-
-
-class _http:
-    """`async with _http(timeout=...) as client`: borrows this worker's shared
-    keep-alive client instead of opening a new HTTPS connection per call
-    (each new one cost ~0.5s: taps, drafts and edits all felt it). The
-    client is never closed here; one per event loop."""
-
-    def __init__(self, timeout: float = 10.0):
-        self.timeout = timeout
-
-    async def __aenter__(self):
-        loop = asyncio.get_running_loop()
-        client = _CLIENTS.get(loop)
-        if client is None or client.is_closed:
-            client = _CLIENTS[loop] = _new_client()
-        self.client = client
-        return self
-
-    async def __aexit__(self, *exc) -> bool:
-        return False
-
-    async def get(self, url, **kwargs):
-        return await self.client.get(url, timeout=self.timeout, **kwargs)
-
-    async def post(self, url, **kwargs):
-        return await self.client.post(url, timeout=self.timeout, **kwargs)
-
-
-def _url(method: str, token: Optional[str] = None) -> str:
-    return f"https://api.telegram.org/bot{token or settings.TELEGRAM_BOT_TOKEN}/{method}"
+def _bot(token: Optional[str] = None) -> Bot:
+    """This worker's Bot for `token` (None: the deployment's). Its session is
+    reused, not reopened per call (a new HTTPS connection cost ~0.5s that
+    taps, drafts and edits all felt), and never closed here."""
+    bots = _BOTS.setdefault(asyncio.get_running_loop(), {})
+    token = token or settings.TELEGRAM_BOT_TOKEN
+    if token not in bots:
+        bots[token] = Bot(token)
+    return bots[token]
 
 
 async def bot_username(token: Optional[str] = None) -> str:
     """Also how a pasted token is validated: Telegram rejects a bad one."""
-    async with _http(timeout=10.0) as client:
-        resp = await client.get(_url("getMe", token))
-        resp.raise_for_status()
-    return resp.json()["result"]["username"]
+    return (await _bot(token).get_me(request_timeout=TIMEOUT)).username
 
 
 def start_key(code: str) -> str:
@@ -80,15 +62,13 @@ def start_key(code: str) -> str:
 
 async def find_chat(code: str, token: Optional[str] = None) -> Optional[int]:
     # ponytail: scans the last 100 pending updates; a busy bot needs a webhook instead
-    async with _http(timeout=10.0) as client:
-        resp = await client.get(_url("getUpdates", token), params={"allowed_updates": '["message"]'})
-    if resp.status_code == 409:
+    try:
+        pending = await _bot(token).get_updates(allowed_updates=["message"], request_timeout=TIMEOUT)
+    except TelegramConflictError:
         return None  # the AI poller holds this bot; it stashes Start codes instead
-    resp.raise_for_status()
-    for update in reversed(resp.json().get("result") or []):
-        message = update.get("message") or {}
-        if (message.get("text") or "").strip() == f"/start {code}":
-            return message["chat"]["id"]
+    for update in reversed(pending):
+        if update.message and (update.message.text or "").strip() == f"/start {code}":
+            return update.message.chat.id
     return None
 
 
@@ -99,57 +79,27 @@ async def updates(offset: Optional[int] = None, token: Optional[str] = None, wai
     bring their own BotFather bot, whose webhook configuration NeoTrade does
     not own.  Callers persist the next offset after handling each batch.
     """
-    params = {"allowed_updates": '["message","callback_query"]', "timeout": wait}
-    if offset is not None:
-        params["offset"] = offset
     # `wait` > 0 is a long poll: Telegram answers as soon as an update arrives.
-    async with _http(timeout=wait + 10.0) as client:
-        resp = await client.get(_url("getUpdates", token), params=params)
-        resp.raise_for_status()
-    return resp.json().get("result") or []
+    batch = await _bot(token).get_updates(offset=offset, timeout=wait, allowed_updates=["message", "callback_query"],
+                                          request_timeout=wait + TIMEOUT)
+    return [update.model_dump(mode="json", by_alias=True, exclude_none=True) for update in batch]
 
 
 async def send(chat_id: int, text: str, token: Optional[str] = None, reply_markup: Optional[dict] = None) -> bool:
     """Best effort: a failed alert is logged, never raised into the monitor."""
     if not (token or configured()):
         return False
-    try:
-        async with _http(timeout=10.0) as client:
-            body = {"chat_id": chat_id, "text": text}
-            if reply_markup:
-                body["reply_markup"] = reply_markup
-            resp = await client.post(_url("sendMessage", token), json=body)
-            resp.raise_for_status()
-        return True
-    except Exception as exc:
-        logger.warning("telegram send failed: %s", exc)
-        return False
+    return await _call(SendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup or None), token) is not None
 
 
 async def send_buttons(chat_id: int, text: str, buttons: list[list[dict]], token: Optional[str] = None) -> bool:
     """Send a proposal card. Callback data carries only an opaque action id."""
-    if not (token or configured()):
-        return False
-    try:
-        async with _http(timeout=10.0) as client:
-            resp = await client.post(_url("sendMessage", token), json={
-                "chat_id": chat_id, "text": text,
-                "reply_markup": {"inline_keyboard": buttons},
-            })
-            resp.raise_for_status()
-        return True
-    except Exception as exc:
-        logger.warning("telegram button send failed: %s", exc)
-        return False
+    return await send(chat_id, text, token, {"inline_keyboard": buttons})
 
 
 async def answer_callback(callback_id: str, text: str, token: Optional[str] = None) -> None:
     """Dismiss Telegram's button spinner; errors are non-fatal."""
-    try:
-        async with _http(timeout=10.0) as client:
-            await client.post(_url("answerCallbackQuery", token), json={"callback_query_id": callback_id, "text": text})
-    except Exception as exc:
-        logger.warning("telegram callback acknowledgement failed: %s", exc)
+    await _call(AnswerCallbackQuery(callback_query_id=callback_id, text=text), token)
 
 
 PRE_MAX_WIDTH = 34  # characters a phone shows on one monospace line
@@ -221,35 +171,31 @@ def to_html(md: str) -> str:
     return "".join(out)
 
 
-async def _call(method: str, body: dict, token: Optional[str]) -> Optional[dict]:
-    """POST a Bot API method; the response, or None on any failure (logged)."""
+async def _call(method: TelegramMethod, token: Optional[str]):
+    """Run one Bot API method; its result, or None on any failure (logged)."""
     try:
-        async with _http(timeout=10.0) as client:
-            resp = await client.post(_url(method, token), json=body)
-        data = resp.json()
-        if not data.get("ok"):
-            # An edit with unchanged text is harmless; anything else is worth a line.
-            if "not modified" not in (data.get("description") or ""):
-                logger.warning("telegram %s failed: %s", method, data.get("description"))
-            return None
-        return data
+        return await _bot(token)(method, request_timeout=TIMEOUT)
+    except TelegramAPIError as exc:
+        # An edit with unchanged text is harmless; anything else is worth a line.
+        if "not modified" not in exc.message:
+            logger.warning("telegram %s failed: %s", method.__api_method__, exc.message)
     except Exception as exc:
-        logger.warning("telegram %s failed: %s", method, exc)
-        return None
+        logger.warning("telegram %s failed: %s", method.__api_method__, type(exc).__name__)
+    return None
 
 
 async def set_commands(commands: list[dict], token: Optional[str] = None) -> bool:
     """Set the bot's "/" menu. Narrower scopes win in Telegram clients, so
     clear the private/group menus another app may have left behind."""
     for scope in ("all_private_chats", "all_group_chats"):
-        await _call("deleteMyCommands", {"scope": {"type": scope}}, token)
-    return await _call("setMyCommands", {"commands": commands}, token) is not None
+        await _call(DeleteMyCommands(scope={"type": scope}), token)
+    return await _call(SetMyCommands(commands=commands), token) is not None
 
 
 async def set_buttons(chat_id: int, message_id: int, buttons: list[list[dict]], token: Optional[str] = None) -> None:
     """Replace a message's inline buttons (an empty list removes them), leaving its text."""
-    await _call("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": message_id,
-                                           "reply_markup": {"inline_keyboard": buttons}}, token)
+    await _call(EditMessageReplyMarkup(chat_id=chat_id, message_id=message_id,
+                                       reply_markup={"inline_keyboard": buttons}), token)
 
 
 async def clear_buttons(chat_id: int, message_id: int, token: Optional[str] = None) -> None:
@@ -258,32 +204,31 @@ async def clear_buttons(chat_id: int, message_id: int, token: Optional[str] = No
 
 async def chat_action(chat_id: int, token: Optional[str] = None) -> None:
     """Shows "typing…" in the chat for ~5 seconds."""
-    await _call("sendChatAction", {"chat_id": chat_id, "action": "typing"}, token)
+    await _call(SendChatAction(chat_id=chat_id, action="typing"), token)
 
 
 def _plain(markup: str) -> str:
     return html.unescape(re.sub(r"<[^>]+>", "", markup))
 
 
-async def _html_or_plain(method: str, body: dict, text: str, token: Optional[str]) -> Optional[dict]:
+async def _html_or_plain(method: type, body: dict, text: str, token: Optional[str]):
     """Send as HTML; if Telegram rejects the markup, the same text without tags."""
-    data = await _call(method, {**body, "text": text, "parse_mode": "HTML"}, token)
-    return data or await _call(method, {**body, "text": _plain(text)}, token)
+    result = await _call(method(**body, text=text, parse_mode="HTML"), token)
+    return result if result is not None else await _call(method(**body, text=_plain(text)), token)
 
 
 async def send_html(chat_id: int, text: str, token: Optional[str] = None,
                     reply_markup: Optional[dict] = None) -> Optional[int]:
     """Send Telegram HTML; the new message's id, or None."""
-    body = {"chat_id": chat_id, **({"reply_markup": reply_markup} if reply_markup else {})}
-    data = await _html_or_plain("sendMessage", body, text, token)
-    return data["result"]["message_id"] if data else None
+    message = await _html_or_plain(SendMessage, {"chat_id": chat_id, "reply_markup": reply_markup or None}, text, token)
+    return message.message_id if message else None
 
 
 async def edit_html(chat_id: int, message_id: int, text: str, token: Optional[str] = None,
                     reply_markup: Optional[dict] = None) -> None:
     """Replace a message's text; with no reply_markup its buttons go too."""
-    body = {"chat_id": chat_id, "message_id": message_id, **({"reply_markup": reply_markup} if reply_markup else {})}
-    await _html_or_plain("editMessageText", body, text, token)
+    await _html_or_plain(EditMessageText, {"chat_id": chat_id, "message_id": message_id,
+                                           "reply_markup": reply_markup or None}, text, token)
 
 
 async def send_rich(chat_id: int, md: str, token: Optional[str] = None,
@@ -295,8 +240,7 @@ async def draft(chat_id: int, draft_id: int, text: str, token: Optional[str] = N
     """Stream a live, animated preview (Bot API sendMessageDraft, private chats
     only). It is ephemeral: it lasts ~30s and the next sendMessage replaces it.
     Empty text shows Telegram's own "Thinking…" placeholder."""
-    body = {"chat_id": chat_id, "draft_id": draft_id}
-    return await _html_or_plain("sendMessageDraft", body, text, token) is not None
+    return await _html_or_plain(SendMessageDraft, {"chat_id": chat_id, "draft_id": draft_id}, text, token) is not None
 
 
 async def alert(db, user_id: str, text: str, html: bool = False) -> bool:

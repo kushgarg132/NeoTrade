@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock
 
+import pytest
 from mongomock_motor import AsyncMongoMockClient
 
 from backend.guardrails import telegram_bot
@@ -381,23 +382,12 @@ def test_draft_says_thinking_before_the_first_words():
     assert "Thinking" not in telegram_bot._draft_html({"steps": [], "text": "Hello"})
 
 
-async def test_telegram_calls_share_one_keep_alive_client(monkeypatch):
-    import httpx
-
+async def test_telegram_calls_share_one_bot_per_token():
     from backend.guardrails import telegram
 
-    made = []
-
-    def new_client():
-        made.append(1)
-        return httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"ok": True})))
-
-    monkeypatch.setattr(telegram, "_new_client", new_client)
-    monkeypatch.setattr(telegram, "_CLIENTS", __import__("weakref").WeakKeyDictionary())
-    await telegram.answer_callback("c1", "", "tok")
-    await telegram.chat_action(42, "tok")
-    await telegram.answer_callback("c2", "", "tok")
-    assert len(made) == 1  # no new TLS handshake per call
+    # One Bot, so one keep-alive session: no new TLS handshake per call.
+    assert telegram._bot("1:a") is telegram._bot("1:a")
+    assert telegram._bot("1:a") is not telegram._bot("2:b")
 
 
 async def test_failed_poll_backs_off_instead_of_hammering(monkeypatch):
@@ -412,3 +402,39 @@ async def test_failed_poll_backs_off_instead_of_hammering(monkeypatch):
 
     assert await telegram_bot.poll_once(db, redis) == 0
     sleep.assert_awaited_once_with(telegram_bot.FAIL_BACKOFF_SECONDS)
+    assert telegram_bot.FAIL_BACKOFF_SECONDS == 10 < telegram_bot.LOCK_SECONDS
+
+
+async def test_taps_route_only_from_the_linked_private_chat(monkeypatch):
+    """A Confirm tap counts only from the chat linked to that bot's user:
+    not from another chat, and never from a group (any member could tap)."""
+    db = AsyncMongoMockClient()["test_db"]
+    redis = AsyncMock()
+    redis.get.return_value = None
+    monkeypatch.setattr(telegram_bot.GuardrailStore, "telegram_routes",
+                        AsyncMock(return_value=[("tok", {42: "alice", -42: "alice"})]))
+
+    def tap(update_id, chat_id):
+        return {"update_id": update_id, "callback_query": {
+            "id": f"cb{update_id}", "data": "nt:confirm:a1", "message": {"message_id": 7, "chat": {"id": chat_id}}}}
+
+    monkeypatch.setattr(telegram_bot.telegram, "updates", AsyncMock(return_value=[tap(1, 99), tap(2, -42), tap(3, 42)]))
+    monkeypatch.setattr(telegram_bot.telegram, "set_commands", AsyncMock(return_value=True))
+    callback = AsyncMock()
+    monkeypatch.setattr(telegram_bot, "_callback", callback)
+
+    assert await telegram_bot.poll_once(db, redis) == 1
+    (args, _), = callback.await_args_list
+    assert args[2:5] == ("alice", 42, "tok") and args[5]["id"] == "cb3"
+
+
+@pytest.mark.parametrize("data", ["nt:confirm", "nt:", "other:confirm:a1", "", "nt:delete:a1"])
+async def test_malformed_or_foreign_callback_data_does_nothing(monkeypatch, data):
+    db = AsyncMongoMockClient()["test_db"]
+    confirmed = AsyncMock()
+    monkeypatch.setattr(telegram_bot, "confirm", confirmed)
+    for name in ("answer_callback", "edit_html", "send"):
+        monkeypatch.setattr(telegram_bot.telegram, name, AsyncMock())
+    await telegram_bot._callback(db, None, "alice", 42, "tok", {"id": "cb", "data": data, "message": {"message_id": 7}})
+    confirmed.assert_not_awaited()
+    telegram_bot.telegram.edit_html.assert_not_awaited()

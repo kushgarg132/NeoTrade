@@ -1,7 +1,7 @@
 """UpstoxMarketFeed: protobuf FeedResponse frames -> ticks -> clock-driven
 bars, plus the subscribe frame and reconnect loop. No real WebSocket: the
 frames are built here field-by-field from MarketDataFeedV3.proto's field
-numbers (quoted in backend/data/feeds/live_upstox.py), and `connect_fn`
+numbers (upstox_client/feeder/proto, MarketDataFeedV3.proto), and `connect_fn`
 returns a fake connection."""
 
 import asyncio
@@ -86,6 +86,14 @@ def test_decodes_ltpc_only_and_index_feeds_without_volume():
 def test_decodes_first_level_with_greeks():
     greeks = _len(1, _ltpc(88.0)) + _int(4, 500)  # ltpc, vtt
     assert decode_feed_response(_response({KEY: _len(3, greeks)})) == {KEY: (88.0, 500)}
+
+
+def test_omitted_zero_fields_mean_no_tick_and_no_volume():
+    """proto3 leaves zero values off the wire: a feed with no ltp is no tick,
+    and a market feed with no vtt (nothing traded yet) has no volume."""
+    no_ltp = _len(2, _len(1, _len(1, _int(2, 1)) + _int(6, 50)))
+    no_vtt = _len(2, _len(1, _len(1, _ltpc(10.0))))
+    assert decode_feed_response(_response({KEY: no_ltp, "NSE_EQ|B": no_vtt})) == {"NSE_EQ|B": (10.0, None)}
 
 
 def test_market_info_message_has_no_ticks():

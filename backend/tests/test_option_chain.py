@@ -4,7 +4,6 @@ MarketData, AnalyticsData); every HTTP call is mocked."""
 
 from unittest.mock import AsyncMock
 
-import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -12,6 +11,7 @@ from fastapi.testclient import TestClient
 from backend.brokers.protocol import BrokerSessionState
 from backend.brokers.upstox import UpstoxAdapter
 from backend.routers import options
+from backend.tests.upstox_wire import UpstoxWire
 
 
 def _leg(key, ltp, oi, prev_oi, iv):
@@ -39,33 +39,26 @@ CONTRACTS = {"status": "success", "data": [
 
 @pytest.fixture
 def adapter(monkeypatch):
-    calls = []
-
-    async def fake_get(self, url, params=None, headers=None):
-        calls.append((url, params, headers))
-        body = CHAIN if url.endswith("/option/chain") else CONTRACTS
-        return httpx.Response(200, json=body, request=httpx.Request("GET", url))
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    wire = UpstoxWire(monkeypatch).on("GET", "/v2/option/chain", CHAIN).on("GET", "/v2/option/contract", CONTRACTS)
     a = UpstoxAdapter(api_key="id", api_secret="secret", redirect_uri="https://x/cb", redis=None, user_id="alice")
     a.get_access_token = AsyncMock(return_value="tok")
-    a.calls = calls
+    a.wire = wire
     return a
 
 
 @pytest.mark.asyncio
 async def test_expiries_come_from_the_contract_list_soonest_first(adapter):
     assert await adapter.option_expiries("NSE_INDEX|Nifty 50") == ["2026-09-29", "2026-10-06"]
-    url, params, headers = adapter.calls[0]
-    assert url == "https://api.upstox.com/v2/option/contract"
-    assert params == {"instrument_key": "NSE_INDEX|Nifty 50"}
-    assert headers["Authorization"] == "Bearer tok"
+    call = adapter.wire.calls[0]
+    assert (call.host, call.path) == ("api.upstox.com", "/v2/option/contract")
+    assert call.query == {"instrument_key": "NSE_INDEX|Nifty 50"}
+    assert call.headers["authorization"] == "Bearer tok"
 
 
 @pytest.mark.asyncio
 async def test_chain_puts_call_and_put_side_by_side_lowest_strike_first(adapter):
     rows = await adapter.option_chain("NSE_INDEX|Nifty 50", "2026-09-29")
-    assert adapter.calls[0][1] == {"instrument_key": "NSE_INDEX|Nifty 50", "expiry_date": "2026-09-29"}
+    assert adapter.wire.calls[0].query == {"instrument_key": "NSE_INDEX|Nifty 50", "expiry_date": "2026-09-29"}
     assert [r["strike"] for r in rows] == [25100.0, 25200.0]
     call = rows[0]["call"]
     assert call["ltp"] == 110.0 and call["oi"] == 500.0 and call["oi_change"] == 100.0
@@ -109,8 +102,10 @@ def test_without_an_upstox_login_the_route_says_connect_upstox(monkeypatch):
     assert "Connect Upstox" in resp.json()["detail"]
 
 
-def test_an_upstox_failure_is_a_502(adapter, monkeypatch):
-    async def broken(self, url, params=None, headers=None):
-        raise httpx.ConnectError("down")
-    monkeypatch.setattr(httpx.AsyncClient, "get", broken)
+@pytest.mark.parametrize("status", [None, 500])
+def test_an_upstox_failure_is_a_502(adapter, status):
+    if status:
+        adapter.wire.on("GET", "/v2/option/", {"status": "error"}, status=status)
+    else:
+        adapter.wire.down()
     assert _client(adapter).get("/api/v1/options/expiries", params={"underlying": "NIFTY"}).status_code == 502

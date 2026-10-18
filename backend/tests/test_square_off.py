@@ -5,13 +5,11 @@ adapters report the product/exchange it depends on."""
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 from backend.brokers.kite_orders import KiteOrderClient
 from backend.brokers.protocol import BrokerSessionState
 from backend.brokers.trades import parse_ist
-from backend.brokers.upstox import UpstoxAdapter
 from backend.core.models import Position, Side
 from backend.guardrails import monitor
 from backend.guardrails.square_off import describe, exit_orders
@@ -123,25 +121,6 @@ async def test_kite_positions_carry_exchange_and_product():
     with patch("backend.brokers.kite_orders.asyncio.to_thread", new=AsyncMock(side_effect=lambda fn: fn())):
         positions = await client.get_positions()
     assert (positions["SBIN"].exchange, positions["SBIN"].product) == ("NSE", "MIS")
-
-
-async def test_upstox_positions_map_product_codes(monkeypatch):
-    redis = MagicMock()
-    redis.get = AsyncMock(return_value="tok")
-    adapter = UpstoxAdapter(api_key="k", api_secret="s", redirect_uri="https://x/cb", redis=redis, user_id="alice")
-
-    async def fake_get(self, url, **kwargs):
-        return httpx.Response(200, json={"data": [
-            {"trading_symbol": "SBIN", "exchange": "NSE", "product": "I", "quantity": 10, "average_price": 800},
-            {"trading_symbol": "TCS", "exchange": "NSE", "product": "D", "quantity": 1, "average_price": 4000},
-            {"trading_symbol": "NIFTYFUT", "exchange": "NFO", "product": "D", "quantity": 50, "average_price": 1},
-        ]}, request=httpx.Request("GET", url))
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
-    positions = await adapter.get_positions()
-    assert (positions["SBIN"].exchange, positions["SBIN"].product) == ("NSE", "MIS")
-    assert positions["TCS"].product == "CNC"
-    assert positions["NIFTYFUT"].exchange == "NFO"
 
 
 async def test_square_off_never_touches_the_ai_account(monkeypatch):

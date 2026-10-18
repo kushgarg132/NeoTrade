@@ -17,6 +17,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from aiogram.filters.callback_data import CallbackData
+
 from backend.auth.broker_credentials import get_credential_store
 from backend.chat import agent
 from backend.chat.actions import ActionRefused, ChatActionStore, confirm
@@ -73,6 +75,14 @@ TELEGRAM_CONTEXT = {"page": "Telegram chat on a phone (action cards appear right
                             "buttons; prefer short bullet lists to tables, and keep any table to 2-3 short columns)"}
 
 
+class Tap(CallbackData, prefix="nt"):
+    """Every NeoTrade button's callback data, "nt:<command>:<id>": confirm,
+    confirm2 (the real-money second tap), cancel and an action id; ask and a
+    suggestion index; autopilot and "off" (autopilot/service.STOP_BUTTON)."""
+    command: str
+    id: str
+
+
 def _offset_key(token: Optional[str]) -> str:
     # Redis stores a one-way identifier, never a bot token.
     identity = token or "deployment-bot"
@@ -102,10 +112,9 @@ async def _remember(redis, user_id: str, history: list[dict], question: str, ans
 
 
 def _buttons(action: dict) -> list[list[dict]]:
-    action_id = action["id"]
     return [[
-        {"text": "Confirm", "callback_data": f"nt:confirm:{action_id}"},
-        {"text": "Cancel", "callback_data": f"nt:cancel:{action_id}"},
+        {"text": "Confirm", "callback_data": Tap(command="confirm", id=action["id"]).pack()},
+        {"text": "Cancel", "callback_data": Tap(command="cancel", id=action["id"]).pack()},
     ]]
 
 
@@ -269,7 +278,7 @@ def _suggestion_rows(suggestions: list[str]) -> list[list[dict]]:
     """Short labels two to a row, long ones on their own -- compact, nothing cut off."""
     rows: list[list[dict]] = []
     for i, q in enumerate(suggestions):
-        button = {"text": q[:64], "callback_data": f"nt:ask:{i}"}
+        button = {"text": q[:64], "callback_data": Tap(command="ask", id=str(i)).pack()}
         last = rows[-1] if rows else None
         if last and len(last) == 1 and len(q) <= PAIR_MAX_CHARS and len(last[0]["text"]) <= PAIR_MAX_CHARS:
             last.append(button)
@@ -350,10 +359,11 @@ async def _render(chat_id: int, token: Optional[str], state: dict, stop: asyncio
 
 
 async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str], callback: dict) -> None:
-    data = callback.get("data") or ""
-    callback_id = callback.get("id", "")
-    _, _, action_id = data.partition("nt:")
-    command, _, action_id = action_id.partition(":")
+    try:
+        tap = Tap.unpack(callback.get("data") or "")
+    except (TypeError, ValueError):
+        return  # not one of our buttons
+    command, action_id, callback_id = tap.command, tap.id, callback.get("id", "")
     if command == "ask":
         await _ask(db, redis, user_id, chat_id, token, callback, action_id)
         return
@@ -387,8 +397,8 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
                     chat_id, card["message_id"],
                     f"{html.escape(card.get('text') or '', quote=False)}\n\n⚠️ Real money. Tap Send real order to place it.",
                     token, reply_markup={"inline_keyboard": [[
-                        {"text": "Send real order", "callback_data": f"nt:confirm2:{action_id}"},
-                        {"text": "Cancel", "callback_data": f"nt:cancel:{action_id}"},
+                        {"text": "Send real order", "callback_data": Tap(command="confirm2", id=action_id).pack()},
+                        {"text": "Cancel", "callback_data": Tap(command="cancel", id=action_id).pack()},
                     ]]})
                 return
             done = True

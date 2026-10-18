@@ -45,7 +45,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/marks.py` | best-effort current prices (Redis `quote:` then yfinance) | `mark_prices`, `cached_quotes`, `store_quotes` |
 | `backend/analytics.py` | P&L cards and the scorecard maths | `compute_pnl`, `compute_scorecard` |
 | `backend/routers/*.py` | HTTP handlers (map below) | one module per area |
-| `docker-compose.yml`, `backend/Dockerfile`, `backend/requirements.txt` | runtime image and stack | services `backend`, `ingest`, `frontend` |
+| `docker-compose.yml`, `backend/Dockerfile`, `backend/requirements.txt` | runtime image and stack; pinned SDKs `upstox-python-sdk==2.30.0`, `aiogram==3.31.0` (caps pydantic below 2.14) | services `backend`, `ingest`, `frontend` |
 | `.github/workflows/ci.yml`, `deploy-backend.yml` | CI and push-to-deploy caller | see Deploy |
 
 Router modules by area (handlers in the table): `auth`, `settings` (prefs, strategies, OmniRoute admin, broker creds), `trading`, `suggestions`, `orders`, `chat_actions`, `analytics`, `broker`, `journal`, `guardrails`, `portfolio`, `mine`, `today`, `plan`, `picks`, `profile`, `watchlist`, `options`, `market_data`, `agents`. `backend/__init__.py` is a one-line package marker.
@@ -326,4 +326,4 @@ Two supported paths, chosen once per session (host `/home/ubuntu/CLAUDE.md`, "De
 | `test_analytics.py`, `test_marks.py` | P&L/scorecard maths, mark prices |
 | `test_today.py`, `test_mine_router.py`, `test_plan_router.py`, `test_orders_router.py`, `test_suggestions_router.py`, `test_portfolio_rebalance_router.py`, `test_market_quotes.py`, `test_market_index_detail.py`, `test_option_chain.py` | the matching routers |
 | `test_core_models.py`, `test_no_datetime_now.py` | engine types, no direct `datetime.now` in core/engine |
-| none | `routers/watchlist.py`, `routers/agents.py`, `routers/guardrails.py` handlers, `routers/picks.py` (only auth smoke / forecast tests) |
+| none | `routers/watchlist.py`, `routers/agents.py`, `routers/guardrails.py` handlers other than `telegram_set_bot` (a rejected token is a 400, `test_telegram_transport.py`), `routers/picks.py` (only auth smoke / forecast tests) |
