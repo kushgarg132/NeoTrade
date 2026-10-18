@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # a compromised extension) is only useful for this long. Silent renewal
     # is REFRESH_TOKEN's job, not a long access-token lifetime's.
     JWT_SECRET: str = "change-me-in-production"
+    # Dev/test escape hatch: lets the API start with an empty or the public
+    # default JWT_SECRET (refused otherwise; see require_jwt_secret).
+    ALLOW_INSECURE_JWT_SECRET: bool = False
     SESSION_MAX_AGE_SECONDS: int = 1800  # 30 minutes
 
     # Long-lived refresh token (httpOnly cookie, never touches JS). Opaque
@@ -129,3 +132,11 @@ class Settings(BaseSettings):
         extra = "ignore"
 
 settings = Settings()
+
+
+def require_jwt_secret(s: Settings = settings) -> None:
+    """Refuse to serve with a forgeable session key: empty (compose passes
+    ${JWT_SECRET:-}) or the public default."""
+    if s.JWT_SECRET in ("", "change-me-in-production") and not s.ALLOW_INSECURE_JWT_SECRET:
+        raise RuntimeError("JWT_SECRET is empty or the public default; set a real secret "
+                           "(or ALLOW_INSECURE_JWT_SECRET=true for local dev)")

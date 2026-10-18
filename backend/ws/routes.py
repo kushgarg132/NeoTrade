@@ -18,9 +18,11 @@ Two things differ from the HTTP routes and both are deliberate:
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
+import jwt as pyjwt
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from backend.auth.jwt import InvalidSessionToken, decode_session_jwt
@@ -74,6 +76,7 @@ async def stream(websocket: WebSocket, token: Optional[str] = Query(default=None
     await websocket.send_json({"topic": "system", "event": "ready", "data": {"user_id": user.id}})
 
     pump = asyncio.create_task(_pump(websocket, connection))
+    expiry = asyncio.create_task(_close_at_expiry(websocket, token))
     try:
         while True:
             message = await websocket.receive_json()
@@ -84,7 +87,21 @@ async def stream(websocket: WebSocket, token: Optional[str] = Query(default=None
         logger.info("socket for %s closing: %s", user.id, exc)
     finally:
         pump.cancel()
+        expiry.cancel()
         hub.disconnect(connection)
+
+
+async def _close_at_expiry(websocket: WebSocket, token: str) -> None:
+    """The token is only checked at the handshake, so close the socket when it
+    expires; the client reconnects with its refreshed token."""
+    try:
+        exp = pyjwt.decode(token, options={"verify_signature": False}).get("exp")
+    except pyjwt.PyJWTError:
+        return
+    if exp is None:
+        return
+    await asyncio.sleep(max(0, exp - time.time()))
+    await websocket.close(code=CLOSE_UNAUTHORIZED)
 
 
 async def _pump(websocket: WebSocket, connection) -> None:

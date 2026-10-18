@@ -97,7 +97,7 @@ class KiteSessionManager:
         """Returns the Kite login URL a human should visit. Raises when
         UNCONFIGURED -- there is no api_key to build a URL from."""
         if not self._api_key:
-            raise RuntimeError("Cannot generate Kite login URL: KITE_API_KEY is not configured")
+            raise RuntimeError("Cannot generate Kite login URL: no Kite API key is set (broker credentials are per-user)")
         return self._client().login_url()
 
     async def exchange_request_token(self, request_token: str) -> str:
@@ -106,7 +106,7 @@ class KiteSessionManager:
         for an access_token via the SDK's generate_session, then caches it
         in Redis with an expiry set to the next 06:00 IST."""
         if not self._api_key or not self._api_secret:
-            raise RuntimeError("Cannot exchange Kite request_token: KITE_API_KEY/KITE_API_SECRET not configured")
+            raise RuntimeError("Cannot exchange Kite request_token: no Kite API key/secret is set (broker credentials are per-user)")
 
         session = await asyncio.to_thread(self._client().generate_session, request_token, self._api_secret)
         access_token = session["access_token"]
