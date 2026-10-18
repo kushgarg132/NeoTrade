@@ -19,7 +19,7 @@ const minutesLeft = (iso, now) => Math.max(0, Math.ceil((new Date(iso).getTime()
 
 const WaitingCard = ({ card, now, onSettled }) => {
   const [busy, setBusy] = useState(null);
-  const [secondTap, setSecondTap] = useState(false);
+  const [confirmToken, setConfirmToken] = useState(null); // set by the first tap on real money
   const [note, setNote] = useState(null);
   // The real-money tap arms 600ms after it appears: one double tap is not two taps.
   const [arming, setArming] = useState(false);
@@ -31,9 +31,9 @@ const WaitingCard = ({ card, now, onSettled }) => {
     setBusy('confirm');
     setNote(null);
     try {
-      const res = await api.post(endpoints.chat.confirm(card.id), { second_tap: secondTap });
+      const res = await api.post(endpoints.chat.confirm(card.id), { confirm_token: confirmToken });
       if (res.data.status === 'NEEDS_SECOND_TAP') {
-        setSecondTap(true);
+        setConfirmToken(res.data.confirm_token);
         setArming(true);
         later(() => setArming(false), 600);
       } else {
@@ -71,10 +71,10 @@ const WaitingCard = ({ card, now, onSettled }) => {
           size="sm"
           onClick={confirm}
           disabled={busy !== null || arming}
-          className={secondTap ? 'bg-[var(--stamp)] border-[var(--stamp)]' : undefined}
+          className={confirmToken ? 'bg-[var(--stamp)] border-[var(--stamp)]' : undefined}
         >
           {busy === 'confirm' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-          {secondTap ? 'Real money. Tap Confirm again' : 'Confirm'}
+          {confirmToken ? 'Real money. Tap Confirm again' : 'Confirm'}
         </Button>
       </div>
     </li>

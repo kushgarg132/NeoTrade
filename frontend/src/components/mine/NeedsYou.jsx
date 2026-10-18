@@ -32,7 +32,13 @@ const NeedsYou = ({ actions, onChanged, limit }) => {
   }, [wantIdeas, actions]);
 
   const act = (verb, id) => api.post(endpoints.mine[verb](id)).then(onChanged).catch(() => {});
-  const decide = (s, url) => api.post(url, url.endsWith('/reject') ? {} : undefined).then(onChanged);
+  const decide = (s, url) => api.post(url, {}).then(onChanged);
+  // Two calls: the first returns a one-time token, the second sends it and places the order.
+  const approveLive = (s, token) =>
+    api.post(endpoints.suggestions.approveLive(s.id), { confirm_token: token || undefined }).then((res) => {
+      if (token) onChanged();
+      return res.data;
+    });
 
   return (
     <Sheet title="Needs you" meta={actions.length ? `${actions.length}` : null}>
@@ -74,7 +80,7 @@ const NeedsYou = ({ actions, onChanged, limit }) => {
                     <SuggestionRecord
                       suggestion={idea}
                       hasMine
-                      onApproveLive={() => decide(idea, endpoints.suggestions.approveLive(idea.id))}
+                      onApproveLive={(token) => approveLive(idea, token)}
                       onReject={() => decide(idea, endpoints.suggestions.reject(idea.id))}
                     />
                   </div>

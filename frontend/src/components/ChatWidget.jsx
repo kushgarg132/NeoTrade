@@ -48,10 +48,11 @@ const ActionCard = ({ action, onUpdate }) => {
         await api.post(endpoints.chat.cancel(action.card.id));
         onUpdate({ state: 'CANCELLED', note: 'Cancelled. Nothing changed.' });
       } else {
+        // The second tap presents the token the server returned for the first.
         const res = await api.post(endpoints.chat.confirm(action.card.id), {
-          second_tap: action.state === 'NEEDS_SECOND_TAP',
+          confirm_token: action.state === 'NEEDS_SECOND_TAP' ? action.token : undefined,
         });
-        onUpdate({ state: res.data.status, note: res.data.result });
+        onUpdate({ state: res.data.status, note: res.data.result, token: res.data.confirm_token });
       }
     } catch (err) {
       // No response at all: the confirm may have run. Never call that a failure.
