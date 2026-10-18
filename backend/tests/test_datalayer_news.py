@@ -43,8 +43,9 @@ class FakeRedis:
     async def mget(self, keys):
         return [self.data.get(k) for k in keys]
 
-    async def delete(self, key):
-        self.data.pop(key, None)
+    async def delete(self, *keys):
+        for key in keys:
+            self.data.pop(key, None)
 
     async def incrby(self, key, n):
         self.data[key] = int(self.data.get(key, 0)) + n

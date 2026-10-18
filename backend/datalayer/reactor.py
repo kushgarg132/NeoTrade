@@ -175,6 +175,8 @@ async def react(db, redis, now: Optional[datetime] = None) -> int:
                     sent += 1
                 except Exception:
                     logger.exception("news alert for %s failed", user_id)
+                    # release the hour's throttle so the next item can still alert
+                    await redis.delete(*(ALERT_KEY.format(user_id, h["target"]) for h in hits))
     if sent:
         logger.info("news reactor: %d alert(s) from %d item(s)", sent, len(items))
     return sent
