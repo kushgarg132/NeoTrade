@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/screening/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: affde7d
+verified_at: 44ab59f
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -20,7 +20,7 @@ gates them. **Screening** (`backend/screening/`) gives the fundamentals quality 
 
 | path | role | key symbols |
 |---|---|---|
-| backend/forecast/picks.py | Daily Picks job: compute, store, score, forward record, live gate | `picks.py::compute`, `::score`, `::forward`, `::live_refusal`, `::load`, `::run`, `::MAX_PICKS`=10, `::MIN_FORWARD`=100, `::CALIBRATION_GAP`=0.05, `::HISTORY_START`, `::CAVEATS` |
+| backend/forecast/picks.py | Daily Picks job: compute, store, score, forward record, live gate | `picks.py::compute`, `::score`, `::forward`, `::live_refusal`, `::load`, `::ensure_indexes`, `::run`, `::MAX_PICKS`=10, `::MIN_FORWARD`=100, `::CALIBRATION_GAP`=0.05, `::HISTORY_START`, `::CAVEATS` |
 | backend/forecast/setups.py | 5 setups as pure functions over a wide bar table (no look-ahead) | `setups.py::table`, `::SETUPS`, `::BY_NAME`, `::Setup`, `::momentum`, `::low_vol`, `::momentum_vol`, `::breakout`, `::pullback`, `::_top_decile`, `::_month_starts` |
 | backend/forecast/study.py | Event study + per-year walk-forward calibration | `study.py::net_return`, `::kept`, `::outcome`, `::events`, `::stats`, `::walk_forward`, `::run`, `::NOTIONAL`=1e5, `::MIN_PRIOR`=30, `::MIN_N`=100 |
 | backend/forecast/research/ml_experiment_tool.py | Research only, not wired: LightGBM vs setups (needs lightgbm, not installed in prod) | `ml_experiment_tool.py::load`, `::HORIZONS` |
@@ -70,7 +70,7 @@ Mongo collections (writer → readers):
 - `learning_state` (one per `user_id`): `paused{name:since}`, `floors{name:float}`, `skip_regimes{name:[up|down]}`, `reset_at{name:dt}`, `regime` (`adapt.py::learn`). Also read by `builder/draft.py::_retire_paused`.
 - `learning_changes`: `{strategy, rule (pause|resume|floor|regime), before, after, evidence, user_id, at}`.
 - `strategy_retunes`: one doc per attempt `{strategy, current, params, accepted, reason, trials, trial_sharpes, train, test, dsr, at, source?, hypothesis_id?}`; latest `accepted:true` per strategy = running params (`retune.py::current_params`).
-- `retune_runs`: `{month:"YYYY-MM", started_at}` claim (`retune.py::start_if_due`, upsert claim, unique index via `retune.py::ensure_indexes`, must be called at startup).
+- `retune_runs`: `{month:"YYYY-MM", started_at}` claim (`retune.py::start_if_due`, upsert claim, unique index on `month` via `retune.py::ensure_indexes`, called from `server.py::ensure_collection_indexes`).
 - `strategy_hypotheses`: `{id, strategy, params, rationale, status: queued|accepted|rejected, created_at, reason, tested_at}`.
 - `built_strategies`: `slug` (unique), `owner_id` (None = AI/global), `spec`, `thesis`, `description`, `drafted_at`, `status` (`testing|rejected|active|retired`), `verdict`, `metrics{year,holdout,benchmark?}`, `trials`, `sharpe`, `trial_history`, `tested_at`, `raw` (refused specs). `builder_runs`: `{week:"%G-W%V"}` unique (`builder/store.py::ensure_indexes`).
 - `strategy_backtests`: gate rows written via `risk/backtest_gate.py::BacktestGateStore.record` (`strategy_name`, `run_at`) by `builder/draft.py::_test`; read by `adapt.py::learn` (resume) and `library.py::catalog`. `factor/report.py::_save` writes the same `strategy_name`/`run_at`/`passed` keys plus a `report`.
@@ -84,7 +84,7 @@ Redis keys:
 
 Prefs (`backend/prefs.py`): `universe`, `account_size`, `max_exposure`, `per_trade_cap`, `scan_enabled`, `omniroute_model` (thesis model), `factor_paper_capital` (₹3 L), `live_strategies` (library), `autopilot_enabled/live/news`, `picks_live`.
 App settings: `app_settings.lab_on(...)` gates "nightly learning", "the monthly re-tune", "the weekly strategy builder".
-Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor/data.py::CACHE_SECONDS`).
+Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor/data.py::CACHE_SECONDS`); the file name carries a sha1 of the sorted symbols, stable across restarts (it was Python `hash`, which changes per process).
 
 ## Flows
 
@@ -102,7 +102,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 3. Bars come from `HistoricalFeed(StoreHistoryProvider)` over `LOOKBACK` (400 d). `engine/runner.py::run` replays with `order_sink=SuggestionSink(held=mine_holdings)` and `learned=adapt.load_rules`.
 4. In the runner, `scoring/composite.py::score_intent` (None below RULE_FLOOR) and `LearnedRules.blocks` apply. `SuggestionSink.__call__` records only when `armed` (final session). An equity SELL is allowed only up to `held`. One PENDING per (user, symbol, mode) (`store.has_pending`). → `SuggestionStore.create` (+ WS `suggestions/created`).
 5. `store.keep_best(user, "LONGTERM", 5)` expires the rest as `outranked`. It skips docs with `ai_order` set.
-6. `thesis.py::attach_theses` (≤10): `ResearchAgent.run(symbol)` under `use_model(prefs.omniroute_model)` → `store.attach_thesis` (text + `_rescored` score), WS `enriched`.
+6. `thesis.py::attach_theses` (≤10): `ResearchAgent.run(symbol)` under `use_model(prefs.omniroute_model)` → `store.attach_thesis` (text + `_rescored` score; the sentiment sign is flipped for a non-option SELL suggestion, which wins when the stock falls), WS `enriched`.
 7. Scheduler: `risk/paper_gate.py::for_mine` filters, then Telegram via `notify.py::proposals_text`.
 
 **3. Decide a suggestion** (`routers/suggestions.py`)
@@ -149,7 +149,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 | 16:00 weekdays | expire_stale, scans + theses, `_learn`, re-tune start, builder start, picks.run | `scheduler.py::run_daily_jobs` (`RUN_HOUR`=16) | `scheduler:daily_lock` (2 h); `scheduler:last_pass` for catch-up |
 | 09:20+ once/day | factor rebalance if due, picks entries, expire_stale, morning proposals digest, 16:00 catch-up if missed | `engine/autorun.py::_longterm_pass` (`MORNING`) | `longterm:{user}:{day}:morning` NX 24 h |
 | every 15 min | `check_exits` alerts, autopilot exits, picks exits | `_longterm_pass` (`EXIT_CHECK_MINUTES`=15) | `longterm:{user}:{day}:{bucket}` NX |
-| 1st pass of month | re-tune subprocess | `retune.py::start_if_due` | `retune_runs.month` (not atomic) |
+| 1st pass of month | re-tune subprocess | `retune.py::start_if_due` | `retune_runs.month` (atomic upsert claim + unique index) |
 | Friday 16:00 | builder subprocess; learning weekly note | `draft.py::start_if_due`; `scheduler.py::_learn` | `builder_runs.week` unique + `builder:lock` 6 h |
 | on demand | manual scan | `POST /suggestions/scan` | rate limit 5/10 min |
 | on material news | news scan | `datalayer/reactor.py::_scan_user` | — |
@@ -185,10 +185,10 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 Related, outside the globs: `/strategies/built*`, `/strategies/library` (→ `learning/library.py::catalog`), `/strategies/vocabulary`, `/strategies/describe` in `routers/settings.py`; `GET /journal/learning` (→ `learning/report.py::snapshot`, `routers/journal.py::get_learning`); `POST /system/builder/run` (`system/router.py`). Frontend paths: `frontend/src/utils/api.js` `picks`, `suggestions`.
 
 ## Gotchas and known issues
-- **Open**: `retune.py::start_if_due` uses `find_one` then `insert_one` on `retune_runs` with no unique index. Two concurrent passes could both spawn (the daily lock makes this unlikely). The builder uses an atomic upsert and a unique index instead.
+- Fixed: `retune.py::start_if_due` claims the month with an atomic `update_one(upsert)` on a unique `month` index (`retune.py::ensure_indexes`); a `DuplicateKeyError` or an existing claim returns False.
 - `picks.py::compute` does not require `walk_forward.edge`. Picks from "no edge" setups are stored and badged (`edge: False`), by design (handbook).
 - `due_date` counts weekdays only. Exchange holidays push the real exit (`picks.py::compute` comment). `score` uses the NIFTY calendar.
-- `/picks` loads every scored pick on each call (`picks_today` `find({"outcome":{"$ne":None}})`). `picks` has no index on `date`/`outcome`.
+- `/picks` loads every scored pick on each call (`picks_today` `find({"outcome":{"$ne":None}})`). the scan projects only `p_up` and `outcome`. `picks` has indexes on `date` and `outcome` (`picks.py::ensure_indexes`, called at startup).
 - At scan time sentiment is usually not cached, so `final ≤ 0.7·rule + 0.15` until `attach_theses` rescores (`thesis.py` docstring).
 - `keep_best` uses wall-clock `decided_at`, not `now` (`store.py::keep_best` comment).
 - `check_exits` closes a trade as `sold` by writing `paper_trades` directly: the ledger only closes via fills, and this is an inferred broker-side sale with no fill (left as is). A same-day buy is not checked against holdings (only a snapshot from a later IST day).

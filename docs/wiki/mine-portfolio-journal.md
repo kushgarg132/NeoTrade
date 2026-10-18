@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py]
-verified_at: 7d0f313
+verified_at: 44ab59f
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -127,7 +127,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
    5. The snapshot is inserted and `hub.publish(user,"portfolio","refreshed")` fires.
 5. **GET /portfolio**: `routers/portfolio.py::get_portfolio` reads the latest snapshot. With `live=1` it calls
    `portfolio/service.py::with_live_prices` (broker reads plus quote repricing, nothing stored). It always re-scopes with
-   `scorecard_for` to `account`'s brokers (or every broker in `raw_holdings`). If verdicts are visible it adds
+   `scorecard_for` to `account`'s brokers (or every broker in `raw_holdings`), passing `verdicts=account != "ai"` so the AI view never carries the review's verdicts. If verdicts are visible it adds
    `with_suggestions`. It adds `thesis_target` and returns `present(snapshot, visible)`.
 6. **Rebalance**: `POST /portfolio/rebalance` reprices with `service.quoted`, re-scopes to mine brokers, allows only
    candidates from `routers/portfolio.py::_candidate_symbols`, prices them with `::_closes` (yfinance 5d), and calls
@@ -278,7 +278,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
   brokers are mine"; `journal/accounts.py::ai_vs_me` now does too (mine = every non-AI broker, AI book empty).
 - **Snapshots versus scorecard_for.** The stored card's `holdings` are mine-only, while `raw_holdings` cover all
   brokers. `GET /portfolio` always re-scopes. `scorecard_for` copies verdict, health and note by symbol only, and it
-  does not copy `verdict_since`.
+  does not copy `verdict_since`. With `verdicts=False` (the `ai` account) it copies none of them.
 - **Action ids contain `:`.** That is why the route uses `{action_id:path}`, with `ACTION_ID` capped at 300 characters.
   Ids pin each instance (`kind:symbol:key`), so a dismissal lasts until the key changes. For `add` the key is
   `verdict_since`.

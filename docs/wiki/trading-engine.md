@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: de65474
+verified_at: 44ab59f
 ---
 # Trading engine
 
@@ -201,7 +201,7 @@ All behind `get_current_user` at include time (`server.py`: trading, broker, opt
 | method path | handler | auth | notes / response keys |
 |---|---|---|---|
 | `POST /trading/start` | `trading.py::start_trading` | user | body `{mode, universe<=300, poll_interval_seconds 1-3600}`; -> `{run_id}`; 409 if already running; 400 no instruments/strategies. Risk caps come from stored prefs, not the body |
-| `POST /trading/stop` | `::stop_trading` | user (owner only) | `{run_id}` -> `{run_id, stopped}`; cross-worker via `runs:cancel` |
+| `POST /trading/stop` | `::stop_trading` | user (owner only) | `{run_id}` -> `{run_id, stopped}`; 404 unless the run is the caller's and still `ACTIVE` (a finished run id is 404); cross-worker via `runs:cancel` |
 | `GET /trading/runs` | `::list_runs` | user | `RunStore.list_for_user` incl. `progress` (bars, signals, orders, below_cost, last_symbol, last_bar_at, updated_at) |
 | `GET /trading/positions?venue=` | `::get_positions` | user | position dicts marked at read time via `marks.mark_prices` (stored `unrealized_pnl` is 0) |
 | `GET /trading/kill-switch` | `::get_kill_switch` | user | `{tripped, reason, equity, tripped_at}` |

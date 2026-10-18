@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/components/**, backend/agents/**, backend/mcp_tools/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py]
-verified_at: affde7d
+verified_at: 44ab59f
 ---
 # Data layer, AI and background jobs
 
@@ -248,7 +248,8 @@ All behind `get_current_user` (router-level dependency in `backend/server.py`, p
 - `scheduler.py::run_daily_jobs` takes `pass_day` (from `_run_locked`): a Monday catch-up for a missed Friday still runs Friday's weekly mirrors and builder `start_if_due`. `send_postclose` still uses the real `now`.
 - Direct collection reads inside prompt builders (`plan/builder.py::_headlines`, `::_held_and_watched`, `::_context`; `datalayer/analysis.py::from_layer`) bypass the "AI reads through `ai/facts`" rule in `.claude/CLAUDE.md`. The JSON repair message in `ai/runner.py` is still inline; the final-turn prompt is `prompts/final_turn.md`.
 - `llm.py::MultiKeyChain.astream_events` falls back to the next key only before the first event; a mid-stream failure re-raises.
-- `chat/agent.py::TOOL_LABELS` covers every chat tool (`tests/test_chat_agent.py` checks); add a label when adding a tool.
+- `chat/agent.py::TOOL_LABELS` covers every chat tool (`tests/test_chat_agent.py` checks); add a label when adding a tool. `stream_chat` shows a generic "try again in a minute" on failure (the exception is only logged).
+- `ai/facts/user.py::portfolio` re-scopes with `scorecard_for(..., verdicts=account != "ai")`, so the AI account's facts carry no review verdicts.
 - `plan/store.py::save` sets `version = last + 1` with no unique index on `(user_id,date,version)` (index creation is in `server.py`, not done); safe only because builds hold `plan:build:` and revisions run on the single ingest leader. A retry-on-duplicate needs that index.
 - (fixed) duplicate `gross_margins` in `CompanyInfo` and the dead branch in `calculate_position_size` are gone.
 - `TrendDetector.detect_trend` returns CHOPPY under 200 rows, so quick analysis shows "Sideways" for short histories; `returns["1y"]` needs >=240 bars.

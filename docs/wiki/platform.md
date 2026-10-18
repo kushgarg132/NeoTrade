@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 33b7971
+verified_at: 44ab59f
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -65,9 +65,9 @@ Mongo (db `DATABASE_NAME`, default `stock_investor_db`; datetimes come back tz-a
 | `trading_runs` | `run_id`, `user_id`, `mode`, `universe`, `params`, `status` (RUNNING/STOPPED/ERROR), `boot_id`, `progress`, `started_at`, `stopped_at`, `error` | unique `run_id`; `(user_id, status)` | `RunStore` (trading router, autorun) |
 | `backlog` | `title`, `area`, `status`, `rank`, `why`, `notes`, `effort`, `source`, `done_at` | none | admin routes; `seed_backlog` upserts by title |
 | `watchlist` | `user_id`, `symbols[]`, `updated_at` | none (see Gotchas) | `routers/watchlist.py`; ingest, plan, news read |
-| `portfolio_snapshots` | index `(user_id, at desc)` created at startup (`server.py:131`) | | written by portfolio service (other page) |
+| `portfolio_snapshots` | index `(user_id, at desc)` created at startup (`server.py:161`) | | written by portfolio service (other page) |
 
-Startup also creates indexes for instruments, suggestions, builder, journal, mine thesis, `mine_daily`, guardrails, chat actions, broker credentials, ledger, `live_orders`, `paper_limit_orders` (`server.py::startup_db_client`) and `trading_runs`.
+Startup also creates indexes for instruments, suggestions, builder, journal, mine thesis, `mine_daily`, guardrails, chat actions, broker credentials, ledger, `live_orders`, `paper_limit_orders` (`server.py::startup_db_client`) and `trading_runs`; `ensure_collection_indexes` also calls `learning/retune.py::ensure_indexes` and `forecast/picks.py::ensure_indexes`.
 
 `user_prefs` keys and defaults (`prefs.py::DEFAULTS`, all editable via `PUT /settings/preferences`): `universe` (=`ALL_SCAN_STOCKS`), `account_size` 1,000,000, `max_exposure` 1,000,000, `per_trade_cap` 100,000, `daily_loss_limit` 50,000 (0 = off), `scan_enabled` true, `omniroute_model` null, `live_strategies` [], guardrails (`guardrails_enabled` false, `max_trades_per_day`, `cooldown_after_losses`, `cooldown_minutes` 30, `max_option_trades_per_day`, `max_option_lots`, `warn_naked_options`), `auto_square_off` "off", `factor_paper_capital` 300,000, `broker_roles` {}, `autopilot_enabled/live/news`, `picks_live`, `rebalance_targets`, `auto_paper_intraday/longterm`, `portfolio_max_loss_pct` 25, `portfolio_max_weight_pct` 20, `news_alerts` "held". Note `factor_paper_capital` is in `EDITABLE` but not in `PreferencesPatch`, so the HTTP API cannot set it.
 
@@ -303,7 +303,7 @@ Two supported paths, chosen once per session (host `/home/ubuntu/CLAUDE.md`, "De
 - HTTP `POST /agents/quick-analyze/{symbol}` shares the socket's `quick_analyze:<uid>` budget (60/min); HTTP `analyze` has 10/min. `/market/index/{ticker}/analysis` is Redis-cached per index (`research/index_move.py`), so it is not an LLM-cost path per user.
 - `locks.py` is only used by the ingest worker; `trading.py:305` and `scheduler.py:232` release their locks with their own get-then-delete (not atomic, fine while TTL >> hold).
 - `KiteSessionManager` error strings still say `KITE_API_KEY` (`kite_session.py:100,109`) though keys are per-user now (cosmetic).
-- Handbook drift: `frontend/src/handbook/jobs-and-ops.md` says the heartbeat is ~10 s (code: 30 s) and that `/health` reports Mongo/Redis (code returns only `{api, ingest}`, `server.py:263`). Deploy health check hits `/`, not `/health`.
+- Handbook drift: `frontend/src/handbook/jobs-and-ops.md` says the heartbeat is ~10 s (code: 30 s) and that `/health` reports Mongo/Redis (code returns only `{api, ingest}`, `server.py:304`). Deploy health check hits `/`, not `/health`.
 - `lab_on` logs once per day using `date.today()` (container local date, UTC), not IST (`app_settings.py:62`); only log timing.
 - `AppSettingsStore.set_portfolio_verdicts` does no value check; only the route's `Literal["admin","all"]` guards it.
 - Mongo datetimes: `tz_aware=True` on the client, but older code still has naive-UTC fixes (`_aware`, `_as_utc`); a naive datetime sent to the browser is read as IST.
