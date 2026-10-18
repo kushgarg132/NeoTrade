@@ -1,7 +1,7 @@
 """UpstoxMarketFeed: protobuf FeedResponse frames -> ticks -> clock-driven
 bars, plus the subscribe frame and reconnect loop. No real WebSocket: the
 frames are built here field-by-field from MarketDataFeedV3.proto's field
-numbers (quoted in backend/data/feeds/live_upstox.py), and `connect_fn`
+numbers (upstox_client/feeder/proto, MarketDataFeedV3.proto), and `connect_fn`
 returns a fake connection."""
 
 import asyncio
