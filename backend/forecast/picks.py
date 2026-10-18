@@ -133,6 +133,15 @@ async def load(db, now: datetime) -> Optional[dict]:
     return setups.table(frames)
 
 
+async def ensure_indexes(db) -> None:
+    """`date` serves /picks (latest day, history), `outcome` the unscored and scored scans."""
+    try:
+        await db[PICKS].create_index([("date", -1)])
+        await db[PICKS].create_index("outcome")
+    except Exception as exc:  # startup must not fail on it
+        logger.error("picks indexes not created: %s", exc)
+
+
 async def run(db, now: Optional[datetime] = None) -> dict:
     now = now or datetime.now(timezone.utc)
     t = await load(db, now)

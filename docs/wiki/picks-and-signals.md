@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/screening/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 886e763
+verified_at: 373ec7d
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -61,7 +61,7 @@ gates them. **Screening** (`backend/screening/`) gives the fundamentals quality 
 ## Data
 
 Mongo collections (writer → readers):
-- `picks`: `_id` `"<date>:<setup>:<symbol>"`, `date`, `symbol`, `setup`, `label`, `horizon`, `due_date` (BDay(h+1), weekdays only), `entry_ref`, `expected{median,p10,p90}`, `p_up`, `p_beat_nifty`, `n`, `median_excess`, `edge`, `explanation`, `strength`, `created_at`, `outcome` (None until scored → `{exit_date,gross,net,nifty,won,beat_nifty}`), `scored_at`. Insert-only for new ids (`forecast/picks.py::run`). Readers: `routers/picks.py`, `autopilot/picks.py`. No secondary index.
+- `picks`: `_id` `"<date>:<setup>:<symbol>"`, `date`, `symbol`, `setup`, `label`, `horizon`, `due_date` (BDay(h+1), weekdays only), `entry_ref`, `expected{median,p10,p90}`, `p_up`, `p_beat_nifty`, `n`, `median_excess`, `edge`, `explanation`, `strength`, `created_at`, `outcome` (None until scored → `{exit_date,gross,net,nifty,won,beat_nifty}`), `scored_at`. Insert-only for new ids (`forecast/picks.py::run`). Readers: `routers/picks.py`, `autopilot/picks.py`. Indexes `date`, `outcome` (`forecast/picks.py::ensure_indexes`; must be called at startup in server.py).
 - `picks_study`: single doc `_id: "latest"` `{as_of, setups:[stats + walk_forward]}` (`forecast/picks.py::run`).
 - `factor_books`: `_id` = `user_id`, `user_id`, `cash`, `shares{sym:int}`, `start_equity`, `started_at`, `start_nifty`, `costs`, `last_rebalance`, `updated_at`, `last_summary` (`factor/paper.py::FactorBookStore`).
 - `suggestions`: see `suggestions/store.py::SuggestionStore.create`: `id` (uuid, unique index), `user_id`, `run_id`, `symbol`, `mode`, `side`, `quantity`, `entry_ref`, `stop`, `target`, `max_hold_days`, `trail_atr`, `notional`, `option_contract`, `strength`, `reason_codes`, `strategy`, `score{rule,ai,final}`, `ai_thesis`, `source` (`scan`/`manual`/`scheduler`/`news`/`run`), `status`, `created_at`, `expires_at`, `decided_at`, `reason`, `order_id`. Later fields: `expired_reason:"outranked"` (`keep_best`), `venue`, `filled_quantity` (`settle`), `ai_order` (set by `engine/autorun.py`). Index `(user_id,status,mode)` (`store.py::ensure_indexes`, called at `server.py:125`).
@@ -70,10 +70,10 @@ Mongo collections (writer → readers):
 - `learning_state` (one per `user_id`): `paused{name:since}`, `floors{name:float}`, `skip_regimes{name:[up|down]}`, `reset_at{name:dt}`, `regime` (`adapt.py::learn`). Also read by `builder/draft.py::_retire_paused`.
 - `learning_changes`: `{strategy, rule (pause|resume|floor|regime), before, after, evidence, user_id, at}`.
 - `strategy_retunes`: one doc per attempt `{strategy, current, params, accepted, reason, trials, trial_sharpes, train, test, dsr, at, source?, hypothesis_id?}`; latest `accepted:true` per strategy = running params (`retune.py::current_params`).
-- `retune_runs`: `{month:"YYYY-MM", started_at}` claim (`retune.py::start_if_due`, find-then-insert, no unique index).
+- `retune_runs`: `{month:"YYYY-MM", started_at}` claim (`retune.py::start_if_due`, upsert claim, unique index via `retune.py::ensure_indexes`, must be called at startup).
 - `strategy_hypotheses`: `{id, strategy, params, rationale, status: queued|accepted|rejected, created_at, reason, tested_at}`.
 - `built_strategies`: `slug` (unique), `owner_id` (None = AI/global), `spec`, `thesis`, `description`, `drafted_at`, `status` (`testing|rejected|active|retired`), `verdict`, `metrics{year,holdout,benchmark?}`, `trials`, `sharpe`, `trial_history`, `tested_at`, `raw` (refused specs). `builder_runs`: `{week:"%G-W%V"}` unique (`builder/store.py::ensure_indexes`).
-- `strategy_backtests`: gate rows written via `risk/backtest_gate.py::BacktestGateStore.record` (`strategy_name`, `run_at`) by `builder/draft.py::_test`; read by `adapt.py::learn` (resume) and `library.py::catalog`. `factor/report.py::_save` writes a differently-shaped row (`strategy`, `ran_at`, see Gotchas).
+- `strategy_backtests`: gate rows written via `risk/backtest_gate.py::BacktestGateStore.record` (`strategy_name`, `run_at`) by `builder/draft.py::_test`; read by `adapt.py::learn` (resume) and `library.py::catalog`. `factor/report.py::_save` writes the same `strategy_name`/`run_at`/`passed` keys plus a `report`.
 - `daily_bars` (via `datalayer/bars.py::read`): Picks, swing builder, trailing stops.
 
 Redis keys:
@@ -185,17 +185,13 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 Related, outside the globs: `/strategies/built*`, `/strategies/library` (→ `learning/library.py::catalog`), `/strategies/vocabulary`, `/strategies/describe` in `routers/settings.py`; `GET /journal/learning` (→ `learning/report.py::snapshot`, `routers/journal.py::get_learning`); `POST /system/builder/run` (`system/router.py`). Frontend paths: `frontend/src/utils/api.js` `picks`, `suggestions`.
 
 ## Gotchas and known issues
-
-- **Open, suspected bug**: `factor/report.py::_save` writes `strategy_backtests` with `strategy` / `ran_at`. `BacktestGateStore.latest` and `adapt.py::learn` query `strategy_name` / `run_at`, so a `--save` verdict is invisible to the gate.
-- **Open, suspected bug**: `suggestions/thesis.py::_rescored` sets `ai_score = sentiment` without the `is_bearish` flip that `composite.py::score_intent` applies. Good news then raises conviction of a SELL / long-put suggestion.
-- **Open**: `factor/data.py::closes` cache key uses `hash(tuple(...))`. String hashing is salted per process (PYTHONHASHSEED), so the disk cache never hits across processes (every subprocess or CLI re-downloads). Stale pickles also accumulate.
 - **Open**: `retune.py::start_if_due` uses `find_one` then `insert_one` on `retune_runs` with no unique index. Two concurrent passes could both spawn (the daily lock makes this unlikely). The builder uses an atomic upsert and a unique index instead.
 - `picks.py::compute` does not require `walk_forward.edge`. Picks from "no edge" setups are stored and badged (`edge: False`), by design (handbook).
 - `due_date` counts weekdays only. Exchange holidays push the real exit (`picks.py::compute` comment). `score` uses the NIFTY calendar.
 - `/picks` loads every scored pick on each call (`picks_today` `find({"outcome":{"$ne":None}})`). `picks` has no index on `date`/`outcome`.
 - At scan time sentiment is usually not cached, so `final ≤ 0.7·rule + 0.15` until `attach_theses` rescores (`thesis.py` docstring).
 - `keep_best` uses wall-clock `decided_at`, not `now` (`store.py::keep_best` comment).
-- `check_exits` closes a trade as `sold` by writing `paper_trades` directly, not through the ledger. A same-day buy is not checked against holdings (only a snapshot from a later IST day).
+- `check_exits` closes a trade as `sold` by writing `paper_trades` directly: the ledger only closes via fills, and this is an inferred broker-side sale with no fill (left as is). A same-day buy is not checked against holdings (only a snapshot from a later IST day).
 - `SuggestionStore.DECIDED_STATUSES` doesn't list `SENDING`/`SENT`. Nothing reads it for those.
 - `builder/draft.py::run` drops `builder:lock` in `finally`. A run past 6 h may delete a newer run's lock (`ponytail:` note at `draft.py::run`).
 - The builder's gateway response cache replays cut-off replies, hence the single retry with a timestamped line (ac1b363).

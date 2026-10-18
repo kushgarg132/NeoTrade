@@ -216,6 +216,14 @@ async def spawn() -> None:
     asyncio.create_task(proc.wait())  # reap it whenever it ends
 
 
+async def ensure_indexes(db) -> None:
+    """One re-tune claim per month: the claim's upsert is only atomic with this index."""
+    try:
+        await db["retune_runs"].create_index("month", unique=True)
+    except Exception as exc:  # startup must not fail on it
+        logger.error("retune_runs index not created: %s", exc)
+
+
 async def start_if_due(db, now: datetime) -> bool:
     """Starts this month's re-tune once; True if it started one now."""
     month = now.strftime("%Y-%m")
@@ -224,7 +232,14 @@ async def start_if_due(db, now: datetime) -> bool:
     from backend import app_settings
     if not await app_settings.lab_on("the monthly re-tune", db):
         return False
-    await db["retune_runs"].insert_one({"month": month, "started_at": now})
+    from pymongo.errors import DuplicateKeyError
+    try:  # atomic with the unique index on month (ensure_indexes): two passes never both start one
+        claimed = await db["retune_runs"].update_one(
+            {"month": month}, {"$setOnInsert": {"month": month, "started_at": now}}, upsert=True)
+    except DuplicateKeyError:  # a concurrent upsert claimed it first
+        return False
+    if claimed.upserted_id is None:
+        return False
     await spawn()
     return True
 

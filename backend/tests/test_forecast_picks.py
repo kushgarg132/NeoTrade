@@ -175,3 +175,27 @@ def test_forward_record_is_unproven_until_100_scored():
     assert picks.forward(scored)["status"] == "unproven"
     record = picks.forward(scored + scored[:1])
     assert record["status"] == "measured" and record["buckets"][0]["bucket"] == "60%–70%"
+
+
+def test_factor_closes_cache_file_name_is_stable_across_processes(tmp_path, monkeypatch):
+    import pandas as pd
+    from backend.factor import data
+    monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(data, "_download", lambda tickers, start: pd.DataFrame(
+        {t: [1.0] for t in tickers}, index=pd.to_datetime(["2020-01-01"])))
+    data.closes(["B", "A"])
+    # sha1("A,B")[:16], independent of PYTHONHASHSEED
+    assert [p.name for p in tmp_path.iterdir()] == ["closes-2008-01-01-a1f86715f2bfd6bb.pkl"]
+
+
+def test_factor_report_saves_the_keys_the_gate_reads(monkeypatch):
+    import asyncio
+    from mongomock_motor import AsyncMongoMockClient
+    from backend import database
+    from backend.factor import report
+    from backend.risk.backtest_gate import BacktestGateStore
+    db = AsyncMongoMockClient()["t"]
+    monkeypatch.setattr(database.db, "connect_to_database", lambda: asyncio.sleep(0))
+    monkeypatch.setattr(database.db, "db", db, raising=False)
+    asyncio.run(report._save({"verdict": {"passed": True}}))
+    assert asyncio.run(BacktestGateStore(db).live_eligible(report.STRATEGY_NAME)) is True
