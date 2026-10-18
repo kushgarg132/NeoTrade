@@ -32,6 +32,16 @@ async def _deploy(db, redis) -> dict:
     return {"backend_sha": os.environ.get("GIT_SHA") or None, "backend_started_at": STARTED_AT}
 
 
+async def _data_alerts(db, redis, now) -> list[str]:
+    """The live data-quality checks; one that cannot run says so instead of blanking the Jobs panel."""
+    from backend.system.data_quality import live
+
+    try:
+        return await live(db, redis, now)
+    except Exception as exc:
+        return [f"Data-quality checks could not run: {type(exc).__name__}: {exc}"]
+
+
 async def _jobs(db, redis) -> dict:
     from backend.datalayer.worker import heartbeat_ages
     from backend.runs import ALIVE_KEY
@@ -42,6 +52,7 @@ async def _jobs(db, redis) -> dict:
     return {
         "daily_pass": runs[DAILY_PASS],
         "data_quality": runs[DATA_QUALITY],
+        "data_alerts": await _data_alerts(db, redis, now),
         "builder": runs[BUILDER],
         "next_daily_pass_at": (now + timedelta(seconds=seconds_until_next_run(now))).isoformat(),
         "loops": {name: runs[name] for name in LOOPS},
