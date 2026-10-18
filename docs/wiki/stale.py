@@ -51,7 +51,8 @@ def main() -> int:
             print(f"{page.name}: missing covers/verified_at")
             stale += 1
             continue
-        changed = [f for f in git("diff", "--name-only", f"{sha}..HEAD").split() if covered(f, globs)]
+        changed = [f for f in git("diff", "--name-only", f"{sha}..HEAD").split()
+                   if covered(f, globs) and not any(x in f for x in SKIP)]
         if changed:
             stale += 1
             print(f"{page.name}: stale since {sha} ({len(changed)} file(s))")
