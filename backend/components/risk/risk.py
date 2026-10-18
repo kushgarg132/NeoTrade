@@ -16,15 +16,11 @@ class RiskRules:
         Risk Amount = Account Size * Risk %
         Position Size = Risk Amount / (Entry - Stop Loss)
         """
-        if entry_price <= stop_loss:
-            # Short trade logic or invalid
-             if entry_price > stop_loss: # Long
-                 pass
-             else: # Short
-                 risk_per_share = stop_loss - entry_price
-                 if risk_per_share <= 0: return 0.0
-                 risk_amount = account_size * (risk_per_trade_percent / 100)
-                 return risk_amount / risk_per_share
+        if entry_price <= stop_loss:  # short trade
+            risk_per_share = stop_loss - entry_price
+            if risk_per_share <= 0: return 0.0
+            risk_amount = account_size * (risk_per_trade_percent / 100)
+            return risk_amount / risk_per_share
 
         risk_per_share = entry_price - stop_loss
         if risk_per_share <= 0:

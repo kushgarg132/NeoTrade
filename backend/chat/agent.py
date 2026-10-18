@@ -30,7 +30,11 @@ TOOL_LABELS = {
     "propose_paper_run": "Preparing a paper-run change", "propose_setting": "Preparing a settings change",
     "propose_order": "Preparing an order", "propose_exit": "Preparing an exit",
     "propose_cancel_order": "Preparing a cancellation", "propose_modify_order": "Preparing an order change",
-    "propose_stop_loss": "Preparing a stop-loss",
+    "propose_stop_loss": "Preparing a stop-loss", "propose_strategy": "Preparing a strategy",
+    "get_learning": "Reading what the engine learned", "get_strategy_library": "Reading the strategy library",
+    "get_built_strategies": "Reading your strategies", "search_news": "Searching the news",
+    "get_market_backdrop": "Reading the market backdrop", "fetch_stock_info_tool": "Looking up the company",
+    "fetch_price_history_tool": "Reading the price history", "resolve_symbol_tool": "Finding the symbol",
 }
 
 

@@ -10,6 +10,7 @@ from backend.prompts import render
 PROMPTS = {
     "chat": {"snapshot": "portfolio: value=401747", "page": "/portfolio", "profile": "name=Kush"},
     "model_test": {},
+    "final_turn": {},
     "resolve_instrument": {"query": "tata motors", "candidates": '[{"tradingsymbol": "TATAMOTORS"}]'},
     "peers": {"name": "Reliance Industries", "symbol": "RELIANCE"},
     "triage_news": {"items": "[0] [GLOBAL] Brent jumps (Reuters)"},
