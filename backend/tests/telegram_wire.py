@@ -1,8 +1,7 @@
-"""A fake Telegram Bot API behind both transports guardrails/telegram.py has
-used: httpx (JSON/query) and aiogram (form fields). Each call is recorded as
-(token, method, params) with params as the form fields Telegram reads --
-scalars as strings, objects and arrays decoded -- so tests pin the wire
-whichever client sent it. Nothing here touches a network.
+"""A fake Telegram Bot API under aiogram's session: each call is recorded as
+(token, method, params), params being the form fields aiogram puts on the
+wire -- scalars as strings, objects and arrays decoded. The same tests passed
+against the httpx transport this replaced. Nothing here touches a network.
 
     wire = TelegramWire(monkeypatch).on("sendMessage", {"message_id": 7, ...})
 """
@@ -10,7 +9,7 @@ whichever client sent it. Nothing here touches a network.
 import json
 from dataclasses import dataclass
 
-import httpx
+from aiogram.client.session.aiohttp import AiohttpSession
 
 
 @dataclass
@@ -27,18 +26,8 @@ class Call:
     params: dict
 
 
-def _field(value):
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (dict, list)):
-        return value
-    text = str(value)
-    if text[:1] in "[{":
-        try:
-            return json.loads(text)
-        except ValueError:
-            pass
-    return text
+def _field(value: str):
+    return json.loads(value) if value[:1] in "[{" else value
 
 
 def _message(message_id=100, chat_id=42, text="x"):
@@ -50,19 +39,6 @@ class TelegramWire:
         self.calls: list[Call] = []
         self.answers: dict = {}
         wire = self
-
-        async def httpx_send(client, request, **kwargs):
-            _, bot, method = request.url.path.rsplit("/", 2)
-            params = json.loads(request.content) if request.content else dict(request.url.params)
-            status, body = wire._answer(Call(bot.removeprefix("bot"), method,
-                                             {k: _field(v) for k, v in params.items() if v is not None}))
-            return httpx.Response(status, json=body, request=request)
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", httpx_send)
-        try:
-            from aiogram.client.session.aiohttp import AiohttpSession
-        except ImportError:  # the httpx transport predates aiogram
-            return
 
         async def aiogram_make_request(session, bot, method, timeout=None):
             params = {}
