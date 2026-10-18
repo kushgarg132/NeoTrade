@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 44ab59f
+verified_at: 0865567
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -249,6 +249,9 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/journal` | `backend/routers/journal.py::get_journal` | user |
 | GET | `/api/v1/journal/ai-vs-me` | `backend/routers/journal.py::ai_vs_me` | user |
 | POST | `/api/v1/journal/sync` | `backend/routers/journal.py::sync_journal` | user |
+| POST | `/api/v1/imports/cas` | `backend/routers/imports.py::import_cas` | user |
+| GET | `/api/v1/imports` | `backend/routers/imports.py::imported` | user |
+| DELETE | `/api/v1/imports` | `backend/routers/imports.py::delete_imported` | user |
 | POST | `/api/v1/journal/import/zerodha-console` | `backend/routers/journal.py::import_console_csv` | user |
 | POST | `/api/v1/journal/import/upstox-history` | `backend/routers/journal.py::import_upstox` | user |
 | PUT | `/api/v1/journal/round-trips/{round_trip_id}/note` | `backend/routers/journal.py::set_round_trip_note` | user |
