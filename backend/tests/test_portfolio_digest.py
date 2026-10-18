@@ -71,6 +71,9 @@ class _Redis:
         self.keys.add(key)
         return True
 
+    async def delete(self, key):
+        self.keys.discard(key)
+
 
 async def test_premarket_goes_once_in_its_window(db, monkeypatch):
     from backend.suggestions import notify
@@ -123,3 +126,20 @@ async def test_chat_portfolio_fact_hides_verdicts_from_non_admins(db):
     fact = await user_facts.portfolio(db, None, "alice")
     assert fact["plan"] is None and fact["sell_or_trim"] == []
     assert {h["symbol"]: h.get("verdict") for h in fact["holdings"]}["DOWN"] == "REVIEW"  # SELL masked
+
+
+async def test_premarket_failure_is_retried_next_tick(db, monkeypatch):
+    from backend.suggestions import notify
+
+    calls = []
+
+    async def flaky(db_, user_id, text, html=False):
+        calls.append(text)
+        if len(calls) == 1:
+            raise RuntimeError("telegram down")
+        return True
+
+    monkeypatch.setattr(notify, "notify", flaky)
+    redis, at = _Redis(), NOW.replace(hour=8, minute=46)
+    assert await digest.send_premarket(db, redis, at) == 0
+    assert await digest.send_premarket(db, redis, at.replace(minute=47)) == 1

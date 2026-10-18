@@ -304,6 +304,7 @@ async def send_premarket(db, redis, now: datetime) -> int:
             sent += 1
         except Exception as exc:
             logger.exception("pre-market digest failed for %s: %s", user_id, exc)
+            await redis.delete(f"digest:pre:{user_id}:{local.date()}")  # let the next tick retry
     return sent
 
 
