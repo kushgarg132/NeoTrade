@@ -20,7 +20,7 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | `backend/datalayer/news.py` | news pipeline: store, triage, prune, score, aggregate | `news.py::poll_loop`, `::process_loop`, `::store`, `::triage`, `::_prune`, `::score`, `::aggregate`, `::followed`, `::valid_impacts`, `::_deep_budget`, `::_score_due` |
 | `backend/datalayer/reactor.py` | alerts, news-triggered scans, shadow exits; shared `_claim` | `reactor.py::react`, `::scan`, `::shadow_exits`, `::_claim`, `::hits_for`, `::scan_targets`, `::ai_targets`, `::exit_hit` |
 | `backend/datalayer/outcomes.py` | news to price outcomes, theme weights, `proven` | `outcomes.py::record`, `::measure`, `::weights`, `::load_weights`, `::item_weight`, `::proven`, `::loop` |
-| `backend/datalayer/market.py` | calendar, FII/DII flows, rule regime, AI brief, `backdrop` | `market.py::calendar`, `::flows`, `::regime`, `::compute_regime`, `::brief`, `::_brief_due`, `::upcoming`, `::top_items`, `::backdrop` |
+| `backend/datalayer/market.py` | calendar, FII/DII flows, rule regime, AI brief, `backdrop` | `market.py::calendar`, `::flows`, `::regime`, `::compute_regime`, `::brief`, `::_brief_due`, `::upcoming`, `::top_items`, `::latest_brief`, `::backdrop` |
 | `backend/datalayer/bars.py` | `daily_bars` + `fundamentals` stores and loops | `bars.py::loop`, `::fundamentals_loop`, `::read`, `::write`, `::prev_closes`, `::nifty_closes`, `::_due`, `::symbols` |
 | `backend/datalayer/analysis.py` | AnalystAgent answer built from stored scored news | `analysis.py::from_layer`, `::_build` |
 | `backend/datalayer/catalysts.py` | overnight catalyst map for gap strategies | `catalysts.py::catalyst_map` |
@@ -230,6 +230,8 @@ All behind `get_current_user` (router-level dependency in `backend/server.py`, p
 | POST `/chat/actions/{id}/confirm` body `{confirm_token}` | `chat_actions.py::confirm_action` | `status` CONFIRMED / NEEDS_SECOND_TAP (+ `confirm_token`, `expires_in`), `result`; 409 `detail` on `ActionRefused`; `TokenRefused` -> its status (409/403) |
 | POST `/chat/actions/{id}/cancel` | `chat_actions.py::cancel_action` | `status:"CANCELLED"`; 409 "Nothing to cancel." |
 | WS actions `chat`, `analyze`, `quick_analyze` (outside globs: `backend/ws/routes.py`) | `_stream_chat`, `_stream_analysis`, `_stream_quick_analysis` | `chat:{req_id}` events `thinking, content, action, suggestions, done, error` (data `{text}` except action/suggestions); `analysis:{req_id}` `started, report, error`; `quick_analysis:{req_id}` `report, error` |
+| GET `/market/brief` | `routers/market_data.py::get_market_brief` (stored brief via `market.py::latest_brief`, no LLM, 404 when none) | `text, as_of, regime` |
+| GET `/research/{symbol}/note` | `routers/market_data.py::get_cached_note` (only the cached `analyst:{SYM}` note, no LLM, 404 when none; `as_of` derived from the key's TTL) | `summary, thesis, as_of` |
 | GET `/market/index/{ticker}/analysis` (outside globs) | `routers/market_data.py::get_index_analysis` | `analysis, session, headlines, generated_at, cached` |
 
 ## Gotchas and known issues

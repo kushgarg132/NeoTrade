@@ -21,6 +21,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/mine/events.py | Results and ex-dividend dates from yfinance, plus dividends received | `events.py::refresh`, `::loop`, `::upcoming`, `::dividends_received`, `::_fetch_sync` |
 | backend/mine/history.py | Daily value curve `mine_daily`, replayed from journal trades; XIRR | `history.py::xirr`, `::_inputs`, `::_compute`, `::_store`, `::backfill`, `::write_all`, `::series`, `::returns` |
 | backend/mine/lots.py | FIFO lots, realised matches, broker reconciliation, split detection | `lots.py::_fifo`, `::open_lots`, `::realised`, `::unmatched`, `::split_ratio`, `::reconcile`, `::mine_trades` |
+| backend/routers/mine.py (`GET /mine/review/latest`) | The latest non-empty AI portfolio `summary` on the user's `portfolio_snapshots` as `{text, date}` (IST day); no LLM; 404 until one exists | `mine.py::latest_review` |
 | backend/mine/stock.py | One-stock detail page | `stock.py::detail`, `::_verdicts`, `::_news` |
 | backend/mine/tax.py | Indian FY capital-gains estimate (pure) | `tax.py::report`, `::est_tax`, `::long_from`, `::is_long`, `::current_fy`, `STCG_RATE`, `LTCG_RATE`, `LTCG_EXEMPTION` |
 | backend/mine/thesis.py | User's why/target/stop/review_by per holding | `thesis.py::ThesisIn`, `::ThesisStore`, `SYMBOL` |

@@ -161,6 +161,8 @@ export const endpoints = {
   quickAnalyze: (symbol) => `/agents/quick-analyze/${symbol}`,
   intraday: (symbol) => `/agents/intraday/${symbol}`,
   marketIndices: '/market/indices',
+  marketBrief: '/market/brief',
+  stockNote: (s) => `/research/${encodeURIComponent(s)}/note`,
   trendingStocks: '/market/trending',
   marketQuotes: (symbols) => `/market/quotes?symbols=${encodeURIComponent(symbols.join(','))}`,
   // The backend derives the owner from the session token; there is no user
@@ -229,6 +231,7 @@ export const endpoints = {
   todayAttention: '/today/attention',
   mine: {
     overview: '/mine/overview',
+    reviewLatest: '/mine/review/latest',
     history: (range) => `/mine/history?range=${range}`,
     actions: '/mine/actions',
     dismiss: (id) => `/mine/actions/${encodeURIComponent(id)}/dismiss`,

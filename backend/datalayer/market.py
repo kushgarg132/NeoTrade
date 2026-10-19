@@ -254,6 +254,15 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
     return True
 
 
+async def latest_brief(redis) -> Optional[dict]:
+    """The stored brief for display: {text, as_of (ISO), regime}; None when there is none. No LLM call."""
+    doc = await _json(redis, BRIEF_KEY) if redis is not None else None
+    if not doc or not doc.get("text"):
+        return None
+    return {"text": doc["text"], "as_of": datetime.fromtimestamp(doc["at"], timezone.utc).isoformat(),
+            "regime": doc.get("regime")}
+
+
 async def backdrop(redis) -> dict:
     """What every AI answer and report gets: the brief and the regime.
     Empty when the ingest worker has not produced them."""

@@ -191,3 +191,15 @@ async def snooze_action(action_id: str = ACTION_ID, user: User = Depends(get_cur
 
     await actions.snooze(db.db, user.id, action_id, datetime.now(timezone.utc))
     return {"ok": True}
+
+
+@router.get("/review/latest")
+async def latest_review(user: User = Depends(get_current_user)):
+    """The AI write-up of the user's latest daily portfolio review (stored on the snapshot by the 16:00
+    pass). Never calls the model; 404 until one exists."""
+    docs = await db.db["portfolio_snapshots"].find(
+        {"user_id": user.id, "summary": {"$nin": [None, ""]}}).sort("at", -1).limit(1).to_list(length=1)
+    if not docs:
+        raise HTTPException(status_code=404, detail="No review yet")
+    at = docs[0]["at"].replace(tzinfo=timezone.utc) if docs[0]["at"].tzinfo is None else docs[0]["at"]
+    return {"text": docs[0]["summary"], "date": at.astimezone(IST).date().isoformat()}
