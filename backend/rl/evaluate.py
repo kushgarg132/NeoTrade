@@ -5,9 +5,9 @@
 Research only, run by hand, no schedule; nothing in the app imports it. Per setup the folds are
 `lab.splits.yearly_folds` (3 train years min) and a train episode needs `episode_end < test_start`.
 In each fold the policy is fitted on train episodes only and three exit rules are applied to the
-test year's episodes: `policy`, `fixed` (the setup's horizon, today's rule) and `best_fixed` (the
+test year's episodes: `policy`, `fixed` (decide at the setup's horizon day) and `best_fixed` (the
 holding day with the best mean reward on the TRAIN episodes). The baseline is whichever of the two
-fixed rules did better on train, chosen per fold from train data only. Every run is recorded in
+fixed rules did better on train, chosen per fold from train data only. Every rule decides at a close and fills at the next open. Every run is recorded in
 `lab_runs` (kind `rl`), passed or not.
 """
 
@@ -30,7 +30,10 @@ ITERATIONS = 5
 MIN_TRAIN_YEARS = 3
 MIN_T = 2.0
 MIN_HIT = 0.70
-CAVEATS = ["no point-in-time NIFTY 200 membership (survivorship +4-8%/yr)", "price-only state"]
+MIN_TEST_YEARS = 8
+MIN_SETUPS_PASSED = 2  # family rule: one pass among five setups is not evidence
+CAVEATS = ["no point-in-time NIFTY 200 membership (survivorship +4-8%/yr)", "price-only state",
+           "episodes with a missing bar are dropped (conditions on halts/delistings, as study.outcome)"]
 
 
 def _taken(rows: pd.DataFrame, days: pd.Series) -> pd.DataFrame:
@@ -107,10 +110,13 @@ def evaluate(t: dict, setup) -> dict:
 
 def passes(result: dict) -> tuple[bool, list[str]]:
     """The bar: mean yearly improvement over the baseline > 0, t >= 2, positive in >= 70% of years,
-    and the policy's max drawdown no deeper than the baseline's."""
+    and the policy's max drawdown no deeper than the baseline's, over at least MIN_TEST_YEARS test years.
+    Reading the family of setups is `run`'s `family_passed`."""
     why = []
     if not result["improvement_by_year"]:
         return False, ["no test years"]
+    if len(result["improvement_by_year"]) < MIN_TEST_YEARS:
+        why.append(f"only {len(result['improvement_by_year'])} test years (< {MIN_TEST_YEARS})")
     if not result["mean_improvement"] > 0:
         why.append(f"mean improvement {result['mean_improvement']:+.4f} is not above 0")
     t = result["t"]
@@ -124,9 +130,10 @@ def passes(result: dict) -> tuple[bool, list[str]]:
     return not why, why
 
 
-def _metrics(result: dict, ok: bool, why: list[str]) -> dict:
+def _metrics(result: dict, ok: bool, why: list[str], setups_passed: int = 0) -> dict:
     out = {k: v for k, v in result.items() if k != "folds"}
-    return {**out, "passed": ok, "reasons": why, "caveats": CAVEATS}
+    return {**out, "passed": ok, "reasons": why, "caveats": CAVEATS, "setups_passed": setups_passed,
+            "family_passed": setups_passed >= MIN_SETUPS_PASSED}
 
 
 async def run(db, now, setups=SETUPS) -> dict[str, dict]:
@@ -137,15 +144,18 @@ async def run(db, now, setups=SETUPS) -> dict[str, dict]:
     store, out = LabRunStore(db), {}
     window = (t["close"].index[0].date(), t["close"].index[-1].date())
     fp = await asyncio.to_thread(fingerprint, t["close"])
+    results = {s.name: await asyncio.to_thread(evaluate, t, s) for s in setups}
+    verdicts = {name: passes(r) for name, r in results.items()}
+    n_passed = sum(ok for ok, _ in verdicts.values())
     for s in setups:
-        result = await asyncio.to_thread(evaluate, t, s)
-        ok, why = passes(result)
+        result, (ok, why) = results[s.name], verdicts[s.name]
         run_id = await store.record(
             kind="rl", name=f"fqi_exit:{s.name}", execution=DEFAULT, window=window, fingerprint=fp,
             config={"params": {**agent.PARAMS, "rounds": agent.ROUNDS}, "iterations": ITERATIONS,
                     "hmax": "2 * setup.horizon", "horizon": s.horizon, "hmax_days": hmax(s), "features": STATE},
-            folds=result["folds"], metrics=_metrics(result, ok, why))
-        out[s.name] = {**result, "passed": ok, "reasons": why, "run_id": run_id}
+            folds=result["folds"], metrics=_metrics(result, ok, why, n_passed))
+        out[s.name] = {**result, "passed": ok, "reasons": why, "run_id": run_id, "setups_passed": n_passed,
+                       "family_passed": n_passed >= MIN_SETUPS_PASSED}
     return out
 
 
@@ -175,6 +185,9 @@ def main(argv=None) -> int:
         print("  by year: " + ", ".join(f"{y} {v:+.4f}" for y, v in r["improvement_by_year"].items()))
         for why in r["reasons"]:
             print("  - " + why)
+    first = next(iter(results.values()))
+    print(f"family: {'PASS' if first['family_passed'] else 'FAIL'} ({first['setups_passed']} setups passed, "
+          f"{MIN_SETUPS_PASSED} needed)")
     return 0 if all(r["run_id"] for r in results.values()) else 1
 
 

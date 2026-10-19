@@ -144,19 +144,41 @@ name = The app does not import the RL sandbox (run by hand only)
 type = forbidden
 source_modules =
     backend.ai
+    backend.auth
     backend.autopilot
+    backend.brokers
+    backend.builder
+    backend.chat
+    backend.core
+    backend.data
+    backend.datalayer
     backend.engine
+    backend.factor
     backend.forecast
+    backend.forward
+    backend.guardrails
+    backend.instruments
+    backend.jobs
+    backend.journal
     backend.lab
-    backend.ml
+    backend.learning
+    backend.llm
     backend.mine
+    backend.ml
+    backend.options
     backend.plan
     backend.portfolio
+    backend.profile
+    backend.research
+    backend.risk
     backend.routers
     backend.scheduler
+    backend.scoring
     backend.server
-    backend.jobs
+    backend.strategies
+    backend.suggestions
     backend.system
+    backend.ws
 allow_indirect_imports = True
 forbidden_modules =
     backend.rl

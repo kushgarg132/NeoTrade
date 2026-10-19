@@ -20,7 +20,7 @@ FAST, SLOW = [.04, .06, .03, 0, -.02, -.02, -.02, -.02], [.005, .02, .04, .07, .
 START = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
-def _prices(planted: bool, seed=0, symbols=12, years=8, every=10):
+def _prices(planted: bool, seed=0, symbols=12, years=12, every=10):
     """Flat 100 plus noise; a pick every `every` days per name follows FAST or SLOW (random) if planted."""
     rng = np.random.default_rng(seed)
     idx = pd.bdate_range("2012-01-02", periods=years * 260)
@@ -54,10 +54,12 @@ def test_planted_exit_timing_passes_and_is_fast(planted):
     t0 = time.perf_counter()
     r = ev.evaluate_rows(rows, s)
     assert time.perf_counter() - t0 < 60
-    assert len(r["improvement_by_year"]) == 4 and all(v > 0 for v in r["improvement_by_year"].values())
+    assert len(r["improvement_by_year"]) == 8 and all(v > 0 for v in r["improvement_by_year"].values())
     assert 2.5 < r["rules"]["policy"]["mean_days"] < 3.5
     assert r["rules"]["policy"]["mean_excess"] > r["rules"]["best_fixed"]["mean_excess"] > r["rules"]["fixed"]["mean_excess"]
-    assert ev.passes(r) == (True, [])
+    # the planted baseline never loses money (drawdown 0), so a policy's few-bp dip is the only clause that can bite
+    ok, why = ev.passes(r)
+    assert all("drawdown" in w for w in why) and r["rules"]["policy"]["max_drawdown"] < 0.01
 
 
 def test_noise_fails_with_reasons():
@@ -117,7 +119,7 @@ def test_train_episodes_that_end_in_the_test_year_are_dropped():
     assert ends[0] < pd.Timestamp(2017, 1, 1)
 
 
-RES = {"improvement_by_year": {"2020": 0.01, "2021": 0.01}, "mean_improvement": 0.01, "t": 3.0, "hit_years": 1.0,
+RES = {"improvement_by_year": {str(y): 0.01 for y in range(2012, 2020)}, "mean_improvement": 0.01, "t": 3.0, "hit_years": 1.0,
        "rules": {"policy": {"max_drawdown": 0.10}}, "baseline": {"max_drawdown": 0.10}}
 
 
@@ -142,6 +144,11 @@ def test_passes_boundaries(change, reason):
 
 def test_passes_accepts_the_boundaries_themselves():
     assert ev.passes(_with(t=2.0, hit_years=0.70, dd=0.10)) == (True, [])
+
+
+def test_fewer_than_min_test_years_fails():
+    ok, why = ev.passes(_with(improvement_by_year={"2020": 0.01, "2021": 0.01}))
+    assert not ok and why == [f"only 2 test years (< {ev.MIN_TEST_YEARS})"]
 
 
 def test_no_test_years_fails():
@@ -169,6 +176,7 @@ async def test_run_records_one_rl_row_per_setup_even_when_not_passed(monkeypatch
     rows = await LabRunStore(db).list(kind="rl")
     assert sorted(r["name"] for r in rows) == sorted(f"fqi_exit:{s.name}" for s in ev.SETUPS)
     m = rows[0]["metrics"]
+    assert m["setups_passed"] == 0 and m["family_passed"] is False
     assert m["passed"] is False and m["reasons"] and m["caveats"] == ev.CAVEATS
     assert m["improvement_by_year"] == {"2020": -0.01} and m["baseline"]["choice"] == {"2020": "fixed"}
     bson.encode(rows[0]["metrics"])  # mongomock accepts anything; real Mongo does not
@@ -185,7 +193,7 @@ async def test_a_real_result_is_bson_safe(planted, monkeypatch):
 
 def test_main_prints_not_recorded_and_exits_1(monkeypatch, capsys):
     async def fake_run(db, now, setups):
-        return {"momentum": {**FAKE, "passed": False, "reasons": ["x"], "run_id": None}}
+        return {"momentum": {**FAKE, "setups_passed": 0, "family_passed": False, "passed": False, "reasons": ["x"], "run_id": None}}
 
     class Db:
         db = None
@@ -197,3 +205,21 @@ def test_main_prints_not_recorded_and_exits_1(monkeypatch, capsys):
     monkeypatch.setattr("backend.database.db", Db())
     assert ev.main([]) == 1
     assert "NOT RECORDED" in capsys.readouterr().out
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("n_pass, family", [(1, False), (2, True)])
+async def test_family_passes_only_with_two_setups(monkeypatch, n_pass, family):
+    idx = pd.bdate_range("2020-01-01", periods=30)
+
+    async def load(db, now):
+        return {"close": pd.DataFrame({"A": np.arange(30.0) + 100}, index=idx)}
+
+    names = [s.name for s in ev.SETUPS]
+    monkeypatch.setattr(ev.picks, "load", load)
+    monkeypatch.setattr(ev, "evaluate", lambda t, s: {**FAKE, "name": s.name})
+    monkeypatch.setattr(ev, "passes", lambda r: (names.index(r["name"]) < n_pass, []))
+    db = AsyncMongoMockClient()["t"]
+    out = await ev.run(db, START)
+    assert all(o["family_passed"] is family and o["setups_passed"] == n_pass for o in out.values())
+    assert all(r["metrics"]["family_passed"] is family for r in await LabRunStore(db).list(kind="rl"))

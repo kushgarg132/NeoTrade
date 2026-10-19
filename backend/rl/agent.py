@@ -1,6 +1,6 @@
 """Fitted Q-iteration for the exit decision, LightGBM as the regressor.
 
-Q_exit(s) is the row's `exit_reward` (known). Q_hold(s) is regressed on the NEXT row of the same
+Q_exit(s) is the row's `exit_reward` (known: decide at the close, fill at the next open). Q_hold(s) is regressed on the NEXT row of the same
 episode only: target = max(Q_exit(s'), Q_hold(s')), and Q_hold at the last day is -inf (a forced
 exit), so a row never sees its own reward in its target. After k iterations the policy looks about
 k days ahead. The policy exits on the first day Q_exit >= Q_hold, or on the last day.
@@ -47,6 +47,8 @@ def fit(rows: pd.DataFrame, iterations: int = 5, train=_train) -> Policy:
     for _ in range(iterations):
         target = reward[nxt]  # Q_exit(s'), and Q_hold(s') once there is a model
         if model is not None:
-            target = np.maximum(target, np.asarray(model.predict(X), dtype=float)[nxt])
+            hold = np.asarray(model.predict(X), dtype=float)[nxt]
+            hold[nxt_all[nxt] < 0] = -np.inf  # the model never saw last-day states: Q_hold there is -inf
+            target = np.maximum(target, hold)
         model = train(X[has_next], target)
     return Policy(model)

@@ -50,8 +50,9 @@ def test_q_target_uses_only_the_next_row():
     (X1, y1), (X2, y2) = fits
     assert len(X1) == 2 and X1["held"].tolist() == [1 / 3, 2 / 3]  # the last day has no target
     assert y1.tolist() == [2.0, 3.0]  # first pass: Q_exit of the NEXT row, never the row's own 1.0 / 2.0
-    # second pass: max(Q_exit(next), Q_hold(next)); the stub's Q_hold is 10 * held of the next row
-    assert np.allclose(y2, [max(2.0, 10 * 2 / 3), max(3.0, 10 * 1.0)])
+    # second pass: max(Q_exit(next), Q_hold(next)); the stub's Q_hold is 10 * held of the next row, except
+    # on the last day, where Q_hold is -inf (forced exit), so the penultimate target is the exit value alone
+    assert np.allclose(y2, [max(2.0, 10 * 2 / 3), 3.0])
 
 
 def test_last_day_is_a_forced_exit_whatever_q_hold_says():
