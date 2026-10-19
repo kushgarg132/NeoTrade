@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: a2539d8
+verified_at: b8e37f7
 ---
 # Trading engine
 
@@ -139,7 +139,7 @@ Block vocab (`blocks/vocab.py`): setups `orb_break gap vwap_cross rsi_cross ema_
 1. **Start a run** (`POST /trading/start` -> `trading.py::start_trading` -> `::launch_run` -> `::_launch_run`):
    - Redis lock `launch:{user}:{mode}` then `RunStore.list_active` -> 409 if a run of that mode is live (`launch_run`).
    - INTRADAY: load today's plan (`plan/store.py::current`), add plan symbols, drop symbols the user's open LONGTERM trades hold (`_launch_run`, BHEL 2026-10-08 comment).
-   - `run(..., forward=engine_recorder(db, user_id))` (`forward/store.py::engine_recorder`): `size_intents` calls it via `runner.py::_forward` for each INTRADAY entry (equity or option) just before `orders.append`, after the order is fully decided; it writes an `engine` forward record (`name`=strategy, horizon 0, `ref_price`=entry) and an exception only logs. Only `_launch_run` passes it, so backtests and scans write none.
+   - `run(..., forward=engine_recorder(db, user_id, redis))` (`forward/store.py::engine_recorder`): `size_intents` calls it via `runner.py::_forward` for each INTRADAY equity entry (option entries are not recorded: premium vs underlying bars is meaningless) just before `orders.append`, after the order is fully decided; it writes an `engine` forward record (`name`=strategy, horizon 0, `ref_price`=entry, `nifty_ref` read best-effort from Redis `macro:^NSEI`) and an exception only logs. Only `_launch_run` passes it, so backtests and scans write none.
    - Default universe + connected Kite/Upstox -> `options/premiums.py::live_premium_source` and `FO_UNDERLYINGS` fed alongside (not into equity strategies).
    - `build_default_strategies(...)` filtered to the mode; `live_eligible_strategies` (backtest gate) then `paper_records` (paper gate) -> `eligible`.
    - Live routing needs ALL of: `autopilot_enabled` and `autopilot_live`, an ACTIVE `ai` broker (`ai_broker_adapter`), strategy in `live_strategies`, strategy eligible. Then `live_by_strategy[name] = AutopilotExecutionClient`. Otherwise paper.

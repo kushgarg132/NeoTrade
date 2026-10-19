@@ -378,6 +378,11 @@ NIFTY net of charges, t, hit rate and calibration gap. A name is proven only at 
 more and a calibration gap within 5 points; otherwise it reads "Unproven n/100". The same label shows
 on Picks setups, Lab strategy cards and ideas (`frontend/src/components/ForwardBadge.jsx`). It never
 gates money; the "Disagrees" marker flags where the existing money gate says otherwise.
+Excess is net return minus NIFTY over the same window (plus NIFTY for a SELL, the short side). Engine
+(intraday) entries store NIFTY at decision time (`nifty_ref`, from the quotes loop's Redis key) and are
+scored from there to the close; without it the scorer falls back to the day's open, which lets the morning
+NIFTY move leak into excess. Option entries are not recorded. A suggestion is named after its strategy.
+The scorecard is cached for 60 seconds.
 
 ## Reproducing a run
 

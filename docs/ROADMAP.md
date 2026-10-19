@@ -928,7 +928,7 @@ registration and public onboarding are deferred, not cancelled.
 3. **Research Lab:** make experiment definitions, point-in-time inputs, costs/slippage,
    backtests, purged walk-forward reports and comparisons first-class and reproducible. *Status: done 2026-10-19 (run records, Lab › Runs list and compare); see the research-lab-core spec.*
 4. **Forward record:** paper-trade and score every rule candidate before outcome; compare net
-   returns and calibration to NIFTY. An unproven result stays labelled unproven. *Status: step 4 (scorecard API, Lab › Forward, proven badge) done 2026-10-19.*
+   returns and calibration to NIFTY. An unproven result stays labelled unproven. *Status: done 2026-10-19 (scorecard API, Lab › Forward, proven badge).*
 5. **ML ranking:** let a passing model rank or filter candidates, never own sizing or exits at
    first. It must beat simple rule baselines after turnover in yearly purged walk-forward tests,
    have calibration better than the base rate, then earn a paper record.
