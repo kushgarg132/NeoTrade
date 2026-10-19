@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, RefreshCw, Upload, History } from 'lucide-react';
 import Layout from '../components/Layout';
-import SectionTabs from '../components/layout/SectionTabs';
-import { MINE_TABS } from '../components/layout/sections';
+import GuardrailsSheet from '../components/journal/GuardrailsSheet';
 import GuardrailAlerts from '../components/journal/GuardrailAlerts';
 import BrokerPnl from '../components/dashboard/BrokerPnl';
 import LivePnl from '../components/journal/LivePnl';
@@ -154,8 +153,10 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
   const [selectedDay, setSelectedDay] = useState(null);
   const [openTrip, setOpenTrip] = useState(null);
   // Trades: calendar and trade list. Habits: the patterns. `view` only picks the default.
-  const [tab, setTab] = useTab(view === 'habits' ? ['habits', 'trades'] : ['trades', 'habits']);
+  const [tab, setTab] = useTab(view === 'habits' ? ['habits', 'trades', 'guardrails'] : ['trades', 'habits', 'guardrails']);
   const habits = tab === 'habits';
+  const guardrails = tab === 'guardrails';
+  const trades = tab === 'trades';
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const fileInput = useRef(null);
@@ -190,7 +191,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
   // one exists, since most accounts never switch a strategy live.
   const [liveTrades, setLiveTrades] = useState([]);
   const loadLiveTrades = () =>
-    habits
+    !trades
       ? Promise.resolve()
       : api
           .get(endpoints.trading.trades(null, 'live'))
@@ -198,7 +199,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
           .catch(() => setLiveTrades([]));
   useEffect(() => {
     loadLiveTrades();
-  }, [habits]);
+  }, [trades]);
   useTopic('trades', loadLiveTrades);
   // Real-money P&L, your account and the AI account as separate figures.
   const [livePnl, setLivePnl] = useState(null);
@@ -324,7 +325,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
   return (
     <Layout>
       <div className="private space-y-3 sm:space-y-4">
-        {lockedAccount ? <SectionTabs tabs={MINE_TABS} label="My account" /> : <AccountSwitch {...accountState} />}
+        {!lockedAccount && <AccountSwitch {...accountState} />}
         {lockedAccount && accountState.roles && !accountState.hasRole && (
           <Link to="/settings?tab=accounts" className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 border-dashed hover:bg-[var(--paper-sunk)]">
             <span className="text-sm">Showing every account. Set which broker is <span className="field-label">yours</span> in More → Accounts.</span>
@@ -332,22 +333,24 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
           </Link>
         )}
         <GuardrailAlerts />
-        {!habits && <BrokerPnl journal={data} loading={!data && !error} error={error} />}
-        {!habits && <LivePnl live={livePnl} />}
-        {!habits && liveTrades.length > 0 && (
+        {trades && <BrokerPnl journal={data} loading={!data && !error} error={error} />}
+        {trades && <LivePnl live={livePnl} />}
+        {trades && liveTrades.length > 0 && (
           <TradeLedger title="Orders placed from NeoTrade" trades={liveTrades} loading={false} error={null} />
         )}
 
-        {data && (
+        {(data || guardrails) && (
           <Tabs
-            tabs={[{ id: 'trades', label: 'Trades' }, { id: 'habits', label: 'Habits' }]}
+            tabs={[{ id: 'trades', label: 'Trades' }, { id: 'habits', label: 'Habits' }, { id: 'guardrails', label: 'Guardrails' }]}
             active={tab}
             onSelect={setTab}
             label="Journal sections"
           />
         )}
 
-        {(!habits || empty) && (
+        {guardrails && <GuardrailsSheet />}
+
+        {!guardrails && (!habits || empty) && (
         <Sheet
           title="Journal"
           meta={summary ? `${summary.trips} closed` : undefined}
@@ -360,7 +363,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
             <Empty
               title="No trades in the journal yet"
               detail="Sync pulls today's fills from every connected broker, and it runs on its own after the close each day. For older history, download your tradebook from Zerodha Console (Reports → Tradebook) and import the CSV."
-              action={<Link to="/import" className="field-label text-[var(--stamp)] hover:underline min-h-11 inline-flex items-center">Import files ›</Link>}
+              action={<Link to="/portfolio/import" className="field-label text-[var(--stamp)] hover:underline min-h-11 inline-flex items-center">Import files ›</Link>}
             />
           ) : (
             <>
@@ -451,7 +454,7 @@ const Journal = ({ view = 'trades', lockedAccount = null }) => {
           </Sheet>
         )}
 
-        {!empty && !habits && (
+        {!empty && trades && (
           <Sheet
             title={selectedDay ? `Trades closed ${selectedDay}` : 'Recent round trips'}
             meta="Gross of charges"

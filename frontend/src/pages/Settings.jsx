@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Loader2, Check, ExternalLink, Unplug, ArrowRight, ChevronDown } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Sheet, Empty, Ruling, Stamp, Tabs } from '../components/doc/Doc';
@@ -10,9 +10,8 @@ import api, { endpoints, getPreferences } from '../utils/api';
 import { cn } from '../utils/cn';
 import { useAuth } from '../context/AuthContext';
 import { Row, NumberField } from '../components/settings/Fields';
-import { formatCurrency, formatQuantity, formatDateTime, formatTimeAgo, formatClock } from '../utils/formatters';
+import { formatQuantity, formatDateTime, formatTimeAgo, formatClock } from '../utils/formatters';
 import { Avatar } from '../components/common/Avatar';
-import useSchedule from '../hooks/useSchedule';
 
 /**
  * Standing instructions for the real account: who the broker is, the limits
@@ -894,371 +893,6 @@ const UsageSheet = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/* Guardrails                                                                 */
-/* -------------------------------------------------------------------------- */
-
-const GUARD_FIELDS = [
-  'max_trades_per_day', 'cooldown_after_losses', 'cooldown_minutes', 'daily_loss_limit',
-  'max_option_trades_per_day', 'max_option_lots',
-];
-
-const GuardrailsSheet = () => {
-  const { t } = useSchedule();
-  const [prefs, setPrefs] = useState(null);
-  const [draft, setDraft] = useState({});
-  const [telegram, setTelegram] = useState(null);
-  const [linkUrl, setLinkUrl] = useState(null);
-  const [botToken, setBotToken] = useState('');
-  const [note, setNote] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  const loadTelegram = () =>
-    api
-      .get(endpoints.guardrails.status)
-      .then((res) => setTelegram(res.data.telegram))
-      .catch(() => setTelegram(null));
-
-  useEffect(() => {
-    getPreferences()
-      .then((res) => {
-        setPrefs(res.data);
-        setDraft(Object.fromEntries(GUARD_FIELDS.map((key) => [key, res.data[key]])));
-      })
-      .catch(() => setPrefs(null));
-    loadTelegram();
-  }, []);
-
-  const save = (patch) => api.put(endpoints.settings.preferences, patch).then((res) => setPrefs(res.data));
-  const [confirmOff, setConfirmOff] = useState(false);
-
-  // An empty or invalid field restores the saved value instead of saving 0
-  // (0 means "off" for every guardrail); a refused save says why and resets.
-  const commit = (key, value) => {
-    const restore = () => setDraft((d) => ({ ...d, [key]: prefs[key] }));
-    if (String(draft[key]).trim() === '' || !Number.isFinite(value) || value < 0) return restore();
-    if (value === prefs[key]) return undefined;
-    // 0 turns the daily loss limit -- and with it the kill-switch -- off: never by a cleared field.
-    if (key === 'daily_loss_limit' && value === 0) return setConfirmOff(true);
-    setNote(null);
-    return save({ [key]: value }).catch((err) => {
-      setNote(err?.response?.data?.detail || 'That value was not saved.');
-      restore();
-    });
-  };
-
-  const act = (request, onDone) => {
-    setBusy(true);
-    setNote(null);
-    request()
-      .then(onDone)
-      .catch((err) => setNote(err?.response?.data?.detail || 'That did not work'))
-      .finally(() => setBusy(false));
-  };
-
-  if (!prefs) {
-    return (
-      <Sheet title="Guardrails">
-        <Ruling rows={3} />
-      </Sheet>
-    );
-  }
-
-  const numberRow = (key, label, hint) => (
-    <Row label={label} hint={hint}>
-      <NumberField
-        value={draft[key]}
-        onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
-        onCommit={() => commit(key, Math.round(Number(draft[key])))}
-        zeroIsOff
-      />
-    </Row>
-  );
-
-  return (
-    <Sheet
-      title="Guardrails"
-      meta={
-        prefs.guardrails_enabled
-          ? prefs.auto_square_off === 'live'
-            ? 'Watching · square-off live'
-            : 'Watching'
-          : 'Off'
-      }
-    >
-      <p className="doc-meta normal-case pb-3 border-b border-[var(--rule)]">
-        Limits you set for yourself. NeoTrade checks them against your broker every minute during the
-        session and alerts you when one is crossed. It cannot stop an order you place in your broker's
-        own app.
-      </p>
-
-      <Row label="Watch my broker" hint={`Checks every connected broker from ${t.monitor_open} to ${t.monitor_close} IST.`}>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={prefs.guardrails_enabled}
-          onClick={() => save({ guardrails_enabled: !prefs.guardrails_enabled })}
-          className={cn(
-            'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
-            prefs.guardrails_enabled
-              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-              : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-          )}
-        >
-          {prefs.guardrails_enabled ? 'On' : 'Off'}
-        </button>
-      </Row>
-
-      <Row
-        label="Daily loss limit"
-        hint="Checked against your broker's own day P&L. Reaching it also trips the engine's kill-switch for the day. Shared with the AI account (AI › Settings › Trading limits)."
-      >
-        <NumberField
-          value={draft.daily_loss_limit}
-          onChange={(value) => {
-            setConfirmOff(false);
-            setDraft((d) => ({ ...d, daily_loss_limit: value }));
-          }}
-          onCommit={() => commit('daily_loss_limit', Number(draft.daily_loss_limit))}
-          zeroIsOff
-        />
-      </Row>
-      {confirmOff && (
-        <div role="alert" className="py-2 flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--loss)]">
-          <span>0 turns off the daily loss limit and the engine's kill-switch.</span>
-          <span className="inline-flex gap-2">
-            <button
-              type="button"
-              className="min-h-11 sm:min-h-0 px-2 py-1 border border-[var(--rule-strong)] text-[var(--ink)]"
-              onClick={() => {
-                setConfirmOff(false);
-                setDraft((d) => ({ ...d, daily_loss_limit: prefs.daily_loss_limit }));
-              }}
-            >
-              Keep {formatCurrency(prefs.daily_loss_limit)}
-            </button>
-            <button
-              type="button"
-              className="min-h-11 sm:min-h-0 px-2 py-1 border border-[var(--loss)]"
-              onClick={() => {
-                setConfirmOff(false);
-                save({ daily_loss_limit: 0 }).catch((err) => setNote(err?.response?.data?.detail || 'That value was not saved.'));
-              }}
-            >
-              Turn off
-            </button>
-          </span>
-        </div>
-      )}
-
-      {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this; the autopilot opens no more. Shared with AI › Settings › Trading limits. 0 is off.')}
-      {numberRow('cooldown_after_losses', 'Cooldown after losses in a row', 'Start a cooldown after this many losses in a row. 0 is off.')}
-      {numberRow('cooldown_minutes', 'Cooldown length, minutes', 'Any trade opened inside it is flagged.')}
-      {numberRow('max_option_trades_per_day', 'Options trades per day', 'Alert when you open more options trades than this. 0 is off.')}
-      {numberRow('max_option_lots', 'Lots per options trade', 'Alert when one options position is bigger than this many lots. Needs Kite connected for lot sizes. 0 is off.')}
-
-      <Row
-        label="Warn on unhedged option selling"
-        hint="Alert when you sell an option with no bought option on the same underlying open to cap the loss. A sold option's loss has no fixed limit."
-      >
-        <button
-          type="button"
-          role="switch"
-          aria-checked={Boolean(prefs.warn_naked_options)}
-          onClick={() => save({ warn_naked_options: !prefs.warn_naked_options })}
-          className={cn(
-            'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
-            prefs.warn_naked_options
-              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-              : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-          )}
-        >
-          {prefs.warn_naked_options ? 'On' : 'Off'}
-        </button>
-      </Row>
-
-      <Row
-        label="Square off at the loss limit"
-        hint={
-          prefs.auto_square_off === 'live'
-            ? 'Live: when the daily loss limit is hit, NeoTrade places market orders to close your NSE intraday (MIS) positions, once a day. Delivery and F&O positions are never touched.'
-            : 'Preview alerts you with the exact exit orders it would place, without sending them. Live sends them. Only NSE intraday (MIS) positions, once a day.'
-        }
-      >
-        <div className="flex" role="radiogroup" aria-label="Square off at the loss limit">
-          {[
-            ['off', 'Off'],
-            ['preview', 'Preview'],
-            ['live', 'Live'],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={prefs.auto_square_off === value}
-              onClick={() => {
-                if (value === prefs.auto_square_off) return;
-                if (
-                  value === 'live' &&
-                  !window.confirm(
-                    'Live square-off places real market orders on your broker account, without asking, when your daily loss limit is hit. Turn it on?'
-                  )
-                )
-                  return;
-                save({ auto_square_off: value });
-              }}
-              className={cn(
-                'px-3 py-1 border -ml-px first:ml-0 font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
-                prefs.auto_square_off === value
-                  ? value === 'live'
-                    ? 'bg-[var(--loss)] text-[var(--paper)] border-[var(--loss)]'
-                    : 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-                  : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </Row>
-
-      <Row
-        label="Your Telegram bot"
-        hint={
-          telegram?.own_bot
-            ? `Alerts come from @${telegram.own_bot}. Removing it unlinks your chat.`
-            : 'Optional. In Telegram, message @BotFather, send /newbot, and paste the token it gives you. It is stored encrypted and never shown again.'
-        }
-      >
-        {telegram?.own_bot ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={busy}
-            onClick={() => act(() => api.delete(endpoints.guardrails.telegramBot), () => {
-              setLinkUrl(null);
-              loadTelegram();
-            })}
-          >
-            Remove bot
-          </Button>
-        ) : (
-          <form
-            className="flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              act(() => api.put(endpoints.guardrails.telegramBot, { token: botToken.trim() }), (res) => {
-                setBotToken('');
-                setLinkUrl(null);
-                setTelegram((t) => ({ ...t, configured: true, linked: false, own_bot: res.data.own_bot }));
-              });
-            }}
-          >
-            <input
-              type="password"
-              autoComplete="off"
-              value={botToken}
-              onChange={(event) => setBotToken(event.target.value)}
-              placeholder="123456:ABC…"
-              aria-label="Telegram bot token"
-              className="min-w-0 w-40 sm:w-56 bg-transparent border-b border-[var(--rule-strong)] py-1.5 text-sm focus:outline-none focus:border-[var(--stamp)]"
-            />
-            <Button type="submit" variant="primary" size="sm" disabled={busy || !botToken.trim()}>
-              Save
-            </Button>
-          </form>
-        )}
-      </Row>
-
-      <Row
-        label="Telegram alerts"
-        hint={
-          telegram?.configured === false
-            ? 'Add your own bot above to get alerts on your phone. They still appear in the app.'
-            : 'Alerts arrive on your phone even when the app is closed.'
-        }
-      >
-        {telegram?.configured &&
-          (telegram.linked ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={busy}
-              onClick={() =>
-                act(() => api.delete(endpoints.guardrails.telegram), () =>
-                  setTelegram((t) => ({ ...t, linked: false }))
-                )
-              }
-            >
-              Unlink
-            </Button>
-          ) : linkUrl ? (
-            <div className="flex gap-2">
-              <a href={linkUrl} target="_blank" rel="noreferrer">
-                <Button variant="secondary" size="sm">
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Open Telegram
-                </Button>
-              </a>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  act(() => api.post(endpoints.guardrails.verify), () => {
-                    setLinkUrl(null);
-                    setTelegram((t) => ({ ...t, linked: true }));
-                  })
-                }
-              >
-                I tapped Start
-              </Button>
-            </div>
-          ) : (
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={busy}
-              onClick={() => act(() => api.post(endpoints.guardrails.link), (res) => setLinkUrl(res.data.url))}
-            >
-              Link Telegram
-            </Button>
-          ))}
-      </Row>
-      <Row
-        label="News alerts"
-        hint="Material news on the names you follow, as a toast here and on Telegram when linked. A market-wide shock reaches anyone holding something."
-      >
-        <div role="radiogroup" aria-label="News alerts" className="flex flex-wrap">
-          {[
-            ['held', 'Holdings'],
-            ['held+watched', '+ Watchlist'],
-            ['all', 'All'],
-            ['off', 'Off'],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={(prefs.news_alerts || 'held') === value}
-              onClick={() => value !== prefs.news_alerts && save({ news_alerts: value })}
-              className={cn(
-                'px-3 py-1 border -ml-px first:ml-0 font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
-                (prefs.news_alerts || 'held') === value
-                  ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-                  : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </Row>
-      {note && <p className="doc-meta normal-case pt-2">{note}</p>}
-    </Sheet>
-  );
-};
-
-/* -------------------------------------------------------------------------- */
 /* Portfolio review                                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -1413,17 +1047,21 @@ const ProfileRow = () => {
   );
 };
 
-const LEGACY_TABS = { broker: 'accounts', guardrails: 'safety', portfolio: 'safety', beta: 'about' };
+const LEGACY_TABS = { broker: 'accounts', portfolio: 'safety', beta: 'about' };
 
 const Settings = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   // Old links (?tab=broker, guardrails, portfolio) land on the regrouped tabs.
   useEffect(() => {
-    const legacy = LEGACY_TABS[params.get('tab')];
+    const requested = params.get('tab');
+    // Guardrails moved to the Journal.
+    if (requested === 'guardrails') navigate('/journal?tab=guardrails', { replace: true });
+    const legacy = LEGACY_TABS[requested];
     if (legacy) setParams({ tab: legacy }, { replace: true });
-  }, [params, setParams]);
+  }, [params, setParams, navigate]);
   const tabs = [
     { id: 'accounts', label: 'Accounts' },
     { id: 'safety', label: 'Safety' },
@@ -1441,7 +1079,6 @@ const Settings = () => {
             {tab === 'accounts' && <BrokerSheet />}
             {tab === 'safety' && (
               <>
-                <GuardrailsSheet />
                 <PortfolioSheet isAdmin={isAdmin} />
               </>
             )}
@@ -1449,10 +1086,10 @@ const Settings = () => {
               <>
                 <ModelSheet isAdmin={isAdmin} />
                 <Link
-                  to="/ai/settings"
+                  to="/lab/limits"
                   className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors"
                 >
-                  <span className="text-sm"><span className="field-label">Autopilot</span> switch and limits are under AI › Settings</span>
+                  <span className="text-sm"><span className="field-label">Autopilot</span> switch and limits are under Lab › Autopilot limits</span>
                   <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
                 </Link>
                 {isAdmin && <UsageSheet />}
@@ -1460,8 +1097,8 @@ const Settings = () => {
             )}
             {tab === 'about' && (isAdmin ? (
               <div className="space-y-2">
-                {[['/system', 'Handbook', 'how every part works, with live status'],
-                  ['/system/future', 'Future', 'the backlog of what comes next']].map(([to, label, detail]) => (
+                {[['/lab/handbook', 'Handbook', 'how every part works, with live status'],
+                  ['/lab/backlog', 'Future', 'the backlog of what comes next']].map(([to, label, detail]) => (
                   <Link key={to} to={to}
                         className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors">
                     <span className="text-sm"><span className="field-label">{label}</span> — {detail}</span>
