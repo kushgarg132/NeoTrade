@@ -157,7 +157,7 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
     # The evening answer, from the review just done (portfolio/digest.py).
     from backend.portfolio.digest import send_postclose
     try:
-        await send_postclose(db, now)
+        await send_postclose(db, now, redis)
     except Exception as exc:
         logger.exception("post-close digests failed: %s", exc)
 

@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
-covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py]
-verified_at: 907da1f
+covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
+verified_at: cf66c98
 ---
 # Data layer, AI and background jobs
 
@@ -58,6 +58,9 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | `backend/plan/replay.py` | nightly plan(A) vs no-plan(B) replay; `weeks_beating` | `replay.py::replay_day`, `::replay_all`, `::weeks_beating`, `::SCORECARDS` |
 | `backend/plan/notify.py` | Telegram text for plans (not for fallback) | `notify.py::plan_text`, `::notify_plan` |
 | `backend/routers/plan.py` | `GET /plan/today` | `plan.py::plan_today` |
+| `backend/summaries/core.py` | shared by every AI summary: Redis NX claim per user+kind+period, grounded text, failure back-off (6 h), Mongo `ai_summaries` | `core.py::produce`, `::get`, `::latest`, `::shown`, `::FAIL_BACKOFF` |
+| `backend/summaries/day.py` | Home "Your day": 3 lines pre-open and post-close, feature `portfolio`, tier `fast` | `day.py::generate`, `::TTL` |
+| `backend/routers/summaries.py` | read-only `GET /summaries/*`, never calls a model | `summaries.py::day` |
 
 ### research, analyst, llm, scheduler
 | path | role | key symbols |
@@ -187,6 +190,7 @@ All times IST. `in_session` = NSE trading day (`core/market_calendar.py::is_trad
 | Auto-run tick | API (every worker) | 60s | `autorun.py::autorun_loop` then `tick` | Redis `autorun:{slot}` ownership; intraday needs Lab "the intraday auto-run" |
 | Login reminders | API | 08:30 to 09:05 ("early"), 09:05 to 09:15 ("late"), once each per user | `autorun.py::_login_reminders` | SET NX per user/day/slot |
 | Pre-market digest | API | 08:45 to 09:15, once a day per user | `portfolio/digest.py::send_premarket` | `digest:pre:{user}:{date}` |
+| AI summary: Your day | API (with the digests) | with the 08:45 pre-market digest (08:45 to 09:15) and with the post-close digest after the 16:00 pass; 2 calls per user per day | `digest.py::_day_summary` then `summaries/day.py::generate` | `summary:day:{user}:{date}:{phase}` SET NX 30h; feature `portfolio` (fast); failure waits 6h |
 | Game-plan build | API | 08:45 to 15:30 trading days, per auto-intraday user with a live broker feed, until a plan exists | `autorun.py::_preopen_plans` | Lab "the AI game plan build"; `plan:build:` 1h; `PLAN_LLM_CALLS_PER_DAY` |
 | Long-term exits / level alerts | API | in session, every 15-min bucket | `autorun.py::_longterm_pass`, `::_level_pass` | `longterm:{user}:{day}:{bucket}`, `levels:...` |
 | Morning pass | API | first tick at/after 09:20, once a day per user (catch-up, monthly factor rebalance, picks entry, autopilot proposals, digest) | `autorun.py::_longterm_pass` | `longterm:{user}:{day}:morning` |
@@ -212,6 +216,7 @@ Lab switch (`app_settings.lab_enabled`, default off, seen by every process withi
 - Every plan LLM call goes through `store.reserve_call`; news deep calls through `_deep_budget`; user chat/research through `_charge`.
 - Figures in AI prose must come from the call's facts (`grounding.py`); plan rationale is filtered with it; ungrounded sentences are dropped, not rewritten.
 - One sentiment source for conviction: `sentiment:{SYM}`, written by `news.aggregate` for followed names; for those, the analyst note never writes `sentiment:` when the ingest layer answered (`AnalystAgent._store_note`).
+- AI summaries (`backend/summaries/`) are written only by their job at the cadence in the table above (Redis NX per user+kind+period); `GET /summaries/*` reads Mongo `ai_summaries` and never calls a model; a failed or over-budget call keeps the last text.
 - Prompts live in `backend/prompts/*.md`; `render` raises `KeyError` on missing or extra placeholders (`prompts/__init__.py::render`).
 - Ingest has a single leader; reactions are idempotent through claim stamps on `news_items`, so a restart never double alerts.
 - Every user-owned record carries `user_id` (`trade_plans`, `chat_actions`, `plan_scorecards`).
@@ -256,4 +261,4 @@ All behind `get_current_user` (router-level dependency in `backend/server.py`, p
 
 ## Tests
 
-`backend/tests/`: `test_datalayer_worker.py` (leader, loops, shutdown), `test_datalayer_prices.py`, `test_datalayer_news.py`, `test_datalayer_reactor.py`, `test_datalayer_outcomes.py`, `test_datalayer_market.py` (regime, brief gating), `test_datalayer_bars.py`, `test_datalayer_catalysts.py`, `test_market_news.py` (`/news/market`, `/news/feed`, `/news/symbols`), `test_analyst_agent.py`, `test_ai_facts_market.py`, `test_ai_facts_user.py`, `test_ai_runner.py`, `test_ai_grounding.py`, `test_ai_sentiment.py`, `test_ai_analyst_verdict.py`, `test_chat_agent.py`, `test_chat_actions.py`, `test_chat_orders.py`, `test_chat_tools.py`, `test_chat_query_tool.py`, `test_chat_context.py`, `test_plan_builder.py`, `test_plan_builder_tools.py`, `test_plan_validate.py`, `test_plan_store.py`, `test_plan_gate.py`, `test_plan_runner.py`, `test_plan_revise.py`, `test_plan_revise_tools.py`, `test_plan_replay.py`, `test_plan_notify.py`, `test_plan_router.py`, `test_research_quick.py`, `test_stock_flags.py`, `test_research_graph_demoted.py`, `test_index_move.py`, `test_llm.py`, `test_llm_tiers.py`, `test_llm_call_tiers.py` (pins every call site's tier and feature), `test_llm_content_blocks.py`, `test_model_catalog.py`, `test_market_cache.py`, `test_prompts.py`, `test_scheduler.py` (IST timing, per-user isolation, lock, catch-up day), `test_lab_switch.py` (the seven Lab gates), `test_app_settings.py`, `test_autorun.py`, `test_indicators.py`, `test_stock_info_logo.py`, `test_system_jobs.py`.
+`backend/tests/`: `test_summaries.py` (every AI summary: facts, once per period, failure fallback, user scope), `test_datalayer_worker.py` (leader, loops, shutdown), `test_datalayer_prices.py`, `test_datalayer_news.py`, `test_datalayer_reactor.py`, `test_datalayer_outcomes.py`, `test_datalayer_market.py` (regime, brief gating), `test_datalayer_bars.py`, `test_datalayer_catalysts.py`, `test_market_news.py` (`/news/market`, `/news/feed`, `/news/symbols`), `test_analyst_agent.py`, `test_ai_facts_market.py`, `test_ai_facts_user.py`, `test_ai_runner.py`, `test_ai_grounding.py`, `test_ai_sentiment.py`, `test_ai_analyst_verdict.py`, `test_chat_agent.py`, `test_chat_actions.py`, `test_chat_orders.py`, `test_chat_tools.py`, `test_chat_query_tool.py`, `test_chat_context.py`, `test_plan_builder.py`, `test_plan_builder_tools.py`, `test_plan_validate.py`, `test_plan_store.py`, `test_plan_gate.py`, `test_plan_runner.py`, `test_plan_revise.py`, `test_plan_revise_tools.py`, `test_plan_replay.py`, `test_plan_notify.py`, `test_plan_router.py`, `test_research_quick.py`, `test_stock_flags.py`, `test_research_graph_demoted.py`, `test_index_move.py`, `test_llm.py`, `test_llm_tiers.py`, `test_llm_call_tiers.py` (pins every call site's tier and feature), `test_llm_content_blocks.py`, `test_model_catalog.py`, `test_market_cache.py`, `test_prompts.py`, `test_scheduler.py` (IST timing, per-user isolation, lock, catch-up day), `test_lab_switch.py` (the seven Lab gates), `test_app_settings.py`, `test_autorun.py`, `test_indicators.py`, `test_stock_info_logo.py`, `test_system_jobs.py`.

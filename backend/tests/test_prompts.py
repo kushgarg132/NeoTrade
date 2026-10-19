@@ -44,6 +44,13 @@ PROMPTS = {
 }
 
 
+# AI summaries (backend/summaries/)
+PROMPTS |= {
+    "summary_day": {"phase": "after the market has closed", "account": "Your account: ₹2,950", "count": 1,
+                    "needs": "- DOWN: HOLD → SELL", "market": "{\"regime\": \"neutral\"}"},
+}
+
+
 def test_every_prompt_file_is_covered_here():
     files = {p.stem for p in (Path(__file__).parents[1] / "prompts").glob("*.md")}
     assert files == set(PROMPTS)

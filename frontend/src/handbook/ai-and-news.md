@@ -80,6 +80,18 @@ skips with one info log line a day; per-user switches still apply inside it.
 
 <!-- live:ai -->
 
+## AI summaries
+
+Short generated cards, each labelled "AI summary" with the time it was written. A job writes them at a
+fixed cadence into Mongo `ai_summaries` (`summaries/core.py::produce`: one Redis NX claim per user, kind
+and period, figures checked against the facts given, a failed or over-budget call keeps the last text
+and waits 6 hours); `GET /summaries/*` (`routers/summaries.py`) only reads, so opening a page never costs a call.
+
+- **Your day** (Home): three lines, where you stand, what needs you, the market. Written with the
+  pre-market digest and the post-close digest (`portfolio/digest.py::_day_summary`,
+  `summaries/day.py::generate`), feature `portfolio`, fast tier. Home shows it in place of the digest's
+  templated lines when it exists (`components/home/BriefCard.jsx`).
+
 ## Facts, tools and grounding
 
 - **Fact layer** — `backend/ai/facts/`: the one read path for AI features. Market facts

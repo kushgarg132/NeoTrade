@@ -325,15 +325,27 @@ async def send_premarket(db, redis, now: datetime) -> int:
         if not await redis.set(f"digest:pre:{user_id}:{local.date()}", "1", nx=True, px=86_400_000):
             continue
         try:
-            await notify(db, user_id, await premarket_for(db, user_id, now), html=True)
+            text = await premarket_for(db, user_id, now)
+            await notify(db, user_id, text, html=True)
             sent += 1
+            await _day_summary(db, redis, user_id, "pre", now, text)
         except Exception as exc:
             logger.exception("pre-market digest failed for %s: %s", user_id, exc)
             await redis.delete(f"digest:pre:{user_id}:{local.date()}")  # let the next tick retry
     return sent
 
 
-async def send_postclose(db, now: datetime) -> int:
+async def _day_summary(db, redis, user_id: str, phase: str, now: datetime, text: str) -> None:
+    """Home's AI "Your day" (summaries/day.py); the digest has gone out either way."""
+    from backend.summaries import day
+
+    try:
+        await day.generate(db, redis, user_id, phase, now, text)
+    except Exception as exc:
+        logger.warning("day summary failed for %s: %s", user_id, exc)
+
+
+async def send_postclose(db, now: datetime, redis=None) -> int:
     """After the 16:00 pass's review (backend/scheduler.py). Skipped when the
     pass runs as the next morning's catch-up: an evening message at 9 AM is noise."""
     from backend.datalayer import market
@@ -348,6 +360,7 @@ async def send_postclose(db, now: datetime) -> int:
             text = await postclose_for(db, user_id, now, events)
             await notify(db, user_id, text, html=True)
             sent += 1
+            await _day_summary(db, redis, user_id, "post", now, text)
         except Exception as exc:
             logger.exception("post-close digest failed for %s: %s", user_id, exc)
     return sent
