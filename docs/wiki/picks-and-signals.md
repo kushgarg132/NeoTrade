@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 8c6573d
+verified_at: dba63fd
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -96,6 +96,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 3. `picks.py::compute` (in `asyncio.to_thread`): `study.py::run` → per setup `signals` → `study.py::events` (entry t+1 open, exit close t+1+H, net of 10 bps slippage per side (`lab/assumptions.py`) and CNC charges on ₹1 L, NIFTY over the same window, `kept` drops overlaps) → `stats` + `walk_forward`.
 4. Picks = setups with `n ≥ MIN_N` whose last kept signal is today. Sorted by `median_excess × p_beat_nifty`, then `strength`. Top 10.
 5. Upsert `picks_study/latest`. Insert only new `_id`s with `outcome: None`. Then every `outcome: None` pick is scored by `picks.py::score` once its exit bar exists.
+5b. Right after `picks.run`, `forward/score.py::score_due(db, now)` scores due forward records (`ForwardStore.due` → `outcome(t, record)` on the table: next-open entry, horizon-day close exit, intraday = `ref_price` to same-day close, SELL = short side, net via `round_trip_return`; `{"void": "no bars"}` after 10 trading days) and marks `job:last:forward`. Never raises.
 6. Trading them is outside this area: `autopilot/picks.py::enter` (09:20 morning pass) and `::exit_due`. Live money needs `picks.py::live_refusal` → None plus prefs `picks_live` and `autopilot_live` (`autopilot/picks.py::live_allowed`).
 
 **2. Long-term scan → suggestion**
