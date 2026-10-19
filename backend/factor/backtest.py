@@ -24,8 +24,8 @@ from backend.core.models import Side
 from backend.engine.execution.costs import calculate_indian_costs
 from backend.factor import model
 from backend.factor.model import Params
+from backend.lab.assumptions import DAILY, Execution, fill_price
 
-SLIPPAGE_BPS = 10.0
 RISK_OFF_YIELD = 0.065  # liquid ETF (e.g. LIQUIDBEES), annual
 
 
@@ -67,7 +67,7 @@ def rebalance_days(index: pd.DatetimeIndex, how: str) -> set:
 
 
 def simulate(closes: pd.DataFrame, market: pd.Series, params: Params, start, end,
-             capital: float = 1_000_000.0, slippage_bps: float = SLIPPAGE_BPS,
+             capital: float = 1_000_000.0, ex: Execution = DAILY,
              risk_off_yield: float = RISK_OFF_YIELD) -> Result:
     prices = closes.ffill()  # a missing day (halt, delisting) keeps its last price
     days = prices.loc[start:end].index
@@ -83,7 +83,7 @@ def simulate(closes: pd.DataFrame, market: pd.Series, params: Params, start, end
         row = prices.loc[day]
         cash *= 1 + daily_yield
         if pending is not None:
-            cash = _trade(shares, cash, row, pending, slippage_bps, result)
+            cash = _trade(shares, cash, row, pending, ex, result)
             pending = None
         equity = cash + sum(n * row[s] for s, n in shares.items() if np.isfinite(row[s]))
         values.append(equity)
@@ -97,7 +97,7 @@ def simulate(closes: pd.DataFrame, market: pd.Series, params: Params, start, end
     return result
 
 
-def _trade(shares: dict, cash: float, row: pd.Series, book: pd.Series, slippage_bps: float,
+def _trade(shares: dict, cash: float, row: pd.Series, book: pd.Series, ex: Execution,
            result: Result) -> float:
     equity = cash + sum(n * row[s] for s, n in shares.items() if np.isfinite(row[s]))
     targets = {s: int(w * equity // row[s]) for s, w in book.items() if np.isfinite(row[s]) and row[s] > 0}
@@ -109,7 +109,7 @@ def _trade(shares: dict, cash: float, row: pd.Series, book: pd.Series, slippage_
             continue
         side = Side.BUY if delta > 0 else Side.SELL
         qty = abs(delta)
-        price = row[symbol] * (1 + (slippage_bps if side == Side.BUY else -slippage_bps) / 10_000)
+        price = fill_price(row[symbol], side, ex)
         if side == Side.BUY:
             qty = min(qty, int(cash // (price * 1.003)))  # never borrow
             if qty <= 0:

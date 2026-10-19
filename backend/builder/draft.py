@@ -26,10 +26,10 @@ import pandas as pd
 from backend.builder import store
 from backend.builder.validate import describe, slugify, validate_spec
 from backend.core.models import Side
-from backend.engine.backtest import BACKTEST_SLIPPAGE_BPS
 from backend.engine.execution.costs import calculate_indian_costs
 from backend.engine.session import IST
 from backend.factor.validate import deflated_sharpe
+from backend.lab.assumptions import DEFAULT
 from backend.learning.retune import ACCOUNT, MIN_DSR, _at, _daily, _sharpe
 from backend.risk.backtest_gate import (LOOKBACK_DAYS, MAX_DRAWDOWN, MIN_PROFIT_FACTOR, MIN_TRADES, MIN_WINDOW_DAYS,
                                         BacktestGateStore, passes_gate)
@@ -283,7 +283,7 @@ async def _test(db, doc: dict, backtest, kwargs: dict, now: datetime) -> tuple[s
     if swing:  # last, so a benchmark error never hides an earlier check's verdict
         ticket = account["per_trade_cap"] or account["account_size"]
         charges = sum(calculate_indian_costs(ticket, 1, side, "CNC") for side in (Side.BUY, Side.SELL)) / ticket * 100
-        charges += 2 * BACKTEST_SLIPPAGE_BPS / 100  # the slippage the strategy pays on each side
+        charges += 2 * DEFAULT.slippage_bps / 100  # the slippage the strategy pays on each side
         mine, buy_hold = r.total_pnl / account["account_size"] * 100, _benchmark(kwargs["bars"], cut, end, charges)
         fields["metrics"]["benchmark"] = {"strategy_pct": round(mine, 2), "buy_hold_pct": round(buy_hold, 2)}
     if swing and not mine > buy_hold:

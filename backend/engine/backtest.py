@@ -23,14 +23,15 @@ from backend.engine.portfolio import Portfolio
 from backend.engine.protocols import Strategy
 from backend.engine.runner import run
 from backend.instruments.models import Instrument
+from backend.lab.assumptions import DEFAULT
 from backend.options.backtest import ModelOptions
 from backend.suggestions.exits import trail_level
 
 logger = logging.getLogger(__name__)
 PROGRESS_EVERY = 20_000  # bars between progress log lines
 
-# Adverse slippage per side on every backtest fill (spread + impact).
-BACKTEST_SLIPPAGE_BPS = 10.0
+# Kept as a name for callers/tests; the value lives in lab.assumptions.
+BACKTEST_SLIPPAGE_BPS: float = DEFAULT.slippage_bps
 
 
 async def run_backtest(
@@ -53,7 +54,7 @@ async def run_backtest(
     began = time.monotonic()
     logger.info("backtest %s: %d instruments, %s..%s, %s", names, len(instruments), start, end, timeframe)
     # Next-bar-open fills: the signal bar is only known once it has closed.
-    execution = SimulatedExecutionClient(slippage_bps=BACKTEST_SLIPPAGE_BPS, fill_on_next_open=True)
+    execution = SimulatedExecutionClient(slippage_bps=DEFAULT.slippage_bps, fill_on_next_open=True)
     portfolio = Portfolio()
     clock = SimClock()
 

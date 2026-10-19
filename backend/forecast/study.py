@@ -1,7 +1,7 @@
 """Event study and walk-forward calibration for the Picks setups.
 
 An event: the setup fires on day t (close known), entry at t+1's open, exit
-at the close of t+1+H. Net return is gross minus NSE delivery round-trip
+at the close of t+1+H. Net return is gross minus adverse slippage and NSE delivery round-trip
 charges from `engine/execution/costs.py::calculate_indian_costs` (CNC, on a
 NOTIONAL position); NIFTY's return is taken over the identical window.
 
@@ -13,8 +13,7 @@ not counted as independent evidence.
 import numpy as np
 import pandas as pd
 
-from backend.core.models import Side
-from backend.engine.execution.costs import calculate_indian_costs
+from backend.lab.assumptions import round_trip_return
 
 NOTIONAL = 100_000.0  # rupees per position: sets the flat parts (brokerage cap, DP charge)
 MIN_PRIOR = 30        # walk-forward: a year is only tested once this many past events have matured
@@ -22,9 +21,7 @@ MIN_N = 100           # picks come only from setups with at least this many even
 
 
 def net_return(entry: float, exit_: float) -> float:
-    qty = NOTIONAL / entry
-    charges = calculate_indian_costs(entry, qty, Side.BUY, "CNC") + calculate_indian_costs(exit_, qty, Side.SELL, "CNC")
-    return (qty * (exit_ - entry) - charges) / NOTIONAL
+    return round_trip_return(entry, exit_, notional=NOTIONAL)
 
 
 def kept(fires: np.ndarray, horizon: int) -> list[int]:

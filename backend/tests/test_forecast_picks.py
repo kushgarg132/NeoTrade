@@ -15,6 +15,7 @@ from backend.auth.models import User
 from backend.database import db as database
 from backend.datalayer import bars
 from backend.forecast import picks, setups, study
+from backend.lab.assumptions import Execution, round_trip_return
 
 
 def _frames(days=420, n=25, seed=1):
@@ -71,8 +72,12 @@ def test_entry_is_next_open_and_exit_is_close_after_horizon():
 def test_delivery_charges_on_a_flat_round_trip():
     # Rs 1L at Rs 100: buy 20 + STT 100 + exch 2.97 + SEBI 0.10 + stamp 15 + GST 4.15 = 142.22;
     # sell 20 + 100 + 2.97 + 0.10 + GST 4.15 + DP 15.93 = 143.15.
-    assert study.net_return(100.0, 100.0) == pytest.approx(-(142.22 + 143.15) / 100_000)
-    assert study.net_return(100.0, 110.0) == pytest.approx(0.10 - (142.22 + 153.51) / 100_000)  # sell side on Rs 1.1L
+    flat = Execution(slippage_bps=0.0)
+    assert round_trip_return(100.0, 100.0, flat) == pytest.approx(-(142.22 + 143.15) / 100_000)
+    assert round_trip_return(100.0, 110.0, flat) == pytest.approx(0.10 - (142.22 + 153.51) / 100_000)  # sell side on Rs 1.1L
+    # study returns now include 10 bps adverse slippage per side
+    assert study.net_return(100.0, 100.0) == pytest.approx(-0.004849702)
+    assert study.net_return(100.0, 110.0) == pytest.approx(0.094847098)
 
 
 def test_signals_inside_an_open_event_window_are_dropped():

@@ -19,6 +19,7 @@ from backend.engine.portfolio import Portfolio
 from backend.engine.protocols import DataFeed, ExecutionClient, Strategy, StrategyContext
 from backend.engine.session import IST, is_past_square_off_time
 from backend.instruments.master import InstrumentMaster
+from backend.lab.assumptions import DEFAULT
 from backend.learning.adapt import LearnedRules
 from backend.options.sizing import size_option_intent
 from backend.risk.kill_switch import should_trip
@@ -85,7 +86,6 @@ YIELD_EVERY_BARS = 200
 
 # An entry must expect at least this multiple of its round-trip friction.
 COST_MULTIPLE = 3
-FILTER_SLIPPAGE_BPS = 10.0  # per side, as the backtester assumes
 
 
 async def size_intents(
@@ -297,7 +297,7 @@ async def size_intents(
             friction = (
                 calculate_indian_costs(entry, size, Side.BUY, product_for_cost)
                 + calculate_indian_costs(entry, size, Side.SELL, product_for_cost)
-                + notional * 2 * FILTER_SLIPPAGE_BPS / 10_000
+                + notional * 2 * DEFAULT.slippage_bps / 10_000
             )
             if gain < COST_MULTIPLE * friction:
                 logger.info("skipping intent for %s: expected ₹%.2f < %d x friction ₹%.2f",

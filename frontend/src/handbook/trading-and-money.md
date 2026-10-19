@@ -348,7 +348,7 @@ reaches Telegram, digests or chat.
   horizon. A signal on day t reads rows up to t only. The study reads every stored bar (from 2009,
   `picks.py::HISTORY_START`).
 - **Events** (`backend/forecast/study.py::events`): entry t+1 open, exit close of t+1+H; net of
-  CNC charges from `engine/execution/costs.py::calculate_indian_costs` on a ₹1L position; NIFTY
+  10 bps slippage per side (`lab/assumptions.py::round_trip_return`) and CNC charges from `engine/execution/costs.py::calculate_indian_costs` on a ₹1L position; NIFTY
   over the same window. `study.py::kept` drops signals inside an open event's window.
 - **Walk-forward** (`study.py::walk_forward`): each year's P(up) is predicted only from events
   that matured before it began, then scored (realised hit rate, Brier). Out-of-sample excess

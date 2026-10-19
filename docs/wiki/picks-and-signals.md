@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 54813ea
+verified_at: b62529e
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -22,12 +22,12 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 |---|---|---|
 | backend/forecast/picks.py | Daily Picks job: compute, store, score, forward record, live gate | `picks.py::compute`, `::score`, `::forward`, `::live_refusal`, `::load`, `::ensure_indexes`, `::run`, `::MAX_PICKS`=10, `::MIN_FORWARD`=100, `::CALIBRATION_GAP`=0.05, `::HISTORY_START`, `::CAVEATS` |
 | backend/forecast/setups.py | 5 setups as pure functions over a wide bar table (no look-ahead) | `setups.py::table`, `::SETUPS`, `::BY_NAME`, `::Setup`, `::momentum`, `::low_vol`, `::momentum_vol`, `::breakout`, `::pullback`, `::_top_decile`, `::_month_starts` |
-| backend/forecast/study.py | Event study + per-year walk-forward calibration | `study.py::net_return`, `::kept`, `::outcome`, `::events`, `::stats`, `::walk_forward`, `::run`, `::NOTIONAL`=1e5, `::MIN_PRIOR`=30, `::MIN_N`=100 |
+| backend/forecast/study.py | Event study + per-year walk-forward calibration | `study.py::net_return` (= `lab/assumptions.py::round_trip_return`, 10 bps slipped), `::kept`, `::outcome`, `::events`, `::stats`, `::walk_forward`, `::run`, `::NOTIONAL`=1e5, `::MIN_PRIOR`=30, `::MIN_N`=100 |
 | backend/forecast/research/ml_experiment_tool.py | Research only, not wired: LightGBM vs setups (needs lightgbm, not installed in prod) | `ml_experiment_tool.py::load`, `::HORIZONS` |
 | backend/forecast/research/bandit_experiment_tool.py | Research only, not wired: LinUCB/Thompson sizing (0/0.5/1) and exit (horizon vs ATR trail 1.5/2/3) over Picks events; failed its bar 2026-10-18 (fixed rule +0.91% vs bandits +0.68-0.82%), trailing stops lost every year | `bandit_experiment_tool.py::event_table`, `::walk_forward`, `::EXITS` |
 | backend/routers/picks.py | `/picks` admin-only API | `routers/picks.py::router`, `::picks_today`, `::picks_history`; order = `forecast/picks.py::rank_key` (also used by `/today` `picks_top`) |
 | backend/factor/model.py | Pure momentum + low-vol scoring, selection with buffer, inverse-vol weights, trend/vol exposure | `factor/model.py::Params`, `::scores`, `::select`, `::weights`, `::exposure`, `::target_book`, `::volatility`, `::YEAR/HALF/MONTH` |
-| backend/factor/backtest.py | Daily MTM backtest: decide on close, trade next close, real charges + slippage | `factor/backtest.py::simulate`, `::_trade`, `::performance`, `::rebalance_days`, `::equal_weight`, `::buy_and_hold`, `::Result`, `::SLIPPAGE_BPS`=10, `::RISK_OFF_YIELD`=0.065 |
+| backend/factor/backtest.py | Daily MTM backtest: decide on close, trade next close, real charges + slippage (`simulate(..., ex=lab.assumptions.DAILY)`) | `factor/backtest.py::simulate`, `::_trade`, `::performance`, `::rebalance_days`, `::equal_weight`, `::buy_and_hold`, `::Result`, `::RISK_OFF_YIELD`=0.065 |
 | backend/factor/validate.py | Walk-forward variant selection + deflated Sharpe | `factor/validate.py::grid`, `::walk_forward`, `::deflated_sharpe`, `::WalkForward`, `::TRIALS_TRIED`=16 |
 | backend/factor/report.py | CLI `python -m backend.factor.report [--save]`: OOS verdict vs benchmarks | `factor/report.py::verdict`, `::run`, `::_save`, `::DSR_THRESHOLD`, `::MIN_OOS_YEARS`=8 |
 | backend/factor/data.py | Nifty 200 CSV universe + yfinance closes, disk cache 20 h | `factor/data.py::universe`, `::closes`, `::series`, `::MARKET`, `::BENCHMARKS`, `::CACHE_DIR` |
@@ -91,7 +91,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 **1. Picks daily (16:00 pass)**
 1. `scheduler.py::run_daily_jobs` → `forecast/picks.py::run(db, now)`.
 2. `picks.py::load`: every symbol in `daily_bars` + NIFTY from `HISTORY_START` (bars.DEEP_START, 2009) → `setups.py::table` (NIFTY days as calendar).
-3. `picks.py::compute` (in `asyncio.to_thread`): `study.py::run` → per setup `signals` → `study.py::events` (entry t+1 open, exit close t+1+H, net of CNC charges on ₹1 L, NIFTY over the same window, `kept` drops overlaps) → `stats` + `walk_forward`.
+3. `picks.py::compute` (in `asyncio.to_thread`): `study.py::run` → per setup `signals` → `study.py::events` (entry t+1 open, exit close t+1+H, net of 10 bps slippage per side (`lab/assumptions.py`) and CNC charges on ₹1 L, NIFTY over the same window, `kept` drops overlaps) → `stats` + `walk_forward`.
 4. Picks = setups with `n ≥ MIN_N` whose last kept signal is today. Sorted by `median_excess × p_beat_nifty`, then `strength`. Top 10.
 5. Upsert `picks_study/latest`. Insert only new `_id`s with `outcome: None`. Then every `outcome: None` pick is scored by `picks.py::score` once its exit bar exists.
 6. Trading them is outside this area: `autopilot/picks.py::enter` (09:20 morning pass) and `::exit_due`. Live money needs `picks.py::live_refusal` → None plus prefs `picks_live` and `autopilot_live` (`autopilot/picks.py::live_allowed`).
