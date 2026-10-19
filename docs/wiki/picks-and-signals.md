@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
-covers: [backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 54813ea
+covers: [backend/forecast/**, backend/factor/**, backend/lab/splits.py, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
+verified_at: b62529e
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -22,13 +22,14 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 |---|---|---|
 | backend/forecast/picks.py | Daily Picks job: compute, store, score, forward record, live gate | `picks.py::compute`, `::score`, `::forward`, `::live_refusal`, `::load`, `::ensure_indexes`, `::run`, `::MAX_PICKS`=10, `::MIN_FORWARD`=100, `::CALIBRATION_GAP`=0.05, `::HISTORY_START`, `::CAVEATS` |
 | backend/forecast/setups.py | 5 setups as pure functions over a wide bar table (no look-ahead) | `setups.py::table`, `::SETUPS`, `::BY_NAME`, `::Setup`, `::momentum`, `::low_vol`, `::momentum_vol`, `::breakout`, `::pullback`, `::_top_decile`, `::_month_starts` |
-| backend/forecast/study.py | Event study + per-year walk-forward calibration | `study.py::net_return`, `::kept`, `::outcome`, `::events`, `::stats`, `::walk_forward`, `::run`, `::NOTIONAL`=1e5, `::MIN_PRIOR`=30, `::MIN_N`=100 |
+| backend/forecast/study.py | Event study + per-year walk-forward calibration (years from `lab.splits.yearly_folds`) | `study.py::net_return`, `::kept`, `::outcome`, `::events`, `::stats`, `::walk_forward`, `::run`, `::NOTIONAL`=1e5, `::MIN_PRIOR`=30, `::MIN_N`=100 |
 | backend/forecast/research/ml_experiment_tool.py | Research only, not wired: LightGBM vs setups (needs lightgbm, not installed in prod) | `ml_experiment_tool.py::load`, `::HORIZONS` |
 | backend/forecast/research/bandit_experiment_tool.py | Research only, not wired: LinUCB/Thompson sizing (0/0.5/1) and exit (horizon vs ATR trail 1.5/2/3) over Picks events; failed its bar 2026-10-18 (fixed rule +0.91% vs bandits +0.68-0.82%), trailing stops lost every year | `bandit_experiment_tool.py::event_table`, `::walk_forward`, `::EXITS` |
 | backend/routers/picks.py | `/picks` admin-only API | `routers/picks.py::router`, `::picks_today`, `::picks_history`; order = `forecast/picks.py::rank_key` (also used by `/today` `picks_top`) |
 | backend/factor/model.py | Pure momentum + low-vol scoring, selection with buffer, inverse-vol weights, trend/vol exposure | `factor/model.py::Params`, `::scores`, `::select`, `::weights`, `::exposure`, `::target_book`, `::volatility`, `::YEAR/HALF/MONTH` |
 | backend/factor/backtest.py | Daily MTM backtest: decide on close, trade next close, real charges + slippage | `factor/backtest.py::simulate`, `::_trade`, `::performance`, `::rebalance_days`, `::equal_weight`, `::buy_and_hold`, `::Result`, `::SLIPPAGE_BPS`=10, `::RISK_OFF_YIELD`=0.065 |
-| backend/factor/validate.py | Walk-forward variant selection + deflated Sharpe | `factor/validate.py::grid`, `::walk_forward`, `::deflated_sharpe`, `::WalkForward`, `::TRIALS_TRIED`=16 |
+| backend/lab/splits.py | Shared walk-forward folds: one per calendar test year, optional rolling window, purge/embargo trading days | `splits.py::Fold`, `::yearly_folds` |
+| backend/factor/validate.py | Walk-forward variant selection (folds from `lab.splits.yearly_folds`, rolling `in_sample_years` window) + deflated Sharpe | `factor/validate.py::grid`, `::walk_forward`, `::deflated_sharpe`, `::WalkForward`, `::TRIALS_TRIED`=16 |
 | backend/factor/report.py | CLI `python -m backend.factor.report [--save]`: OOS verdict vs benchmarks | `factor/report.py::verdict`, `::run`, `::_save`, `::DSR_THRESHOLD`, `::MIN_OOS_YEARS`=8 |
 | backend/factor/data.py | Nifty 200 CSV universe + yfinance closes, disk cache 20 h | `factor/data.py::universe`, `::closes`, `::series`, `::MARKET`, `::BENCHMARKS`, `::CACHE_DIR` |
 | backend/factor/paper.py | Per-user paper factor book, monthly rebalance | `factor/paper.py::rebalance`, `::due`, `::params_for`, `::FactorBookStore`, `::summary_text`, `::PARAMS`, `::SMALL_ACCOUNT`, `::STRATEGY` |
