@@ -1,0 +1,32 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { ideaFromSuggestion, ideaFromPick, rangeBar, parseIdeaId } from './ideas.js';
+
+const sug = { id: 'a1', symbol: 'TCS', side: 'BUY', quantity: 10, entry_ref: 100, stop: 95, target: 110, notional: 1000,
+  strategy: 'macd_crossover', reason_codes: ['macd_crossover'], max_hold_days: 5, status: 'PENDING' };
+const pick = { _id: '2026-10-19:mom:INFY', symbol: 'INFY', label: 'Momentum', setup: 'mom', horizon: 10, entry_ref: 1500,
+  expected: { p10: -0.04, median: 0.02, p90: 0.08 }, p_up: 0.6, p_beat_nifty: 0.55, n: 120, explanation: 'x', edge: true };
+
+test('suggestion view model', () => {
+  const v = ideaFromSuggestion(sug);
+  assert.equal(v.id, 's-a1');
+  assert.equal(v.risk, 50);
+  assert.equal(v.headline.value, 0.1);
+  assert.equal(v.reasons[0], 'MACD crossover');
+});
+test('pick view model', () => {
+  const v = ideaFromPick(pick, { walk_forward: { oos_excess: 0.01, oos_n: 40 } });
+  assert.equal(v.id, 'p-2026-10-19:mom:INFY');
+  assert.equal(v.headline.value, 0.02);
+  assert.equal(v.oosN, 40);
+  assert.equal(v.qty, null);
+});
+test('parse id splits on the first dash only', () => {
+  assert.deepEqual(parseIdeaId('p-2026-10-19:mom:INFY'), { kind: 'p', key: '2026-10-19:mom:INFY' });
+  assert.equal(parseIdeaId('zzz'), null);
+});
+test('rangeBar keeps order and the zero line', () => {
+  const r = rangeBar(-0.04, 0.02, 0.08);
+  assert.ok(r.p10 === 0 && r.p90 === 100 && r.p10 < r.zero && r.zero < r.median && r.median < r.p90);
+  assert.deepEqual(rangeBar(0, 0, 0), { p10: 50, median: 50, p90: 50, zero: 50 });
+});
