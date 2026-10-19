@@ -65,7 +65,7 @@ async def test_score_due_sets_outcomes_only_for_scorable_records():
         async def set_outcome(self, record_id, outcome, now):
             self.sets.append((record_id, outcome))
 
-    assert await score.score_due(None, DECIDED, t=table(DAYS[:6]), store=Store()) == 1
+    assert await score.score_due(None, DECIDED, t=table(DAYS[:6]), store=Store()) == (1, 0)
     assert [i for i, _ in Store.sets] == ["a"]
 
 
@@ -104,7 +104,18 @@ async def test_void_record_does_not_break_scorecard():
               ref_price=None, horizon_days=1)
     await s.record(symbol="AAA", **kw)
     await s.record(symbol="ZZZ", **kw)
-    assert await score.score_due(db, datetime(2026, 11, 13, tzinfo=timezone.utc), t=table(), store=s) == 1
+    assert await score.score_due(db, datetime(2026, 11, 13, tzinfo=timezone.utc), t=table(), store=s) == (1, 0)
     assert (await db["forward_records"].find_one({"symbol": "ZZZ"}))["outcome"] == {"void": "no bars"}
     [row] = await scorecard(db)
     assert row["n"] == 1
+
+
+async def test_score_due_counts_failures():
+    class Store:
+        async def due(self, now):
+            return [rec(_id="a"), {"_id": "bad"}]
+
+        async def set_outcome(self, *a):
+            pass
+
+    assert await score.score_due(None, DECIDED, t=table(DAYS[:6]), store=Store()) == (1, 1)
