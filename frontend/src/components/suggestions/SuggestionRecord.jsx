@@ -99,6 +99,7 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
   const [confirmLive, setConfirmLive] = useState(false);
   const liveArmedAt = useRef(0);
   const liveToken = useRef(null); // the server's one-time token from the first tap
+  const [liveUntil, setLiveUntil] = useState(0);
   // Grounds and thesis are a tap away: the terms, risk and score are what Approve needs.
   const [why, setWhy] = useState(false);
   const canGoLive = Boolean(onApproveLive);
@@ -115,7 +116,8 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
       await { live: () => onApproveLive(liveToken.current), reject: onReject }[kind]();
     } catch (err) {
       setFailure(
-        err?.response?.data?.detail ||
+        (kind === 'live' && tokenRefusal(err)) ||
+          err?.response?.data?.detail ||
           (kind === 'reject' ? 'Could not record the decision' : 'Could not place the order')
       );
     } finally {
@@ -256,7 +258,15 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
             <p className="mb-2 text-sm text-[var(--loss)]" role="alert">
               Real money: {suggestion.side === 'SELL' ? 'sells' : 'buys'}{' '}
               {formatQuantity(suggestion.quantity)} {suggestion.option_contract ? 'units' : 'shares'} of{' '}
-              {suggestion.symbol} at market on your account. Tap again to send.
+              {suggestion.symbol} at market on your account. Tap again to send.{' '}
+              <Countdown
+                until={liveUntil}
+                onExpire={() => {
+                  liveToken.current = null;
+                  setConfirmLive(false);
+                  setFailure(EXPIRED_NOTE);
+                }}
+              />
             </p>
           )}
           {/* No paper approval: the AI account paper-trades proposals itself.
@@ -284,7 +294,9 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
                   setBusy('live');
                   setFailure(null);
                   try {
-                    liveToken.current = (await onApproveLive()).confirm_token;
+                    const first = await onApproveLive();
+                    liveToken.current = first.confirm_token;
+                    setLiveUntil(deadlineFrom(first.expires_in));
                   } catch (err) {
                     setFailure(err?.response?.data?.detail || 'Could not place the order');
                     return;

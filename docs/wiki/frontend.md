@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 2c26d99
+verified_at: 8857d38
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -183,7 +183,7 @@ None run in the frontend build. Client-side timers: Today polls `/today` every 6
 - Refresh is single-flight (`refreshPromise`); a request is retried at most once (`_retriedAfterRefresh`).
 - One socket per session (`stream`), opened/closed only by `App`'s effect. Pages must not open their own WebSocket.
 - A stale number must never look live (PRODUCT.md, `useStreamStatus`/`FeedStatus`); after reconnect pages refetch (`useReconnect`/`useRefetchOn`). The service worker never caches `/api/`.
-- Real-money order safety (backend rules mirrored in UI, from `.claude/CLAUDE.md`): the UI never places an order directly. `OrderTicket` always proposes (`venue:'live'`, the user's own `mine` account only) then confirms through `/chat/actions/{id}/confirm`, and a live order needs a second tap enforced server-side (`status:'NEEDS_SECOND_TAP'` returns a one-time `confirm_token` the second tap must send; `ChatWidget`, `WaitingCards`, `OrderTicket`, `SuggestionRecord` all carry it). The AI account is not selectable in the ticket (needs a `mine` role: `hasMine` from prefs `broker_roles`). The autopilot switch to Live requires typing `LIVE` (`AutopilotSheet`). Setting `daily_loss_limit` to 0 (which also disables the kill switch) requires an explicit confirm and never happens by a cleared field (`Settings.jsx::GuardrailsSheet`, `AutopilotSheet`).
+- Real-money order safety (backend rules mirrored in UI, from `.claude/CLAUDE.md`): the UI never places an order directly. `OrderTicket` always proposes (`venue:'live'`, the user's own `mine` account only) then confirms through `/chat/actions/{id}/confirm`, and a live order needs a second tap enforced server-side (`status:'NEEDS_SECOND_TAP'` returns a one-time `confirm_token` the second tap must send; `ChatWidget`, `WaitingCards`, `OrderTicket`, `SuggestionRecord` all carry it). Each second tap shows `common/Countdown` from `expires_in` (`utils/liveConfirm.js::deadlineFrom`); at 0 it returns to the first tap locally with no server call, and a 409/403 token refusal (`tokenRefusal`, matched on the `TokenRefused` message text) does the same with "Confirmation expired — tap again" / "Order changed — review and tap again" (OrderTicket keeps its PROPOSED card). Other errors keep their old handling; no placement is ever retried. The AI account is not selectable in the ticket (needs a `mine` role: `hasMine` from prefs `broker_roles`). The autopilot switch to Live requires typing `LIVE` (`AutopilotSheet`). Setting `daily_loss_limit` to 0 (which also disables the kill switch) requires an explicit confirm and never happens by a cleared field (`Settings.jsx::GuardrailsSheet`, `AutopilotSheet`).
 - Admin gating in UI is cosmetic; the backend enforces (`/picks` router has `require_admin`; model/usage writes return 403). `RequireAdmin` redirects to `/settings`.
 - Unknown `?tab=` falls back to the first tab (`hooks/useTab.js`).
 - API `detail` is always text by the time a page reads it (interceptor), so pages may render `err.response.data.detail` directly.

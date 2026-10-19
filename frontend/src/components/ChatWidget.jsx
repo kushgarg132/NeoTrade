@@ -5,6 +5,8 @@ import Markdown from './common/Markdown';
 import { stream } from '../lib/ws';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
+import Countdown from './common/Countdown';
+import { tokenRefusal, deadlineFrom, EXPIRED_NOTE } from '../utils/liveConfirm';
 
 /**
  * The margin note: an assistant docked to the corner of the sheet.
@@ -52,9 +54,12 @@ const ActionCard = ({ action, onUpdate }) => {
         const res = await api.post(endpoints.chat.confirm(action.card.id), {
           confirm_token: action.state === 'NEEDS_SECOND_TAP' ? action.token : undefined,
         });
-        onUpdate({ state: res.data.status, note: res.data.result, token: res.data.confirm_token });
+        onUpdate({ state: res.data.status, note: res.data.result, token: res.data.confirm_token, until: res.data.confirm_token ? deadlineFrom(res.data.expires_in) : undefined });
       }
     } catch (err) {
+      // A refused token leaves the card PROPOSED on the server: back to the first tap.
+      const refusal = kind !== 'cancel' && action.token && tokenRefusal(err);
+      if (refusal) return onUpdate({ state: 'PROPOSED', note: refusal, token: undefined, until: undefined });
       // No response at all: the confirm may have run. Never call that a failure.
       if (kind !== 'cancel' && !err?.response) onUpdate({ state: 'UNKNOWN', note: 'No answer from the server. The order may have gone through: check Mine › Journal before trying again.' });
       else onUpdate({ state: 'FAILED', note: err?.response?.data?.detail || 'That did not go through.' });
@@ -73,7 +78,10 @@ const ActionCard = ({ action, onUpdate }) => {
       </div>
       <p className="figure-md">{action.card.summary}</p>
       {action.state === 'NEEDS_SECOND_TAP' && (
-        <p className="mt-1.5 text-[var(--loss)]" role="alert">Real money. Tap Confirm again to send it.</p>
+        <p className="mt-1.5 text-[var(--loss)]" role="alert">
+          Real money. Tap Confirm again to send it.{' '}
+          {action.until && <Countdown until={action.until} onExpire={() => onUpdate({ state: 'PROPOSED', note: EXPIRED_NOTE, token: undefined, until: undefined })} />}
+        </p>
       )}
       {action.note && action.state !== 'NEEDS_SECOND_TAP' && (
         <p className={cn('mt-1.5', action.state === 'FAILED' ? 'text-[var(--loss)]' : 'text-[var(--ink-soft)]')}>

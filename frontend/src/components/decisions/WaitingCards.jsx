@@ -4,6 +4,8 @@ import { Sheet } from '../doc/Doc';
 import MoneyBadge from '../common/MoneyBadge';
 import { Button } from '../common/Button';
 import api, { endpoints } from '../../utils/api';
+import Countdown from '../common/Countdown';
+import { tokenRefusal, deadlineFrom, EXPIRED_NOTE } from '../../utils/liveConfirm';
 
 /**
  * Cards from the chat or the order ticket that wait for a Confirm. A card on
@@ -20,6 +22,8 @@ const minutesLeft = (iso, now) => Math.max(0, Math.ceil((new Date(iso).getTime()
 const WaitingCard = ({ card, now, onSettled }) => {
   const [busy, setBusy] = useState(null);
   const [confirmToken, setConfirmToken] = useState(null); // set by the first tap on real money
+  const [until, setUntil] = useState(0);
+  const reset = (text) => { setConfirmToken(null); setUntil(0); setArming(false); setNote(text); };
   const [note, setNote] = useState(null);
   // The real-money tap arms 600ms after it appears: one double tap is not two taps.
   const [arming, setArming] = useState(false);
@@ -34,6 +38,7 @@ const WaitingCard = ({ card, now, onSettled }) => {
       const res = await api.post(endpoints.chat.confirm(card.id), { confirm_token: confirmToken });
       if (res.data.status === 'NEEDS_SECOND_TAP') {
         setConfirmToken(res.data.confirm_token);
+        setUntil(deadlineFrom(res.data.expires_in));
         setArming(true);
         later(() => setArming(false), 600);
       } else {
@@ -41,6 +46,9 @@ const WaitingCard = ({ card, now, onSettled }) => {
         later(onSettled, 1500);
       }
     } catch (err) {
+      // A refused token leaves the card PROPOSED on the server: back to the first tap.
+      const refusal = confirmToken && tokenRefusal(err);
+      if (refusal) return reset(refusal);
       setNote(err?.response ? detailText(err, 'This card could not be confirmed.') : 'No answer from the server. The order may have gone through: check Mine › Journal before trying again.');
       later(onSettled, 2500);
     } finally {
@@ -62,6 +70,11 @@ const WaitingCard = ({ card, now, onSettled }) => {
         <span className="doc-meta shrink-0">{minutesLeft(card.expires_at, now)} min left</span>
       </div>
       {note && <p role="status" className="text-sm text-[var(--ink-soft)]">{note}</p>}
+      {confirmToken && (
+        <p className="doc-meta">
+          Real money. <Countdown until={until} onExpire={() => reset(EXPIRED_NOTE)} />
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <Button variant="secondary" size="sm" onClick={cancel} disabled={busy !== null}>
           {busy === 'cancel' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}

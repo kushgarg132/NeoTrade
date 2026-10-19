@@ -197,6 +197,8 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
   one-time `confirm_token` (`backend/risk/live_confirm.py::issue`, 60 s, bound to the user,
   the proposal and its terms); the call that presents it places the order
   (`routers/suggestions.py::approve_suggestion_live`). The same token guards chat, ticket and Telegram cards.
+  On the web the second tap shows a 60 s countdown; if it runs out, or the server refuses the token
+  (expired, used, order changed), the card goes back to its first tap with a short reason. Nothing is retried.
   There is no paper approval: the AI account paper-trades proposals itself.
 - Expire after 3 days (`DEFAULT_TTL`). An equity SELL is proposed only against a held long.
 - At most 5 long-term proposals stay pending, the best by final score: after each scan the rest

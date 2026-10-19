@@ -5,6 +5,8 @@ import { Button } from '../common/Button';
 import api, { endpoints, getPreferences } from '../../utils/api';
 import { formatCurrency } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import Countdown from '../common/Countdown';
+import { tokenRefusal, deadlineFrom, EXPIRED_NOTE } from '../../utils/liveConfirm';
 
 /**
  * The order ticket: Buy or Sell, on Mine (the user's own broker
@@ -58,6 +60,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
   const [hasMine, setHasMine] = useState(null);
   const [card, setCard] = useState(null);
   const [confirmToken, setConfirmToken] = useState(null); // set by the first tap on real money
+  const [until, setUntil] = useState(0);
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -165,6 +168,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
       const res = await api.post(endpoints.chat.confirm(card.id), { confirm_token: confirmToken });
       if (res.data.status === 'NEEDS_SECOND_TAP') {
         setConfirmToken(res.data.confirm_token);
+        setUntil(deadlineFrom(res.data.expires_in));
         setArming(true);
         setTimeout(() => setArming(false), 600);
       } else {
@@ -172,6 +176,13 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
         onDone?.();
       }
     } catch (err) {
+      // A refused token leaves the card PROPOSED on the server: keep it, back to the first tap.
+      const refusal = confirmToken && tokenRefusal(err);
+      if (refusal) {
+        setConfirmToken(null);
+        setError(refusal);
+        return;
+      }
       // No response at all: the order may be placed. Never say it was not.
       setError(err?.response ? detailText(err, 'The order was not placed.') : 'No answer from the server. The order may have gone through: check Mine › Journal before trying again.');
       setCard(null);
@@ -286,6 +297,12 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
             {estimate != null && <p className="doc-meta normal-case">About {formatCurrency(estimate)}</p>}
 
             {card && <p className="text-sm border border-[var(--rule-strong)] bg-[var(--paper-sunk)] px-3 py-2">{card.summary}</p>}
+            {confirmToken && (
+              <p className="doc-meta normal-case">
+                Real money.{' '}
+                <Countdown until={until} onExpire={() => { setConfirmToken(null); setError(EXPIRED_NOTE); }} />
+              </p>
+            )}
             {error && (
               <p role="alert" className="text-sm text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2">
                 {error}
