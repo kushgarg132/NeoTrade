@@ -237,6 +237,9 @@ app.include_router(picks_router.router, prefix=settings.API_PREFIX, tags=["Picks
 from backend.routers import lab as lab_router  # noqa: E402
 app.include_router(lab_router.router, prefix=settings.API_PREFIX)
 
+from backend.routers import forward as forward_router  # noqa: E402
+app.include_router(forward_router.router, prefix=settings.API_PREFIX)
+
 from backend.routers import market_data
 from backend.routers import options as options_router
 from backend.routers import watchlist

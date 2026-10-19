@@ -185,6 +185,7 @@ export const endpoints = {
     builderRun: '/system/builder/run',
   },
   labRuns: { list: '/lab/runs', one: (id) => `/lab/runs/${id}` },
+  forward: { scorecard: '/forward/scorecard', records: '/forward/records' },
   newsFeed: '/news/feed',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
   planToday: '/plan/today',

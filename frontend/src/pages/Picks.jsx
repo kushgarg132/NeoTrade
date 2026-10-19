@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { Sheet, Statement, Row, Cell, Empty, Ruling, Scrip, Field, Money } from '../components/doc/Doc';
+import ForwardBadge from '../components/ForwardBadge';
 import api, { endpoints } from '../utils/api';
 import { formatPercent, formatSignedPercent } from '../utils/formatters';
 
@@ -99,7 +100,7 @@ const Picks = () => {
               <Statement columns={SETUP_COLUMNS}>
                 {data.setups.map((s) => (
                   <Row key={s.setup}>
-                    <Cell>{s.label} · {s.horizon}d {!s.walk_forward.edge && <Badge>No edge</Badge>}</Cell>
+                    <Cell>{s.label} · {s.horizon}d {!s.walk_forward.edge && <Badge>No edge</Badge>} <ForwardBadge source="picks" name={s.setup} /></Cell>
                     <Cell align="right" mono>{s.n}</Cell>
                     <Cell align="right" mono>{signed(s.median)}</Cell>
                     <Cell align="right" mono>{signed(s.p10)} / {signed(s.p90)}</Cell>
