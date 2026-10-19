@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 8857d38
+verified_at: 0e1e378
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -88,7 +88,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 
 ### 4. Today (`/`)
 1. `pages/Today.jsx` calls `GET /today` (+ `getPreferences` for `autopilot_enabled`) on mount, every 60 s while visible, on `visibilitychange`, and via `useRefetchOn(['trades','suggestions','autopilot','portfolio','guardrails'])`.
-2. Reads: `market.open`, `accounts{role:{broker,state}}` (`ACTIVE` else "log in" chip to `/settings?tab=accounts`), `live_armed{autopilot,strategies[]}`, `kill_switch.tripped` (-> `/settings?tab=safety`), `setup{done,total,steps[{id,label,link,done}]}`, `pulse{value,day_change,day_change_pct,pnl,pnl_pct,as_of,holdings_as_of}`, `mine_actions[]`, `mine_actions_total`, `needs_you[{kind,title,detail,link,expires_at}]`, `scoreboard{today,month}.{mine,ai}`, `ai_activity[{status,side,quantity,symbol,reason,at}]`, `backdrop{regime{label,drivers},brief,events[{at,country,title,forecast}]}`, `errors{pulse,scoreboard}`.
+2. Reads: `market.open`, `accounts{role:{broker,state}}` (`ACTIVE` else "log in" chip to `/settings?tab=accounts`), `live_armed{autopilot,strategies[]}`, `kill_switch.tripped` (-> `/settings?tab=safety`), `setup{done,total,steps[{id,label,link,done}]}`, `pulse{value,day_change,day_change_pct,pnl,pnl_pct,as_of,holdings_as_of}`, `mine_actions[]`, `mine_actions_total`, `needs_you[{kind,title,detail,link,expires_at}]`, `scoreboard{today,month}.{mine,ai}`, `ai_activity[{status,side,quantity,symbol,reason,at}]`, `backdrop{regime{label,drivers},brief,events[{at,country,title,forecast}]}`, `errors{pulse,scoreboard}`, `phase`, `next_open`, `premarket`, `postclose`, `unjournaled`, `picks_top`. Sections and their order follow `phase` (`utils/todayLayout.js::sectionsFor`; missing phase = session order); `digestLines` turns the digest HTML into plain lines.
 3. A section that failed renders in place (`errors.pulse`, `errors.scoreboard`); the rest still shows.
 
 ### 5. Mine (own broker account)
