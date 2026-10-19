@@ -27,7 +27,9 @@ from backend.core.models import Side
 from backend.datalayer.bars import NIFTY
 from backend.engine.execution.costs import calculate_indian_costs
 from backend.forecast import setups, study
+from backend.lab.assumptions import Execution
 
+NO_SLIP = Execution(0.0)  # tool nets are unslipped charges only; compare like with like
 HORIZONS = (5, 20, 60)
 STEP = 5  # train / IC sample every 5th day: neighbouring days are near-duplicates
 PARAMS = dict(n_estimators=300, learning_rate=0.03, num_leaves=31, min_child_samples=200,
@@ -221,8 +223,8 @@ def _check() -> None:
     t = {"open": pd.DataFrame({"A": [100.0, 100.0, 50.0, 50.0]}), "close": pd.DataFrame({"A": [100.0, 120.0, 90.0, 60.0]}),
          "nifty_open": pd.Series([1.0] * 4), "nifty_close": pd.Series([1.0] * 4)}
     _, net, _ = labels(t, 1)
-    assert abs(net["A"].iat[0] - study.net_return(100.0, 90.0)) < 1e-9, net
-    assert abs(net["A"].iat[1] - study.net_return(50.0, 60.0)) < 1e-9, net
+    assert abs(net["A"].iat[0] - study.net_return(100.0, 90.0, NO_SLIP)) < 1e-9, net
+    assert abs(net["A"].iat[1] - study.net_return(50.0, 60.0, NO_SLIP)) < 1e-9, net
 
 
 if __name__ == "__main__":

@@ -243,7 +243,6 @@ def _gate_reason(r) -> str:
 async def _record_run(db, doc: dict, fields: dict, start: datetime, end: datetime) -> None:
     """Best-effort lab run record for one draft test."""
     try:
-        from backend.lab.assumptions import DEFAULT
         from backend.lab.runs import LabRunStore
 
         await LabRunStore(db).record(

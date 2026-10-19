@@ -13,7 +13,7 @@ not counted as independent evidence.
 import numpy as np
 import pandas as pd
 
-from backend.lab.assumptions import round_trip_return
+from backend.lab.assumptions import DEFAULT, Execution, round_trip_return
 from backend.lab.splits import yearly_folds
 
 NOTIONAL = 100_000.0  # rupees per position: sets the flat parts (brokerage cap, DP charge)
@@ -21,8 +21,8 @@ MIN_PRIOR = 30        # walk-forward: a year is only tested once this many past 
 MIN_N = 100           # picks come only from setups with at least this many events
 
 
-def net_return(entry: float, exit_: float) -> float:
-    return round_trip_return(entry, exit_, notional=NOTIONAL)
+def net_return(entry: float, exit_: float, ex: Execution = DEFAULT) -> float:
+    return round_trip_return(entry, exit_, ex, notional=NOTIONAL)
 
 
 def kept(fires: np.ndarray, horizon: int) -> list[int]:

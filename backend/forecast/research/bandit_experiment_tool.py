@@ -33,6 +33,7 @@ import pandas as pd
 
 from backend.datalayer.bars import NIFTY
 from backend.forecast import setups, study
+from backend.lab.assumptions import Execution
 from backend.suggestions.exits import trail_level
 
 EXITS = (None, 1.5, 2.0, 3.0)  # None = fixed horizon
@@ -115,6 +116,9 @@ def event_table(t: dict, low: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+NO_SLIP = Execution(0.0)  # the tool slips prices itself; slip once
+
+
 def rewards(df: pd.DataFrame, t: dict, slip_bps: float) -> np.ndarray:
     """events x len(EXITS) excess returns (size 1) at this slippage."""
     s = slip_bps / 10_000
@@ -122,7 +126,7 @@ def rewards(df: pd.DataFrame, t: dict, slip_bps: float) -> np.ndarray:
     out = np.empty((len(df), len(EXITS)))
     for i, (pos, entry, paths) in enumerate(zip(df["pos"], df["entry_open"], df["_paths"])):
         for j, (xp, price) in enumerate(paths):
-            out[i, j] = study.net_return(entry * (1 + s), price * (1 - s)) - (nc[xp] / no[pos + 1] - 1)
+            out[i, j] = study.net_return(entry * (1 + s), price * (1 - s), NO_SLIP) - (nc[xp] / no[pos + 1] - 1)
     return out
 
 

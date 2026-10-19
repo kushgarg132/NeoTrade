@@ -4,12 +4,11 @@ import SectionTabs from '../components/layout/SectionTabs';
 import { LAB_TABS } from '../components/layout/sections';
 import { Sheet, Empty } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
-import { compareRows } from '../utils/labRuns';
+import { compareRows, flatMetrics, fmtMetric } from '../utils/labRuns';
 import { formatTimeAgo } from '../utils/formatters';
 
 /** Research Lab run records (admin-only, /lab/runs): newest first; tick two to compare side by side. */
 
-const fmt = (v) => (typeof v === 'number' ? v.toFixed(3) : '—');
 const TH = 'text-left font-normal field-label py-1 pr-3';
 const TD = 'py-1.5 pr-3 align-top';
 
@@ -60,9 +59,9 @@ const LabRuns = () => {
                       <td className={TD}>{r.name}</td>
                       <td className={`${TD} whitespace-nowrap`}>{r.window?.join(' → ')}</td>
                       <td className={`${TD} font-mono`}>{(r.code_sha || '').slice(0, 7)}</td>
-                      <td className={TD}>{fmt(r.metrics?.cagr)}</td>
-                      <td className={TD}>{fmt(r.metrics?.sharpe)}</td>
-                      <td className={TD}>{fmt(r.metrics?.max_drawdown)}</td>
+                      <td className={TD}>{fmtMetric('cagr', flatMetrics(r.metrics).cagr)}</td>
+                      <td className={TD}>{fmtMetric('sharpe', flatMetrics(r.metrics).sharpe)}</td>
+                      <td className={TD}>{fmtMetric('max_drawdown', flatMetrics(r.metrics).max_drawdown)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -77,7 +76,7 @@ const LabRuns = () => {
                 <thead><tr><th className={TH}>Metric</th><th className={TH}>{a.name} · {(a.code_sha || '').slice(0, 7)}</th><th className={TH}>{b.name} · {(b.code_sha || '').slice(0, 7)}</th></tr></thead>
                 <tbody className="divide-y divide-[var(--rule)]">
                   {compareRows(a, b).map((row) => (
-                    <tr key={row.key}><td className={TD}>{row.key}</td><td className={TD}>{fmt(row.a)}</td><td className={TD}>{fmt(row.b)}</td></tr>
+                    <tr key={row.key}><td className={TD}>{row.key}</td><td className={TD}>{fmtMetric(row.key, row.a)}</td><td className={TD}>{fmtMetric(row.key, row.b)}</td></tr>
                   ))}
                 </tbody>
               </table>
