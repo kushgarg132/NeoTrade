@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
-covers: [backend/lab/metrics.py, backend/forecast/**, backend/factor/**, backend/lab/splits.py, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: b62529e
+covers: [backend/lab/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
+verified_at: 6a2e4f7
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
