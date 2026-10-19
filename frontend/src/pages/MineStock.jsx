@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceDot, ReferenceLine } from 'recharts';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
-import { MINE_TABS } from '../components/layout/sections';
+import { PORTFOLIO_TABS } from '../components/layout/sections';
+import { StockAnalysis } from './Dashboard';
 import { Sheet, Field, Money, Empty, Ruling, Scrip, Stamp, Statement, Row, Cell } from '../components/doc/Doc';
 import ThesisEditor from '../components/mine/ThesisEditor';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
@@ -113,7 +114,8 @@ const MineStock = () => {
 
   let body;
   if (status === 'loading') body = <Sheet><Ruling rows={6} /></Sheet>;
-  else if (status === 'missing') body = <Sheet title={symbol}><Empty title="Not in your account" detail="You have no holding or trades in this stock." /></Sheet>;
+  // Not held: skip the position blocks and show the analysis alone.
+  else if (status === 'missing') body = null;
   else if (status === 'error') body = <Sheet title={symbol}><Empty title="Could not load this stock" /></Sheet>;
   else
     body = (
@@ -123,7 +125,6 @@ const MineStock = () => {
           meta={p?.sold ? undefined : p?.held_since ? `Held since ${day(p.held_since)}` : undefined}
           actions={
             <div className="flex items-center gap-2">
-              <Link to={`/research/stock/${encodeURIComponent(symbol)}`} className="doc-meta underline">Research</Link>
               {!p?.sold && <TicketButton label="Add" onClick={() => setTicket({ symbol, side: 'BUY', lastPrice: lastClose })} />}
               {!p?.sold && <TicketButton label="Sell" tone="loss" onClick={() => setTicket({ symbol, side: 'SELL', lastPrice: lastClose })} />}
             </div>
@@ -257,8 +258,9 @@ const MineStock = () => {
   return (
     <Layout>
       <div className="space-y-3">
-        <SectionTabs tabs={MINE_TABS} label="My account" />
+        <SectionTabs tabs={PORTFOLIO_TABS} label="Portfolio" />
         {body}
+        <StockAnalysis symbol={symbol} />
       </div>
       {ticket && <OrderTicket {...ticket} onClose={() => setTicket(null)} onDone={load} />}
     </Layout>

@@ -1,88 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Loader2, X } from 'lucide-react';
-import Layout from '../components/Layout';
-import SmartSearch from '../components/dashboard/SmartSearch';
-import IndexCard from '../components/dashboard/IndexCard';
-import IndexAnalysis from '../components/dashboard/IndexAnalysis';
-import { bareSymbol } from '../utils/formatters';
-import Market from '../components/dashboard/Market';
-import SectionTabs from '../components/layout/SectionTabs';
-import { RESEARCH_TABS } from '../components/layout/sections';
+import { Loader2 } from 'lucide-react';
 import AnalysisCard from '../components/AnalysisCard';
 import { Sheet, Empty } from '../components/doc/Doc';
-import { Button } from '../components/common/Button';
 import api, { endpoints } from '../utils/api';
 import { stream } from '../lib/ws';
-import { clearRecentStocks, recentStocks, rememberStock, stockPath } from '../utils/stocks';
+import { rememberStock } from '../utils/stocks';
 
 /**
- * Research. With a symbol in the URL (/research/stock/:symbol) this is that
- * stock's page: the instant snapshot, and the AI analysis only once its tab
- * is opened. Without one it is the front page: search, the stocks opened
- * recently on this device and the markets (the watchlist has its own tab). The user's broker
- * statement is not here; it lives under Mine.
- *
- * Analysis streams over the socket; the HTTP route is the fallback.
+ * The analysis half of the stock page (/stock/:symbol, hosted by MineStock):
+ * the instant snapshot, and the AI analysis only once its tab is opened.
+ * Search lives in the masthead. Analysis streams over the socket; the HTTP
+ * route is the fallback.
  */
-
-const Chip = ({ to, children }) => (
-  <Link
-    to={to}
-    className="inline-flex items-baseline gap-2 min-h-11 sm:min-h-9 px-3 py-1.5 border border-[var(--rule-strong)] hover:border-[var(--stamp)] hover:bg-[var(--paper-sunk)] transition-colors"
-  >
-    {children}
-  </Link>
-);
-
-const FrontPage = () => {
-  const [recent, setRecent] = useState(recentStocks);
-
-  return (
-    <>
-      {recent.length > 0 && (
-        <Sheet
-          title="Recent"
-          actions={
-            <button
-              type="button"
-              onClick={() => {
-                clearRecentStocks();
-                setRecent([]);
-              }}
-              className="field-label text-[var(--stamp)] hover:underline min-h-9"
-            >
-              Clear
-            </button>
-          }
-        >
-          <div className="flex flex-wrap gap-2">
-            {recent.map((symbol) => (
-              <Chip key={symbol} to={stockPath(symbol)}>
-                <span className="figure-md text-sm">{symbol}</span>
-              </Chip>
-            ))}
-          </div>
-        </Sheet>
-      )}
-
-      <Market />
-    </>
-  );
-};
-
-const Dashboard = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { symbol: routeSymbol } = useParams();
-  const symbol = routeSymbol ? bareSymbol(decodeURIComponent(routeSymbol)).toUpperCase() : null;
-
-  // An index opened from the market table replaces the front page; indices
-  // have no URL of their own.
-  const [indexTicker, setIndexTicker] = useState(null);
-  const [indexDetail, setIndexDetail] = useState(null);
-  const [indexError, setIndexError] = useState(null);
-
+export const StockAnalysis = ({ symbol }) => {
   const [quick, setQuick] = useState(null);
   const [quickLoading, setQuickLoading] = useState(false);
   const [quickError, setQuickError] = useState(null);
@@ -96,30 +26,12 @@ const Dashboard = () => {
   symbolRef.current = symbol;
   const aiRequest = useRef(null);
 
-  const closeIndex = () => {
-    setIndexTicker(null);
-    setIndexDetail(null);
-    setIndexError(null);
-  };
-
-  const openIndex = (ticker) => {
-    setIndexTicker(ticker);
-    setIndexDetail(null);
-    setIndexError(null);
-    api
-      .get(endpoints.marketIndex(ticker))
-      .then((res) => setIndexDetail(res.data))
-      .catch((err) => setIndexError(err?.response?.data?.detail || 'Could not load this index'));
-  };
-
   // Overview (quote, fundamentals, technicals) has no LLM call and is what a
   // click should show immediately; AI analysis waits for its tab.
   useEffect(() => {
     if (!symbol) return undefined;
     let current = true;
-    closeIndex();
     rememberStock(symbol);
-    window.scrollTo(0, 0);
     setQuickLoading(true);
     setQuickError(null);
     setQuick(null);
@@ -182,95 +94,36 @@ const Dashboard = () => {
     }
   };
 
-  // Old callers still hand over a symbol in navigation state: give it its URL.
-  useEffect(() => {
-    const { symbol: stateSymbol, index } = location.state || {};
-    if (stateSymbol) {
-      navigate(stockPath(stateSymbol), { replace: true });
-    } else if (index) {
-      window.scrollTo(0, 0);
-      openIndex(index);
-      navigate('.', { replace: true, state: {} });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state?.symbol, location.state?.index]);
-
-  const open = (picked) => navigate(stockPath(picked));
-
   return (
-    <Layout>
-      <div className="space-y-3 sm:space-y-4">
-        <SectionTabs tabs={RESEARCH_TABS} label="Research" />
-
-        <Sheet bodyClassName="px-3 py-2.5 sm:p-4">
-          <SmartSearch onSearch={open} isLoading={Boolean(symbol) && quickLoading} />
+    <>
+      {quickLoading && (
+        <Sheet title="Enquiry in progress">
+          <div className="flex items-center gap-3 py-6 justify-center text-[var(--ink-soft)]">
+            <Loader2 className="w-4 h-4 animate-spin text-[var(--stamp)]" />
+            <span className="text-sm">Reading fundamentals and technicals…</span>
+          </div>
         </Sheet>
+      )}
 
-        {symbol && (
-          <div className="flex justify-end">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/research')}>
-              Back to Research
-            </Button>
-          </div>
-        )}
-
-        {symbol && quickLoading && (
-          <Sheet title="Enquiry in progress">
-            <div className="flex items-center gap-3 py-6 justify-center text-[var(--ink-soft)]">
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--stamp)]" />
-              <span className="text-sm">Reading fundamentals and technicals…</span>
-            </div>
-          </Sheet>
-        )}
-
-        {symbol && quickError && (
-          <Sheet
-            title="Enquiry failed"
-            actions={
-              <button
-                type="button"
-                onClick={() => navigate('/research')}
-                className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 -my-2 -mr-2 text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
-                aria-label="Dismiss the failed enquiry"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            }
-          >
-            <Empty
-              title={quickError}
-              detail="The scrip may not be in the instrument master, or the data provider is unreachable."
-            />
-          </Sheet>
-        )}
-
-        {symbol && quick && !quickLoading && (
-          <AnalysisCard
-            quick={quick}
-            ai={ai}
-            aiLoading={aiLoading}
-            aiError={aiError}
-            aiRequested={aiRequested}
-            onOpenAiTab={requestAi}
+      {quickError && (
+        <Sheet title="Enquiry failed">
+          <Empty
+            title={quickError}
+            detail="The scrip may not be in the instrument master, or the data provider is unreachable."
           />
-        )}
+        </Sheet>
+      )}
 
-        {!symbol && indexTicker && (
-          <div className="space-y-4">
-            <div className="flex justify-end">
-              <Button variant="ghost" size="sm" onClick={closeIndex}>
-                Back to Research
-              </Button>
-            </div>
-            <IndexCard detail={indexDetail} loading={!indexDetail && !indexError} error={indexError} />
-            <IndexAnalysis key={indexTicker} ticker={indexTicker} />
-          </div>
-        )}
-
-        {!symbol && !indexTicker && <FrontPage />}
-      </div>
-    </Layout>
+      {quick && !quickLoading && (
+        <AnalysisCard
+          quick={quick}
+          ai={ai}
+          aiLoading={aiLoading}
+          aiError={aiError}
+          aiRequested={aiRequested}
+          onOpenAiTab={requestAi}
+        />
+      )}
+    </>
   );
 };
-
-export default Dashboard;
