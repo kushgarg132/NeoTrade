@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 93fd364
+verified_at: cb99485
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -303,7 +303,7 @@ Two supported paths, chosen once per session (host `/home/ubuntu/CLAUDE.md`, "De
 
 ## Import rules
 
-`backend/.importlinter` (run `lint-imports --config backend/.importlinter` from the repo root or `/app`): domain modules (incl. `backend.forward`) never import `backend.routers`; `backend.mine` and `backend.journal` never import `backend.autopilot`; nothing imports `backend.forecast.research`; `backend.lab` never imports `backend.routers` or `backend.autopilot`; `backend.ml` never imports `backend.routers`, `backend.autopilot` or `backend.engine`, and the app (ai, autopilot, engine, forecast, lab, mine, plan, portfolio, routers, scheduler, server, jobs, system) never imports `backend.ml`. Only direct imports are checked (`allow_indirect_imports`); 14 existing domain-to-router imports sit under `ignore_imports` as known debt, removed when fixed.
+`backend/.importlinter` (run `lint-imports --config backend/.importlinter` from the repo root or `/app`): domain modules (incl. `backend.forward`) never import `backend.routers`; `backend.mine` and `backend.journal` never import `backend.autopilot`; nothing imports `backend.forecast.research`; `backend.lab` never imports `backend.routers` or `backend.autopilot`; `backend.ml` and `backend.rl` never import `backend.routers`, `backend.autopilot` or `backend.engine`, and the app (ai, autopilot, engine, forecast, lab, mine, plan, portfolio, routers, scheduler, server, jobs, system; `backend.ml` too for `backend.rl`) never imports `backend.ml` or `backend.rl`. Only direct imports are checked (`allow_indirect_imports`); 14 existing domain-to-router imports sit under `ignore_imports` as known debt, removed when fixed.
 
 ## Gotchas and known issues
 

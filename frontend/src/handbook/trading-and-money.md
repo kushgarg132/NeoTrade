@@ -409,6 +409,28 @@ fundamentals history. `python -m backend.lab rerun` does not re-run `ml` runs; t
 
 First real run, 2026-10-19: FAIL at 20 and 60 days. The ranking signal is real in-sample (rank IC positive every year at 20 days, t 5.9) but the top decile does worse than the plain momentum score after costs, and its P(up) is less accurate than the base rate. Momentum stays; nothing is wired.
 
+## RL exit sandbox (research, admin runs by hand)
+
+Can a learned policy time the exit of a Pick better than the fixed rule? `backend/rl/env.py::episodes` turns each
+Pick into an episode: from the day after entry the agent either holds or exits at that day's close, and the
+exit is forced on day `2 * horizon`. The state on day d uses bars up to d only (days held, open P&L, 20-day
+volatility, the stock's 20-day return minus NIFTY's, NIFTY against its 200-day mean, the setup). The reward is
+the net return (`round_trip_return`, 10 bps slippage and CNC charges) minus NIFTY over the same days.
+`backend/rl/agent.py::fit` is fitted Q-iteration with LightGBM: five passes, each regressing the value of
+holding on the best of exiting or holding on the next day, so a row never sees its own reward.
+
+`backend/rl/evaluate.py::evaluate_rows` walks forward a calendar year at a time (3 training years minimum; a
+training episode must have ended before the test year starts) and compares the policy with two fixed rules on
+the test year: today's horizon (`fixed`) and the single holding day that did best on the training years
+(`best_fixed`, never chosen on test data). The baseline is the better of those two on train.
+**The bar** (`evaluate.py::passes`): mean yearly improvement over the baseline above 0, t-stat of the yearly
+improvements at least 2, positive in at least 70% of years, and a policy max drawdown no deeper than the baseline's.
+
+Run it in the jobs container: `docker exec neotrade-jobs nice python -m backend.rl.evaluate [--setup momentum]`.
+It prints `recorded <id>` or `NOT RECORDED` per setup and leaves a `lab_runs` row (kind `rl`, name
+`fqi_exit:<setup>`), passed or not, with the caveats: no point-in-time NIFTY 200 membership (survivorship) and
+price-only state. Nothing is wired; a pass would only justify a later paper-only forward-record source.
+
 ## Reproducing a run
 
 Every simulator leaves a `lab_runs` record (`backend/lab/runs.py::LabRunStore`). To check one still
@@ -417,5 +439,5 @@ backend container. For a `factor` or `study` run it rebuilds the inputs from the
 config (bars after the window are ignored), re-runs the same code (`backend/factor/report.py::run`,
 `backend/forecast/study.py::run`) and compares the data fingerprint and every metric to 1e-6.
 Exit 0 means identical, 1 means something differs (the printed `deltas` say what; a changed
-fingerprint means the underlying prices moved), 2 means the kind (`engine`, `ml`, `bandit`) is not
+fingerprint means the underlying prices moved), 2 means the kind (`engine`, `ml`, `rl`, `bandit`) is not
 re-runnable here.

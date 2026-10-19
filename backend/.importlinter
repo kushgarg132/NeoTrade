@@ -127,3 +127,36 @@ source_modules =
 allow_indirect_imports = True
 forbidden_modules =
     backend.ml
+
+[importlinter:contract:rl-is-a-leaf]
+name = The RL sandbox does not import routers, the autopilot or the engine
+type = forbidden
+source_modules =
+    backend.rl
+allow_indirect_imports = True
+forbidden_modules =
+    backend.routers
+    backend.autopilot
+    backend.engine
+
+[importlinter:contract:nothing-imports-rl]
+name = The app does not import the RL sandbox (run by hand only)
+type = forbidden
+source_modules =
+    backend.ai
+    backend.autopilot
+    backend.engine
+    backend.forecast
+    backend.lab
+    backend.ml
+    backend.mine
+    backend.plan
+    backend.portfolio
+    backend.routers
+    backend.scheduler
+    backend.server
+    backend.jobs
+    backend.system
+allow_indirect_imports = True
+forbidden_modules =
+    backend.rl
