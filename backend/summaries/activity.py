@@ -28,7 +28,7 @@ async def generate(db, redis, user_id: str, now: datetime):
     from backend.prefs import PrefsStore
 
     local = now.astimezone(IST)
-    start = datetime.combine(local.date(), time(0, 0), tzinfo=IST)
+    start, key = datetime.combine(local.date(), time(0, 0), tzinfo=IST), local.date().isoformat()
 
     async def build():
         rows = await _day_rows(db, user_id, start)
@@ -51,7 +51,7 @@ async def generate(db, redis, user_id: str, now: datetime):
             result=core.as_facts(facts["result"]))
         return system, prompt, facts
 
-    return await core.produce(db, redis, user_id, KIND, local.date().isoformat(), build, tier="standard",
+    return await core.produce(db, redis, user_id, KIND, key, build, tier="standard",
                               feature="plan", ttl=TTL)
 
 
