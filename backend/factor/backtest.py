@@ -24,6 +24,7 @@ from backend.core.models import Side
 from backend.engine.execution.costs import calculate_indian_costs
 from backend.factor import model
 from backend.factor.model import Params
+from backend.lab.metrics import summary
 
 SLIPPAGE_BPS = 10.0
 RISK_OFF_YIELD = 0.065  # liquid ETF (e.g. LIQUIDBEES), annual
@@ -56,7 +57,7 @@ def performance(equity: pd.Series) -> dict:
     sharpe = returns.mean() / returns.std() * np.sqrt(model.YEAR) if returns.std() else 0.0
     drawdown = float((equity / equity.cummax() - 1).min())
     return {"cagr": float(cagr), "vol": float(vol), "sharpe": float(sharpe), "max_drawdown": drawdown,
-            "calmar": float(cagr / -drawdown) if drawdown < 0 else 0.0}
+            "calmar": float(cagr / -drawdown) if drawdown < 0 else 0.0, "summary": summary(returns)}
 
 
 def rebalance_days(index: pd.DatetimeIndex, how: str) -> set:

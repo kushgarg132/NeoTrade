@@ -28,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from backend.factor.validate import deflated_sharpe
+from backend.lab.metrics import daily_returns
 
 logger = logging.getLogger(__name__)
 
@@ -44,18 +45,6 @@ ACCOUNT = 1_000_000.0  # run_backtest's default account_size
 def variants(grid: dict[str, list]) -> list[dict]:
     keys = list(grid)
     return [dict(zip(keys, combo)) for combo in itertools.product(*(grid[k] for k in keys))]
-
-
-def _daily(trades: list[dict], start: datetime, end: datetime) -> pd.Series:
-    """Net P&L per weekday as a fraction of the account, zero on days
-    without a trade, over [start, end)."""
-    days = pd.bdate_range(start.date(), end.date() - timedelta(days=1))
-    pnl = pd.Series(0.0, index=days)
-    for t in trades:
-        day = pd.Timestamp(datetime.fromisoformat(t["timestamp"]).date())
-        if day in pnl.index:
-            pnl[day] += t["net_pnl"]
-    return pnl / ACCOUNT
 
 
 def _sharpe(r: pd.Series) -> float:
@@ -82,7 +71,7 @@ async def retune_strategy(strategy, backtest, current: dict, start: datetime, sp
     train = []
     for params in candidates if candidates is not None else variants(strategy.GRID):
         result = await backtest(params, start, split)
-        returns = _daily(result.trades, start, split)
+        returns = daily_returns(result.trades, start, split, ACCOUNT)
         train.append((params, returns, result.trades))
     trial_sharpes = past_trials + [_sharpe(r) for _, r, _ in train]
     doc.update(trials=len(trial_sharpes), trial_sharpes=[_sharpe(r) for _, r, _ in train],
@@ -101,7 +90,7 @@ async def retune_strategy(strategy, backtest, current: dict, start: datetime, sp
     for label, params in (("best", best), ("current", current)):
         result = await backtest(params, warm, end)
         trades = [t for t in result.trades if _at(t) >= split]
-        out[label] = (_daily(trades, split, end), trades)
+        out[label] = (daily_returns(trades, split, end, ACCOUNT), trades)
     doc["test"] = {label: _summary(r, t) for label, (r, t) in out.items()}
     best_net, current_net = doc["test"]["best"]["net"], doc["test"]["current"]["net"]
     if best_net <= max(current_net, 0.0):
