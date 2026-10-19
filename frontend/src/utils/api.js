@@ -184,6 +184,7 @@ export const endpoints = {
     item: (id) => `/system/backlog/${id}`,
     builderRun: '/system/builder/run',
   },
+  labRuns: { list: '/lab/runs', one: (id) => `/lab/runs/${id}` },
   newsFeed: '/news/feed',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
   planToday: '/plan/today',

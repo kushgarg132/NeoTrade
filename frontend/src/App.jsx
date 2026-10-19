@@ -20,6 +20,7 @@ const AiActivity = lazy(() => import('./pages/AiActivity'));
 import Login from './pages/Login';
 const Handbook = lazy(() => import('./pages/Handbook'));
 const Backlog = lazy(() => import('./pages/Backlog'));
+const LabRuns = lazy(() => import('./pages/LabRuns'));
 const Picks = lazy(() => import('./pages/Picks'));
 import RequireAuth from './components/RequireAuth';
 import Layout from './components/Layout';
@@ -132,6 +133,7 @@ const App = () => {
       <Route path="/lab/limits" element={gated(<RequireAdmin><AiLimits /></RequireAdmin>)} />
       <Route path="/lab/options" element={gated(<RequireAdmin><OptionChain /></RequireAdmin>)} />
       <Route path="/lab/handbook" element={gated(<RequireAdmin><Handbook /></RequireAdmin>)} />
+      <Route path="/lab/runs" element={gated(<RequireAdmin><LabRuns /></RequireAdmin>)} />
       <Route path="/lab/backlog" element={gated(<RequireAdmin><Backlog /></RequireAdmin>)} />
       {/* Setup */}
       <Route path="/settings" element={gated(<Settings />)} />
