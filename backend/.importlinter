@@ -95,3 +95,35 @@ allow_indirect_imports = True
 forbidden_modules =
     backend.routers
     backend.autopilot
+
+[importlinter:contract:ml-is-a-leaf]
+name = The ML harness does not import routers, the autopilot or the engine
+type = forbidden
+source_modules =
+    backend.ml
+allow_indirect_imports = True
+forbidden_modules =
+    backend.routers
+    backend.autopilot
+    backend.engine
+
+[importlinter:contract:nothing-imports-ml]
+name = The app does not import the ML harness (run by hand only)
+type = forbidden
+source_modules =
+    backend.ai
+    backend.autopilot
+    backend.engine
+    backend.forecast
+    backend.lab
+    backend.mine
+    backend.plan
+    backend.portfolio
+    backend.routers
+    backend.scheduler
+    backend.server
+    backend.jobs
+    backend.system
+allow_indirect_imports = True
+forbidden_modules =
+    backend.ml

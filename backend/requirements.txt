@@ -32,3 +32,4 @@ python-multipart>=0.0.9  # multipart upload of the CAS PDF
 aiogram==3.31.0  # Telegram Bot API transport (backend/guardrails/telegram.py); caps pydantic<2.14
 import-linter==2.15  # import contracts, `lint-imports` (backend/.importlinter); pure python
 empyrical-reloaded==0.7.0  # Apache-2.0, standard return metrics (backend/lab/metrics.py)
+lightgbm==4.6.0  # ML ranking harness (backend/ml/), aarch64 wheel; no scikit-learn
