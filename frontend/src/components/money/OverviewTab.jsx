@@ -12,6 +12,20 @@ import useHoldings from './useHoldings';
 import useSymbolNews from '../../hooks/useSymbolNews';
 import { topMovers, whyLine } from '../../utils/money';
 import { stockPath } from '../../utils/stocks';
+import { AiCard, AiText, AiState } from '../ai/AiSummary';
+import useStored from '../../hooks/useStored';
+import { endpoints } from '../../utils/api';
+
+const WhyMoved = () => {
+  const { data, status, retry } = useStored(endpoints.mine.reviewLatest);
+  return (
+    <AiCard title="Why your money moved" asOf={data?.date}>
+      <AiState status={status} retry={retry} message="Could not load your review." />
+      {status === 'empty' && <Empty title="No review yet" body="Your first review arrives after today's 16:00 pass." />}
+      {status === 'ok' && <AiText text={data.text} />}
+    </AiCard>
+  );
+};
 
 /** Invested, total P&L and today's three biggest movers with a one-line why. `headline` comes from /mine/overview. */
 const OverviewTab = ({ headline }) => {
@@ -22,6 +36,7 @@ const OverviewTab = ({ headline }) => {
 
   return (
     <div className="space-y-4">
+      <WhyMoved />
       <ValueChart />
 
       {headline && (
