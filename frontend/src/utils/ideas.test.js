@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { confidence, ideaFromSuggestion, ideaFromPick, rangeBar, parseIdeaId } from './ideas.js';
+import { confidence, ideaFromSuggestion, ideaFromPick, rangeBar, parseIdeaId, describeFeatures } from './ideas.js';
 
 const sug = { id: 'a1', symbol: 'TCS', side: 'BUY', quantity: 10, entry_ref: 100, stop: 95, target: 110, notional: 1000,
   strategy: 'macd_crossover', reason_codes: ['macd_crossover'], max_hold_days: 5, status: 'PENDING' };
@@ -60,4 +60,10 @@ test('pick with per-stock forecast headlines excess and describes features', () 
   assert.equal(v.features[0], 'near its 52-week high');
   assert.ok(v.features.includes('calmer than usual'));
   assert.deepEqual(ideaFromPick(pick).features, []);
+});
+test('describeFeatures reads regime as a fraction and skips setup-scaled strength', () => {
+  const words = describeFeatures({ regime: 0.03, strength: 9 });
+  assert.deepEqual(words, ['market in an uptrend']);
+  assert.deepEqual(describeFeatures({ regime: 0.01 }), ['market sideways']);
+  assert.deepEqual(describeFeatures({ regime: -0.05 }), ['market in a downtrend']);
 });

@@ -58,8 +58,9 @@ export const describeFeatures = (f) => {
   add(f.vol60, [[0.025, 'more volatile than usual'], [0.015, 'normal volatility'], [-Infinity, 'calmer than usual']]);
   add(f.mom, [[0.1, 'strong momentum'], [-0.05, 'flat momentum'], [-Infinity, 'losing momentum']]);
   add(f.rel20, [[0.02, 'beating NIFTY over the last month'], [-0.02, 'in line with NIFTY lately'], [-Infinity, 'lagging NIFTY over the last month']]);
-  add(f.strength, [[0.5, 'strong signal today'], [-0.5, 'average signal today'], [-Infinity, 'weak signal today']]);
-  add(f.regime, [[0.5, 'market in an uptrend'], [-0.5, 'market sideways'], [-Infinity, 'market in a downtrend']]);
+  // strength is on each setup's own scale, so it has no plain-word reading here.
+  // regime = NIFTY / its 200-day mean - 1 (backend/forecast/similar.py::_frames).
+  add(f.regime, [[0.02, 'market in an uptrend'], [-0.02, 'market sideways'], [-Infinity, 'market in a downtrend']]);
   return out;
 };
 
