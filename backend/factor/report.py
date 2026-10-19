@@ -41,22 +41,24 @@ def verdict(strategy: dict, benchmarks: dict[str, dict], dsr: float, oos_years: 
     return {"passed": all(checks.values()), "checks": checks}
 
 
-def run(start: str = "2009-06-01", end=None) -> dict:
-    symbols = data.universe()
-    closes = data.closes(symbols)
-    market = data.series(data.MARKET)
+def run(start: str = "2009-06-01", end=None, closes=None, market=None, series=None) -> dict:
+    """`closes`/`market`/`series(ticker)` default to yfinance; the lab re-run injects stored-window data."""
+    series = series or data.series
+    if closes is None:
+        closes = data.closes(data.universe())
+    market = series(data.MARKET) if market is None else market
     end = end or closes.index[-1]
     wf = walk_forward(closes, market, start, end, grid())
     oos_start, oos_end = wf.returns.index[0], wf.returns.index[-1]
     strategy = backtest.performance(wf.equity())
-    benchmarks = {name: backtest.performance(backtest.buy_and_hold(data.series(t), oos_start, oos_end))
+    benchmarks = {name: backtest.performance(backtest.buy_and_hold(series(t), oos_start, oos_end))
                   for name, t in data.BENCHMARKS.items()}
     benchmarks["Equal-weight Nifty 200 (same bias)"] = backtest.performance(
         backtest.equal_weight(closes, oos_start, oos_end))
     oos_years = len(wf.returns) / 252
     from backend.lab.runs import fingerprint
     from backend.lab.splits import yearly_folds
-    lab = {"fingerprint": fingerprint(closes), "variants": [asdict(p) for p in grid()],
+    lab = {"start": start, "fingerprint": fingerprint(closes), "variants": [json.loads(json.dumps(asdict(p), default=sorted)) for p in grid()],
            "folds": [asdict(f) for f in yearly_folds([d.date() for d in closes.index], min_train_years=3, window_years=3)]}
     trial_costs = {str(p.momentum_weight) + "/" + str(p.top_n) + "/" + p.rebalance + "/" + str(p.target_vol):
                    r.metrics() for p, r in wf.trials.items()}
@@ -101,7 +103,7 @@ async def _record_run(database, report: dict) -> None:
                  for f in lab.get("folds", [])]
         start, end = (date.fromisoformat(x) for x in report["window"])
         await LabRunStore(database).record(
-            kind="factor", name=STRATEGY_NAME, config={"window": report["window"], "variants": lab.get("variants", [])},
+            kind="factor", name=STRATEGY_NAME, config={"start": lab.get("start"), "window": report["window"], "variants": lab.get("variants", [])},
             execution=DAILY, window=(start, end), fingerprint=lab.get("fingerprint"), folds=folds,
             metrics={"oos": report["oos"], "dsr": report["dsr"], "verdict": report["verdict"]})
     except Exception as exc:

@@ -369,3 +369,14 @@ reaches Telegram, digests or chat.
   shows that row disabled. Today's **You vs Picks** (`portfolio/digest.py::scoreboard`, admin-only)
   sets your account against these trades, net of charges.
 - **Caveat**: the universe is today's stock list (survivorship); the payload says so.
+
+## Reproducing a run
+
+Every simulator leaves a `lab_runs` record (`backend/lab/runs.py::LabRunStore`). To check one still
+reproduces, run `python -m backend.lab rerun <id>` (`backend/lab/__main__.py::rerun`) inside the
+backend container. For a `factor` or `study` run it rebuilds the inputs from the stored window and
+config (bars after the window are ignored), re-runs the same code (`backend/factor/report.py::run`,
+`backend/forecast/study.py::run`) and compares the data fingerprint and every metric to 1e-6.
+Exit 0 means identical, 1 means something differs (the printed `deltas` say what; a changed
+fingerprint means the underlying prices moved), 2 means the kind (`engine`, `ml`, `bandit`) is not
+re-runnable here.
