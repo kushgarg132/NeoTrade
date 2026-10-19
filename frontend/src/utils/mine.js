@@ -65,3 +65,6 @@ export const REASONS = {
   strong_roe: 'Return on equity of 15% or more',
   reasonable_valuation: 'Price to earnings under 40',
 };
+
+/** Chart y-axis lower bound: auto padding below the data, but never below 0 when the data is all >= 0. */
+export const floorAtZero = (min) => (min >= 0 ? Math.max(0, Math.floor(min * 0.95)) : min);

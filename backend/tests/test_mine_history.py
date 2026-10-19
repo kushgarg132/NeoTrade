@@ -165,3 +165,17 @@ async def test_a_bonus_scales_journal_events_to_the_adjusted_bars(db):
     rows = await history.series(db, "carol", None)
     assert rows[0]["by_symbol"] == {"A": {"qty": 20, "value": 2000}} and rows[0]["invested"] == 2000
     assert rows[-1]["invested"] == 2000 and rows[-1]["value"] == 2400 and not rows[-1]["partial"]
+
+
+async def test_selling_everything_after_a_gain_leaves_nifty_at_zero_not_negative(db):
+    await db["journal_trades"].insert_one(_trade("A", "SELL", 10, 120, D3))
+    await history.backfill(db, "alice", D3)
+    row = await db["mine_daily"].find_one({"user_id": "alice", "date": D3.isoformat()})
+    assert row["value"] == 0 and row["nifty_value"] == 0 and row["invested"] == -200
+
+
+async def test_a_partial_sale_halves_the_nifty_replica(db):
+    await db["journal_trades"].insert_one(_trade("A", "SELL", 5, 120, D3))
+    await history.backfill(db, "alice", D3)
+    row = await db["mine_daily"].find_one({"user_id": "alice", "date": D3.isoformat()})
+    assert row["nifty_value"] == pytest.approx(550)  # 1 unit at 1100, half sold

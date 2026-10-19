@@ -302,7 +302,10 @@ Backend, `backend/mine/` behind `backend/routers/mine.py` (`/mine/*`, every reco
   account's value, net invested and the NIFTY-equivalent value per day. Backfill replays journal trades
   over stored closes (sells clipped to what the journal holds, split-scaled to match the adjusted bars);
   the 16:00 pass (`backend/scheduler.py`, via `::write_all`) recomputes every user's whole curve and
-  upserts what changed, so a later import fixes the past.
+  upserts what changed, so a later import fixes the past. The NIFTY line (`nifty_value`) is the same
+  rupees in NIFTY: a buy adds units worth what was put in, a sale removes the same fraction of the
+  units that it removed from the portfolio (proceeds over its value just before the sale), so the line
+  never goes below zero; `::returns`' NIFTY XIRR follows from it.
   `::xirr` is stdlib Newton with a bisection fallback; `::returns` gives the account's and NIFTY's XIRR
   on the same cash flows.
 - **Needs you** (`backend/mine/actions.py::build`): one ranked list of verdict changes, target/stop

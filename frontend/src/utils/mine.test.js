@@ -43,3 +43,10 @@ test('sortHoldings by verdict puts SELL first', () => {
   assert.equal(sortHoldings(rows, 'verdict')[0].symbol, 'B');
   assert.deepEqual(RANGES, ['1M', '6M', '1Y', 'ALL']);
 });
+
+test('floorAtZero pads below but never under zero for non-negative data', async () => {
+  const { floorAtZero } = await import('./mine.js');
+  assert.equal(floorAtZero(1000), 950);
+  assert.equal(floorAtZero(0), 0);
+  assert.equal(floorAtZero(-50), -50);
+});

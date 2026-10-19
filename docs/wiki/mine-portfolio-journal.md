@@ -68,7 +68,8 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
   note, previous_verdict, verdict_since`), `totals`, `benchmark`, `concentration`, `summary`, `plan`. Index
   `(user_id, at desc)` (`backend/server.py:131`). Inserted by `portfolio/service.py::refresh_portfolio`; read through
   `::latest_snapshot`.
-- `mine_daily`: one row per user per NIFTY trading day. Fields `date` (ISO), `flow, invested, value, nifty_value,
+- `mine_daily`: one row per user per NIFTY trading day. `nifty_value` = NIFTY units (buys add `flow/nifty`; a sale removes
+  the fraction of units equal to proceeds / portfolio value just before it, capped at 1; never below 0). Fields `date` (ISO), `flow, invested, value, nifty_value,
   by_symbol{sym:{qty,value}}, partial`. Unique index `(user_id, date)` (`backend/server.py:134`). Written by
   `mine/history.py::_store`, which upserts only changed rows and deletes dates the replay no longer has.
 - `holding_theses`: one doc per `(user_id, symbol)` (unique, `mine/thesis.py::ThesisStore.ensure_indexes`). Fields

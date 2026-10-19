@@ -6,7 +6,7 @@ import ErrorLine from '../ui/ErrorLine';
 import Skeleton from '../ui/Skeleton';
 import { inr, compactInr } from '../ui/format';
 import api, { endpoints } from '../../utils/api';
-import { RANGES, rangeLabel } from '../../utils/mine';
+import { RANGES, rangeLabel, floorAtZero } from '../../utils/mine';
 import { cn } from '../../utils/cn';
 
 // Identity is never colour alone: the series also differ in dash and are named in the legend.
@@ -91,7 +91,7 @@ const ValueChart = () => {
               <LineChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                 <CartesianGrid stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="date" tickFormatter={short} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} minTickGap={40} tickLine={false} axisLine={{ stroke: 'var(--border)' }} />
-                <YAxis tickFormatter={compactInr} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} width={56} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
+                <YAxis tickFormatter={compactInr} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} width={56} tickLine={false} axisLine={false} domain={[floorAtZero, 'auto']} />
                 <Tooltip content={<Tip />} />
                 {SERIES.map((s) => (
                   <Line key={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={s.key === 'value' ? 2.5 : 2} strokeDasharray={s.dash} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} connectNulls />

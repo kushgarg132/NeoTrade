@@ -1,6 +1,9 @@
 """The user's own account day by day (`mine_daily`): what it was worth, what
 went in, and what the same rupees would be worth in NIFTY -- plus the XIRR
-of both. Quantities come from the journal; shares the journal never saw
+of both. A buy adds NIFTY units worth the rupees put in; a sale removes the
+same fraction of the NIFTY units that it removed from the portfolio (proceeds
+over the portfolio's value just before it, capped at 1), so the replica never
+goes below zero after gains bigger than NIFTY's. Quantities come from the journal; shares the journal never saw
 (held before its history began) enter as one lot at the earliest snapshot's
 average price and mark the curve `partial`. Mutual funds are left out (their
 NAVs are not in daily_bars) and flagged `funds_excluded`.
@@ -156,21 +159,25 @@ async def _compute(db, user_id: str, today: date) -> list[dict]:
     rows = []
     last_nifty = None
     for i, day in enumerate(days):
-        flow = 0.0
-        for _, sym, q, price in by_day.get(i, []):
-            qty[sym] = qty.get(sym, 0.0) + q
-            flow += q * price
         for s in symbols:
             carry[s] = closes.get(s, {}).get(day, carry[s])
         last_nifty = nifty.get(day, last_nifty)
-        units += flow / last_nifty
+        flow = 0.0
+        for _, sym, q, price in by_day.get(i, []):
+            if q < 0:  # the sale takes the same fraction of the NIFTY replica as of the portfolio
+                before = sum(n * carry[s] for s, n in qty.items())
+                units *= 1 - (min(1.0, -q * price / before) if before > 0 else 1.0)
+            else:
+                units += q * price / last_nifty
+            qty[sym] = qty.get(sym, 0.0) + q
+            flow += q * price
         invested += flow
         by_symbol = {s: {"qty": qty[s], "value": round(qty[s] * carry[s], 2)}
                      for s in symbols if qty.get(s, 0) > 1e-9}
         rows.append({
             "user_id": user_id, "date": day.isoformat(), "flow": round(flow, 2), "invested": round(invested, 2),
             "value": round(sum(v["value"] for v in by_symbol.values()), 2),
-            "nifty_value": round(units * last_nifty, 2), "by_symbol": by_symbol, "partial": data["partial"],
+            "nifty_value": round(max(units, 0.0) * last_nifty, 2), "by_symbol": by_symbol, "partial": data["partial"],
         })
     return rows
 
