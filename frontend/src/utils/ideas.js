@@ -7,6 +7,11 @@ export const parseIdeaId = (id) => {
   return m ? { kind: m[1], key: m[2] } : null;
 };
 
+/** The suggestion's composite score ({rule, ai, final}, 0-1): the rules' part and what the AI added on top. */
+export const confidence = (score) => (score && typeof score.final === 'number'
+  ? { final: score.final, rule: score.rule ?? null, ai: score.rule != null ? score.final - score.rule : null }
+  : null);
+
 export const ideaFromSuggestion = (s) => {
   const entry = s.entry_ref;
   const risk = s.stop != null && entry != null ? Math.abs(entry - s.stop) * s.quantity : null;
@@ -20,6 +25,8 @@ export const ideaFromSuggestion = (s) => {
     qty: s.quantity, notional: s.notional ?? (entry ? entry * s.quantity : null), risk,
     reasons: (s.reason_codes || []).map(strategyName), thesis: s.ai_thesis || null, why: null,
     range: null, pUp: null, pBeat: null, pastN: null, oosExcess: null, oosN: null, decided: s.status !== 'PENDING',
+    status: s.status, strategy: s.strategy || null, score: confidence(s.score),
+    toStop: s.stop != null && entry ? -Math.abs(entry - s.stop) / entry : null,
   };
 };
 

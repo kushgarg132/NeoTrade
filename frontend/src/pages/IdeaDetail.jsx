@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
@@ -12,14 +12,69 @@ import IdeaBadge from '../components/ideas/IdeaBadge';
 import RangeBar from '../components/ideas/RangeBar';
 import BuyBar from '../components/ideas/BuyBar';
 import { useLoad } from '../components/ideas/useLoad';
+import Badge from '../components/ui/Badge';
+import { useForward } from '../components/ForwardBadge';
 import api, { endpoints } from '../utils/api';
+import { recordLine, statusOf } from '../utils/library';
 import { ideaFromSuggestion, ideaFromPick, parseIdeaId } from '../utils/ideas';
 import { bareSymbol } from '../utils/formatters';
 import { inr, pct } from '../components/ui/format';
+import { toneText } from '../components/ui/tone';
+
+const STATUS = { APPROVED: 'You bought this', REJECTED: 'You skipped this', EXPIRED: 'Expired', FILLED: 'Filled', CANCELLED: 'Cancelled' };
+const PAPER = { 'live-ready': 'Paper record clears the live gate', paper: 'Paper record still building', untested: 'Not backtested yet', paused: 'Paused by the AI' };
+
+/** The suggestion's composite score and how much of it is the rules versus the AI. */
+const Confidence = ({ score }) => (
+  <Card title="Confidence">
+    <div className="flex items-baseline justify-between">
+      <span className="text-[28px] leading-9 font-bold tabular-nums text-[var(--text)]">{Math.round(score.final * 100)}<span className="text-[15px] font-medium text-[var(--text-muted)]"> / 100</span></span>
+    </div>
+    <div className="mt-2 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden" role="img" aria-label={`Composite score ${Math.round(score.final * 100)} out of 100`}>
+      <div className="h-full bg-[var(--accent)]" style={{ width: `${Math.max(0, Math.min(1, score.final)) * 100}%` }} />
+    </div>
+    {score.rule != null && (
+      <p className="mt-2 text-[13px] text-[var(--text-muted)]">
+        Rules {Math.round(score.rule * 100)} · AI {score.ai >= 0 ? '+' : '−'}{Math.abs(Math.round(score.ai * 100))}. The AI can move the score only a little: it cannot rescue a trade the rules did not support.
+      </p>
+    )}
+  </Card>
+);
+
+/** Strategy track record: forward scorecard row (n/100, mean excess, hit rate) and the paper record. */
+const StrategyRecord = ({ idea }) => {
+  const rows = useForward();
+  const row = rows.find((r) => r.source === 'suggestion' && r.name === idea.strategy);
+  const [card, setCard] = useState(null);
+  useEffect(() => {
+    let live = true;
+    api.get(endpoints.strategyLibrary()).then((r) => live && setCard(r.data.strategies.find((c) => c.name === idea.strategy) || null)).catch(() => {});
+    return () => { live = false; };
+  }, [idea.strategy]);
+  if (!row && !card) return null;
+  return (
+    <Card title="Track record" action={<IdeaBadge badge={idea.badge} />}>
+      {row && (
+        <div className="grid grid-cols-3 gap-3">
+          <Stat label="Scored" value={`${Math.min(row.n, 100)}/100`} />
+          <Stat label="Avg vs NIFTY" value={<span className={toneText(row.mean_excess > 0 ? 'gain' : row.mean_excess < 0 ? 'loss' : 'neutral')}>{pct(row.mean_excess, { sign: true })}</span>} />
+          <Stat label="Hit rate" value={pct(row.hit_rate, { dp: 0 })} />
+        </div>
+      )}
+      {card && (
+        <p className={`${row ? 'mt-3 ' : ''}text-[14px] text-[var(--text-muted)]`}>
+          Paper record: {recordLine(card)}. {PAPER[statusOf(card)]}.
+        </p>
+      )}
+    </Card>
+  );
+};
 
 const find = async (kind, key) => {
   if (kind === 's') {
-    const s = (await api.get(endpoints.suggestions.list({ status: 'PENDING' }))).data.find((x) => x.id === key);
+    // Pending first; a decided idea is found in the full history.
+    const pending = (await api.get(endpoints.suggestions.list({ status: 'PENDING' }))).data.find((x) => x.id === key);
+    const s = pending || (await api.get(endpoints.suggestions.list({ limit: 500 }))).data.find((x) => x.id === key);
     return s ? ideaFromSuggestion(s) : null;
   }
   const today = (await api.get(endpoints.picks.today)).data;
@@ -51,7 +106,10 @@ const IdeaDetail = () => {
         <span className="text-[13px] text-[var(--text-muted)]">{idea.setup}{idea.horizon ? ` · ${idea.horizon}d` : ''}</span>
         <IdeaBadge badge={idea.badge} />
         {idea.noEdge && <span className="text-[12px] font-semibold text-[var(--warn)]">No edge</span>}
+        {idea.decided && <Badge kind="neutral">{STATUS[idea.status] || idea.status}</Badge>}
       </div>
+
+      {idea.score && <Confidence score={idea.score} />}
 
       <Card title="Why">
         {idea.why && <p className="text-[15px] text-[var(--text)]">{idea.why}</p>}
@@ -66,6 +124,12 @@ const IdeaDetail = () => {
           {idea.stop != null && <Stat label="Stop" value={px(idea.stop)} />}
           {idea.target != null && <Stat label="Target" value={px(idea.target)} />}
         </div>
+        {idea.kind === 's' && (idea.headline?.value != null || idea.toStop != null) && (
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {idea.headline?.value != null && <Stat label="If it hits target" value={<span className="text-[var(--gain)]">{pct(idea.headline.value, { sign: true, dp: 1 })}</span>} />}
+            {idea.toStop != null && <Stat label="If stopped out" value={<span className="text-[var(--loss)]">{pct(idea.toStop, { sign: true, dp: 1 })}</span>} />}
+          </div>
+        )}
         {idea.qty != null && (
           <div className="mt-4 grid grid-cols-3 gap-3">
             <Stat label="Quantity" value={idea.qty} />
@@ -84,6 +148,8 @@ const IdeaDetail = () => {
           </div>
         </Card>
       )}
+
+      {idea.kind === 's' && idea.strategy && <StrategyRecord idea={idea} />}
 
       {idea.pastN != null && (
         <Card title="Track record">

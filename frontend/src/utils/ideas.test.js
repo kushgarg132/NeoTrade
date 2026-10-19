@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ideaFromSuggestion, ideaFromPick, rangeBar, parseIdeaId } from './ideas.js';
+import { confidence, ideaFromSuggestion, ideaFromPick, rangeBar, parseIdeaId } from './ideas.js';
 
 const sug = { id: 'a1', symbol: 'TCS', side: 'BUY', quantity: 10, entry_ref: 100, stop: 95, target: 110, notional: 1000,
   strategy: 'macd_crossover', reason_codes: ['macd_crossover'], max_hold_days: 5, status: 'PENDING' };
@@ -29,4 +29,12 @@ test('rangeBar keeps order and the zero line', () => {
   const r = rangeBar(-0.04, 0.02, 0.08);
   assert.ok(r.p10 === 0 && r.p90 === 100 && r.p10 < r.zero && r.zero < r.median && r.median < r.p90);
   assert.deepEqual(rangeBar(0, 0, 0), { p10: 50, median: 50, p90: 50, zero: 50 });
+});
+
+test('confidence splits the composite into rule and AI parts', () => {
+  const c = confidence({ rule: 0.6, ai: 0.5, final: 0.68 });
+  assert.equal(c.final, 0.68);
+  assert.ok(Math.abs(c.ai - 0.08) < 1e-9);
+  assert.equal(confidence(null), null);
+  assert.equal(ideaFromSuggestion({ ...sug, score: { rule: 0.6, ai: 0.5, final: 0.68 } }).score.rule, 0.6);
 });
