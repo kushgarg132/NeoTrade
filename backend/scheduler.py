@@ -13,6 +13,7 @@ import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Awaitable, Callable, Optional
 
+from backend.core.market_calendar import is_last_trading_day_of_week, is_trading_day
 from backend.ai.analyst_verdict import refresh_analyst_verdict
 from backend.core.models import Fill, Side
 from backend.engine.execution.options_costs import calculate_options_costs
@@ -143,7 +144,7 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
         await picks.run(db, now)
     except Exception as exc:
         logger.exception("picks failed: %s", exc)
-    if pass_day.weekday() == 4:
+    if is_last_trading_day_of_week(pass_day):
         await _weekly_mirrors(db)
     # The evening answer, from the review just done (portfolio/digest.py).
     from backend.portfolio.digest import send_postclose
@@ -349,7 +350,7 @@ async def _learn(db, now: datetime) -> int:
     for user_id in users:
         try:
             total += len(await learn(db, user_id, nifty, now))
-            if now.astimezone(IST).weekday() == 4 and (text := await weekly_text(db, user_id, nifty, now)):
+            if is_last_trading_day_of_week(now.astimezone(IST).date()) and (text := await weekly_text(db, user_id, nifty, now)):
                 await notify(db, user_id, text)
         except Exception as exc:
             logger.warning("learning pass failed for %s: %s", user_id, exc)
@@ -409,8 +410,8 @@ async def _refresh_analyst_verdicts(redis) -> int:
 async def scheduler_loop(db, redis=None) -> None:
     while True:
         await asyncio.sleep(seconds_until_next_run(datetime.now(timezone.utc)))
-        if datetime.now(timezone.utc).astimezone(IST).weekday() >= 5:
-            # No session, so nothing to scan, review or report -- and a Sunday
+        if not is_trading_day(datetime.now(timezone.utc).astimezone(IST).date()):
+            # No session (weekend or NSE holiday), so nothing to scan, review or report -- and a Sunday
             # last_pass hid a missed Friday from Monday's catch-up.
             continue
         try:

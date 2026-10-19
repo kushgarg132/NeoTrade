@@ -158,7 +158,7 @@ Env (`backend/configs/settings.py`): `NEWS_LLM_CALLS_PER_DAY=200`, `USER_LLM_CAL
 
 ## Jobs and schedules
 
-All times IST. `in_session` = Mon-Fri 09:15 to <15:30, no holiday calendar (`engine/autorun.py::in_session`). `near_session` = in_session or in_session(now+45 min), i.e. from 08:30 (`autorun.py::near_session`). "Every" for ingest loops is the sleep AFTER a pass (`worker.py::_run_loop`), not a fixed rate. A loop's heartbeat is written only when its pass did not raise.
+All times IST. `in_session` = NSE trading day (`core/market_calendar.py::is_trading_day`: Mon-Fri minus the static holiday set) 09:15 to <15:30 (`engine/autorun.py::in_session`). `near_session` = in_session or in_session(now+45 min), i.e. from 08:30 (`autorun.py::near_session`). "Every" for ingest loops is the sleep AFTER a pass (`worker.py::_run_loop`), not a fixed rate. A loop's heartbeat is written only when its pass did not raise.
 
 | Job | Process | When | Entry | Lock / gate |
 |---|---|---|---|---|
@@ -179,7 +179,7 @@ All times IST. `in_session` = Mon-Fri 09:15 to <15:30, no holiday calendar (`eng
 | `plan_revise` | ingest | 60s, in session only | `revise.py::loop` | leader; Lab "AI game plan revisions"; <=2 revisions per user per day, 15 min apart |
 | `corp_events` | ingest | 6h | `mine/events.py::loop` (outside this area) | leader |
 | Daily pass | API (any worker) | 16:00 Mon-Fri (`RUN_HOUR=16`; weekends skipped) | `scheduler.py::scheduler_loop` then `_run_locked` | `scheduler:daily_lock` 2h; skipped if `scheduler:last_pass` >= the day |
-| Daily pass catch-up | API | first tick at/after 09:20 when `last_pass` < previous weekday | `autorun.py::_longterm_pass` then `_catch_up` then `scheduler._run_locked(pass_day=missed)` | same lock; background task |
+| Daily pass catch-up | API | first tick at/after 09:20 when `last_pass` < previous trading day | `autorun.py::_longterm_pass` then `_catch_up` then `scheduler._run_locked(pass_day=missed)` | same lock; background task |
 | Monthly re-tune | subprocess (`nice -n 15`) | once per calendar month, first daily pass with Lab on | `learning/retune.py::start_if_due` | Lab "the monthly re-tune"; `retune_runs` month doc |
 | Strategy builder | subprocess (`nice -n 15`) | Friday pass, once per ISO week | `builder/draft.py::start_if_due` | Lab "the weekly strategy builder"; unique `week`; `builder:lock` |
 | Nightly learning | API (daily pass) | 16:00 pass; weekly note Fridays | `scheduler.py::_learn` | Lab "nightly learning" |
@@ -187,7 +187,7 @@ All times IST. `in_session` = Mon-Fri 09:15 to <15:30, no holiday calendar (`eng
 | Auto-run tick | API (every worker) | 60s | `autorun.py::autorun_loop` then `tick` | Redis `autorun:{slot}` ownership; intraday needs Lab "the intraday auto-run" |
 | Login reminders | API | 08:30 to 09:05 ("early"), 09:05 to 09:15 ("late"), once each per user | `autorun.py::_login_reminders` | SET NX per user/day/slot |
 | Pre-market digest | API | 08:45 to 09:15, once a day per user | `portfolio/digest.py::send_premarket` | `digest:pre:{user}:{date}` |
-| Game-plan build | API | 08:45 to 15:30 weekdays, per auto-intraday user with a live broker feed, until a plan exists | `autorun.py::_preopen_plans` | Lab "the AI game plan build"; `plan:build:` 1h; `PLAN_LLM_CALLS_PER_DAY` |
+| Game-plan build | API | 08:45 to 15:30 trading days, per auto-intraday user with a live broker feed, until a plan exists | `autorun.py::_preopen_plans` | Lab "the AI game plan build"; `plan:build:` 1h; `PLAN_LLM_CALLS_PER_DAY` |
 | Long-term exits / level alerts | API | in session, every 15-min bucket | `autorun.py::_longterm_pass`, `::_level_pass` | `longterm:{user}:{day}:{bucket}`, `levels:...` |
 | Morning pass | API | first tick at/after 09:20, once a day per user (catch-up, monthly factor rebalance, picks entry, autopilot proposals, digest) | `autorun.py::_longterm_pass` | `longterm:{user}:{day}:morning` |
 | Order sweeps | API | 60s | `engine/sweeps.py::_loop` | compare-and-set per row |

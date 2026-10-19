@@ -26,6 +26,7 @@ import asyncio
 import logging
 from datetime import datetime, time, timezone
 
+from backend.core.market_calendar import is_trading_day
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
 from backend.brokers.protocol import BrokerSessionState
 from backend.brokers.roles import brokers_for
@@ -53,7 +54,7 @@ SESSION_OPEN, SESSION_CLOSE = time(9, 15), time(15, 35)
 
 def in_session(now: datetime) -> bool:
     local = now.astimezone(IST)
-    return local.weekday() < 5 and SESSION_OPEN <= local.time() <= SESSION_CLOSE
+    return is_trading_day(local.date()) and SESSION_OPEN <= local.time() <= SESSION_CLOSE
 
 
 async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list[dict]:

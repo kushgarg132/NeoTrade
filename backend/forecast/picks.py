@@ -17,6 +17,7 @@ from typing import Optional
 
 import pandas as pd
 
+from backend.core.market_calendar import add_trading_days
 from backend.datalayer import bars
 from backend.forecast import setups, study
 
@@ -58,8 +59,7 @@ def compute(t: dict) -> tuple[dict, list[dict]]:
                 "_id": f"{day.date()}:{s.name}:{symbol}",
                 "date": day.date().isoformat(), "symbol": symbol, "setup": s.name, "label": s.label,
                 "horizon": s.horizon,
-                # weekdays only: an exchange holiday pushes the real exit later
-                "due_date": (day + pd.offsets.BDay(s.horizon + 1)).date().isoformat(),
+                "due_date": add_trading_days(day.date(), s.horizon + 1).isoformat(),
                 "entry_ref": float(t["close"][symbol].iat[last]),
                 "expected": {"median": r["median"], "p10": r["p10"], "p90": r["p90"]},
                 "p_up": r["p_up"], "p_beat_nifty": r["p_beat_nifty"], "n": r["n"],

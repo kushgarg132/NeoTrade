@@ -30,6 +30,7 @@ import json
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
+from backend.core.market_calendar import is_trading_day, last_trading_day
 from backend.datalayer.bars import AFTER_CLOSE as BARS_READY, BARS
 from backend.datalayer.news import COLLECTION as NEWS
 from backend.datalayer.news_sources import FEEDS
@@ -51,13 +52,11 @@ def _names(symbols) -> str:
     return ", ".join(symbols[:EXAMPLES]) + more
 
 
-def last_weekday_at(now: datetime, at: time) -> date:
+def last_trading_day_at(now: datetime, at: time) -> date:
     """The latest weekday whose `at` (IST) is not after `now`."""
     local = now.astimezone(IST)
     day = local.date() if local.time() >= at else local.date() - timedelta(days=1)
-    while day.weekday() >= 5:
-        day -= timedelta(days=1)
-    return day
+    return last_trading_day(day)
 
 
 def _text(value) -> Optional[str]:
@@ -91,7 +90,7 @@ async def _quotes(redis) -> list[str]:
 async def _last_pass(redis, now: datetime) -> list[str]:
     from backend.scheduler import LAST_PASS_KEY
 
-    due = last_weekday_at(now, PASS_DONE).isoformat()
+    due = last_trading_day_at(now, PASS_DONE).isoformat()
     last = _text(await redis.get(LAST_PASS_KEY))
     return [] if last and last >= due else [f"Daily pass for {due} has not run (last: {last or 'never'})"]
 
@@ -99,7 +98,7 @@ async def _last_pass(redis, now: datetime) -> list[str]:
 async def _picks(db, now: datetime) -> list[str]:
     from backend.forecast.picks import STUDY
 
-    due = last_weekday_at(now, PASS_DONE)
+    due = last_trading_day_at(now, PASS_DONE)
     doc = await db[STUDY].find_one({"_id": "latest"}, {"as_of": 1})
     at = doc and doc.get("as_of")
     ran = at and (at if at.tzinfo else at.replace(tzinfo=timezone.utc)).astimezone(IST).date()
@@ -118,7 +117,7 @@ async def check(db, redis=None, now: Optional[datetime] = None) -> dict:
     latest = {row["_id"]: row["date"] async for row in db[BARS].aggregate(
         [{"$group": {"_id": "$symbol", "date": {"$max": "$date"}}}])}
     newest = max(latest.values(), default=None)
-    session = last_weekday_at(now, BARS_READY).isoformat()
+    session = last_trading_day_at(now, BARS_READY).isoformat()
     stale = [s for s, d in latest.items() if d < session]
 
     universe = set()
@@ -148,7 +147,7 @@ async def alerts(db, redis, now: Optional[datetime] = None) -> list[str]:
     from backend.system.jobs import DATA_QUALITY, last_runs
 
     now = now or datetime.now(timezone.utc)
-    if now.astimezone(IST).weekday() >= 5:
+    if not is_trading_day(now.astimezone(IST).date()):
         return []
     out = await live(db, redis, now)
     run = (await last_runs(redis, [DATA_QUALITY]))[DATA_QUALITY] if redis is not None else None

@@ -11,6 +11,7 @@ from datetime import datetime, time, timedelta, timezone
 from html import escape
 from typing import Optional
 
+from backend.core.market_calendar import is_trading_day
 from backend.engine.session import IST
 
 logger = logging.getLogger(__name__)
@@ -97,8 +98,8 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
     changes = []
     # Only from the latest trading day's review: a failing review must not
     # replay the same "HOLD -> SELL" in Do today and every evening message.
-    from backend.engine.autorun import _previous_weekday
-    reviewed = _aware(snapshot["at"]).astimezone(IST).date() >= _previous_weekday(now.astimezone(IST).date())
+    from backend.core.market_calendar import previous_trading_day
+    reviewed = _aware(snapshot["at"]).astimezone(IST).date() >= previous_trading_day(now.astimezone(IST).date())
     if reviewed and await verdicts_visible(db, user_id):
         changes = [{"symbol": r["symbol"], "from": r["previous_verdict"], "to": r["verdict"],
                     "reasons": r.get("reason_codes") or []}
@@ -124,10 +125,10 @@ async def last_session_move(db, held: dict[str, float], today) -> Optional[dict]
     daily closes. Before the open a quote is still yesterday's close, so a
     pulse there reads about 0 for 'yesterday'."""
     from backend.datalayer import bars
-    from backend.engine.autorun import _previous_weekday
+    from backend.core.market_calendar import previous_trading_day
 
     last = await bars.prev_closes(db, held, today)                       # the last session's close
-    before = await bars.prev_closes(db, held, _previous_weekday(today))  # the one before it
+    before = await bars.prev_closes(db, held, previous_trading_day(today))  # the one before it
     both = [s for s in held if s in last and s in before]
     base = sum(held[s] * before[s] for s in both)
     if not base:
@@ -284,7 +285,7 @@ async def send_premarket(db, redis, now: datetime) -> int:
     from backend.suggestions.notify import notify
 
     local = now.astimezone(IST)
-    if local.weekday() >= 5 or not (PREMARKET <= local.time() < PREMARKET_END):
+    if not is_trading_day(local.date()) or not (PREMARKET <= local.time() < PREMARKET_END):
         return 0
     sent = 0
     for user_id in await _users(db):
@@ -295,8 +296,8 @@ async def send_premarket(db, redis, now: datetime) -> int:
             p = await pulse(db, user_id, now)
             held = list(await mine_holdings(db, user_id))
             # The previous session's close: on a Monday, Friday's (weekend news counts).
-            from backend.engine.autorun import _previous_weekday
-            last_close = datetime.combine(_previous_weekday(local.date()), time(15, 30), tzinfo=IST)
+            from backend.core.market_calendar import previous_trading_day
+            last_close = datetime.combine(previous_trading_day(local.date()), time(15, 30), tzinfo=IST)
             overnight = await headlines_for(db, held, last_close)
             ideas = len(await for_mine(db, user_id, await db["suggestions"].find(
                 {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200)))
