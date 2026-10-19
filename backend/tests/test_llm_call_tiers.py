@@ -20,6 +20,9 @@ EXPECTED = {
     "learning/hypotheses.py": ["deep"],
     "builder/draft.py": ["deep"],                         # the weekly strategy drafts
     "chat/agent.py": ["fast", "deep"],                   # follow-up chips; the reply
+    # AI summaries: summaries/core.py::produce makes the call, each generator names tier and feature to it
+    "summaries/day.py": ["fast"], "summaries/holding.py": ["fast"], "summaries/activity.py": ["standard"],
+    "summaries/weekly.py": ["standard"], "summaries/habits.py": ["standard"],
 }
 
 FEATURE = {
@@ -30,17 +33,19 @@ FEATURE = {
     "portfolio/review.py": "portfolio", "chat/agent.py": "chat",
     "learning/report.py": "learning", "learning/hypotheses.py": "learning",
     "builder/draft.py": "learning",
+    "summaries/day.py": "portfolio", "summaries/holding.py": "news", "summaries/activity.py": "plan",
+    "summaries/weekly.py": "portfolio", "summaries/habits.py": "learning",
 }
 
 
 def test_every_llm_call_names_its_tier():
     for path in BACKEND.rglob("*.py"):
         rel = path.relative_to(BACKEND).as_posix()
-        # llm.py and ai/runner.py pass their caller's tier through; the callers are checked.
-        if rel.startswith("tests/") or rel in ("llm.py", "routers/settings.py", "ai/runner.py"):
+        # llm.py, ai/runner.py and summaries/core.py pass their caller's tier through; the callers are checked.
+        if rel.startswith("tests/") or rel in ("llm.py", "routers/settings.py", "ai/runner.py", "summaries/core.py"):
             continue
         text = path.read_text()
-        calls = re.findall(r"await [\w.]*(?:get_completion|get_llm|run_with_tools)\((.*?)\)", text, flags=re.S)
+        calls = re.findall(r"await [\w.]*(?:get_completion|get_llm|run_with_tools|produce)\((.*?)\)", text, flags=re.S)
         if not calls:
             continue
         tiers = [m.group(1) for c in calls if (m := re.search(r'tier="(\w+)"', c))]

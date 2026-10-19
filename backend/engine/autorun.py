@@ -224,6 +224,12 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
     except Exception as exc:
         logger.warning("weekly report failed: %s", exc)
 
+    try:
+        from backend.summaries import holding
+        await holding.run_all(db, redis, now)  # a note under each bad-news / results-soon action
+    except Exception as exc:
+        logger.warning("holding notes failed: %s", exc)
+
     planned = await _preopen_plans(db, redis, now, sorted(_split(slot)[0] for slot in enabled
                                                          if _split(slot)[1] == "INTRADAY"))
     if planned:

@@ -24,6 +24,7 @@ const Home = () => {
   const [indices, setIndices] = useState(null);
   const [pnl, setPnl] = useState(null);
   const [card, setCard] = useState(null);
+  const [day, setDay] = useState(null);
   const [error, setError] = useState(null);
   const need = useNeedCount();
 
@@ -34,6 +35,7 @@ const Home = () => {
     api.get(endpoints.analytics.pnl('paper')).then((r) => setPnl(r.data)).catch(() => {});
     api.get(endpoints.analytics.scorecard('paper')).then((r) => setCard(r.data)).catch(() => {});
     api.get(endpoints.marketIndices).then((r) => setIndices(r.data)).catch(() => {});
+    api.get(endpoints.summaries.day).then((r) => setDay(r.data.summary)).catch(() => {}); // the digest below stands in
   }, []);
   useEffect(() => {
     load();
@@ -72,7 +74,7 @@ const Home = () => {
           <Tile title="AI" icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.sub} tone={h.ai.tone} />
           <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} />
         </div>
-        {kind && <BriefCard title={kind === 'premarket' ? 'Before the open' : 'After the close'} text={today[kind]} />}
+        {kind && <BriefCard title={kind === 'premarket' ? 'Before the open' : 'After the close'} text={today[kind]} summary={day} />}
         <GoalTile />
         <WeeklyLink />
         <SetupChecklist setup={today.setup} />

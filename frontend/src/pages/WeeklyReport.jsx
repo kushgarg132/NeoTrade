@@ -10,6 +10,7 @@ import Empty from '../components/ui/Empty';
 import Skeleton from '../components/ui/Skeleton';
 import ErrorLine from '../components/ui/ErrorLine';
 import { useLoad } from '../components/ideas/useLoad';
+import AiSummary from '../components/ai/AiSummary';
 import api, { endpoints } from '../utils/api';
 import { bareSymbol } from '../utils/formatters';
 import { inr, pct, tone } from '../components/ui/format';
@@ -23,6 +24,7 @@ const WeeklyReport = () => {
   const week = params.get('week');
   const { data: r, loading, error, reload } = useLoad(useCallback(
     () => api.get(endpoints.weeklyReport(week)).then((x) => x.data), [week]));
+  const words = useLoad(useCallback(() => api.get(endpoints.summaries.weekly(week)).then((x) => x.data), [week]));
   const go = (by) => setParams({ week: shiftWeek(r?.week || week, by) });
   const shown = r?.week || week;
 
@@ -41,6 +43,7 @@ const WeeklyReport = () => {
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
+      <AiSummary title="The week in words" state={words} className="mb-4" emptyBody="Written on Sunday evening, with the report." />
       {loading ? <Skeleton rows={6} />
         : error ? <ErrorLine message="Could not load this week." onRetry={reload} />
         : (

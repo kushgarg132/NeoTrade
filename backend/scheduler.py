@@ -110,6 +110,14 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
         plan_replays = await replay_all(db, YFinanceProvider(), now)
     except Exception as exc:
         logger.exception("plan replays failed: %s", exc)
+    # AI > Activity's "what the AI did today and why", after the close (summaries/activity.py).
+    if redis is not None and pass_day == now.astimezone(IST).date() and now.astimezone(IST).time() >= time(15, 30):
+        try:
+            from backend.summaries import activity
+
+            await activity.run_all(db, redis, now)
+        except Exception as exc:
+            logger.warning("activity summaries failed: %s", exc)
     # Monthly, in its own process: re-tune strategy thresholds (backend/learning/retune.py).
     from backend.learning.retune import start_if_due
     try:
@@ -154,10 +162,17 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
         await mark(redis, "forward", False, str(exc))
     if is_last_trading_day_of_week(pass_day):
         await _weekly_mirrors(db)
+        if redis is not None:  # Journal > Habits' "what your trades say" (summaries/habits.py)
+            try:
+                from backend.summaries import habits
+
+                await habits.run_all(db, redis, pass_day)
+            except Exception as exc:
+                logger.warning("habits summaries failed: %s", exc)
     # The evening answer, from the review just done (portfolio/digest.py).
     from backend.portfolio.digest import send_postclose
     try:
-        await send_postclose(db, now)
+        await send_postclose(db, now, redis)
     except Exception as exc:
         logger.exception("post-close digests failed: %s", exc)
 

@@ -228,6 +228,13 @@ export const endpoints = {
   },
   weeklyReport: (week) => (week ? `/reports/weekly?week=${encodeURIComponent(week)}` : '/reports/weekly'),
   today: '/today',
+  summaries: {
+    day: '/summaries/day',
+    holdings: '/summaries/holdings',
+    activity: '/summaries/activity',
+    habits: '/summaries/habits',
+    weekly: (week) => (week ? `/summaries/weekly?week=${encodeURIComponent(week)}` : '/summaries/weekly'),
+  },
   todayAttention: '/today/attention',
   mine: {
     overview: '/mine/overview',

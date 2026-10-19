@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, RefreshCw, Upload, History } from 'lucide-react';
 import Card from '../ui/Card';
@@ -16,6 +16,8 @@ import BrokerPnl from '../dashboard/BrokerPnl';
 import LivePnl from '../journal/LivePnl';
 import TradeLedger from '../dashboard/TradeLedger';
 import MonthGrid from '../journal/MonthGrid';
+import AiSummary from '../ai/AiSummary';
+import { useLoad } from '../ideas/useLoad';
 import { useReconnect, useTopic } from '../../hooks/useStream';
 import { useAccount } from '../../hooks/useAccount';
 import { monthKey, shiftMonth, monthLabel, todayIst } from '../../utils/months';
@@ -125,6 +127,8 @@ const JournalTab = ({ onImport }) => {
   const trades = sub === 'trades';
   const habits = sub === 'habits';
   const guardrails = sub === 'guardrails';
+  // Read only when the Habits tab is open: the weekly paragraph a job wrote.
+  const words = useLoad(useCallback(() => (habits ? api.get(endpoints.summaries.habits).then((r) => r.data) : Promise.resolve(null)), [habits]));
 
   const load = (stale = () => false) =>
     api
@@ -328,6 +332,7 @@ const JournalTab = ({ onImport }) => {
           <Empty title="No trades yet" body="Habits show once the journal has closed trades." action={<Button onClick={onImport}>Import files</Button>} />
         ) : (
           <>
+            <AiSummary title="What your trades say" state={words} emptyBody="Written once a week, on the week's last trading day." />
             <MirrorCard mirror={data.mirror} />
             <Card title="Your patterns">
               {data.insights.length === 0 ? (

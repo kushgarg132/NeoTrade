@@ -21,6 +21,11 @@ PROTECTED_SAMPLE_PATHS = [
     ("GET", "/api/v1/suggestions"),
     ("GET", "/api/v1/analytics/pnl"),
     ("GET", "/api/v1/broker/kite/status"),
+    ("GET", "/api/v1/summaries/day"),
+    ("GET", "/api/v1/summaries/holdings"),
+    ("GET", "/api/v1/summaries/activity"),
+    ("GET", "/api/v1/summaries/weekly"),
+    ("GET", "/api/v1/summaries/habits"),
 ]
 
 

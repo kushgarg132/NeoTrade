@@ -263,6 +263,8 @@ app.include_router(broker.router, prefix=settings.API_PREFIX, tags=["Broker"], d
 app.include_router(journal.router, prefix=settings.API_PREFIX, tags=["Journal"], dependencies=[Depends(get_current_user)])
 app.include_router(guardrails_router.router, prefix=settings.API_PREFIX, tags=["Guardrails"], dependencies=[Depends(get_current_user)])
 app.include_router(portfolio_router.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
+from backend.routers import summaries as summaries_router
+app.include_router(summaries_router.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
 
 # The socket authenticates its own handshake (see backend/ws/routes.py): the
 # HTTP bearer dependency cannot run on a WebSocket upgrade.

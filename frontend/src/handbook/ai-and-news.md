@@ -80,6 +80,38 @@ skips with one info log line a day; per-user switches still apply inside it.
 
 <!-- live:ai -->
 
+## AI summaries
+
+Short generated cards, each labelled "AI summary" with the time it was written. A job writes them at a
+fixed cadence into Mongo `ai_summaries` (`summaries/core.py::produce`: one Redis NX claim per user, kind
+and period, figures checked against the facts given, a failed or over-budget call keeps the last text
+and waits 6 hours); `GET /summaries/*` (`routers/summaries.py`) only reads, so opening a page never costs a call.
+
+- **Your day** (Home): three lines, where you stand, what needs you, the market. Written with the
+  pre-market digest and the post-close digest (`portfolio/digest.py::_day_summary`,
+  `summaries/day.py::generate`), feature `portfolio`, fast tier. Home shows it in place of the digest's
+  templated lines when it exists (`components/home/BriefCard.jsx`).
+- **What this means for you** (Ideas, Your holdings): one sentence under each bad-news and results-soon row
+  (position size, the risk, what to watch). Actions are derived on demand, so `engine/autorun.py::tick` calls
+  `summaries/holding.py::run_all`: each user at most every 30 minutes, 08:45 to 22:00, writes a note for each
+  such action that has none (action ids pin the instance), at most 4 a run and 12 a day. Feature `news`, fast
+  tier; shown by `components/ideas/HoldingActions.jsx`.
+- **What the AI did today and why** (AI > Activity): a short paragraph from the autopilot log, the day's
+  game plan and the AI book's closed P&L, once per user per day after the 16:00 pass
+  (`scheduler.py::run_daily_jobs`, `summaries/activity.py::run_all`). Feature `plan`, standard tier. Users
+  with no order, refusal or plan that day get none.
+- **The week in words** (Weekly report, top): what worked, what did not, one habit to watch, written with the
+  report by the Sunday job (`reports/weekly.py::send`, `summaries/weekly.py::generate`) from the report's
+  numbers and the journal's habit findings, and appended to the Sunday Telegram text. Feature `portfolio`,
+  standard tier, once per user per week; with no model the report goes out as before.
+- **What your trades say** (Money > Journal > Habits): a few sentences on the habits the journal's findings
+  show (`journal/insights.py` through the journal fact) and what charges add, once per user per ISO week in
+  the 16:00 pass of the week's last trading day (`summaries/habits.py::run_all`). Feature `learning`,
+  standard tier. It describes what you did; it never says what to trade.
+
+Every summary skips silently when the feature is off, the model errors or the allowance is spent, and keeps
+the last stored text; a figure the facts do not contain drops its sentence (`ai/grounding.py`).
+
 ## Facts, tools and grounding
 
 - **Fact layer** — `backend/ai/facts/`: the one read path for AI features. Market facts
