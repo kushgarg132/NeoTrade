@@ -12,7 +12,7 @@ export const GO_LIVE_RULE =
  * place; the parent keeps one row open at a time.
  */
 const StrategyRow = ({ name, status, detail, extra, open, onToggle, children }) => (
-  <div className="border-b border-[var(--rule)] last:border-b-0">
+  <div className="border-b border-[var(--border)] last:border-b-0">
     <div className="flex items-center gap-3 py-2">
       <button
         type="button"
@@ -25,7 +25,7 @@ const StrategyRow = ({ name, status, detail, extra, open, onToggle, children }) 
           <span className="doc-meta normal-case block truncate">{status}</span>
         </span>
         <ChevronDown
-          className={cn('w-4 h-4 shrink-0 text-[var(--ink-faint)] transition-transform', open && 'rotate-180')}
+          className={cn('w-4 h-4 shrink-0 text-[var(--text-muted)] transition-transform', open && 'rotate-180')}
           aria-hidden="true"
         />
       </button>
@@ -51,7 +51,7 @@ export const StrategyFold = ({ count, ready, live, open, onToggle }) => (
     <span className="text-sm">
       {count} strategies · {ready} ready{live != null ? ` · ${live} live` : ''}
     </span>
-    <span className="field-label text-[var(--stamp)] inline-flex items-center gap-1">
+    <span className="field-label text-[var(--accent)] inline-flex items-center gap-1">
       {open ? 'Hide' : 'Show'}
       <ChevronDown className={cn('w-4 h-4 transition-transform', open && 'rotate-180')} aria-hidden="true" />
     </span>

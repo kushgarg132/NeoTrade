@@ -23,7 +23,7 @@ const detailText = (err, fallback) => {
 };
 
 const Segmented = ({ label, options, value, onChange, disabled = {}, locked = false }) => (
-  <div role="radiogroup" aria-label={label} className="flex border border-[var(--rule-strong)]">
+  <div role="radiogroup" aria-label={label} className="flex border border-[var(--border)]">
     {options.map((option) => {
       const selected = option.id === value;
       return (
@@ -36,8 +36,8 @@ const Segmented = ({ label, options, value, onChange, disabled = {}, locked = fa
           onClick={() => onChange(option.id)}
           className={cn(
             'flex-1 min-h-11 sm:min-h-9 px-2 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
-            '[&:not(:first-child)]:border-l border-[var(--rule-strong)]',
-            selected ? option.selectedClass || 'bg-[var(--ink)] text-[var(--paper)]' : 'bg-[var(--paper)] text-[var(--ink-soft)] hover:text-[var(--ink)]'
+            '[&:not(:first-child)]:border-l border-[var(--border)]',
+            selected ? option.selectedClass || 'bg-[var(--text)] text-[var(--surface)]' : 'bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)]'
           )}
         >
           {option.label}
@@ -194,13 +194,13 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-[var(--ink)]/40" onClick={close} aria-hidden="true" />
+      <div className="absolute inset-0 bg-[var(--text)]/40" onClick={close} aria-hidden="true" />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative w-full sm:max-w-md sheet bg-[var(--paper)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3 max-h-[90vh] overflow-y-auto"
+        className="relative w-full sm:max-w-md sheet bg-[var(--surface)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-baseline justify-between gap-3">
           <h2 id={titleId} className="figure-md text-lg">
@@ -212,7 +212,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
             onClick={close}
             disabled={busy}
             aria-label="Close the order ticket"
-            className="ml-auto inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 -my-2 -mr-2 text-[var(--ink-soft)] hover:text-[var(--ink)]"
+            className="ml-auto inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 -my-2 -mr-2 text-[var(--text-muted)] hover:text-[var(--text)]"
           >
             <X className="w-4 h-4" />
           </button>
@@ -232,7 +232,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
               locked={busy}
               options={[
                 { id: 'BUY', label: 'Buy', selectedClass: 'bg-[var(--gain)] text-white' },
-                { id: 'SELL', label: 'Sell', selectedClass: 'bg-[var(--loss)] text-[var(--paper)]' },
+                { id: 'SELL', label: 'Sell', selectedClass: 'bg-[var(--loss)] text-[var(--surface)]' },
               ]}
             />
             {hasMine === false && (
@@ -275,7 +275,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
                   value={quantity}
                   onChange={(e) => edit(setQuantity)(e.target.value)}
                   disabled={busy}
-                  className="w-full bg-transparent border-0 border-b-2 border-[var(--rule-strong)] focus:border-[var(--stamp)] focus:ring-0 py-2 figure-md"
+                  className="w-full bg-transparent border-0 border-b-2 border-[var(--border)] focus:border-[var(--accent)] focus:ring-0 py-2 figure-md"
                 />
               </label>
               {orderType === 'LIMIT' && (
@@ -289,14 +289,14 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
                     value={limitPrice}
                     onChange={(e) => edit(setLimitPrice)(e.target.value)}
                     disabled={busy}
-                    className="w-full bg-transparent border-0 border-b-2 border-[var(--rule-strong)] focus:border-[var(--stamp)] focus:ring-0 py-2 figure-md"
+                    className="w-full bg-transparent border-0 border-b-2 border-[var(--border)] focus:border-[var(--accent)] focus:ring-0 py-2 figure-md"
                   />
                 </label>
               )}
             </div>
             {estimate != null && <p className="doc-meta normal-case">About {formatCurrency(estimate)}</p>}
 
-            {card && <p className="text-sm border border-[var(--rule-strong)] bg-[var(--paper-sunk)] px-3 py-2">{card.summary}</p>}
+            {card && <p className="text-sm border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">{card.summary}</p>}
             {confirmToken && (
               <p className="doc-meta normal-case">
                 Real money.{' '}
@@ -316,7 +316,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
               </Button>
             ) : (
               <Button
-                className={cn('w-full', confirmToken && 'bg-[var(--stamp)] border-[var(--stamp)]')}
+                className={cn('w-full', confirmToken && 'bg-[var(--accent)] border-[var(--accent)]')}
                 onClick={confirm}
                 disabled={busy || arming}
               >

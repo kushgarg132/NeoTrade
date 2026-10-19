@@ -32,17 +32,17 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--paper-sunk)] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[var(--surface-2)] flex items-center justify-center p-4">
       <div className="w-full max-w-sm sheet">
-        <div className="px-6 py-5 border-b border-[var(--rule-strong)] text-center">
-          <h1 className="font-[family-name:var(--font-narrow)] font-bold uppercase tracking-[0.2em] text-sm">
+        <div className="px-6 py-5 border-b border-[var(--border)] text-center">
+          <h1 className="font-[family-name:var(--font-narrow)] font-bold text-sm">
             Contract Note
           </h1>
           <p className="doc-meta mt-1.5">NeoTrade · NSE · {formatNoteDate()}</p>
         </div>
 
         <div className="px-6 py-8">
-          <p className="text-sm text-[var(--ink)] mb-5">
+          <p className="text-sm text-[var(--text)] mb-5">
             A journal and guardrails for your own trading, on top of the broker you already use.
           </p>
           <dl className="space-y-4 mb-8">
@@ -53,7 +53,7 @@ const Login = () => {
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="field-label">{label}</dt>
-                <dd className="text-sm text-[var(--ink-soft)] mt-0.5">{value}</dd>
+                <dd className="text-sm text-[var(--text-muted)] mt-0.5">{value}</dd>
               </div>
             ))}
           </dl>
@@ -71,7 +71,7 @@ const Login = () => {
           {brokerCode && (
             <p className="mt-5 doc-meta normal-case text-center">
               Sign in to finish connecting your broker. Your login code:{' '}
-              <span className="select-all break-all text-[var(--ink)]">{brokerCode}</span>
+              <span className="select-all break-all text-[var(--text)]">{brokerCode}</span>
             </p>
           )}
 
@@ -85,7 +85,7 @@ const Login = () => {
           )}
         </div>
 
-        <p className="px-6 py-3 border-t border-[var(--rule)] doc-meta text-center normal-case">
+        <p className="px-6 py-3 border-t border-[var(--border)] doc-meta text-center normal-case">
           Free while in beta. Not investment advice. NeoTrade never holds your money.
         </p>
       </div>

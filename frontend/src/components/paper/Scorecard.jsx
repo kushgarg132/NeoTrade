@@ -69,7 +69,7 @@ const Scorecard = ({ mode }) => {
           title="No closed paper trades yet"
           detail="Turn on the daily auto-run and the engine paper-trades every session by itself. Each closed trade lands here, net of charges."
           action={
-            <Link to="/lab/limits" className="field-label text-[var(--stamp)] hover:underline">
+            <Link to="/lab/limits" className="field-label text-[var(--accent)] hover:underline">
               Turn on auto-run
             </Link>
           }
@@ -123,16 +123,16 @@ const Scorecard = ({ mode }) => {
         <div className="flex items-center justify-between mb-2">
           <button
             type="button"
-            className="p-2 min-h-9 text-[var(--ink-soft)] hover:text-[var(--ink)]"
+            className="p-2 min-h-9 text-[var(--text-muted)] hover:text-[var(--text)]"
             onClick={() => setMonth(shiftMonth(shown, -1))}
             aria-label="Previous month"
           >
             <ChevronLeft size={16} />
           </button>
-          <span className="field-label text-[var(--ink)]">{monthLabel(shown)}</span>
+          <span className="field-label text-[var(--text)]">{monthLabel(shown)}</span>
           <button
             type="button"
-            className="p-2 min-h-9 text-[var(--ink-soft)] hover:text-[var(--ink)]"
+            className="p-2 min-h-9 text-[var(--text-muted)] hover:text-[var(--text)]"
             onClick={() => setMonth(shiftMonth(shown, 1))}
             aria-label="Next month"
           >

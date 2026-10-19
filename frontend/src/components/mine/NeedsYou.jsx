@@ -7,8 +7,8 @@ import SuggestionRecord from '../suggestions/SuggestionRecord';
 import api, { endpoints } from '../../utils/api';
 import { actionTarget } from '../../utils/mine';
 
-const LINK = 'field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center';
-const ICON = 'min-h-9 min-w-9 inline-flex items-center justify-center text-[var(--ink-faint)] hover:text-[var(--ink)]';
+const LINK = 'field-label text-[var(--accent)] hover:underline min-h-9 inline-flex items-center';
+const ICON = 'min-h-9 min-w-9 inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)]';
 const VERB = { ticket: 'Open ticket', stock: 'Open', tax: 'Open', rebalance: 'Plan' };
 
 /**
@@ -45,7 +45,7 @@ const NeedsYou = ({ actions, onChanged, limit }) => {
       {actions.length === 0 ? (
         <Empty title="You're clear." detail="Nothing on your holdings needs a decision right now." />
       ) : (
-        <ul className="divide-y divide-[var(--rule)]">
+        <ul className="divide-y divide-[var(--border)]">
           {rows.map((a) => {
             const target = actionTarget(a);
             const idea = a.action?.type === 'idea' ? ideas[a.action.suggestion_id] : null;
@@ -56,7 +56,7 @@ const NeedsYou = ({ actions, onChanged, limit }) => {
                     <p className="text-sm font-semibold">
                       {a.symbol && <Scrip symbol={a.symbol} />} <span className="ml-1">{a.title}</span>
                     </p>
-                    {a.detail && <p className="text-sm text-[var(--ink-soft)]">{a.detail}</p>}
+                    {a.detail && <p className="text-sm text-[var(--text-muted)]">{a.detail}</p>}
                   </div>
                   {target.to && !target.idea && (
                     <Link to={target.to} className={LINK}>
@@ -91,7 +91,7 @@ const NeedsYou = ({ actions, onChanged, limit }) => {
         </ul>
       )}
       {limit && actions.length > limit && (
-        <button type="button" onClick={() => setAll((v) => !v)} className="w-full py-3 field-label text-[var(--stamp)] hover:bg-[var(--paper-sunk)]">
+        <button type="button" onClick={() => setAll((v) => !v)} className="w-full py-3 field-label text-[var(--accent)] hover:bg-[var(--surface-2)]">
           {all ? `Show first ${limit}` : `Show ${actions.length - limit} more`}
         </button>
       )}

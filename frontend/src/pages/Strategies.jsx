@@ -49,7 +49,7 @@ const StrategyItem = ({ card, gate, short, open, onToggle, yours }) => {
           <ForwardBadge source="engine" name={card.name} />
           {card.built && <Badge variant="secondary">{yours ? 'Built · Yours' : 'Built'}</Badge>}
           {card.built && <Badge variant="neutral">{card.built.horizon === 'swing' ? 'Swing' : 'Intraday'}</Badge>}
-          <ChevronDown className={cn('ml-auto w-4 h-4 text-[var(--ink-faint)] transition-transform', open && 'rotate-180')} />
+          <ChevronDown className={cn('ml-auto w-4 h-4 text-[var(--text-muted)] transition-transform', open && 'rotate-180')} />
         </span>
         {card.built && (
           <span className="block text-sm mt-0.5">
@@ -81,7 +81,7 @@ const Rejected = ({ rows }) => {
   return (
     <details>
       <summary className="sheet cursor-pointer px-4 py-3 field-label">Tried and rejected</summary>
-      <ul className="sheet divide-y divide-[var(--rule)] px-4 mt-3 sm:mt-4">
+      <ul className="sheet divide-y divide-[var(--border)] px-4 mt-3 sm:mt-4">
         {rows.map((r) => (
           <li key={r.slug} className="py-2.5">
             <Badge variant="neutral">{r.horizon === 'swing' ? 'Swing' : 'Intraday'}</Badge>
@@ -156,12 +156,12 @@ const Strategies = () => {
         <Sheet
           title="Strategies"
           meta={cards ? counts.map(([n, label]) => `${n} ${label}`).join(' · ') : undefined}
-          actions={<Link to="/lab/limits" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Live switches ›</Link>}
+          actions={<Link to="/lab/limits" className="field-label text-[var(--accent)] hover:underline min-h-9 inline-flex items-center">Live switches ›</Link>}
         >
           <Tabs tabs={[{ id: 'INTRADAY', label: 'Intraday' }, { id: 'LONGTERM', label: 'Long-term' }]}
                 active={mode} onSelect={setMode} label="Strategy timeframe" className="static z-auto mb-1" />
           {loaded.mode === mode && loaded.failed ? <p className="text-sm py-2">Couldn’t load the strategies.</p> : cards === null ? <Ruling rows={5} /> : (
-            <ul className="divide-y divide-[var(--rule)]">
+            <ul className="divide-y divide-[var(--border)]">
               {cards.map((card) => (
                 <StrategyItem key={card.name} card={card} gate={gate(card.name)} short={short(card.name)} open={openName === card.name}
                               onToggle={() => setOpenName((n) => (n === card.name ? null : card.name))} yours={mineSlugs.has(card.name)} />
@@ -170,12 +170,12 @@ const Strategies = () => {
           )}
         </Sheet>
 
-        <div className="grid grid-cols-3 border border-[var(--rule-strong)]" role="tablist" aria-label="Which engine's record">
+        <div className="grid grid-cols-3 border border-[var(--border)]" role="tablist" aria-label="Which engine's record">
           {BOOKS.map((b) => (
             <button key={b.key} type="button" role="tab" aria-selected={b.key === book.key}
                     onClick={() => setParams(b.key === 'all' ? {} : { book: b.key }, { replace: true })}
                     className={cn('min-h-11 field-label touch-manipulation',
-                      b.key === book.key ? 'bg-[var(--ink)] text-[var(--paper)]' : 'text-[var(--ink-soft)] hover:text-[var(--ink)]')}>
+                      b.key === book.key ? 'bg-[var(--text)] text-[var(--surface)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]')}>
               {b.label}
             </button>
           ))}

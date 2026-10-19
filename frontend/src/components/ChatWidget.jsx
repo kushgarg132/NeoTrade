@@ -69,10 +69,10 @@ const ActionCard = ({ action, onUpdate }) => {
   };
 
   return (
-    <div className={cn('border px-3 py-2.5 text-sm', live ? 'border-[var(--loss)]' : 'border-[var(--rule-strong)]')}>
+    <div className={cn('border px-3 py-2.5 text-sm', live ? 'border-[var(--loss)]' : 'border-[var(--border)]')}>
       <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="field-label text-[var(--ink)]">Proposed change</span>
-        <span className={cn('field-label', live ? 'text-[var(--loss)]' : 'text-[var(--ink-soft)]')}>
+        <span className="field-label text-[var(--text)]">Proposed change</span>
+        <span className={cn('field-label', live ? 'text-[var(--loss)]' : 'text-[var(--text-muted)]')}>
           {live ? 'Live · real money' : action.card.venue === 'paper' ? 'Paper' : ''}
         </span>
       </div>
@@ -84,7 +84,7 @@ const ActionCard = ({ action, onUpdate }) => {
         </p>
       )}
       {action.note && action.state !== 'NEEDS_SECOND_TAP' && (
-        <p className={cn('mt-1.5', action.state === 'FAILED' ? 'text-[var(--loss)]' : 'text-[var(--ink-soft)]')}>
+        <p className={cn('mt-1.5', action.state === 'FAILED' ? 'text-[var(--loss)]' : 'text-[var(--text-muted)]')}>
           {action.note}
         </p>
       )}
@@ -94,7 +94,7 @@ const ActionCard = ({ action, onUpdate }) => {
             type="button"
             onClick={() => run('cancel')}
             disabled={busy}
-            className="min-h-9 border border-[var(--rule-strong)] field-label text-[var(--ink)] disabled:opacity-50"
+            className="min-h-9 border border-[var(--border)] field-label text-[var(--text)] disabled:opacity-50"
           >
             Cancel
           </button>
@@ -223,13 +223,13 @@ const ChatWidget = () => {
             expanded ? 'w-[min(34rem,calc(100vw-2rem))] h-[70vh]' : 'w-[min(22rem,calc(100vw-2rem))] h-[26rem]'
           )}
         >
-          <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--rule-strong)] bg-[var(--paper-sunk)]">
-            <span className="field-label text-[var(--ink)]">Margin note</span>
+          <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border)] bg-[var(--surface-2)]">
+            <span className="field-label text-[var(--text)]">Margin note</span>
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => setExpanded((value) => !value)}
-                className="p-1 text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                className="p-1 text-[var(--text-muted)] hover:text-[var(--text)]"
                 aria-label={expanded ? 'Shrink' : 'Expand'}
               >
                 {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
@@ -237,7 +237,7 @@ const ChatWidget = () => {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="p-1 text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                className="p-1 text-[var(--text-muted)] hover:text-[var(--text)]"
                 aria-label="Close"
               >
                 <X className="w-3.5 h-3.5" />
@@ -260,8 +260,8 @@ const ChatWidget = () => {
                   className={cn(
                     'inline-block text-left text-sm leading-relaxed px-3 py-2 border max-w-[92%]',
                     message.role === 'user'
-                      ? 'border-[var(--rule-strong)] bg-[var(--paper-sunk)]'
-                      : 'border-[var(--rule)]'
+                      ? 'border-[var(--border)] bg-[var(--surface-2)]'
+                      : 'border-[var(--border)]'
                   )}
                 >
                   <Markdown>{message.content}</Markdown>
@@ -277,7 +277,7 @@ const ChatWidget = () => {
                     key={question}
                     type="button"
                     onClick={() => send(question)}
-                    className="min-h-11 lg:min-h-0 px-2.5 py-1.5 border border-[var(--rule-strong)] text-xs text-[var(--ink)] hover:bg-[var(--stamp-soft)] active:bg-[var(--stamp-soft)] text-left touch-manipulation"
+                    className="min-h-11 lg:min-h-0 px-2.5 py-1.5 border border-[var(--border)] text-xs text-[var(--text)] hover:bg-[var(--accent-soft)] active:bg-[var(--accent-soft)] text-left touch-manipulation"
                   >
                     {question}
                   </button>
@@ -286,15 +286,15 @@ const ChatWidget = () => {
             )}
 
             {busy && (
-              <div className="flex items-center gap-2 text-[var(--ink-soft)]">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--stamp)] shrink-0" />
+              <div className="flex items-center gap-2 text-[var(--text-muted)]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)] shrink-0" />
                 <span className="doc-meta normal-case truncate">{thinking || 'Thinking…'}</span>
               </div>
             )}
             <div ref={endRef} />
           </div>
 
-          <form onSubmit={submit} className="flex items-center gap-2 px-3 py-2 border-t border-[var(--rule-strong)]">
+          <form onSubmit={submit} className="flex items-center gap-2 px-3 py-2 border-t border-[var(--border)]">
             <input
               ref={inputRef}
               value={input}
@@ -307,7 +307,7 @@ const ChatWidget = () => {
             <button
               type="submit"
               disabled={busy || !input.trim()}
-              className="p-1.5 text-[var(--stamp)] disabled:opacity-30"
+              className="p-1.5 text-[var(--accent)] disabled:opacity-30"
               aria-label="Send"
             >
               <Send className="w-4 h-4" />
@@ -319,7 +319,7 @@ const ChatWidget = () => {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="pointer-events-auto hidden lg:flex w-11 h-11 border border-[var(--rule-strong)] bg-[var(--paper)] text-[var(--ink)] items-center justify-center shadow-[var(--sheet-shadow)] hover:bg-[var(--stamp-soft)] transition-colors"
+        className="pointer-events-auto hidden lg:flex w-11 h-11 border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] items-center justify-center shadow-[var(--sheet-shadow)] hover:bg-[var(--accent-soft)] transition-colors"
         aria-label={open ? 'Close the margin note' : 'Open the margin note'}
       >
         {open ? <X className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />}

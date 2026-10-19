@@ -71,14 +71,14 @@ const Layout = ({ children }) => {
 
       <div role="status" aria-live="polite" className="fixed z-50 right-3 bottom-20 lg:bottom-4 w-[min(22rem,calc(100vw-1.5rem))] space-y-2">
         {alerts.map((alert) => (
-          <div key={alert.id} className="sheet px-3 py-2.5 shadow-lg flex gap-2 items-start bg-[var(--paper)]">
-            <Link to="/market?tab=news" onClick={() => dismiss(alert.id)} className="flex-1 min-w-0 text-sm hover:text-[var(--stamp)]">
+          <div key={alert.id} className="sheet px-3 py-2.5 shadow-lg flex gap-2 items-start bg-[var(--surface)]">
+            <Link to="/market?tab=news" onClick={() => dismiss(alert.id)} className="flex-1 min-w-0 text-sm hover:text-[var(--accent)]">
               <span className="block font-semibold">{alert.event || alert.title}</span>
               <span className="block doc-meta normal-case">
                 {(alert.hits || []).map((h) => `${h.target === 'INDIA' ? 'Market' : h.target} ${h.direction > 0 ? '↑' : '↓'} ${h.impact}/10`).join(' · ')}
               </span>
             </Link>
-            <button type="button" aria-label="Dismiss" onClick={() => dismiss(alert.id)} className="min-h-9 min-w-9 inline-flex items-center justify-center text-[var(--ink-faint)]">
+            <button type="button" aria-label="Dismiss" onClick={() => dismiss(alert.id)} className="min-h-9 min-w-9 inline-flex items-center justify-center text-[var(--text-muted)]">
               <X className="w-4 h-4" />
             </button>
           </div>

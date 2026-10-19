@@ -9,12 +9,12 @@ import { cn } from '../../utils/cn';
  */
 const STYLES =
   '[&_h1]:field-label [&_h2]:field-label [&_h3]:field-label [&_h4]:field-label ' +
-  '[&_h1]:text-[var(--ink)] [&_h2]:text-[var(--ink)] [&_h3]:text-[var(--ink)] [&_h4]:text-[var(--ink)] ' +
+  '[&_h1]:text-[var(--text)] [&_h2]:text-[var(--text)] [&_h3]:text-[var(--text)] [&_h4]:text-[var(--text)] ' +
   '[&_h1]:mt-4 [&_h2]:mt-4 [&_h3]:mt-4 [&_h4]:mt-3 [&_h1]:mb-1 [&_h2]:mb-1 [&_h3]:mb-1 [&_h4]:mb-1 ' +
-  '[&>*:first-child]:mt-0 [&_p]:my-1.5 [&_strong]:text-[var(--ink)] [&_strong]:font-semibold ' +
+  '[&>*:first-child]:mt-0 [&_p]:my-1.5 [&_strong]:text-[var(--text)] [&_strong]:font-semibold ' +
   '[&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-1 ' +
-  '[&_a]:text-[var(--stamp)] [&_a]:underline ' +
-  '[&_table]:w-full [&_td]:border [&_td]:border-[var(--rule)] [&_td]:px-1.5 [&_th]:border [&_th]:border-[var(--rule)] [&_th]:px-1.5';
+  '[&_a]:text-[var(--accent)] [&_a]:underline ' +
+  '[&_table]:w-full [&_td]:border [&_td]:border-[var(--border)] [&_td]:px-1.5 [&_th]:border [&_th]:border-[var(--border)] [&_th]:px-1.5';
 
 const Markdown = ({ children, className }) => {
   const html = useMemo(() => DOMPurify.sanitize(marked.parse(children || '')), [children]);

@@ -51,11 +51,11 @@ const TradingControlBar = ({
         <label htmlFor="universe-search" className="field-label block mb-1.5">
           Universe{' '}
           {universeSymbols.length === 0 && (
-            <span className="text-[var(--ink-faint)]">— default, 83 scrip</span>
+            <span className="text-[var(--text-muted)]">— default, 83 scrip</span>
           )}
         </label>
-        <div className="flex items-center gap-2 border-b border-[var(--rule-strong)] focus-within:border-[var(--stamp)]">
-          <Search className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
+        <div className="flex items-center gap-2 border-b border-[var(--border)] focus-within:border-[var(--accent)]">
+          <Search className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
           <input
             id="universe-search"
             value={query}
@@ -73,13 +73,13 @@ const TradingControlBar = ({
                 <button
                   type="button"
                   onClick={() => add(match.tradingsymbol)}
-                  className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left border-b border-[var(--rule)] last:border-b-0 hover:bg-[var(--stamp-soft)]"
+                  className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--accent-soft)]"
                 >
                   <span className="figure-md text-sm inline-flex items-center gap-1.5">
                     <StockIcon symbol={match.tradingsymbol} />
                     {match.tradingsymbol}
                   </span>
-                  <span className="text-xs text-[var(--ink-soft)] truncate">{match.name}</span>
+                  <span className="text-xs text-[var(--text-muted)] truncate">{match.name}</span>
                 </button>
               </li>
             ))}

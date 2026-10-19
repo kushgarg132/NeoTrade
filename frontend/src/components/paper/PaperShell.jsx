@@ -11,9 +11,9 @@ import { AI_TABS } from '../layout/sections';
 const PaperShell = ({ children, tabs = AI_TABS, label = 'AI account' }) => (
   <div className="private space-y-3 sm:space-y-4">
     <SectionTabs tabs={tabs} label={label} />
-    <div className="border-2 border-dashed border-[var(--stamp)] bg-[var(--stamp-soft)]">
+    <div className="border-2 border-dashed border-[var(--accent)] bg-[var(--accent-soft)]">
       <div className="flex items-baseline justify-between gap-3 px-3 py-1.5 sm:px-4 sm:pt-2.5 sm:pb-2">
-        <p className="font-[family-name:var(--font-narrow)] text-xs font-bold uppercase tracking-[0.16em] text-[var(--stamp)]">
+        <p className="font-[family-name:var(--font-narrow)] text-xs font-bold text-[var(--accent)]">
           AI account · paper
         </p>
         <p className="doc-meta normal-case text-right">

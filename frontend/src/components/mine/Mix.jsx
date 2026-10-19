@@ -4,7 +4,7 @@ import { formatPercent } from '../../utils/formatters';
 
 const Line = ({ label, children }) => (
   <div className="flex items-baseline justify-between gap-4 py-1.5">
-    <span className="text-sm text-[var(--ink-soft)]">{label}</span>
+    <span className="text-sm text-[var(--text-muted)]">{label}</span>
     <span className="figure-md text-sm tabular-nums text-right">{children}</span>
   </div>
 );
@@ -26,11 +26,11 @@ const Mix = ({ concentration, count }) => (
       {concentration.sectors.map((sector) => (
         <li key={sector.sector}>
           <div className="flex justify-between text-sm">
-            <span className="text-[var(--ink-soft)]">{sector.sector}</span>
+            <span className="text-[var(--text-muted)]">{sector.sector}</span>
             <span className="figure-md">{formatPercent(sector.pct)}</span>
           </div>
-          <div className="h-1.5 bg-[var(--paper-sunk)] mt-1" aria-hidden="true">
-            <div className="h-full bg-[var(--ink)]" style={{ width: `${Math.min(sector.pct, 100)}%` }} />
+          <div className="h-1.5 bg-[var(--surface-2)] mt-1" aria-hidden="true">
+            <div className="h-full bg-[var(--text)]" style={{ width: `${Math.min(sector.pct, 100)}%` }} />
           </div>
         </li>
       ))}
@@ -40,7 +40,7 @@ const Mix = ({ concentration, count }) => (
         <p className="field-label mt-4 mb-1">Move together</p>
         <ul>
           {concentration.correlated.map((pair) => (
-            <li key={`${pair.a}-${pair.b}`} className="text-sm py-1 text-[var(--ink-soft)]">
+            <li key={`${pair.a}-${pair.b}`} className="text-sm py-1 text-[var(--text-muted)]">
               {pair.a} and {pair.b} — {pair.correlation.toFixed(2)} correlation over a year, closer to one
               bet than two
             </li>

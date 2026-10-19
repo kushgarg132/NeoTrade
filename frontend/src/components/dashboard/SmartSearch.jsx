@@ -103,11 +103,11 @@ const SmartSearch = ({ onSearch, isLoading, className, compact = false, autoFocu
       <label htmlFor={inputId} className={cn('field-label block mb-1.5', compact && 'sr-only')}>
         Scrip enquiry
       </label>
-      <div className="flex items-center gap-2 border-b-2 border-[var(--rule-strong)] focus-within:border-[var(--stamp)] transition-colors">
+      <div className="flex items-center gap-2 border-b-2 border-[var(--border)] focus-within:border-[var(--accent)] transition-colors">
         {isLoading || searching ? (
-          <Loader2 className="w-4 h-4 shrink-0 text-[var(--stamp)] animate-spin" />
+          <Loader2 className="w-4 h-4 shrink-0 text-[var(--accent)] animate-spin" />
         ) : (
-          <Search className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
+          <Search className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
         )}
         <input
           id={inputId}
@@ -138,7 +138,7 @@ const SmartSearch = ({ onSearch, isLoading, className, compact = false, autoFocu
           className={cn('absolute z-[35] mt-px sheet max-h-72 overflow-y-auto', compact ? 'right-0 w-[min(20rem,calc(100vw-1.5rem))]' : 'left-0 right-0')}
         >
           {matches.length === 0 ? (
-            <li className="px-3 py-3 text-sm text-[var(--ink-soft)]">
+            <li className="px-3 py-3 text-sm text-[var(--text-muted)]">
               No scrip matches “{query.trim()}”.
             </li>
           ) : (
@@ -149,15 +149,15 @@ const SmartSearch = ({ onSearch, isLoading, className, compact = false, autoFocu
                   onMouseEnter={() => setActive(index)}
                   onClick={() => choose(match.tradingsymbol)}
                   className={cn(
-                    'w-full text-left px-3 py-2.5 flex items-center justify-between gap-3 border-b border-[var(--rule)] last:border-b-0',
-                    index === active ? 'bg-[var(--stamp-soft)]' : 'bg-transparent'
+                    'w-full text-left px-3 py-2.5 flex items-center justify-between gap-3 border-b border-[var(--border)] last:border-b-0',
+                    index === active ? 'bg-[var(--accent-soft)]' : 'bg-transparent'
                   )}
                 >
                   <span className="figure-md text-sm shrink-0 inline-flex items-center gap-1.5">
                     <StockIcon symbol={match.tradingsymbol} />
                     {match.tradingsymbol}
                   </span>
-                  <span className="text-xs text-[var(--ink-soft)] truncate text-right flex-1 min-w-0">
+                  <span className="text-xs text-[var(--text-muted)] truncate text-right flex-1 min-w-0">
                     {match.name}
                   </span>
                   {quotes[match.tradingsymbol] && (
@@ -165,7 +165,7 @@ const SmartSearch = ({ onSearch, isLoading, className, compact = false, autoFocu
                       <span className="figure-md text-xs block">{formatCurrency(quotes[match.tradingsymbol].price)}</span>
                       <span
                         className={cn(
-                          'figure-md text-[0.625rem] block',
+                          'figure-md text-[12px] block',
                           quotes[match.tradingsymbol].change_pct >= 0 ? 'text-up' : 'text-down'
                         )}
                       >

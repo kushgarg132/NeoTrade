@@ -11,7 +11,7 @@ import { cn } from '../../utils/cn';
  */
 
 const MAX_FILTERS = 3;
-const FIELD = 'bg-transparent border-b border-[var(--rule-strong)] py-1 text-sm focus:outline-none focus:border-[var(--stamp)] min-h-11 sm:min-h-0';
+const FIELD = 'bg-transparent border-b border-[var(--border)] py-1 text-sm focus:outline-none focus:border-[var(--accent)] min-h-11 sm:min-h-0';
 const label = (code) => code.replace(/_/g, ' ');
 
 /** A starting value for one parameter: the first choice, else the low end of its range — or the high end
@@ -137,7 +137,7 @@ const HorizonForm = ({ horizon, vocab, onSubmitted }) => {
         )}
       </Row>
       {Object.entries(filters).map(([block, params]) => (
-        <div key={block} className="pl-3 border-l border-[var(--rule-strong)]">
+        <div key={block} className="pl-3 border-l border-[var(--border)]">
           <div className="flex items-center justify-between pt-2">
             <span className="field-label">{label(block)}</span>
             <button type="button" onClick={() => dropFilter(block)} className="text-xs underline min-h-11 sm:min-h-8 px-2">Remove</button>
@@ -150,8 +150,8 @@ const HorizonForm = ({ horizon, vocab, onSubmitted }) => {
         <span className="inline-flex" role="radiogroup" aria-label="Side">
           {[['long', 'Long'], ['short', 'Short']].map(([key, text]) => (
             <button key={key} type="button" role="radio" aria-checked={side === key} onClick={() => setSide(key)}
-                    className={cn('h-11 sm:h-8 px-4 text-xs border border-[var(--rule-strong)] -ml-px first:ml-0',
-                      side === key && 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]')}>
+                    className={cn('h-11 sm:h-8 px-4 text-xs border border-[var(--border)] -ml-px first:ml-0',
+                      side === key && 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]')}>
               {text}
             </button>
           ))}
@@ -163,8 +163,8 @@ const HorizonForm = ({ horizon, vocab, onSubmitted }) => {
           <span className="inline-flex" role="radiogroup" aria-label="Stop">
             {[['atr', 'ATR × n'], swing ? ['low', 'Swing low'] : ['bar', 'Setup bar']].map(([key, text]) => (
               <button key={key} type="button" role="radio" aria-checked={stopKind === key} onClick={() => setStopKind(key)}
-                      className={cn('h-11 sm:h-8 px-3 text-xs border border-[var(--rule-strong)] -ml-px first:ml-0',
-                        stopKind === key && 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]')}>
+                      className={cn('h-11 sm:h-8 px-3 text-xs border border-[var(--border)] -ml-px first:ml-0',
+                        stopKind === key && 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]')}>
                 {text}
               </button>
             ))}
@@ -199,7 +199,7 @@ const HorizonForm = ({ horizon, vocab, onSubmitted }) => {
       <p className={cn('text-sm py-2', preview.bad && 'text-[var(--loss)]')} aria-live="polite">{preview.text}</p>
       {error && <p className="text-sm text-[var(--loss)]" role="alert">{error}</p>}
       <button type="submit" disabled={busy || !name.trim() || preview.bad}
-              className="h-11 sm:h-9 px-4 text-xs bg-[var(--ink)] text-[var(--paper)] disabled:opacity-40">
+              className="h-11 sm:h-9 px-4 text-xs bg-[var(--text)] text-[var(--surface)] disabled:opacity-40">
         Test it
       </button>
     </form>
@@ -215,8 +215,8 @@ const NewStrategySheet = ({ vocab, onSubmitted }) => {
         <span className="inline-flex" role="radiogroup" aria-label="Horizon">
           {[['intraday', 'Intraday'], ['swing', 'Swing']].map(([key, text]) => (
             <button key={key} type="button" role="radio" aria-checked={horizon === key} onClick={() => setHorizon(key)}
-                    className={cn('h-11 sm:h-8 px-4 text-xs border border-[var(--rule-strong)] -ml-px first:ml-0',
-                      horizon === key && 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]')}>
+                    className={cn('h-11 sm:h-8 px-4 text-xs border border-[var(--border)] -ml-px first:ml-0',
+                      horizon === key && 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]')}>
               {text}
             </button>
           ))}

@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '../../utils/cn';
 import { chipLabel, tone } from '../../utils/news';
 
-const TONE = { pos: 'text-up', neg: 'text-down', flat: 'text-[var(--ink-soft)]' };
+const TONE = { pos: 'text-up', neg: 'text-down', flat: 'text-[var(--text-muted)]' };
 
 /** The news layer's read on one stock: signed sentiment and its latest headline.
  * `link={false}` inside a button row: a link may not nest in a button. */

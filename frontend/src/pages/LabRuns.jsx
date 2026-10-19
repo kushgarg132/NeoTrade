@@ -36,7 +36,7 @@ const LabRuns = () => {
         <SectionTabs tabs={LAB_TABS} label="Lab" />
         <Sheet title="Runs" meta={runs ? `${runs.length} latest` : undefined}
                actions={<button type="button" disabled={picked.length !== 2} onClick={() => setComparing(true)}
-                                className="min-h-11 sm:min-h-8 px-3 border border-[var(--rule-strong)] text-sm disabled:opacity-40">Compare</button>}>
+                                className="min-h-11 sm:min-h-8 px-3 border border-[var(--border)] text-sm disabled:opacity-40">Compare</button>}>
           {error && <p role="alert" className="text-sm text-[var(--loss)]">{error}</p>}
           {!error && runs === null && <p className="doc-meta">Loading…</p>}
           {runs && runs.length === 0 && <Empty title="No runs recorded yet" />}
@@ -47,7 +47,7 @@ const LabRuns = () => {
                   <tr><th className={TH}><span className="sr-only">Compare</span></th><th className={TH}>Created</th><th className={TH}>Kind</th><th className={TH}>Name</th>
                     <th className={TH}>Window</th><th className={TH}>Code</th><th className={TH}>CAGR</th><th className={TH}>Sharpe</th><th className={TH}>Max DD</th></tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--rule)]">
+                <tbody className="divide-y divide-[var(--border)]">
                   {runs.map((r) => (
                     <tr key={r.id}>
                       <td className={TD}>
@@ -74,7 +74,7 @@ const LabRuns = () => {
             {compareRows(a, b).length === 0 ? <Empty title="These runs share no numeric metrics" /> : (
               <table className="w-full text-sm">
                 <thead><tr><th className={TH}>Metric</th><th className={TH}>{a.name} · {(a.code_sha || '').slice(0, 7)}</th><th className={TH}>{b.name} · {(b.code_sha || '').slice(0, 7)}</th></tr></thead>
-                <tbody className="divide-y divide-[var(--rule)]">
+                <tbody className="divide-y divide-[var(--border)]">
                   {compareRows(a, b).map((row) => (
                     <tr key={row.key}><td className={TD}>{row.key}</td><td className={TD}>{fmtMetric(row.key, row.a)}</td><td className={TD}>{fmtMetric(row.key, row.b)}</td></tr>
                   ))}

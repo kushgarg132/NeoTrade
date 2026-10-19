@@ -12,14 +12,14 @@ export const Avatar = ({ src, name, size = 40 }) => {
         referrerPolicy="no-referrer"
         onError={() => setBroken(true)}
         style={style}
-        className="rounded-full object-cover shrink-0 border border-[var(--rule-strong)]"
+        className="rounded-full object-cover shrink-0 border border-[var(--border)]"
       />
     );
   }
   return (
     <span
       style={style}
-      className="rounded-full shrink-0 grid place-items-center bg-[var(--stamp-soft)] text-[var(--stamp)] font-semibold"
+      className="rounded-full shrink-0 grid place-items-center bg-[var(--accent-soft)] text-[var(--accent)] font-semibold"
       aria-hidden="true"
     >
       {(name || '?').trim().charAt(0).toUpperCase()}

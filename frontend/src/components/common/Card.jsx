@@ -13,14 +13,14 @@ Card.displayName = 'Card';
 const CardHeader = React.forwardRef(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('px-4 py-3 border-b border-[var(--rule)] bg-[var(--paper-sunk)]', className)}
+    className={cn('px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-2)]', className)}
     {...props}
   />
 ));
 CardHeader.displayName = 'CardHeader';
 
 const CardTitle = React.forwardRef(({ className, ...props }, ref) => (
-  <h3 ref={ref} className={cn('field-label text-[var(--ink)]', className)} {...props} />
+  <h3 ref={ref} className={cn('field-label text-[var(--text)]', className)} {...props} />
 ));
 CardTitle.displayName = 'CardTitle';
 

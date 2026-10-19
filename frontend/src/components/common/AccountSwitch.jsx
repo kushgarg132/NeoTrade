@@ -21,8 +21,8 @@ export const AccountSwitch = ({ account, setAccount, roles, hasBoth }) => {
           className={cn(
             'h-11 sm:h-8 px-3 text-xs border transition-colors',
             account === value
-              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-              : 'border-[var(--rule-strong)] text-[var(--ink-soft)] hover:border-[var(--ink)]',
+              ? 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]'
+              : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)]',
           )}
         >
           {label}

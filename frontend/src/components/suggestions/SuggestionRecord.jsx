@@ -29,13 +29,13 @@ const Conviction = ({ score, detailed = true }) => {
   const rule = Math.max(0, Math.min(1, score?.rule ?? 0));
   const bar = (
     <div
-      className="relative h-2.5 flex-1 border border-[var(--rule-strong)] bg-[var(--paper-sunk)]"
+      className="relative h-2.5 flex-1 border border-[var(--border)] bg-[var(--surface-2)]"
       role="img"
       aria-label={`Conviction ${final.toFixed(2)} of 1.00, rule component ${rule.toFixed(2)}, AI influence capped at ${AI_CAP}`}
     >
-      <div className="absolute inset-y-0 left-0 bg-[var(--ink)]" style={{ width: `${final * 100}%` }} />
+      <div className="absolute inset-y-0 left-0 bg-[var(--text)]" style={{ width: `${final * 100}%` }} />
       {/* The printed limit mark: AI can move the score at most this far. */}
-      <div className="absolute inset-y-[-3px] w-px bg-[var(--stamp)]" style={{ left: `${(1 - AI_CAP) * 100}%` }} />
+      <div className="absolute inset-y-[-3px] w-px bg-[var(--accent)]" style={{ left: `${(1 - AI_CAP) * 100}%` }} />
     </div>
   );
   if (!detailed) {
@@ -67,7 +67,7 @@ const Conviction = ({ score, detailed = true }) => {
  */
 const OptionTerms = ({ contract, quantity }) => (
   <>
-    <div className="mt-4 grid grid-cols-3 gap-3 py-3 border-y border-[var(--rule)]">
+    <div className="mt-4 grid grid-cols-3 gap-3 py-3 border-y border-[var(--border)]">
       <Field label="Strike" value={formatCurrency(contract.strike)} />
       <Field label="Expiry" value={contract.expiry ? formatNoteDate(new Date(contract.expiry)) : '—'} />
       <Field label="Lots" value={`${quantity / contract.lot_size} × ${contract.lot_size}`} />
@@ -78,7 +78,7 @@ const OptionTerms = ({ contract, quantity }) => (
       </span>
       <span className="figure-md text-sm">
         {formatCurrency(contract.premium_estimate)}
-        <span className="text-[var(--ink-faint)]"> ({formatCurrency(contract.premium_estimate * quantity)} total)</span>
+        <span className="text-[var(--text-muted)]"> ({formatCurrency(contract.premium_estimate * quantity)} total)</span>
       </span>
     </div>
     <div className="mt-1.5 flex items-baseline justify-between gap-4">
@@ -182,7 +182,7 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
         why ? (
           <OptionTerms contract={suggestion.option_contract} quantity={suggestion.quantity} />
         ) : (
-          <p className="mt-2 py-1.5 border-y border-[var(--rule)] figure-md text-xs flex flex-wrap gap-x-3">
+          <p className="mt-2 py-1.5 border-y border-[var(--border)] figure-md text-xs flex flex-wrap gap-x-3">
             <span>Strike {formatCurrency(suggestion.option_contract.strike)}</span>
             <span>
               Expiry{' '}
@@ -193,11 +193,11 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
       ) : (
         // Entry, stop, target and reward on one line; the risk in rupees is
         // under Why with the rest of the reasoning.
-        <p className="mt-2 py-1.5 border-y border-[var(--rule)] figure-md text-xs flex flex-wrap gap-x-3 gap-y-0.5">
+        <p className="mt-2 py-1.5 border-y border-[var(--border)] figure-md text-xs flex flex-wrap gap-x-3 gap-y-0.5">
           <span>Entry {formatCurrency(suggestion.entry_ref)}</span>
           <span className="text-down">Stop {formatCurrency(suggestion.stop)}</span>
           <span className="text-up">Target {formatCurrency(suggestion.target)}</span>
-          <span className="text-[var(--ink-soft)]">{ratio ? `1:${ratio.toFixed(1)}` : '—'}</span>
+          <span className="text-[var(--text-muted)]">{ratio ? `1:${ratio.toFixed(1)}` : '—'}</span>
         </p>
       )}
 
@@ -216,7 +216,7 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
           type="button"
           onClick={() => setWhy((value) => !value)}
           aria-expanded={why}
-          className="mt-2 min-h-9 inline-flex items-center gap-1 field-label text-[var(--stamp)] hover:underline"
+          className="mt-2 min-h-9 inline-flex items-center gap-1 field-label text-[var(--accent)] hover:underline"
         >
           Why
           {suggestion.reason_codes?.length > 0 && ` · ${suggestion.reason_codes.length} ground${suggestion.reason_codes.length === 1 ? '' : 's'}`}
@@ -240,9 +240,9 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
       )}
 
       {why && suggestion.ai_thesis && (
-        <blockquote className="mt-3 pl-3 border-l border-[var(--stamp)] text-sm text-[var(--ink-soft)] leading-relaxed">
+        <blockquote className="mt-3 pl-3 border-l border-[var(--accent)] text-sm text-[var(--text-muted)] leading-relaxed">
           <p className="field-label mb-1 flex items-center gap-1">
-            <Quote className="w-3 h-3 text-[var(--stamp)]" aria-hidden="true" />
+            <Quote className="w-3 h-3 text-[var(--accent)]" aria-hidden="true" />
             Thesis
           </p>
           <Markdown>{suggestion.ai_thesis}</Markdown>

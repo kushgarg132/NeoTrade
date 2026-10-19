@@ -8,7 +8,7 @@ const RequireAuth = ({ children }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--paper)]">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--surface)]">
         <p className="field-label" role="status">
           Retrieving note…
         </p>

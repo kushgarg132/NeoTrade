@@ -13,15 +13,15 @@ import { stockPath } from '../../utils/stocks';
 export const Sheet = ({ title, meta, actions, children, className, bodyClassName }) => (
   <section className={cn('sheet min-w-0', className)}>
     {(title || actions || meta) && (
-      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 px-3 py-2 sm:px-4 sm:py-2.5 border-b border-[var(--rule)] bg-[var(--paper-sunk)]">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pt-4">
         <div className="flex items-baseline gap-3 min-w-0">
-          {title && <h2 className="field-label text-[var(--ink)] shrink-0">{title}</h2>}
+          {title && <h2 className="text-[15px] font-semibold text-[var(--text)] shrink-0">{title}</h2>}
           {meta && <span className="doc-meta truncate min-w-0">{meta}</span>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2 max-w-full">{actions}</div>}
       </header>
     )}
-    <div className={cn('p-3 sm:p-4', bodyClassName)}>{children}</div>
+    <div className={cn('p-4', bodyClassName)}>{children}</div>
   </section>
 );
 
@@ -42,10 +42,10 @@ export const StockIcon = ({ symbol: raw, className }) => {
   const symbol = bareSymbol(raw)?.toUpperCase();
   const [failed, setFailed] = useState(null);
   if (!symbol) return null;
-  const box = 'inline-flex size-5 shrink-0 items-center justify-center border border-[var(--rule)]';
+  const box = 'inline-flex size-5 shrink-0 items-center justify-center border border-[var(--border)]';
   if (failed === symbol || missingLogos.has(symbol)) {
     return (
-      <span aria-hidden="true" className={cn(box, 'bg-[var(--paper-sunk)] text-[0.625rem] font-semibold text-[var(--ink-soft)]', className)}>
+      <span aria-hidden="true" className={cn(box, 'bg-[var(--surface-2)] text-[12px] font-semibold text-[var(--text-muted)]', className)}>
         {symbol[0]}
       </span>
     );
@@ -84,8 +84,8 @@ export const Scrip = ({ symbol: raw, children, className, icon = true }) => {
       to={stockPath(symbol)}
       onClick={(event) => event.stopPropagation()}
       className={cn(
-        'figure-md underline decoration-[var(--rule)] decoration-1 underline-offset-[3px]',
-        'hover:decoration-[var(--stamp)] hover:text-[var(--stamp)] transition-colors',
+        'figure-md underline decoration-[var(--border)] decoration-1 underline-offset-[3px]',
+        'hover:decoration-[var(--accent)] hover:text-[var(--accent)] transition-colors',
         icon && 'inline-flex items-center gap-1.5 max-w-full align-middle',
         className
       )}
@@ -112,7 +112,7 @@ export const Field = ({ label, value, tone, className }) => (
         'figure-md text-sm truncate',
         tone === 'up' && 'text-up',
         tone === 'down' && 'text-down',
-        tone === 'stamp' && 'text-[var(--stamp)]'
+        tone === 'stamp' && 'text-[var(--accent)]'
       )}
     >
       {value}
@@ -157,7 +157,7 @@ export const Statement = ({ columns, children, className, inline = false }) => (
   <div className={cn('sm:overflow-x-auto sm:-mx-4 sm:px-4', className)}>
     <table className={cn('statement w-full border-collapse text-sm', inline && 'statement-inline')}>
       <thead>
-        <tr className="border-b border-[var(--rule-strong)]">
+        <tr className="border-b border-[var(--border)]">
           {columns.map((column) => (
             <th
               key={column.key}
@@ -190,7 +190,7 @@ export const Row = ({ children, className, ...props }) => {
   );
   return (
     <tr
-      className={cn('border-b border-[var(--rule)] last:border-b-0', className)}
+      className={cn('border-b border-[var(--border)] last:border-b-0', className)}
       {...props}
     >
       {cells}
@@ -229,39 +229,21 @@ export const NetLine = ({ label, children, className }) => (
  * The rubber stamp. The one authored motion in this world: a decision lands
  * the way a stamp lands. Used only where something has actually been decided.
  */
-export const Stamp = ({ label, tone = 'stamp', animate = false, className }) => {
-  const colour =
-    tone === 'gain' ? 'var(--gain)' : tone === 'loss' ? 'var(--loss)' : 'var(--stamp)';
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center justify-center px-2.5 py-1 border-2 select-none',
-        'font-[family-name:var(--font-narrow)] text-[0.6875rem] font-bold uppercase tracking-[0.16em]',
-        animate && 'stamp-land',
-        className
-      )}
-      style={{
-        color: colour,
-        borderColor: colour,
-        opacity: 0.85,
-        transform: 'rotate(-4deg)',
-      }}
-    >
-      {label}
-    </span>
-  );
+export const Stamp = ({ label, tone = 'stamp', className }) => {
+  const kind = tone === 'gain' ? 'bg-[var(--gain-wash)] text-[var(--gain)]' : tone === 'loss' ? 'bg-[var(--loss-wash)] text-[var(--loss)]' : 'bg-[var(--accent-soft)] text-[var(--accent)]';
+  return <span className={cn('inline-flex items-center rounded-full px-2.5 min-h-6 text-[12px] font-semibold', kind, className)}>{label}</span>;
 };
 
 export const Empty = ({ title, detail, action, className }) => (
   <div
     className={cn(
-      'py-10 px-4 text-center border border-dashed border-[var(--rule)]',
+      'py-8 px-4 text-center rounded-[16px] border border-dashed border-[var(--border)]',
       className
     )}
   >
-    <p className="field-label text-[var(--ink)]">{title}</p>
+    <p className="text-[15px] font-semibold text-[var(--text)]">{title}</p>
     {detail && (
-      <p className="mt-2 text-sm text-[var(--ink-soft)] max-w-sm mx-auto">{detail}</p>
+      <p className="mt-1 text-[14px] text-[var(--text-muted)] max-w-sm mx-auto">{detail}</p>
     )}
     {action && <div className="mt-4 flex justify-center">{action}</div>}
   </div>
@@ -271,7 +253,7 @@ export const Empty = ({ title, detail, action, className }) => (
 export const Ruling = ({ rows = 3, className }) => (
   <div className={cn('space-y-3', className)} aria-hidden="true">
     {Array.from({ length: rows }).map((_, index) => (
-      <div key={index} className="h-3 border-b border-[var(--rule)]" />
+      <div key={index} className="h-4 rounded-[8px] bg-[var(--surface-2)]" />
     ))}
   </div>
 );
@@ -281,13 +263,7 @@ export const Ruling = ({ rows = 3, className }) => (
  * time instead of a scroll through all of them. Sticks under the masthead.
  */
 export const Tabs = ({ tabs, active, onSelect, label, className }) => (
-  <nav
-    aria-label={label}
-    className={cn(
-      'sticky top-[calc(var(--masthead-h)+env(safe-area-inset-top))] z-30 flex overflow-x-auto border-b border-[var(--rule-strong)] bg-[var(--paper)]',
-      className
-    )}
-  >
+  <nav aria-label={label} className={cn('flex gap-1 overflow-x-auto rounded-[12px] bg-[var(--surface-2)] p-1', className)}>
     {tabs.map((tab) => {
       const selected = tab.id === active;
       return (
@@ -297,20 +273,12 @@ export const Tabs = ({ tabs, active, onSelect, label, className }) => (
           aria-current={selected ? 'page' : undefined}
           onClick={() => onSelect(tab.id)}
           className={cn(
-            // Natural width, never truncated: when the labels outgrow a phone the strip scrolls.
-            'flex-1 shrink-0 min-h-11 px-2 inline-flex items-center justify-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors',
-            'font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.08em]',
-            selected
-              ? 'border-[var(--stamp)] text-[var(--ink)]'
-              : 'border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]'
+            'flex-1 shrink-0 min-h-11 px-3 rounded-[8px] inline-flex items-center justify-center gap-1.5 whitespace-nowrap text-[14px] font-medium transition-colors',
+            selected ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'
           )}
         >
           <span>{tab.label}</span>
-          {tab.count > 0 && (
-            <span className="figure-md px-1 text-[0.5625rem] leading-4 bg-[var(--stamp)] text-[var(--paper)]">
-              {tab.count}
-            </span>
-          )}
+          {tab.count > 0 && <span className="min-w-5 px-1 rounded-full bg-[var(--accent)] text-[var(--surface)] text-[12px] leading-5 text-center tabular-nums">{tab.count}</span>}
         </button>
       );
     })}

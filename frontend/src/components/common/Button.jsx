@@ -2,28 +2,21 @@ import React from 'react';
 import { cn } from '../../utils/cn';
 
 const VARIANTS = {
-  primary:
-    'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)] hover:bg-[var(--stamp)] hover:border-[var(--stamp)]',
-  secondary:
-    'bg-[var(--paper)] text-[var(--ink)] border-[var(--rule-strong)] hover:bg-[var(--paper-sunk)]',
-  outline:
-    'bg-transparent text-[var(--ink)] border-[var(--rule-strong)] hover:bg-[var(--paper-sunk)]',
-  glass: 'bg-transparent text-[var(--ink)] border-[var(--rule-strong)] hover:bg-[var(--paper-sunk)]',
-  ghost: 'bg-transparent text-[var(--ink-soft)] border-transparent hover:text-[var(--ink)] hover:bg-[var(--paper-sunk)]',
-  danger:
-    'bg-[var(--loss)] text-[var(--paper)] border-[var(--loss)] hover:brightness-110',
-  approve:
-    'bg-[var(--gain)] text-white border-[var(--gain)] hover:brightness-110',
+  primary: 'bg-[var(--accent)] text-[var(--surface)] border-transparent',
+  secondary: 'bg-[var(--surface-2)] text-[var(--text)] border-[var(--border)]',
+  outline: 'bg-transparent text-[var(--text)] border-[var(--border)]',
+  glass: 'bg-transparent text-[var(--text)] border-[var(--border)]',
+  ghost: 'bg-transparent text-[var(--text-muted)] border-transparent',
+  danger: 'bg-[var(--loss)] text-[var(--surface)] border-transparent',
+  approve: 'bg-[var(--gain)] text-[var(--surface)] border-transparent',
 };
 
-// Mobile-first heights meet the 44px WCAG touch-target minimum; the sm:
-// breakpoint reverts to the original compact sizing once a mouse/trackpad
-// (not a fingertip) is the likely pointer.
+// Touch targets stay 44px; `sm` is only a little tighter in width.
 const SIZES = {
-  sm: 'h-11 sm:h-8 px-3 text-[0.6875rem]',
-  md: 'h-11 sm:h-10 px-4 text-xs',
-  lg: 'h-12 px-6 text-sm',
-  icon: 'h-11 w-11 sm:h-9 sm:w-9',
+  sm: 'min-h-11 px-3 text-[14px]',
+  md: 'min-h-11 px-4 text-[15px]',
+  lg: 'min-h-12 px-6 text-[15px]',
+  icon: 'min-h-11 min-w-11',
 };
 
 const Button = React.forwardRef(
@@ -31,8 +24,8 @@ const Button = React.forwardRef(
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center gap-2 border font-[family-name:var(--font-narrow)] font-semibold uppercase tracking-[0.11em] transition-colors duration-150',
-        'disabled:opacity-40 disabled:pointer-events-none',
+        'inline-flex items-center justify-center gap-2 rounded-[12px] border font-semibold transition-colors',
+        'disabled:opacity-50 disabled:pointer-events-none',
         VARIANTS[variant] || VARIANTS.primary,
         SIZES[size] || SIZES.md,
         className

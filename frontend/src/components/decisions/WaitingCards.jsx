@@ -69,7 +69,7 @@ const WaitingCard = ({ card, now, onSettled }) => {
         <span className="text-sm flex-1 min-w-0">{card.summary}</span>
         <span className="doc-meta shrink-0">{minutesLeft(card.expires_at, now)} min left</span>
       </div>
-      {note && <p role="status" className="text-sm text-[var(--ink-soft)]">{note}</p>}
+      {note && <p role="status" className="text-sm text-[var(--text-muted)]">{note}</p>}
       {confirmToken && (
         <p className="doc-meta">
           Real money. <Countdown until={until} onExpire={() => reset(EXPIRED_NOTE)} />
@@ -84,7 +84,7 @@ const WaitingCard = ({ card, now, onSettled }) => {
           size="sm"
           onClick={confirm}
           disabled={busy !== null || arming}
-          className={confirmToken ? 'bg-[var(--stamp)] border-[var(--stamp)]' : undefined}
+          className={confirmToken ? 'bg-[var(--accent)] border-[var(--accent)]' : undefined}
         >
           {busy === 'confirm' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           {confirmToken ? 'Real money. Tap Confirm again' : 'Confirm'}
@@ -119,7 +119,7 @@ const WaitingCards = ({ venue }) => {
 
   return (
     <Sheet title="Waiting for you" meta={String(shown.length)}>
-      <ul className="divide-y divide-[var(--rule)]">
+      <ul className="divide-y divide-[var(--border)]">
         {shown.map((card) => (
           <WaitingCard key={card.id} card={card} now={now} onSettled={load} />
         ))}

@@ -75,7 +75,7 @@ const Rules = ({ rules }) => {
       ) : (
         <ul>
           {lines.map((line) => (
-            <li key={line} className="text-sm text-[var(--ink)] py-0.5">
+            <li key={line} className="text-sm text-[var(--text)] py-0.5">
               {line}
             </li>
           ))}
@@ -130,8 +130,8 @@ const LearningView = ({ data }) => {
             ) : (
               <ul>
                 {data.changes.map((c) => (
-                  <li key={`${c.at}:${c.strategy}:${c.rule}`} className="py-2 border-b border-[var(--rule)] last:border-b-0">
-                    <p className="text-sm text-[var(--ink)]">
+                  <li key={`${c.at}:${c.strategy}:${c.rule}`} className="py-2 border-b border-[var(--border)] last:border-b-0">
+                    <p className="text-sm text-[var(--text)]">
                       <span className="capitalize">{name(c.strategy)}</span> · {changeText(c)}
                     </p>
                     <p className="doc-meta normal-case mt-1">
@@ -187,8 +187,8 @@ const LearningView = ({ data }) => {
             <p className="field-label mb-1">AI ideas, tested before use</p>
             <ul>
               {data.hypotheses.map((h) => (
-                <li key={h.id} className="py-2 border-b border-[var(--rule)] last:border-b-0">
-                  <p className="text-sm text-[var(--ink)]">
+                <li key={h.id} className="py-2 border-b border-[var(--border)] last:border-b-0">
+                  <p className="text-sm text-[var(--text)]">
                     <span className="capitalize">{name(h.strategy)}</span> · {params(h.params)} ·{' '}
                     {IDEA_STATUS[h.status] || h.status}
                   </p>
@@ -209,8 +209,8 @@ const LearningView = ({ data }) => {
         ) : (
           <ul>
             {data.retunes.map((r) => (
-              <li key={r.strategy} className="py-2 border-b border-[var(--rule)] last:border-b-0">
-                <p className="text-sm text-[var(--ink)]">
+              <li key={r.strategy} className="py-2 border-b border-[var(--border)] last:border-b-0">
+                <p className="text-sm text-[var(--text)]">
                   <span className="capitalize">{name(r.strategy)}</span> ·{' '}
                   {r.accepted ? `changed to ${params(r.params)}` : 'kept its thresholds'}
                 </p>

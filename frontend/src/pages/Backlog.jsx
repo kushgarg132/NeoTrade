@@ -18,8 +18,8 @@ const AREAS = ['System', 'Data', 'Trading', 'AI', 'News', 'Journal', 'UI', 'Ops'
 const OPEN = [['doing', 'Doing'], ['next', 'Next'], ['idea', 'Ideas']];
 const CLOSED = [['done', 'Done'], ['dropped', 'Dropped']];
 const STATUSES = ['idea', 'next', 'doing', 'done', 'dropped'];
-const FIELD = 'w-full bg-transparent border-b border-[var(--rule-strong)] py-1 text-sm focus:outline-none focus:border-[var(--stamp)]';
-const SMALL_BUTTON = 'min-h-11 sm:min-h-8 px-2 border border-[var(--rule-strong)] text-sm disabled:opacity-40';
+const FIELD = 'w-full bg-transparent border-b border-[var(--border)] py-1 text-sm focus:outline-none focus:border-[var(--accent)]';
+const SMALL_BUTTON = 'min-h-11 sm:min-h-8 px-2 border border-[var(--border)] text-sm disabled:opacity-40';
 
 const Editor = ({ item, onSave }) => {
   const [draft, setDraft] = useState({ why: item.why, notes: item.notes });
@@ -164,7 +164,7 @@ const Backlog = () => {
     const rows = group(status);
     if (rows.length === 0) return <p className="doc-meta normal-case py-2">Nothing here.</p>;
     return (
-      <ul className="divide-y divide-[var(--rule)]">
+      <ul className="divide-y divide-[var(--border)]">
         {rows.map((item, index) => (
           <Item key={item.id} item={item} open={openId === item.id}
                 onToggle={() => setOpenId((id) => (id === item.id ? null : item.id))}
@@ -180,19 +180,19 @@ const Backlog = () => {
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
         <SectionTabs tabs={LAB_TABS} label="Lab" />
         <Sheet title="Future" meta={items ? `${items.filter((i) => !['done', 'dropped'].includes(i.status)).length} open` : undefined}>
-          <form onSubmit={add} className="flex flex-wrap items-end gap-2 pb-3 border-b border-[var(--rule)]">
+          <form onSubmit={add} className="flex flex-wrap items-end gap-2 pb-3 border-b border-[var(--border)]">
             <input aria-label="New item" placeholder="Add an idea…" maxLength={140} value={title}
                    onChange={(e) => setTitle(e.target.value)} className={cn(FIELD, 'flex-1 min-w-[12rem]')} />
             <select aria-label="Area" value={newArea} onChange={(e) => setNewArea(e.target.value)} className={cn(FIELD, 'w-auto')}>
               {AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
-            <button type="submit" className="min-h-11 px-3 text-sm border border-[var(--rule-strong)]">Add</button>
+            <button type="submit" className="min-h-11 px-3 text-sm border border-[var(--border)]">Add</button>
           </form>
           <div className="flex flex-wrap gap-1.5 py-2" role="group" aria-label="Filter by area">
             {['', ...AREAS].map((a) => (
               <button key={a || 'all'} type="button" aria-pressed={area === a} onClick={() => setArea(a)}
                       className={cn('min-h-9 px-2.5 field-label border',
-                        area === a ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]' : 'border-[var(--rule-strong)] text-[var(--ink-soft)]')}>
+                        area === a ? 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)]')}>
                 {a || 'All'}
               </button>
             ))}
@@ -202,7 +202,7 @@ const Backlog = () => {
             <>
               {OPEN.map(([status, label]) => (
                 <section key={status} className="mt-3">
-                  <h2 className="field-label text-[var(--ink)]">{label} · {group(status).length}</h2>
+                  <h2 className="field-label text-[var(--text)]">{label} · {group(status).length}</h2>
                   {list(status)}
                 </section>
               ))}

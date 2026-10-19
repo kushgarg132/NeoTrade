@@ -8,9 +8,9 @@ import { cn } from '../../utils/cn';
 
 // Identity is never colour alone: each series also differs in dash and is named in the legend.
 const SERIES = [
-  { key: 'value', label: 'Your value', color: 'var(--ink)', dash: undefined },
-  { key: 'invested', label: 'Money put in', color: 'var(--ink-faint)', dash: '5 4' },
-  { key: 'nifty_value', label: 'Same money in NIFTY', color: 'var(--stamp)', dash: '2 3' },
+  { key: 'value', label: 'Your value', color: 'var(--text)', dash: undefined },
+  { key: 'invested', label: 'Money put in', color: 'var(--text-muted)', dash: '5 4' },
+  { key: 'nifty_value', label: 'Same money in NIFTY', color: 'var(--accent)', dash: '2 3' },
 ];
 
 const compact = (v) => (v >= 1e7 ? `${(v / 1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v / 1e5).toFixed(1)}L` : `${Math.round(v / 1e3)}k`);
@@ -18,13 +18,13 @@ const short = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', m
 
 const CurveTip = ({ active, payload, label }) =>
   active && payload?.length ? (
-    <div className="sheet px-2.5 py-2 bg-[var(--paper)] text-xs space-y-0.5">
+    <div className="sheet px-2.5 py-2 bg-[var(--surface)] text-xs space-y-0.5">
       <p className="field-label">{short(label)}</p>
       {SERIES.map((s) => {
         const p = payload.find((x) => x.dataKey === s.key);
         return p && p.value != null ? (
           <p key={s.key} className="flex justify-between gap-4">
-            <span className="text-[var(--ink-soft)]">{s.label}</span>
+            <span className="text-[var(--text-muted)]">{s.label}</span>
             <span className="figure-md">{formatCurrency(p.value)}</span>
           </p>
         ) : null;
@@ -59,8 +59,8 @@ const ValueCurve = () => {
           aria-pressed={r === range}
           onClick={() => setRange(r)}
           className={cn(
-            'min-h-9 px-2.5 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em]',
-            r === range ? 'border-[var(--ink)] text-[var(--ink)]' : 'border-[var(--rule-strong)] text-[var(--ink-faint)]'
+            'min-h-9 px-2.5 border text-[12px] font-semibold',
+            r === range ? 'border-[var(--text)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)]'
           )}
         >
           {rangeLabel(r)}
@@ -79,7 +79,7 @@ const ValueCurve = () => {
         <Empty title="Not enough history yet" detail="The curve builds up from your imported trades, one point a trading day." />
       ) : (
         <>
-          <ul className="flex flex-wrap gap-x-4 gap-y-1 mb-2 text-xs text-[var(--ink-soft)]">
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 mb-2 text-xs text-[var(--text-muted)]">
             {SERIES.map((s) => (
               <li key={s.key} className="inline-flex items-center gap-1.5">
                 <svg width="22" height="6" aria-hidden="true">
@@ -92,9 +92,9 @@ const ValueCurve = () => {
           <div className="h-56 sm:h-72" role="img" aria-label={`Value ${formatCurrency(points.at(-1).value)} against ${formatCurrency(points.at(-1).invested)} put in, ${rangeLabel(range)}`}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                <CartesianGrid stroke="var(--rule)" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={short} tick={{ fontSize: 10, fill: 'var(--ink-faint)' }} minTickGap={40} tickLine={false} axisLine={{ stroke: 'var(--rule-strong)' }} />
-                <YAxis tickFormatter={compact} tick={{ fontSize: 10, fill: 'var(--ink-faint)' }} width={40} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
+                <CartesianGrid stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="date" tickFormatter={short} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} minTickGap={40} tickLine={false} axisLine={{ stroke: 'var(--border)' }} />
+                <YAxis tickFormatter={compact} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} width={40} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
                 <Tooltip content={<CurveTip />} />
                 {SERIES.map((s) => (
                   <Line key={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={2} strokeDasharray={s.dash} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} connectNulls />

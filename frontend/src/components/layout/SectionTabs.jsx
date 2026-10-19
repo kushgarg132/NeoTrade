@@ -11,7 +11,7 @@ const SectionTabs = ({ tabs, label }) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   return (
-  <nav aria-label={label} className="flex gap-1 overflow-x-auto border-b border-[var(--rule-strong)] -mx-1 px-1">
+  <nav aria-label={label} className="flex gap-1 overflow-x-auto border-b border-[var(--border)] -mx-1 px-1">
     {tabs.filter((tab) => !tab.admin || isAdmin).map((tab) => (
       <NavLink
         key={tab.to}
@@ -21,14 +21,14 @@ const SectionTabs = ({ tabs, label }) => {
           cn(
             // Five tabs fit a 390px phone at this size; wider screens get the roomier label.
             'shrink-0 px-2 sm:px-3 min-h-11 sm:min-h-9 flex items-center border-b-2 -mb-px transition-colors',
-            'font-[family-name:var(--font-narrow)] text-[0.6875rem] sm:text-xs font-semibold uppercase tracking-[0.06em] sm:tracking-[0.11em]',
-            isActive ? 'border-[var(--stamp)] text-[var(--ink)]' : 'border-transparent text-[var(--ink-faint)] hover:text-[var(--ink)]',
+            'font-[family-name:var(--font-narrow)] text-[12px] sm:text-xs font-semibold',
+            isActive ? 'border-[var(--accent)] text-[var(--text)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]',
           )
         }
       >
         {tab.label}
         {tab.counter && pending > 0 && (
-          <span className="ml-1.5 figure-md px-1 text-[0.5625rem] leading-4 bg-[var(--stamp)] text-[var(--paper)]">{pending}</span>
+          <span className="ml-1.5 figure-md px-1 text-[12px] leading-4 bg-[var(--accent)] text-[var(--surface)]">{pending}</span>
         )}
       </NavLink>
     ))}

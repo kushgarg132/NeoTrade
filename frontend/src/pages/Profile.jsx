@@ -25,7 +25,7 @@ const STYLES = [
 ];
 
 const inputClass =
-  'w-full bg-transparent border-b border-[var(--rule-strong)] py-1.5 text-sm focus:outline-none focus:border-[var(--stamp)]';
+  'w-full bg-transparent border-b border-[var(--border)] py-1.5 text-sm focus:outline-none focus:border-[var(--accent)]';
 
 const Counter = ({ value, limit }) => (
   <span className={cn('doc-meta', (value || '').length > limit && 'text-[var(--loss)]')}>
@@ -53,7 +53,7 @@ const TextArea = ({ id, label, hint, value, onChange, placeholder, rows = 4 }) =
     {hint && <p className="doc-meta normal-case mb-1.5">{hint}</p>}
     <textarea id={id} rows={rows} value={value || ''} placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-transparent border border-[var(--rule-strong)] p-2 text-sm focus:outline-none focus:border-[var(--stamp)] resize-y" />
+      className="w-full bg-transparent border border-[var(--border)] p-2 text-sm focus:outline-none focus:border-[var(--accent)] resize-y" />
   </div>
 );
 
@@ -66,8 +66,8 @@ const Segmented = ({ options, value, onChange, label }) => (
         className={cn(
           'h-11 sm:h-8 px-3 text-xs capitalize border transition-colors',
           value === option
-            ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-            : 'border-[var(--rule-strong)] text-[var(--ink-soft)] hover:border-[var(--ink)]',
+            ? 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]'
+            : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)]',
         )}>
         {option}
       </button>
@@ -91,10 +91,10 @@ const ChipInput = ({ id, label, hint, value = [], onChange, placeholder }) => {
       {hint && <p className="doc-meta normal-case mb-1.5">{hint}</p>}
       <div className="flex flex-wrap gap-1.5 mb-1.5">
         {value.map((item) => (
-          <span key={item} className="inline-flex items-center gap-1 pl-2 pr-1 h-8 text-xs border border-[var(--rule-strong)]">
+          <span key={item} className="inline-flex items-center gap-1 pl-2 pr-1 h-8 text-xs border border-[var(--border)]">
             {item}
             <button type="button" onClick={() => onChange(value.filter((v) => v !== item))}
-              className="p-1 text-[var(--ink-faint)] hover:text-[var(--loss)]" aria-label={`Remove ${item}`}>
+              className="p-1 text-[var(--text-muted)] hover:text-[var(--loss)]" aria-label={`Remove ${item}`}>
               <X className="w-3 h-3" />
             </button>
           </span>
@@ -167,7 +167,7 @@ const MemorySheet = ({ memories, onChange }) => {
       {memories.length === 0 ? (
         <Empty title="Nothing remembered yet" detail="Tell the assistant about a goal or a preference, or add one here." />
       ) : (
-        <ul className="divide-y divide-[var(--rule)]">
+        <ul className="divide-y divide-[var(--border)]">
           {memories.map((m) => (
             <li key={m.id} className="flex items-start gap-3 py-2.5">
               <div className="flex-1 min-w-0">
@@ -175,7 +175,7 @@ const MemorySheet = ({ memories, onChange }) => {
                 <p className="doc-meta">{m.source === 'chat' ? 'From chat' : 'Added by you'} · {formatDateTime(m.created_at)}</p>
               </div>
               <button type="button" onClick={() => remove(m.id)} aria-label="Delete memory"
-                className="p-2 text-[var(--ink-faint)] hover:text-[var(--loss)]">
+                className="p-2 text-[var(--text-muted)] hover:text-[var(--loss)]">
                 <Trash2 className="w-4 h-4" />
               </button>
             </li>
@@ -255,8 +255,8 @@ const Profile = () => {
                       <button key={id} type="button" aria-pressed={on}
                         onClick={() => set('styles')(on ? draft.styles.filter((s) => s !== id) : [...(draft.styles || []), id])}
                         className={cn('h-11 sm:h-8 px-3 text-xs border transition-colors',
-                          on ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-                            : 'border-[var(--rule-strong)] text-[var(--ink-soft)] hover:border-[var(--ink)]')}>
+                          on ? 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]'
+                            : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text)]')}>
                         {label}
                       </button>
                     );

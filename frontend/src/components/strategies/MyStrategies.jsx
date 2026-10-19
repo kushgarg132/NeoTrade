@@ -36,16 +36,16 @@ const MyStrategies = ({ built, refresh }) => {
   return (
     <Sheet title="Mine" meta={rows.length ? `${rows.length}` : undefined}
            actions={<button type="button" onClick={openForm} aria-expanded={open}
-                            className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">
+                            className="field-label text-[var(--accent)] hover:underline min-h-9 inline-flex items-center">
                       {open ? 'Close' : 'New strategy'}
                     </button>}>
       {open && (vocab
         ? <NewStrategySheet vocab={vocab} onSubmitted={() => { setOpen(false); refresh(); }} />
         : <p className="text-sm py-2">{vocabFailed ? 'Couldn’t load the building blocks.' : '…'}</p>)}
       {rows.length === 0 && !open && (
-        <p className="text-sm text-[var(--ink-soft)]">Build your own from the same blocks the AI uses. It must pass the same checks before it trades.</p>
+        <p className="text-sm text-[var(--text-muted)]">Build your own from the same blocks the AI uses. It must pass the same checks before it trades.</p>
       )}
-      <ul className="divide-y divide-[var(--rule)]">
+      <ul className="divide-y divide-[var(--border)]">
         {rows.map((r) => (
           <li key={r.slug} className="py-2.5">
             <span className="flex flex-wrap items-baseline gap-2">

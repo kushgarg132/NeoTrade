@@ -21,7 +21,7 @@ const DEFAULTS = { rule: 'cap', max_stock_pct: 15, max_sector_pct: 30, overrides
 const NumberField = ({ label, value, onChange, suffix, placeholder }) => (
   <label className="block min-w-0">
     <span className="field-label block mb-1">{label}</span>
-    <span className="flex items-baseline gap-1 border-b border-[var(--rule-strong)]">
+    <span className="flex items-baseline gap-1 border-b border-[var(--border)]">
       <input
         type="number"
         inputMode="decimal"
@@ -131,8 +131,8 @@ const Rebalance = ({ snapshot, onTrade }) => {
                 aria-checked={targets.rule === option.id}
                 onClick={() => chooseRule(option.id)}
                 className={cn(
-                  'min-h-11 sm:min-h-0 px-3 py-1.5 text-sm border border-[var(--rule-strong)] -ml-px first:ml-0',
-                  targets.rule === option.id ? 'bg-[var(--ink)] text-[var(--paper)]' : 'text-[var(--ink-soft)]'
+                  'min-h-11 sm:min-h-0 px-3 py-1.5 text-sm border border-[var(--border)] -ml-px first:ml-0',
+                  targets.rule === option.id ? 'bg-[var(--text)] text-[var(--surface)]' : 'text-[var(--text-muted)]'
                 )}
               >
                 {option.label}
@@ -178,7 +178,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
               <ul className="flex flex-wrap gap-2">
                 {candidates.map((c) => (
                   <li key={c.symbol}>
-                    <label className="inline-flex items-center gap-2 min-h-11 sm:min-h-0 px-2 py-1 border border-[var(--rule-strong)] cursor-pointer">
+                    <label className="inline-flex items-center gap-2 min-h-11 sm:min-h-0 px-2 py-1 border border-[var(--border)] cursor-pointer">
                       <input type="checkbox" checked={ticked.includes(c.symbol)} onChange={() => toggle(c.symbol)} />
                       <span className="figure-md text-sm">{c.symbol}</span>
                       <Badge variant="secondary">
@@ -213,7 +213,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
             <Empty title="Nothing to do" detail="Your holdings are already close to their targets." />
           ) : (
             <>
-              <ul className="sm:hidden divide-y divide-[var(--rule)]">
+              <ul className="sm:hidden divide-y divide-[var(--border)]">
                 {trades.map((t) => (
                   <li key={`${t.symbol}-${t.side}`} className="py-3">
                     <div className="flex items-baseline justify-between gap-3">

@@ -103,7 +103,7 @@ const OptionChain = () => {
           }
           bodyClassName="p-0"
         >
-          <div className="grid grid-cols-2 border-b border-[var(--rule-strong)]" role="tablist" aria-label="Underlying">
+          <div className="grid grid-cols-2 border-b border-[var(--border)]" role="tablist" aria-label="Underlying">
             {UNDERLYINGS.map((item) => (
               <button
                 key={item.id}
@@ -112,10 +112,10 @@ const OptionChain = () => {
                 aria-selected={underlying === item.id}
                 onClick={() => pickUnderlying(item.id)}
                 className={cn(
-                  'min-h-11 px-4 font-[family-name:var(--font-narrow)] text-xs font-semibold uppercase tracking-[0.11em] border-b-2 -mb-px transition-colors',
+                  'min-h-11 px-4 text-xs font-semibold border-b-2 -mb-px transition-colors',
                   underlying === item.id
-                    ? 'border-[var(--stamp)] text-[var(--ink)]'
-                    : 'border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]'
+                    ? 'border-[var(--accent)] text-[var(--text)]'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'
                 )}
               >
                 {item.label}
@@ -124,13 +124,13 @@ const OptionChain = () => {
           </div>
 
           {expiries && expiries.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-[var(--paper-sunk)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-[var(--surface-2)]">
               <label className="flex items-center gap-2">
                 <span className="field-label">Expiry</span>
                 <select
                   value={expiry || ''}
                   onChange={(event) => setExpiry(event.target.value)}
-                  className="bg-[var(--paper)] border border-[var(--rule-strong)] px-2 py-1 figure-md text-sm"
+                  className="bg-[var(--surface)] border border-[var(--border)] px-2 py-1 figure-md text-sm"
                 >
                   {expiries.map((date) => (
                     <option key={date} value={date}>
@@ -142,7 +142,7 @@ const OptionChain = () => {
               <button
                 type="button"
                 onClick={() => setAll((value) => !value)}
-                className="field-label text-[var(--stamp)] hover:underline"
+                className="field-label text-[var(--accent)] hover:underline"
               >
                 {all ? `Near the money only` : 'All strikes'}
               </button>
@@ -156,7 +156,7 @@ const OptionChain = () => {
               title="No option chain"
               detail={error}
               action={
-                <Link to="/settings" className="field-label text-[var(--stamp)] hover:underline">
+                <Link to="/settings" className="field-label text-[var(--accent)] hover:underline">
                   Broker settings
                 </Link>
               }
@@ -168,7 +168,7 @@ const OptionChain = () => {
           </Sheet>
         ) : (
           <Sheet title={chain.name} meta={formatNoteDate(new Date(`${chain.expiry}T00:00:00+05:30`))} bodyClassName="p-0">
-            <div className="grid grid-cols-3 gap-4 px-4 py-3 border-b border-[var(--rule)]">
+            <div className="grid grid-cols-3 gap-4 px-4 py-3 border-b border-[var(--border)]">
               <Field label="Spot" value={formatLevel(chain.spot)} />
               <Field label="At the money" value={chain.atm_strike == null ? '—' : formatLevel(chain.atm_strike)} />
               <Field label="Put / call OI" value={chain.pcr == null ? '—' : chain.pcr.toFixed(2)} />
@@ -176,10 +176,10 @@ const OptionChain = () => {
 
             <table className="w-full text-sm border-collapse table-fixed">
               <thead>
-                <tr className="border-b border-[var(--rule-strong)]">
+                <tr className="border-b border-[var(--border)]">
                   <th className="field-label py-2 px-2 text-left" scope="col" aria-label="Call open interest">OI</th>
                   <th className="field-label py-2 px-2 text-right" scope="col">Call</th>
-                  <th className="field-label py-2 px-2 text-center bg-[var(--paper-sunk)]" scope="col">Strike</th>
+                  <th className="field-label py-2 px-2 text-center bg-[var(--surface-2)]" scope="col">Strike</th>
                   <th className="field-label py-2 px-2 text-left" scope="col">Put</th>
                   <th className="field-label py-2 px-2 text-right" scope="col" aria-label="Put open interest">OI</th>
                 </tr>
@@ -193,30 +193,30 @@ const OptionChain = () => {
                     <tr
                       key={row.strike}
                       className={cn(
-                        'border-b border-[var(--rule)]',
-                        atm && 'border-y-2 border-y-[var(--stamp)]'
+                        'border-b border-[var(--border)]',
+                        atm && 'border-y-2 border-y-[var(--accent)]'
                       )}
                     >
-                      <td className={cn('py-2 px-2 align-top', callItm && 'bg-[var(--stamp-soft)]')}>
+                      <td className={cn('py-2 px-2 align-top', callItm && 'bg-[var(--accent-soft)]')}>
                         <span className="figure-md block">{oi(row.call)}</span>
                         <span className={cn('doc-meta normal-case', row.call?.oi_change > 0 ? 'text-up' : 'text-down')}>
                           {oiChange(row.call)}
                         </span>
                       </td>
-                      <td className={cn('py-2 px-2 text-right align-top', callItm && 'bg-[var(--stamp-soft)]')}>
+                      <td className={cn('py-2 px-2 text-right align-top', callItm && 'bg-[var(--accent-soft)]')}>
                         <span className="figure-md whitespace-nowrap">{premium(row.call)}</span>
-                        {ivShown(row.call?.iv) && <span className="block doc-meta normal-case whitespace-nowrap text-[0.625rem]">IV {row.call.iv.toFixed(1)}</span>}
+                        {ivShown(row.call?.iv) && <span className="block doc-meta normal-case whitespace-nowrap text-[12px]">IV {row.call.iv.toFixed(1)}</span>}
                       </td>
-                      <td className="py-2 px-1 text-center align-top bg-[var(--paper-sunk)]">
-                        <span className={cn('figure-md whitespace-nowrap', atm && 'text-[var(--stamp)]')}>
+                      <td className="py-2 px-1 text-center align-top bg-[var(--surface-2)]">
+                        <span className={cn('figure-md whitespace-nowrap', atm && 'text-[var(--accent)]')}>
                           {Math.round(row.strike).toLocaleString('en-IN')}
                         </span>
                       </td>
-                      <td className={cn('py-2 px-2 align-top', putItm && 'bg-[var(--stamp-soft)]')}>
+                      <td className={cn('py-2 px-2 align-top', putItm && 'bg-[var(--accent-soft)]')}>
                         <span className="figure-md whitespace-nowrap">{premium(row.put)}</span>
-                        {ivShown(row.put?.iv) && <span className="block doc-meta normal-case whitespace-nowrap text-[0.625rem]">IV {row.put.iv.toFixed(1)}</span>}
+                        {ivShown(row.put?.iv) && <span className="block doc-meta normal-case whitespace-nowrap text-[12px]">IV {row.put.iv.toFixed(1)}</span>}
                       </td>
-                      <td className={cn('py-2 px-2 text-right align-top', putItm && 'bg-[var(--stamp-soft)]')}>
+                      <td className={cn('py-2 px-2 text-right align-top', putItm && 'bg-[var(--accent-soft)]')}>
                         <span className="figure-md block">{oi(row.put)}</span>
                         <span className={cn('doc-meta normal-case', row.put?.oi_change > 0 ? 'text-up' : 'text-down')}>
                           {oiChange(row.put)}
