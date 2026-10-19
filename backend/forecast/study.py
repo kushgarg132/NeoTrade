@@ -74,6 +74,8 @@ def stats(ev: pd.DataFrame) -> dict:
         "p_beat_nifty": float((excess > 0).mean()),
         "mean_excess": float(excess.mean()),
         "median_excess": float(excess.median()),
+        "excess_p10": float(excess.quantile(0.1)),
+        "excess_p90": float(excess.quantile(0.9)),
     }
 
 

@@ -19,7 +19,7 @@ import pandas as pd
 
 from backend.core.market_calendar import add_trading_days
 from backend.datalayer import bars
-from backend.forecast import setups, study
+from backend.forecast import setups, similar, study
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +34,8 @@ HISTORY_START = date.fromisoformat(bars.DEEP_START)
 CAVEATS = [
     "Survivorship: the universe is today's stock list, so names that were delisted or dropped out are missing "
     "from history, which flatters past returns.",
-    "Every number is a base rate measured over this setup's past events (net of delivery charges), "
-    "not a forecast for this particular stock.",
+    "Every number is a base rate measured over past events (net of delivery charges): this setup's overall, "
+    "or, where testing showed it helps, the stock's most similar past setups.",
     "Past base rates can change; the walk-forward table shows how well they held out of sample.",
 ]
 
@@ -50,24 +50,36 @@ def compute(t: dict) -> tuple[dict, list[dict]]:
         r = results[s.name]
         if r["n"] < study.MIN_N:
             continue
+        ev = similar.event_features(t, study.events(t, s, fires[s.name]), fires[s.name])
+        r["similar"] = similar.validate(ev)
+        frames = similar._frames(t)
+        pool = ev[ev["exit"] < days[last]] if r["similar"]["personalised"] else None
         for symbol in fires[s.name].columns:
             col = fires[s.name][symbol].to_numpy()
             if not study.kept(col, s.horizon)[-1:] == [last]:
                 continue  # did not fire today, or today sits inside an open event's window
             day = days[last]
+            x = similar.features(t, symbol, last, float(col[last]), frames)
+            f = similar.forecast(pool, x) if pool is not None and x is not None else None
+            base = {"median": r["median"], "p10": r["p10"], "p90": r["p90"],
+                    "excess": {"median": r["median_excess"], "p10": r["excess_p10"], "p90": r["excess_p90"]}}
             picks.append({
                 "_id": f"{day.date()}:{s.name}:{symbol}",
                 "date": day.date().isoformat(), "symbol": symbol, "setup": s.name, "label": s.label,
                 "horizon": s.horizon,
                 "due_date": add_trading_days(day.date(), s.horizon + 1).isoformat(),
                 "entry_ref": float(t["close"][symbol].iat[last]),
-                "expected": {"median": r["median"], "p10": r["p10"], "p90": r["p90"]},
-                "p_up": r["p_up"], "p_beat_nifty": r["p_beat_nifty"], "n": r["n"],
-                "median_excess": r["median_excess"], "edge": r["walk_forward"]["edge"],
+                "expected": {k: f[k] for k in ("median", "p10", "p90", "excess")} if f else base,
+                "p_up": f["p_up"] if f else r["p_up"],
+                "p_beat_nifty": f["p_beat_nifty"] if f else r["p_beat_nifty"], "n": r["n"],
+                "median_excess": f["excess"]["median"] if f else r["median_excess"],
+                "edge": r["walk_forward"]["edge"],
+                "forecast": "similar" if f else "setup", "similar_n": f["n"] if f else None,
+                "features": dict(zip(similar.FEATURES, map(float, x))) if x is not None else None,
                 "explanation": s.explain(t, symbol, day),
                 "strength": float(col[last]),
             })
-    picks.sort(key=lambda p: (p["median_excess"] * p["p_beat_nifty"], p["strength"]), reverse=True)
+    picks.sort(key=rank_key, reverse=True)
     return results, picks[:MAX_PICKS]
 
 
@@ -161,6 +173,10 @@ async def _record_runs(db, t: dict, results: dict) -> None:
                 await store.record(kind="study", name=s.name, config={"horizon": s.horizon}, execution=DEFAULT,
                                    window=(days[0].date(), days[-1].date()), fingerprint=fp, folds=[],
                                    metrics=results[s.name])
+                if "similar" in results[s.name]:
+                    await store.record(kind="study", name=f"similar:{s.name}", config={"horizon": s.horizon, "k": similar.K},
+                                       execution=DEFAULT, window=(days[0].date(), days[-1].date()), fingerprint=fp,
+                                       folds=[], metrics=results[s.name]["similar"])
     except Exception as exc:
         logger.warning("lab runs for picks not recorded: %s", exc)
 
