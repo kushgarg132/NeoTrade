@@ -926,7 +926,7 @@ registration and public onboarding are deferred, not cancelled.
    market-hours and post-market decisions. *Status 2026-10-19: navigation, routes, one stock page and
    Journal guardrails done (tabs Today, Picks, AI, Portfolio, Journal, Lab); Today ordered by market phase (pre, session, post, closed). **Done, deployed 7cc5e93.***
 3. **Research Lab:** make experiment definitions, point-in-time inputs, costs/slippage,
-   backtests, purged walk-forward reports and comparisons first-class and reproducible. *Status 2026-10-19: step 3 done locally (run records, Lab › Runs list and compare); see the research-lab-core spec.*
+   backtests, purged walk-forward reports and comparisons first-class and reproducible. *Status: done 2026-10-19 (run records, Lab › Runs list and compare); see the research-lab-core spec.*
 4. **Forward record:** paper-trade and score every rule candidate before outcome; compare net
    returns and calibration to NIFTY. An unproven result stays labelled unproven.
 5. **ML ranking:** let a passing model rank or filter candidates, never own sizing or exits at

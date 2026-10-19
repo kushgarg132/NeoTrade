@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 88bff67
+verified_at: 8c6573d
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -120,7 +120,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 2. `pages/Profile.jsx`: `GET/PUT /profile` (`{profile{display_name,risk_appetite,horizon,goals,constraints,about_me,answer_style,memories[]},account{name,created_at}}`), `POST /profile/memories {text}` (max 50), `DELETE /profile/memories/{id}`.
 3. `pages/Handbook.jsx` (admin, `/lab/handbook`): five `?raw` markdown files, `utils/handbook.js::splitLive` swaps `<!-- live:deploy|jobs|news|data|ai -->` markers for `components/system/LivePanels.jsx` fed by `GET /system/status` (Jobs panel shows `data_alerts` as "Data alerts now"); panel actions: `POST /settings/llm-feature {feature,enabled}`, `POST /settings/lab {enabled}`, `POST /system/builder/run` (409 = already running).
 4. `pages/Backlog.jsx` (admin, `/lab/backlog`): `GET/POST /system/backlog`, `PATCH/DELETE /system/backlog/{id}`; optimistic writes roll back with the API message; reorder swaps `rank`.
-5. `pages/LabRuns.jsx` (admin, `/lab/runs`): `GET /lab/runs`; table of runs (created, kind, name, window, short code SHA, CAGR, Sharpe, max DD); tick two and Compare shows `utils/labRuns.js::compareRows` (the 7 summary metric keys, then numeric keys both runs share).
+5. `pages/LabRuns.jsx` (admin, `/lab/runs`): `GET /lab/runs`; table of runs (created, kind, name, window, short code SHA, CAGR, Sharpe, max DD); `utils/labRuns.js::flatMetrics` flattens each kind's payload (gate `summary`, factor `oos` with `vol` as volatility, retune `test.best`, builder/study top-level numbers; study has no CAGR/Sharpe so shows "—"). `fmtMetric` prints cagr/max_drawdown/volatility/alpha as 1 dp percent, sharpe/sortino/beta 2 dp, others 3 dp. Tick two and Compare shows `compareRows` (the 7 summary metric keys, then numeric keys both runs share).
 
 ### 9. Order ticket / chat actions (the only path to real orders from the UI)
 1. `OrderTicket` (Buy/Sell, CNC, market/limit) does `POST /orders/propose {symbol,side,quantity,product,order_type,limit_price,venue:'live'}` -> card `{id,summary,...}`; Confirm = `POST /chat/actions/{id}/confirm {confirm_token}`. Response `status:'NEEDS_SECOND_TAP'` stores its `confirm_token` and arms a second tap (button disabled 600 ms) that sends it; otherwise `result` is shown. Any edit or close cancels the card (`POST /chat/actions/{id}/cancel`); unmount also cancels. No response at all is reported as "may have gone through", never as failure.
