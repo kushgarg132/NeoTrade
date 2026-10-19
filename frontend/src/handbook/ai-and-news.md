@@ -92,6 +92,13 @@ skips with one info log line a day; per-user switches still apply inside it.
 - **Grounding** — `backend/ai/grounding.py`: figures in AI prose are checked against the facts
   the call received; dates, times and unrelated numbers are not treated as facts.
 
+## Stored AI text on the pages
+
+Four cards show AI text that was already written; opening a page never calls a model. A card is
+`components/ai/AiSummary.jsx::AiCard` ("AI summary" plus when it was written) and a 404 from the
+server reads as its empty state.
+
+
 ## The chat (every page, and Telegram)
 
 `backend/chat/`: each message carries a day snapshot (`context.py`) and the trader's

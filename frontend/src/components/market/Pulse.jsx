@@ -11,6 +11,9 @@ import { toneText } from '../ui/tone';
 import { sectorRows, breadth } from '../../utils/market';
 import { formatDateTime } from '../../utils/formatters';
 import { stockPath } from '../../utils/stocks';
+import { X } from 'lucide-react';
+import { AiCard, AiText, AiState } from '../ai/AiSummary';
+import useStored from '../../hooks/useStored';
 
 const REGIME = {
   risk_off: { label: 'Risk off', kind: 'alert' },
@@ -36,7 +39,56 @@ const loadToday = () => api.get(endpoints.today).then((r) => r.data.backdrop || 
 const loadMovers = () => api.get(endpoints.trendingStocks).then((r) => r.data);
 const loadSectors = () => api.get(endpoints.newsFeed, { params: { limit: 50, scope: 'SECTOR' } }).then((r) => sectorRows(r.data.items));
 
+const EXPLAINABLE = new Set(['^NSEI', '^NSEBANK', '^BSESN']); // the indices the explanation endpoint covers
+
+const Brief = () => {
+  const { data, status, retry } = useStored(endpoints.marketBrief);
+  const shown = REGIME[data?.regime];
+  return (
+    <AiCard title="Market today" asOf={data?.as_of}>
+      <AiState status={status} retry={retry} message="Could not load the market brief." />
+      {status === 'empty' && <Empty title="No brief yet" body="The market brief appears once the news desk has written one." />}
+      {status === 'ok' && (
+        <div className="space-y-2">
+          {shown && <Badge kind={shown.kind}>{shown.label}</Badge>}
+          <AiText text={data.text} />
+        </div>
+      )}
+    </AiCard>
+  );
+};
+
+/** Why an index moved: the existing explanation endpoint, called on tap. 503 means the model is off. */
+const IndexSheet = ({ index, onClose }) => {
+  const { data, status, code, retry } = useStored(endpoints.marketIndexAnalysis(index.symbol));
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={onClose}>
+      <div role="dialog" aria-label={`Why ${index.name} moved`} className="bg-[var(--bg)] w-full sm:max-w-xl max-h-[90vh] overflow-y-auto p-3 sm:p-4 rounded-t-[16px] sm:rounded-[16px]" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-end">
+          <button type="button" onClick={onClose} aria-label="Close" className="min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--text-muted)]"><X className="w-5 h-5" /></button>
+        </div>
+        <AiCard title={`Why ${index.name} moved`} asOf={data?.session?.date}>
+          {status === 'loading' && <Skeleton rows={4} />}
+          {status === 'error' && code === 503 && <ErrorLine message="Explanation unavailable right now" onRetry={retry} />}
+          {status === 'error' && code !== 503 && <ErrorLine message="Could not load the explanation." onRetry={retry} />}
+          {status === 'ok' && (
+            <>
+              <AiText text={data.analysis} />
+              {data.headlines?.length > 0 && (
+                <ul className="mt-3 list-disc pl-5 text-[13px] text-[var(--text-muted)]">
+                  {data.headlines.slice(0, 3).map((h) => <li key={h.title}>{h.title}</li>)}
+                </ul>
+              )}
+            </>
+          )}
+        </AiCard>
+      </div>
+    </div>
+  );
+};
+
 const Indices = () => {
+  const [open, setOpen] = useState(null);
   const [{ data, error }, retry] = useSection(loadIndices);
   const b = breadth(data || []);
   return (
@@ -48,8 +100,11 @@ const Indices = () => {
           <ListRow key={i.name} title={i.name} chevron={false}
                    sub={Number.isFinite(i.change) ? `${i.change > 0 ? '+' : ''}${i.change.toFixed(2)}` : null}
                    right={`${Number(i.value).toLocaleString('en-IN', { maximumFractionDigits: 2 })}  ${pct(i.percent / 100, { sign: true })}`}
-                   rightTone={tone(i.percent)} />
+                   rightTone={tone(i.percent)}
+                   chevron={EXPLAINABLE.has(i.symbol)}
+                   onClick={EXPLAINABLE.has(i.symbol) ? () => setOpen(i) : undefined} />
         ))}
+      {open && <IndexSheet index={open} onClose={() => setOpen(null)} />}
     </Card>
   );
 };
@@ -118,6 +173,7 @@ const Movers = () => {
 
 const Pulse = () => (
   <div className="space-y-3">
+    <Brief />
     <Indices />
     <Regime />
     <Sectors />
