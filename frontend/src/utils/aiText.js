@@ -1,5 +1,6 @@
 // Helpers for showing stored AI text. Pure.
 
+import { firstBody } from './aiMarkdown.js';
 const AMOUNT = /(?:₹|Rs\.?\s?)\d[\d,]*(?:\.\d+)?(?:\s?(?:lakhs?|crores?|cr|k)\b)?/gi;
 
 /** Text cut into [{ text, amount }] so rupee amounts can wear the privacy mask (`.figure-md`). */
@@ -26,8 +27,8 @@ export const splitThesis = (text) => {
   return { why: all.slice(0, at).join(' '), risk: all.slice(at).join(' ') };
 };
 
-/** The first sentence, cut to `max` characters with an ellipsis. */
+/** The first sentence of the body (markdown headings and meta lines skipped), cut to `max` characters. */
 export const oneLine = (text, max = 160) => {
-  const first = sentences(text)[0] || '';
+  const first = sentences(firstBody(text))[0] || '';
   return first.length > max ? `${first.slice(0, max - 1).trimEnd()}…` : first;
 };
