@@ -83,7 +83,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 8. Hooks: `useTopic` (latest-handler ref, subscribes once per topic), `useReconnect`, `useRefetchOn(topics, fn, delay=400)` (debounces a burst, also fires on reconnect).
 
 ### 3. Layout shell (every page)
-1. `Layout` loads `GET /mine/actions` (count -> `PendingContext`, badge on Mine) and `GET /today/attention` (`res.data.count` -> badge on Today), refreshes on `useTopic('suggestions')` and `useReconnect` (`components/Layout.jsx::loadPending/loadAttention`).
+1. `Layout` takes the one needs-you count from `hooks/useNeedCount.js::useNeedCount` (`utils/ideas.js::needCount` = `/mine/actions` rows other than `idea` + pending suggestions + admin Picks; Home's "N need you", the Ideas tile and the Ideas tab badge all use it; `PendingContext`) and `GET /today/attention` (`res.data.count` -> badge on Home), refreshed on `useTopic('suggestions')` and `useReconnect`. The Ideas page lists those rows under "Your holdings" (`components/ideas/HoldingActions.jsx`, grouped by `utils/ideas.js::groupHoldingActions`). Home's AI tile uses `utils/ai.js::aiBook`, the same as the AI page header.
 2. `useTopic('news')` pushes up to 3 toast alerts (`message.data` with `id`, `event|title`, `hits[{target,direction,impact}]`), auto-dismissed after 15 s, linking to `/portfolio/news`.
 3. Renders `Sidebar` (lg), `Masthead`, `<main>` wrapped in its own `ErrorBoundary`, `BottomNav` (phone), `ChatWidget`. `App.gated()` adds an outer `ErrorBoundary` + `Suspense` (pages are `React.lazy`) because a page crash before `<Layout>` mounts would otherwise be uncaught.
 
@@ -152,7 +152,7 @@ Old pages `Today`, `MineOverview`, `MineHoldings`, `MineTax`, `MineStock`, `Jour
 Redirects (`replace`, query string kept by `Moved` via `utils/routes.js::movedTarget`; `/mine/stock/:symbol` and `/research/stock/:symbol` -> `/stock/:symbol` via `StockMoved`): the table is `utils/routes.js::MOVED` (every old path to its final path in one hop; `routes.test.js` checks no chain), e.g. `/portfolio` -> `/money`, `/portfolio/holdings` -> `/money?tab=holdings`, `/portfolio/news` -> `/market?tab=news`, `/journal` -> `/money?tab=journal` (an old `?tab=habits|guardrails` becomes `jtab`), `/picks` -> `/ideas`, `/ai/book` -> `/ai?tab=positions`, `/lab` -> `/settings/lab/strategies`, `/lab/limits` -> `/settings?tab=limits`.
 
 ### Shell (`components/layout/`)
-- `tabs.js::MAIN_TABS`: Home `/` (badge `attention`), Money, Ideas (badge `pending`), AI, Market; `tabActive` keeps a tab lit on sub-paths. `BottomTabs` (phone) and `SideRail` (lg+) render it; `Header` is on every page (stock search via `dashboard/SmartSearch` -> `stockPath`, market/feed dot, privacy eye, theme, profile -> `/settings`). `Layout` owns the counts and passes them down.
+- `tabs.js::MAIN_TABS`: Home `/` (badge `attention`), Money, Ideas (badge `pending` = the needs-you count), AI, Market; `tabActive` keeps a tab lit on sub-paths. `BottomTabs` (phone) and `SideRail` (lg+) render it; `Header` is on every page (stock search via `dashboard/SmartSearch` -> `stockPath`, market/feed dot, privacy eye, theme, profile -> `/settings`). `Layout` owns the counts and passes them down.
 - `sections.js` keeps `PORTFOLIO_TABS`, `AI_TABS`, `LAB_TABS` for the old pages that still use `SectionTabs` (`LAB_TABS` points at `/settings/lab/*`).
 
 ## Jobs and schedules
