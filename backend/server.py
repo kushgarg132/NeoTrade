@@ -229,6 +229,8 @@ from backend.routers import mine as mine_router
 app.include_router(mine_router.router, prefix=settings.API_PREFIX, tags=["Mine"], dependencies=[Depends(get_current_user)])
 from backend.routers import imports as imports_router
 app.include_router(imports_router.router, prefix=settings.API_PREFIX, tags=["Imports"], dependencies=[Depends(get_current_user)])
+from backend.routers import reports as reports_router
+app.include_router(reports_router.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
 from backend.routers import plan as plan_router
 app.include_router(plan_router.router, prefix=settings.API_PREFIX, tags=["Plan"], dependencies=[Depends(get_current_user)])
 # Admin-only (require_admin on the router) until the SEBI RA registration exists.

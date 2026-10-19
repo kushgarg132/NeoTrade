@@ -224,6 +224,7 @@ export const endpoints = {
     pnl: (venue, mode) => inMode('/analytics/pnl', venue, mode),
     scorecard: (venue, mode) => inMode('/analytics/scorecard', venue, mode),
   },
+  weeklyReport: (week) => (week ? `/reports/weekly?week=${encodeURIComponent(week)}` : '/reports/weekly'),
   today: '/today',
   todayAttention: '/today/attention',
   mine: {
