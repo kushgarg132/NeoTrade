@@ -11,7 +11,8 @@ and the deployment model lives in Mongo behind an admin check.
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Literal, Optional
 
 import httpx
@@ -59,6 +60,23 @@ class RebalanceTargets(BaseModel):
         return value
 
 
+IST = ZoneInfo("Asia/Kolkata")
+
+
+class GoalIn(BaseModel):
+    """value: portfolio worth `target` rupees; beat_nifty: `target` percentage points ahead of NIFTY."""
+    kind: Literal["value", "beat_nifty"]
+    target: float = Field(gt=0, allow_inf_nan=False)
+    by: date
+
+    @field_validator("by")
+    @classmethod
+    def _future(cls, value):
+        if value <= datetime.now(IST).date():
+            raise ValueError("the goal date must be in the future")
+        return value
+
+
 class PreferencesPatch(BaseModel):
     """Every field optional: the settings page saves one card at a time."""
     universe: Optional[list[str]] = None
@@ -88,6 +106,7 @@ class PreferencesPatch(BaseModel):
     picks_live: Optional[bool] = None
     rebalance_targets: Optional[RebalanceTargets] = None
     news_alerts: Optional[Literal["held", "held+watched", "all", "off"]] = None
+    goal: Optional[GoalIn] = None
 
     @field_validator("broker_roles")
     @classmethod
@@ -114,7 +133,24 @@ async def update_preferences(
     # No AI account means nothing for the autopilot to trade: switch it off.
     if "broker_roles" in fields and "ai" not in fields["broker_roles"].values():
         fields["autopilot_enabled"] = False
+    if "goal" in fields:
+        fields["goal"] = await _stamp_goal(user.id, fields["goal"], (await prefs.get(user.id)).get("goal"))
     return await prefs.update(user.id, fields)
+
+
+async def _stamp_goal(user_id: str, goal: dict, old: Optional[dict]) -> dict:
+    """Start date and value are the server's: editing the target keeps the
+    original start (progress is not reset), a new kind starts from today."""
+    goal["by"] = goal["by"].isoformat()
+    if old and old.get("kind") == goal["kind"] and old.get("start"):
+        return {**goal, "start": old["start"], "start_value": old.get("start_value")}
+    from backend.portfolio import digest
+
+    try:
+        pulse = await digest.pulse(db.db, user_id, datetime.now(timezone.utc))
+    except Exception:  # no snapshot yet: the goal still saves, progress falls back to the target alone
+        pulse = None
+    return {**goal, "start": datetime.now(IST).date().isoformat(), "start_value": (pulse or {}).get("value")}
 
 
 @router.get("/settings/autopilot/log")
