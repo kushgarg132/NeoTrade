@@ -53,6 +53,7 @@ from backend.engine.persistence import LedgerStore, mine_book
 from backend.ws.hub import hub
 from backend.ws.publish import publisher_for
 from backend.engine.portfolio import Portfolio
+from backend.forward.store import engine_recorder
 from backend.engine.runner import run
 from backend.runs import ACTIVE, RunStore
 from backend.instruments.master import InstrumentMaster
@@ -472,6 +473,7 @@ async def _launch_run(
         expand=(make_expand(master, feed, YFinanceProvider(), strategies, symbol_for_token, today)
                 if mode == "INTRADAY" else None),
         shadow_exit=_plan_shadow_exit(user_id),
+        forward=engine_recorder(db.db, user_id),
     )
     await runs.create(
         run_id=run_id, user_id=user_id, mode=mode,

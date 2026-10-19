@@ -7,6 +7,7 @@ difference is who presses the button.
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from backend.engine.runner import Proposal
@@ -57,8 +58,26 @@ class SuggestionSink:
         suggestion = await self.store.create(
             user_id=self.user_id, proposal=proposal, source=self.source, run_id=self.run_id,
         )
+        await self._forward(proposal)
         logger.info(
             "suggestion %s pending approval: %s %s x%s",
             suggestion["id"], proposal.order.side, proposal.order.symbol, proposal.order.quantity,
         )
         return False
+
+    async def _forward(self, proposal: Proposal) -> None:
+        """Forward-record the suggestion just created; never raises."""
+        try:
+            from backend.forward.store import ForwardStore
+
+            news = self.source == "news"
+            # ponytail: proposals carry no news theme yet; "news" until the reactor threads one through.
+            name = (getattr(proposal, "themes", None) or ["news"])[0] if news else self.source
+            await ForwardStore(self.store.collection.database).record(
+                source="news" if news else "suggestion", name=name, user_id=self.user_id,
+                symbol=proposal.order.symbol, side=getattr(proposal.order.side, "value", proposal.order.side),
+                decided_at=datetime.now(timezone.utc), intraday=False, ref_price=proposal.entry,
+                horizon_days=5 if news else (proposal.intent.max_hold_days or 20),
+            )
+        except Exception as exc:
+            logger.warning("forward record skipped: %s", exc)

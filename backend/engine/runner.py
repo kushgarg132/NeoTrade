@@ -7,6 +7,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Awaitable, Callable, Optional
 
 from backend.ai.sentiment import get_cached_sentiment
@@ -88,6 +89,16 @@ YIELD_EVERY_BARS = 200
 COST_MULTIPLE = 3
 
 
+async def _forward(forward, order: Order, intent: Intent, entry: float, ctx: StrategyContext) -> None:
+    """Forward-record an INTRADAY entry; never alters the order, never raises."""
+    if forward is None:
+        return
+    try:
+        await forward(order, intent, entry, ctx.now())
+    except Exception as exc:
+        logger.warning("forward record skipped for %s: %s", order.symbol, exc)
+
+
 async def size_intents(
     intents: list[Intent],
     portfolio: Portfolio,
@@ -107,6 +118,7 @@ async def size_intents(
     holders: Optional[dict[str, str]] = None,
     plan=None,
     skipped: Optional[dict] = None,
+    forward: Optional[Callable[[Order, Intent, float, datetime], Awaitable[None]]] = None,
 ) -> list[Order]:
     """Scores each Intent (backend.scoring.composite.score_intent, which
     caps AI's influence at AI_CAP regardless of what's passed here), then
@@ -237,6 +249,8 @@ async def size_intents(
                     "stop": intent.stop_hint, "target": intent.target_hint,
                     "mark": result.premium_estimate, "strategy_name": result.order.strategy_name,
                 }
+            if intraday:
+                await _forward(forward, result.order, intent, result.premium_estimate, ctx)
             orders.append(result.order)
             continue
 
@@ -328,6 +342,8 @@ async def size_intents(
             if not await order_sink(proposal):
                 continue  # the sink owns it now -- e.g. it became a suggestion
 
+        if opens and mode == "INTRADAY":
+            await _forward(forward, order, intent, entry, ctx)
         orders.append(order)
 
     return orders
@@ -453,6 +469,7 @@ async def run(
     plan=None,
     expand: Optional[Callable[[list[str]], Awaitable[list]]] = None,
     shadow_exit: Optional[Callable[[str, str], Awaitable[None]]] = None,
+    forward: Optional[Callable[[Order, Intent, float, datetime], Awaitable[None]]] = None,
 ) -> None:
     """`symbol_for_token` is not in the plan's pseudocode signature; it's
     needed because `Bar` identifies instruments by `instrument_token` while
@@ -610,7 +627,7 @@ async def run(
                 order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
                 master=master, premium_source=premium_source, option_legs=option_legs, learned=learned,
                 plan=plan,
-                strategies_by_name=strategies_by_name, holders=holders, skipped=progress,
+                strategies_by_name=strategies_by_name, holders=holders, skipped=progress, forward=forward,
             )
             held_by = {**owner_by_symbol, **{s: strategies_by_name[h] for s, h in holders.items() if h in strategies_by_name}}
             orders.extend(_square_off_orders(symbol, bar.timestamp, portfolio, held_by))

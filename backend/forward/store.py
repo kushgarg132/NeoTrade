@@ -67,3 +67,14 @@ class ForwardStore:
         if source:
             q["source"] = source
         return await self.col.find(q).to_list(length=None)
+
+
+def engine_recorder(db, user_id: str):
+    """The runner's `forward` hook: one INTRADAY entry -> one engine record."""
+    store = ForwardStore(db)
+
+    async def record(order, intent, entry: float, at: datetime) -> None:
+        await store.record(source="engine", name=order.strategy_name, user_id=user_id, symbol=order.symbol,
+                           side=order.side.value, decided_at=at, intraday=True, ref_price=entry, horizon_days=0)
+
+    return record

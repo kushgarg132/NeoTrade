@@ -165,6 +165,20 @@ async def _record_runs(db, t: dict, results: dict) -> None:
         logger.warning("lab runs for picks not recorded: %s", exc)
 
 
+async def _forward(db, new: list[dict], now: datetime) -> None:
+    """One forward record per new pick; never raises."""
+    try:
+        from backend.forward.store import ForwardStore
+
+        store = ForwardStore(db)
+        for p in new:
+            await store.record(source="picks", name=p["setup"], user_id="system", symbol=p["symbol"], side="BUY",
+                               decided_at=now, intraday=False, ref_price=p["entry_ref"], horizon_days=p["horizon"],
+                               predicted={"p_up": p["p_up"], "median": p["expected"]["median"]})
+    except Exception as exc:
+        logger.warning("forward records for picks not written: %s", exc)
+
+
 async def run(db, now: Optional[datetime] = None) -> dict:
     now = now or datetime.now(timezone.utc)
     t = await load(db, now)
@@ -178,6 +192,7 @@ async def run(db, now: Optional[datetime] = None) -> dict:
     new = [{**p, "created_at": now, "outcome": None} for p in today if p["_id"] not in known]
     if new:
         await db[PICKS].insert_many(new)
+        await _forward(db, new, now)
 
     scored = 0
     async for pick in db[PICKS].find({"outcome": None}):
