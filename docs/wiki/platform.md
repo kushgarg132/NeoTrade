@@ -299,7 +299,7 @@ Two supported paths, chosen once per session (host `/home/ubuntu/CLAUDE.md`, "De
 
 ## Import rules
 
-`backend/.importlinter` (run `lint-imports --config backend/.importlinter` from the repo root or `/app`): domain modules never import `backend.routers`; `backend.mine` and `backend.journal` never import `backend.autopilot`; nothing imports `backend.forecast.research`. Permissive on purpose; existing violations sit under `ignore_imports` as known debt, removed when fixed.
+`backend/.importlinter` (run `lint-imports --config backend/.importlinter` from the repo root or `/app`): domain modules never import `backend.routers`; `backend.mine` and `backend.journal` never import `backend.autopilot`; nothing imports `backend.forecast.research`. Only direct imports are checked (`allow_indirect_imports`); 14 existing domain-to-router imports sit under `ignore_imports` as known debt, removed when fixed.
 
 ## Gotchas and known issues
 
