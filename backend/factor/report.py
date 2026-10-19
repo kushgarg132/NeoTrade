@@ -9,12 +9,16 @@ STRATEGY_NAME. Network: yfinance (~25s for the Nifty 200).
 import argparse
 import asyncio
 import json
+import logging
+from dataclasses import asdict
 from datetime import datetime, timezone
 
 import pandas as pd
 
 from backend.factor import backtest, data
 from backend.factor.validate import grid, walk_forward
+
+logger = logging.getLogger(__name__)
 
 STRATEGY_NAME = "factor_momentum_lowvol"
 DSR_THRESHOLD = 0.95
@@ -50,6 +54,10 @@ def run(start: str = "2009-06-01", end=None) -> dict:
     benchmarks["Equal-weight Nifty 200 (same bias)"] = backtest.performance(
         backtest.equal_weight(closes, oos_start, oos_end))
     oos_years = len(wf.returns) / 252
+    from backend.lab.runs import fingerprint
+    from backend.lab.splits import yearly_folds
+    lab = {"fingerprint": fingerprint(closes), "variants": [asdict(p) for p in grid()],
+           "folds": [asdict(f) for f in yearly_folds([d.date() for d in closes.index], min_train_years=3, window_years=3)]}
     trial_costs = {str(p.momentum_weight) + "/" + str(p.top_n) + "/" + p.rebalance + "/" + str(p.target_vol):
                    r.metrics() for p, r in wf.trials.items()}
     return {
@@ -58,7 +66,7 @@ def run(start: str = "2009-06-01", end=None) -> dict:
         "verdict": verdict(strategy, benchmarks, wf.dsr, oos_years),
         "chosen": {y: f"mom={p.momentum_weight} n={p.top_n} {p.rebalance} vol={p.target_vol}"
                    for y, p in wf.chosen.items()},
-        "variants_full_period": trial_costs,
+        "variants_full_period": trial_costs, "lab": lab,
     }
 
 
@@ -77,6 +85,27 @@ async def _save(report: dict) -> None:
         "strategy_name": STRATEGY_NAME, "passed": report["verdict"]["passed"], "kind": "factor_walk_forward",
         "run_at": datetime.now(timezone.utc), "report": json.loads(json.dumps(report, default=str)),
     })
+    await _record_run(db.db, report)
+
+
+async def _record_run(database, report: dict) -> None:
+    """Best-effort lab run record for a saved report."""
+    try:
+        from datetime import date
+        from backend.lab.assumptions import DAILY
+        from backend.lab.runs import LabRunStore
+        from backend.lab.splits import Fold
+
+        lab = report.get("lab") or {}
+        folds = [Fold(**{k: date.fromisoformat(str(v)) if k != "year" else v for k, v in f.items()})
+                 for f in lab.get("folds", [])]
+        start, end = (date.fromisoformat(x) for x in report["window"])
+        await LabRunStore(database).record(
+            kind="factor", name=STRATEGY_NAME, config={"window": report["window"], "variants": lab.get("variants", [])},
+            execution=DAILY, window=(start, end), fingerprint=lab.get("fingerprint"), folds=folds,
+            metrics={"oos": report["oos"], "dsr": report["dsr"], "verdict": report["verdict"]})
+    except Exception as exc:
+        logger.warning("lab run for factor report not recorded: %s", exc)
 
 
 def main() -> None:

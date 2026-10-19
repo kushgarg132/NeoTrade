@@ -69,6 +69,26 @@ async def gate_universe(db, symbols=ALL_SCAN_STOCKS) -> tuple[list[Instrument], 
     return instruments, {i.instrument_token: i.tradingsymbol for i in instruments}
 
 
+async def _record_run(db, strategy_name: str, result: BacktestResult, account_size: float, now: datetime) -> None:
+    """Best-effort lab run record; never affects the gate."""
+    try:
+        from backend.lab.assumptions import DEFAULT
+        from backend.lab.metrics import daily_returns, summary
+        from backend.lab.runs import LabRunStore
+
+        start, end = now - timedelta(days=LOOKBACK_DAYS), now
+        admin = await db["users"].find_one({"role": "admin"}, {"id": 1})
+        await LabRunStore(db).record(
+            kind="engine", name=strategy_name, config={"lookback_days": LOOKBACK_DAYS}, execution=DEFAULT,
+            window=(start.date(), end.date()), fingerprint=None, folds=[],
+            metrics={"trades": result.total_trades, "pf": result.profit_factor, "dd": result.max_drawdown,
+                     "net": result.total_pnl,
+                     "summary": summary(daily_returns(result.trades, start, end, account_size))},
+            user_id=admin["id"] if admin else "system")
+    except Exception as exc:
+        logger.warning("lab run for gate %s not recorded: %s", strategy_name, exc)
+
+
 async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> BacktestResult:
     master = InstrumentMaster(db)
     options = strategy_name in OPTIONS_STRATEGIES
@@ -101,13 +121,15 @@ async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> 
     if not strategies:
         raise ValueError(f"No registered strategy named {strategy_name!r}")
 
+    account = await backtest_account(db)
     result = await run_backtest(
         strategies, provider, instruments, start=now - timedelta(days=LOOKBACK_DAYS), end=now,
         timeframe=strategies[0].spec.timeframe,
         model_options=ModelOptions(lot_sizes) if options else None,
-        **await backtest_account(db),
+        **account,
     )
     await BacktestGateStore(db).record(strategy_name, result)
+    await _record_run(db, strategy_name, result, account["account_size"], now)
     logger.info(
         "gate backtest %s: %d trades, PF %.2f, DD %.2f, %s..%s",
         strategy_name, result.total_trades, result.profit_factor, result.max_drawdown,

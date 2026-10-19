@@ -143,6 +143,21 @@ def variant(strategy, universe: list[str], symbol_for_token: dict[int, str], par
     return type(strategy)(universe, symbol_for_token, params, **kept)
 
 
+async def _record_run(db, name: str, doc: dict, start: datetime, end: datetime) -> None:
+    """Best-effort lab run record for one re-tune."""
+    try:
+        from backend.lab.assumptions import DEFAULT
+        from backend.lab.runs import LabRunStore
+
+        await LabRunStore(db).record(
+            kind="engine", name=f"retune:{name}", config={"window_days": (end - start).days}, execution=DEFAULT,
+            window=(start.date(), end.date()), fingerprint=None, folds=[],
+            metrics={"accepted": doc.get("accepted"), "reason": doc.get("reason"), "train": doc.get("train"),
+                     "test": doc.get("test")})
+    except Exception as exc:
+        logger.warning("lab run for retune %s not recorded: %s", name, exc)
+
+
 async def run_all(db, provider, now: datetime, intraday=None) -> list[dict]:
     """`provider` serves daily bars; `intraday` (or None, skipping them) 5-minute ones."""
     from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
@@ -190,6 +205,7 @@ async def run_all(db, provider, now: datetime, intraday=None) -> list[dict]:
             doc = {"strategy": name, "accepted": False, "reason": f"failed: {exc}"}
         doc["at"] = now
         await db["strategy_retunes"].insert_one(dict(doc))
+        await _record_run(db, name, doc, start, now)
         logger.info("re-tune %s: %s (%s)", name, "accepted" if doc["accepted"] else "kept", doc["reason"])
         docs.append(doc)
 

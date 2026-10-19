@@ -147,12 +147,31 @@ async def ensure_indexes(db) -> None:
         logger.error("picks indexes not created: %s", exc)
 
 
+async def _record_runs(db, t: dict, results: dict) -> None:
+    """One best-effort lab run per setup (event stats + walk-forward)."""
+    try:
+        from backend.lab.assumptions import DEFAULT
+        from backend.lab.runs import LabRunStore, fingerprint
+
+        days = t["close"].index
+        fp = await asyncio.to_thread(fingerprint, t["close"])
+        store = LabRunStore(db)
+        for s in setups.SETUPS:
+            if s.name in results:
+                await store.record(kind="study", name=s.name, config={"horizon": s.horizon}, execution=DEFAULT,
+                                   window=(days[0].date(), days[-1].date()), fingerprint=fp, folds=[],
+                                   metrics=results[s.name])
+    except Exception as exc:
+        logger.warning("lab runs for picks not recorded: %s", exc)
+
+
 async def run(db, now: Optional[datetime] = None) -> dict:
     now = now or datetime.now(timezone.utc)
     t = await load(db, now)
     if t is None:
         return {"picks": 0, "scored": 0}
     results, today = await asyncio.to_thread(compute, t)
+    await _record_runs(db, t, results)
     await db[STUDY].replace_one({"_id": "latest"}, {"as_of": now, "setups": list(results.values())}, upsert=True)
 
     known = set(await db[PICKS].distinct("_id", {"_id": {"$in": [p["_id"] for p in today]}}))

@@ -240,6 +240,20 @@ def _gate_reason(r) -> str:
     return "gate: failed"
 
 
+async def _record_run(db, doc: dict, fields: dict, start: datetime, end: datetime) -> None:
+    """Best-effort lab run record for one draft test."""
+    try:
+        from backend.lab.assumptions import DEFAULT
+        from backend.lab.runs import LabRunStore
+
+        await LabRunStore(db).record(
+            kind="engine", name=f"builder:{doc['slug']}", config={"spec": doc.get("spec")}, execution=DEFAULT,
+            window=(start.date(), end.date()), fingerprint=None, folds=[],
+            metrics={**fields["metrics"], "sharpe": fields["sharpe"]}, user_id=doc.get("owner_id") or "system")
+    except Exception as exc:
+        logger.warning("lab run for draft %s not recorded: %s", doc.get("slug"), exc)
+
+
 async def _test(db, doc: dict, backtest, kwargs: dict, now: datetime) -> tuple[str, str, dict]:
     """(status, verdict, fields) for one draft; records its gate row."""
     from backend.strategies.built import BlockStrategy
@@ -272,6 +286,7 @@ async def _test(db, doc: dict, backtest, kwargs: dict, now: datetime) -> tuple[s
                  "net": round(r.total_pnl, 2), "win_rate": round(r.win_rate, 4)},
         "holdout": {"trades": len(holdout), "net": hold_net}}}
     await BacktestGateStore(db).record(strategy.spec.name, r)
+    await _record_run(db, doc, fields, start, end)
     if not finite:
         return "rejected", "non-finite Sharpe", fields
     if not passes_gate(r):

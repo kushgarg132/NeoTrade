@@ -84,3 +84,13 @@ source_modules =
 allow_indirect_imports = True
 forbidden_modules =
     backend.forecast.research
+
+[importlinter:contract:lab-is-a-leaf]
+name = The research lab does not import HTTP routers or the autopilot
+type = forbidden
+source_modules =
+    backend.lab
+allow_indirect_imports = True
+forbidden_modules =
+    backend.routers
+    backend.autopilot

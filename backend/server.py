@@ -81,11 +81,13 @@ async def ensure_collection_indexes(d) -> None:
     """Indexes for collections whose stores have no ensure_indexes of their
     own. Unique ones back upserts that otherwise race into duplicates."""
     from backend.risk.backtest_gate import BacktestGateStore
+    from backend.lab.runs import LabRunStore
     from backend.risk.kill_switch import KillSwitchStore
 
     try:
         await BacktestGateStore(d).ensure_indexes()
         await KillSwitchStore(d).ensure_indexes()
+        await LabRunStore(d).ensure_indexes()
         await d["mine_action_state"].create_index([("user_id", 1), ("action_id", 1)], unique=True)
         await d["corporate_events"].create_index([("symbol", 1), ("kind", 1), ("date", 1)], unique=True)
         await d["corporate_events_meta"].create_index("symbol", unique=True)
