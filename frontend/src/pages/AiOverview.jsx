@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import EngineNow from '../components/paper/EngineNow';
 import TodayNet from '../components/paper/TodayNet';
@@ -16,6 +17,7 @@ import { formatCurrency } from '../utils/formatters';
     its capital, what the engine is doing now, today's paper money net of
     charges, and what it traded today. You vs the AI is on Today. */
 const AiOverview = () => {
+  const isAdmin = useAuth().user?.role === 'admin';
   const [data, setData] = useState(null);
   const [prefs, setPrefs] = useState(null);
   const [pnl, setPnl] = useState(null);
@@ -39,7 +41,7 @@ const AiOverview = () => {
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
         <SectionTabs tabs={AI_TABS} label="AI account" />
         <Sheet title="Autopilot" meta={ap ? (ap.enabled ? `On · ${ap.live ? 'live' : 'paper'}` : 'Off') : undefined}
-               actions={<Link to="/lab/limits" className="field-label text-[var(--stamp)] hover:underline">Settings ›</Link>}>
+               actions={isAdmin && <Link to="/lab/limits" className="field-label text-[var(--stamp)] hover:underline">Settings ›</Link>}>
           {!data ? <Ruling rows={3} /> : !ap ? (
             <p className="doc-meta normal-case">Couldn’t load the autopilot.</p>
           ) : (

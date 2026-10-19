@@ -2,8 +2,8 @@
 const ORDER = {
   pre: ['beforeOpen', 'picksTop', 'doToday', 'account', 'markets'],
   session: ['doToday', 'account', 'aiActivity', 'markets'],
-  post: ['afterClose', 'journalPrompt', 'scoreboard', 'account', 'aiActivity'],
-  closed: ['closedNote', 'afterClose', 'scoreboard', 'account'],
+  post: ['afterClose', 'doToday', 'journalPrompt', 'scoreboard', 'account', 'aiActivity'],
+  closed: ['closedNote', 'doToday', 'afterClose', 'scoreboard', 'account'],
 };
 
 // An old backend sends no phase: fall back to the session order.

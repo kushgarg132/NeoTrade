@@ -143,7 +143,7 @@ const MineHoldings = () => {
                 <button type="button" onClick={readNow} disabled={reading === 'busy'} className={cn(CHIP, 'border-[var(--ink)] text-[var(--ink)]')}>
                   {reading === 'busy' ? 'Reading…' : 'Read holdings now'}
                 </button>
-                <Link to="/import" className={cn(CHIP, 'border-[var(--ink)] text-[var(--ink)]')}>Import files</Link>
+                <Link to="/portfolio/import" className={cn(CHIP, 'border-[var(--ink)] text-[var(--ink)]')}>Import files</Link>
               </span>
               }
             />

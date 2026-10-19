@@ -1085,13 +1085,13 @@ const Settings = () => {
             {tab === 'ai' && (
               <>
                 <ModelSheet isAdmin={isAdmin} />
-                <Link
+                {isAdmin && <Link
                   to="/lab/limits"
                   className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors"
                 >
                   <span className="text-sm"><span className="field-label">Autopilot</span> switch and limits are under Lab › Autopilot limits</span>
                   <ArrowRight className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
-                </Link>
+                </Link>}
                 {isAdmin && <UsageSheet />}
               </>
             )}

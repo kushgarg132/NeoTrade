@@ -28,7 +28,7 @@ import { Sheet, Empty } from './components/doc/Doc';
 import { useAuth } from './context/AuthContext';
 import { stream } from './lib/ws';
 import RequireAdmin from './components/system/RequireAdmin';
-import { MOVED } from './utils/routes.js';
+import { MOVED, withSearch } from './utils/routes.js';
 
 const NotFound = () => (
   <Layout>
@@ -49,7 +49,7 @@ const NotFound = () => (
 /** A page that moved: same query string, new path. */
 const Moved = ({ to }) => {
   const { search } = useLocation();
-  return <Navigate to={`${to}${search}`} replace />;
+  return <Navigate to={withSearch(to, search)} replace />;
 };
 
 /** /journal?tab=patterns|learning now lives under the Habits tab. */

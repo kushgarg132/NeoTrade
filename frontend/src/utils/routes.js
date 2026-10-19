@@ -27,3 +27,12 @@ export const MOVED = [
   ['/decisions', '/portfolio'], ['/suggestions', '/portfolio'], ['/paper', '/ai'], ['/paper/decisions', '/portfolio'],
   ['/paper/holdings', '/ai/book'], ['/paper/engine', '/ai'], ['/paper/settings', '/lab/limits'], ['/trading', '/ai'],
 ];
+
+/** `to` plus the old URL's query; if `to` already has one, merge with `&` (the old URL's value wins). */
+export const withSearch = (to, search) => {
+  if (!search) return to;
+  const [path, q = ''] = to.split('?');
+  const merged = new URLSearchParams(q);
+  new URLSearchParams(search).forEach((v, k) => merged.set(k, v));
+  return `${path}?${merged}`;
+};

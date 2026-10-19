@@ -69,7 +69,7 @@ const MineTax = () => {
           detail="Tax is worked out from your trades, so it needs them first: a Zerodha Console tradebook CSV, or your Upstox history."
           action={
             <span className="flex flex-wrap justify-center gap-2">
-              <Link to="/import" className={`${BUTTON} inline-flex items-center`}>Import a tradebook</Link>
+              <Link to="/portfolio/import" className={`${BUTTON} inline-flex items-center`}>Import a tradebook</Link>
               <button type="button" className={BUTTON} onClick={importHistory} disabled={busy}>{busy ? 'Importing…' : 'Import Upstox history'}</button>
             </span>
           }

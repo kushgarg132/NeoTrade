@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ROUTES, ADMIN_ROUTES, MOVED } from './routes.js';
+import { ROUTES, ADMIN_ROUTES, MOVED, withSearch } from './routes.js';
 import { stockPath } from './stocks.js';
 
 test('every redirect lands on a real route in one hop', () => {
@@ -30,4 +30,11 @@ test('picks and lab are admin routes', () => {
 test('stockPath encodes', () => {
   assert.equal(stockPath('M&M'), '/stock/M%26M');
   assert.equal(stockPath('BAJAJ-AUTO.NS'), '/stock/BAJAJ-AUTO');
+});
+
+test('withSearch merges queries instead of doubling the ?', () => {
+  assert.equal(withSearch('/journal', ''), '/journal');
+  assert.equal(withSearch('/portfolio', '?a=1'), '/portfolio?a=1');
+  assert.equal(withSearch('/journal?tab=habits', '?x=1'), '/journal?tab=habits&x=1');
+  assert.equal(withSearch('/journal?tab=habits', '?tab=rules'), '/journal?tab=rules');
 });

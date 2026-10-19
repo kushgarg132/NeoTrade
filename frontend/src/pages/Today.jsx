@@ -11,6 +11,7 @@ import api, { endpoints, getPreferences } from '../utils/api';
 import { useRefetchOn } from '../hooks/useStream';
 import { cn } from '../utils/cn';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { useAuth } from '../context/AuthContext';
 import { stockPath } from '../utils/stocks';
 import { sectionsFor, digestLines } from '../utils/todayLayout';
 
@@ -35,6 +36,7 @@ const Chip = ({ to, tone = 'neutral', children }) => {
 };
 
 const StatusStrip = ({ data }) => {
+  const { user } = useAuth();
   const { market, accounts, live_armed: armed, kill_switch: kill } = data;
   return (
     <div className="sticky top-0 z-20 -mx-3 px-3 py-2 sm:-mx-4 sm:px-4 bg-[var(--paper)] border-b border-[var(--rule-strong)] flex flex-wrap gap-1.5">
@@ -50,12 +52,12 @@ const StatusStrip = ({ data }) => {
           : <Chip key={role} tone="bad" to="/settings?tab=accounts">{name} · log in ›</Chip>;
       })}
       {(armed?.autopilot || armed?.strategies?.length > 0) && (
-        // Goes where the armed thing is switched off: AI › Settings holds both.
-        <Chip tone="bad" to="/ai/settings">
+        // Admins switch it off in Lab › Autopilot limits; others stop it from AI activity.
+        <Chip tone="bad" to={user?.role === 'admin' ? '/lab/limits' : '/ai/activity'}>
           ▲ LIVE armed{armed.autopilot ? ' · autopilot' : ''}{armed.strategies?.length ? ` · ${armed.strategies.length} strateg${armed.strategies.length === 1 ? 'y' : 'ies'}` : ''}
         </Chip>
       )}
-      {kill?.tripped && <Chip tone="bad" to="/settings?tab=safety">Loss limit hit · trading stopped</Chip>}
+      {kill?.tripped && <Chip tone="bad" to="/journal?tab=guardrails">Loss limit hit · trading stopped</Chip>}
     </div>
   );
 };
@@ -128,8 +130,8 @@ const Pulse = ({ pulse, failed, now, actions, total, onChanged }) => {
     return (
       <Sheet title="Your account">
         <p className="text-sm">No portfolio read yet.</p>
-        <Link to="/mine/holdings" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Read it from your broker ›</Link>
-        <Link to="/import" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center ml-4">Or import your files ›</Link>
+        <Link to="/portfolio/holdings" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Read it from your broker ›</Link>
+        <Link to="/portfolio/import" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center ml-4">Or import your files ›</Link>
       </Sheet>
     );
   }
@@ -139,7 +141,7 @@ const Pulse = ({ pulse, failed, now, actions, total, onChanged }) => {
       <Sheet
         title="Your account"
         meta={`as of ${formatDateTime(pulse.as_of)}`}
-        actions={<Link to="/mine" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Mine ›</Link>}
+        actions={<Link to="/portfolio" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Mine ›</Link>}
       >
         <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="figure-lg">{formatCurrency(pulse.value)}</span>
@@ -158,7 +160,7 @@ const Pulse = ({ pulse, failed, now, actions, total, onChanged }) => {
       </Sheet>
       <NeedsYou actions={actions} limit={3} onChanged={onChanged} />
       {total > 0 && (
-        <Link to="/mine" className="block field-label text-[var(--stamp)] hover:underline min-h-9">
+        <Link to="/portfolio" className="block field-label text-[var(--stamp)] hover:underline min-h-9">
           See all {total} in Mine ›
         </Link>
       )}
@@ -175,8 +177,8 @@ const Scoreboard = ({ board }) => (
     ) : (
       <div className="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-2 items-baseline">
         <span />
-        <Link to="/mine/journal" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="mine" /></Link>
-        <Link to="/research/picks" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="ai" mode="picks" /></Link>
+        <Link to="/journal" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="mine" /></Link>
+        <Link to="/picks" className="field-label hover:text-[var(--stamp)]"><MoneyBadge kind="ai" mode="picks" /></Link>
         {[['Today', board.today], ['This month', board.month]].map(([label, row]) => (
           <React.Fragment key={label}>
             <span className="field-label">{label}</span>
@@ -255,7 +257,7 @@ const MarketBackdrop = ({ backdrop }) => {
   return (
     <Sheet
       title="Markets"
-      actions={<Link to="/research/news" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">News ›</Link>}
+      actions={<Link to="/portfolio/news" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">News ›</Link>}
     >
       {regime && (
         <div className="flex flex-wrap gap-1.5 mb-2">

@@ -237,7 +237,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         "premarket": await part("premarket", digest.premarket_for(db.db, user.id, now)) if phase == "pre" else None,
         "postclose": await part("postclose", digest.postclose_for(db.db, user.id, now))
         if phase in ("post", "closed") else None,
-        "unjournaled": await part("unjournaled", _unjournaled(user.id, roles, now)),
+        "unjournaled": await part("unjournaled", _unjournaled(user.id, roles, now)) if phase == "post" else None,
         "picks_top": await part("picks_top", _picks_top()) if admin and phase == "pre" else None,
         "accounts": accounts,
         "live_armed": {"autopilot": bool(prefs.get("autopilot_enabled") and prefs.get("autopilot_live")),

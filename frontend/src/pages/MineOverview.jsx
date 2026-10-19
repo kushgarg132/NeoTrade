@@ -106,7 +106,7 @@ const MineOverview = () => {
             <Empty
               title="Nothing here yet"
               detail="Connect your broker, or import your trades and mutual funds from files."
-              action={<Link to="/import" className="field-label text-[var(--stamp)] hover:underline min-h-11 inline-flex items-center">Import files ›</Link>}
+              action={<Link to="/portfolio/import" className="field-label text-[var(--stamp)] hover:underline min-h-11 inline-flex items-center">Import files ›</Link>}
             />
           ) : (
             <>

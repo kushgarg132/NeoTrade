@@ -5,8 +5,8 @@ import { sectionsFor, digestLines } from './todayLayout.js';
 test('phase orders', () => {
   assert.deepEqual(sectionsFor('pre'), ['beforeOpen', 'picksTop', 'doToday', 'account', 'markets']);
   assert.deepEqual(sectionsFor('session'), ['doToday', 'account', 'aiActivity', 'markets']);
-  assert.deepEqual(sectionsFor('post'), ['afterClose', 'journalPrompt', 'scoreboard', 'account', 'aiActivity']);
-  assert.deepEqual(sectionsFor('closed'), ['closedNote', 'afterClose', 'scoreboard', 'account']);
+  assert.deepEqual(sectionsFor('post'), ['afterClose', 'doToday', 'journalPrompt', 'scoreboard', 'account', 'aiActivity']);
+  assert.deepEqual(sectionsFor('closed'), ['closedNote', 'doToday', 'afterClose', 'scoreboard', 'account']);
 });
 
 test('unknown phase falls back to session', () => {
