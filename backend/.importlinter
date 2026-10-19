@@ -21,6 +21,7 @@ source_modules =
     backend.engine
     backend.factor
     backend.forecast
+    backend.forward
     backend.guardrails
     backend.instruments
     backend.journal

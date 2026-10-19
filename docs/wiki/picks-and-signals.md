@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 8c6573d
+verified_at: dba63fd
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -21,6 +21,8 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 | path | role | key symbols |
 |---|---|---|
 | backend/forecast/picks.py | Daily Picks job: compute, store, score, forward record, live gate | `picks.py::compute`, `::score`, `::forward`, `::live_refusal`, `::load`, `::ensure_indexes`, `::run`, `::MAX_PICKS`=10, `::MIN_FORWARD`=100, `::CALIBRATION_GAP`=0.05, `::HISTORY_START`, `::CAVEATS` |
+| backend/forward/store.py | Forward record store (`forward_records`), idempotent writes that never raise | `store.py::ForwardStore` (`record`, `due`, `set_outcome`, `list`, `scored`, `ensure_indexes`), `::record_id`, `::COLLECTION` |
+| backend/forward/scorecard.py | Per source/name stats, the one proven rule, comparison with each existing money gate | `scorecard.py::stats`, `::label`, `::scorecard`, `::MIN_N`=100, `::MIN_T`=2.0, `::MAX_GAP`=0.05 |
 | backend/forecast/setups.py | 5 setups as pure functions over a wide bar table (no look-ahead) | `setups.py::table`, `::SETUPS`, `::BY_NAME`, `::Setup`, `::momentum`, `::low_vol`, `::momentum_vol`, `::breakout`, `::pullback`, `::_top_decile`, `::_month_starts` |
 | backend/forecast/study.py | Event study + per-year walk-forward calibration (years from `lab.splits.yearly_folds`) | `study.py::net_return` (= `lab/assumptions.py::round_trip_return`, 10 bps slipped), `::kept`, `::outcome`, `::events`, `::stats`, `::walk_forward`, `::run`, `::NOTIONAL`=1e5, `::MIN_PRIOR`=30, `::MIN_N`=100 |
 | backend/forecast/research/ml_experiment_tool.py | Research only, not wired: LightGBM vs setups (needs lightgbm, not installed in prod) | `ml_experiment_tool.py::load`, `::HORIZONS` |
@@ -64,6 +66,7 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 Mongo collections (writer → readers):
 - `picks`: `_id` `"<date>:<setup>:<symbol>"`, `date`, `symbol`, `setup`, `label`, `horizon`, `due_date` (`market_calendar.add_trading_days(h+1)`, skips NSE holidays), `entry_ref`, `expected{median,p10,p90}`, `p_up`, `p_beat_nifty`, `n`, `median_excess`, `edge`, `explanation`, `strength`, `created_at`, `outcome` (None until scored → `{exit_date,gross,net,nifty,won,beat_nifty}`), `scored_at`. Insert-only for new ids (`forecast/picks.py::run`). Readers: `routers/picks.py`, `autopilot/picks.py`. Indexes `date`, `outcome` (`forecast/picks.py::ensure_indexes`; must be called at startup in server.py).
 - `lab_runs`: one best-effort `kind="study"` run per setup each pass (`forecast/picks.py::_record_runs`: event stats + walk-forward, fingerprint of the close table; `lab/runs.py::LabRunStore`, never raises). The gate backtest, factor report (`--save`), re-tune and builder write `engine`/`factor` runs the same way. `python -m backend.lab rerun <id>` (`lab/__main__.py::rerun`) rebuilds a `factor` or `study` run's inputs from its stored window/config (rows after the window are cut), re-runs and compares fingerprint + every metric within 1e-6; exit 0 same, 1 differs, 2 other kinds ("not re-runnable here"). Data is injectable via `sources` for tests; factor config stores `start` so the re-run reproduces `factor/report.py::run`.
+- `forward_records`: `_id` `"<source>:<name>:<symbol>:<YYYY-MM-DD>:<side>"`, `source` (`picks|engine|suggestion|news`), `name`, `user_id`, `symbol`, `side`, `decided_at`, `intraday`, `ref_price`, `horizon_days`, `due_date`, `predicted`, `outcome` (None until scored; `{void:true}` is excluded from stats), `scored_at`. Insert-only via `$setOnInsert` (`forward/store.py::ForwardStore.record`). Indexes `(outcome,due_date)`, `(source,name,decided_at)` (`ensure_indexes`, called from `server.py::ensure_collection_indexes`).
 - `picks_study`: single doc `_id: "latest"` `{as_of, setups:[stats + walk_forward]}` (`forecast/picks.py::run`).
 - `factor_books`: `_id` = `user_id`, `user_id`, `cash`, `shares{sym:int}`, `start_equity`, `started_at`, `start_nifty`, `costs`, `last_rebalance`, `updated_at`, `last_summary` (`factor/paper.py::FactorBookStore`).
 - `suggestions`: see `suggestions/store.py::SuggestionStore.create`: `id` (uuid, unique index), `user_id`, `run_id`, `symbol`, `mode`, `side`, `quantity`, `entry_ref`, `stop`, `target`, `max_hold_days`, `trail_atr`, `notional`, `option_contract`, `strength`, `reason_codes`, `strategy`, `score{rule,ai,final}`, `ai_thesis`, `source` (`scan`/`manual`/`scheduler`/`news`/`run`), `status`, `created_at`, `expires_at`, `decided_at`, `reason`, `order_id`. Later fields: `expired_reason:"outranked"` (`keep_best`), `venue`, `filled_quantity` (`settle`), `ai_order` (set by `engine/autorun.py`). Index `(user_id,status,mode)` (`store.py::ensure_indexes`, called at `server.py:125`).

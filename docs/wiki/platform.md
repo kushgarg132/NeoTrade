@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 8c6573d
+verified_at: dba63fd
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -70,7 +70,7 @@ Mongo (db `DATABASE_NAME`, default `stock_investor_db`; datetimes come back tz-a
 | `watchlist` | `user_id`, `symbols[]`, `updated_at` | none (see Gotchas) | `routers/watchlist.py`; ingest, plan, news read |
 | `portfolio_snapshots` | index `(user_id, at desc)` created at startup (`server.py:161`) | | written by portfolio service (other page) |
 
-Startup also creates indexes for instruments, suggestions, builder, journal, mine thesis, `mine_daily`, guardrails, chat actions, broker credentials, ledger, `live_orders`, `paper_limit_orders` (`server.py::startup_db_client`) and `trading_runs` and `lab_runs` (`lab/runs.py::LabRunStore.ensure_indexes`); `ensure_collection_indexes` also calls `learning/retune.py::ensure_indexes` and `forecast/picks.py::ensure_indexes`.
+Startup also creates indexes for instruments, suggestions, builder, journal, mine thesis, `mine_daily`, guardrails, chat actions, broker credentials, ledger, `live_orders`, `paper_limit_orders` (`server.py::startup_db_client`) and `trading_runs` and `lab_runs` (`lab/runs.py::LabRunStore.ensure_indexes`); `ensure_collection_indexes` also calls `learning/retune.py::ensure_indexes` `forecast/picks.py::ensure_indexes` and `forward/store.py::ForwardStore.ensure_indexes`.
 
 `user_prefs` keys and defaults (`prefs.py::DEFAULTS`, all editable via `PUT /settings/preferences`): `universe` (=`ALL_SCAN_STOCKS`), `account_size` 1,000,000, `max_exposure` 1,000,000, `per_trade_cap` 100,000, `daily_loss_limit` 50,000 (0 = off), `scan_enabled` true, `omniroute_model` null, `live_strategies` [], guardrails (`guardrails_enabled` false, `max_trades_per_day`, `cooldown_after_losses`, `cooldown_minutes` 30, `max_option_trades_per_day`, `max_option_lots`, `warn_naked_options`), `auto_square_off` "off", `factor_paper_capital` 300,000, `broker_roles` {}, `autopilot_enabled/live/news`, `picks_live`, `rebalance_targets`, `auto_paper_intraday/longterm`, `portfolio_max_loss_pct` 25, `portfolio_max_weight_pct` 20, `news_alerts` "held". Note `factor_paper_capital` is in `EDITABLE` but not in `PreferencesPatch`, so the HTTP API cannot set it.
 
@@ -301,7 +301,7 @@ Two supported paths, chosen once per session (host `/home/ubuntu/CLAUDE.md`, "De
 
 ## Import rules
 
-`backend/.importlinter` (run `lint-imports --config backend/.importlinter` from the repo root or `/app`): domain modules never import `backend.routers`; `backend.mine` and `backend.journal` never import `backend.autopilot`; nothing imports `backend.forecast.research`; `backend.lab` never imports `backend.routers` or `backend.autopilot`. Only direct imports are checked (`allow_indirect_imports`); 14 existing domain-to-router imports sit under `ignore_imports` as known debt, removed when fixed.
+`backend/.importlinter` (run `lint-imports --config backend/.importlinter` from the repo root or `/app`): domain modules (incl. `backend.forward`) never import `backend.routers`; `backend.mine` and `backend.journal` never import `backend.autopilot`; nothing imports `backend.forecast.research`; `backend.lab` never imports `backend.routers` or `backend.autopilot`. Only direct imports are checked (`allow_indirect_imports`); 14 existing domain-to-router imports sit under `ignore_imports` as known debt, removed when fixed.
 
 ## Gotchas and known issues
 

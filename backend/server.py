@@ -104,6 +104,9 @@ async def ensure_collection_indexes(d) -> None:
 
         await retune.ensure_indexes(d)
         await forecast_picks.ensure_indexes(d)
+        from backend.forward.store import ForwardStore
+
+        await ForwardStore(d).ensure_indexes()
     except Exception as exc:
         logger.error("collection indexes not created: %s", exc)
 
