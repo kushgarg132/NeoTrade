@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 15e1ceb
+verified_at: bdeb6b8
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -33,7 +33,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/ws/publish.py` | adapter so stores publish without importing the hub | `publisher_for` |
 | `backend/broadcast.py` | Redis pub/sub wrapper | `publish`, `listen`, `listen_forever` |
 | `backend/runs.py` | durable trading-run records + worker liveness | `RunStore`, `BOOT_ID`, `ALIVE_KEY`, `run_summary` |
-| `backend/prefs.py` | per-user preferences with defaults | `DEFAULTS`, `EDITABLE`, `PrefsStore` |
+| `backend/prefs.py` | per-user preferences with defaults | `DEFAULTS`, `EDITABLE`, `PrefsStore`, `PrefsStore.unset` (clears one field; `update` ignores None) |
 | `backend/app_settings.py` | deployment-wide settings + 30 s in-process cache | `AppSettingsStore`, `lab_on`, `feature_enabled`, `current_llm_model`, `TIERS`, `FEATURES` |
 | `backend/profile/{models,store}.py` | what a user tells the AI about themselves + memories | `ProfileUpdate`, `ProfileStore`, `MemoryRefused` |
 | `backend/system/router.py` | admin-only status, builder trigger, broker reconciliation read, backlog CRUD | `system_status`, `run_builder`, `reconciliation`, `*_backlog_item` |
@@ -213,6 +213,8 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/mine/actions` | `backend/routers/mine.py::mine_actions` | user |
 | POST | `/api/v1/mine/actions/{action_id:path}/dismiss` | `backend/routers/mine.py::dismiss_action` | user |
 | POST | `/api/v1/mine/actions/{action_id:path}/snooze` | `backend/routers/mine.py::snooze_action` | user |
+| GET | `/api/v1/mine/review/latest` | `backend/routers/mine.py::latest_review` | user |
+| GET | `/api/v1/reports/weekly?week=` | `backend/routers/reports.py::weekly_report` | user |
 | GET | `/api/v1/summaries/day` | `backend/routers/summaries.py::day` | user |
 | GET | `/api/v1/summaries/holdings` | `backend/routers/summaries.py::holdings` | user |
 | GET | `/api/v1/summaries/activity` | `backend/routers/summaries.py::activity` | user |
@@ -230,6 +232,8 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/market/global` | `backend/routers/market_data.py::get_global_indices` | user |
 | GET | `/api/v1/market/index/{ticker}` | `backend/routers/market_data.py::get_index_detail` | user |
 | GET | `/api/v1/market/index/{ticker}/analysis` | `backend/routers/market_data.py::get_index_analysis` | user |
+| GET | `/api/v1/market/brief` | `backend/routers/market_data.py::get_market_brief` (stored, no model call; 404 if none) | user |
+| GET | `/api/v1/research/{symbol}/note` | `backend/routers/market_data.py::get_cached_note` (cached analyst note, no model call; 404 if none) | user |
 | GET | `/api/v1/market/quotes` | `backend/routers/market_data.py::get_quotes` | user |
 | GET | `/api/v1/options/expiries` | `backend/routers/options.py::get_expiries` | user |
 | GET | `/api/v1/options/chain` | `backend/routers/options.py::get_chain` | user |

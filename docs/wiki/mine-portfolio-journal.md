@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
-covers: [backend/mine/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 69e0cc6
+covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
+verified_at: bdeb6b8
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -22,6 +22,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/mine/history.py | Daily value curve `mine_daily`, replayed from journal trades; XIRR | `history.py::xirr`, `::_inputs`, `::_compute`, `::_store`, `::backfill`, `::write_all`, `::series`, `::returns` |
 | backend/mine/lots.py | FIFO lots, realised matches, broker reconciliation, split detection | `lots.py::_fifo`, `::open_lots`, `::realised`, `::unmatched`, `::split_ratio`, `::reconcile`, `::mine_trades` |
 | backend/routers/mine.py (`GET /mine/review/latest`) | The latest non-empty AI portfolio `summary` on the user's `portfolio_snapshots` as `{text, date}` (IST day); no LLM; 404 until one exists | `mine.py::latest_review` |
+| backend/reports/weekly.py | Weekly report dict (last ISO week: account vs NIFTY from `mine_daily`, AI book, ideas taken vs skipped, journal net) + Telegram text; Sundays from 18:00, once per user per week | `weekly.py::build`, `::text`, `::send`, `::last_completed`, `::parse_week`, `::week_id`, `::SEND_AT`; served by `routers/reports.py::weekly_report` |
 | backend/mine/stock.py | One-stock detail page | `stock.py::detail`, `::_verdicts`, `::_news` |
 | backend/mine/tax.py | Indian FY capital-gains estimate (pure) | `tax.py::report`, `::est_tax`, `::long_from`, `::is_long`, `::current_fy`, `STCG_RATE`, `LTCG_RATE`, `LTCG_EXEMPTION` |
 | backend/mine/thesis.py | User's why/target/stop/review_by per holding | `thesis.py::ThesisIn`, `::ThesisStore`, `SYMBOL` |
@@ -31,7 +32,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/portfolio/health.py | Per-stock fundamentals, trend and headlines, cached daily | `health.py::stock_health`, `::price_trend`, `::profit_trend` |
 | backend/portfolio/review.py | LLM write-up (summary, notes, plan); explains only | `review.py::write_review`, `MAX_HOLDINGS` |
 | backend/portfolio/rebalance.py | Target weights, rebalance plan, one-tap suggestion, charges, sell tax | `rebalance.py::target_weights`, `::target_gaps`, `::plan_rebalance`, `::suggest`, `::charges`, `::sell_tax`, `::multiplier`, `DEFAULT_TARGETS` |
-| backend/portfolio/digest.py | Pulse (account right now), scoreboard, 08:45 and post-close Telegram digests | `digest.py::pulse`, `::verdicts_visible`, `::headlines_for`, `::pnl_since`, `::scoreboard`, `::send_premarket`, `::send_postclose`, `::premarket_for`, `::postclose_for` (per-user bodies, shared with `/today`), `::premarket_text`, `::postclose_text`, `::last_session_move` |
+| backend/portfolio/digest.py | Pulse (account right now), scoreboard, 08:45 and post-close Telegram digests | `digest.py::pulse`, `::verdicts_visible`, `::headlines_for`, `::pnl_since`, `::scoreboard`, `::send_premarket`, `::send_postclose`, `::premarket_for`, `::postclose_for` (per-user bodies, shared with `/today`), `::premarket_text`, `::postclose_text`, `::last_session_move`, `::_day_summary` (after each digest: Home "Your day", `summaries/day.py::generate`; `send_postclose(db, now, redis)`) |
 | backend/journal/store.py | `journal_trades` / `journal_notes` persistence | `journal/store.py::JournalStore.add_trades`, `.list_trades`, `.notes_for`, `.set_note` |
 | backend/journal/roundtrips.py | Groups fills into round trips; instrument kind (pure) | `roundtrips.py::build_round_trips`, `::daily_pnl`, `::instrument_kind`, `::underlying_of` |
 | backend/journal/sync.py | Pulls today's trade book from ACTIVE brokers; Upstox history backfill | `sync.py::sync_user_trades`, `::import_upstox_history`, `::connected_brokers` |
