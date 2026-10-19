@@ -67,6 +67,9 @@ DEFAULTS = {
     # Who gets a news alert (backend/datalayer/reactor.py): "held",
     # "held+watched", "all" or "off".
     "news_alerts": "held",
+    # The owner's goal (routers/settings.py validates it; start/start_value are
+    # stamped server-side): {kind: "value"|"beat_nifty", target, by, start, start_value}.
+    "goal": None,
 }
 
 EDITABLE = tuple(DEFAULTS)
