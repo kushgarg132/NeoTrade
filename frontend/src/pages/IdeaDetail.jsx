@@ -140,8 +140,18 @@ const IdeaDetail = () => {
       </Card>
 
       {idea.range && (
-        <Card title="Likely range">
-          <RangeBar range={idea.range} />
+        <Card title={idea.excessRange ? 'Likely result vs NIFTY' : 'Likely range'}>
+          {idea.forecast && (
+            <p className="mb-3 text-[13px] text-[var(--text-muted)]">
+              {idea.forecast === 'similar' && idea.similarN != null
+                ? `Based on ${idea.similarN} similar past ${idea.setup} setups.`
+                : 'Setup average: the similar-setup forecast did not beat it in testing.'}
+            </p>
+          )}
+          <RangeBar range={idea.excessRange || idea.range} />
+          {idea.features.length > 0 && (
+            <ul className="mt-3 list-disc pl-5 text-[14px] text-[var(--text-muted)]">{idea.features.map((f) => <li key={f}>{f}</li>)}</ul>
+          )}
           <div className="mt-4 grid grid-cols-2 gap-3">
             <Stat label="Chance up" value={pct(idea.pUp, { dp: 0 })} />
             <Stat label="Beat NIFTY" value={pct(idea.pBeat, { dp: 0 })} />

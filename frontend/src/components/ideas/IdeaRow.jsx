@@ -22,7 +22,7 @@ const IdeaRow = ({ idea }) => (
     {idea.headline?.value != null && (
       <div className="shrink-0 text-right tabular-nums">
         <div className={`text-[15px] font-semibold ${toneText(tone(idea.headline.value))}`}>{pct(idea.headline.value, { sign: true, dp: 1 })}</div>
-        <div className="text-[12px] text-[var(--text-muted)]">{idea.headline.label}</div>
+        <div className="text-[12px] text-[var(--text-muted)]">{idea.headline.label}{idea.kind === 'p' && idea.pBeat != null ? ` · beats ${pct(idea.pBeat, { dp: 0 })}` : ''}</div>
       </div>
     )}
     <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
