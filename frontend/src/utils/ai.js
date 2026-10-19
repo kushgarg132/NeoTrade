@@ -25,3 +25,15 @@ export const scoreboard = ({ month, card, capital, mineValue } = {}) => {
     ],
   };
 };
+
+/**
+ * The AI book as the AI page header shows it, from GET /today `autopilot`, GET /analytics/pnl (paper)
+ * and its scorecard: current value, today's P&L and that as a fraction of capital. Missing parts are null.
+ */
+export const aiBook = ({ autopilot, pnl, card } = {}) => {
+  const t = pnl?.today;
+  const day = t ? (t.net ?? t.realized ?? 0) + (t.unrealized || 0) : null;
+  const value = autopilot?.capital != null && card?.totals ? autopilot.capital + (card.totals.net || 0) + (t?.unrealized || 0) : null;
+  const dayPct = day != null && autopilot?.capital ? day / autopilot.capital : null;
+  return { value, day, dayPct };
+};

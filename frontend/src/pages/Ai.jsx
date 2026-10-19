@@ -12,6 +12,7 @@ import { useForward } from '../components/ForwardBadge';
 import api, { endpoints } from '../utils/api';
 import { useRefetchOn, useReconnect, useTopic } from '../hooks/useStream';
 import { inr, pct, tone } from '../components/ui/format';
+import { aiBook } from '../utils/ai';
 import { toneText } from '../components/ui/tone';
 
 const IDS = ['scoreboard', 'positions', 'activity'];
@@ -57,10 +58,7 @@ const Ai = () => {
 
   const ap = today.data?.autopilot;
   const on = ap?.enabled && !stopped;
-  const t = pnl.data?.today;
-  const day = t ? (t.net ?? t.realized ?? 0) + (t.unrealized || 0) : null;
-  const value = ap?.capital != null && card.data?.totals ? ap.capital + (card.data.totals.net || 0) + (t?.unrealized || 0) : null;
-  const dayPct = day != null && ap?.capital ? day / ap.capital : null;
+  const { value, day, dayPct } = aiBook({ autopilot: ap, pnl: pnl.data, card: card.data });
 
   return (
     <Layout>

@@ -8,6 +8,7 @@ import ChatWidget from './ChatWidget';
 import ErrorBoundary from './ErrorBoundary';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
+import { useNeedCount } from '../hooks/useNeedCount';
 import { PendingContext } from '../context/pendingContext';
 
 /**
@@ -16,20 +17,8 @@ import { PendingContext } from '../context/pendingContext';
  * visible from wherever you are.
  */
 const Layout = ({ children }) => {
-  const [pending, setPending] = useState(0);
+  const pending = useNeedCount().count; // the one "needs you" number, shared with Home
 
-  const loadPending = () =>
-    api
-      .get(endpoints.mine.actions)
-      .then((res) => setPending(res.data.length))
-      .catch(() => setPending(0));
-  useEffect(() => {
-    loadPending();
-  }, []);
-  useReconnect(loadPending);
-
-  // Counts Mine's Needs-you list. Re-counted on each suggestion event, since
-  // ideas are part of it and a failed send can put one back to PENDING.
   // The nav badge: what needs the user outside practice (GET /today/attention).
   const [attention, setAttention] = useState(0);
   const loadAttention = () =>
@@ -40,7 +29,6 @@ const Layout = ({ children }) => {
   useReconnect(loadAttention);
 
   useTopic('suggestions', () => {
-    loadPending();
     loadAttention(); // an interrupted approval lands as NEEDS_REVIEW
   });
 

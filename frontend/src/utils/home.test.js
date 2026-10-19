@@ -12,16 +12,18 @@ test('missing data gives dashes, never throws', () => {
 
 test('full data', () => {
   const t = tileHeadlines(
-    { proposals_total: 3, mine_actions: [{ kind: 'stop_hit' }, { kind: 'idea' }],
-      scoreboard: { today: { ai: 1200, mine: 0 }, month: { ai: 5000, mine: -300 } },
-      backdrop: { regime: { label: 'risk_on' } } },
+    { backdrop: { regime: { label: 'risk_on' } } },
     { headline: { value: 409205, day_change: 3000, day_change_pct: 0.74, xirr: 0.142 } },
     [{ name: 'NIFTY 50', percent: -0.4 }],
+    { count: 4, actions: [{ kind: 'bad_news' }, { kind: 'stop_hit' }, { kind: 'idea' }], ideas: [{}, {}] },
+    { value: 1050000, day: 1200, dayPct: 0.0012 },
   );
   assert.equal(t.money.value, '₹4,09,205');
   assert.equal(t.money.sub, 'today +0.74%');
-  assert.equal(t.ideas.sub, '3 proven · 1 exit');
-  assert.equal(t.ai.value, '+₹1,200');
+  assert.equal(t.ideas.value, '4');
+  assert.equal(t.ideas.sub, '2 to review · 2 ideas');
+  assert.equal(t.ai.value, '₹10,50,000');
+  assert.equal(t.ai.sub, 'today +₹1,200 (+0.12%)');
   assert.equal(t.market.value, '-0.40%');
   assert.equal(t.market.tone, 'loss');
 });
@@ -30,6 +32,10 @@ test('partial: pulse without overview, regime without index', () => {
   const t = tileHeadlines({ pulse: { value: 1000, day_change: 0, day_change_pct: 0 }, backdrop: { regime: { label: 'neutral' } } }, null, []);
   assert.equal(t.money.sub, 'today 0.00%');
   assert.equal(t.market.value, 'Neutral');
+});
+
+test('a non-array indices response does not crash', () => {
+  assert.equal(tileHeadlines({}, null, { error: 'x' }).market.value, '—');
 });
 
 test('brief kind and weekly day', () => {

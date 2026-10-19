@@ -1,6 +1,6 @@
 import { inr, pct, tone } from '../components/ui/format.js';
+import { holdingActions } from './ideas.js';
 
-const EXIT_KINDS = ['stop_hit', 'target_hit', 'idea_exit'];
 const REGIME = { risk_off: 'Risk off', risk_on: 'Risk on', neutral: 'Neutral' };
 const PHASE = { pre: 'Before the open', session: 'Market open', post: 'After the close', closed: 'Market closed' };
 
@@ -12,8 +12,10 @@ const p100 = (x, opts) => (typeof x === 'number' ? pct(x / 100, opts) : '—');
 /**
  * The four Home tiles' headline, sub-line and tone from GET /today, GET /mine/overview
  * and (optional) GET /market/indices. Any part may be missing: that tile shows "—".
+ * `need` is the useNeedCount result ({ count, actions, ideas }, null while loading) and `book` the
+ * AI page's figures (utils/ai.js::aiBook), so the tiles read what their pages show.
  */
-export const tileHeadlines = (today, overview, indices) => {
+export const tileHeadlines = (today, overview, indices, need = null, book = null) => {
   const t = today || {};
   const h = overview?.headline;
   const pulse = t.pulse;
@@ -26,18 +28,16 @@ export const tileHeadlines = (today, overview, indices) => {
       }
     : { value: '—', sub: 'Not read yet', tone: 'neutral' };
 
-  const n = t.proposals_total;
-  const exits = (t.mine_actions || []).filter((a) => EXIT_KINDS.includes(a.kind)).length;
-  const ideas = typeof n === 'number'
-    ? { value: String(n), sub: `${n} proven · ${exits} exit`, tone: exits ? 'warn' : 'neutral' }
+  const review = need ? holdingActions(need.actions).length : 0;
+  const ideas = need
+    ? { value: String(need.count), sub: `${review} to review · ${need.ideas.length} idea${need.ideas.length === 1 ? '' : 's'}`, tone: review ? 'warn' : 'neutral' }
     : { value: '—', sub: 'Unavailable', tone: 'neutral' };
 
-  const b = t.scoreboard;
-  const ai = b
-    ? { value: inr(b.today.ai, { sign: true }), sub: `month ${inr(b.month.ai, { sign: true })}`, tone: tone(b.today.ai) }
+  const ai = book && book.value != null
+    ? { value: inr(book.value), sub: `today ${inr(book.day, { sign: true })} (${pct(book.dayPct, { sign: true })})`, tone: 'neutral', subTone: tone(book.day) }
     : { value: '—', sub: 'No AI book yet', tone: 'neutral' };
 
-  const nifty = (indices || []).find((r) => r.name === 'NIFTY 50');
+  const nifty = (Array.isArray(indices) ? indices : []).find((r) => r.name === 'NIFTY 50');
   const regime = REGIME[t.backdrop?.regime?.label];
   const market = nifty && typeof nifty.percent === 'number'
     ? { value: p100(nifty.percent, { sign: true }), sub: regime ? `NIFTY · ${regime}` : 'NIFTY', tone: tone(nifty.percent) }

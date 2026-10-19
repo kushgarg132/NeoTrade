@@ -38,3 +38,16 @@ test('confidence splits the composite into rule and AI parts', () => {
   assert.equal(confidence(null), null);
   assert.equal(ideaFromSuggestion({ ...sug, score: { rule: 0.6, ai: 0.5, final: 0.68 } }).score.rule, 0.6);
 });
+
+import { needCount, groupHoldingActions } from './ideas.js';
+
+test('needCount: holdings actions (not idea rows) plus pending ideas; bad shapes count 0', () => {
+  const acts = [{ kind: 'bad_news' }, { kind: 'results_soon' }, { kind: 'idea' }, { kind: 'stop_hit' }];
+  assert.equal(needCount(acts, [{}, {}]), 5);
+  assert.equal(needCount(null, undefined), 0);
+});
+
+test('groupHoldingActions groups exits under one title, in order', () => {
+  const g = groupHoldingActions([{ kind: 'stop_hit' }, { kind: 'bad_news' }, { kind: 'target_hit' }, { kind: 'idea' }]);
+  assert.deepEqual(g.map((x) => [x.title, x.items.length]), [['Exit alerts', 2], ['Bad news', 1]]);
+});

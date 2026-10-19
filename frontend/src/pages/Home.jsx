@@ -12,6 +12,8 @@ import WeeklyLink from '../components/home/WeeklyLink';
 import SetupChecklist from '../components/home/SetupChecklist';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useRefetchOn } from '../hooks/useStream';
+import { useNeedCount } from '../hooks/useNeedCount';
+import { aiBook } from '../utils/ai';
 import { tileHeadlines, phaseLabel, briefKind, alerts } from '../utils/home';
 
 // Home: a hub. One call each for today, the account overview and the indices;
@@ -20,12 +22,17 @@ const Home = () => {
   const [today, setToday] = useState(null);
   const [overview, setOverview] = useState(null);
   const [indices, setIndices] = useState(null);
+  const [pnl, setPnl] = useState(null);
+  const [card, setCard] = useState(null);
   const [error, setError] = useState(null);
+  const need = useNeedCount();
 
   const load = useCallback(() => {
     api.get(endpoints.today).then((r) => { setToday(r.data); setError(null); })
       .catch((e) => setError(e?.response?.data?.detail || 'Could not load today.'));
     api.get(endpoints.mine.overview).then((r) => setOverview(r.data)).catch(() => {});
+    api.get(endpoints.analytics.pnl('paper')).then((r) => setPnl(r.data)).catch(() => {});
+    api.get(endpoints.analytics.scorecard('paper')).then((r) => setCard(r.data)).catch(() => {});
     api.get(endpoints.marketIndices).then((r) => setIndices(r.data)).catch(() => {});
   }, []);
   useEffect(() => {
@@ -43,9 +50,9 @@ const Home = () => {
         ? <ErrorLine message={error} onRetry={load} />
         : <Skeleton rows={4} />;
     }
-    const h = tileHeadlines(today, overview, indices);
+    const h = tileHeadlines(today, overview, indices, need, aiBook({ autopilot: today.autopilot, pnl, card }));
     const kind = briefKind(today.phase);
-    const needs = today.mine_actions_total || 0;
+    const needs = need.count;
     return (
       <div className="space-y-3">
         <p className="text-[15px] text-[var(--text-muted)]">

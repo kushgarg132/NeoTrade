@@ -51,3 +51,30 @@ export const rangeBar = (p10, median, p90) => {
   const at = (x) => (span > 0 ? Math.max(0, Math.min(100, ((x - lo) / span) * 100)) : 50);
   return { p10: at(p10), median: at(median), p90: at(p90), zero: at(0) };
 };
+
+/** Plain titles for the "Your holdings" groups on Ideas, in the order /mine/actions ranks them. */
+export const HOLDING_GROUPS = {
+  stop_hit: 'Exit alerts', idea_exit: 'Exit alerts', target_hit: 'Exit alerts',
+  verdict_worse: 'Verdict got worse', bad_news: 'Bad news', review_due: 'Reviews due',
+  results_soon: 'Results soon', overweight: 'Too much in one stock', ltcg_soon: 'Tax: turning long-term',
+  harvest: 'Tax: harvest', ex_dividend: 'Dividends coming', add: 'Room to add',
+};
+
+/** Mine actions about the holdings: everything except `idea` rows, which are the Ideas list's own pending suggestions. */
+export const holdingActions = (actions) => (Array.isArray(actions) ? actions : []).filter((a) => a.kind !== 'idea');
+
+/** [{ title, items }] in rank order, one group per plain title. */
+export const groupHoldingActions = (actions) => {
+  const groups = [];
+  for (const a of holdingActions(actions)) {
+    const title = HOLDING_GROUPS[a.kind] || 'Other';
+    let g = groups.find((x) => x.title === title);
+    if (!g) groups.push((g = { title, items: [] }));
+    g.items.push(a);
+  }
+  return groups;
+};
+
+/** The ONE "needs you" number: holdings actions plus pending ideas (your suggestions, and today's Picks for admins). */
+export const needCount = (actions, ideas) =>
+  holdingActions(actions).length + (Array.isArray(ideas) ? ideas.length : 0);
