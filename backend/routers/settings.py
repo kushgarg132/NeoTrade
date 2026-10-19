@@ -138,6 +138,14 @@ async def update_preferences(
     return await prefs.update(user.id, fields)
 
 
+@router.delete("/settings/goal")
+async def remove_goal(
+    user: User = Depends(get_current_user),
+    prefs: PrefsStore = Depends(get_prefs_store),
+):
+    return await prefs.unset(user.id, "goal")
+
+
 async def _stamp_goal(user_id: str, goal: dict, old: Optional[dict]) -> dict:
     """Start date and value are the server's: editing the target keeps the
     original start (progress is not reset), a new kind starts from today."""

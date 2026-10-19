@@ -28,11 +28,24 @@ const Goal = () => {
   const save = async () => {
     setBusy(true);
     try {
-      await api.put(endpoints.preferences, { goal: { kind: form.kind, target: Number(form.target), by: form.by } });
+      await api.put(endpoints.settings.preferences, { goal: { kind: form.kind, target: Number(form.target), by: form.by } });
       setMsg({ ok: true, text: 'Saved. Home now tracks this.' });
     } catch (e) {
       const d = e?.response?.data?.detail;
       setMsg({ ok: false, text: Array.isArray(d) ? d.map((x) => x.msg).join('; ') : d || 'Could not save.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.delete(endpoints.settings.goal);
+      setForm({ kind: 'value', target: '', by: '' });
+      setMsg({ ok: true, text: 'Goal removed.' });
+    } catch {
+      setMsg({ ok: false, text: 'Could not remove the goal.' });
     } finally {
       setBusy(false);
     }
@@ -62,6 +75,7 @@ const Goal = () => {
         </label>
         {msg && <p role={msg.ok ? 'status' : 'alert'} className={cn('text-[14px]', msg.ok ? 'text-[var(--gain)]' : 'text-[var(--loss)]')}>{msg.text}</p>}
         <Button onClick={save} disabled={busy || !form.target || !form.by} className="w-full">{busy ? 'Saving…' : 'Save goal'}</Button>
+        {form.target && <Button variant="secondary" onClick={remove} disabled={busy} className="w-full">Remove goal</Button>}
         <p className="text-[13px] text-[var(--text-muted)]">Progress counts from the day you save, at your portfolio's value then. Editing the target or date keeps that start.</p>
       </div>
     </Card>

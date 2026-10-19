@@ -302,6 +302,7 @@ export const endpoints = {
     lab: '/settings/lab',
     omnirouteCatalog: '/settings/omniroute-catalog',
     preferences: '/settings/preferences',
+    goal: '/settings/goal',
     strategies: '/settings/strategies',
     promotion: '/settings/strategies/promotion',
     portfolioVerdicts: '/settings/portfolio-verdicts',

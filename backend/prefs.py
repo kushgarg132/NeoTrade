@@ -95,6 +95,15 @@ class PrefsStore:
             )
         return await self.get(user_id)
 
+    async def unset(self, user_id: str, field: str) -> dict:
+        """Removes one editable field (update() ignores None, so clearing needs this)."""
+        if field in EDITABLE:
+            await self.collection.update_one(
+                {"user_id": user_id},
+                {"$unset": {field: ""}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+            )
+        return await self.get(user_id)
+
     async def scan_enabled_users(self) -> list[dict]:
         """Users the scheduled scan should run for. A user who has never
         opened settings has no document at all, so absence means enabled --

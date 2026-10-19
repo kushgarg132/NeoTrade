@@ -51,3 +51,10 @@ def test_edit_keeps_original_start(client, db):  # noqa: F811
 def test_invalid_goal_422(client, goal):
     goal["by"] = {"+30": _by(30), "past": _by(-1), "today": _by(0)}[goal["by"]]
     assert _put(client, **goal).status_code == 422
+
+
+def test_goal_can_be_removed(client):
+    assert _put(client, kind="value", target=1000000, by=_by(365)).status_code == 200
+    r = client.delete("/api/v1/settings/goal")
+    assert r.status_code == 200 and r.json().get("goal") is None
+    assert client.get("/api/v1/settings/preferences").json().get("goal") is None
