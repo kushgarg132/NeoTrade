@@ -19,7 +19,9 @@ import EventsTab from '../components/stock/EventsTab';
 import useStockAnalysis from '../components/stock/useStockAnalysis';
 import { verdictKind, verdictLabel } from '../components/stock/common';
 import api, { endpoints } from '../utils/api';
-import { bareSymbol, formatQuantity } from '../utils/formatters';
+import { bareSymbol, formatQuantity, formatDateTime } from '../utils/formatters';
+import useStored from '../hooks/useStored';
+import { oneLine } from '../utils/aiText';
 import { positionSummary } from '../utils/stock';
 
 const TABS = [
@@ -57,6 +59,10 @@ const Stock = () => {
   useEffect(() => {
     api.get(endpoints.mine.overview).then((res) => setPortfolio(res.data?.headline?.value ?? null)).catch(() => setPortfolio(null));
   }, []);
+
+  // One line from the analyst note already cached (never triggers a model call). The fresh Analysis tab read wins.
+  const note = useStored(symbol ? endpoints.stockNote(symbol) : null);
+  const noteText = oneLine(ai.data?.analyst_summary || (note.status === 'ok' ? note.data.summary : ''));
 
   const m = mine.data;
   const company = quick.data?.company_info;
@@ -123,6 +129,13 @@ const Stock = () => {
         {sold && <p className="mt-3 text-[14px] text-[var(--text-muted)]">You no longer hold this. Past trades are on the chart.</p>}
         {mine.status === 'error' && <ErrorLine message="Could not load your position." onRetry={loadMine} />}
       </Card>
+
+      {noteText && (
+        <p className="mb-3 text-[14px] text-[var(--text)]">
+          <span className="block text-[12px] text-[var(--text-muted)]">AI summary{note.data?.as_of ? ` · ${formatDateTime(note.data.as_of)}` : ''}</span>
+          {noteText}
+        </p>
+      )}
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} label="Stock sections" />
       <div className="mt-3">
