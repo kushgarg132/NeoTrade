@@ -433,6 +433,8 @@ It prints `recorded <id>` or `NOT RECORDED` per setup and leaves a `lab_runs` ro
 price-only state. Expected runtime (reviewer estimate, not yet measured): about 30-60 min for all five setups at 1 thread, ~1 GB peak;
 use `--setup` to run one at a time. Nothing is wired; a pass would only justify a later paper-only forward-record source.
 
+First real run, 2026-10-19: FAIL, 0 of 5 setups. The learned exits did worse than simply holding a fixed number of days. Fixed-horizon exits stay.
+
 ## Reproducing a run
 
 Every simulator leaves a `lab_runs` record (`backend/lab/runs.py::LabRunStore`). To check one still

@@ -29,7 +29,7 @@ where to start — nothing else in this repo tracks it.
 | 17 | Profitability and LLM cost: measure before spending, trade only where there is evidence (17.1 fix what corrupts the evidence, 17.2 LLM cost, 17.3 edge, 17.4 architecture, 17.5 business) | 14–16 | **17.1 done 2026-10-07** (auto intraday waits for a live broker feed, stale seed symbols dropped, untagged approvals refused, long-term gate backtests re-run, Today net of charges, plan replay fixed); 17.2–17.5 planned |
 | 19 | Two accounts, one daily answer: AI (Kite) runs itself on paper until proven, Mine (Upstox) gets proven ideas + daily holdings review; Practice folds into AI (A stop the bleeding, B real holdings are held, C one AI book, D proven-only ideas, E Today + Telegram daily, F nav reset + cuts) | — | **19.A done 2026-10-14** (ledger doubling fix + paper book reset, backup `~/backups/neotrade/paper-book-20261014.json`; LLM content blocks + tiers standard `auto/gemini`, deep `codex/gpt-5.6-luna-low`; 08:30/09:05 login reminder; logged-out holdings priced from quotes); **19.B done 2026-10-14** (logged-out broker keeps its holdings, review + AI text on mine only, `mine_holdings` drives news alerts + scan SELLs, review daily); **19.C done 2026-10-14** (`via` + origin strategy credited, no paper approvals or paper ticket, `<user>:mine` ledger, exits with autopilot off + 15:15 intraday square-off); **19.D done 2026-10-14** (`paper_gate.for_mine`: ideas only from proven strategies everywhere + approve-live 409, `ai_order` keeps the idea pending, exit alerts on `<user>:mine`); **19.E done 2026-10-14** (`portfolio/digest.py`: pulse, movers + headline, verdict changes, you vs AI; Today top section + Do today + scoreboard; Telegram 08:45 + post-close); **19.F done 2026-10-14** (nav: Mine = Holdings · Ideas · Trades · Habits, AI = Overview · Activity · Book · Strategies · Settings, Practice folded in, bullish scanner cut, options off the tabs, docs). **Phase 19 done.** — spec `docs/superpowers/specs/2026-10-14-two-accounts-reset-design.md` |
 | 20 | Mine redesign: the trader's own account gets a past (daily value, XIRR vs NIFTY), a to-do list (Needs you), tax lots and India tax estimates, and a thesis per stock; Mine = Overview · Holdings · Tax · Journal, Ideas/Plan/Review cut | 19 | **done 2026-10-15, built** — spec `docs/superpowers/specs/2026-10-15-mine-redesign-design.md`, plan `docs/superpowers/plans/2026-10-15-mine-redesign.md` |
-| 21 | Private trading workstation: make NeoTrade dependable for its owner before any commercial, registration or public-user work. Truth/safety → daily workflow → Research Lab → forward record → ML ranking → isolated RL experiments. | 20 | **active 2026-10-18** |
+| 21 | Private trading workstation: make NeoTrade dependable for its owner before any commercial, registration or public-user work. Truth/safety → daily workflow → Research Lab → forward record → ML ranking → isolated RL experiments. | 20 | **done 2026-10-19** |
 | 22 | Revenue without SEBI registration: back office Pro for traders + the Picks engine as research software for registered analyst firms (lawyer's review, five design-partner firms, analyst workbench with compliance kit, billing, launch) | 21 | planned — plan doc https://claude.ai/code/artifact/7e6019ff-c866-47da-9f27-fcbe90ab52b5 |
 
 Two orderings are not negotiable: **Phase 3 before Phase 5** (no real order may be
@@ -911,7 +911,7 @@ to "model output never places an order" (AGENTS.md, .claude/CLAUDE.md). Spec and
 `docs/superpowers/`. Setup: Kite Connect app; static IP 161.118.167.148 whitelisted with Zerodha
 and Upstox; daily logins (09:00 reminder).
 
-## Phase 21 — Private trading workstation — **active 2026-10-18**
+## Phase 21 — Private trading workstation — **done 2026-10-19**
 
 **Goal:** Make NeoTrade the owner's dependable private system for operating a trading day,
 researching strategies and evaluating AI/ML/RL experiments. Sales, analyst-firm pilots,
@@ -939,7 +939,13 @@ registration and public onboarding are deferred, not cancelled.
    price-only features likely flatter the IC. Nothing wired; lab_runs 384060350ca1, 5bbe1158ec29.*
 6. **RL sandbox:** keep RL entirely isolated from live trading. Consider execution, sizing or
    exit experiments only after the simulator and data history are trustworthy; require the same
-   out-of-sample and paper gates before any further decision.
+   out-of-sample and paper gates before any further decision. *Status 2026-10-19: sandbox built and deployed (`backend/rl/`,
+   `python -m backend.rl.evaluate`, fitted Q-iteration on Picks exits, fills at next open). First
+   run FAILED: 0 of 5 setups pass (family bar needs 2). Learned exits trail the better fixed
+   holding period in 86-93% of test years for four setups (t -3.5 to -4.0); pullback is closest
+   (t -1.8). Side finding, out of sample per fold: holding about twice today's horizon beat today's
+   horizon for every setup (e.g. momentum_vol_60 +9.3% vs +4.3% a pick), with deeper drawdowns and
+   survivorship flattering long holds. Not acted on: a candidate for a forward-recorded rule test.*
 
 **Done when:** Every live trade reconciles to the broker; each strategy/model run can be
 reproduced from stored inputs and configuration; every personal live order has an explicit,
