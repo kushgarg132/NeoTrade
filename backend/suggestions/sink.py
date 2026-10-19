@@ -72,7 +72,7 @@ class SuggestionSink:
 
             news = self.source == "news"
             # ponytail: proposals carry no news theme yet; "news" until the reactor threads one through.
-            name = (getattr(proposal, "themes", None) or ["news"])[0] if news else self.source
+            name = (getattr(proposal, "themes", None) or ["news"])[0] if news else (proposal.order.strategy_name or "unknown")
             await ForwardStore(self.store.collection.database).record(
                 source="news" if news else "suggestion", name=name, user_id=self.user_id,
                 symbol=proposal.order.symbol, side=getattr(proposal.order.side, "value", proposal.order.side),

@@ -80,3 +80,31 @@ async def test_scheduler_pass_survives_a_failing_forward_step(monkeypatch):
     await scheduler.run_daily_jobs(AsyncMongoMockClient()["t"], now=datetime(2026, 10, 19, 10, 30, tzinfo=timezone.utc))
 
     sent.assert_awaited()
+
+
+def test_sell_excess_adds_the_index_return():
+    out = score.outcome(table(), rec(side="SELL"))
+    assert out["excess"] == pytest.approx(out["net"] + out["nifty"])
+
+
+def test_intraday_nifty_uses_ref_then_falls_back_to_day_open():
+    r = rec(intraday=True, ref_price=100.5, horizon_days=0)
+    assert score.outcome(table(), r)["nifty"] == pytest.approx(201.0 / 200.0 - 1)
+    out = score.outcome(table(), {**r, "nifty_ref": 200.5})
+    assert out["nifty"] == pytest.approx(201.0 / 200.5 - 1)
+
+
+async def test_void_record_does_not_break_scorecard():
+    from backend.forward.scorecard import scorecard
+    from backend.forward.store import ForwardStore
+
+    db = AsyncMongoMockClient()["v"]
+    s = ForwardStore(db)
+    kw = dict(source="picks", name="n", user_id="u", side="BUY", decided_at=DECIDED, intraday=False,
+              ref_price=None, horizon_days=1)
+    await s.record(symbol="AAA", **kw)
+    await s.record(symbol="ZZZ", **kw)
+    assert await score.score_due(db, datetime(2026, 11, 13, tzinfo=timezone.utc), t=table(), store=s) == 1
+    assert (await db["forward_records"].find_one({"symbol": "ZZZ"}))["outcome"] == {"void": "no bars"}
+    [row] = await scorecard(db)
+    assert row["n"] == 1

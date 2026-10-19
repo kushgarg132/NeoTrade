@@ -77,7 +77,7 @@ class _Premiums:
         return self.price
 
 
-async def _run(strategy, closes, premiums, start=START, execution=None):
+async def _run(strategy, closes, premiums, start=START, execution=None, forward=None):
     execution = execution or SimulatedExecutionClient()
     portfolio = Portfolio()
     fills = []
@@ -98,7 +98,7 @@ async def _run(strategy, closes, premiums, start=START, execution=None):
     await run(
         strategies=[strategy], feed=priced(), execution=execution, portfolio=portfolio,
         clock=SimClock(), symbol_for_token={TOKEN: "RELIANCE"},
-        master=await _master(), premium_source=premiums,
+        master=await _master(), premium_source=premiums, forward=forward,
     )
     return portfolio, fills
 
@@ -167,3 +167,13 @@ def test_orb_options_turns_a_breakdown_into_a_bought_put(monkeypatch):
     assert intent.side == Side.BUY and intent.option_flavor == "LONG_PUT"
     assert intent.reason_codes == ["orb_breakout", "buy_put"]
     assert (intent.stop_hint, intent.target_hint) == (105.0, 90.0)
+
+
+@pytest.mark.asyncio
+async def test_option_entry_writes_no_forward_record():
+    calls = []
+
+    async def forward(*a):
+        calls.append(a)
+    _portfolio, fills = await _run(_BuyCallOnce(), [100.0] * 22, _Premiums(5.0), forward=forward)
+    assert fills and calls == []

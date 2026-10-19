@@ -4,6 +4,7 @@ readers never raise into callers."""
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, datetime
 from typing import Optional
@@ -29,7 +30,7 @@ class ForwardStore:
 
     async def record(self, *, source: str, name: Optional[str], user_id: str, symbol: str, side: str,
                      decided_at: datetime, intraday: bool, ref_price: Optional[float], horizon_days: int,
-                     predicted: Optional[dict] = None) -> bool:
+                     predicted: Optional[dict] = None, nifty_ref: Optional[float] = None) -> bool:
         """True when a new record was written; False on a duplicate or any error."""
         try:
             name = name or "unknown"
@@ -40,7 +41,7 @@ class ForwardStore:
                 {"$setOnInsert": {
                     "source": source, "name": name, "user_id": user_id, "symbol": symbol, "side": side,
                     "decided_at": decided_at, "intraday": intraday, "ref_price": ref_price,
-                    "horizon_days": horizon_days, "due_date": due.isoformat(), "predicted": predicted,
+                    "horizon_days": horizon_days, "due_date": due.isoformat(), "predicted": predicted, "nifty_ref": nifty_ref,
                     "outcome": None, "scored_at": None,
                 }},
                 upsert=True,
@@ -63,18 +64,30 @@ class ForwardStore:
         return await self.col.find(q).sort("decided_at", -1).to_list(length=limit)
 
     async def scored(self, source: Optional[str] = None) -> list[dict]:
-        q = {"outcome": {"$ne": None}, "outcome.void": {"$ne": True}}
+        q = {"outcome.excess": {"$exists": True}}  # voids carry {"void": ...} and no excess
         if source:
             q["source"] = source
         return await self.col.find(q).to_list(length=None)
 
 
-def engine_recorder(db, user_id: str):
+async def _nifty_now(redis) -> Optional[float]:
+    """NIFTY 50 last value from the ingest quotes loop's Redis key; None when unavailable."""
+    try:
+        from backend.datalayer.prices import MACRO, MACRO_KEY
+
+        raw = await redis.get(MACRO_KEY.format(MACRO["NIFTY 50"])) if redis is not None else None
+        return float(json.loads(raw)["value"]) if raw else None
+    except Exception:
+        return None
+
+
+def engine_recorder(db, user_id: str, redis=None):
     """The runner's `forward` hook: one INTRADAY entry -> one engine record."""
     store = ForwardStore(db)
 
     async def record(order, intent, entry: float, at: datetime) -> None:
         await store.record(source="engine", name=order.strategy_name, user_id=user_id, symbol=order.symbol,
-                           side=order.side.value, decided_at=at, intraday=True, ref_price=entry, horizon_days=0)
+                           side=order.side.value, decided_at=at, intraday=True, ref_price=entry, horizon_days=0,
+                           nifty_ref=await _nifty_now(redis))
 
     return record

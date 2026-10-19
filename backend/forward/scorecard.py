@@ -3,6 +3,7 @@ with each source's existing money gate."""
 
 import logging
 import math
+import time
 from collections import defaultdict
 from typing import Optional
 
@@ -13,9 +14,12 @@ MIN_N = 100
 MIN_T = 2.0
 MAX_GAP = 0.05
 NEWS_MIN_N = 20
+CACHE_SECONDS = 60
+_cache: tuple = (0.0, None)  # (monotonic time, rows)
 
 
 def stats(records: list[dict]) -> dict:
+    records = [r for r in records if "excess" in (r.get("outcome") or {})]  # skip voids defensively
     outs = [r["outcome"] for r in records]
     n = len(outs)
     excess = [o["excess"] for o in outs]
@@ -44,7 +48,7 @@ def label(s: dict) -> dict:
     return {"label": "proven" if ok else "unproven", "progress": min(s["n"], MIN_N)}
 
 
-async def _gate(db, source: str, name: str) -> Optional[bool]:
+async def _gate(db, source: str, name: str, admin: Optional[tuple] = None) -> Optional[bool]:
     """Does the source's existing money gate pass this name? None when unknown."""
     try:
         if source == "picks":
@@ -56,11 +60,11 @@ async def _gate(db, source: str, name: str) -> Optional[bool]:
             from backend.prefs import PrefsStore
             from backend.risk import paper_gate
 
-            admin = await db["users"].find_one({"role": "admin"}, {"id": 1})
+            if admin is None:  # (admin id, account size), looked up once per scorecard call
+                admin = await _admin(db)
             if not admin:
                 return None
-            size = (await PrefsStore(db).get(admin["id"]))["account_size"]
-            return name in await paper_gate.proven_strategies(db, admin["id"], {name}, size)
+            return name in await paper_gate.proven_strategies(db, admin[0], {name}, admin[1])
         if source == "news":
             w = await db["news_theme_weights"].find_one({"_id": name})
             return bool(w) and w["weight"] > 1 and w["n"] >= NEWS_MIN_N
@@ -69,7 +73,30 @@ async def _gate(db, source: str, name: str) -> Optional[bool]:
     return None
 
 
-async def scorecard(db) -> list[dict]:
+async def _admin(db) -> Optional[tuple]:
+    from backend.prefs import PrefsStore
+
+    row = await db["users"].find_one({"role": "admin"}, {"id": 1})
+    return (row["id"], (await PrefsStore(db).get(row["id"]))["account_size"]) if row else None
+
+
+async def scorecard(db, force: bool = False) -> list[dict]:
+    """Cached 60 s in-process: the badge hook calls this on every page load."""
+    global _cache
+    at, rows = _cache
+    if not force and rows is not None and time.monotonic() - at < CACHE_SECONDS:
+        return rows
+    rows = await _scorecard(db)
+    _cache = (time.monotonic(), rows)
+    return rows
+
+
+async def _scorecard(db) -> list[dict]:
+    try:
+        admin = await _admin(db)
+    except Exception as exc:
+        logger.warning("forward admin lookup failed: %s", exc)
+        admin = None
     groups = defaultdict(list)
     for r in await ForwardStore(db).scored():
         groups[(r["source"], r["name"])].append(r)
@@ -77,7 +104,7 @@ async def scorecard(db) -> list[dict]:
     for (source, name), group in sorted(groups.items()):
         s = stats(group)
         lab = label(s)
-        gate = await _gate(db, source, name)
+        gate = await _gate(db, source, name, admin)
         rows.append({"source": source, "name": name, **s, **lab, "gate": gate,
                      "disagrees": None if gate is None else gate != (lab["label"] == "proven")})
     return rows

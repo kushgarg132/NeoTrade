@@ -57,3 +57,10 @@ def _every_strategy_proven(request, monkeypatch):
 
     monkeypatch.setattr(paper_gate, "proven_strategies", proven)
     monkeypatch.setattr(paper_gate, "for_mine", everything)
+
+
+@pytest.fixture(autouse=True)
+def _reset_forward_scorecard_cache():
+    from backend.forward import scorecard
+
+    scorecard._cache = (0.0, None)

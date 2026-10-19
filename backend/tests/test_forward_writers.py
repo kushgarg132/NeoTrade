@@ -64,7 +64,7 @@ async def test_sink_records_suggestion_and_news():
     await SuggestionSink(SuggestionStore(db), user_id="u", source="scan")(_proposal(max_hold=12))
     await SuggestionSink(SuggestionStore(db), user_id="v", source="news")(_proposal())
     by = {r["source"]: r for r in await _records(db)}
-    assert by["suggestion"]["horizon_days"] == 12 and by["suggestion"]["name"] == "scan"
+    assert by["suggestion"]["horizon_days"] == 12 and by["suggestion"]["name"] == "unknown"
     assert by["news"]["horizon_days"] == 5 and by["news"]["name"] == "news"
     sink = SuggestionSink(SuggestionStore(db), user_id="u", source="scan")
     await sink(_proposal())  # pending exists for u/TCS
@@ -101,3 +101,20 @@ async def test_runner_hook_records_intraday_entries_only():
 
 async def test_runner_hook_failure_does_not_change_the_order():
     assert len(await _size("INTRADAY", AsyncMock(side_effect=RuntimeError("x")))) == 1
+
+
+async def test_engine_recorder_stores_nifty_ref_best_effort():
+    class R:
+        async def get(self, key):
+            assert key == "macro:^NSEI"
+            return '{"value": 24500.5}'
+
+    db = AsyncMongoMockClient()["n"]
+    order = Order(id="o", symbol="TCS", side=Side.BUY, quantity=1.0, order_type="MARKET", limit_price=None,
+                  product="MIS", strategy_name="orb")
+    now = datetime(2026, 10, 19, 5, tzinfo=timezone.utc)
+    await engine_recorder(db, "u", R())(order, None, 100.0, now)
+    assert (await _records(db))[0]["nifty_ref"] == 24500.5
+    db2 = AsyncMongoMockClient()["n2"]
+    await engine_recorder(db2, "u")(order, None, 100.0, now)
+    assert (await _records(db2))[0]["nifty_ref"] is None

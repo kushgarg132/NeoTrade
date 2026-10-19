@@ -473,7 +473,7 @@ async def _launch_run(
         expand=(make_expand(master, feed, YFinanceProvider(), strategies, symbol_for_token, today)
                 if mode == "INTRADAY" else None),
         shadow_exit=_plan_shadow_exit(user_id),
-        forward=engine_recorder(db.db, user_id),
+        forward=engine_recorder(db.db, user_id, db.redis),
     )
     await runs.create(
         run_id=run_id, user_id=user_id, mode=mode,

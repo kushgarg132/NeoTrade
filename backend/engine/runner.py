@@ -249,8 +249,6 @@ async def size_intents(
                     "stop": intent.stop_hint, "target": intent.target_hint,
                     "mark": result.premium_estimate, "strategy_name": result.order.strategy_name,
                 }
-            if intraday:
-                await _forward(forward, result.order, intent, result.premium_estimate, ctx)
             orders.append(result.order)
             continue
 

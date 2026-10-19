@@ -48,7 +48,7 @@ async def test_due_and_set_outcome():
     due = await s.due(later)
     assert len(due) == 2
     await s.set_outcome(due[0]["_id"], {"net": 0.01, "nifty": 0.0, "excess": 0.01, "won": True}, later)
-    await s.set_outcome(due[1]["_id"], {"void": True}, later)
+    await s.set_outcome(due[1]["_id"], {"void": "no bars"}, later)
     assert await s.due(later) == []
     assert len(await s.scored()) == 1
     assert len(await s.scored("news")) == 0

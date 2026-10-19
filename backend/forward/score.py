@@ -28,14 +28,16 @@ def _score(t: dict, record: dict, d0, intraday: bool, horizon: int) -> Optional[
     if q >= len(days) or sym not in t["close"].columns or (intraday and days[p].date() != d0):
         return None
     entry = record.get("ref_price") if intraday and record.get("ref_price") else t["open"][sym].iat[p]
-    exit_, n_in, n_out = t["close"][sym].iat[q], t["nifty_open"].iat[p], t["nifty_close"].iat[q]
+    # intraday: NIFTY from the decision-time reference when recorded, else the day open (leaks the morning move)
+    n_in = record.get("nifty_ref") if intraday and record.get("nifty_ref") else t["nifty_open"].iat[p]
+    exit_, n_out = t["close"][sym].iat[q], t["nifty_close"].iat[q]
     if not (all(np.isfinite([entry, exit_, n_in, n_out])) and entry > 0):
         return None
     entry, exit_ = float(entry), float(exit_)
     net = round_trip_return(entry, exit_) if record["side"] == "BUY" else round_trip_return(exit_, entry)
     nifty = float(n_out / n_in - 1)
     return {"entry_date": days[p].date().isoformat(), "exit_date": days[q].date().isoformat(),
-            "net": net, "nifty": nifty, "excess": net - nifty, "won": net > 0}
+            "net": net, "nifty": nifty, "excess": net + nifty if record["side"] == "SELL" else net - nifty, "won": net > 0}
 
 
 def outcome(t: dict, record: dict) -> Optional[dict]:
