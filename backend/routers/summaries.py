@@ -37,3 +37,9 @@ async def holdings(user: User = Depends(get_current_user)):
     async for d in db.db[core.COLLECTION].find({"user_id": user.id, "kind": "holding", "at": {"$gte": since}}).limit(200):
         notes[d["key"]] = {k: v for k, v in core.shown(d).items() if k != "key"}
     return {"notes": notes}
+
+
+@router.get("/activity")
+async def activity(user: User = Depends(get_current_user)):
+    """The latest "what the AI did today and why" (written once a day after the close)."""
+    return {"summary": core.shown(await core.latest(db.db, user.id, "activity"))}

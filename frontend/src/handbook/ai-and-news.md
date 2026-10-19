@@ -96,6 +96,10 @@ and waits 6 hours); `GET /summaries/*` (`routers/summaries.py`) only reads, so o
   `summaries/holding.py::run_all`: each user at most every 30 minutes, 08:45 to 22:00, writes a note for each
   such action that has none (action ids pin the instance), at most 4 a run and 12 a day. Feature `news`, fast
   tier; shown by `components/ideas/HoldingActions.jsx`.
+- **What the AI did today and why** (AI > Activity): a short paragraph from the autopilot log, the day's
+  game plan and the AI book's closed P&L, once per user per day after the 16:00 pass
+  (`scheduler.py::run_daily_jobs`, `summaries/activity.py::run_all`). Feature `plan`, standard tier. Users
+  with no order, refusal or plan that day get none.
 
 ## Facts, tools and grounding
 

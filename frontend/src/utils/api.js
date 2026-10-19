@@ -229,6 +229,7 @@ export const endpoints = {
   summaries: {
     day: '/summaries/day',
     holdings: '/summaries/holdings',
+    activity: '/summaries/activity',
   },
   todayAttention: '/today/attention',
   mine: {

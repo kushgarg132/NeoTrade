@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 76e88db
+verified_at: 90445e1
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -214,6 +214,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | POST | `/api/v1/mine/actions/{action_id:path}/snooze` | `backend/routers/mine.py::snooze_action` | user |
 | GET | `/api/v1/summaries/day` | `backend/routers/summaries.py::day` | user |
 | GET | `/api/v1/summaries/holdings` | `backend/routers/summaries.py::holdings` | user |
+| GET | `/api/v1/summaries/activity` | `backend/routers/summaries.py::activity` | user |
 | GET | `/api/v1/plan/today` | `backend/routers/plan.py::plan_today` | user |
 | GET | `/api/v1/picks` | `backend/routers/picks.py::picks_today` | admin |
 | GET | `/api/v1/picks/history` | `backend/routers/picks.py::picks_history` | admin |

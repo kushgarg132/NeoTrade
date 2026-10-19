@@ -1,7 +1,7 @@
 """AI summaries (backend/summaries/): each generator builds the right facts, writes once per period,
 keeps the last text when the model fails, and the read endpoints are scoped to the user."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,7 +13,7 @@ from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.engine.session import IST
 from backend.routers import summaries as router
-from backend.summaries import core, day, holding
+from backend.summaries import activity, core, day, holding
 from backend.tests.test_datalayer_news import FakeRedis
 
 NOW = datetime(2026, 10, 15, 8, 50, tzinfo=IST)
@@ -220,4 +220,79 @@ async def test_holdings_endpoint_returns_only_the_users_recent_notes(client, db,
     assert list(notes) == ["bad_news:DOWN:k"] and notes["bad_news:DOWN:k"]["text"] == "mine"
     holder["user"] = "carol"
     assert http.get("/api/v1/summaries/holdings").json() == {"notes": {}}
+    assert llm.calls == []
+
+
+# ------------------------------------------------------------------ AI: Activity
+
+CLOSE = datetime(2026, 10, 15, 16, 5, tzinfo=IST)
+
+
+@pytest.fixture
+async def ai_day(db, monkeypatch):
+    t = datetime(2026, 10, 15, 10, 0, tzinfo=IST)
+    await db["autopilot_log"].insert_many([
+        {"user_id": "alice", "at": t, "status": "FILLED", "side": "BUY", "quantity": 10, "symbol": "TCS",
+         "source": "picks", "mode": "LONGTERM", "reason": "Pick cleared the fence"},
+        {"user_id": "alice", "at": t.replace(hour=11), "status": "REFUSED", "side": "BUY", "quantity": 5, "symbol": "INFY",
+         "source": "news", "mode": "INTRADAY", "reason": "risk-off regime blocks news entries"},
+        {"user_id": "alice", "at": t - timedelta(days=1), "status": "FILLED", "side": "BUY", "quantity": 1, "symbol": "OLD",
+         "source": "picks", "mode": "LONGTERM", "reason": "yesterday"},
+        {"user_id": "bob", "at": t, "status": "FILLED", "side": "BUY", "quantity": 99, "symbol": "BOBCO",
+         "source": "picks", "mode": "LONGTERM", "reason": "not alice"}])
+    monkeypatch.setattr("backend.ai.facts.user.game_plan", AsyncMock(return_value={"plan": {
+        "trigger": "pre_open", "skip_day": False, "risk_multiplier": 0.5, "max_positions": 4,
+        "rationale": ["Risk-off: half size"], "allow": [{"symbol": "TCS", "strategies": ["orb"]}]}}))
+    monkeypatch.setattr("backend.portfolio.digest.pnl_since", AsyncMock(return_value={
+        "mine": 0.0, "ai": 1250.5, "ai_charges": 40.0, "mine_charges": 0.0}))
+
+
+async def test_activity_prompt_has_todays_orders_the_plan_and_the_result_for_this_user(db, redis, llm, ai_day):
+    llm.reply = "It filled 1 order and refused 1; the plan halved risk. The day ended at ₹1,250.5."
+    doc = await activity.generate(db, redis, "alice", CLOSE)
+    assert doc["key"] == "2026-10-15" and doc["text"].startswith("It filled")
+    [call] = llm.calls
+    assert (call["tier"], call["feature"]) == ("standard", "plan")
+    p = call["prompt"]
+    assert "Pick cleared the fence" in p and "risk-off regime blocks news entries" in p
+    assert "yesterday" not in p and "BOBCO" not in p                      # only today's rows, only this user
+    assert "Risk-off: half size" in p and '"risk_multiplier": 0.5' in p and '"orb"' in p
+    assert '"ai_net_pnl": 1250.5' in p
+
+
+async def test_activity_is_once_a_day(db, redis, llm, ai_day):
+    assert await activity.generate(db, redis, "alice", CLOSE)
+    assert await activity.generate(db, redis, "alice", CLOSE.replace(minute=30)) is None
+    assert len(llm.calls) == 1
+
+
+async def test_activity_with_nothing_to_explain_makes_no_call(db, redis, llm, monkeypatch):
+    monkeypatch.setattr("backend.ai.facts.user.game_plan", AsyncMock(return_value={"plan": None}))
+    assert await activity.generate(db, redis, "carol", CLOSE) is None and llm.calls == []
+
+
+async def test_activity_failure_keeps_yesterdays_text(db, redis, llm, ai_day):
+    await db["ai_summaries"].insert_one({"user_id": "alice", "kind": "activity", "key": "2026-10-14", "text": "yesterday's",
+                                         "at": datetime(2026, 10, 14, 11, tzinfo=timezone.utc)})
+    llm.reply = "Error generating response: 500"
+    assert await activity.generate(db, redis, "alice", CLOSE) is None
+    assert (await core.latest(db, "alice", "activity"))["text"] == "yesterday's"
+
+
+async def test_activity_run_all_covers_users_with_a_log_row_or_a_plan_today(db, redis, llm, ai_day):
+    await db["trade_plans"].insert_one({"user_id": "dave", "date": "2026-10-15"})
+    assert await activity.run_all(db, redis, CLOSE) == 3                   # alice, bob, dave
+    assert {d["user_id"] async for d in db["ai_summaries"].find({"kind": "activity"})} == {"alice", "bob", "dave"}
+
+
+async def test_activity_endpoint_is_the_users_latest(client, db, llm):
+    http, holder = client
+    at = datetime.now(timezone.utc)
+    await db["ai_summaries"].insert_many([
+        {"user_id": "alice", "kind": "activity", "key": "2026-10-14", "text": "older", "at": at.replace(year=2025)},
+        {"user_id": "alice", "kind": "activity", "key": "2026-10-15", "text": "newer", "at": at},
+        {"user_id": "bob", "kind": "activity", "key": "2026-10-16", "text": "bobs", "at": at}])
+    assert http.get("/api/v1/summaries/activity").json()["summary"]["text"] == "newer"
+    holder["user"] = "carol"
+    assert http.get("/api/v1/summaries/activity").json() == {"summary": None}
     assert llm.calls == []
