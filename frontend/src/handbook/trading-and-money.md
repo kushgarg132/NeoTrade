@@ -384,6 +384,8 @@ scored from there to the close; without it the scorer falls back to the day's op
 NIFTY move leak into excess. Option entries are not recorded. A suggestion is named after its strategy.
 The scorecard is cached for 60 seconds.
 
+Each pick also gets a `<setup>:long` row: the same entry held twice as long, scored on paper only (nothing trades it, no gate). It tests the RL sandbox's side finding that longer holds did better; a rule change waits until a `:long` row is proven and beats its base setup.
+
 ## ML ranking (research, admin runs by hand)
 
 Does a LightGBM model on price and volume features rank stocks better than the Picks momentum rule?

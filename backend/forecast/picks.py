@@ -165,16 +165,22 @@ async def _record_runs(db, t: dict, results: dict) -> None:
         logger.warning("lab runs for picks not recorded: %s", exc)
 
 
+LONG_SUFFIX = ":long"  # paper-only twin held 2x the horizon (RL sandbox side finding, 2026-10-19)
+
+
 async def _forward(db, new: list[dict], now: datetime) -> None:
-    """One forward record per new pick; never raises."""
+    """Two forward records per new pick, never raises: the pick at its horizon, and a
+    `<setup>:long` twin held twice as long. The twin is scored only; nothing trades it."""
     try:
         from backend.forward.store import ForwardStore
 
         store = ForwardStore(db)
         for p in new:
-            await store.record(source="picks", name=p["setup"], user_id="system", symbol=p["symbol"], side="BUY",
-                               decided_at=now, intraday=False, ref_price=p["entry_ref"], horizon_days=p["horizon"],
-                               predicted={"p_up": p["p_up"], "median": p["expected"]["median"]})
+            common = dict(source="picks", user_id="system", symbol=p["symbol"], side="BUY", decided_at=now,
+                          intraday=False, ref_price=p["entry_ref"])
+            await store.record(name=p["setup"], horizon_days=p["horizon"],
+                               predicted={"p_up": p["p_up"], "median": p["expected"]["median"]}, **common)
+            await store.record(name=p["setup"] + LONG_SUFFIX, horizon_days=2 * p["horizon"], **common)
     except Exception as exc:
         logger.warning("forward records for picks not written: %s", exc)
 

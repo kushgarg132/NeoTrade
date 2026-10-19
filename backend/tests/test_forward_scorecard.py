@@ -35,3 +35,15 @@ async def test_scorecard_news_gate_and_disagreement():
     await db["news_theme_weights"].insert_one({"_id": "x", "weight": 1.2, "n": 30})
     [row] = await scorecard(db)
     assert row["gate"] is True and row["label"] == "unproven" and row["disagrees"] is True
+
+
+async def test_long_hold_picks_rows_have_no_gate():
+    # `<setup>:long` is a paper-only twin: no live gate exists for it, so the gate is unknown,
+    # not the base setup's live_refusal.
+    db = AsyncMongoMockClient()["t"]
+    await db["forward_records"].insert_many(
+        [{"_id": f"{n}{i}", "source": "picks", "name": n, **rec(0.01, 0.0)}
+         for n in ("mom", "mom:long") for i in range(3)])
+    rows = {r["name"]: r for r in await scorecard(db, force=True)}
+    assert rows["mom:long"]["gate"] is None and rows["mom:long"]["disagrees"] is None
+    assert rows["mom"]["gate"] is False  # no scored picks yet -> live_refusal refuses

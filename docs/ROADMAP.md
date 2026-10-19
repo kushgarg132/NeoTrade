@@ -945,7 +945,7 @@ registration and public onboarding are deferred, not cancelled.
    holding period in 86-93% of test years for four setups (t -3.5 to -4.0); pullback is closest
    (t -1.8). Side finding, out of sample per fold: holding about twice today's horizon beat today's
    horizon for every setup (e.g. momentum_vol_60 +9.3% vs +4.3% a pick), with deeper drawdowns and
-   survivorship flattering long holds. Not acted on: a candidate for a forward-recorded rule test.*
+   survivorship flattering long holds. Now forward-recorded on paper as `<setup>:long` (2026-10-19); a rule change waits for a proven `:long` row.*
 
 **Done when:** Every live trade reconciles to the broker; each strategy/model run can be
 reproduced from stored inputs and configuration; every personal live order has an explicit,

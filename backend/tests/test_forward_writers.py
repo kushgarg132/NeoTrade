@@ -44,10 +44,12 @@ async def test_picks_write_forward_records_and_survive_a_failing_store(monkeypat
     db = AsyncMongoMockClient()["a"]
     await seed(db)
     await picks.run(db, now)
-    recs = await _records(db)
-    assert len(recs) == 1 and recs[0]["source"] == "picks" and recs[0]["name"] == "fake"
-    assert recs[0]["user_id"] == "system" and recs[0]["horizon_days"] == 2
-    assert set(recs[0]["predicted"]) == {"p_up", "median"}
+    recs = {r["name"]: r for r in await _records(db)}
+    assert set(recs) == {"fake", "fake:long"}  # each pick plus its long-hold paper twin
+    base, long = recs["fake"], recs["fake:long"]
+    assert base["source"] == long["source"] == "picks" and base["user_id"] == "system"
+    assert base["horizon_days"] == 2 and long["horizon_days"] == 4
+    assert set(base["predicted"]) == {"p_up", "median"} and long["predicted"] is None
 
     async def boom(self, **k):
         raise RuntimeError("down")

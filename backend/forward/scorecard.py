@@ -52,7 +52,10 @@ async def _gate(db, source: str, name: str, admin: Optional[tuple] = None) -> Op
     """Does the source's existing money gate pass this name? None when unknown."""
     try:
         if source == "picks":
-            from backend.forecast.picks import PICKS, live_refusal
+            from backend.forecast.picks import LONG_SUFFIX, PICKS, live_refusal
+
+            if name.endswith(LONG_SUFFIX):
+                return None  # paper-only twin: no live gate exists for it
 
             scored = await db[PICKS].find({"setup": name, "outcome": {"$ne": None}}).to_list(length=None)
             return live_refusal(scored) is None
