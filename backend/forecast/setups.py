@@ -1,6 +1,6 @@
 """Daily setups for Picks, as pure functions over a wide bar table.
 
-A table is {"open"|"high"|"close"|"volume": DataFrame (rows = NIFTY's trading
+A table is {"open"|"high"|"low"|"close"|"volume": DataFrame (rows = NIFTY's trading
 days, columns = symbols), "nifty_open"|"nifty_close": Series}. NIFTY's days
 are the calendar, so a Yahoo bar on an exchange holiday drops out.
 
@@ -20,7 +20,7 @@ from backend.strategies.indicators import Indicators
 from backend.datalayer.bars import NIFTY
 from backend.factor.model import MONTH, YEAR, Params, scores, volatility
 
-FIELDS = ("open", "high", "close", "volume")
+FIELDS = ("open", "high", "low", "close", "volume")
 
 
 def table(frames: dict[str, pd.DataFrame]) -> dict:

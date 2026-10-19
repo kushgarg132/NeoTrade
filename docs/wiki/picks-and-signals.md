@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
-covers: [backend/lab/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: b8e37f7
+covers: [backend/lab/**, backend/ml/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
+verified_at: 1e8ef76
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -25,7 +25,7 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 | backend/forward/scorecard.py | Per source/name stats, the one proven rule, comparison with each existing money gate | `scorecard.py::stats`, `::label`, `::scorecard` (cached 60 s, `force` bypasses; admin id and account size looked up once per call), `::_gate`, `::MIN_N`=100, `::MIN_T`=2.0, `::MAX_GAP`=0.05 |
 | backend/forecast/setups.py | 5 setups as pure functions over a wide bar table (no look-ahead) | `setups.py::table`, `::SETUPS`, `::BY_NAME`, `::Setup`, `::momentum`, `::low_vol`, `::momentum_vol`, `::breakout`, `::pullback`, `::_top_decile`, `::_month_starts` |
 | backend/forecast/study.py | Event study + per-year walk-forward calibration (years from `lab.splits.yearly_folds`) | `study.py::net_return` (= `lab/assumptions.py::round_trip_return`, 10 bps slipped), `::kept`, `::outcome`, `::events`, `::stats`, `::walk_forward`, `::run`, `::NOTIONAL`=1e5, `::MIN_PRIOR`=30, `::MIN_N`=100 |
-| backend/forecast/research/ml_experiment_tool.py | Research only, not wired: LightGBM vs setups (needs lightgbm, not installed in prod) | `ml_experiment_tool.py::load`, `::HORIZONS` |
+| backend/ml/features.py | Research only, not wired: 24 price/volume features and net-return labels for the ML harness (no look-ahead; labels via `lab/assumptions.py::round_trip_return`, DEFAULT costs; needs lightgbm) | `features.py::FEATURES`, `::features`, `::labels`, `::long_table`, `::STEP`=5 |
 | backend/forecast/research/bandit_experiment_tool.py | Research only, not wired: LinUCB/Thompson sizing (0/0.5/1) and exit (horizon vs ATR trail 1.5/2/3) over Picks events; failed its bar 2026-10-18 (fixed rule +0.91% vs bandits +0.68-0.82%), trailing stops lost every year | `bandit_experiment_tool.py::event_table`, `::walk_forward`, `::EXITS` |
 | backend/routers/picks.py | `/picks` admin-only API | `routers/picks.py::router`, `::picks_today`, `::picks_history`; order = `forecast/picks.py::rank_key` (also used by `/today` `picks_top`) |
 | backend/factor/model.py | Pure momentum + low-vol scoring, selection with buffer, inverse-vol weights, trend/vol exposure | `factor/model.py::Params`, `::scores`, `::select`, `::weights`, `::exposure`, `::target_book`, `::volatility`, `::YEAR/HALF/MONTH` |
@@ -250,5 +250,5 @@ Related, outside the globs: `/strategies/built*`, `/strategies/library` (→ `le
 | backend/tests/test_built_strategy.py | `strategies/built.py::BlockStrategy` (spec interpreter) |
 | backend/tests/test_screening_fundamentals.py, test_screening_universe.py, test_yfinance_fundamentals_provider.py | screening scores, universe filter, provider mapping |
 
-Not covered by tests: `factor/survivorship.py`, `factor/data.py`, `forecast/research/ml_experiment_tool.py`, `forecast/research/bandit_experiment_tool.py`, `suggestions/notify.py` (beyond indirect use).
+Not covered by tests: `factor/survivorship.py`, `factor/data.py`, `forecast/research/bandit_experiment_tool.py`, `suggestions/notify.py` (beyond indirect use).
 Run: `cd backend && python -m pytest tests/test_forecast_picks.py ...`.
