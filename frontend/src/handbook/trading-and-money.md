@@ -412,24 +412,26 @@ First real run, 2026-10-19: FAIL at 20 and 60 days. The ranking signal is real i
 ## RL exit sandbox (research, admin runs by hand)
 
 Can a learned policy time the exit of a Pick better than the fixed rule? `backend/rl/env.py::episodes` turns each
-Pick into an episode: from the day after entry the agent either holds or exits at that day's close, and the
-exit is forced on day `2 * horizon`. The state on day d uses bars up to d only (days held, open P&L, 20-day
+Pick into an episode: from the day after entry the agent either holds or exits (decided at that day's close, filled at
+the next day's open, so the decision never sees its own fill price), and the exit is forced on day `2 * horizon`. The state on day d uses bars up to d only (days held, open P&L, NIFTY since entry, 20-day
 volatility, the stock's 20-day return minus NIFTY's, NIFTY against its 200-day mean, the setup). The reward is
 the net return (`round_trip_return`, 10 bps slippage and CNC charges) minus NIFTY over the same days.
 `backend/rl/agent.py::fit` is fitted Q-iteration with LightGBM: five passes, each regressing the value of
-holding on the best of exiting or holding on the next day, so a row never sees its own reward.
+holding on the best of exiting or holding on the next day, so a row never sees its own reward (holding on the last day is worth -inf, a forced exit).
 
 `backend/rl/evaluate.py::evaluate_rows` walks forward a calendar year at a time (3 training years minimum; a
 training episode must have ended before the test year starts) and compares the policy with two fixed rules on
-the test year: today's horizon (`fixed`) and the single holding day that did best on the training years
+the test year, all filling at the next open: today's horizon (`fixed`) and the single holding day that did best on the training years
 (`best_fixed`, never chosen on test data). The baseline is the better of those two on train.
 **The bar** (`evaluate.py::passes`): mean yearly improvement over the baseline above 0, t-stat of the yearly
-improvements at least 2, positive in at least 70% of years, and a policy max drawdown no deeper than the baseline's.
+improvements at least 2, positive in at least 70% of years, and a policy max drawdown no deeper than the baseline's, over at least `MIN_TEST_YEARS` = 8 test years. One setup passing
+is not evidence among five: `run` reports `family_passed` only when at least 2 setups pass (`evaluate.py::run`).
 
 Run it in the jobs container: `docker exec neotrade-jobs nice python -m backend.rl.evaluate [--setup momentum]`.
 It prints `recorded <id>` or `NOT RECORDED` per setup and leaves a `lab_runs` row (kind `rl`, name
 `fqi_exit:<setup>`), passed or not, with the caveats: no point-in-time NIFTY 200 membership (survivorship) and
-price-only state. Nothing is wired; a pass would only justify a later paper-only forward-record source.
+price-only state. Expected runtime (reviewer estimate, not yet measured): about 30-60 min for all five setups at 1 thread, ~1 GB peak;
+use `--setup` to run one at a time. Nothing is wired; a pass would only justify a later paper-only forward-record source.
 
 ## Reproducing a run
 

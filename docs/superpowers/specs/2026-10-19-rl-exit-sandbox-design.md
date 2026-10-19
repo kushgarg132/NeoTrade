@@ -19,12 +19,13 @@ adding a paper-only `rl` forward-record source.
 - Episodes = Picks events: for each setup in `forecast/setups.py::SETUPS`, `forecast/study.py::events`
   over the `forecast/picks.py::load` table. Entry = next trading day's open (as `study.outcome`).
 - `HMAX(setup) = 2 * setup.horizon`. On held day d = 1..HMAX the agent chooses `hold` or `exit`;
-  `exit` closes at day d's close; day HMAX forces exit.
-- State at day d (bars up to d only): `days_held / HMAX`, open P&L (close_d / entry − 1),
+  the decision is taken at day d's close and `exit` fills at the OPEN of day d+1 (tradable); day HMAX
+  forces exit. An episode needs bars through day HMAX+1, else it is dropped.
+- State at day d (bars up to d only): `days_held / HMAX`, open P&L (close_d / entry − 1), NIFTY return since the entry open (nifty_close_d / nifty_open_entry − 1, so the state sees what the reward subtracts),
   20-day realised volatility, stock 20-day return − NIFTY 20-day return, NIFTY close / its 200-day
   mean − 1, setup one-hot.
-- Reward on exit at d: `lab/assumptions.py::round_trip_return(entry, close_d)` − NIFTY return over
-  the same entry/exit days.
+- Reward on exit at d: `lab/assumptions.py::round_trip_return(entry, open_{d+1})` − NIFTY return over
+  the same entry open → open_{d+1}. `fixed` (decide at day H) and `best_fixed` use the same fill.
 - `episodes(t, setup) -> pd.DataFrame` long table: one row per (episode, day) with state columns,
   `exit_reward`, `next_row` index (None at HMAX), `episode_end` (date of day HMAX), `signal_date`.
 
@@ -47,7 +48,10 @@ adding a paper-only `rl` forward-record source.
   `t` over yearly improvements (mean / (std/√n)), `hit_years` (share of years > 0), max drawdown
   of cumulative per-pick excess per rule, mean days held.
 - `passes(result) -> (bool, reasons)`: mean improvement > 0 and t ≥ 2 and `hit_years` ≥ 0.70 and
-  policy max drawdown ≤ baseline max drawdown.
+  policy max drawdown ≤ baseline max drawdown, over at least `MIN_TEST_YEARS = 8` test years (fewer
+  fails with "only N test years (< 8)").
+- Family verdict: `run` returns/prints `family_passed = setups_passed >= 2` (one pass among five
+  setups is not evidence) and stores `family_passed` and `setups_passed` in every row's metrics.
 - `async run(db, now) -> dict`: one `lab_runs` row per setup, kind `rl`, name `fqi_exit:<setup>`,
   config (params, iterations, HMAX rule, features), `execution=DEFAULT`, window, fingerprint,
   folds, metrics + `passed` + `reasons` + caveats (today's universe list; price-only state).
