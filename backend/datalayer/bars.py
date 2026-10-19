@@ -175,7 +175,9 @@ async def read(
     rows: dict[str, list] = {}
     cursor = db[BARS].find(
         {"symbol": {"$in": wanted}, "date": {"$gte": since.isoformat()}}, {"_id": 0},
-    ).sort("date", 1)
+    # Index order: a global date sort over 17 years of bars is an in-memory sort that Atlas
+    # refuses past 32 MB (picks.load failed on it). Only per-symbol date order is needed.
+    ).sort([("symbol", 1), ("date", 1)])
     async for doc in cursor:
         rows.setdefault(doc.pop("symbol"), []).append(doc)
     cutoff = ((today or today_ist()) - timedelta(days=STALE_DAYS)).isoformat()
@@ -201,7 +203,7 @@ async def prev_closes(db, symbols: Iterable[str], day: date) -> dict[str, float]
     cursor = db[BARS].find(
         {"symbol": {"$in": wanted}, "date": {"$lt": day.isoformat(), "$gte": (day - timedelta(days=10)).isoformat()}},
         {"_id": 0, "symbol": 1, "close": 1},
-    ).sort("date", 1)
+    ).sort([("symbol", 1), ("date", 1)])  # index order; the last close per symbol wins
     async for doc in cursor:
         closes[doc["symbol"]] = float(doc["close"])
     return closes
