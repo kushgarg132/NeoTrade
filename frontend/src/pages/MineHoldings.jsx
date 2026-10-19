@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { X } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
-import { MINE_TABS } from '../components/layout/sections';
+import { PORTFOLIO_TABS } from '../components/layout/sections';
+import { stockPath } from '../utils/stocks';
 import { Sheet, Statement, Row, Cell, Money, Empty, Ruling, StockIcon } from '../components/doc/Doc';
 import VerdictStamp from '../components/mine/VerdictStamp';
 import Rebalance from '../components/portfolio/Rebalance';
@@ -112,7 +113,7 @@ const MineHoldings = () => {
       .catch((err) => setReading(err?.response?.data?.detail || 'Could not read your holdings.'));
   };
   const toggle = (f) => setFilters((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]));
-  const open = (r) => r.kind !== 'MF' && navigate(`/mine/stock/${encodeURIComponent(r.symbol)}`);
+  const open = (r) => r.kind !== 'MF' && navigate(stockPath(r.symbol));
   const closePlan = () => setParams({}, { replace: true });
   const asOf = snapshot?.holdings_as_of || snapshot?.stale_since;
 
@@ -125,7 +126,7 @@ const MineHoldings = () => {
   return (
     <Layout>
       <div className="private space-y-3 sm:space-y-4">
-        <SectionTabs tabs={MINE_TABS} label="My account" />
+        <SectionTabs tabs={PORTFOLIO_TABS} label="Portfolio" />
         <Sheet
           title="Holdings"
           meta={snapshot ? (asOf ? `Holdings as of ${formatDateTime(asOf)} · broker logged out` : `${all.length} · ${formatDateTime(snapshot.at)}`) : null}

@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import SectionTabs from '../components/layout/SectionTabs';
-import { RESEARCH_TABS } from '../components/layout/sections';
 import { Sheet, Statement, Row, Cell, Empty, Ruling, Scrip, Field, Money } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { formatPercent, formatSignedPercent } from '../utils/formatters';
 
 /**
- * Picks (admin-only, /research/picks): today's setups with the base rates
+ * Picks (admin-only, /picks): today's setups with the base rates
  * measured over their own past events (backend/forecast/), the walk-forward
  * calibration per setup, and the forward record of stored picks.
  */
@@ -80,7 +78,6 @@ const Picks = () => {
   return (
     <Layout>
       <div className="space-y-4">
-        <SectionTabs tabs={RESEARCH_TABS} label="Research" />
         {error ? (
           <Empty title="Could not load picks" detail={error} />
         ) : !data ? (

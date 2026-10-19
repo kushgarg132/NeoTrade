@@ -39,7 +39,7 @@ const AiOverview = () => {
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
         <SectionTabs tabs={AI_TABS} label="AI account" />
         <Sheet title="Autopilot" meta={ap ? (ap.enabled ? `On · ${ap.live ? 'live' : 'paper'}` : 'Off') : undefined}
-               actions={<Link to="/ai/settings" className="field-label text-[var(--stamp)] hover:underline">Settings ›</Link>}>
+               actions={<Link to="/lab/limits" className="field-label text-[var(--stamp)] hover:underline">Settings ›</Link>}>
           {!data ? <Ruling rows={3} /> : !ap ? (
             <p className="doc-meta normal-case">Couldn’t load the autopilot.</p>
           ) : (

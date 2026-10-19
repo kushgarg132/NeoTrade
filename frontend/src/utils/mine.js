@@ -1,4 +1,5 @@
 /** Helpers for the Mine pages (Overview, Holdings, Stock, Tax). */
+import { stockPath } from './stocks.js';
 
 export const RANGES = ['1M', '6M', '1Y', 'ALL'];
 export const rangeLabel = (r) => (r === 'ALL' ? 'All' : r);
@@ -8,15 +9,15 @@ export const actionTarget = (item) => {
   const a = item?.action || {};
   switch (a.type) {
     case 'stock':
-      return { to: `/mine/stock/${encodeURIComponent(item.symbol)}` };
+      return { to: stockPath(item.symbol) };
     case 'tax':
-      return { to: '/mine/tax' };
+      return { to: '/portfolio/tax' };
     case 'rebalance':
-      return { to: '/mine/holdings?plan=1' };
+      return { to: '/portfolio/holdings?plan=1' };
     case 'ticket':
       return { ticket: { symbol: item.symbol, side: a.side, quantity: a.quantity, limitPrice: a.price } };
     case 'idea':
-      return { to: '/mine', idea: a.suggestion_id };
+      return { to: '/portfolio', idea: a.suggestion_id };
     default:
       return {};
   }

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
-import { MINE_TABS } from '../components/layout/sections';
+import { PORTFOLIO_TABS } from '../components/layout/sections';
 import { Sheet, Money, Empty, Ruling, Scrip } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { formatCurrency, formatQuantity } from '../utils/formatters';
@@ -163,7 +163,7 @@ const MineTax = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4">
-        <SectionTabs tabs={MINE_TABS} label="My account" />
+        <SectionTabs tabs={PORTFOLIO_TABS} label="Portfolio" />
         <div className="flex justify-end">{select}</div>
         {body}
         <p className="doc-meta normal-case">Estimate, not tax advice. Not covered: pre-2018 grandfathered cost, F&amp;O and intraday income, set-off against other income.</p>

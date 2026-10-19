@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: bce1071
+verified_at: 10e06dc
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -188,7 +188,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
     - `_needs_you` (logins, kill switch, NEEDS_REVIEW suggestions, PROPOSED chat cards, today's guardrail events, a
       `reconcile` item when the latest `broker_reconciliation` day (within `RECON_FRESH_DAYS`=4) has a mismatch
       (`engine/broker_recon.py::summary`), and for admins `data_quality` items from `system/data_quality.py::alerts`,
-      link `/system`, guarded so a failing check never blanks the list)
+      link `/lab/handbook`, guarded so a failing check never blanks the list)
     - `_mine_actions` top 3, plus the total
     - `scoreboard` (admin only)
     - `proposals_total`

@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import Layout from '../components/Layout';
+import SectionTabs from '../components/layout/SectionTabs';
+import { LAB_TABS } from '../components/layout/sections';
 import SystemTabs from '../components/system/SystemTabs';
 import { Sheet, Empty, Ruling } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
@@ -177,6 +179,7 @@ const Backlog = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
+        <SectionTabs tabs={LAB_TABS} label="Lab" />
         <SystemTabs active="future" />
         <Sheet title="Future" meta={items ? `${items.filter((i) => !['done', 'dropped'].includes(i.status)).length} open` : undefined}>
           <form onSubmit={add} className="flex flex-wrap items-end gap-2 pb-3 border-b border-[var(--rule)]">

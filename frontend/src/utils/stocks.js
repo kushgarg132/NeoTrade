@@ -1,7 +1,7 @@
-import { bareSymbol } from './formatters';
+import { bareSymbol } from './formatters.js';
 
 /** The one URL for a stock's page. */
-export const stockPath = (symbol) => `/research/stock/${encodeURIComponent(bareSymbol(symbol))}`;
+export const stockPath = (symbol) => `/stock/${encodeURIComponent(bareSymbol(symbol))}`;
 
 // Recently opened stocks, per device. Storage can be blocked (private
 // windows, previews): every access is guarded and an empty list is fine.

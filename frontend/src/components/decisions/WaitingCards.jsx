@@ -49,7 +49,7 @@ const WaitingCard = ({ card, now, onSettled }) => {
       // A refused token leaves the card PROPOSED on the server: back to the first tap.
       const refusal = confirmToken && tokenRefusal(err);
       if (refusal) return reset(refusal);
-      setNote(err?.response ? detailText(err, 'This card could not be confirmed.') : 'No answer from the server. The order may have gone through: check Mine › Journal before trying again.');
+      setNote(err?.response ? detailText(err, 'This card could not be confirmed.') : 'No answer from the server. The order may have gone through: check Journal before trying again.');
       later(onSettled, 2500);
     } finally {
       setBusy(null);

@@ -91,22 +91,22 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
                           "detail": "Broker sessions expire every day.", "link": "/settings?tab=accounts"})
     if kill and kill.get("tripped"):
         items.append({"kind": "kill_switch", "title": "Daily loss limit hit: live trading stopped",
-                      "detail": kill.get("reason") or "", "link": "/settings?tab=safety"})
+                      "detail": kill.get("reason") or "", "link": "/journal?tab=guardrails"})
     async for s in db.db["suggestions"].find({"user_id": user_id, "status": "NEEDS_REVIEW"}):
         items.append({"kind": "review", "title": f"Check {s['symbol']}: an approval was interrupted",
                       "detail": s.get("reason") or "Check your broker's order book before approving again.",
-                      "link": "/mine/journal"})
+                      "link": "/journal"})
     async for card in db.db["chat_actions"].find({"user_id": user_id, "status": "PROPOSED"}):
         if (_aware(card.get("expires_at")) or now) >= now:
             items.append({"kind": "card", "title": card.get("summary", "A card waits for you"),
                           "detail": "Confirm or cancel it in chat.", "expires_at": _aware(card.get("expires_at"))})
     for alert in await GuardrailStore(db.db).events_for(user_id, now.astimezone(IST).date()):
         items.append({"kind": "guardrail", "title": alert.get("title", "Guardrail alert"),
-                      "detail": alert.get("detail", ""), "link": "/settings?tab=safety"})
+                      "detail": alert.get("detail", ""), "link": "/journal?tab=guardrails"})
     since = now.astimezone(IST).date() - timedelta(days=RECON_FRESH_DAYS)
     if line := broker_recon.summary(await broker_recon.latest(db.db, user_id, since)):
         items.append({"kind": "reconcile", "title": "Reconciliation: broker and app records differ",
-                      "detail": line, "link": "/mine/journal"})
+                      "detail": line, "link": "/journal"})
     if admin:
         try:  # a broken check must not hide the user's other nags
             failures = await data_quality.alerts(db.db, db.redis, now)
@@ -114,7 +114,7 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
             logger.warning("today: data-quality alerts failed: %s", exc)
             failures = [f"Data-quality checks could not run: {type(exc).__name__}"]
         for failure in failures:
-            items.append({"kind": "data_quality", "title": failure, "detail": "Data quality", "link": "/system"})
+            items.append({"kind": "data_quality", "title": failure, "detail": "Data quality", "link": "/lab/handbook"})
     return items
 
 
@@ -136,13 +136,13 @@ async def _setup(user_id: str, prefs: dict) -> dict:
     has_trades = await db.db["journal_trades"].find_one({"user_id": user_id}, {"_id": 1}) is not None
     has_funds = await db.db["mf_imports"].find_one({"_id": user_id}, {"_id": 1}) is not None
     steps = [
-        ("import_trades", "Import your trades from a Zerodha Console file", has_trades, "/import"),
-        ("import_funds", "Import your mutual funds from a CAS statement", has_funds, "/import"),
+        ("import_trades", "Import your trades from a Zerodha Console file", has_trades, "/portfolio/import"),
+        ("import_funds", "Import your mutual funds from a CAS statement", has_funds, "/portfolio/import"),
         ("connect_mine", "Connect your broker", any(b in has_creds for b, r in roles.items() if r == "mine"), "/settings?tab=accounts"),
         ("connect_ai", "Connect the AI's broker", any(b in has_creds for b, r in roles.items() if r == "ai"), "/settings?tab=accounts"),
         ("roles", "Choose which account is yours and which is the AI's", {"ai", "mine"} <= set(roles.values()), "/settings?tab=accounts"),
-        ("daily_loss", "Turn on Watch my broker, with a daily loss limit", bool(prefs.get("guardrails_enabled")) and (prefs.get("daily_loss_limit") or 0) > 0, "/settings?tab=safety"),
-        ("telegram", "Link Telegram for alerts", bool(channel.get("telegram_chat_id")), "/settings?tab=safety"),
+        ("daily_loss", "Turn on Watch my broker, with a daily loss limit", bool(prefs.get("guardrails_enabled")) and (prefs.get("daily_loss_limit") or 0) > 0, "/journal?tab=guardrails"),
+        ("telegram", "Link Telegram for alerts", bool(channel.get("telegram_chat_id")), "/journal?tab=guardrails"),
         ("profile", "Tell the AI about yourself", sum(1 for k, v in profile.items() if k != "memories" and v) >= 3, "/profile"),
     ]
     rows = [{"id": i, "label": label, "done": bool(done), "link": link} for i, label, done, link in steps]

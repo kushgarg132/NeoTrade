@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { Search, Loader2 } from 'lucide-react';
 import api, { endpoints } from '../../utils/api';
 import { cn } from '../../utils/cn';
@@ -13,7 +13,10 @@ import { formatCurrency, formatSignedPercent } from '../../utils/formatters';
  * Keyboard-complete because a search you cannot drive from the keyboard is a
  * search you retype.
  */
-const SmartSearch = ({ onSearch, isLoading, className }) => {
+const SmartSearch = ({ onSearch, isLoading, className, compact = false, autoFocus = false }) => {
+  const uid = useId();
+  const inputId = `instrument-search-${uid}`;
+  const listId = `instrument-matches-${uid}`;
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState([]);
   const [open, setOpen] = useState(false);
@@ -97,7 +100,7 @@ const SmartSearch = ({ onSearch, isLoading, className }) => {
 
   return (
     <div ref={boxRef} className={cn('relative', className)}>
-      <label htmlFor="instrument-search" className="field-label block mb-1.5">
+      <label htmlFor={inputId} className={cn('field-label block mb-1.5', compact && 'sr-only')}>
         Scrip enquiry
       </label>
       <div className="flex items-center gap-2 border-b-2 border-[var(--rule-strong)] focus-within:border-[var(--stamp)] transition-colors">
@@ -107,11 +110,12 @@ const SmartSearch = ({ onSearch, isLoading, className }) => {
           <Search className="w-4 h-4 shrink-0 text-[var(--ink-faint)]" />
         )}
         <input
-          id="instrument-search"
+          id={inputId}
+          autoFocus={autoFocus}
           type="text"
           role="combobox"
           aria-expanded={showList}
-          aria-controls="instrument-matches"
+          aria-controls={listId}
           aria-autocomplete="list"
           autoComplete="off"
           value={query}
@@ -123,15 +127,15 @@ const SmartSearch = ({ onSearch, isLoading, className }) => {
           onKeyDown={onKeyDown}
           placeholder="Company or symbol"
           disabled={isLoading}
-          className="w-full bg-transparent border-0 py-2.5 text-base focus:outline-none focus:ring-0 disabled:opacity-50"
+          className={cn('w-full bg-transparent border-0 text-base focus:outline-none focus:ring-0 disabled:opacity-50', compact ? 'py-1.5 text-sm' : 'py-2.5')}
         />
       </div>
 
       {showList && (
         <ul
-          id="instrument-matches"
+          id={listId}
           role="listbox"
-          className="absolute z-[35] left-0 right-0 mt-px sheet max-h-72 overflow-y-auto"
+          className={cn('absolute z-[35] mt-px sheet max-h-72 overflow-y-auto', compact ? 'right-0 w-[min(20rem,calc(100vw-1.5rem))]' : 'left-0 right-0')}
         >
           {matches.length === 0 ? (
             <li className="px-3 py-3 text-sm text-[var(--ink-soft)]">

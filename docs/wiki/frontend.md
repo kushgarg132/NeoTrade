@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 8857d38
+verified_at: 10e06dc
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -30,7 +30,7 @@ The whole UI: a plain-JSX (no TypeScript) React 19 / React Router 7 / Tailwind v
 | `src/hooks/useSchedule.js`, `src/utils/schedule.js` | job times in copy (`EngineNow`, `EngineSwitches`, `PlanCard`, `TradingControlBar`, Settings guardrails hint) from `GET /system/schedule`; `utils/schedule.js::FALLBACK_SCHEDULE` shows until it loads | `useSchedule`, `clock12`, `FALLBACK_SCHEDULE` |
 | `src/hooks/useSymbolNews.js` | `GET /news/symbols` per distinct symbol list | `useSymbolNews` |
 | `src/components/Layout.jsx` | shell every page renders inside; loads nav counts; news toast | `Layout` |
-| `src/components/layout/{sections.js,Sidebar,BottomNav,SectionTabs,Masthead}.jsx` | nav model and chrome | `SECTIONS`, `MINE_TABS`, `AI_TABS`, `RESEARCH_TABS`, `sectionActive` |
+| `src/components/layout/{sections.js,Sidebar,BottomNav,SectionTabs,Masthead}.jsx` | nav model and chrome | `SECTIONS`, `PORTFOLIO_TABS`, `AI_TABS`, `LAB_TABS`, `sectionActive`, `utils/nav.js::visibleSections` |
 | `src/components/{RequireAuth,ErrorBoundary}.jsx`, `system/RequireAdmin.jsx` | route guards / crash boundary | `RequireAuth`, `RequireAdmin` |
 | `src/components/doc/Doc.jsx` | the design-system primitives (see Design tokens) | `Sheet`, `Statement`/`Row`/`Cell`, `Money`, `Scrip`, `Field`, `Empty`, `Ruling`, `Tabs`, `Stamp`, `NetLine` |
 | `src/components/common/*` | `Button`, `Badge`, `Card`, `Avatar`, `Markdown` (marked + DOMPurify), `MoneyBadge`, `NewsChip`, `AccountSwitch`, `StopAutopilot` | `Markdown` |
@@ -83,7 +83,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 
 ### 3. Layout shell (every page)
 1. `Layout` loads `GET /mine/actions` (count -> `PendingContext`, badge on Mine) and `GET /today/attention` (`res.data.count` -> badge on Today), refreshes on `useTopic('suggestions')` and `useReconnect` (`components/Layout.jsx::loadPending/loadAttention`).
-2. `useTopic('news')` pushes up to 3 toast alerts (`message.data` with `id`, `event|title`, `hits[{target,direction,impact}]`), auto-dismissed after 15 s, linking to `/research/news`.
+2. `useTopic('news')` pushes up to 3 toast alerts (`message.data` with `id`, `event|title`, `hits[{target,direction,impact}]`), auto-dismissed after 15 s, linking to `/portfolio/news`.
 3. Renders `Sidebar` (lg), `Masthead`, `<main>` wrapped in its own `ErrorBoundary`, `BottomNav` (phone), `ChatWidget`. `App.gated()` adds an outer `ErrorBoundary` + `Suspense` (pages are `React.lazy`) because a page crash before `<Layout>` mounts would otherwise be uncaught.
 
 ### 4. Today (`/`)
@@ -95,31 +95,31 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 1. Overview `pages/MineOverview.jsx`: `GET /mine/overview` -> `headline{value,day_change,day_change_pct,pnl,pnl_pct,xirr,nifty_xirr,as_of,holdings_as_of}`, `drivers{month|all:{top,bottom}}`, `mix{count,top,top_pct,top_symbol,effective_holdings,correlated,sectors}`; `GET /mine/actions`; reloads on `useReconnect`, `useTopic('suggestions')`. Children: `ValueCurve` (`GET /mine/history?range=1M|6M|1Y|ALL` -> `points[{value,invested,nifty_value}]`), `WaitingCards` (`GET /chat/actions/pending`, confirm/cancel), `NeedsYou`, `Mix`.
 2. `NeedsYou` rows: `{id,symbol,title,detail,action{type,side,quantity,price,suggestion_id}}`. `utils/mine.js::actionTarget` maps `action.type` `stock|tax|rebalance|ticket|idea` to a link, an `OrderTicket`, or an inline `SuggestionRecord` (loaded from `GET /suggestions?status=PENDING&mode=LONGTERM`, approve = `POST /suggestions/{id}/approve-live` twice: the first tap gets `confirm_token`, the second sends `{confirm_token}` (`NeedsYou::approveLive`, `SuggestionRecord` `liveToken`), decline = `POST .../reject`). Snooze/dismiss = `POST /mine/actions/{id}/snooze|dismiss` (7-day snooze).
 3. Holdings `pages/MineHoldings.jsx`: `GET /portfolio` with `params {account:'mine', live:true}` every 5 s while `marketPhase() !== 'closed'` and the tab is visible, plus `useRefetchOn(['portfolio','trades'])`. Reads `holdings[{symbol,isin,kind(STOCK|MF|...),name,weight_pct,value,pnl_pct,last_price,close_price,avg_price,thesis_target,verdict}]`, `holdings_as_of`, `stale_since`, `at`. First-use empty state -> `POST /portfolio/refresh`. `?plan=1` opens `portfolio/Rebalance.jsx` (`GET /portfolio/rebalance/candidates`, `PUT` prefs `rebalance_targets`, `POST /portfolio/rebalance {new_money,candidates}` -> `trades[]`; a trade opens `OrderTicket` via `utils/ticket.js::ticketFrom`).
-4. Stock `pages/MineStock.jsx`: `GET /mine/stock/{symbol}` (404 -> "missing") -> `position{avg_price,pnl_pct,held_since,sold}`, `verdict{current,reasons[],note,history[]}`, `lots[{buy_date,days_to_long,est_tax}]`, `unknown_qty`, `closes[{date,close}]`, `trades`, `thesis`, `dividends[{date,total|amount}]`, `events`, `news[{headline|title,url,published_at}]`. `ThesisEditor` -> `PUT /mine/thesis/{symbol}`.
+4. Stock `pages/MineStock.jsx` (`/stock/:symbol`; position blocks only when held, then `StockAnalysis`): `GET /mine/stock/{symbol}` (404 -> "missing") -> `position{avg_price,pnl_pct,held_since,sold}`, `verdict{current,reasons[],note,history[]}`, `lots[{buy_date,days_to_long,est_tax}]`, `unknown_qty`, `closes[{date,close}]`, `trades`, `thesis`, `dividends[{date,total|amount}]`, `events`, `news[{headline|title,url,published_at}]`. `ThesisEditor` -> `PUT /mine/thesis/{symbol}`.
 5. Tax `pages/MineTax.jsx`: `GET /mine/tax?fy=<year>` (FY select from `utils/mine.js::taxYears`, first FY 2025) -> `has_history`, `realised{short_gain,long_gain,est_tax,exemption_used,exemption_left}`, `unrealised[]`, `turning_long[]`, `harvest`, `unknown[]`, `pre_2018`. Empty state offers `POST /journal/import/upstox-history {days:730}`.
-6. Journal `pages/Journal.jsx` (`lockedAccount="mine"`): `GET /journal` with `params {account}` -> `summary{pnl,trips,wins,by_kind}`, `calendar[{day,pnl,trips}]`, `round_trips[{id,day,symbol,kind,direction,quantity,entry_price,exit_price,pnl,note,tags}]`, `brokers_connected`, `insights[]`, `mirror{costs{charges,net_pnl,trades_per_year,heavy_trader},benchmark{your_return,nifty_return,start}}`. Actions: `POST /journal/sync`, `POST /journal/import/upstox-history`, `POST /journal/import/zerodha-console {csv}`, note save `PUT /journal/round-trips/{id}/note`. Also `components/journal/LivePnl.jsx` (`GET /analytics/pnl?venue=live` -> `{mine,ai}`, topic `pnl` `data.live`; rows "Your account" / "AI account", AI row hidden without live trades) and `GET /trading/trades?venue=live` ("Orders placed from NeoTrade", refetched on `useTopic('trades')`), `GET /guardrails` (`events[]`, live via `useTopic('guardrails')`). `?tab=habits` shows patterns; `/mine/habits` and `/journal?tab=patterns|learning` redirect there.
+6. Journal `pages/Journal.jsx` (`/journal`, `lockedAccount="mine"`; tabs `trades|habits|guardrails` via `useTab`, the last renders `components/journal/GuardrailsSheet.jsx`, moved out of Settings): `GET /journal` with `params {account}` -> `summary{pnl,trips,wins,by_kind}`, `calendar[{day,pnl,trips}]`, `round_trips[{id,day,symbol,kind,direction,quantity,entry_price,exit_price,pnl,note,tags}]`, `brokers_connected`, `insights[]`, `mirror{costs{charges,net_pnl,trades_per_year,heavy_trader},benchmark{your_return,nifty_return,start}}`. Actions: `POST /journal/sync`, `POST /journal/import/upstox-history`, `POST /journal/import/zerodha-console {csv}`, note save `PUT /journal/round-trips/{id}/note`. Also `components/journal/LivePnl.jsx` (`GET /analytics/pnl?venue=live` -> `{mine,ai}`, topic `pnl` `data.live`; rows "Your account" / "AI account", AI row hidden without live trades) and `GET /trading/trades?venue=live` ("Orders placed from NeoTrade", refetched on `useTopic('trades')`), `GET /guardrails` (`events[]`, live via `useTopic('guardrails')`). `?tab=habits` shows patterns; `/mine/habits` and `/journal?tab=patterns|learning` redirect there.
 
 ### 6. AI account (paper until a strategy earns live)
 1. Overview `pages/AiOverview.jsx`: `GET /today` (`autopilot{enabled,live,capital,deployed}`, `scoreboard.today.ai`), `getPreferences`, `GET /analytics/pnl?venue=paper` (also pushed on topic `pnl` as `message.data.paper`); children `EngineNow`, `TodayNet` (`pnl.today{net,realized,unrealized,costs,trades,wins,losses}`), `TradedToday` (`GET /trading/fills?venue=paper&since=<IST midnight>`).
 2. `components/paper/EngineNow.jsx`: `GET /trading/runs`, `/trading/kill-switch`, `/trading/trades?status=OPEN&venue=paper&mode=LONGTERM`; Start = `POST /trading/start {mode:'INTRADAY', universe?}`, Stop = `POST /trading/stop {run_id}`, "Long-term scan" = `POST /suggestions/scan`; `useTopic('runs')` patches `progress` in place, `useTopic('trades')` refetches. Sizing is not sent (server reads prefs).
 3. Activity `pages/AiActivity.jsx`: `GET /settings/autopilot/log` -> `rows[{at,status(FILLED|SENT|REFUSED),side,quantity,symbol,source,mode,reason}]`, refetch via `useRefetchOn(['autopilot'])`; `PlanCard` reads `GET /plan/today`; `StopAutopilot` -> `PUT prefs {autopilot_enabled:false}`.
 4. Book `pages/Portfolio.jsx` (route `/ai/book`): `GET /trading/positions?venue=paper`, `GET /trading/trades?status=CLOSED&venue=paper&limit=1000` (`CLOSED_LIMIT`), `GET /trading/fills?venue=paper`; `utils/practice.js::periodSummary` builds the net curve client-side in IST.
-5. Strategies `pages/Strategies.jsx`: `GET /strategies/library?mode=`, `GET /settings/strategies/promotion`, `GET /strategies/built`, prefs `live_strategies`, `GET /trading/trades?venue=paper[&mode]` (only when "Every paper trade" is opened); `Scorecard` -> `GET /analytics/scorecard?venue=paper[&mode]` (`days[]`, `totals{...}`, `nifty_return_pct`, per-strategy rows `strategy,trades,win_rate,net,profit_factor,max_drawdown`); `MyStrategies`/`NewStrategySheet` -> `GET /strategies/vocabulary`, `POST /strategies/describe`, `POST /strategies/built`, `POST /strategies/built/{slug}/retire|retest` (polls every 10 s while a test runs); `LearningSheet` -> `GET /journal/learning`. `?book=intraday|longterm` filters the record.
-6. Settings `pages/AiLimits.jsx` = `AutopilotSheet` (autopilot Off/Paper/Live; Live requires typing `LIVE`) + `EngineSwitches` + trading limits + `EngineSettings` (per-strategy live switch writes `live_strategies`; admin-only "Run a year's backtest" -> `POST /trading/backtests/{name}`).
+5. Strategies `pages/Strategies.jsx` (admin, `/lab`): `GET /strategies/library?mode=`, `GET /settings/strategies/promotion`, `GET /strategies/built`, prefs `live_strategies`, `GET /trading/trades?venue=paper[&mode]` (only when "Every paper trade" is opened); `Scorecard` -> `GET /analytics/scorecard?venue=paper[&mode]` (`days[]`, `totals{...}`, `nifty_return_pct`, per-strategy rows `strategy,trades,win_rate,net,profit_factor,max_drawdown`); `MyStrategies`/`NewStrategySheet` -> `GET /strategies/vocabulary`, `POST /strategies/describe`, `POST /strategies/built`, `POST /strategies/built/{slug}/retire|retest` (polls every 10 s while a test runs); `LearningSheet` -> `GET /journal/learning`. `?book=intraday|longterm` filters the record.
+6. Autopilot limits `pages/AiLimits.jsx` (admin, `/lab/limits`) = `AutopilotSheet` (autopilot Off/Paper/Live; Live requires typing `LIVE`) + `EngineSwitches` + trading limits + `EngineSettings` (per-strategy live switch writes `live_strategies`; admin-only "Run a year's backtest" -> `POST /trading/backtests/{name}`).
 
-### 7. Research
-1. `pages/Dashboard.jsx` serves `/research` (front page: `SmartSearch`, recent stocks, `Market`) and `/research/stock/:symbol`. Stock: `stream.request('quick_analyze',{symbol})` -> event `report` -> `quick{company_info,price_data,technical_analysis,flags}`; fallback `POST /agents/quick-analyze/{symbol}`. AI tab fetched lazily on first open: `stream.request('analyze')` -> `ai{sentiment{score,...},sentiment_score,analyst_summary,thesis,news_articles,events}`; fallback `POST /agents/analyze/{symbol}`. `TradingChart` 1D = `GET /agents/intraday/{symbol}` every minute. "Add to watchlist" = `POST /watchlist/add?symbol=`. Buy/Sell opens `OrderTicket`.
-2. `Market.jsx`: `GET /market/indices`, `/market/global`, `/market/trending` (`percent`, `name`, `symbol`); index click -> `GET /market/index/{ticker}` + `.../analysis` (`IndexCard`, `IndexAnalysis`; NIFTY/BANKNIFTY link to `/research/options?u=`). `SmartSearch`: debounce 250 ms `GET /trading/instruments?q=` then `GET /market/quotes?symbols=`.
-3. News `pages/News.jsx`: `GET /news/feed` `params {limit:50, scope?, mine?, before?}` -> `items[{id,title,url,scope,source,published_at,material,status,impacts[{type,target,direction,impact}]}]`; refetch on `useTopic('news')`.
-4. Watchlist `pages/Watchlist.jsx`: `GET /watchlist/details` rows `{symbol,current_price,previous_close,day_change,day_change_percent}`; subscribes `prices:<SYM>` (`data.price`) for live ticks; remove = `DELETE /watchlist/remove/{symbol}`.
-5. Options `pages/OptionChain.jsx`: `GET /options/expiries?underlying=`, `GET /options/chain?underlying=&expiry=` -> `{name,expiry,spot,atm_strike,pcr,strikes[{strike,call{oi,oi_change,ltp,iv},put{...}}]}`; `?u=NIFTY|BANKNIFTY`.
-6. Picks `pages/Picks.jsx` (admin): `GET /picks` (`date,picks[],setups[],forward,caveats`) + `GET /picks/history?days=90` (`picks[]` filtered to those with `outcome`).
+### 7. Portfolio extras (News, Watchlist, Picks, Options)
+1. `pages/Dashboard.jsx` now exports only `StockAnalysis({symbol})`, rendered under `MineStock` at `/stock/:symbol`: `stream.request('quick_analyze',{symbol})` -> event `report` -> `quick{company_info,price_data,technical_analysis,flags}`, rendered by `AnalysisCard`; AI analysis (`stream.request('analyze')`) only when its tab opens. The old front page (`SmartSearch` landing, recent stocks, `Market`) is gone; `SmartSearch` lives in the `Masthead` (compact, icon on phone) and navigates to `utils/stocks.js::stockPath`. `Market.jsx`, `IndexCard`, `IndexAnalysis` are unrouted leftovers.
+2. `Market.jsx` (unrouted): `GET /market/indices`, `/market/global`, `/market/trending`; index click -> `GET /market/index/{ticker}` + `.../analysis`.
+3. News `pages/News.jsx` (`/portfolio/news`): `GET /news/feed` `params {limit:50, scope?, mine?, before?}` -> `items[{id,title,url,scope,source,published_at,material,status,impacts[{type,target,direction,impact}]}]`; refetch on `useTopic('news')`.
+4. Watchlist `pages/Watchlist.jsx` (`/portfolio/watchlist`): `GET /watchlist/details` rows `{symbol,current_price,previous_close,day_change,day_change_percent}`; subscribes `prices:<SYM>` (`data.price`) for live ticks; remove = `DELETE /watchlist/remove/{symbol}`.
+5. Options `pages/OptionChain.jsx` (admin, `/lab/options`): `GET /options/expiries?underlying=`, `GET /options/chain?underlying=&expiry=` -> `{name,expiry,spot,atm_strike,pcr,strikes[{strike,call{oi,oi_change,ltp,iv},put{...}}]}`; `?u=NIFTY|BANKNIFTY`.
+6. Picks `pages/Picks.jsx` (admin, `/picks`): `GET /picks` (`date,picks[],setups[],forward,caveats`) + `GET /picks/history?days=90` (`picks[]` filtered to those with `outcome`).
 
 ### 8. More: Settings, Profile, System
 1. `pages/Settings.jsx` tabs (`useTab`): `accounts` (`BrokerSheet`: `GET /broker/{broker}/status`, `GET .../login-url`, `POST .../connect {request_token}` or `{client_code,password,totp}`, `POST .../disconnect`, `POST /settings/broker-credentials {api_key,...}`; role radio writes prefs `broker_roles`), `safety` (`GuardrailsSheet`: prefs + `/guardrails/telegram/{link,verify,bot}`; `PortfolioSheet`: `portfolio_max_*_pct`, admin `GET/PUT /settings/portfolio-verdicts {audience}`), `ai` (`ModelSheet` `omniroute-model|tiers|models|catalog|model/test` (writes admin-only), admin `UsageSheet` `omniroute-usage` retried 5x/4 s), `about` (admin: links to `/system`, `/system/future`, `BetaSheet` -> `GET /journal/beta-metrics`). `LEGACY_TABS` maps old `?tab=broker|guardrails|portfolio|beta`. A broker redirect lands as `?code=` (Upstox) or `?request_token=` (Kite) and is auto-submitted then stripped from the URL.
 2. `pages/Profile.jsx`: `GET/PUT /profile` (`{profile{display_name,risk_appetite,horizon,goals,constraints,about_me,answer_style,memories[]},account{name,created_at}}`), `POST /profile/memories {text}` (max 50), `DELETE /profile/memories/{id}`.
-3. `pages/Handbook.jsx` (admin, `/system`): five `?raw` markdown files, `utils/handbook.js::splitLive` swaps `<!-- live:deploy|jobs|news|data|ai -->` markers for `components/system/LivePanels.jsx` fed by `GET /system/status` (Jobs panel shows `data_alerts` as "Data alerts now"); panel actions: `POST /settings/llm-feature {feature,enabled}`, `POST /settings/lab {enabled}`, `POST /system/builder/run` (409 = already running).
-4. `pages/Backlog.jsx` (admin, `/system/future`): `GET/POST /system/backlog`, `PATCH/DELETE /system/backlog/{id}`; optimistic writes roll back with the API message; reorder swaps `rank`.
+3. `pages/Handbook.jsx` (admin, `/lab/handbook`): five `?raw` markdown files, `utils/handbook.js::splitLive` swaps `<!-- live:deploy|jobs|news|data|ai -->` markers for `components/system/LivePanels.jsx` fed by `GET /system/status` (Jobs panel shows `data_alerts` as "Data alerts now"); panel actions: `POST /settings/llm-feature {feature,enabled}`, `POST /settings/lab {enabled}`, `POST /system/builder/run` (409 = already running).
+4. `pages/Backlog.jsx` (admin, `/lab/backlog`): `GET/POST /system/backlog`, `PATCH/DELETE /system/backlog/{id}`; optimistic writes roll back with the API message; reorder swaps `rank`.
 
 ### 9. Order ticket / chat actions (the only path to real orders from the UI)
 1. `OrderTicket` (Buy/Sell, CNC, market/limit) does `POST /orders/propose {symbol,side,quantity,product,order_type,limit_price,venue:'live'}` -> card `{id,summary,...}`; Confirm = `POST /chat/actions/{id}/confirm {confirm_token}`. Response `status:'NEEDS_SECOND_TAP'` stores its `confirm_token` and arms a second tap (button disabled 600 ms) that sends it; otherwise `result` is shown. Any edit or close cancels the card (`POST /chat/actions/{id}/cancel`); unmount also cancels. No response at all is reported as "may have gone through", never as failure.
@@ -134,34 +134,32 @@ Source: `src/App.jsx::App`. `gated(x)` = `RequireAuth > ErrorBoundary > Suspense
 |---|---|---|---|
 | `/login` | `Login` | no | not gated; honours `?next=` |
 | `/` | `Today` | no | nav section Today |
-| `/mine` | `MineOverview` | no | `MINE_TABS` Overview |
-| `/mine/holdings` | `MineHoldings` | no | `?plan=1` = rebalance |
-| `/mine/tax` | `MineTax` | no | |
-| `/mine/stock/:symbol` | `MineStock` | no | not a tab |
-| `/mine/journal` | `Journal lockedAccount="mine"` | no | `?tab=habits` |
+| `/portfolio` | `MineOverview` | no | `PORTFOLIO_TABS` Overview |
+| `/portfolio/holdings` | `MineHoldings` | no | `?plan=1` = rebalance |
+| `/portfolio/tax` | `MineTax` | no | |
+| `/portfolio/news` | `News` | no | |
+| `/portfolio/watchlist` | `Watchlist` | no | |
+| `/portfolio/import` | `Import` | no | no-broker onboarding: Console CSV (`POST /journal/import/zerodha-console`), CAS PDF + password (`POST /imports/cas`, multipart), consent note, `DELETE /imports`; linked from the Today setup checklist (`import_trades`, `import_funds`) and the empty Today/Journal states |
+| `/stock/:symbol` | `MineStock` | no | not a tab; header search target (`stockPath`) |
+| `/journal` | `JournalRoute` -> `Journal lockedAccount="mine"` | no | `?tab=habits\|guardrails`; `?tab=patterns\|learning` -> `habits` |
+| `/picks` | `Picks` | **yes** | `RequireAdmin` redirects non-admin to `/settings`; tab hidden by `visibleSections` |
 | `/ai` | `AiOverview` | no | `AI_TABS` Overview |
 | `/ai/activity` | `AiActivity` | no | |
 | `/ai/book` | `Portfolio` | no | |
-| `/ai/strategies` | `Strategies` | no | `?book=` |
-| `/ai/settings` | `AiLimits` | no | |
-| `/research` | `Dashboard` | no | |
-| `/research/stock/:symbol` | `Dashboard` | no | same component, symbol from `useParams` |
-| `/research/news` | `News` | no | |
-| `/research/watchlist` | `Watchlist` | no | |
-| `/research/picks` | `Picks` | **yes** | `RequireAdmin` redirects non-admin to `/settings`; tab hidden by `SectionTabs` |
-| `/research/options` | `OptionChain` | no | not a tab; `?u=NIFTY\|BANKNIFTY` |
-| `/settings` | `Settings` | no | `?tab=accounts\|safety\|ai\|about` |
+| `/lab` | `Strategies` | **yes** | `LAB_TABS` Strategies; `?book=` |
+| `/lab/limits` | `AiLimits` | **yes** | |
+| `/lab/options` | `OptionChain` | **yes** | `?u=NIFTY\|BANKNIFTY` |
+| `/lab/handbook` | `Handbook` | **yes** | `?tab=system\|trading\|ai\|ops\|journey` |
+| `/lab/backlog` | `Backlog` | **yes** | |
+| `/settings` | `Settings` | no | `?tab=accounts\|safety\|ai\|about`; `?tab=guardrails` -> `/journal?tab=guardrails` |
 | `/profile` | `Profile` | no | |
-| `/import` | `Import` | no | no-broker onboarding: Console CSV (`POST /journal/import/zerodha-console`), CAS PDF + password (`POST /imports/cas`, multipart), consent note, `DELETE /imports`; linked from the Today setup checklist (`import_trades`, `import_funds`) and the empty Today/Mine/Journal states |
-| `/system` | `Handbook` | **yes** | `?tab=system\|trading\|ai\|ops\|journey` |
-| `/system/future` | `Backlog` | **yes** | |
 | `*` | `NotFound` (inside `Layout`) | no | gated |
 
-Redirects (`replace`, query string kept by `Moved`): `/mine/ideas` -> `/mine`; `/mine/trades` -> `/mine/journal`; `/mine/habits` -> `/mine/journal?tab=habits`; `/ai/decisions`, `/practice/decisions`, `/ai/practice/decisions`, `/decisions`, `/suggestions`, `/paper/decisions` -> `/mine`; `/ai/autopilot`, `/ai/limits`, `/practice/setup`, `/ai/practice/settings`, `/paper/settings` -> `/ai/settings`; `/practice`, `/ai/practice`, `/ai/practice/engine`, `/paper`, `/paper/engine`, `/trading` -> `/ai`; `/practice/book`, `/ai/practice/book`, `/ai/practice/holdings`, `/paper/holdings` -> `/ai/book`; `/practice/strategies`, `/practice/library` -> `/ai/strategies`; `/portfolio` -> `/mine/holdings`; `/watchlist` -> `/research/watchlist`; `/options` -> `/research/options`; `/scanner`, `/research/scanner` -> `/research`; `/journal` -> `JournalMoved` (`?tab=patterns|learning` -> `/mine/journal?tab=habits`, else `/mine/journal` + query).
+Redirects (`replace`, query string kept by `Moved`; `/mine/stock/:symbol` and `/research/stock/:symbol` -> `/stock/:symbol` via `StockMoved`): the table is `utils/routes.js::MOVED` (every old path to its final path in one hop; `routes.test.js` checks no chain), e.g. `/mine` -> `/portfolio`, `/mine/journal` -> `/journal`, `/mine/habits` -> `/journal?tab=habits`, `/research/news` -> `/portfolio/news`, `/ai/settings` -> `/lab/limits`, `/ai/strategies` -> `/lab`, `/system` -> `/lab/handbook`, `/import` -> `/portfolio/import`, `/research`, `/scanner` -> `/`.
 
 ### Nav sections (`components/layout/sections.js`)
-- `SECTIONS` (5, all `primary`): Today `/` (exact, badge `attention`), Mine `/mine` (match `/mine`, badge `pending`), AI `/ai`, Research `/research`, More `/settings` (match `/settings`, `/profile`, `/system`). `Sidebar` (lg+) and `BottomNav` (phone) both render these; `sectionActive` keeps a section lit on all its sub-paths.
-- `MINE_TABS`: Overview, Holdings, Tax, Journal. `AI_TABS`: Overview, Activity, Book, Strategies, Settings. `RESEARCH_TABS`: Search, News, Watchlist, Picks (`admin:true`, filtered in `SectionTabs`). `SystemTabs` (admin) = `HANDBOOK_TABS` + Future.
+- `SECTIONS` (6, all `primary`): Today `/` (exact, badge `attention`), Picks `/picks` (`admin`), AI `/ai`, Portfolio `/portfolio` (badge `pending`), Journal `/journal`, Lab `/lab` (`admin`). `Sidebar` (lg+) and `BottomNav` (phone) both filter through `utils/nav.js::visibleSections` (4 tabs for non-admins, 6 for admins; `barColumns` picks the grid class); `sectionActive` keeps a section lit on all its sub-paths. Settings is an icon in the `Masthead`, next to the compact stock search.
+- `PORTFOLIO_TABS`: Overview, Holdings, Tax, News, Watchlist, Import. `AI_TABS`: Overview, Activity, Book. `LAB_TABS`: Strategies, Autopilot limits, Options, Handbook, Backlog. `SystemTabs` (admin) = `HANDBOOK_TABS` + Future, under the Lab tabs.
 
 ## Jobs and schedules
 
@@ -210,7 +208,7 @@ The frontend serves none. Full list of backend routes it calls (all via `utils/a
 - The response interceptor calls `hardLogout` only when the refresh itself returns 401; a network error or 5xx rejects the original request and keeps the session.
 - `getPreferences()` is cached 5 s and shared; a component that needs fresh prefs right after writing elsewhere must write through `api.put(endpoints.settings.preferences, ...)` (which clears the cache) and use the PUT response (`AutopilotSheet`, `EngineSettings` do).
 - `useAccount()` returns `account: null` until prefs load; pages must not fetch until it is non-null (`Journal.jsx` effect guard).
-- Router quirks: `/research/stock/:symbol` and `/research` share one `Dashboard`; an index detail has no URL (state only). `Journal`'s `view` prop is never passed by `App` (default `'trades'`). The old `Sidebar` supports `item.divider` but no `SECTIONS` entry sets it (left in place).
+- Router quirks: `/stock/:symbol` is `MineStock` plus `Dashboard`'s `StockAnalysis`. `Journal`'s `view` prop is never passed by `App` (default `'trades'`). The old `Sidebar` supports `item.divider` but no `SECTIONS` entry sets it (left in place).
 - Past fixes worth knowing: 62bac34 403 no longer logs out; fddec62 failed settings saves/broker disconnect no longer silent; 57829a6 journal note save failure is shown; c2a47ed "order may have gone through" points at Mine > Journal; 1c98111 date-only fields as calendar dates; 63e529b new account can read holdings from the empty state; 1997d25 run settings drop sizing fields the server ignores; bb1aebe AI book re-reads positions on push (push carries the raw book); 023008f AI overview asks `/trading/fills` for today only; 0404502 stale-holdings rule (36 h, `utils/mine.js::STALE_MS`), FY 2025+ select.
 - Job times in copy come from `GET /system/schedule` (fixed 2026-10-18); the handbook markdown still quotes times in prose.
 

@@ -11,7 +11,7 @@ import useSchedule from '../../hooks/useSchedule';
  * long-term pass, so while it is on both run regardless of their own
  * switches (backend/prefs.py::scan_enabled_users, engine/autorun.py::tick);
  * here they show as kept on. Intraday paper is independent. Limits and
- * per-strategy live switches stay in AI › Settings.
+ * per-strategy live switches stay in Lab › Autopilot limits.
  */
 
 const SWITCH =
@@ -55,7 +55,7 @@ const EngineSwitches = ({ prefs, save }) => {
         {autopilot
           ? 'Feeds the autopilot: the scan and the long-term pass stay on while it is on. Only intraday paper is your call.'
           : <>The strategy engine on its own. Ideas from proven strategies wait for you in{' '}
-              <Link to="/mine" className="underline">Mine</Link>; turn the autopilot on and it paper-trades the rest.</>}
+              <Link to="/portfolio" className="underline">Portfolio</Link>; turn the autopilot on and it paper-trades the rest.</>}
       </p>
       {switchRow(
         'auto_paper_intraday',
@@ -76,7 +76,7 @@ const EngineSwitches = ({ prefs, save }) => {
       )}
       <p className="pt-3 doc-meta normal-case">
         Which strategies may trade real money:{' '}
-        <Link to="/ai/settings" className="underline">AI › Settings</Link>.
+        <Link to="/lab/limits" className="underline">Lab › Autopilot limits</Link>.
       </p>
     </Sheet>
   );

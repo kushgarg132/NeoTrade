@@ -235,4 +235,4 @@ def test_data_quality_alerts_show_only_to_the_admin(monkeypatch):
     assert not [n for n in user.get("/api/v1/today").json()["needs_you"] if n["kind"] == "data_quality"]
     admin, _ = _client(monkeypatch, role="admin")
     items = [n for n in admin.get("/api/v1/today").json()["needs_you"] if n["kind"] == "data_quality"]
-    assert [(i["title"], i["link"]) for i in items] == [("Ingest loop quotes last beat 60 min ago", "/system")]
+    assert [(i["title"], i["link"]) for i in items] == [("Ingest loop quotes last beat 60 min ago", "/lab/handbook")]

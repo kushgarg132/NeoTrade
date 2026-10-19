@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Trash2, ArrowRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
-import { RESEARCH_TABS } from '../components/layout/sections';
+import { PORTFOLIO_TABS } from '../components/layout/sections';
 import { Sheet, Statement, Row, Cell, Empty, Ruling, Scrip } from '../components/doc/Doc';
 import OrderTicket, { TicketButton } from '../components/trading/OrderTicket';
 import api, { endpoints } from '../utils/api';
@@ -61,7 +61,7 @@ const Watchlist = () => {
   return (
     <Layout>
       <div className="space-y-4">
-      <SectionTabs tabs={RESEARCH_TABS} label="Research" />
+      <SectionTabs tabs={PORTFOLIO_TABS} label="Portfolio" />
       <Sheet title="Watchlist" meta={`${rows.length} scrip`}>
         {loading ? (
           <Ruling rows={4} />

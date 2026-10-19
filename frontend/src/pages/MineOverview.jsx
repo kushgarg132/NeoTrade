@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
-import { MINE_TABS } from '../components/layout/sections';
+import { PORTFOLIO_TABS } from '../components/layout/sections';
+import { stockPath } from '../utils/stocks';
 import { Sheet, Money, Empty, Ruling, Scrip } from '../components/doc/Doc';
 import WaitingCards from '../components/decisions/WaitingCards';
 import ValueCurve from '../components/mine/ValueCurve';
@@ -44,7 +45,7 @@ const Drivers = ({ drivers }) => {
         <ul>
           {rows.map((r) => (
             <li key={r.symbol} className="flex items-center justify-between py-1.5 border-b border-[var(--rule)]">
-              <Link to={`/mine/stock/${encodeURIComponent(r.symbol)}`} className="hover:text-[var(--stamp)]">
+              <Link to={stockPath(r.symbol)} className="hover:text-[var(--stamp)]">
                 <Scrip symbol={r.symbol} />
               </Link>
               <Money value={r.contribution} size="sm" className="text-sm" />
@@ -94,7 +95,7 @@ const MineOverview = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4">
-        <SectionTabs tabs={MINE_TABS} label="My account" />
+        <SectionTabs tabs={PORTFOLIO_TABS} label="Portfolio" />
 
         <Sheet title="Your account" meta={holdingsStale(h?.holdings_as_of) ? `Holdings as of ${formatDateTime(h.holdings_as_of)} · broker logged out` : h?.as_of ? formatDateTime(h.as_of) : null}>
           {error ? (
