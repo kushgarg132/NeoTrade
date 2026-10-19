@@ -35,13 +35,14 @@ The missing two are reported as a caveat on every run, not fixed here.
 
 ### `backend/ml/evaluate.py`
 
-- `HORIZONS = (20, 60)`; LightGBM `PARAMS` as in the tool (`n_jobs=4`, `random_state=0`).
-- Per horizon, folds = `lab.splits.yearly_folds(dates, min_train_years=3, purge_days=horizon + 1)`;
-  train rows are those whose `label_end` is before the test year starts.
+- `HORIZONS = (20, 60)`; LightGBM `PARAMS` as in the tool (`num_threads=1`, `seed=0`; 4 threads were ~25x slower on the shared host).
+- Per horizon, folds = `lab.splits.yearly_folds(dates, min_train_years=3, purge_days=0)`;
+  no extra purge: train rows are those whose `label_end` is before the test year starts,
+  which removes every row whose label overlaps the test year.
 - Per fold: `LGBMRegressor` on `excess` (ranker score) and `LGBMClassifier` on `up` (P(up)).
 - Outputs per horizon:
-  - `ic_by_year`: mean daily Spearman rank IC of the score vs `excess` per test year; `ic_t` over
-    monthly means.
+  - `ic_by_year`: mean daily Spearman rank IC of the score vs `excess` per test year; `ic_t` over means of
+    non-overlapping blocks of H trading days (independent samples).
   - `brier`, `brier_base` (base rate = train-period P(up)), `brier_skill = 1 - brier / brier_base`.
   - `portfolio`: top decile by score every `STEP` days, equal weight, held `horizon` days,
     net of `round_trip_return` on every entry/exit (turnover counted); same construction for the
