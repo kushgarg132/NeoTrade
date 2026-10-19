@@ -12,7 +12,7 @@ import WeeklyLink from '../components/home/WeeklyLink';
 import SetupChecklist from '../components/home/SetupChecklist';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useRefetchOn } from '../hooks/useStream';
-import { tileHeadlines, phaseLabel, briefKind } from '../utils/home';
+import { tileHeadlines, phaseLabel, briefKind, alerts } from '../utils/home';
 
 // Home: a hub. One call each for today, the account overview and the indices;
 // a failing overview or index call only blanks its own figure.
@@ -52,8 +52,15 @@ const Home = () => {
           {phaseLabel(today.phase)}
           {needs > 0 && <> · <Link to="/ideas" className="font-semibold text-[var(--accent)]">{needs} need{needs === 1 ? 's' : ''} you</Link></>}
         </p>
+        {alerts(today).map((a) => (
+          <Link key={a.id} to={a.to} role="alert"
+                className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2 text-[14px] font-medium text-[var(--loss)]">
+            <span>{a.text}</span>
+            <span className="shrink-0 font-semibold underline">{a.action}</span>
+          </Link>
+        ))}
         <div className="grid grid-cols-2 gap-3">
-          <Tile title="Money" icon={Wallet} to="/money" value={h.money.value} sub={h.money.sub} tone={h.money.tone} />
+          <Tile title="Money" icon={Wallet} to="/money" value={h.money.value} sub={h.money.sub} tone={h.money.tone} subTone={h.money.subTone} />
           <Tile title="Ideas" icon={Lightbulb} to="/ideas" value={h.ideas.value} sub={h.ideas.sub} tone={h.ideas.tone} />
           <Tile title="AI" icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.sub} tone={h.ai.tone} />
           <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} />

@@ -20,9 +20,9 @@ export const tileHeadlines = (today, overview, indices) => {
   const money = h || pulse
     ? {
         value: inr((h || pulse).value),
-        sub: [`today ${p100((h || pulse).day_change_pct, { sign: true })}`,
-          typeof h?.xirr === 'number' ? `XIRR ${pct(h.xirr, { dp: 1 })}` : null].filter(Boolean).join(' · '),
-        tone: tone((h || pulse).day_change),
+        sub: `today ${p100((h || pulse).day_change_pct, { sign: true })}`,
+        tone: 'neutral', // the value is a balance, not a delta
+        subTone: tone((h || pulse).day_change),
       }
     : { value: '—', sub: 'Not read yet', tone: 'neutral' };
 
@@ -34,7 +34,7 @@ export const tileHeadlines = (today, overview, indices) => {
 
   const b = t.scoreboard;
   const ai = b
-    ? { value: inr(b.today.ai, { sign: true }), sub: `month ${inr(b.month.ai, { sign: true })} · you ${inr(b.month.mine, { sign: true })}`, tone: tone(b.today.ai) }
+    ? { value: inr(b.today.ai, { sign: true }), sub: `month ${inr(b.month.ai, { sign: true })}`, tone: tone(b.today.ai) }
     : { value: '—', sub: 'No AI book yet', tone: 'neutral' };
 
   const nifty = (indices || []).find((r) => r.name === 'NIFTY 50');
@@ -53,4 +53,23 @@ export const briefKind = (phase) => (phase === 'pre' ? 'premarket' : phase === '
 export const showWeekly = (now = new Date()) => {
   const day = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).getDay();
   return day === 0 || day === 1;
+};
+
+const BROKERS = { kite: 'Kite', upstox: 'Upstox', angel_one: 'Angel One' };
+
+/** What on Home needs attention right now: a broker login that expired, the kill switch, live money armed. */
+export const alerts = (today) => {
+  const t = today || {};
+  const out = [];
+  for (const [role, info] of Object.entries(t.accounts || {})) {
+    if (info?.state !== 'ACTIVE') {
+      out.push({ id: `login-${role}`, text: `${BROKERS[info.broker] || info.broker || 'Broker'}${role === 'ai' ? ' (AI)' : ''} login expired`, to: '/settings?tab=accounts', action: 'Log in' });
+    }
+  }
+  if (t.kill_switch?.tripped) out.push({ id: 'kill', text: 'Daily loss limit hit: live trading stopped', to: '/ai', action: 'See AI' });
+  const armed = t.live_armed;
+  if (armed?.autopilot || armed?.strategies?.length) {
+    out.push({ id: 'live', text: `Live money armed${armed.autopilot ? ': autopilot' : ''}${armed.strategies?.length ? ` · ${armed.strategies.length} strateg${armed.strategies.length === 1 ? 'y' : 'ies'}` : ''}`, to: '/ai', action: 'Stop', danger: true });
+  }
+  return out;
 };
