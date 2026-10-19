@@ -61,6 +61,7 @@ async def test_a_variant_that_wins_in_and_out_of_sample_is_accepted():
     doc = await retune_strategy(_Strategy, bt, {"volume_mult": 3.0}, START, SPLIT, END, past_trials=[])
     assert doc["accepted"] and doc["params"] == {"volume_mult": 4.0}
     assert doc["dsr"] >= retune.MIN_DSR and doc["trials"] == 3
+    assert set(doc["summary"]) >= {"cagr", "sharpe", "max_drawdown"}  # recorded into the Lab run
 
 
 @pytest.mark.asyncio

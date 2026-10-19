@@ -11,7 +11,7 @@ from datetime import datetime, time, timedelta, timezone
 from html import escape
 from typing import Optional
 
-from backend.core.market_calendar import is_trading_day
+from backend.core.market_calendar import is_trading_day, last_trading_day
 from backend.engine.session import IST
 
 logger = logging.getLogger(__name__)
@@ -305,8 +305,11 @@ async def postclose_for(db, user_id: str, now: datetime, events: Optional[list[d
     if events is None:
         events = await market.upcoming(db, hours=24, now=now)
     roles = (await PrefsStore(db).get(user_id)).get("broker_roles") or {}
-    recon = broker_recon.summary(await broker_recon.latest(db, user_id, now.astimezone(IST).date()))
-    return postclose_text(await pulse(db, user_id, now), await pnl_since(db, user_id, roles, day_start(now)),
+    # weekend/holiday ("closed" phase): the last session's day, not today's empty one
+    day = last_trading_day(now.astimezone(IST).date())
+    recon = broker_recon.summary(await broker_recon.latest(db, user_id, day))
+    return postclose_text(await pulse(db, user_id, now),
+                          await pnl_since(db, user_id, roles, datetime.combine(day, time(0, 0), tzinfo=IST)),
                           events, await _actions(db, user_id, now), recon)
 
 

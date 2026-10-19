@@ -56,21 +56,21 @@ def outcome(t: dict, record: dict) -> Optional[dict]:
     return res
 
 
-async def score_due(db, now: datetime, t: Optional[dict] = None, store=None) -> int:
-    """Score every due record that has bars; returns how many were scored. Never raises."""
+async def score_due(db, now: datetime, t: Optional[dict] = None, store=None) -> tuple[int, int]:
+    """Score every due record that has bars; returns (scored, failed). Never raises."""
     try:
         if store is None:
             from backend.forward.store import ForwardStore
             store = ForwardStore(db)
         due = await store.due(now)
         if not due:
-            return 0
+            return 0, 0
         if t is None:
             from backend.forecast import picks
             t = await picks.load(db, now)
         if t is None:
-            return 0
-        scored = 0
+            return 0, 0
+        scored = failed = 0
         for rec in due:
             try:
                 out = outcome(t, rec)
@@ -78,8 +78,9 @@ async def score_due(db, now: datetime, t: Optional[dict] = None, store=None) -> 
                     await store.set_outcome(rec["_id"], out, now)
                     scored += "void" not in out
             except Exception as exc:
+                failed += 1
                 logger.warning("forward score failed for %s: %s", rec.get("_id"), exc)
-        return scored
+        return scored, failed
     except Exception as exc:
         logger.exception("forward scoring failed: %s", exc)
-        return 0
+        return 0, 1

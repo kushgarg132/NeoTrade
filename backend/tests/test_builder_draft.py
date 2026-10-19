@@ -111,6 +111,8 @@ async def test_pass_becomes_active_and_records_the_gate_row(env):
     assert doc["sharpe"] > 0 and doc["trials"] == 1 and doc["thesis"] == "because" and doc["description"]
     gate = await db["strategy_backtests"].find_one({"strategy_name": f"built:{slug}"})
     assert gate["passed"] is True
+    run = await db["lab_runs"].find_one({"name": f"builder:{slug}"})
+    assert run["metrics"]["summary"]["cagr"] is not None and run["metrics"]["summary"]["max_drawdown"] is not None
     assert sent == [("admin", sent[0][1])]
     assert sent[0][1].startswith(f"🧪 Strategy builder: 1 drafted, 1 passed: built:{slug} (PF 1.50, 300 trades, "
                                  "last 90 days +₹")

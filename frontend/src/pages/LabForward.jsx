@@ -37,8 +37,9 @@ const LabForward = () => {
 
   const pick = (row) => {
     setRecords(null);
-    if (open === row) return setOpen(null);
-    setOpen(row);
+    const key = `${row.source}:${row.name}`;  // by value: a refetched row is a new object
+    if (open === key) return setOpen(null);
+    setOpen(key);
     api.get(endpoints.forward.records, { params: { source: row.source, name: row.name } })
       .then((res) => setRecords(res.data.records))
       .catch(() => setRecords([]));
@@ -58,7 +59,7 @@ const LabForward = () => {
                 <Row key={`${r.source}:${r.name}`}>
                   <Cell>{r.source}</Cell>
                   <Cell>
-                    <button type="button" onClick={() => pick(r)} aria-expanded={open === r}
+                    <button type="button" onClick={() => pick(r)} aria-expanded={open === `${r.source}:${r.name}`}
                             className="min-h-11 sm:min-h-0 text-left underline decoration-dotted underline-offset-2">{r.name}</button>
                   </Cell>
                   <Cell align="right" mono>{r.progress}/100{r.n > r.progress ? ` (${r.n})` : ''}</Cell>

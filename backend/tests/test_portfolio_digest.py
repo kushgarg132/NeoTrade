@@ -104,6 +104,20 @@ async def test_postclose_skips_a_morning_catch_up(db):
     assert await digest.send_postclose(db, NOW.replace(hour=9, minute=20)) == 0
 
 
+async def test_postclose_on_a_saturday_reads_fridays_pnl_not_todays_empty_one(db, monkeypatch):
+    seen = {}
+
+    async def pnl(db_, user_id, roles, since, picks_only=False):
+        seen["since"] = since
+        return {"mine": 0.0, "ai": 0.0}
+
+    monkeypatch.setattr(digest, "pnl_since", pnl)
+    monkeypatch.setattr(digest, "pulse", AsyncMock(return_value=None))
+    monkeypatch.setattr(digest, "_actions", AsyncMock(return_value=[]))
+    await digest.postclose_for(db, "alice", datetime(2026, 10, 17, 11, 0, tzinfo=IST), events=[])
+    assert seen["since"].date().isoformat() == "2026-10-16"
+
+
 async def test_a_holding_with_no_stored_close_has_no_day_move_not_a_days_old_one(db, monkeypatch):
     # 14 Oct: CPPLUS had no daily bars, so "today" was measured from the 9 Oct snapshot's close.
     monkeypatch.setattr(service.bars, "prev_closes", AsyncMock(return_value={"DOWN": 100.0, "FLAT": 100.0}))

@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 93fd364
+verified_at: 907da1f
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -108,8 +108,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 6. Autopilot limits `pages/AiLimits.jsx` (admin, `/lab/limits`) = `AutopilotSheet` (autopilot Off/Paper/Live; Live requires typing `LIVE`) + `EngineSwitches` + trading limits + `EngineSettings` (per-strategy live switch writes `live_strategies`; admin-only "Run a year's backtest" -> `POST /trading/backtests/{name}`).
 
 ### 7. Portfolio extras (News, Watchlist, Picks, Options)
-1. `pages/Dashboard.jsx` now exports only `StockAnalysis({symbol})`, rendered under `MineStock` at `/stock/:symbol`: `stream.request('quick_analyze',{symbol})` -> event `report` -> `quick{company_info,price_data,technical_analysis,flags}`, rendered by `AnalysisCard`; AI analysis (`stream.request('analyze')`) only when its tab opens. The old front page (`SmartSearch` landing, recent stocks, `Market`) is gone; `SmartSearch` lives in the `Masthead` (compact, icon on phone) and navigates to `utils/stocks.js::stockPath`. `Market.jsx`, `IndexCard`, `IndexAnalysis` are unrouted leftovers.
-2. `Market.jsx` (unrouted): `GET /market/indices`, `/market/global`, `/market/trending`; index click -> `GET /market/index/{ticker}` + `.../analysis`.
+1. `pages/Dashboard.jsx` now exports only `StockAnalysis({symbol})`, rendered under `MineStock` at `/stock/:symbol`: `stream.request('quick_analyze',{symbol})` -> event `report` -> `quick{company_info,price_data,technical_analysis,flags}`, rendered by `AnalysisCard`; AI analysis (`stream.request('analyze')`) only when its tab opens. The old front page (`SmartSearch` landing, recent stocks, `Market`) is gone; `SmartSearch` lives in the `Masthead` (compact, icon on phone) and navigates to `utils/stocks.js::stockPath`.
 3. News `pages/News.jsx` (`/portfolio/news`): `GET /news/feed` `params {limit:50, scope?, mine?, before?}` -> `items[{id,title,url,scope,source,published_at,material,status,impacts[{type,target,direction,impact}]}]`; refetch on `useTopic('news')`.
 4. Watchlist `pages/Watchlist.jsx` (`/portfolio/watchlist`): `GET /watchlist/details` rows `{symbol,current_price,previous_close,day_change,day_change_percent}`; subscribes `prices:<SYM>` (`data.price`) for live ticks; remove = `DELETE /watchlist/remove/{symbol}`.
 5. Options `pages/OptionChain.jsx` (admin, `/lab/options`): `GET /options/expiries?underlying=`, `GET /options/chain?underlying=&expiry=` -> `{name,expiry,spot,atm_strike,pcr,strikes[{strike,call{oi,oi_change,ltp,iv},put{...}}]}`; `?u=NIFTY|BANKNIFTY`.

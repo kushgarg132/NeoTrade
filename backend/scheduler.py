@@ -147,8 +147,8 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
     # Forward record: score due candidates against the same bars (forward/score.py).
     try:
         from backend.forward import score as forward_score
-        scored = await forward_score.score_due(db, now)
-        await mark(redis, "forward", True, f"{scored} scored")
+        scored, failed = await forward_score.score_due(db, now)
+        await mark(redis, "forward", not failed, f"{scored} scored" + (f", {failed} failed" if failed else ""))
     except Exception as exc:
         logger.exception("forward scoring failed: %s", exc)
         await mark(redis, "forward", False, str(exc))
