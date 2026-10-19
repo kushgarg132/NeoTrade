@@ -295,6 +295,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
   `verdict_since`.
 - **The pre-market digest NX key is set before the work** (`digest.py::send_premarket`) to stop duplicates; a failure
   deletes it again so the next tick retries.
+- **`postclose_for` on a non-trading day reads the last trading day.** P&L window and reconciliation use `last_trading_day(today)`, so the `closed` phase of `/today` shows Friday's result, not an empty Saturday.
 - **Post-close skips the morning catch-up.** `send_postclose` returns 0 before 15:30 IST, so a 09:20 catch-up pass
   sends no evening message.
 - **The Today broker-state cache is per process** (`today.py::_STATE_CACHE`) and is kept only when all sessions are
