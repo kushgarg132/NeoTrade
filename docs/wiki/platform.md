@@ -24,6 +24,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/auth/broker_credentials.py` | per-user Fernet-encrypted broker API keys | `BrokerCredentialStore`, `get_credential_store`, `fernet_from_settings`, `CredentialEncryptionUnavailable` |
 | `backend/auth/kite_session.py` | Kite login/token lifecycle, token cached in Redis to 06:00 IST | `KiteSessionManager`, `next_6am_ist`, `_redis_key` |
 | `backend/core/clock.py` | `Clock` protocol; engine code must not call `datetime.now` | `SystemClock`, `SimClock` |
+| `backend/core/market_calendar.py` | NSE cash-market calendar: weekends + static holiday set (2026 official from NSE's holiday API, 2027 provisional); every "is the market open / last session / due date" check routes here | `is_trading_day`, `previous_trading_day`, `next_trading_day`, `last_trading_day`, `add_trading_days`, `trading_days_between`, `is_last_trading_day_of_week` |
 | `backend/core/models.py` | engine value types (no I/O) plus market/research models | `Side`, `Bar`, `Intent`, `Order`, `Fill`, `Position`, `BrokerOrderStatus`, `BrokerTrade`, `Holding`, `Venue`; `NewsArticle`, `FinancialEvent`, `CompanyInfo`, `PriceCandle`, `BacktestResult`, `Watchlist`, `Trend` |
 | `backend/ws/hub.py` | per-connection bounded queues, topic fan-out, Redis-backed publish | `Hub`, `Connection`, `hub`, `handle_broadcast_event` |
 | `backend/ws/routes.py` | `/api/v1/ws` endpoint, actions, streamed LLM work | `stream`, `_handle`, `authenticate_token`, `origin_allowed`, `_BUDGETS`, `_stream_analysis/_quick_analysis/_chat` |
@@ -38,7 +39,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/system/schedule.py` | job clock times for UI copy, read from `scheduler.RUN_HOUR/RUN_MINUTE`, `autorun.PLAN_AT/SESSION_OPEN/SESSION_CLOSE/MORNING/EXIT_CHECK_MINUTES`, `session.SQUARE_OFF_*`, `monitor.SESSION_*`; `GET /system/schedule` returns "HH:MM" IST strings | `get` |
 | `backend/system/status.py` | handbook live-panel data, 5 blocks, cached 30 s | `build_status`, `cached_status`, `BLOCKS` |
 | `backend/system/jobs.py` | `job:last:<name>` Redis hash writer/reader | `mark`, `last_runs`, `LOOPS` |
-| `backend/system/data_quality.py` | nightly check (stale bars vs the last weekday's session from 15:45, unlisted, silent feeds; `failures`) + live truth checks (ingest heartbeats > 2x interval (min 120 s) or gone, quotes loop, `scheduler:last_pass`, Picks study, due by 18:00 of the last weekday) | `check`, `live`, `alerts` (admin Today item, silent Sat/Sun), `last_weekday_at` |
+| `backend/system/data_quality.py` | nightly check (stale bars vs the last trading day's session from 15:45, unlisted, silent feeds; `failures`) + live truth checks (ingest heartbeats > 2x interval (min 120 s) or gone, quotes loop, `scheduler:last_pass`, Picks study, due by 18:00 of the last trading day) | `check`, `live`, `alerts` (admin Today item, silent on weekends and NSE holidays), `last_trading_day_at` |
 | `backend/system/backlog.py`, `seed_backlog.py` | admin backlog store; one-time seed | `ItemIn`, `ItemPatch`, `list_items/create/update/delete`, `seed` |
 | `backend/locks.py` | token-checked Redis lock (used by the ingest worker only) | `acquire`, `renew`, `release` |
 | `backend/rate_limit.py` | fixed-window per-key limiter, fails open | `allow` |
@@ -113,7 +114,7 @@ All times IST. Loops start in `startup_db_client` on every uvicorn worker (`--wo
 | what | when | where | lock / guard |
 |---|---|---|---|
 | daily pass | 16:00 Mon-Fri (`RUN_HOUR`) | `scheduler.py::scheduler_loop` -> `_run_locked` -> `run_daily_jobs` | `scheduler:daily_lock` 2 h; skip if `scheduler:last_pass` >= day; then `_data_quality` -> `job:last:data_quality` (ok=0 when `failures`) |
-| 09:20 catch-up of a missed pass | weekdays | `engine/autorun.py` (other page) | same lock/last_pass |
+| 09:20 catch-up of a missed pass | trading days | `engine/autorun.py` (other page) | same lock/last_pass |
 | price + P&L pump | every 15 s | `ws/pump.py::pump_loop` | none (each worker serves its own sockets) |
 | worker heartbeat | every 30 s (`ALIVE_TTL_SECONDS // 3`) | `server.py::_heartbeat` | writes `worker:alive:<BOOT_ID>` |
 | orphan sweep | once at startup | `RunStore.close_orphaned` | a RUNNING row whose boot id has no live key becomes STOPPED, `error="orphaned by restart"` |

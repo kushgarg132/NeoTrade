@@ -9,6 +9,7 @@ Strategies get the map at construction, so they stay I/O-free.
 
 from datetime import date, datetime, time, timedelta, timezone
 
+from backend.core.market_calendar import previous_trading_day, trading_days_between
 from backend.engine.session import IST
 from backend.strategies.longterm.analyst_verdict import MATERIALITY_THRESHOLD
 
@@ -16,18 +17,11 @@ CLOSE, OPEN = time(15, 30), time(9, 15)
 
 
 def _weekdays(start: date, end: date) -> list[date]:
-    days, d = [], start
-    while d <= end:
-        if d.weekday() < 5:
-            days.append(d)
-        d += timedelta(days=1)
-    return days
+    return trading_days_between(start, end)
 
 
 def _window(day: date) -> tuple[datetime, datetime]:
-    prev = day - timedelta(days=1)
-    while prev.weekday() >= 5:
-        prev -= timedelta(days=1)
+    prev = previous_trading_day(day)
     return datetime.combine(prev, CLOSE, IST), datetime.combine(day, OPEN, IST)
 
 

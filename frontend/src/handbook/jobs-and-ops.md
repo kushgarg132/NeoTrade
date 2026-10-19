@@ -36,17 +36,17 @@ news on your holdings since the close, ideas for your account, the autopilot's m
 
 After the pass, the **data-quality check** (`backend/system/data_quality.py`, `job:last:data_quality`,
 "Data quality found" on the panel below). Failures (the job is marked failed, never the pass):
-covered symbols whose newest daily bar is behind the last weekday's session once its bars are due
+covered symbols whose newest daily bar is behind the last trading day's session once its bars are due
 at 15:45 (a delisted name, or every stock a day late as on 2026-10-15), plus the live checks below.
 Informational only: universe symbols with no NSE instrument, and news feeds with no new item for 3
 days. The **live checks** (`data_quality.py::live`, "Data alerts now" on the panel, and a Do today
 item for the admin on weekdays, `::alerts`): an ingest loop whose heartbeat is older than twice its
 interval (at least 2 min) or gone, the quotes loop failing (no cached quote for the first Nifty 200
-names), `scheduler:last_pass` behind the last weekday whose pass should be done (by 18:00), and the
-Picks study not written for that day. No holiday calendar exists: only Saturday and Sunday are gaps.
+names), `scheduler:last_pass` behind the last trading day whose pass should be done (by 18:00), and the
+Picks study not written for that day. `core/market_calendar.py` holds the NSE holiday set (2026 official, 2027 provisional): weekends and holidays are gaps, not misses.
 
 A worker that wakes late after the pass already ran skips it. If no pass finished for the
-previous weekday (a deploy restarted the backend during it), the long-term engine's 9:20 AM
+previous trading day (a deploy restarted the backend during it), the long-term engine's 9:20 AM
 morning pass runs the whole pass then (`backend/engine/autorun.py::_longterm_pass`), recorded
 under the missed day so that day's own 4:00 PM pass still runs.
 

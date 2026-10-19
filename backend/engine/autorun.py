@@ -34,6 +34,7 @@ from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 
 
+from backend.core.market_calendar import is_trading_day, previous_trading_day
 from backend.core.clock import SystemClock
 from backend.engine.session import IST
 from backend.prefs import PrefsStore
@@ -66,10 +67,8 @@ _LOCAL: dict[str, str] = {}  # slot -> run_id
 
 
 def in_session(now: datetime) -> bool:
-    # ponytail: weekdays only, no NSE holiday calendar. On a holiday the feed
-    # delivers no new bars, so the run idles and places nothing.
     local = now.astimezone(IST)
-    return local.weekday() < 5 and SESSION_OPEN <= local.time() < SESSION_CLOSE
+    return is_trading_day(local.date()) and SESSION_OPEN <= local.time() < SESSION_CLOSE
 
 
 def near_session(now: datetime, lead: timedelta = timedelta(minutes=45)) -> bool:
@@ -115,7 +114,7 @@ async def _preopen_plans(db, redis, now: datetime, user_ids: list[str]) -> list[
 
     local = now.astimezone(IST)
     # Until the close: a broker login after the open still gets its plan before the run starts.
-    if local.weekday() >= 5 or not (PLAN_AT <= local.time() < SESSION_CLOSE) or not user_ids:
+    if not is_trading_day(local.date()) or not (PLAN_AT <= local.time() < SESSION_CLOSE) or not user_ids:
         return []
     from backend import app_settings
     if not await app_settings.lab_on("the AI game plan build", db):
@@ -287,13 +286,6 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
     return done
 
 
-def _previous_weekday(day):
-    day -= timedelta(days=1)
-    while day.weekday() >= 5:
-        day -= timedelta(days=1)
-    return day
-
-
 async def _level_pass(db, redis, user_id: str, now: datetime) -> None:
     """Stop / target hits on the owner's holdings, once per EXIT_CHECK_MINUTES
     bucket on one worker; Telegram once per level (`actions.level_alerts`)."""
@@ -342,7 +334,7 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         did = True
         last_pass = await redis.get(LAST_PASS_KEY)
         last_pass = last_pass.decode() if isinstance(last_pass, bytes) else last_pass
-        missed = _previous_weekday(local.date())
+        missed = previous_trading_day(local.date())
         if last_pass is None or last_pass < missed.isoformat():
             # The whole pass, not just the scan: learning, plan replays, the
             # re-tune and the data check are lost too when a deploy kills 16:00.
@@ -469,7 +461,7 @@ async def _login_reminders(db, redis, now: datetime, get_adapter=None) -> None:
     from backend.suggestions.notify import notify
 
     local = now.astimezone(IST)
-    if local.weekday() >= 5 or not (LOGIN_REMIND <= local.time() < SESSION_OPEN):
+    if not is_trading_day(local.date()) or not (LOGIN_REMIND <= local.time() < SESSION_OPEN):
         return
     slot = "late" if local.time() >= LOGIN_REMIND_AGAIN else "early"
     get_adapter = get_adapter or get_broker_adapter

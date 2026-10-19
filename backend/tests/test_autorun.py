@@ -346,6 +346,17 @@ async def test_the_morning_pass_rebalances_the_factor_book_and_leaves_proposals_
 
 
 @pytest.mark.asyncio
+async def test_the_catch_up_after_a_holiday_counts_the_previous_trading_day(world, longterm):
+    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True})
+    world.redis.data["scheduler:last_pass"] = "2026-10-16"  # Monday's pass never happened; Tuesday was a holiday
+
+    await _tick(world, datetime(2026, 10, 21, 9, 21, tzinfo=IST))
+    await asyncio.sleep(0.05)
+    assert len(longterm["passes"]) == 1
+    assert world.redis.data["scheduler:last_pass"] == "2026-10-19"  # not Tuesday's holiday
+
+
+@pytest.mark.asyncio
 async def test_with_the_autopilot_on_engine_proposals_go_to_it(world, longterm, monkeypatch):
     from backend.autopilot import service
     from backend.suggestions.store import SuggestionStore

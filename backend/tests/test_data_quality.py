@@ -123,7 +123,7 @@ async def test_a_missed_daily_pass_and_picks_run_are_named_by_the_last_weekday()
     assert failures == ["Daily pass for 2026-10-16 has not run (last: 2026-10-15)",
                         "Picks job has not run for 2026-10-16 (last: 2026-10-15)"]
     # Friday's runs satisfy Saturday and Sunday: the weekend is not a gap.
-    assert data_quality.last_weekday_at(SATURDAY, data_quality.PASS_DONE).isoformat() == "2026-10-16"
+    assert data_quality.last_trading_day_at(SATURDAY, data_quality.PASS_DONE).isoformat() == "2026-10-16"
 
 
 async def test_admin_alerts_add_the_nightly_stale_bars_and_stay_quiet_at_weekends():

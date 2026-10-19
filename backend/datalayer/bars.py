@@ -31,6 +31,7 @@ from typing import Iterable, Optional
 import pandas as pd
 import yfinance as yf
 
+from backend.core.market_calendar import last_trading_day
 from backend.engine.session import IST
 
 logger = logging.getLogger(__name__)
@@ -246,7 +247,7 @@ async def loop(db, redis, now: Optional[datetime] = None) -> None:
     # A deep batch takes Yahoo for every ticker, then lays a current broker
     # frame (about five years) over its recent part: `write` replaces from
     # the frame's first date on.
-    session = pd.bdate_range(end=today, periods=1)[0].date()
+    session = last_trading_day(today)
     written = stored = 0
     for broker_period, yahoo_period, all_tickers in batches:
         for i in range(0, len(all_tickers), CHUNK):
