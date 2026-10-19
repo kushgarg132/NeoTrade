@@ -46,5 +46,6 @@ export const LAB_TABS = [
   { to: '/lab/limits', label: 'Autopilot limits' },
   { to: '/lab/options', label: 'Options' },
   { to: '/lab/handbook', label: 'Handbook' },
+  { to: '/lab/runs', label: 'Runs' },
   { to: '/lab/backlog', label: 'Backlog' },
 ];

@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: b01fde8
+verified_at: 88bff67
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -215,6 +215,8 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/plan/today` | `backend/routers/plan.py::plan_today` | user |
 | GET | `/api/v1/picks` | `backend/routers/picks.py::picks_today` | admin |
 | GET | `/api/v1/picks/history` | `backend/routers/picks.py::picks_history` | admin |
+| GET | `/api/v1/lab/runs?kind=&name=&limit=` | `backend/routers/lab.py::list_runs` (`lab_runs` newest first, `folds` omitted) | admin |
+| GET | `/api/v1/lab/runs/{id}` | `backend/routers/lab.py::get_run` (full run, 404 if missing) | admin |
 | GET | `/api/v1/market/indices` | `backend/routers/market_data.py::get_market_indices` | user |
 | GET | `/api/v1/market/trending` | `backend/routers/market_data.py::get_trending_stocks` | user |
 | GET | `/api/v1/market/global` | `backend/routers/market_data.py::get_global_indices` | user |

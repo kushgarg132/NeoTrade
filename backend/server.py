@@ -231,6 +231,8 @@ app.include_router(plan_router.router, prefix=settings.API_PREFIX, tags=["Plan"]
 # Admin-only (require_admin on the router) until the SEBI RA registration exists.
 from backend.routers import picks as picks_router
 app.include_router(picks_router.router, prefix=settings.API_PREFIX, tags=["Picks"])
+from backend.routers import lab as lab_router  # noqa: E402
+app.include_router(lab_router.router, prefix=settings.API_PREFIX)
 
 from backend.routers import market_data
 from backend.routers import options as options_router
