@@ -1,6 +1,5 @@
 import React from 'react';
-import { Sheet } from '../doc/Doc';
-import { cn } from '../../utils/cn';
+import Card from '../ui/Card';
 import Markdown from '../common/Markdown';
 
 /**
@@ -9,9 +8,9 @@ import Markdown from '../common/Markdown';
  * shows a coloured arc makes the reader guess at the value.
  */
 const read = (score) => {
-  if (score >= 0.15) return { label: 'Bullish', tone: 'text-up' };
-  if (score <= -0.15) return { label: 'Bearish', tone: 'text-down' };
-  return { label: 'Neutral', tone: 'text-[var(--ink-soft)]' };
+  if (score >= 0.15) return { label: 'Bullish', tone: 'text-[var(--gain)]' };
+  if (score <= -0.15) return { label: 'Bearish', tone: 'text-[var(--loss)]' };
+  return { label: 'Neutral', tone: 'text-[var(--text-muted)]' };
 };
 
 const SentimentPanel = ({ score, summary, sentiment, thesis }) => {
@@ -20,28 +19,28 @@ const SentimentPanel = ({ score, summary, sentiment, thesis }) => {
   const position = ((value + 1) / 2) * 100;
 
   return (
-    <Sheet title="News sentiment" className="h-full">
+    <Card title="News sentiment">
       <div className="flex items-baseline justify-between gap-3">
-        <span className={cn('font-[family-name:var(--font-narrow)] font-bold uppercase tracking-[0.11em] text-lg', reading.tone)}>
+        <span className={`text-[20px] font-bold ${reading.tone}`}>
           {reading.label}
         </span>
-        <span className="figure-md text-base">{value.toFixed(2)}</span>
+        <span className="tabular-nums text-[17px] font-semibold">{value.toFixed(2)}</span>
       </div>
 
       <div className="mt-3">
         <div
-          className="relative h-6 border border-[var(--rule-strong)] bg-[var(--paper-sunk)]"
+          className="relative h-3 rounded-full bg-[var(--surface-2)]"
           role="img"
           aria-label={`Sentiment ${value.toFixed(2)} on a scale from −1 bearish to +1 bullish`}
         >
-          <div className="absolute inset-y-0 left-1/2 w-px bg-[var(--rule-strong)]" aria-hidden="true" />
+          <div className="absolute inset-y-0 left-1/2 w-px bg-[var(--border)]" aria-hidden="true" />
           <div
-            className="absolute inset-y-0 w-0.5 bg-[var(--stamp)]"
+            className="absolute -inset-y-1 w-1 rounded-full bg-[var(--accent)]"
             style={{ left: `calc(${position}% - 1px)` }}
             aria-hidden="true"
           />
         </div>
-        <div className="flex justify-between doc-meta mt-1">
+        <div className="flex justify-between text-[12px] text-[var(--text-muted)] mt-1">
           <span>−1 bearish</span>
           <span>0</span>
           <span>+1 bullish</span>
@@ -49,37 +48,37 @@ const SentimentPanel = ({ score, summary, sentiment, thesis }) => {
       </div>
 
       {sentiment && (
-        <div className="mt-4 pt-3 border-t border-[var(--rule)] flex justify-between text-sm">
-          <span className="text-[var(--ink-soft)]">
+        <div className="mt-4 pt-3 border-t border-[var(--border)] flex justify-between text-[14px]">
+          <span className="text-[var(--text-muted)]">
             Articles read{' '}
-            <span className="figure-md text-[var(--ink)]">{sentiment.article_count || 0}</span>
+            <span className="tabular-nums font-medium text-[var(--text)]">{sentiment.article_count || 0}</span>
             {sentiment.relevant_count != null && (
               <>
                 {' · relevant '}
-                <span className="figure-md text-[var(--ink)]">{sentiment.relevant_count}</span>
+                <span className="tabular-nums font-medium text-[var(--text)]">{sentiment.relevant_count}</span>
               </>
             )}
           </span>
-          <span className="text-[var(--ink-soft)]">
+          <span className="text-[var(--text-muted)]">
             Impact{' '}
-            <span className="figure-md text-[var(--ink)]">{sentiment.risk_score || 0}/10</span>
+            <span className="tabular-nums font-medium text-[var(--text)]">{sentiment.risk_score || 0}/10</span>
           </span>
         </div>
       )}
 
       {summary && (
-        <Markdown className="mt-3 pt-3 border-t border-[var(--rule)] text-sm text-[var(--ink-soft)] leading-relaxed">
+        <Markdown className="mt-3 pt-3 border-t border-[var(--border)] text-[15px] text-[var(--text-muted)] leading-relaxed">
           {summary}
         </Markdown>
       )}
 
       {thesis && (
-        <div className="mt-3 pt-3 border-t border-[var(--rule)]">
-          <p className="field-label mb-1.5">Thesis</p>
-          <Markdown className="text-sm text-[var(--ink-soft)] leading-relaxed">{thesis}</Markdown>
+        <div className="mt-3 pt-3 border-t border-[var(--border)]">
+          <p className="text-[13px] text-[var(--text-muted)] mb-1.5">Thesis</p>
+          <Markdown className="text-[15px] text-[var(--text-muted)] leading-relaxed">{thesis}</Markdown>
         </div>
       )}
-    </Sheet>
+    </Card>
   );
 };
 

@@ -1,7 +1,6 @@
 import React from 'react';
-import { Sheet, Statement, Row, Cell } from '../doc/Doc';
+import Card from '../ui/Card';
 import { formatCurrency, formatPercent, formatSignedPercent } from '../../utils/formatters';
-import { cn } from '../../utils/cn';
 
 const isNum = (value) => typeof value === 'number' && Number.isFinite(value);
 
@@ -23,10 +22,10 @@ const RangeBar = ({ low, high, price, currency }) => {
   const at = Math.max(0, Math.min(100, ((price - low) / (high - low)) * 100));
   return (
     <div className="w-full">
-      <div className="relative h-1.5 bg-[var(--paper-sunk)]" aria-hidden="true">
-        <div className="absolute top-1/2 -translate-y-1/2 w-2 h-3 bg-[var(--ink)]" style={{ left: `calc(${at}% - 4px)` }} />
+      <div className="relative h-1.5 rounded-full bg-[var(--surface-2)]" aria-hidden="true">
+        <div className="absolute top-1/2 -translate-y-1/2 w-2 h-3 rounded-sm bg-[var(--accent)]" style={{ left: `calc(${at}% - 4px)` }} />
       </div>
-      <div className="mt-1 flex justify-between doc-meta normal-case">
+      <div className="mt-1 flex justify-between text-[13px] text-[var(--text-muted)]">
         <span>{formatCurrency(low, currency)}</span>
         <span>{formatCurrency(high, currency)}</span>
       </div>
@@ -60,34 +59,19 @@ const TradingLevels = ({ t, currency }) => {
   ];
 
   return (
-    <Sheet title="Trading levels">
-      <p className="field-label mb-1.5">52-week range</p>
+    <Card title="Trading levels">
+      <p className="text-[13px] text-[var(--text-muted)] mb-1.5">52-week range</p>
       <RangeBar low={t?.low_52w} high={t?.high_52w} price={price} currency={currency} />
-      <Statement
-        inline
-        className="mt-3"
-        columns={[
-          { key: 'item', label: 'Level' },
-          { key: 'value', label: 'Value', align: 'right' },
-          { key: 'note', label: 'Note', align: 'right' },
-        ]}
-      >
+      <ul className="mt-3">
         {rows.map(([label, value, note]) => (
-          <Row key={label}>
-            <Cell className="text-[var(--ink-soft)]">{label}</Cell>
-            <Cell align="right" mono>{value}</Cell>
-            <Cell
-              align="right"
-              mono
-              data-label={note ? undefined : ''}
-              className={cn('text-[var(--ink-faint)]', note.startsWith('+') && 'text-up', note.startsWith('−') && 'text-down')}
-            >
-              {note}
-            </Cell>
-          </Row>
+          <li key={label} className="flex items-baseline gap-3 min-h-11 py-2 border-b border-[var(--border)] last:border-b-0 text-[15px]">
+            <span className="flex-1 min-w-0 text-[var(--text-muted)]">{label}</span>
+            <span className="private tabular-nums font-medium text-[var(--text)]">{value}</span>
+            {note && <span className={`w-24 text-right text-[13px] tabular-nums ${note.startsWith('+') ? 'text-[var(--gain)]' : note.startsWith('−') ? 'text-[var(--loss)]' : 'text-[var(--text-muted)]'}`}>{note}</span>}
+          </li>
         ))}
-      </Statement>
-    </Sheet>
+      </ul>
+    </Card>
   );
 };
 

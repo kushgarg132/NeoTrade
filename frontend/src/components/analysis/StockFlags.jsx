@@ -1,21 +1,15 @@
 import React from 'react';
-import { cn } from '../../utils/cn';
+import { toneText } from '../ui/tone';
 
-const TONE = { up: 'text-up', down: 'text-down', neutral: 'text-[var(--ink)]' };
+const TONE = { up: 'gain', down: 'loss' };
 
 /** Plain-fact chips over the stock (backend/research/flags.py): facts, never a buy or sell call. */
 const StockFlags = ({ flags }) => {
   if (!flags?.length) return null;
   return (
-    <ul className="flex flex-wrap gap-1.5" aria-label="At a glance">
+    <ul className="flex flex-wrap gap-2" aria-label="At a glance">
       {flags.map((flag) => (
-        <li
-          key={flag.code}
-          className={cn(
-            'px-2 py-1 border border-[var(--rule-strong)] bg-[var(--paper)] font-[family-name:var(--font-narrow)] text-xs font-semibold',
-            TONE[flag.tone] || TONE.neutral
-          )}
-        >
+        <li key={flag.code} className={`px-3 min-h-8 inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[13px] font-medium ${toneText(TONE[flag.tone])}`}>
           {flag.label}
         </li>
       ))}

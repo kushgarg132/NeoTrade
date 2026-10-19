@@ -10,6 +10,7 @@ import NewsChip from '../common/NewsChip';
 import Markdown from '../common/Markdown';
 import { strategyName } from '../../utils/library';
 import ForwardBadge from '../ForwardBadge';
+import { tokenRefusal, deadlineFrom, EXPIRED_NOTE } from '../../utils/liveConfirm';
 
 /**
  * One proposal, printed as a record on the note.

@@ -1,6 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import React from 'react';
-import { Sheet } from '../doc/Doc';
+import Card from '../ui/Card';
 import { formatCompactNumber, formatCurrency, formatPercent } from '../../utils/formatters';
 
 const isNum = (value) => typeof value === 'number' && Number.isFinite(value);
@@ -55,14 +55,14 @@ const Fundamentals = ({ company: c, currency }) => {
   if (!groups.length) return null;
   const wide = typeof window !== 'undefined' && window.matchMedia?.('(min-width: 768px)').matches;
   return (
-    <Sheet title="Fundamentals">
+    <Card title="Fundamentals">
       <div className="grid gap-4 md:grid-cols-3">
         {groups.map(([title, rows], i) => (
           // Phone: the first group open, the rest folded. Desktop has the room: all open.
           <details key={title} className="min-w-0 group" open={i === 0 || wide}>
-            <summary className="field-label mb-1 cursor-pointer list-none flex items-center justify-between min-h-11 md:min-h-0">
+            <summary className="text-[14px] font-semibold text-[var(--text)] cursor-pointer list-none flex items-center justify-between min-h-11 md:min-h-0">
               {title}
-              <span className="doc-meta inline-flex items-center gap-1" aria-hidden="true">
+              <span className="text-[13px] font-normal text-[var(--text-muted)] inline-flex items-center gap-1" aria-hidden="true">
                 {rows.length}
                 <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
               </span>
@@ -70,16 +70,16 @@ const Fundamentals = ({ company: c, currency }) => {
             {/* Two figures a line: label over value, in a 2-column grid. */}
             <dl className="grid grid-cols-2 gap-x-4">
               {rows.map(([label, value]) => (
-                <div key={label} className="py-1.5 border-b border-[var(--rule)] min-w-0">
-                  <dt className="doc-meta normal-case truncate">{label}</dt>
-                  <dd className="figure-md text-sm">{value ?? '—'}</dd>
+                <div key={label} className="py-1.5 border-b border-[var(--border)] min-w-0">
+                  <dt className="text-[13px] text-[var(--text-muted)] truncate">{label}</dt>
+                  <dd className="private tabular-nums text-[15px] font-medium text-[var(--text)]">{value ?? '—'}</dd>
                 </div>
               ))}
             </dl>
           </details>
         ))}
       </div>
-    </Sheet>
+    </Card>
   );
 };
 

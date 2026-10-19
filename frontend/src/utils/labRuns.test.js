@@ -11,6 +11,7 @@ test('returns the 7 summary keys in order', () => {
 });
 
 test('skips a key missing from one side and adds shared kind-specific keys', () => {
+  // eslint-disable-next-line no-unused-vars
   const { beta, ...noBeta } = full;
   const rows = compareRows({ metrics: { ...noBeta, trades: 5, pf: 1 } }, { metrics: { ...full, trades: 8, dd: 2 } });
   assert.ok(!rows.some((r) => r.key === 'beta' || r.key === 'pf' || r.key === 'dd'));

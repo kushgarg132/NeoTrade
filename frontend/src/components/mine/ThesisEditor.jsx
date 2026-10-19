@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { Button } from '../common/Button';
+import Button from '../ui/Button';
 import api, { endpoints } from '../../utils/api';
 
 const num = (v) => (v === '' ? null : Number(v));
-const INPUT = 'w-full min-h-11 sm:min-h-9 px-2 border border-[var(--rule-strong)] bg-[var(--paper)] text-sm';
+const INPUT = 'w-full min-h-11 px-3 py-2 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] text-[15px] text-[var(--text)]';
 
 /** Why I bought, target, stop, review-by. PUT /mine/thesis/{symbol}; a 422 shows its reason inline. */
 const ThesisEditor = ({ symbol, thesis, onSaved }) => {
@@ -47,34 +47,34 @@ const ThesisEditor = ({ symbol, thesis, onSaved }) => {
   return (
     <form onSubmit={submit} className="space-y-3">
       <label className="block">
-        <span className="field-label">Why I bought</span>
+        <span className="text-[13px] text-[var(--text-muted)]">Why I bought</span>
         <textarea value={form.why} onChange={set('why')} maxLength={2000} rows={3} className={`${INPUT} mt-1`} />
       </label>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <label className="block">
-          <span className="field-label">Target price</span>
+          <span className="text-[13px] text-[var(--text-muted)]">Target price</span>
           <input type="number" inputMode="decimal" min="0" step="any" value={form.target} onChange={set('target')} className={`${INPUT} mt-1`} />
         </label>
         <label className="block">
-          <span className="field-label">Stop price</span>
+          <span className="text-[13px] text-[var(--text-muted)]">Stop price</span>
           <input type="number" inputMode="decimal" min="0" step="any" value={form.stop} onChange={set('stop')} className={`${INPUT} mt-1`} />
         </label>
         <label className="block">
-          <span className="field-label">Review by</span>
+          <span className="text-[13px] text-[var(--text-muted)]">Review by</span>
           <input type="date" value={form.review_by} onChange={set('review_by')} className={`${INPUT} mt-1`} />
         </label>
       </div>
       {error && (
-        <p role="alert" className="text-sm text-[var(--loss)]">
+        <p role="alert" className="text-[14px] text-[var(--loss)]">
           {error}
         </p>
       )}
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={busy}>
-          {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+        <Button type="submit" variant="secondary" disabled={busy}>
+          {busy && <Loader2 className="w-4 h-4 animate-spin" />}
           Save thesis
         </Button>
-        {saved && <span className="doc-meta normal-case">Saved</span>}
+        {saved && <span className="text-[13px] text-[var(--text-muted)]">Saved</span>}
       </div>
     </form>
   );

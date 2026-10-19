@@ -43,19 +43,17 @@ const Stock = () => {
   const { quick, ai, requestAi, reloadQuick } = useStockAnalysis(symbol);
 
   // Your side of the stock: 404 means you have never held it, which is not an error.
-  const [mine, setMine] = useState({ data: null, status: 'loading' }); // loading | ok | missing | error
+  const [mineRaw, setMine] = useState({ data: null, status: 'loading', symbol }); // loading | ok | missing | error
+  const mine = mineRaw.symbol === symbol ? mineRaw : { data: null, status: 'loading' }; // another stock's answer is not ours
   const [portfolio, setPortfolio] = useState(null);
   const [ticket, setTicket] = useState(null);
   const loadMine = useCallback(() => {
     api
       .get(endpoints.mine.stock(symbol))
-      .then((res) => setMine({ data: res.data, status: 'ok' }))
-      .catch((err) => setMine({ data: null, status: err?.response?.status === 404 ? 'missing' : 'error' }));
+      .then((res) => setMine({ data: res.data, status: 'ok', symbol }))
+      .catch((err) => setMine({ data: null, status: err?.response?.status === 404 ? 'missing' : 'error', symbol }));
   }, [symbol]);
-  useEffect(() => {
-    setMine({ data: null, status: 'loading' });
-    loadMine();
-  }, [loadMine]);
+  useEffect(loadMine, [loadMine]);
   useEffect(() => {
     api.get(endpoints.mine.overview).then((res) => setPortfolio(res.data?.headline?.value ?? null)).catch(() => setPortfolio(null));
   }, []);
@@ -131,7 +129,7 @@ const Stock = () => {
         {tab === 'chart' && quick.error && !closes.length ? <Empty title="No price data" body={quick.error} action={<Button variant="secondary" onClick={reloadQuick}>Retry</Button>} /> : panel}
       </div>
 
-      <div className="h-16" aria-hidden="true" />
+      <div className="h-28 lg:h-20" aria-hidden="true" />
       <div className="fixed z-30 inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-0 lg:left-56 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-2">
         <div className="mx-auto max-w-5xl flex gap-3">
           {pos && <Button variant="secondary" className="flex-1" onClick={() => setTicket({ symbol, side: 'SELL', lastPrice: price })}>Sell</Button>}

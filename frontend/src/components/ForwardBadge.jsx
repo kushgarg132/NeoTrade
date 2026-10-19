@@ -15,6 +15,7 @@ const load = () => {
 };
 
 /** Scorecard rows for admins; [] for everyone else and on any error (the badge stays hidden). */
+// eslint-disable-next-line react-refresh/only-export-components
 export const useForward = () => {
   const isAdmin = useAuth().user?.role === 'admin';
   const [rows, setRows] = useState([]);

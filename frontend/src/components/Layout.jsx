@@ -39,7 +39,7 @@ const Layout = ({ children }) => {
   }, []);
   useReconnect(loadAttention);
 
-  useTopic('suggestions', (message) => {
+  useTopic('suggestions', () => {
     loadPending();
     loadAttention(); // an interrupted approval lands as NEEDS_REVIEW
   });
