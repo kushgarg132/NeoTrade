@@ -6,6 +6,7 @@ import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import Empty from '../ui/Empty';
 import Skeleton from '../ui/Skeleton';
+import ListRow from '../ui/ListRow';
 import { inr, pct } from '../ui/format';
 import { toneText } from '../ui/tone';
 import ImportFiles from './ImportFiles';
@@ -69,6 +70,7 @@ const HoldingsTab = () => {
   const { snapshot, loading, reload } = useHoldings({ poll: true });
   const [sort, setSort] = useState('day');
   const [ticket, setTicket] = useState(null);
+  const [importing, setImporting] = useState(false);
   const [reading, setReading] = useState(null);
   const [needsOnly, setNeedsOnly] = useState(false);
   const [needs, setNeeds] = useState(() => new Set());
@@ -128,7 +130,21 @@ const HoldingsTab = () => {
         )}
       </Card>
 
-      <ImportFiles onImported={() => reload()} />
+      <Card>
+        <ListRow title="Import trades or funds" sub="Zerodha tradebook CSV, CAMS or KFintech statement" onClick={() => setImporting(true)} />
+      </Card>
+      {importing && (
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setImporting(false)}>
+          <div role="dialog" aria-label="Import trades or funds" className="bg-[var(--bg)] w-full sm:max-w-xl max-h-[90vh] overflow-y-auto p-3 sm:p-4 rounded-t-[16px] sm:rounded-[16px]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setImporting(false)} aria-label="Close" className="min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--text-muted)]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <ImportFiles onImported={() => reload()} />
+          </div>
+        </div>
+      )}
 
       {plan && snapshot && (
         <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/40" onClick={closePlan}>
