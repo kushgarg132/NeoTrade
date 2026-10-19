@@ -407,6 +407,8 @@ shared host). Each horizon leaves a `lab_runs` row (kind `ml`, name `lgbm_h<H>`)
 with two caveats attached: no point-in-time NIFTY 200 membership (survivorship, +4-8% a year) and no
 fundamentals history. `python -m backend.lab rerun` does not re-run `ml` runs; this command is the rerun.
 
+First real run, 2026-10-19: FAIL at 20 and 60 days. The ranking signal is real in-sample (rank IC positive every year at 20 days, t 5.9) but the top decile does worse than the plain momentum score after costs, and its P(up) is less accurate than the base rate. Momentum stays; nothing is wired.
+
 ## Reproducing a run
 
 Every simulator leaves a `lab_runs` record (`backend/lab/runs.py::LabRunStore`). To check one still

@@ -931,7 +931,12 @@ registration and public onboarding are deferred, not cancelled.
    returns and calibration to NIFTY. An unproven result stays labelled unproven. *Status: done 2026-10-19 (scorecard API, Lab › Forward, proven badge).*
 5. **ML ranking:** let a passing model rank or filter candidates, never own sizing or exits at
    first. It must beat simple rule baselines after turnover in yearly purged walk-forward tests,
-   have calibration better than the base rate, then earn a paper record.
+   have calibration better than the base rate, then earn a paper record. *Status 2026-10-19:
+   harness built and deployed (`backend/ml/`, `python -m backend.ml.evaluate`). First run FAILED
+   the bar at both horizons: rank IC positive every year (H=20 t 5.9, H=60 t 4.6 but 2026
+   negative), yet the top decile trails `momentum_vol_60` after costs (-0.43% / -0.33% a pick) and
+   P(up) is worse than the base rate (Brier skill -4.9% / -9.1%). Survivorship (today's list) and
+   price-only features likely flatter the IC. Nothing wired; lab_runs 384060350ca1, 5bbe1158ec29.*
 6. **RL sandbox:** keep RL entirely isolated from live trading. Consider execution, sizing or
    exit experiments only after the simulator and data history are trustworthy; require the same
    out-of-sample and paper gates before any further decision.
