@@ -47,9 +47,10 @@ the single source of charges.
   test = each calendar year after the first `train_years`; train = all dates before the test
   start minus the last `purge_days` trading days (removes labels that overlap the test year);
   `embargo_days` trading days after a test year are dropped from later trains.
-- Users: `factor/validate.py::walk_forward` (purge 0, as today: decisions at close, no label
-  overlap), `forecast/study.py::walk_forward` (purge = setup horizon + 1), `learning/retune.py`
-  and `builder/draft.py` where they split windows, `forecast/research/*_tool.py`.
+- Users: `factor/validate.py::walk_forward` (rolling 3-year window, purge 0, as today) and
+  `forecast/study.py::walk_forward` (expanding, keeps its `exit < test_start` event purge).
+  Retune and builder keep their single hold-out split; the research tools are unchanged
+  (planning ruling: both would change outcomes or cannot run in prod/tests).
 - Current outputs must not change where purge/embargo are 0 (tests pin that).
 
 ### `backend/lab/metrics.py`
