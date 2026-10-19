@@ -137,6 +137,7 @@ Source: `src/App.jsx::App`. `gated(x)` = `RequireAuth > ErrorBoundary > Suspense
 | `/login` | `Login` | no | not gated; honours `?next=` |
 | `/` | `Home` | no | stub (redesign task 1); `components/home/{GoalTile,BriefCard,WeeklyLink}` are null stubs |
 | `/money` | `Money` | no | stub; tabs `?tab=` (overview, holdings, tax, journal) |
+| (AI summaries) | Stored-AI-text cards: `components/ai/AiSummary.jsx` (`AiCard`, `AiText` masks ₹ amounts, `AiState`), `hooks/useStored.js` (404 = empty), `utils/aiText.js`. Placements: Market Pulse `Brief` + `IndexSheet` (`market/Pulse.jsx`), Money `WhyMoved` (`money/OverviewTab.jsx`), Stock header one-liner (`pages/Stock.jsx`), Idea `Thesis` (`pages/IdeaDetail.jsx`) | no | none calls a model on open; the index sheet calls `/market/index/{t}/analysis` on tap |
 | `/ideas`, `/ideas/history`, `/ideas/:id` | `Ideas`, `IdeasHistory`, `IdeaDetail` | no | stubs |
 | `/ai` | `Ai` | no | stub; tabs `?tab=` (scoreboard, positions, activity) |
 | `/market` | `Market` | no | stub; `?tab=news\|watchlist` |

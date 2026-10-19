@@ -20,6 +20,8 @@ import { ideaFromSuggestion, ideaFromPick, parseIdeaId } from '../utils/ideas';
 import { bareSymbol } from '../utils/formatters';
 import { inr, pct } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
+import { AiCard, AiText } from '../components/ai/AiSummary';
+import { splitThesis } from '../utils/aiText';
 
 const STATUS = { APPROVED: 'You bought this', REJECTED: 'You skipped this', EXPIRED: 'Expired', FILLED: 'Filled', CANCELLED: 'Cancelled' };
 const PAPER = { 'live-ready': 'Paper record clears the live gate', paper: 'Paper record still building', untested: 'Not backtested yet', paused: 'Paused by the AI' };
@@ -86,6 +88,22 @@ const find = async (kind, key) => {
 // Price levels keep their paise (inr rounds to rupees).
 const px = (n) => (n == null ? '—' : `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
+/** The AI thesis saved with the suggestion, with its risk sentences set apart when it names any. */
+const Thesis = ({ text, at }) => {
+  const { why, risk } = splitThesis(text);
+  return (
+    <AiCard title="Why this idea, and what could go wrong" asOf={at}>
+      {why && <AiText text={why} />}
+      {risk && (
+        <div className="mt-3">
+          <div className="text-[13px] font-semibold text-[var(--warn)]">What could go wrong</div>
+          <AiText text={risk} className="text-[var(--text-muted)]" />
+        </div>
+      )}
+    </AiCard>
+  );
+};
+
 const IdeaDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -114,9 +132,10 @@ const IdeaDetail = () => {
       <Card title="Why">
         {idea.why && <p className="text-[15px] text-[var(--text)]">{idea.why}</p>}
         {idea.reasons.length > 0 && <ul className="list-disc pl-5 text-[15px] text-[var(--text)]">{idea.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
-        {idea.thesis && <p className="mt-2 text-[14px] text-[var(--text-muted)]">{idea.thesis}</p>}
         {!idea.why && !idea.reasons.length && !idea.thesis && <p className="text-[14px] text-[var(--text-muted)]">No reasons recorded.</p>}
       </Card>
+
+      {idea.thesis && <Thesis text={idea.thesis} at={idea.createdAt} />}
 
       <Card title="Levels">
         <div className="grid grid-cols-3 gap-3">

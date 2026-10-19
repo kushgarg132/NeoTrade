@@ -23,7 +23,7 @@ export const ideaFromSuggestion = (s) => {
     badge: s.strategy ? { source: 'suggestion', name: s.strategy } : null,
     entry, stop: s.stop ?? null, target: s.target ?? null,
     qty: s.quantity, notional: s.notional ?? (entry ? entry * s.quantity : null), risk,
-    reasons: (s.reason_codes || []).map(strategyName), thesis: s.ai_thesis || null, why: null,
+    reasons: (s.reason_codes || []).map(strategyName), thesis: s.ai_thesis || null, createdAt: s.created_at || null, why: null,
     range: null, pUp: null, pBeat: null, pastN: null, oosExcess: null, oosN: null, decided: s.status !== 'PENDING',
     status: s.status, strategy: s.strategy || null, score: confidence(s.score),
     toStop: s.stop != null && entry ? -Math.abs(entry - s.stop) / entry : null,
