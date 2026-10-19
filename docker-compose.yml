@@ -16,10 +16,11 @@ services:
     container_name: neotrade-backend
     restart: unless-stopped
     # The deploy workflow only names `backend`; this makes the same
-    # `docker compose up -d --build backend` also (re)build and start ingest.
+    # `docker compose up -d --build backend` also (re)build and start ingest and jobs.
     # The API does not need it to serve -- it fetches itself on a cache miss.
     depends_on:
       - ingest
+      - jobs
     environment: &backend-env
       MONGODB_URL: ${MONGODB_URL}
       DATABASE_NAME: ${DATABASE_NAME:-stock_investor_db}
@@ -35,6 +36,8 @@ services:
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # false: this process stops starting the background loops; `jobs` runs them (backend/jobs.py).
+      RUN_BACKGROUND_JOBS: ${RUN_BACKGROUND_JOBS:-true}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     networks:
@@ -54,6 +57,26 @@ services:
     container_name: neotrade-ingest
     restart: unless-stopped
     command: ["python", "-m", "backend.datalayer.worker"]
+    environment: *backend-env
+    networks:
+      - default
+      - routineos_default
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Background loops (backend/jobs.py): daily pass, autorun, order sweeps, guardrail
+  # monitor, Telegram poller. Same image, no port. Set RUN_BACKGROUND_JOBS=false on
+  # `backend` so the API stops starting them; the loops' own Redis locks keep it safe
+  # while both run.
+  jobs:
+    build:
+      context: ./backend
+    container_name: neotrade-jobs
+    restart: unless-stopped
+    command: ["python", "-m", "backend.jobs"]
     environment: *backend-env
     networks:
       - default

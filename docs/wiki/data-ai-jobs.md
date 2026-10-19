@@ -194,7 +194,7 @@ All times IST. `in_session` = NSE trading day (`core/market_calendar.py::is_trad
 | Guardrail monitor | API | 60s, in session | `guardrails/monitor.py::monitor_loop` | `LOCK_KEY` 55s |
 | Telegram poller | API | long poll 25s + 0.5s pause; 10s backoff on error | `guardrails/telegram_bot.py::poll_loop` | one poller per bot, lock 60s |
 | Price pump | API | 15s | `ws/pump.py::pump_loop` | none |
-| Worker heartbeat | API | `worker:alive:{boot}` every 30s (TTL 90s) | `server.py::_heartbeat` | none |
+| Worker heartbeat | API and jobs | `worker:alive:{boot}` every 30s (TTL 90s) | `runs.py::keep_alive` | none |
 | Instrument expand | API | once at startup (20h marker) | `server.py::_expand_instruments` | none |
 | Home feeds cache | API (on request) | SWR: indices/global 60s, movers 300s, market news 600s; refresh claim 60s | `market_cache.py::cached` | `market:{key}:refreshing` |
 | Analyst note cache | API (on request) | 4h per symbol | `ai/analyst.py` | `analyst:lock:{SYM}` 120s |

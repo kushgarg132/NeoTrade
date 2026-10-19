@@ -30,3 +30,4 @@ websockets>=14.0  # Upstox v3 market-data feed (backend/data/feeds/live_upstox.p
 casparser==1.4.1  # CAMS/KFintech CAS PDF parser (MIT, backend/mine/cas_import.py); pypdfium2 + casparser-isin
 python-multipart>=0.0.9  # multipart upload of the CAS PDF
 aiogram==3.31.0  # Telegram Bot API transport (backend/guardrails/telegram.py); caps pydantic<2.14
+import-linter==2.15  # import contracts, `lint-imports` (backend/.importlinter); pure python

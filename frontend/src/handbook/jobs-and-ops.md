@@ -60,15 +60,19 @@ stored daily bars instead (no session needed). The result is `job:last:strategy_
 ("Strategy builder" on the Jobs panel below), which also has **Run now** (admin `POST /system/builder/run`;
 "The builder is already running." if the lock is held). What it decides: Trading & Money → Strategy builder.
 
-## Loops in the API (every worker)
+## Background loops (the `jobs` process)
+
+Started by `backend/jobs.py::start_loops` in the `jobs` container, and also in every API worker
+while `RUN_BACKGROUND_JOBS` is true (default). Redis locks keep two copies safe. The price pump
+stays in the API because it needs the socket hub.
 
 | Loop | Every | Does | Code |
 |---|---|---|---|
 | Guardrail monitor | 60 s, 9:15 AM–3:35 PM IST | checks each user's limits against their own broker (never the AI account's) | `backend/guardrails/monitor.py` |
 | Auto run | 60 s | keeps auto paper runs alive, builds game plans, long-term passes, exits | `backend/engine/autorun.py` |
 | Telegram | long poll | answers linked chats, one poller per bot | `backend/guardrails/telegram_bot.py` |
-| Price pump | 15 s | publishes marks and P&L to sockets | `backend/ws/pump.py` |
-| Worker heartbeat | 30 s (90 s TTL) | `worker:alive:<boot>` | `backend/server.py::_heartbeat` |
+| Price pump (API only) | 15 s | publishes marks and P&L to sockets | `backend/ws/pump.py` |
+| Worker heartbeat | 30 s (90 s TTL) | `worker:alive:<boot>` | `backend/runs.py::keep_alive` |
 
 Each loop tick writes `job:last:<name>` through `backend/system/jobs.py::mark`, which never
 raises.
@@ -130,5 +134,5 @@ reports their ages.
 
 ## Health
 
-`GET /health` on the API: `{api: "ok", ingest: {<loop>: age in seconds}}` (`ingest` is empty when the worker is down, null if Redis could not be read); it does not probe Mongo or Redis itself. This page's live panels
+`GET /health` on the API: `{api: "ok", ingest: {<loop>: age in seconds}, jobs: seconds since the jobs process beat or null}` (`ingest` is empty when the worker is down, null if Redis could not be read); it does not probe Mongo or Redis itself. This page's live panels
 come from the admin-only `GET /api/v1/system/status` (`backend/system/status.py`, cached 30 s).

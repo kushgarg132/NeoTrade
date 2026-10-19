@@ -1,0 +1,68 @@
+# Run from the repo root (or /app in the image):
+#   lint-imports --config backend/.importlinter
+# Permissive on purpose: only directions that are clearly wrong. Lazy (in-function)
+# imports count too. Existing violations are listed under ignore_imports as known
+# debt (docs/wiki/platform.md "Import rules"); remove a line when the import is fixed.
+[importlinter]
+root_package = backend
+include_external_packages = False
+
+[importlinter:contract:domain-not-routers]
+name = Domain modules do not import HTTP routers
+type = forbidden
+source_modules =
+    backend.ai
+    backend.autopilot
+    backend.brokers
+    backend.builder
+    backend.chat
+    backend.data
+    backend.datalayer
+    backend.engine
+    backend.factor
+    backend.forecast
+    backend.guardrails
+    backend.instruments
+    backend.journal
+    backend.learning
+    backend.mine
+    backend.options
+    backend.plan
+    backend.portfolio
+    backend.research
+    backend.risk
+    backend.scoring
+    backend.strategies
+    backend.suggestions
+forbidden_modules =
+    backend.routers
+
+[importlinter:contract:own-account-not-autopilot]
+name = Mine and journal never reach the AI account's autopilot
+type = forbidden
+source_modules =
+    backend.mine
+    backend.journal
+forbidden_modules =
+    backend.autopilot
+
+[importlinter:contract:nothing-imports-research-tools]
+name = Nothing imports the forecast research tools (run by hand only)
+type = forbidden
+source_modules =
+    backend.ai
+    backend.autopilot
+    backend.engine
+    backend.forecast.picks
+    backend.forecast.setups
+    backend.forecast.study
+    backend.mine
+    backend.plan
+    backend.portfolio
+    backend.routers
+    backend.scheduler
+    backend.server
+    backend.jobs
+    backend.system
+forbidden_modules =
+    backend.forecast.research
