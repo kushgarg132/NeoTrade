@@ -62,7 +62,7 @@ These make conviction legible. Enforced in code and tests, not by discipline.
 
 Registered in `backend/strategies/registry.py`; each class carries a `CARD`
 (`backend/strategies/card.py`: style, regimes it suits, conditions, best/avoid, typical
-hold), shown in AI → Strategies with this account's record and what each still needs.
+hold), shown in Lab → Strategies with this account's record and what each still needs.
 
 - **Intraday:** `orb_breakout`, `vwap_reversion`, `volume_surge`, `rsi_momentum_scalp`, and the
   news-aware set `gap_and_go`, `gap_fill_fade` (per-day catalyst map,
@@ -101,7 +101,7 @@ validated (`backend/builder/validate.py::validate_spec`, duplicates dropped) and
 2. The last 90 days alone are net-positive (the holdout).
 3. Deflated Sharpe ≥ 0.95 over every draft ever tried, so a lucky draw among many does not pass.
 
-Active strategies appear in AI → Strategies as `built:<slug>` with a **Built** badge; failures sit
+Active strategies appear in Lab → Strategies as `built:<slug>` with a **Built** badge; failures sit
 under "Tried and rejected" with the reason. They trade on paper first, then need both gates to real money
 (above) like any strategy. Each takes at most one entry per symbol per day and exits by its stop, target or the
 15:15 square-off. `backend/strategies/built.py::BlockStrategy` starts each symbol fresh every session, seeded
@@ -132,7 +132,7 @@ are shared across both.
 The chat can do the same: `backend/chat/actions.py::action_tools` offers `propose_strategy`, which validates the
 spec and returns a card; Confirm runs `submit_strategy` itself, so every limit and the test are the form's.
 
-AI → Strategies → **Mine** → **New strategy** composes a spec from the same blocks. Pick the **Horizon**
+Lab → Strategies → **Mine** → **New strategy** composes a spec from the same blocks. Pick the **Horizon**
 (Intraday / Swing) first; Swing hides Short and asks for `Max hold (days)` and an optional
 `Trailing stop (× ATR)`. Rows carry an Intraday / Swing chip. The chat's `propose_strategy` lists both
 vocabularies and takes `"horizon": "swing"` in the spec. (The form reads
@@ -169,7 +169,7 @@ Every run still runs every strategy on paper; the gates decide only where orders
 - **Daily loss kill-switch** — `backend/risk/kill_switch.py`: once realised + unrealised loss
   crosses the user's limit, live trading stops for the session and does not re-arm itself.
 - **Capital caps** — per-trade and per-day, read from stored prefs, never the request body.
-- **Guardrails** (Mine) — `backend/guardrails/`: limits you set on your own broker account
+- **Guardrails** (Journal → Guardrails) — `backend/guardrails/`: limits you set on your own broker account
   (trades per day, cooldown after losses, daily loss, options trades and lots, unhedged
   option selling), checked every minute 9:15 AM–3:35 PM IST. Alerts only — nothing here can
   stop an order you place in the broker's app.
@@ -180,9 +180,9 @@ Every run still runs every strategy on paper; the gates decide only where orders
 - **AI game plan only tightens** — `backend/plan/`: may drop opening intents, shrink risk
   (0.25–1.0), cap positions or skip the day; never blocks an exit or touches conviction.
 
-## Long-term ideas (Mine → Needs you)
+## Long-term ideas (Portfolio → Needs you)
 
-Decided from the "Needs you" list on `/mine` (there is no Ideas tab since 2026-10-15; `/mine/ideas` redirects). Approving
+Decided from the "Needs you" list on `/portfolio` (there is no Ideas tab since 2026-10-15; `/mine/ideas` redirects to `/portfolio`). Approving
 there never trades the AI account: fills go to paper or, on a second tap, to `mine`.
 
 
@@ -206,7 +206,7 @@ there never trades the AI account: fills go to paper or, on a second tap, to `mi
   written only for those. Each must already beat 3× its round-trip charges (`size_intents`).
 - **Ideas for the user's account come only from proven strategies**
   (`risk/paper_gate.py::for_mine`: a passing backtest and a passing paper record on the AI
-  account). Mine → Ideas, Today, the chat, portfolio picks and every proposal Telegram message read
+  account). Portfolio → Overview, Today, the chat, portfolio picks and every proposal Telegram message read
   through it, and approve-live refuses an unproven one with a 409. Until a strategy is proven the
   AI paper-trades its ideas alone. A proposal the AI took stays PENDING with `ai_order` set, so
   both accounts can act on the same idea.
@@ -266,9 +266,9 @@ trades), **Strategies** (which strategy is good enough, the track record, learni
   Sharpe guard: daily-bar strategies on three years of yfinance closes, 5-minute ones on a year
   from the admin's Upstox (or Kite) session (`backend/risk/gate_backtest.py::intraday_history`),
   skipped when neither is logged in. The LLM may only *suggest* thresholds, which are tested like
-  any other variant. Shown under AI → Strategies → What the engine learned.
+  any other variant. Shown under Lab → Strategies → What the engine learned.
 
-## Portfolio (Mine → Holdings)
+## Portfolio (Portfolio → Holdings)
 
 Holdings from every connected broker merged by ISIN (`backend/portfolio/scorecard.py`),
 health per stock (`portfolio/health.py`), rule verdicts SELL / HOLD / ADD (funds REVIEW /
@@ -282,11 +282,12 @@ when a verdict gets worse. A broker that is logged out keeps its last holdings
 `portfolio/service.py::mine_holdings` is what the rest of the app means by "held": news
 alerts and the long-term scan's SELL ideas read it, never paper positions.
 
-## Mine redesign (Mine → Overview · Holdings · Tax · Journal)
+## Mine redesign (Portfolio → Overview · Holdings · Tax, and Journal)
 
-Since 2026-10-15 Mine has four tabs and a stock page; Today is the glance, Mine is the depth.
-Old paths redirect in `frontend/src/App.jsx` (`/mine/ideas` → `/mine`, `/mine/trades` →
-`/mine/journal`, `/mine/habits` → `/mine/journal?tab=habits`). The Plan and Review sub-tabs, the
+Since 2026-10-19 the old Mine section is Portfolio (Overview · Holdings · Tax · News · Watchlist · Import) plus a
+separate Journal tab (Trades · Habits · Guardrails) and one stock page at `/stock/:symbol`; Today is the glance,
+Portfolio is the depth. Old paths redirect in one hop (`frontend/src/utils/routes.js::MOVED`: `/mine` → `/portfolio`,
+`/mine/journal` and `/mine/trades` → `/journal`, `/mine/habits` → `/journal?tab=habits`). The Plan and Review sub-tabs, the
 "Analyse now" button and the Ideas page are gone; the daily 16:00 review still writes verdicts and the
 per-holding AI note, and `POST /portfolio/refresh` stays for the daily pass and the chat. Nothing here
 adds scoring: verdicts stay admin-gated and the one conviction formula is untouched.
@@ -330,7 +331,7 @@ chips, "Plan new money" opens `frontend/src/components/portfolio/Rebalance.jsx`)
 `frontend/src/pages/Journal.jsx` (Trades and Habits as inner tabs). Where an action opens is decided in
 `frontend/src/utils/mine.js::actionTarget`.
 
-## Picks (Research → Picks, admin-only)
+## Picks (Picks, admin-only)
 
 Which stocks fired a setup at the last close, and what that setup has done before — every
 number a measured base rate, never a model's opinion. Admin-only everywhere until the owner's

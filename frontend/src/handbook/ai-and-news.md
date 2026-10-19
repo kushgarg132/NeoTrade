@@ -151,7 +151,7 @@ sentiment, India VIX, Brent, USD/INR, S&P futures, FII flows and imminent high-i
 events; `brief` writes the market brief. Both feed research notes, the chat, the plan and
 the autopilot fence.
 
-**What you see** — Research → News (`GET /news/feed`: your names by default — paper
+**What you see** — Portfolio → News (`GET /news/feed`: your names by default — paper
 positions, broker holdings and the watchlist — filings that move nothing left out),
 `NewsChip` on Holdings, Watchlist and Ideas (`GET /news/symbols`), and Today's
 Markets card.

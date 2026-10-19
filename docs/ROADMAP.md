@@ -923,7 +923,8 @@ registration and public onboarding are deferred, not cancelled.
    sync; add daily broker-to-ledger reconciliation and data-quality monitoring. Retain the kill
    switch, caps, and separate `mine`/`ai` accounts.
 2. **Daily workstation:** consolidate Today, Portfolio, Journal, AI and Lab around pre-market,
-   market-hours and post-market decisions.
+   market-hours and post-market decisions. *Status 2026-10-19: navigation, routes, one stock page and
+   Journal guardrails done (tabs Today, Picks, AI, Portfolio, Journal, Lab); phase-aware Today in progress.*
 3. **Research Lab:** make experiment definitions, point-in-time inputs, costs/slippage,
    backtests, purged walk-forward reports and comparisons first-class and reproducible.
 4. **Forward record:** paper-trade and score every rule candidate before outcome; compare net
