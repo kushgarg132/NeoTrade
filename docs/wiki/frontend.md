@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 8c6573d
+verified_at: a2539d8
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -121,6 +121,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 3. `pages/Handbook.jsx` (admin, `/lab/handbook`): five `?raw` markdown files, `utils/handbook.js::splitLive` swaps `<!-- live:deploy|jobs|news|data|ai -->` markers for `components/system/LivePanels.jsx` fed by `GET /system/status` (Jobs panel shows `data_alerts` as "Data alerts now"); panel actions: `POST /settings/llm-feature {feature,enabled}`, `POST /settings/lab {enabled}`, `POST /system/builder/run` (409 = already running).
 4. `pages/Backlog.jsx` (admin, `/lab/backlog`): `GET/POST /system/backlog`, `PATCH/DELETE /system/backlog/{id}`; optimistic writes roll back with the API message; reorder swaps `rank`.
 5. `pages/LabRuns.jsx` (admin, `/lab/runs`): `GET /lab/runs`; table of runs (created, kind, name, window, short code SHA, CAGR, Sharpe, max DD); `utils/labRuns.js::flatMetrics` flattens each kind's payload (gate `summary`, factor `oos` with `vol` as volatility, retune `test.best`, builder/study top-level numbers; study has no CAGR/Sharpe so shows "—"). `fmtMetric` prints cagr/max_drawdown/volatility/alpha as 1 dp percent, sharpe/sortino/beta 2 dp, others 3 dp. Tick two and Compare shows `compareRows` (the 7 summary metric keys, then numeric keys both runs share).
+6. `pages/LabForward.jsx` (admin, `/lab/forward`): `GET /forward/scorecard` table (source, name, n/100, mean excess, t, hit rate, calibration gap, label, gate, "Disagrees" marker); clicking a name loads `GET /forward/records?source=&name=` (date, symbol, side, net, NIFTY). `components/ForwardBadge.jsx` (`useForward()` fetches the scorecard once per 30 s, admins only, errors give `[]`; `utils/forward.js::badgeFor` returns "Proven" or "Unproven n/100", null when no row) sits on Picks setups (`picks`, setup key), Lab strategy cards (`engine`, card name) and `SuggestionRecord` (`suggestion`, `suggestion.strategy`; shown in Mine › Needs you and AI › Overview's engine ideas).
 
 ### 9. Order ticket / chat actions (the only path to real orders from the UI)
 1. `OrderTicket` (Buy/Sell, CNC, market/limit) does `POST /orders/propose {symbol,side,quantity,product,order_type,limit_price,venue:'live'}` -> card `{id,summary,...}`; Confirm = `POST /chat/actions/{id}/confirm {confirm_token}`. Response `status:'NEEDS_SECOND_TAP'` stores its `confirm_token` and arms a second tap (button disabled 600 ms) that sends it; otherwise `result` is shown. Any edit or close cancels the card (`POST /chat/actions/{id}/cancel`); unmount also cancels. No response at all is reported as "may have gone through", never as failure.
@@ -152,6 +153,7 @@ Source: `src/App.jsx::App`. `gated(x)` = `RequireAuth > ErrorBoundary > Suspense
 | `/lab/options` | `OptionChain` | **yes** | `?u=NIFTY\|BANKNIFTY` |
 | `/lab/handbook` | `Handbook` | **yes** | `?tab=system\|trading\|ai\|ops\|journey` |
 | `/lab/runs` | `LabRuns` | **yes** | |
+| `/lab/forward` | `LabForward` | **yes** | |
 | `/lab/backlog` | `Backlog` | **yes** | |
 | `/settings` | `Settings` | no | `?tab=accounts\|safety\|ai\|about`; `?tab=guardrails` -> `/journal?tab=guardrails` |
 | `/profile` | `Profile` | no | |

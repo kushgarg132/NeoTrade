@@ -47,5 +47,6 @@ export const LAB_TABS = [
   { to: '/lab/options', label: 'Options' },
   { to: '/lab/handbook', label: 'Handbook' },
   { to: '/lab/runs', label: 'Runs' },
+  { to: '/lab/forward', label: 'Forward' },
   { to: '/lab/backlog', label: 'Backlog' },
 ];

@@ -14,6 +14,7 @@ import api, { endpoints, getPreferences } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import { builtLine, recordLine, statusOf, strategyName } from '../utils/library';
 import { readiness, shortStatus } from '../utils/promotion';
+import ForwardBadge from '../components/ForwardBadge';
 import { cn } from '../utils/cn';
 
 /**
@@ -45,6 +46,7 @@ const StrategyItem = ({ card, gate, short, open, onToggle, yours }) => {
         <span className="flex flex-wrap items-baseline gap-2">
           <span className="figure-md text-sm">{strategyName(card.built ? card.name.replace(/^built:/, '') : card.name)}</span>
           <Badge variant={status.variant}>{status.label}</Badge>
+          <ForwardBadge source="engine" name={card.name} />
           {card.built && <Badge variant="secondary">{yours ? 'Built · Yours' : 'Built'}</Badge>}
           {card.built && <Badge variant="neutral">{card.built.horizon === 'swing' ? 'Swing' : 'Intraday'}</Badge>}
           <ChevronDown className={cn('ml-auto w-4 h-4 text-[var(--ink-faint)] transition-transform', open && 'rotate-180')} />

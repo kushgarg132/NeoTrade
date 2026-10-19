@@ -370,6 +370,15 @@ reaches Telegram, digests or chat.
   sets your account against these trades, net of charges.
 - **Caveat**: the universe is today's stock list (survivorship); the payload says so.
 
+## The forward record
+
+Lab › Forward (`/lab/forward`, admin) shows `backend/forward/scorecard.py::scorecard` through
+`backend/routers/forward.py::get_scorecard`: per source and name, scored decisions, mean excess over
+NIFTY net of charges, t, hit rate and calibration gap. A name is proven only at 100 scored, t of 2 or
+more and a calibration gap within 5 points; otherwise it reads "Unproven n/100". The same label shows
+on Picks setups, Lab strategy cards and ideas (`frontend/src/components/ForwardBadge.jsx`). It never
+gates money; the "Disagrees" marker flags where the existing money gate says otherwise.
+
 ## Reproducing a run
 
 Every simulator leaves a `lab_runs` record (`backend/lab/runs.py::LabRunStore`). To check one still

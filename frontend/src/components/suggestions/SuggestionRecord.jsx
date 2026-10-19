@@ -9,6 +9,7 @@ import { cn } from '../../utils/cn';
 import NewsChip from '../common/NewsChip';
 import Markdown from '../common/Markdown';
 import { strategyName } from '../../utils/library';
+import ForwardBadge from '../ForwardBadge';
 
 /**
  * One proposal, printed as a record on the note.
@@ -145,6 +146,7 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
                 ? suggestion.option_contract.option_type === 'CE' ? 'CALL' : 'PUT'
                 : suggestion.mode === 'INTRADAY' ? 'MIS' : 'CNC'}
             </Badge>
+            {suggestion.strategy && <ForwardBadge source="suggestion" name={suggestion.strategy} />}
           </div>
           <NewsChip entry={news} className="mt-1" />
           <p className="doc-meta mt-1 normal-case">

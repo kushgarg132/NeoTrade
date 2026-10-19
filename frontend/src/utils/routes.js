@@ -2,12 +2,12 @@
 export const ROUTES = [
   '/', '/portfolio', '/portfolio/holdings', '/portfolio/tax', '/portfolio/news', '/portfolio/watchlist',
   '/portfolio/import', '/journal', '/picks', '/ai', '/ai/activity', '/ai/book',
-  '/lab', '/lab/limits', '/lab/options', '/lab/handbook', '/lab/runs', '/lab/backlog',
+  '/lab', '/lab/limits', '/lab/options', '/lab/handbook', '/lab/runs', '/lab/forward', '/lab/backlog',
   '/stock/:symbol', '/settings', '/profile',
 ];
 
 /** Picks and Lab are admin only (RequireAdmin in App.jsx; their tabs are flagged admin). */
-export const ADMIN_ROUTES = ['/picks', '/lab', '/lab/limits', '/lab/options', '/lab/handbook', '/lab/runs', '/lab/backlog'];
+export const ADMIN_ROUTES = ['/picks', '/lab', '/lab/limits', '/lab/options', '/lab/handbook', '/lab/runs', '/lab/forward', '/lab/backlog'];
 
 /** [from, to]: the query string is kept by `Moved`. A `to` is always a real route. */
 export const MOVED = [
