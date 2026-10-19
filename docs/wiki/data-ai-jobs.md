@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: 748bf53
+verified_at: 272bae4
 ---
 # Data layer, AI and background jobs
 
@@ -63,6 +63,7 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | `backend/summaries/holding.py` | note under each bad-news / results-soon action, cached by action id, feature `news`, tier `fast` | `holding.py::run_all`, `::run_user`, `::note_for`, `::PER_RUN`, `::PER_DAY` |
 | `backend/summaries/activity.py` | AI > Activity "what the AI did today and why": autopilot_log + game plan + AI book P&L, feature `plan`, tier `standard` | `activity.py::generate`, `::run_all` |
 | `backend/summaries/weekly.py` | weekly report paragraph (what worked, what not, one habit), feature `portfolio`, tier `standard`; also on the Sunday Telegram | `weekly.py::generate`, `::report_facts` |
+| `backend/summaries/habits.py` | Journal > Habits "what your trades say": journal fact patterns + costs, feature `learning`, tier `standard` | `habits.py::generate`, `::run_all` |
 | `backend/routers/summaries.py` | read-only `GET /summaries/*`, never calls a model | `summaries.py::day`, `::holdings` |
 
 ### research, analyst, llm, scheduler
@@ -197,6 +198,7 @@ All times IST. `in_session` = NSE trading day (`core/market_calendar.py::is_trad
 | AI summary: holding notes | API (every tick) | per user at most every 30 min, 08:45 to 22:00; at most 4 new notes a run and 12 a day, one per new action id | `autorun.py::tick` then `summaries/holding.py::run_all` | `summary:holding:run:{user}` 30 min, `summary:holding:{user}:{action id}` 15d, day counter; feature `news` (fast) |
 | AI summary: AI activity | API (daily pass) | 16:00 pass (not a next-morning catch-up), once per user per IST day, for users with an autopilot log row or a plan today | `scheduler.py::run_daily_jobs` then `summaries/activity.py::run_all` | `summary:activity:{user}:{date}` SET NX 30h; feature `plan` (standard) |
 | AI summary: weekly report | API (autorun tick) | Sunday from 18:00 with the weekly report, once per user per ISO week | `reports/weekly.py::send` then `summaries/weekly.py::generate` | `summary:weekly:{user}:{week}` SET NX 8d inside the report's own `report:weekly:` guard; feature `portfolio` (standard) |
+| AI summary: habits | API (daily pass) | the week's last trading day's 16:00 pass, once per user with journal trades per ISO week | `scheduler.py::run_daily_jobs` then `summaries/habits.py::run_all` | `summary:habits:{user}:{week}` SET NX 8d; feature `learning` (standard) |
 | Game-plan build | API | 08:45 to 15:30 trading days, per auto-intraday user with a live broker feed, until a plan exists | `autorun.py::_preopen_plans` | Lab "the AI game plan build"; `plan:build:` 1h; `PLAN_LLM_CALLS_PER_DAY` |
 | Long-term exits / level alerts | API | in session, every 15-min bucket | `autorun.py::_longterm_pass`, `::_level_pass` | `longterm:{user}:{day}:{bucket}`, `levels:...` |
 | Morning pass | API | first tick at/after 09:20, once a day per user (catch-up, monthly factor rebalance, picks entry, autopilot proposals, digest) | `autorun.py::_longterm_pass` | `longterm:{user}:{day}:morning` |

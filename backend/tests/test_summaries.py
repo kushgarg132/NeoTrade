@@ -14,7 +14,7 @@ from backend.auth.models import User
 from backend.engine.session import IST
 from backend.routers import summaries as router
 from backend.reports import weekly as report
-from backend.summaries import activity, core, day, holding
+from backend.summaries import activity, core, day, habits, holding
 from backend.summaries import weekly as narrative
 from backend.tests.test_datalayer_news import FakeRedis
 
@@ -389,4 +389,68 @@ async def test_weekly_endpoint_defaults_to_the_last_week_and_is_scoped(client, d
     assert http.get("/api/v1/summaries/weekly?week=nope").status_code == 422
     holder["user"] = "carol"
     assert http.get("/api/v1/summaries/weekly").json() == {"summary": None}
+    assert llm.calls == []
+
+
+# ------------------------------------------------------------------ Journal: Habits
+
+HABIT_WEEK = datetime(2026, 10, 16, 16, 5, tzinfo=IST).date()    # Friday of 2026-W42
+
+
+@pytest.fixture
+def habit_facts(monkeypatch):
+    async def journal(db_, redis_, user_id, period="month", symbol=None, account="all"):
+        assert account == "mine"
+        if period == "all":
+            return {"closed": 40, "patterns": PATTERNS, "costs_all_time": {
+                "gross_pnl": 5000.0, "charges": 1800.0, "net_pnl": 3200.0, "trades_per_year": 480, "heavy_trader": False,
+                "fills": 99}}
+        return {"closed": 4, "wins": 1, "pnl_gross": -350.0, "patterns": []}
+
+    monkeypatch.setattr("backend.ai.facts.user.journal", journal)
+
+
+async def test_habits_prompt_has_the_patterns_the_week_and_the_costs(db, redis, llm, habit_facts):
+    llm.reply = "Trades after two losses won 17% against 55% on the rest."
+    doc = await habits.generate(db, redis, "alice", "2026-W42")
+    assert doc["key"] == "2026-W42" and doc["text"].startswith("Trades after")
+    [call] = llm.calls
+    assert (call["tier"], call["feature"]) == ("standard", "learning")
+    p = call["prompt"]
+    assert "Trades opened after two losses" in p and '"win_rate_pct": 17.0' in p and '"baseline_win_rate_pct": 55.0' in p
+    assert '"closed_this_week": 4' in p and '"charges": 1800.0' in p and '"trades_per_year": 480' in p
+    assert "fills" not in p                                                    # only the cost keys we named
+
+
+async def test_habits_once_per_week_and_run_all_reads_journal_users(db, redis, llm, habit_facts):
+    await db["journal_trades"].insert_many([{"user_id": "alice"}, {"user_id": "alice"}, {"user_id": "bob"}])
+    assert await habits.run_all(db, redis, HABIT_WEEK) == 2
+    assert await habits.run_all(db, redis, HABIT_WEEK) == 0            # same ISO week: Redis guard
+    assert len(llm.calls) == 2
+    assert await habits.run_all(db, redis, HABIT_WEEK + timedelta(days=7)) == 2
+    assert {d["key"] async for d in db["ai_summaries"].find({})} == {"2026-W42", "2026-W43"}
+
+
+async def test_habits_with_nothing_found_and_nothing_closed_makes_no_call(db, redis, llm, monkeypatch):
+    monkeypatch.setattr("backend.ai.facts.user.journal", AsyncMock(return_value={"closed": 0, "patterns": []}))
+    assert await habits.generate(db, redis, "alice", "2026-W42") is None and llm.calls == []
+
+
+async def test_habits_failure_keeps_last_weeks_text(db, redis, llm, habit_facts):
+    await db["ai_summaries"].insert_one({"user_id": "alice", "kind": "habits", "key": "2026-W41", "text": "last week",
+                                         "at": datetime(2026, 10, 9, 11, tzinfo=timezone.utc)})
+    llm.reply = "LLM_DISABLED"
+    assert await habits.generate(db, redis, "alice", "2026-W42") is None
+    assert (await core.latest(db, "alice", "habits"))["text"] == "last week"
+
+
+async def test_habits_endpoint_is_the_users_latest(client, db, llm):
+    http, holder = client
+    at = datetime.now(timezone.utc)
+    await db["ai_summaries"].insert_many([
+        {"user_id": "alice", "kind": "habits", "key": "2026-W42", "text": "mine", "at": at},
+        {"user_id": "bob", "kind": "habits", "key": "2026-W43", "text": "bobs", "at": at}])
+    assert http.get("/api/v1/summaries/habits").json()["summary"]["text"] == "mine"
+    holder["user"] = "carol"
+    assert http.get("/api/v1/summaries/habits").json() == {"summary": None}
     assert llm.calls == []

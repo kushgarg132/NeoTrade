@@ -162,6 +162,13 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
         await mark(redis, "forward", False, str(exc))
     if is_last_trading_day_of_week(pass_day):
         await _weekly_mirrors(db)
+        if redis is not None:  # Journal > Habits' "what your trades say" (summaries/habits.py)
+            try:
+                from backend.summaries import habits
+
+                await habits.run_all(db, redis, pass_day)
+            except Exception as exc:
+                logger.warning("habits summaries failed: %s", exc)
     # The evening answer, from the review just done (portfolio/digest.py).
     from backend.portfolio.digest import send_postclose
     try:

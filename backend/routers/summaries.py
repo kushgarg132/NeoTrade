@@ -57,3 +57,9 @@ async def weekly(week: Optional[str] = Query(None), user: User = Depends(get_cur
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return {"summary": core.shown(await core.get(db.db, user.id, "weekly", week))}
+
+
+@router.get("/habits")
+async def habits(user: User = Depends(get_current_user)):
+    """The latest "what your trades say" (written weekly, Journal > Habits)."""
+    return {"summary": core.shown(await core.latest(db.db, user.id, "habits"))}

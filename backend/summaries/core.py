@@ -29,6 +29,11 @@ def as_facts(data) -> str:
     return json.dumps(data, default=str, ensure_ascii=False, indent=1)
 
 
+def pct(x: Optional[float]) -> Optional[float]:
+    """A fraction as a percentage, the unit summaries state returns in."""
+    return None if x is None else round(x * 100, 2)
+
+
 def failed(text: Optional[str]) -> bool:
     return not text or text == "LLM_DISABLED" or text.startswith("Error generating response")
 

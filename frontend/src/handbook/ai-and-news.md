@@ -104,6 +104,13 @@ and waits 6 hours); `GET /summaries/*` (`routers/summaries.py`) only reads, so o
   report by the Sunday job (`reports/weekly.py::send`, `summaries/weekly.py::generate`) from the report's
   numbers and the journal's habit findings, and appended to the Sunday Telegram text. Feature `portfolio`,
   standard tier, once per user per week; with no model the report goes out as before.
+- **What your trades say** (Money > Journal > Habits): a few sentences on the habits the journal's findings
+  show (`journal/insights.py` through the journal fact) and what charges add, once per user per ISO week in
+  the 16:00 pass of the week's last trading day (`summaries/habits.py::run_all`). Feature `learning`,
+  standard tier. It describes what you did; it never says what to trade.
+
+Every summary skips silently when the feature is off, the model errors or the allowance is spent, and keeps
+the last stored text; a figure the facts do not contain drops its sentence (`ai/grounding.py`).
 
 ## Facts, tools and grounding
 
