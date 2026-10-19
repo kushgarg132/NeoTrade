@@ -3,8 +3,8 @@
     docker exec neotrade-jobs nice python -m backend.ml.evaluate [--horizon 20]
 
 Research only, run by hand, no schedule; nothing in the app imports it. Per horizon H the
-folds are `lab.splits.yearly_folds` (3 train years min, H+1 days purged) and a train row also
-needs `label_end < test_start`. A LightGBM regressor ranks (target: excess over NIFTY) and a
+folds are `lab.splits.yearly_folds` (3 train years min, no extra purge) and a train row
+needs `label_end < test_start`, which removes every row whose label overlaps the test year. A LightGBM regressor ranks (target: excess over NIFTY) and a
 classifier gives P(up). Every run is recorded in `lab_runs` (kind `ml`), passed or not.
 """
 
@@ -13,6 +13,7 @@ import asyncio
 import math
 
 import lightgbm as lgb
+import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
@@ -25,7 +26,8 @@ from backend.ml.features import FEATURES, STEP, features, long_table
 HORIZONS = (20, 60)
 # lightgbm's native API: the LGBM* sklearn wrappers need scikit-learn, which production does not install
 PARAMS = dict(learning_rate=0.03, num_leaves=31, min_data_in_leaf=200, bagging_fraction=0.8, bagging_freq=1,
-              feature_fraction=0.8, num_threads=4, verbose=-1, seed=0)
+              feature_fraction=0.8, num_threads=1, verbose=-1, seed=0)
+# 1 thread: 4 were ~25x slower on this shared 4-core host (OpenMP spin-waits)
 ROUNDS = 300
 CAVEATS = ["no point-in-time NIFTY 200 membership (survivorship +4-8%/yr)",
            "price/volume features only (no fundamentals history)"]
@@ -40,7 +42,7 @@ def _days(df: pd.DataFrame) -> pd.Series:
 
 def split(df: pd.DataFrame, horizon: int):
     """Yield (fold, train, test): train rows ended (label_end) before the test year starts."""
-    for fold in yearly_folds(sorted(set(_days(df))), min_train_years=3, purge_days=horizon + 1):
+    for fold in yearly_folds(sorted(set(_days(df))), min_train_years=3, purge_days=0):  # label overlap is removed by label_end below
         d = _days(df)
         train = df[(d < fold.train_end) & (df["label_end"].dt.date < fold.test_start)]
         test = df[(d >= fold.test_start) & (d < fold.test_end)]
@@ -54,9 +56,11 @@ def rank_ic(df: pd.DataFrame, score: str) -> pd.Series:
     return pd.Series(out, dtype=float).dropna()
 
 
-def ic_t(ic: pd.Series) -> float | None:
-    """mean / standard error of the monthly mean ICs."""
-    m = ic.groupby(ic.index.to_period("M")).mean()
+def ic_t(ic: pd.Series, horizon: int = 20) -> float | None:
+    """mean / standard error of block-mean ICs, blocks of consecutive sampled dates spanning the
+    horizon, so no two blocks share label days (overlapping labels would inflate t). A short tail is dropped."""
+    b = math.ceil(horizon / STEP)
+    m = ic.groupby(np.arange(len(ic)) // b).mean()[: len(ic) // b]
     if len(m) < 2 or not m.std(ddof=1) > 0:
         return None
     return float(m.mean() / (m.std(ddof=1) / math.sqrt(len(m))))
@@ -66,6 +70,8 @@ def top_decile_net(df: pd.DataFrame, score: str) -> float:
     """Mean net return per pick: top tenth by `score` on each sampled day, equal weight. Every
     pick carries its own full round trip (`net`), so turnover is charged in full."""
     picks_ = [g.nlargest(max(1, len(g) // 10), score)["net"] for _, g in df.groupby("date") if len(g) >= MIN_NAMES]
+    if not picks_:
+        return float("nan")
     return float(pd.concat(picks_).mean())
 
 
@@ -86,8 +92,11 @@ def evaluate_table(df: pd.DataFrame, horizon: int) -> dict:
     brier = float(((oos["p_up"] - oos["up"]) ** 2).mean()) if len(oos) else float("nan")
     base = float(((oos["base_p"] - oos["up"]) ** 2).mean()) if len(oos) else float("nan")
     model, momentum = (top_decile_net(oos, c) for c in ("score", BASELINE)) if len(oos) else (float("nan"),) * 2
-    return {"ic_by_year": {int(y): float(v) for y, v in ic.groupby(ic.index.year).mean().items()},
-            "ic_t": ic_t(ic) if len(ic) else None, "brier": brier, "brier_base": base,
+    by_year = {int(y): float(v) for y, v in ic.groupby(ic.index.year).mean().items()} if len(ic) else {}
+    for f in folds:  # a test year with no IC is a failure, not a skipped year
+        by_year.setdefault(f.year, float("nan"))
+    return {"ic_by_year": dict(sorted(by_year.items())),
+            "ic_t": ic_t(ic, horizon) if len(ic) else None, "brier": brier, "brier_base": base,
             "brier_skill": 1 - brier / base if base else float("nan"),
             "portfolio": {"model": model, "momentum": momentum, "excess_vs_momentum": model - momentum},
             "folds": folds}
@@ -129,14 +138,14 @@ async def run(db, now, horizons=HORIZONS) -> dict[int, dict]:
         return {}
     store, out = LabRunStore(db), {}
     window = (t["close"].index[0].date(), t["close"].index[-1].date())
-    fp = fingerprint(t["close"])
+    fp = await asyncio.to_thread(fingerprint, t["close"])
     for h in horizons:
         result = await asyncio.to_thread(evaluate, t, h)
         ok, why = passes(result)
-        await store.record(kind="ml", name=f"lgbm_h{h}", execution=DEFAULT, window=window, fingerprint=fp,
+        run_id = await store.record(kind="ml", name=f"lgbm_h{h}", execution=DEFAULT, window=window, fingerprint=fp,
                            config={"params": {**PARAMS, "rounds": ROUNDS}, "features": FEATURES, "horizon": h, "step": STEP},
                            folds=result["folds"], metrics=_metrics(result, ok, why))
-        out[h] = {**result, "passed": ok, "reasons": why}
+        out[h] = {**result, "passed": ok, "reasons": why, "run_id": run_id}
     return out
 
 
@@ -151,13 +160,18 @@ def main(argv=None) -> int:
         await db.connect_to_database()
         return await run(db.db, datetime.now(timezone.utc), (args.horizon,) if args.horizon else HORIZONS)
 
-    for h, r in asyncio.run(go()).items():
+    results = asyncio.run(go())
+    if not results:
+        print("no bars")
+        return 1
+    for h, r in results.items():
         print(f"H={h}: {'PASS' if r['passed'] else 'FAIL'}  ic_t {r['ic_t']}  brier_skill {r['brier_skill']:+.4f}  "
               f"excess_vs_momentum {r['portfolio']['excess_vs_momentum']:+.4f}")
+        print(f"  recorded {r['run_id']}" if r["run_id"] else "  NOT RECORDED")
         print("  IC by year: " + ", ".join(f"{y} {v:+.3f}" for y, v in r["ic_by_year"].items()))
         for why in r["reasons"]:
             print("  - " + why)
-    return 0
+    return 0 if all(r["run_id"] for r in results.values()) else 1
 
 
 if __name__ == "__main__":

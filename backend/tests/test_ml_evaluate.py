@@ -3,6 +3,7 @@
 import time
 from datetime import datetime, timezone
 
+import bson
 import numpy as np
 import pandas as pd
 import pytest
@@ -31,12 +32,6 @@ def _table(signal: float, seed=0, symbols=40, years=8) -> pd.DataFrame:
     df["up"] = (df["net"] > 0).astype(int)
     df["label_end"] = df["date"] + pd.Timedelta(days=28)  # ~20 trading days
     return df
-
-
-@pytest.fixture(autouse=True)
-def one_thread(monkeypatch):
-    # production uses 4 threads; on a shared/busy CPU OpenMP spin-waits make that 25x slower
-    monkeypatch.setitem(ev.PARAMS, "num_threads", 1)
 
 
 @pytest.fixture(scope="module")
@@ -71,6 +66,35 @@ def test_no_train_row_ends_after_the_test_year_starts(planted):
     december = planted[(planted["date"].dt.year == fold.year - 1) & (planted["date"].dt.month == 12)]
     late = december[december["label_end"].dt.date >= fold.test_start]
     assert len(late) and not train.index.isin(late.index).any()
+    # no extra purge: the last sampled date whose label ended before the test year is trained on
+    ok = planted[(planted["label_end"].dt.date < fold.test_start) & (planted["date"].dt.date < fold.test_start)]
+    assert train["date"].max() == ok["date"].max()
+
+
+def test_ic_t_uses_non_overlapping_blocks():
+    # H=20, STEP=5 -> blocks of 4 sampled dates. A slow wave: overlapping 'monthly' means (6 dates)
+    # drift together and look significant, the 12 independent blocks do not.
+    n = 48
+    ic = pd.Series(0.05 * np.sin(np.arange(n) * 2 * np.pi / 24) + 0.01 * (np.arange(n) % 2),
+                   index=pd.bdate_range("2015-01-01", periods=n * 5)[::5])
+    t = ev.ic_t(ic, 20)
+    blocks = ic.groupby(np.arange(n) // 4).mean()
+    assert t == pytest.approx(blocks.mean() / (blocks.std(ddof=1) / 12 ** 0.5))
+    assert abs(t) < 2
+
+
+def test_ic_t_drops_the_short_tail_block():
+    ic = pd.Series(np.arange(10.0), index=pd.bdate_range("2015-01-01", periods=10))
+    blocks = [ic.iloc[i:i + 4].mean() for i in (0, 4)]  # 10 dates -> 2 full blocks of 4
+    assert ev.ic_t(ic, 20) == pytest.approx(np.mean(blocks) / (np.std(blocks, ddof=1) / 2 ** 0.5))
+
+
+def test_a_test_year_with_no_ic_fails_the_bar():
+    df = _table(0.02)
+    df = df[~((df["date"].dt.year == 2018) & (df["symbol"] != "S0"))]  # 2018: one name a day, no IC
+    r = ev.evaluate_table(df, H)
+    assert r["ic_by_year"][2018] != r["ic_by_year"][2018]  # NaN
+    assert any("2018" in w for w in ev.passes(r)[1])
 
 
 @pytest.mark.parametrize("change, reason", [
@@ -113,9 +137,28 @@ async def test_run_records_one_ml_row_per_horizon_even_when_not_passed(monkeypat
     monkeypatch.setattr(ev, "evaluate", lambda t, h: bad)
     db = AsyncMongoMockClient()["t"]
     out = await ev.run(db, datetime(2026, 1, 1, tzinfo=timezone.utc), horizons=(20, 60))
-    assert set(out) == {20, 60} and not out[20]["passed"]
+    assert set(out) == {20, 60} and not out[20]["passed"] and all(o["run_id"] for o in out.values())
     rows = await LabRunStore(db).list(kind="ml")
     assert sorted(r["name"] for r in rows) == ["lgbm_h20", "lgbm_h60"]
     m = rows[0]["metrics"]
     assert m["passed"] is False and m["reasons"] and m["caveats"] == ev.CAVEATS and m["ic_by_year"] == {"2020": -0.1}
+    bson.encode(rows[0]["metrics"])  # mongomock accepts anything; real Mongo does not
     assert rows[0]["config"]["horizon"] in (20, 60) and rows[0]["fingerprint"]
+
+
+@pytest.mark.asyncio
+async def test_run_reports_a_failed_record_as_no_run_id(monkeypatch):
+    idx = pd.bdate_range("2020-01-01", periods=30)
+    t = {"close": pd.DataFrame({"A": np.arange(30.0) + 100}, index=idx)}
+
+    async def load(db, now):
+        return t
+
+    async def boom(self, **kw):
+        return None  # what LabRunStore.record returns when the insert raises
+
+    monkeypatch.setattr(ev.picks, "load", load)
+    monkeypatch.setattr(ev, "evaluate", lambda t, h: {**GOOD, "brier": 0.2, "brier_base": 0.25, "folds": []})
+    monkeypatch.setattr(ev.LabRunStore, "record", boom)
+    out = await ev.run(AsyncMongoMockClient()["t"], datetime(2026, 1, 1, tzinfo=timezone.utc), horizons=(20,))
+    assert out[20]["run_id"] is None
