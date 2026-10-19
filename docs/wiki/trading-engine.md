@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: 6a2e4f7
+verified_at: b01fde8
 ---
 # Trading engine
 
@@ -41,7 +41,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/strategies/blocks/*.py` | Closed block vocabulary, incremental state, regime | `vocab.py::SETUPS/FILTERS/EXITS/SWING_*`, `blocks.py::setup_fires`, `swing.py::setup_fires`, `state.py::SymbolState`, `swing_state.py::SwingState`, `regime.py::regime_by_day` |
 | `backend/risk/backtest_gate.py` | Gate 1: stored backtest meets thresholds | `backtest_gate.py::passes_gate`, `::BacktestGateStore` |
 | `backend/risk/paper_gate.py` | Gate 2: user's own paper record | `paper_gate.py::paper_record`, `::proven_strategies`, `::for_mine` |
-| `backend/risk/gate_backtest.py` | Runs a 1y gate backtest and records it | `gate_backtest.py::backtest_for_gate`, `::intraday_history`, `::backtest_account` |
+| `backend/risk/gate_backtest.py` | Runs a 1y gate backtest, records it in `strategy_backtests` and (best effort) a `lab_runs` row, kind `engine`, with `lab.metrics.summary` | `gate_backtest.py::backtest_for_gate`, `::intraday_history`, `::backtest_account` |
 | `backend/risk/rules.py` | Position-size and exposure helpers used by `size_intents` | `rules.py::RiskRules` |
 | `backend/risk/kill_switch.py` | Daily loss trip, persisted | `kill_switch.py::should_trip`, `::KillSwitchStore` |
 | `backend/risk/live_confirm.py` | Server-checked second tap for real money on `mine`: one-time 60 s token bound to user, subject, terms hash | `live_confirm.py::issue`, `::redeem`, `::TokenRefused` |
