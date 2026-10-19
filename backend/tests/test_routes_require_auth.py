@@ -24,6 +24,7 @@ PROTECTED_SAMPLE_PATHS = [
     ("GET", "/api/v1/summaries/day"),
     ("GET", "/api/v1/summaries/holdings"),
     ("GET", "/api/v1/summaries/activity"),
+    ("GET", "/api/v1/summaries/weekly"),
 ]
 
 

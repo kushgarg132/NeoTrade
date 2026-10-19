@@ -4,12 +4,15 @@ signed-in user; `summary` is null until the first one is written."""
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.database import db
 from backend.engine.session import IST
+from backend.reports import weekly as weekly_report
 from backend.summaries import core
 
 router = APIRouter(prefix="/summaries", tags=["Summaries"])
@@ -43,3 +46,14 @@ async def holdings(user: User = Depends(get_current_user)):
 async def activity(user: User = Depends(get_current_user)):
     """The latest "what the AI did today and why" (written once a day after the close)."""
     return {"summary": core.shown(await core.latest(db.db, user.id, "activity"))}
+
+
+@router.get("/weekly")
+async def weekly(week: Optional[str] = Query(None), user: User = Depends(get_current_user)):
+    """The report's narrative for a week (default: the last completed one); written by the Sunday job."""
+    try:
+        week = week or weekly_report.last_completed(datetime.now(timezone.utc).astimezone(IST).date())
+        weekly_report.parse_week(week)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {"summary": core.shown(await core.get(db.db, user.id, "weekly", week))}

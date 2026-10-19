@@ -143,7 +143,7 @@ def _r(x: float) -> str:
     return f"{'-' if x < 0 else '+' if x > 0 else ''}₹{abs(round(x)):,}"
 
 
-def text(r: dict) -> str:
+def text(r: dict, narrative: Optional[str] = None) -> str:
     you, ai, ideas, j = r["you"], r["ai"], r["ideas"], r["journal"]
     lines = [f"<b>Your week {escape(r['week'])}</b>",
              f"You {_p(you['ret'])} · NIFTY {_p(you['nifty'])} · excess {_p(you['excess'])}",
@@ -155,6 +155,8 @@ def text(r: dict) -> str:
         g = ideas[key]
         lines.append(f"Ideas {key}: {g['n']}" + (f" ({_p(g['mean_excess'])} vs NIFTY)" if g["n"] else ""))
     lines.append(f"Journal: {j['trades']} trades, net {_r(j['net'])} after {_r(j['charges'])[1:]} charges")
+    if narrative:  # the AI's paragraph (summaries/weekly.py), closing the message
+        lines += ["", escape(narrative)]
     return "\n".join(lines)
 
 
@@ -172,7 +174,11 @@ async def send(db, redis, now: datetime) -> int:
         if not await redis.set(key, "1", nx=True, px=TTL_MS):
             continue
         try:
-            await notify(db, user_id, text(await build(db, user_id, week)), html=True)
+            report = await build(db, user_id, week)
+            from backend.summaries import weekly as narrative
+
+            written = await narrative.generate(db, redis, user_id, report)  # None: keep the numbers-only text
+            await notify(db, user_id, text(report, written and written["text"]), html=True)
             sent += 1
         except Exception as exc:
             logger.exception("weekly report failed for %s: %s", user_id, exc)

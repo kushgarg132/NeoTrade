@@ -100,6 +100,10 @@ and waits 6 hours); `GET /summaries/*` (`routers/summaries.py`) only reads, so o
   game plan and the AI book's closed P&L, once per user per day after the 16:00 pass
   (`scheduler.py::run_daily_jobs`, `summaries/activity.py::run_all`). Feature `plan`, standard tier. Users
   with no order, refusal or plan that day get none.
+- **The week in words** (Weekly report, top): what worked, what did not, one habit to watch, written with the
+  report by the Sunday job (`reports/weekly.py::send`, `summaries/weekly.py::generate`) from the report's
+  numbers and the journal's habit findings, and appended to the Sunday Telegram text. Feature `portfolio`,
+  standard tier, once per user per week; with no model the report goes out as before.
 
 ## Facts, tools and grounding
 

@@ -13,7 +13,9 @@ from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.engine.session import IST
 from backend.routers import summaries as router
+from backend.reports import weekly as report
 from backend.summaries import activity, core, day, holding
+from backend.summaries import weekly as narrative
 from backend.tests.test_datalayer_news import FakeRedis
 
 NOW = datetime(2026, 10, 15, 8, 50, tzinfo=IST)
@@ -295,4 +297,96 @@ async def test_activity_endpoint_is_the_users_latest(client, db, llm):
     assert http.get("/api/v1/summaries/activity").json()["summary"]["text"] == "newer"
     holder["user"] = "carol"
     assert http.get("/api/v1/summaries/activity").json() == {"summary": None}
+    assert llm.calls == []
+
+
+# ------------------------------------------------------------------ Weekly report narrative
+
+REPORT = {"week": "2026-W42", "you": {"ret": 0.033, "nifty": -0.06, "excess": 0.093}, "ai": {"ret": 0.01},
+          "best": [{"symbol": "WIN", "pnl": 200.0}], "worst": [{"symbol": "LOSE", "pnl": -100.0}],
+          "ideas": {"taken": {"n": 2, "mean_excess": 0.03}, "skipped": {"n": 1, "mean_excess": -0.01}},
+          "journal": {"trades": 2, "net": 87.5, "charges": 12.5}}
+PATTERNS = [{"kind": "late", "title": "Trades opened after two losses", "trips": 6, "pnl": -900.0, "win_rate": 0.17,
+             "baseline_win_rate": 0.55, "avg_pnl": -150.0}]
+
+
+@pytest.fixture
+def journal_facts(monkeypatch):
+    fn = AsyncMock(return_value={"patterns": PATTERNS})
+    monkeypatch.setattr("backend.ai.facts.user.journal", fn)
+    return fn
+
+
+def test_report_facts_state_returns_in_percent():
+    f = narrative.report_facts(REPORT)
+    assert (f["you_return_pct"], f["nifty_return_pct"], f["excess_pct"], f["ai_book_return_pct"]) == (3.3, -6.0, 9.3, 1.0)
+    assert f["ideas_taken"] == {"count": 2, "avg_vs_nifty_pct": 3.0} and f["best"][0]["symbol"] == "WIN"
+
+
+async def test_weekly_prompt_has_the_reports_numbers_and_the_journals_habits(db, redis, llm, journal_facts):
+    llm.reply = "You beat NIFTY by 9.3%. Watch trades opened after two losses: 17% won against 55%."
+    doc = await narrative.generate(db, redis, "alice", REPORT)
+    assert doc["key"] == "2026-W42" and "9.3%" in doc["text"]
+    [call] = llm.calls
+    assert (call["tier"], call["feature"]) == ("standard", "portfolio")
+    p = call["prompt"]
+    assert '"you_return_pct": 3.3' in p and '"excess_pct": 9.3' in p and "LOSE" in p
+    assert "Trades opened after two losses" in p and '"win_rate_pct": 17.0' in p and "win_rate\"" not in p
+    assert journal_facts.await_args.kwargs == {"period": "month", "account": "mine"}
+
+
+async def test_weekly_is_written_once_per_week(db, redis, llm, journal_facts):
+    assert await narrative.generate(db, redis, "alice", REPORT)
+    assert await narrative.generate(db, redis, "alice", REPORT) is None
+    assert await narrative.generate(db, redis, "alice", {**REPORT, "week": "2026-W43"})
+    assert len(llm.calls) == 2
+
+
+async def test_weekly_failure_and_invented_figures_leave_nothing(db, redis, llm, journal_facts):
+    llm.reply = "Error generating response: 429"
+    assert await narrative.generate(db, redis, "alice", REPORT) is None
+    llm.reply = RuntimeError("down")
+    assert await narrative.generate(db, redis, "alice", {**REPORT, "week": "2026-W41"}) is None
+    llm.reply = "You made 41.7% this week."
+    assert await narrative.generate(db, redis, "alice", {**REPORT, "week": "2026-W40"}) is None
+    assert await db["ai_summaries"].count_documents({}) == 0
+
+
+def test_telegram_text_ends_with_the_escaped_paragraph_only_when_there_is_one():
+    plain = report.text(REPORT)
+    withp = report.text(REPORT, "Beat NIFTY <a lot> & held.")
+    assert withp.startswith(plain) and withp.endswith("\n\nBeat NIFTY &lt;a lot&gt; &amp; held.")
+
+
+async def test_sunday_job_sends_the_paragraph_and_survives_a_missing_one(db, redis, llm, journal_facts, monkeypatch):
+    sent = []
+
+    async def notify(db_, uid, text, html=False):
+        sent.append(text)
+
+    monkeypatch.setattr("backend.suggestions.notify.notify", notify)
+    monkeypatch.setattr("backend.portfolio.digest._users", AsyncMock(return_value=["alice"]))
+    monkeypatch.setattr(report, "build", AsyncMock(return_value=REPORT))
+    llm.reply = "A steady week."
+    sunday = datetime(2026, 10, 18, 18, 5, tzinfo=IST)
+    assert await report.send(db, redis, sunday) == 1 and sent[0].endswith("A steady week.")
+    llm.reply = "LLM_DISABLED"
+    assert await report.send(db, redis, sunday + timedelta(days=7)) == 1
+    assert "A steady week." not in sent[1] and sent[1].startswith("<b>Your week")
+
+
+async def test_weekly_endpoint_defaults_to_the_last_week_and_is_scoped(client, db, llm, monkeypatch):
+    http, holder = client
+    monkeypatch.setattr(report, "last_completed", lambda today: "2026-W42")
+    at = datetime.now(timezone.utc)
+    await db["ai_summaries"].insert_many([
+        {"user_id": "alice", "kind": "weekly", "key": "2026-W42", "text": "mine", "at": at},
+        {"user_id": "alice", "kind": "weekly", "key": "2026-W41", "text": "older", "at": at},
+        {"user_id": "bob", "kind": "weekly", "key": "2026-W42", "text": "bobs", "at": at}])
+    assert http.get("/api/v1/summaries/weekly").json()["summary"]["text"] == "mine"
+    assert http.get("/api/v1/summaries/weekly?week=2026-W41").json()["summary"]["text"] == "older"
+    assert http.get("/api/v1/summaries/weekly?week=2026-W30").json() == {"summary": None}
+    assert http.get("/api/v1/summaries/weekly?week=nope").status_code == 422
+    holder["user"] = "carol"
+    assert http.get("/api/v1/summaries/weekly").json() == {"summary": None}
     assert llm.calls == []

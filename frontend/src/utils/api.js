@@ -230,6 +230,7 @@ export const endpoints = {
     day: '/summaries/day',
     holdings: '/summaries/holdings',
     activity: '/summaries/activity',
+    weekly: (week) => (week ? `/summaries/weekly?week=${encodeURIComponent(week)}` : '/summaries/weekly'),
   },
   todayAttention: '/today/attention',
   mine: {
