@@ -35,7 +35,7 @@ change chosen 2026-10-19: Lab is a tab for admins, not a header link.
 - `SECTIONS` gains an `admin` flag; the bottom bar and desktop index drop admin tabs for others.
 - The phone bar's grid uses the visible tab count (6 for admin, 4 otherwise) instead of `grid-cols-5`.
 - Badges: Today keeps `attention`; the `pending` (Needs you) badge moves from Mine to Portfolio.
-- `MINE_TABS`, `RESEARCH_TABS` are replaced by `PORTFOLIO_TABS`, `JOURNAL_TABS`, `LAB_TABS`;
+- `MINE_TABS`, `RESEARCH_TABS` are replaced by `PORTFOLIO_TABS`, `LAB_TABS` (Journal keeps its in-page `?tab=` switch);
   `AI_TABS` loses Strategies and Settings.
 
 ### Header
@@ -55,8 +55,8 @@ change chosen 2026-10-19: Lab is a tab for admins, not a header link.
 | `/portfolio/watchlist` | Watchlist | `/research/watchlist`, `/watchlist` |
 | `/portfolio/import` | Import | `/import` |
 | `/journal` | Journal (`lockedAccount="mine"`) | `/mine/journal`, `/mine/trades` |
-| `/journal/habits` | Journal habits tab | `/mine/habits`, `?tab=patterns|learning` |
-| `/journal/guardrails` | guardrail block moved out of Settings | Settings safety section |
+| `/journal?tab=habits` | Journal habits tab | `/mine/habits`, `?tab=patterns|learning` |
+| `/journal?tab=guardrails` | guardrail block moved out of Settings | Settings safety section |
 | `/picks` | Picks (RequireAdmin) | `/research/picks` |
 | `/lab` | Strategies (RequireAdmin) | `/ai/strategies` |
 | `/lab/limits` | AiLimits (RequireAdmin) | `/ai/settings` |
