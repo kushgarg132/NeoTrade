@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py]
-verified_at: 12667c0
+verified_at: bfa5f1c
 ---
 # Data layer, AI and background jobs
 
@@ -233,6 +233,8 @@ All behind `get_current_user` (router-level dependency in `backend/server.py`, p
 | GET `/market/index/{ticker}/analysis` (outside globs) | `routers/market_data.py::get_index_analysis` | `analysis, session, headlines, generated_at, cached` |
 
 ## Gotchas and known issues
+
+- `bars.py::read` / `::prev_closes` sort `(symbol, date)` (the unique index). A global `date` sort over the 2009+ table is an in-memory sort Atlas refuses past 32 MB; until 2026-10-19 it made `picks.load` fail every pass.
 
 - Past fixes here (git log): `0033585` bounded shutdown (loops outlived cancel on 2026-10-15, worker idle for days); `779a419` ingest exits hard on lost leadership (asyncio.run waited on a blocked to_thread); `34a66f9` broker daily bars missing the latest session are topped up from Yahoo; `4370881` full bar passes backfill from 2009 in 50-ticker chunks; `6a38654` prune rewrites/unfollowed/other-script items before scoring; `1800a7a` zoneless RSS dates are IST and never future; `fbf8a27` a Google company search tags only stories naming the company; `ffd9d9a` dead Moneycontrol feeds replaced; `2be007e` brief hourly only when regime moved or material news; `2c2aba4` plan only with a live feed, skip paused strategies, 2 revisions and 2 tool rounds; `a9a2b09` replay reads `trading_runs` (scorecards had always been empty); `e47b400` content-block replies joined into one string; `f21e249` no weekend daily pass, catch-up off the tick, failed AI text not kept; `f8863de` 09:20 catches up the whole missed pass; `0fc3dad` "held" means real holdings; `b3e7b3c` autopilot trades only proven themes; `8b3c906` verdict gate in chat and LLM limits on HTTP analyze; `c1e9d76` one index explanation per index in Redis; `9af6ed6` Lab switch.
 - `/health` and `analysis.py::from_layer` use ingest heartbeats: a missing heartbeat means no clean pass within `max(300, 2*interval)`; `news_process` older than 15 min makes the analyst fall back to on-demand Google News scoring.
