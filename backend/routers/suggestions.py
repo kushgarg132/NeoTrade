@@ -292,7 +292,7 @@ async def _approve_equity_live(suggestion, user_id, store, ledger, mine_broker, 
     if suggestion["side"] == "SELL":
         # An equity SELL proposal exits a paper position; sent live it would
         # sell the user's own shares, which that position never bought.
-        raise HTTPException(status_code=409, detail="This proposal exits a paper position; approve it on paper. Sell your own shares from Mine → Holdings.")
+        raise HTTPException(status_code=409, detail="This proposal exits a paper position; approve it on paper. Sell your own shares from Portfolio → Holdings.")
     adapter = await mine_broker(user_id)
     if adapter is None:
         raise HTTPException(status_code=409, detail="Connect your broker and set it as My account in Settings to approve with real money.")
