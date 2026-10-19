@@ -2,7 +2,7 @@
 model: the generators run on their own schedules. Every read is scoped to the
 signed-in user; `summary` is null until the first one is written."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 
@@ -27,3 +27,13 @@ async def day(user: User = Depends(get_current_user)):
         if doc:
             return {"summary": {**doc, "phase": phase}}
     return {"summary": None}
+
+
+@router.get("/holdings")
+async def holdings(user: User = Depends(get_current_user)):
+    """{notes: {action id: {text, at}}} for the last two weeks of Your holdings rows."""
+    since = datetime.now(timezone.utc) - timedelta(days=15)
+    notes = {}
+    async for d in db.db[core.COLLECTION].find({"user_id": user.id, "kind": "holding", "at": {"$gte": since}}).limit(200):
+        notes[d["key"]] = {k: v for k, v in core.shown(d).items() if k != "key"}
+    return {"notes": notes}

@@ -91,6 +91,11 @@ and waits 6 hours); `GET /summaries/*` (`routers/summaries.py`) only reads, so o
   pre-market digest and the post-close digest (`portfolio/digest.py::_day_summary`,
   `summaries/day.py::generate`), feature `portfolio`, fast tier. Home shows it in place of the digest's
   templated lines when it exists (`components/home/BriefCard.jsx`).
+- **What this means for you** (Ideas, Your holdings): one sentence under each bad-news and results-soon row
+  (position size, the risk, what to watch). Actions are derived on demand, so `engine/autorun.py::tick` calls
+  `summaries/holding.py::run_all`: each user at most every 30 minutes, 08:45 to 22:00, writes a note for each
+  such action that has none (action ids pin the instance), at most 4 a run and 12 a day. Feature `news`, fast
+  tier; shown by `components/ideas/HoldingActions.jsx`.
 
 ## Facts, tools and grounding
 

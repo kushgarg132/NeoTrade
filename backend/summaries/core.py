@@ -33,6 +33,10 @@ def failed(text: Optional[str]) -> bool:
     return not text or text == "LLM_DISABLED" or text.startswith("Error generating response")
 
 
+def claim_key(user_id: str, kind: str, key: str) -> str:
+    return f"summary:{kind}:{user_id}:{key}"
+
+
 async def get(db, user_id: str, kind: str, key: str) -> Optional[dict]:
     return await db[COLLECTION].find_one({"user_id": user_id, "kind": kind, "key": key}, {"_id": 0, "user_id": 0})
 
@@ -57,7 +61,7 @@ async def produce(db, redis, user_id: str, kind: str, key: str, build: Build, *,
     returns (system prompt, user prompt, facts the figures must come from) or None."""
     if redis is None:
         return None
-    claim = f"summary:{kind}:{user_id}:{key}"
+    claim = claim_key(user_id, kind, key)
     if not await redis.set(claim, "1", nx=True, ex=ttl):
         return None
     if await get(db, user_id, kind, key):  # Redis lost the claim, Mongo did not

@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: cf66c98
+verified_at: 76e88db
 ---
 # Data layer, AI and background jobs
 
@@ -60,7 +60,8 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | `backend/routers/plan.py` | `GET /plan/today` | `plan.py::plan_today` |
 | `backend/summaries/core.py` | shared by every AI summary: Redis NX claim per user+kind+period, grounded text, failure back-off (6 h), Mongo `ai_summaries` | `core.py::produce`, `::get`, `::latest`, `::shown`, `::FAIL_BACKOFF` |
 | `backend/summaries/day.py` | Home "Your day": 3 lines pre-open and post-close, feature `portfolio`, tier `fast` | `day.py::generate`, `::TTL` |
-| `backend/routers/summaries.py` | read-only `GET /summaries/*`, never calls a model | `summaries.py::day` |
+| `backend/summaries/holding.py` | note under each bad-news / results-soon action, cached by action id, feature `news`, tier `fast` | `holding.py::run_all`, `::run_user`, `::note_for`, `::PER_RUN`, `::PER_DAY` |
+| `backend/routers/summaries.py` | read-only `GET /summaries/*`, never calls a model | `summaries.py::day`, `::holdings` |
 
 ### research, analyst, llm, scheduler
 | path | role | key symbols |
@@ -191,6 +192,7 @@ All times IST. `in_session` = NSE trading day (`core/market_calendar.py::is_trad
 | Login reminders | API | 08:30 to 09:05 ("early"), 09:05 to 09:15 ("late"), once each per user | `autorun.py::_login_reminders` | SET NX per user/day/slot |
 | Pre-market digest | API | 08:45 to 09:15, once a day per user | `portfolio/digest.py::send_premarket` | `digest:pre:{user}:{date}` |
 | AI summary: Your day | API (with the digests) | with the 08:45 pre-market digest (08:45 to 09:15) and with the post-close digest after the 16:00 pass; 2 calls per user per day | `digest.py::_day_summary` then `summaries/day.py::generate` | `summary:day:{user}:{date}:{phase}` SET NX 30h; feature `portfolio` (fast); failure waits 6h |
+| AI summary: holding notes | API (every tick) | per user at most every 30 min, 08:45 to 22:00; at most 4 new notes a run and 12 a day, one per new action id | `autorun.py::tick` then `summaries/holding.py::run_all` | `summary:holding:run:{user}` 30 min, `summary:holding:{user}:{action id}` 15d, day counter; feature `news` (fast) |
 | Game-plan build | API | 08:45 to 15:30 trading days, per auto-intraday user with a live broker feed, until a plan exists | `autorun.py::_preopen_plans` | Lab "the AI game plan build"; `plan:build:` 1h; `PLAN_LLM_CALLS_PER_DAY` |
 | Long-term exits / level alerts | API | in session, every 15-min bucket | `autorun.py::_longterm_pass`, `::_level_pass` | `longterm:{user}:{day}:{bucket}`, `levels:...` |
 | Morning pass | API | first tick at/after 09:20, once a day per user (catch-up, monthly factor rebalance, picks entry, autopilot proposals, digest) | `autorun.py::_longterm_pass` | `longterm:{user}:{day}:morning` |
