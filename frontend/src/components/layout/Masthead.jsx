@@ -24,7 +24,6 @@ const FEED = {
 };
 
 const PHASE = { open: 'Session open', pre: 'Pre-open', closed: 'Market closed' };
-const PHASE_SHORT = { open: 'Open', pre: 'Pre-open', closed: 'Closed' };
 
 const FeedStatus = ({ className }) => {
   const status = useStreamStatus();
@@ -45,7 +44,6 @@ const FeedStatus = ({ className }) => {
       {/* A phone has room for the dot and the phase; the dot's colour is the feed. */}
       <span className="hidden sm:inline" style={{ color: feed.tone }}>{feed.label}</span>
       <span aria-hidden="true" className="hidden sm:inline text-[var(--rule-strong)]">/</span>
-      <span className="sm:hidden">{PHASE_SHORT[phase]}</span>
       <span className="hidden sm:inline">{PHASE[phase]}</span>
     </span>
   );
@@ -55,7 +53,7 @@ const FeedStatus = ({ className }) => {
 const toggleMarginNote = () => window.dispatchEvent(new Event('margin-note:toggle'));
 
 const ICON_BUTTON =
-  'inline-flex items-center justify-center min-h-11 min-w-11 lg:min-h-8 lg:min-w-8 border border-[var(--rule)] text-[var(--ink-soft)] hover:text-[var(--ink)] hover:border-[var(--rule-strong)] transition-colors';
+  'inline-flex items-center justify-center min-h-11 min-w-10 sm:min-w-11 lg:min-h-8 lg:min-w-8 border border-[var(--rule)] text-[var(--ink-soft)] hover:text-[var(--ink)] hover:border-[var(--rule-strong)] transition-colors';
 
 /**
  * One printed line on a phone: who issued the note, whether it is live, and
@@ -79,8 +77,9 @@ const Masthead = ({ noteNumber }) => {
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       <div className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-8 h-[var(--masthead-h)] flex items-center justify-between gap-3">
-        <Link to="/" className="min-w-0 flex items-baseline gap-3">
-          <h1 className="font-[family-name:var(--font-narrow)] font-bold uppercase tracking-[0.2em] text-sm leading-none whitespace-nowrap">
+        {/* min-w-0 + truncate: on a narrow phone the wordmark gives way, never the buttons. */}
+        <Link to="/" className="min-w-0 overflow-hidden flex items-baseline gap-3">
+          <h1 className="font-[family-name:var(--font-narrow)] font-bold uppercase tracking-[0.1em] sm:tracking-[0.2em] text-[0.8125rem] sm:text-sm leading-none whitespace-nowrap truncate">
             Contract Note
           </h1>
           <span className="doc-meta hidden md:inline truncate">
@@ -88,7 +87,7 @@ const Masthead = ({ noteNumber }) => {
           </span>
         </Link>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <SmartSearch compact className="hidden sm:block w-44 lg:w-60" onSearch={openStock} />
           <button
             type="button"
@@ -99,7 +98,7 @@ const Masthead = ({ noteNumber }) => {
           >
             <Search className="w-4 h-4" />
           </button>
-          <FeedStatus className="mr-1" />
+          <FeedStatus className="mx-1" />
           <button type="button" onClick={toggleMarginNote} className={cn(ICON_BUTTON, 'lg:hidden')} aria-label="Open the margin note">
             <MessageSquare className="w-4 h-4" />
           </button>
