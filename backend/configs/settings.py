@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_PREFIX: str = "/api/v1"
     SERVER_PORT: int = 8001  # Port the server runs on
+    # False on the api service once the `jobs` service runs the background loops
+    # (backend/jobs.py). Default True keeps a single-process deploy working.
+    RUN_BACKGROUND_JOBS: bool = True
 
     # Database
     MONGODB_URL: str = "mongodb://localhost:27017"

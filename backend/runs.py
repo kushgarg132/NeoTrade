@@ -7,6 +7,8 @@ half: the task dict stays the thing that can be cancelled, while these rows
 are what the API and the UI read.
 """
 
+import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -19,6 +21,18 @@ BOOT_ID = uuid.uuid4().hex
 ALIVE_KEY = "worker:alive:{}"
 ALIVE_TTL_SECONDS = 90
 ORPHANED = "orphaned by restart"
+
+logger = logging.getLogger(__name__)
+
+
+async def keep_alive(redis) -> None:
+    """Keeps worker:alive:<boot id> fresh while this process lives."""
+    while redis is not None:
+        try:
+            await redis.set(ALIVE_KEY.format(BOOT_ID), "1", ex=ALIVE_TTL_SECONDS)
+        except Exception as exc:
+            logger.warning("worker heartbeat failed: %s", exc)
+        await asyncio.sleep(ALIVE_TTL_SECONDS // 3)
 
 
 class RunStore:

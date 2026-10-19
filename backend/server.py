@@ -18,12 +18,7 @@ from backend.suggestions.store import SuggestionStore
 from backend.prefs import PrefsStore
 from backend.journal.store import JournalStore
 from backend.guardrails.store import GuardrailStore
-from backend.guardrails import monitor as guardrail_monitor
-from backend.guardrails import telegram_bot
-from backend.engine import autorun
-from backend.engine import sweeps as order_sweeps
 from backend import broadcast
-from backend import scheduler
 from backend.ws.hub import hub, handle_broadcast_event
 from backend.ws import pump as ws_pump
 from backend.ws import routes as ws_routes
@@ -80,18 +75,6 @@ async def _expand_instruments(master) -> None:
             logger.info(f"Instrument master expanded from free NSE/BSE lists: {free_count} upserted.")
     except Exception as exc:
         logger.warning(f"free NSE/BSE instrument refresh failed: {exc}")
-
-
-async def _heartbeat(redis) -> None:
-    """Keeps worker:alive:<boot id> fresh while this process lives (runs.py)."""
-    from backend.runs import ALIVE_KEY, ALIVE_TTL_SECONDS, BOOT_ID
-
-    while redis is not None:
-        try:
-            await redis.set(ALIVE_KEY.format(BOOT_ID), "1", ex=ALIVE_TTL_SECONDS)
-        except Exception as exc:
-            logger.warning("worker heartbeat failed: %s", exc)
-        await asyncio.sleep(ALIVE_TTL_SECONDS // 3)
 
 
 async def ensure_collection_indexes(d) -> None:
@@ -179,32 +162,29 @@ async def startup_db_client():
     await ensure_collection_indexes(db.db)
     await AppSettingsStore(db.db).load_into_cache()
 
-    # Post-close scan, sentiment refresh and suggestion expiry.
-    scheduler.start(db.db, db.redis)
-    # Live prices and P&L for whoever has a socket open.
+    # Live prices and P&L for whoever has a socket open (needs the socket hub, so it stays here).
     ws_pump.start(db.db)
-    order_sweeps.start(db.db)  # stuck approvals and late live fills (engine/sweeps.py)
-    # The user's own limits, checked against their broker once a minute in session.
-    guardrail_monitor.start(db.db, db.redis)
-    # Resting paper limit orders from the order ticket: fill on cross, expire at 15:30.
-    # Linked Telegram chats are an authenticated client of the same AI and
-    # proposal flow as the web widget; this is inbound polling, not a webhook.
-    telegram_bot.start(db.db, db.redis)
 
     # An asyncio.Task cannot outlive the process that created it, so any run
     # still marked RUNNING belongs to a previous life of this container.
+    from backend.runs import keep_alive
+
     runs = RunStore(db.db)
     await runs.ensure_indexes()
     # This worker's heartbeat first, so the sweep below (and the other
     # worker's) never mistakes this process's runs for orphans.
-    _BACKGROUND.add(asyncio.create_task(_heartbeat(db.redis)))
+    _BACKGROUND.add(asyncio.create_task(keep_alive(db.redis)))
     orphaned = await runs.close_orphaned(db.redis)
     if orphaned:
         logger.info(f"Closed {orphaned} orphaned trading run(s) from a previous process.")
 
-    # Daily intraday paper run for users who turned it on. Started after the
-    # orphan sweep so this worker's own first run is not swept with the rest.
-    autorun.start(db.db, db.redis)
+    # Scheduler, autorun, order sweeps, guardrail monitor, Telegram poller. They move to
+    # the `jobs` process when RUN_BACKGROUND_JOBS=false (backend/jobs.py). Started after
+    # the orphan sweep so this worker's own first run is not swept with the rest.
+    if settings.RUN_BACKGROUND_JOBS:
+        from backend import jobs
+
+        jobs.start_loops(db.db, db.redis)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
@@ -293,15 +273,22 @@ async def root():
 @app.get("/health")
 async def health():
     """Seconds since each ingest loop last finished a pass
-    (backend/datalayer/worker.py); `ingest` is empty when it is down."""
+    (backend/datalayer/worker.py); `ingest` is empty when it is down.
+    `jobs` is seconds since the jobs process last beat (backend/jobs.py), null when it is not running."""
     from backend.datalayer.worker import heartbeat_ages
+    from backend.jobs import heartbeat_age as jobs_heartbeat_age
 
     try:
         ingest = await heartbeat_ages(db.redis)
     except Exception as exc:
         logger.warning("health: heartbeat read failed: %s", exc)
         ingest = None
-    return {"api": "ok", "ingest": ingest}
+    try:
+        jobs_age = await jobs_heartbeat_age(db.redis)
+    except Exception as exc:
+        logger.warning("health: jobs heartbeat read failed: %s", exc)
+        jobs_age = None
+    return {"api": "ok", "ingest": ingest, "jobs": jobs_age}
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=settings.SERVER_PORT, reload=True)

@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 2c26d99
+verified_at: d1d1f8d
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -11,7 +11,8 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 
 | path | role | key symbols |
 |---|---|---|
-| `backend/server.py` | app factory, CORS, router mounts, startup/shutdown, `/health` | `server.py::app`, `startup_db_client`, `shutdown_db_client`, `_heartbeat`, `_expand_instruments`, `health` |
+| `backend/server.py` | app factory, CORS, router mounts, startup/shutdown, `/health` | `server.py::app`, `startup_db_client`, `shutdown_db_client`, `_expand_instruments`, `health` |
+| `backend/jobs.py` | the `jobs` process: background loops, `jobs:heartbeat` | `jobs.py::start_loops`, `main`, `heartbeat_age` |
 | `backend/database.py` | Mongo (motor, tz-aware UTC) + Redis clients, one global | `database.py::db`, `DatabaseManager`, `mongo_client` |
 | `backend/configs/settings.py` | pydantic-settings env config (`.env`, case-sensitive, extras ignored) | `settings.py::Settings`, `settings` |
 | `backend/configs/logging_config.py` | coloured stdout logging; uvicorn loggers at DEBUG | `logging_config.py::setup_logging` |
@@ -79,7 +80,7 @@ Redis keys owned or written by files on this page:
 | key | TTL | owner |
 |---|---|---|
 | `rate:<name>` (names: `analyze:<uid>` 10/60 s, `quick_analyze:<uid>` 60/60 s, `chat:<uid>` 20/60 s on the socket; `scan:<uid>` 5/600 s; `rebalance:<uid>` 10/60 s; `strategies:submit:<uid>:<IST day>` 3/2 days) | window | `rate_limit.py::allow` |
-| `worker:alive:<BOOT_ID>` | 90 s, refreshed every 30 s | `server.py::_heartbeat`, `runs.py::ALIVE_KEY` |
+| `worker:alive:<BOOT_ID>` | 90 s, refreshed every 30 s | `runs.py::keep_alive`, `runs.py::ALIVE_KEY` |
 | `launch:<uid>:<mode>` | 30 s | `trading.py::launch_run` (one run per mode) |
 | `broker:<uid>:kite:access_token` | until next 06:00 IST | `kite_session.py::KiteSessionManager` (other brokers: brokers/ pages) |
 | `quote:<SYM>` JSON `{ltp, prev_close, at}` | 120 s write-through (ingest sets its own) | `marks.py::store_quotes`, ingest `datalayer/prices.py` |
@@ -95,7 +96,7 @@ In-process caches: `routers/settings.py::_USAGE_CACHE` (60 s, stale-while-revali
 1. **Sign-in.** Browser posts a Google ID token to `POST /auth/google` (`routers/auth.py::google_login`) -> `auth/google.py::verify_google_token` (signature, audience `GOOGLE_CLIENT_ID`, `email_verified`) -> `UserStore.upsert_from_google` (role = admin iff email in `ADMIN_EMAILS`, recomputed each login) -> `create_session_jwt` (30 min) -> `RefreshTokenStore.issue` -> `Set-Cookie neotrade_refresh` (httpOnly, Secure, SameSite=None, `path=/api/v1/auth`, 60 d; `routers/auth.py::_set_refresh_cookie`). Body: `{token, user}`.
 2. **Authenticated request.** `HTTPBearer` -> `decode_session_jwt` -> `UserStore.get_by_id` (one Mongo read per request; 401 "Invalid or expired session" / "User no longer exists") -> `require_admin` adds a 403 if `user.role != "admin"` (`auth/dependency.py`). Routers are mounted with `dependencies=[Depends(get_current_user)]` in `server.py`; admin routes add `require_admin` on the handler (or router for `/picks`).
 3. **Refresh.** `POST /auth/refresh` reads the cookie only (no bearer) -> `RefreshTokenStore.rotate`: atomic `find_one_and_update` kills the presented token; within `ROTATION_GRACE` (10 s) of a prior rotation a sibling tab gets its own new token; an older replay revokes all of the user's tokens; a plain logged-out token returns None without killing siblings -> new cookie + `{token}`; failure clears the cookie and returns 401. `POST /auth/logout` revokes the cookie's token and clears it.
-4. **Startup** (`server.py::startup_db_client`): connect Mongo+Redis -> `hub.attach_redis` -> `asyncio.create_task(broadcast.listen_forever({"ws:events": handle_broadcast_event, "runs:cancel": handle_cancel_broadcast}))` -> ensure indexes (incl. `ensure_collection_indexes`) -> seed instruments (`only_new=True`) and expand NSE/BSE lists in a background task (`_expand_instruments`) -> `builder_store.refresh` -> `AppSettingsStore.load_into_cache` -> start loops: `scheduler.start`, `ws_pump.start`, `order_sweeps.start`, `guardrail_monitor.start`, `telegram_bot.start` -> `RunStore.ensure_indexes`, `_heartbeat` task, `close_orphaned(redis)` -> `autorun.start` (after the sweep so its own first run is not swept). Shutdown deletes this worker's `worker:alive` key and closes clients.
+4. **Startup** (`server.py::startup_db_client`): connect Mongo+Redis -> `hub.attach_redis` -> `asyncio.create_task(broadcast.listen_forever({"ws:events": handle_broadcast_event, "runs:cancel": handle_cancel_broadcast}))` -> ensure indexes (incl. `ensure_collection_indexes`) -> seed instruments (`only_new=True`) and expand NSE/BSE lists in a background task (`_expand_instruments`) -> `builder_store.refresh` -> `AppSettingsStore.load_into_cache` -> `ws_pump.start` -> `RunStore.ensure_indexes`, `runs.keep_alive` task, `close_orphaned(redis)` -> if `RUN_BACKGROUND_JOBS`: `jobs.start_loops` (scheduler, order sweeps, guardrail monitor, Telegram, autorun; after the sweep so its own first run is not swept). The `jobs` container does the same from `jobs.py::main` (cancel listener, keep_alive, orphan sweep, `start_loops`, heartbeat). Shutdown deletes this worker's `worker:alive` key and closes clients.
 5. **Live socket.** `GET /api/v1/ws?token=<JWT>`: `ws/routes.py::stream` checks `origin_allowed` (no Origin header allowed; else must be in `CORS_ALLOWED_ORIGINS`) and `authenticate_token`, else closes 1008; accepts, sends `{topic:"system",event:"ready"}`, `hub.connect`, starts `_pump` (forwards the connection queue, a `ping` frame every 20 s idle). Client actions via `_handle`: `subscribe`/`unsubscribe` (topics list), `ping`, `analyze`, `quick_analyze`, `chat`; others return a `system`/`error` frame. The three work actions are rate limited by `_BUDGETS` and run as tasks that `connection.offer` frames on reply topics `analysis:<req_id>`, `quick_analysis:<req_id>`, `chat:<req_id>` (events `started|report|error|done`, chat also `thinking|content|action|suggestions`; `step` and `answer_end` are dropped). Reply topics are delivered directly to the connection, not through subscriptions.
 6. **Publish.** Stores call `ws/publish.py::publisher_for(uid)` -> `Hub.publish` JSON-encodes (ObjectId -> str) -> `broadcast.publish("ws:events")`; if Redis is absent or errors, `Hub.deliver` runs locally. Every worker's `broadcast.listen` -> `handle_broadcast_event` -> `Hub.deliver` (match `user_id` and subscribed topic) -> `Connection.offer` (queue 100, drops oldest when full). Topics seen in code: `prices:<SYM>` `tick`; `pnl` `updated`; `trades`/`positions` `changed` (`engine/persistence.py::LedgerStore._emit`); `runs` `started|progress|stopped`; `suggestions` `created|decided|enriched`; `portfolio` `refreshed|worsened`; `guardrails` `breach`; `news` `alert`; `autopilot` `logged`.
 7. **Price/P&L pump.** `ws/pump.py::push_once` every `INTERVAL_SECONDS`=15: symbols = `hub.subscribed_symbols()` (this worker's sockets only) -> `marks.mark_prices` -> publish `prices:<SYM>/tick` to `users_watching`; for each user on topic `pnl` build `LedgerStore(db, user_id)` marks and publish `analytics.compute_pnl` plus `paper` and `live` = `{mine, ai}` (`analytics.py::compute_live_pnl`).
@@ -108,17 +109,17 @@ In-process caches: `routers/settings.py::_USAGE_CACHE` (60 s, stale-while-revali
 
 ## Jobs and schedules
 
-All times IST. Loops start in `startup_db_client` on every uvicorn worker (`--workers 2`, `backend/Dockerfile`); cross-worker safety comes from Redis locks inside each loop.
+All times IST. Background loops start in `jobs.py::start_loops`, called by the `jobs` container (`python -m backend.jobs`) and, while `RUN_BACKGROUND_JOBS` is true (the default), by `startup_db_client` on every uvicorn worker (`--workers 2`, `backend/Dockerfile`). Set `RUN_BACKGROUND_JOBS=false` on `backend` once `jobs` runs. Cross-process safety comes from Redis locks inside each loop, so both running at once is safe. The `jobs` process beats `jobs:heartbeat` every 10 s (60 s TTL); `/health` reports its age as `jobs`.
 
 | what | when | where | lock / guard |
 |---|---|---|---|
 | daily pass | 16:00 Mon-Fri (`RUN_HOUR`) | `scheduler.py::scheduler_loop` -> `_run_locked` -> `run_daily_jobs` | `scheduler:daily_lock` 2 h; skip if `scheduler:last_pass` >= day; then `_data_quality` -> `job:last:data_quality` (ok=0 when `failures`) |
 | 09:20 catch-up of a missed pass | weekdays | `engine/autorun.py` (other page) | same lock/last_pass |
 | price + P&L pump | every 15 s | `ws/pump.py::pump_loop` | none (each worker serves its own sockets) |
-| worker heartbeat | every 30 s (`ALIVE_TTL_SECONDS // 3`) | `server.py::_heartbeat` | writes `worker:alive:<BOOT_ID>` |
+| worker heartbeat | every 30 s (`ALIVE_TTL_SECONDS // 3`) | `runs.py::keep_alive` (API and jobs) | writes `worker:alive:<BOOT_ID>` |
 | orphan sweep | once at startup | `RunStore.close_orphaned` | a RUNNING row whose boot id has no live key becomes STOPPED, `error="orphaned by restart"` |
 | instrument expansion | startup, background | `server.py::_expand_instruments` | 20 h marker inside the loader |
-| other in-API loops | see the Jobs page | order sweeps, guardrail monitor (60 s, 9:15-15:35), autorun (60 s), Telegram poll | |
+| background loops | see the Jobs page | `jobs.py::start_loops`: scheduler, order sweeps, guardrail monitor (60 s, 9:15-15:35), autorun (60 s), Telegram poll | |
 | ingest worker | separate container `neotrade-ingest` | `python -m backend.datalayer.worker` | Redis leader lock `ingest:leader` |
 
 `system/jobs.py::LOOPS` = `guardrail_monitor, order_sweeps, autorun, telegram`; `DAILY_PASS`, `DATA_QUALITY`, `BUILDER` are the other `job:last:*` names the status panel reads.
@@ -291,9 +292,13 @@ Two supported paths, chosen once per session (host `/home/ubuntu/CLAUDE.md`, "De
 
 - **CI/CD (default).** Push to `main`. `.github/workflows/ci.yml` (`CI`): path filter, then backend job (`pytest -q` from repo root per `pytest.ini` `testpaths = backend/tests`, then `docker build ./backend`) and frontend job (`npm ci`, `lint`, `build`, Node 22). On CI success for a push, `deploy-backend.yml` (`workflow_run`, also `workflow_dispatch` with `force`) calls `kushgarg132/ci-workflows/.github/workflows/deploy-backend.yml@main` on the self-hosted runner label `neotrade`: updates the deploy clone `/home/ubuntu/deploys/NeoTrade` (real `.env`, gitignored), skips unless `backend/**` or `docker-compose.yml` changed (or `force`), runs `docker compose up -d --build backend` with `GIT_SHA` exported (also rebuilds `ingest`, via `depends_on`), health-checks `http://127.0.0.1:8000/` and container `neotrade-backend`. Verify with `gh run watch <id> --exit-status` plus a health check; do not also build by hand. Vercel builds the frontend (root `frontend/`) from the same push.
 - **Direct.** End the HEAD commit subject with `[skip ci]` and push (no workflow runs, no deploy). Then in `/home/ubuntu/deploys/NeoTrade`: `git pull --ff-only && GIT_SHA=$(git rev-parse HEAD) docker compose build backend && docker compose up -d backend`. Vercel still auto-builds the frontend (it ignores `[skip ci]`); do not run `vercel deploy`.
-- Container: image `python:3.11-slim`, `CMD uvicorn backend.server:app --port 8000 --workers 2`, `GIT_SHA` baked as env (shown in `/system/status` `deploy.backend_sha`). Compose publishes `127.0.0.1:${BACKEND_PORT:-8000}:8000`; Nginx + Let's Encrypt on the VM fronts `https://neotrade.161.118.167.148.nip.io`. Mongo (Atlas) and Redis (Upstash) are remote, no containers. Services: `backend`, `ingest` (same image, no port).
+- Container: image `python:3.11-slim`, `CMD uvicorn backend.server:app --port 8000 --workers 2`, `GIT_SHA` baked as env (shown in `/system/status` `deploy.backend_sha`). Compose publishes `127.0.0.1:${BACKEND_PORT:-8000}:8000`; Nginx + Let's Encrypt on the VM fronts `https://neotrade.161.118.167.148.nip.io`. Mongo (Atlas) and Redis (Upstash) are remote, no containers. Services: `backend`, `ingest`, `jobs` (same image, no port; `backend` `depends_on` both).
 - One-time: `docker exec neotrade-backend python -m backend.system.seed_backlog`.
 - Env var NAMES read by the backend (`configs/settings.py::Settings`; compose passes the first group through `environment`): `MONGODB_URL`, `DATABASE_NAME`, `REDIS_URL`, `OMNIROUTE_API_KEY`, `OMNIROUTE_FEATURE_KEYS`, `FINNHUB_API_KEY`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, `CREDENTIAL_ENCRYPTION_KEY`, `TELEGRAM_BOT_TOKEN`, `ADMIN_EMAILS`, `GIT_SHA`, `BACKEND_PORT` (compose-only). Settings with defaults not in compose (set only if the `.env` is read some other way): `OMNIROUTE_API_KEYS`, `OMNIROUTE_BASE_URL`, `OMNIROUTE_MODEL`, `NEWS_LLM_CALLS_PER_DAY` (200), `USER_LLM_CALLS_PER_DAY` (150), `PLAN_LLM_CALLS_PER_DAY` (100), `AI_TOOLS_ENABLED`, `SESSION_MAX_AGE_SECONDS` (1800), `REFRESH_TOKEN_MAX_AGE_SECONDS`, `REFRESH_COOKIE_NAME`, `PROJECT_NAME`, `VERSION`, `API_PREFIX`, `SERVER_PORT`, `LOG_LEVEL`. `ADMIN_EMAILS` and `CORS_ALLOWED_ORIGINS` are comma-separated; `OMNIROUTE_FEATURE_KEYS` is a JSON object.
+
+## Import rules
+
+`backend/.importlinter` (run `lint-imports --config backend/.importlinter` from the repo root or `/app`): domain modules never import `backend.routers`; `backend.mine` and `backend.journal` never import `backend.autopilot`; nothing imports `backend.forecast.research`. Permissive on purpose; existing violations sit under `ignore_imports` as known debt, removed when fixed.
 
 ## Gotchas and known issues
 
