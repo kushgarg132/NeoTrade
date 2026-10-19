@@ -19,8 +19,8 @@ const Section = ({ state, children, ...p }) => {
 };
 
 /** AI -> Scoreboard: this month, AI vs you vs NIFTY, the book's stats, and each strategy's proven status. */
-const Scoreboard = ({ board, card, forward }) => {
-  const s = scoreboard({ month: board.data?.month, card: card.data });
+const Scoreboard = ({ board, card, forward, capital, mineValue }) => {
+  const s = scoreboard({ month: board.data?.month, card: card.data, capital, mineValue });
   const strategies = card.data?.strategies || [];
   return (
     <div className="space-y-3">
@@ -29,7 +29,7 @@ const Scoreboard = ({ board, card, forward }) => {
           <div className="grid grid-cols-3 gap-3">
             {s.versus.map((v) => <Stat key={v.label} label={v.label} value={<span className={toneText(v.tone)}>{v.value}</span>} />)}
           </div>
-          <p className="mt-2 text-[13px] text-[var(--text-muted)]">Closed trades, net of charges. NIFTY: holding the index since the AI began.</p>
+          <p className="mt-2 text-[13px] text-[var(--text-muted)]">This month, closed trades net of charges, as % of the money each book works with (AI: its capital; you: your holdings). NIFTY is not month-aligned: it is the index since the AI began{s.niftyFrom ? ` (${s.niftyFrom})` : ''}.</p>
         </Section>
       </Card>
       <Card title="Track record">

@@ -34,6 +34,8 @@ const f = {
   card: get(endpoints.analytics.scorecard('paper')),
   positions: get(endpoints.trading.positions('paper')),
   log: get(endpoints.settings.autopilotLog),
+  overview: get(endpoints.mine.overview),
+  plan: get(endpoints.planToday),
 };
 
 const Ai = () => {
@@ -43,6 +45,8 @@ const Ai = () => {
   const card = useLoad(f.card);
   const positions = useLoad(f.positions);
   const log = useLoad(f.log);
+  const overview = useLoad(f.overview);
+  const plan = useLoad(f.plan);
   const forward = useForward();
   const [stopped, setStopped] = useState(false);
 
@@ -77,9 +81,9 @@ const Ai = () => {
         )}
       </div>
       <div className="mb-3"><Tabs tabs={TABS} value={tab} onChange={setTab} label="AI sections" /></div>
-      {tab === 'scoreboard' && <Scoreboard board={{ ...today, data: today.data?.scoreboard }} card={card} forward={forward} />}
+      {tab === 'scoreboard' && <Scoreboard board={{ ...today, data: today.data?.scoreboard }} card={card} forward={forward} capital={ap?.capital} mineValue={overview.data?.headline?.value} />}
       {tab === 'positions' && <Positions state={positions} />}
-      {tab === 'activity' && <Activity state={log} />}
+      {tab === 'activity' && <Activity state={log} plan={plan.data} />}
     </Layout>
   );
 };
