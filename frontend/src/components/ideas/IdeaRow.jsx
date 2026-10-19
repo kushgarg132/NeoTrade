@@ -8,7 +8,7 @@ import { toneText } from '../ui/tone';
 
 /** One idea in the list: action + symbol, setup and horizon, headline %, proven badge. */
 const IdeaRow = ({ idea }) => (
-  <Link to={`/ideas/${encodeURIComponent(idea.id)}`} className="flex items-center gap-3 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0">
+  <Link to={`/ideas/${encodeURIComponent(idea.id)}`} className="flex items-center gap-3 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2">
         <span className="text-[12px] font-semibold text-[var(--text-muted)]">{idea.side}</span>

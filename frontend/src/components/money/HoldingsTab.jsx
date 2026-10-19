@@ -62,7 +62,7 @@ const Row = ({ h, news }) => {
     </>
   );
   const cls = 'flex items-center gap-3 min-h-16 py-2 border-b border-[var(--border)] last:border-b-0';
-  return h.kind === 'MF' ? <div className={cls}>{body}</div> : <Link to={stockPath(h.symbol)} className={cls}>{body}</Link>;
+  return h.kind === 'MF' ? <div className={cls}>{body}</div> : <Link to={stockPath(h.symbol)} className={`${cls} active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{body}</Link>;
 };
 
 const HoldingsTab = () => {

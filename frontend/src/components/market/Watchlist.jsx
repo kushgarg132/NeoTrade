@@ -64,7 +64,7 @@ const Watchlist = () => {
         : rows.length === 0 ? <Empty title="Nothing watched" body="Open a stock and add it to the watchlist from there." />
         : rows.map((s) => (
           <div key={s.symbol} className="flex items-center gap-3 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0">
-            <button type="button" onClick={() => navigate(stockPath(s.symbol))} className="min-w-0 flex-1 text-left">
+            <button type="button" onClick={() => navigate(stockPath(s.symbol))} className="min-w-0 flex-1 text-left active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
               <div className="text-[15px] font-medium text-[var(--text)] truncate">{bareSymbol(s.symbol)}</div>
               <div className="text-[13px] text-[var(--text-muted)] truncate">{s.error ? 'Quote unavailable' : s.name}</div>
               <NewsChip entry={news[s.symbol?.toUpperCase().replace(/\.NS$/, '')]} link={false} />

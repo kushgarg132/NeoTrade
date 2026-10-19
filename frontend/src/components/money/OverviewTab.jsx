@@ -1,4 +1,6 @@
 import React, { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import Card from '../ui/Card';
 import Stat from '../ui/Stat';
 import ListRow from '../ui/ListRow';
@@ -36,7 +38,7 @@ const OverviewTab = ({ headline }) => {
         </Card>
       )}
 
-      <Card title="Biggest movers today">
+      <Card title="Biggest movers today" action={<Link to="/money?tab=holdings" className="inline-flex items-center min-h-11 text-[14px] font-semibold text-[var(--accent)]">All holdings<ChevronRight className="w-4 h-4" aria-hidden="true" /></Link>}>
         {loading ? (
           <Skeleton rows={3} />
         ) : movers.length === 0 ? (

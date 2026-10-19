@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Circle } from 'lucide-react';
+import { Check, Circle, ChevronRight } from 'lucide-react';
 import Card from '../ui/Card';
 
 /** First-run steps; gone once all are done. */
@@ -11,11 +11,12 @@ const SetupChecklist = ({ setup }) => {
       <ul className="divide-y divide-[var(--border)]">
         {setup.steps.map((s) => (
           <li key={s.id}>
-            <Link to={s.link} className="flex items-center gap-3 min-h-11 text-[15px]">
+            <Link to={s.link} className="flex items-center gap-3 min-h-11 text-[15px] active:bg-[var(--surface-2)]">
               {s.done
                 ? <Check className="w-4 h-4 shrink-0 text-[var(--gain)]" aria-hidden="true" />
                 : <Circle className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />}
               <span className={s.done ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text)]'}>{s.label}</span>
+              <ChevronRight className="ml-auto w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
             </Link>
           </li>
         ))}

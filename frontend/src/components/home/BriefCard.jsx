@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import Card from '../ui/Card';
 import { digestLines } from '../../utils/todayLayout';
 
@@ -15,8 +16,9 @@ const BriefCard = ({ title, text }) => {
       </ul>
       {lines.length > 3 && (
         <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all}
-                className="mt-1 min-h-11 text-[14px] font-semibold text-[var(--accent)]">
+                className="mt-1 inline-flex items-center gap-1 min-h-11 text-[14px] font-semibold text-[var(--accent)] active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
           {all ? 'Show less' : 'Read all'}
+          <ChevronDown className={`w-4 h-4 transition-transform ${all ? 'rotate-180' : ''}`} aria-hidden="true" />
         </button>
       )}
     </Card>
