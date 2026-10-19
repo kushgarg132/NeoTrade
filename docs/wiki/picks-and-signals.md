@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 2c26d99
+verified_at: bce1071
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -61,7 +61,7 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 ## Data
 
 Mongo collections (writer → readers):
-- `picks`: `_id` `"<date>:<setup>:<symbol>"`, `date`, `symbol`, `setup`, `label`, `horizon`, `due_date` (BDay(h+1), weekdays only), `entry_ref`, `expected{median,p10,p90}`, `p_up`, `p_beat_nifty`, `n`, `median_excess`, `edge`, `explanation`, `strength`, `created_at`, `outcome` (None until scored → `{exit_date,gross,net,nifty,won,beat_nifty}`), `scored_at`. Insert-only for new ids (`forecast/picks.py::run`). Readers: `routers/picks.py`, `autopilot/picks.py`. Indexes `date`, `outcome` (`forecast/picks.py::ensure_indexes`; must be called at startup in server.py).
+- `picks`: `_id` `"<date>:<setup>:<symbol>"`, `date`, `symbol`, `setup`, `label`, `horizon`, `due_date` (`market_calendar.add_trading_days(h+1)`, skips NSE holidays), `entry_ref`, `expected{median,p10,p90}`, `p_up`, `p_beat_nifty`, `n`, `median_excess`, `edge`, `explanation`, `strength`, `created_at`, `outcome` (None until scored → `{exit_date,gross,net,nifty,won,beat_nifty}`), `scored_at`. Insert-only for new ids (`forecast/picks.py::run`). Readers: `routers/picks.py`, `autopilot/picks.py`. Indexes `date`, `outcome` (`forecast/picks.py::ensure_indexes`; must be called at startup in server.py).
 - `picks_study`: single doc `_id: "latest"` `{as_of, setups:[stats + walk_forward]}` (`forecast/picks.py::run`).
 - `factor_books`: `_id` = `user_id`, `user_id`, `cash`, `shares{sym:int}`, `start_equity`, `started_at`, `start_nifty`, `costs`, `last_rebalance`, `updated_at`, `last_summary` (`factor/paper.py::FactorBookStore`).
 - `suggestions`: see `suggestions/store.py::SuggestionStore.create`: `id` (uuid, unique index), `user_id`, `run_id`, `symbol`, `mode`, `side`, `quantity`, `entry_ref`, `stop`, `target`, `max_hold_days`, `trail_atr`, `notional`, `option_contract`, `strength`, `reason_codes`, `strategy`, `score{rule,ai,final}`, `ai_thesis`, `source` (`scan`/`manual`/`scheduler`/`news`/`run`), `status`, `created_at`, `expires_at`, `decided_at`, `reason`, `order_id`. Later fields: `expired_reason:"outranked"` (`keep_best`), `venue`, `filled_quantity` (`settle`), `ai_order` (set by `engine/autorun.py`). Index `(user_id,status,mode)` (`store.py::ensure_indexes`, called at `server.py:125`).
