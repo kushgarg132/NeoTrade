@@ -144,6 +144,14 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
         await picks.run(db, now)
     except Exception as exc:
         logger.exception("picks failed: %s", exc)
+    # Forward record: score due candidates against the same bars (forward/score.py).
+    try:
+        from backend.forward import score as forward_score
+        scored = await forward_score.score_due(db, now)
+        await mark(redis, "forward", True, f"{scored} scored")
+    except Exception as exc:
+        logger.exception("forward scoring failed: %s", exc)
+        await mark(redis, "forward", False, str(exc))
     if is_last_trading_day_of_week(pass_day):
         await _weekly_mirrors(db)
     # The evening answer, from the review just done (portfolio/digest.py).
