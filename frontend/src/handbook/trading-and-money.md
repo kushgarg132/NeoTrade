@@ -326,7 +326,7 @@ Frontend: `frontend/src/pages/MineOverview.jsx::MineOverview` (headline with XIR
 `frontend/src/components/mine/ValueCurve.jsx`, Needs you `frontend/src/components/mine/NeedsYou.jsx`,
 drivers, mix), `frontend/src/pages/MineHoldings.jsx::MineHoldings` (one line per holding, sort and filter
 chips, "Plan new money" opens `frontend/src/components/portfolio/Rebalance.jsx`),
-`frontend/src/pages/MineStock.jsx::MineStock` (lots, chart with trade markers, thesis editor
+`frontend/src/pages/Stock.jsx::Stock` (header, chart with trade markers via `frontend/src/components/stock/TradingChart.jsx`, thesis editor
 `frontend/src/components/mine/ThesisEditor.jsx`), `frontend/src/pages/MineTax.jsx::MineTax` and
 `frontend/src/pages/Journal.jsx` (Trades and Habits as inner tabs). Where an action opens is decided in
 `frontend/src/utils/mine.js::actionTarget`.
