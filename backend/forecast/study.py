@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from backend.lab.assumptions import round_trip_return
+from backend.lab.splits import yearly_folds
 
 NOTIONAL = 100_000.0  # rupees per position: sets the flat parts (brokerage cap, DP charge)
 MIN_PRIOR = 30        # walk-forward: a year is only tested once this many past events have matured
@@ -81,8 +82,9 @@ def walk_forward(ev: pd.DataFrame) -> dict:
     began, then score it against Y's own events. Brier and out-of-sample
     excess pool every tested event."""
     years, preds, outs, excess = [], [], [], []
-    for year in sorted(ev["signal"].dt.year.unique()) if not ev.empty else []:
-        start = pd.Timestamp(year=year, month=1, day=1)
+    folds = yearly_folds(list(ev["signal"].dt.date), min_train_years=0) if not ev.empty else []
+    for fold in folds:
+        year, start = fold.year, pd.Timestamp(fold.test_start)
         prior = ev[ev["exit"] < start]
         test = ev[ev["signal"].dt.year == year]
         if len(prior) < MIN_PRIOR or test.empty:

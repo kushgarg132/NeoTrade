@@ -21,6 +21,7 @@ import pandas as pd
 
 from backend.factor import backtest
 from backend.factor.model import Params
+from backend.lab.splits import yearly_folds
 
 _N = NormalDist()
 EULER_GAMMA = 0.5772156649
@@ -81,15 +82,18 @@ def walk_forward(closes: pd.DataFrame, market: pd.Series, start, end, variants: 
                  in_sample_years: int = 3) -> WalkForward:
     trials = {p: backtest.simulate(closes, market, p, start, end) for p in variants}
     daily = {p: r.equity.pct_change().fillna(0) for p, r in trials.items()}
-    years = sorted({d.year for d in next(iter(daily.values())).index})
     pieces, chosen = [], {}
-    for year in years[in_sample_years:]:
+    index = next(iter(daily.values())).index
+    when = pd.Series([d.date() for d in index], index=index)
+    for fold in yearly_folds(list(when), min_train_years=in_sample_years, window_years=in_sample_years):
+        train, test = (when >= fold.train_start) & (when < fold.train_end), (when >= fold.test_start) & (when < fold.test_end)
+
         def in_sample_sharpe(p):
-            r = daily[p][(daily[p].index.year >= year - in_sample_years) & (daily[p].index.year < year)]
+            r = daily[p][train]
             return r.mean() / r.std() if r.std() else -np.inf
         best = max(variants, key=in_sample_sharpe)
-        chosen[year] = best
-        pieces.append(daily[best][daily[best].index.year == year])
+        chosen[fold.year] = best
+        pieces.append(daily[best][test])
     oos = pd.concat(pieces) if pieces else pd.Series(dtype=float)
     trial_sharpes = [float(d.mean() / d.std()) for d in daily.values() if d.std()]
     # Pad to every variant ever tried with the spread observed, so dropped
