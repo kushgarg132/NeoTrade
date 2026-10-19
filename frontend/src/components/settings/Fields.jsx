@@ -55,3 +55,28 @@ export const NumberField = ({ value, onChange, onCommit, zeroIsOff = false }) =>
     className="w-24 bg-[var(--surface)] border border-[var(--border)] rounded-[12px] px-2 min-h-11 text-right figure-md text-[15px] tabular-nums placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
   />
 );
+
+const PILL = 'min-h-11 px-3 rounded-full border text-[14px] font-semibold transition-colors';
+const PILL_ON = 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]';
+const PILL_ON_DANGER = 'bg-[var(--loss)] text-[var(--surface)] border-[var(--loss)]';
+const PILL_OFF = 'text-[var(--text-muted)] border-[var(--border)] bg-[var(--surface)]';
+
+/** An on/off switch as a pill. */
+export const Toggle = ({ on, onClick, label, onText = 'On', offText = 'Off', danger = false }) => (
+  <button type="button" role="switch" aria-checked={Boolean(on)} aria-label={label} onClick={onClick}
+          className={cn(PILL, on ? (danger ? PILL_ON_DANGER : PILL_ON) : PILL_OFF)}>
+    {on ? onText : offText}
+  </button>
+);
+
+/** One choice out of a few, as joined pills. `options: [[value, label]]`; `dangerValue` reads red when chosen. */
+export const Segmented = ({ options, value, onChange, label, dangerValue }) => (
+  <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+    {options.map(([v, text]) => (
+      <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onChange(v)}
+              className={cn(PILL, value === v ? (v === dangerValue ? PILL_ON_DANGER : PILL_ON) : PILL_OFF)}>
+        {text}
+      </button>
+    ))}
+  </div>
+);

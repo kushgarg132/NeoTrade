@@ -66,16 +66,16 @@ const BrokerRole = ({ broker }) => {
             aria-checked={roles[broker] === role}
             onClick={() => choose(role)}
             className={cn(
-              'text-left p-2.5 border transition-colors min-h-11',
-              roles[broker] === role ? 'border-[var(--accent)] bg-[var(--stamp-soft)]' : 'border-[var(--border)] hover:border-[var(--text)]',
+              'text-left p-3 rounded-[12px] border transition-colors min-h-11',
+              roles[broker] === role ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'border-[var(--border)] bg-[var(--surface)]',
             )}
           >
-            <span className="block text-sm font-semibold">{label}</span>
+            <span className="block text-[15px] font-semibold text-[var(--text)]">{label}</span>
             <span className="block text-[13px] text-[var(--text-muted)] mt-0.5">{hint}</span>
           </button>
         ))}
       </div>
-      {note && <p className="text-[13px] text-[var(--text-muted)] text-[var(--loss)] mt-1.5">{note}</p>}
+      {note && <p className="text-[13px] text-[var(--loss)] mt-1.5">{note}</p>}
     </div>
   );
 };
@@ -216,17 +216,17 @@ const BrokerSheet = () => {
   };
 
   const brokerPicker = (
-    <div className="flex gap-1">
+    <div className="flex flex-wrap gap-1.5">
       {Object.keys(BROKER_LABEL).map((key) => (
         <button
           key={key}
           type="button"
           onClick={() => setBroker(key)}
           className={cn(
-            'text-[13px] font-medium text-[var(--text-muted)] px-2 py-1 border',
+            'min-h-11 px-3 rounded-full border text-[14px] font-semibold',
             key === broker
-              ? 'border-[var(--accent)] text-[var(--accent)]'
-              : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-muted)]',
+              ? 'border-transparent bg-[var(--accent-soft)] text-[var(--accent)]'
+              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)]',
           )}
         >
           {BROKER_LABEL[key]}

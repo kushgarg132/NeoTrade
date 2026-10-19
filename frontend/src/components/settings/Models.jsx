@@ -13,7 +13,7 @@ const TIER_ROWS = [
 ];
 
 const STEP_BUTTON =
-  'w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--stamp-soft)]';
+  'w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--accent-soft)]';
 
 /**
  * Family -> model line -> version, the way people think about models

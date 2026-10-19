@@ -1,12 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Loader2 } from 'lucide-react';
-import { Sheet, Empty, Ruling, Stamp } from '../doc/Doc';
-import { Button } from '../common/Button';
-import { Badge } from '../common/Badge';
+import { ExternalLink } from 'lucide-react';
+import { Sheet, Ruling, Button } from '../settings/Panel';
 import api, { endpoints, getPreferences } from '../../utils/api';
-import { cn } from '../../utils/cn';
-import { Row, NumberField } from '../settings/Fields';
+import { Row, NumberField, Toggle, Segmented } from '../settings/Fields';
 import { formatCurrency } from '../../utils/formatters';
 import useSchedule from '../../hooks/useSchedule';
 
@@ -98,27 +95,14 @@ const GuardrailsSheet = () => {
           : 'Off'
       }
     >
-      <p className="doc-meta normal-case pb-3 border-b border-[var(--rule)]">
+      <p className="text-[13px] text-[var(--text-muted)] pb-3 border-b border-[var(--border)]">
         Limits you set for yourself. NeoTrade checks them against your broker every minute during the
         session and alerts you when one is crossed. It cannot stop an order you place in your broker's
         own app.
       </p>
 
       <Row label="Watch my broker" hint={`Checks every connected broker from ${t.monitor_open} to ${t.monitor_close} IST.`}>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={prefs.guardrails_enabled}
-          onClick={() => save({ guardrails_enabled: !prefs.guardrails_enabled })}
-          className={cn(
-            'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
-            prefs.guardrails_enabled
-              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-              : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-          )}
-        >
-          {prefs.guardrails_enabled ? 'On' : 'Off'}
-        </button>
+        <Toggle on={prefs.guardrails_enabled} label="Watch my broker" onClick={() => save({ guardrails_enabled: !prefs.guardrails_enabled })} />
       </Row>
 
       <Row
@@ -136,12 +120,12 @@ const GuardrailsSheet = () => {
         />
       </Row>
       {confirmOff && (
-        <div role="alert" className="py-2 flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--loss)]">
+        <div role="alert" className="py-2 flex flex-wrap items-center justify-between gap-2 text-[14px] text-[var(--loss)]">
           <span>0 turns off the daily loss limit and the engine's kill-switch.</span>
           <span className="inline-flex gap-2">
             <button
               type="button"
-              className="min-h-11 sm:min-h-0 px-2 py-1 border border-[var(--rule-strong)] text-[var(--ink)]"
+              className="min-h-11 px-3 rounded-[12px] border border-[var(--border)] text-[var(--text)]"
               onClick={() => {
                 setConfirmOff(false);
                 setDraft((d) => ({ ...d, daily_loss_limit: prefs.daily_loss_limit }));
@@ -151,7 +135,7 @@ const GuardrailsSheet = () => {
             </button>
             <button
               type="button"
-              className="min-h-11 sm:min-h-0 px-2 py-1 border border-[var(--loss)]"
+              className="min-h-11 px-3 rounded-[12px] border border-[var(--loss)]"
               onClick={() => {
                 setConfirmOff(false);
                 save({ daily_loss_limit: 0 }).catch((err) => setNote(err?.response?.data?.detail || 'That value was not saved.'));
@@ -173,20 +157,7 @@ const GuardrailsSheet = () => {
         label="Warn on unhedged option selling"
         hint="Alert when you sell an option with no bought option on the same underlying open to cap the loss. A sold option's loss has no fixed limit."
       >
-        <button
-          type="button"
-          role="switch"
-          aria-checked={Boolean(prefs.warn_naked_options)}
-          onClick={() => save({ warn_naked_options: !prefs.warn_naked_options })}
-          className={cn(
-            'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
-            prefs.warn_naked_options
-              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-              : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-          )}
-        >
-          {prefs.warn_naked_options ? 'On' : 'Off'}
-        </button>
+        <Toggle on={prefs.warn_naked_options} label="Warn on unhedged option selling" onClick={() => save({ warn_naked_options: !prefs.warn_naked_options })} />
       </Row>
 
       <Row
@@ -197,41 +168,23 @@ const GuardrailsSheet = () => {
             : 'Preview alerts you with the exact exit orders it would place, without sending them. Live sends them. Only NSE intraday (MIS) positions, once a day.'
         }
       >
-        <div className="flex" role="radiogroup" aria-label="Square off at the loss limit">
-          {[
-            ['off', 'Off'],
-            ['preview', 'Preview'],
-            ['live', 'Live'],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={prefs.auto_square_off === value}
-              onClick={() => {
-                if (value === prefs.auto_square_off) return;
-                if (
-                  value === 'live' &&
-                  !window.confirm(
-                    'Live square-off places real market orders on your broker account, without asking, when your daily loss limit is hit. Turn it on?'
-                  )
-                )
-                  return;
-                save({ auto_square_off: value });
-              }}
-              className={cn(
-                'px-3 py-1 border -ml-px first:ml-0 font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
-                prefs.auto_square_off === value
-                  ? value === 'live'
-                    ? 'bg-[var(--loss)] text-[var(--paper)] border-[var(--loss)]'
-                    : 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-                  : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Square off at the loss limit"
+          options={[['off', 'Off'], ['preview', 'Preview'], ['live', 'Live']]}
+          value={prefs.auto_square_off}
+          dangerValue="live"
+          onChange={(value) => {
+            if (value === prefs.auto_square_off) return;
+            if (
+              value === 'live' &&
+              !window.confirm(
+                'Live square-off places real market orders on your broker account, without asking, when your daily loss limit is hit. Turn it on?'
+              )
+            )
+              return;
+            save({ auto_square_off: value });
+          }}
+        />
       </Row>
 
       <Row
@@ -273,7 +226,7 @@ const GuardrailsSheet = () => {
               onChange={(event) => setBotToken(event.target.value)}
               placeholder="123456:ABC…"
               aria-label="Telegram bot token"
-              className="min-w-0 w-40 sm:w-56 bg-transparent border-b border-[var(--rule-strong)] py-1.5 text-sm focus:outline-none focus:border-[var(--stamp)]"
+              className="min-w-0 w-40 sm:w-56 bg-[var(--surface)] border border-[var(--border)] rounded-[12px] px-3 min-h-11 text-[15px] focus:outline-none focus:border-[var(--accent)]"
             />
             <Button type="submit" variant="primary" size="sm" disabled={busy || !botToken.trim()}>
               Save
@@ -341,32 +294,14 @@ const GuardrailsSheet = () => {
         label="News alerts"
         hint="Material news on the names you follow, as a toast here and on Telegram when linked. A market-wide shock reaches anyone holding something."
       >
-        <div role="radiogroup" aria-label="News alerts" className="flex flex-wrap">
-          {[
-            ['held', 'Holdings'],
-            ['held+watched', '+ Watchlist'],
-            ['all', 'All'],
-            ['off', 'Off'],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={(prefs.news_alerts || 'held') === value}
-              onClick={() => value !== prefs.news_alerts && save({ news_alerts: value })}
-              className={cn(
-                'px-3 py-1 border -ml-px first:ml-0 font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors',
-                (prefs.news_alerts || 'held') === value
-                  ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-                  : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="News alerts"
+          options={[['held', 'Holdings'], ['held+watched', '+ Watchlist'], ['all', 'All'], ['off', 'Off']]}
+          value={prefs.news_alerts || 'held'}
+          onChange={(value) => value !== prefs.news_alerts && save({ news_alerts: value })}
+        />
       </Row>
-      {note && <p className="doc-meta normal-case pt-2">{note}</p>}
+      {note && <p className="text-[13px] text-[var(--text-muted)] pt-2">{note}</p>}
     </Sheet>
   );
 };

@@ -17,8 +17,7 @@ import StrategyRow, { GO_LIVE_RULE, StrategyFold } from './StrategyRow';
  * Guardrails in Settings; this sheet only states it.
  */
 
-const SWITCH =
-  'px-3 py-1 border font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors';
+const SWITCH = 'min-h-11 px-3 rounded-full border text-[14px] font-semibold transition-colors';
 
 const EngineSettings = () => {
   const [prefs, setPrefs] = useState(null);
@@ -101,7 +100,7 @@ const EngineSettings = () => {
             onToggle={() => setStrategiesOpen((value) => !value)}
           />
           {strategiesOpen && (
-            <p className="doc-meta normal-case py-2 border-y border-[var(--rule)]">
+            <p className="doc-meta normal-case py-2 border-y border-[var(--border)]">
               Every strategy trades paper unless you switch it live. {GO_LIVE_RULE} Until then it keeps trading paper.
             </p>
           )}
@@ -128,7 +127,7 @@ const EngineSettings = () => {
                         {' '}
                         <button
                           type="button"
-                          className="underline text-[var(--stamp)]"
+                          className="underline text-[var(--accent)]"
                           onClick={() => runBacktest(name)}
                           disabled={Boolean(backtesting[name])}
                         >
@@ -154,8 +153,8 @@ const EngineSettings = () => {
                   className={cn(
                     SWITCH,
                     isLive
-                      ? 'bg-[var(--loss)] text-[var(--paper)] border-[var(--loss)]'
-                      : 'text-[var(--ink-soft)] border-[var(--rule-strong)]'
+                      ? 'bg-[var(--loss)] text-[var(--surface)] border-[var(--loss)]'
+                      : 'text-[var(--text-muted)] border-[var(--border)] bg-[var(--surface)]'
                   )}
                 >
                   {isLive ? 'Live' : 'Paper'}

@@ -30,7 +30,7 @@ const SettingsHome = () => {
   return (
     <Layout>
       <PageHeader title="Settings" />
-      <Tabs tabs={tabs} value={tab} onChange={setTab} label="Settings sections" />
+      <Tabs tabs={tabs} value={tab} onChange={setTab} label="Settings sections" wrap />
       <div className="pt-3">
         {tab === 'accounts' && <Accounts />}
         {tab === 'alerts' && <Alerts />}

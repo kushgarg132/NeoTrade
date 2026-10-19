@@ -14,8 +14,7 @@ import useSchedule from '../../hooks/useSchedule';
  * per-strategy live switches stay in Lab › Autopilot limits.
  */
 
-const SWITCH =
-  'px-3 py-1 border text-[13px] font-semibold transition-colors';
+const SWITCH = 'min-h-11 inline-flex items-center px-3 rounded-full border text-[14px] font-semibold transition-colors';
 
 const EngineSwitches = ({ prefs, save }) => {
   const { t, raw } = useSchedule();
