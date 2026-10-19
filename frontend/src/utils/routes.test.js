@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ROUTES, ADMIN_ROUTES, MOVED, withSearch } from './routes.js';
+import { ROUTES, ADMIN_ROUTES, MOVED, withSearch, movedTarget } from './routes.js';
 import { stockPath } from './stocks.js';
 
 test('every redirect lands on a real route in one hop', () => {
@@ -13,18 +13,28 @@ test('every redirect lands on a real route in one hop', () => {
 
 test('old paths map where the spec says', () => {
   const m = Object.fromEntries(MOVED);
-  assert.equal(m['/mine'], '/portfolio');
-  assert.equal(m['/mine/journal'], '/journal');
-  assert.equal(m['/mine/habits'], '/journal?tab=habits');
-  assert.equal(m['/research/news'], '/portfolio/news');
-  assert.equal(m['/ai/settings'], '/lab/limits');
-  assert.equal(m['/system'], '/lab/handbook');
-  assert.equal(m['/research'], '/');
-  assert.equal(m['/import'], '/portfolio/import');
+  const want = {
+    '/portfolio': '/money', '/portfolio/holdings': '/money?tab=holdings', '/portfolio/tax': '/money?tab=tax',
+    '/portfolio/import': '/money?tab=holdings', '/portfolio/news': '/market?tab=news',
+    '/portfolio/watchlist': '/market?tab=watchlist', '/journal': '/money?tab=journal', '/picks': '/ideas',
+    '/ai/book': '/ai?tab=positions', '/ai/activity': '/ai?tab=activity', '/lab': '/settings/lab/strategies',
+    '/lab/limits': '/settings?tab=limits', '/lab/options': '/settings/lab/options', '/lab/runs': '/settings/lab/runs',
+    '/lab/forward': '/settings/lab/forward', '/lab/handbook': '/settings/lab/handbook', '/lab/backlog': '/settings/lab/backlog',
+    '/mine': '/money', '/system': '/settings/lab/handbook', '/research': '/',
+  };
+  for (const [from, to] of Object.entries(want)) assert.equal(m[from], to, from);
 });
 
-test('picks and lab are admin routes', () => {
-  for (const p of ['/picks', '/lab', '/lab/limits', '/lab/options', '/lab/handbook', '/lab/backlog']) assert.ok(ADMIN_ROUTES.includes(p));
+test('the lab pages are admin routes', () => {
+  for (const p of ['strategies', 'options', 'runs', 'forward', 'handbook', 'backlog']) assert.ok(ADMIN_ROUTES.includes(`/settings/lab/${p}`));
+  assert.ok(!ADMIN_ROUTES.includes('/settings'));
+});
+
+test('old journal tabs become jtab, other query kept', () => {
+  assert.equal(movedTarget('/journal', '/money?tab=journal', '?tab=habits'), '/money?tab=journal&jtab=habits');
+  assert.equal(movedTarget('/journal', '/money?tab=journal', '?tab=guardrails&x=1'), '/money?tab=journal&x=1&jtab=guardrails');
+  assert.equal(movedTarget('/journal', '/money?tab=journal', '?tab=patterns'), '/money?tab=journal&jtab=habits');
+  assert.equal(movedTarget('/portfolio', '/money', '?a=1'), '/money?a=1');
 });
 
 test('stockPath encodes', () => {

@@ -1,22 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X } from 'lucide-react';
-import Sidebar from './layout/Sidebar';
-import BottomNav from './layout/BottomNav';
-import Masthead from './layout/Masthead';
+import SideRail from './layout/SideRail';
+import BottomTabs from './layout/BottomTabs';
+import Header from './layout/Header';
 import ChatWidget from './ChatWidget';
 import ErrorBoundary from './ErrorBoundary';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import { PendingContext } from '../context/pendingContext';
-
-/** The note's running number: stable per day, the way an issued note is. */
-const noteNumber = () => {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 0);
-  const day = Math.floor((now - start) / 86400000);
-  return `${now.getFullYear()}/${String(day).padStart(3, '0')}`;
-};
 
 /**
  * The shell every page prints inside. The pending count lives here rather than
@@ -63,14 +55,16 @@ const Layout = ({ children }) => {
     setTimeout(() => dismiss(alert.id), 15_000);
   });
 
+  const counts = { attention, pending };
+
   return (
     <PendingContext.Provider value={pending}>
-    <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
-      <Sidebar attention={attention} />
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+      <SideRail counts={counts} />
 
       <div className="lg:pl-56">
-        <Masthead noteNumber={noteNumber()} />
-        <main className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-8 py-3 sm:py-5 pb-24 lg:pb-12">
+        <Header />
+        <main className="mx-auto max-w-5xl px-4 py-4 pb-24 lg:pb-12">
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>
@@ -78,7 +72,7 @@ const Layout = ({ children }) => {
       <div role="status" aria-live="polite" className="fixed z-50 right-3 bottom-20 lg:bottom-4 w-[min(22rem,calc(100vw-1.5rem))] space-y-2">
         {alerts.map((alert) => (
           <div key={alert.id} className="sheet px-3 py-2.5 shadow-lg flex gap-2 items-start bg-[var(--paper)]">
-            <Link to="/portfolio/news" onClick={() => dismiss(alert.id)} className="flex-1 min-w-0 text-sm hover:text-[var(--stamp)]">
+            <Link to="/market?tab=news" onClick={() => dismiss(alert.id)} className="flex-1 min-w-0 text-sm hover:text-[var(--stamp)]">
               <span className="block font-semibold">{alert.event || alert.title}</span>
               <span className="block doc-meta normal-case">
                 {(alert.hits || []).map((h) => `${h.target === 'INDIA' ? 'Market' : h.target} ${h.direction > 0 ? '↑' : '↓'} ${h.impact}/10`).join(' · ')}
@@ -91,7 +85,7 @@ const Layout = ({ children }) => {
         ))}
       </div>
 
-      <BottomNav attention={attention} />
+      <BottomTabs counts={counts} />
       <ChatWidget />
     </div>
     </PendingContext.Provider>

@@ -1086,7 +1086,7 @@ const Settings = () => {
               <>
                 <ModelSheet isAdmin={isAdmin} />
                 {isAdmin && <Link
-                  to="/lab/limits"
+                  to="/settings?tab=limits"
                   className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors"
                 >
                   <span className="text-sm"><span className="field-label">Autopilot</span> switch and limits are under Lab › Autopilot limits</span>
@@ -1097,8 +1097,9 @@ const Settings = () => {
             )}
             {tab === 'about' && (isAdmin ? (
               <div className="space-y-2">
-                {[['/lab/handbook', 'Handbook', 'how every part works, with live status'],
-                  ['/lab/backlog', 'Future', 'the backlog of what comes next']].map(([to, label, detail]) => (
+                {[['/settings/lab/handbook', 'Handbook', 'how every part works, with live status'],
+                  ['/settings/lab/backlog', 'Future', 'the backlog of what comes next'],
+                  ['/settings/lab/strategies', 'Lab', 'strategies, options, runs and forward tests']].map(([to, label, detail]) => (
                   <Link key={to} to={to}
                         className="flex items-center justify-between gap-3 sheet px-3 py-2.5 sm:px-4 hover:bg-[var(--paper-sunk)] transition-colors">
                     <span className="text-sm"><span className="field-label">{label}</span> — {detail}</span>

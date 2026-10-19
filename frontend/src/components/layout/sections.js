@@ -1,29 +1,4 @@
-import { Sun, Sparkles, Bot, Wallet, NotebookPen, FlaskConical } from 'lucide-react';
-
-/**
- * The sections, shared by the desktop index and the phone's bottom bar (the
- * daily workstation): Today (what to do now), Picks and Lab (admin only), AI
- * (the account the app runs), Portfolio (my holdings, tax, news, watchlist),
- * Journal (trades, habits, guardrails). `match` lists the path prefixes a
- * section owns, so its tab stays lit on every page inside it.
- */
-export const SECTIONS = [
-  // Badges: Today counts what needs you outside ideas (logins, waiting
-  // cards, interrupted approvals, guardrail alerts); Portfolio counts its Needs-you list.
-  { icon: Sun, label: 'Today', path: '/', match: ['/'], exact: true, primary: true, counter: 'attention' },
-  { icon: Sparkles, label: 'Picks', path: '/picks', match: ['/picks'], primary: true, admin: true },
-  { icon: Bot, label: 'AI', path: '/ai', match: ['/ai'], primary: true },
-  { icon: Wallet, label: 'Portfolio', path: '/portfolio', match: ['/portfolio'], primary: true, counter: 'pending' },
-  { icon: NotebookPen, label: 'Journal', path: '/journal', match: ['/journal'], primary: true },
-  { icon: FlaskConical, label: 'Lab', path: '/lab', match: ['/lab'], primary: true, admin: true },
-];
-
-/** The badge number for a section: `attention` for Today, ideas for Portfolio. */
-export const sectionCount = (item, counts) => (item.counter ? counts[item.counter] || 0 : 0);
-
-export const sectionActive = (item, pathname) =>
-  item.exact ? pathname === '/' : item.match.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-
+/** Tab sets the not-yet-rebuilt pages still render through SectionTabs. */
 export const PORTFOLIO_TABS = [
   { to: '/portfolio', label: 'Overview', end: true, counter: true },
   { to: '/portfolio/holdings', label: 'Holdings' },
@@ -42,11 +17,11 @@ export const AI_TABS = [
 
 /** The Lab: frozen and experimental features, admin only. */
 export const LAB_TABS = [
-  { to: '/lab', label: 'Strategies', end: true },
-  { to: '/lab/limits', label: 'Autopilot limits' },
-  { to: '/lab/options', label: 'Options' },
-  { to: '/lab/handbook', label: 'Handbook' },
-  { to: '/lab/runs', label: 'Runs' },
-  { to: '/lab/forward', label: 'Forward' },
-  { to: '/lab/backlog', label: 'Backlog' },
+  { to: '/settings/lab/strategies', label: 'Strategies', end: true },
+  { to: '/settings?tab=limits', label: 'Autopilot limits' },
+  { to: '/settings/lab/options', label: 'Options' },
+  { to: '/settings/lab/handbook', label: 'Handbook' },
+  { to: '/settings/lab/runs', label: 'Runs' },
+  { to: '/settings/lab/forward', label: 'Forward' },
+  { to: '/settings/lab/backlog', label: 'Backlog' },
 ];

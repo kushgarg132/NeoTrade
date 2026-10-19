@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 907da1f
+verified_at: 2eae247
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -17,7 +17,7 @@ The whole UI: a plain-JSX (no TypeScript) React 19 / React Router 7 / Tailwind v
 | `frontend/vercel.json` (outside globs) | `/api/:path*` -> backend nip.io host; SPA fallback `/(.*)` -> `/index.html`; `no-cache` on `/sw.js` | `rewrites`, `headers` |
 | `frontend/public/sw.js` (outside globs) | service worker: network-first navigations, never caches `/api/` | `VERSION`, `PRECACHE` |
 | `src/main.jsx` | provider stack and SW registration (PROD only) | `GoogleOAuthProvider > BrowserRouter > ThemeProvider > AuthProvider > App` |
-| `src/App.jsx` | route table, redirects, `gated()` wrapper, scroll-to-top, opens the socket when `user` is set | `App`, `Moved`, `JournalMoved`, `NotFound` |
+| `src/App.jsx` | route table, redirects, `gated()` wrapper, scroll-to-top, opens the socket when `user` is set | `App`, `Moved`, `StockMoved`, `NotFound` |
 | `src/utils/api.js` | axios instance, token + refresh interceptors, preferences cache, ALL endpoint builders | `api`, `refreshAccessToken`, `hardLogout`, `getPreferences`, `endpoints`, `AUTH_TOKEN_STORAGE_KEY` |
 | `src/lib/ws.js` | the single `Stream` socket: subscribe, reconnect with backoff, one-shot `request` | `stream`, `Stream.request`, `isExpired` |
 | `src/context/AuthContext.jsx` | `user` / `loading` / `login(idToken)` / `logout()` | `AuthProvider`, `useAuth` |
@@ -30,7 +30,8 @@ The whole UI: a plain-JSX (no TypeScript) React 19 / React Router 7 / Tailwind v
 | `src/hooks/useSchedule.js`, `src/utils/schedule.js` | job times in copy (`EngineNow`, `EngineSwitches`, `PlanCard`, `TradingControlBar`, Settings guardrails hint) from `GET /system/schedule`; `utils/schedule.js::FALLBACK_SCHEDULE` shows until it loads | `useSchedule`, `clock12`, `FALLBACK_SCHEDULE` |
 | `src/hooks/useSymbolNews.js` | `GET /news/symbols` per distinct symbol list | `useSymbolNews` |
 | `src/components/Layout.jsx` | shell every page renders inside; loads nav counts; news toast | `Layout` |
-| `src/components/layout/{sections.js,Sidebar,BottomNav,SectionTabs,Masthead}.jsx` | nav model and chrome | `SECTIONS`, `PORTFOLIO_TABS`, `AI_TABS`, `LAB_TABS`, `sectionActive`, `utils/nav.js::visibleSections` |
+| `src/components/layout/{tabs.js,Header,BottomTabs,SideRail,SectionTabs,sections.js}` | the shell: nav model and chrome | `MAIN_TABS`, `tabActive`, `LAB_TABS` |
+| `src/components/ui/*`, `ui/format.js` | redesign primitives and number formatting | see Design tokens |
 | `src/components/{RequireAuth,ErrorBoundary}.jsx`, `system/RequireAdmin.jsx` | route guards / crash boundary | `RequireAuth`, `RequireAdmin` |
 | `src/components/doc/Doc.jsx` | the design-system primitives (see Design tokens) | `Sheet`, `Statement`/`Row`/`Cell`, `Money`, `Scrip`, `Field`, `Empty`, `Ruling`, `Tabs`, `Stamp`, `NetLine` |
 | `src/components/common/*` | `Button`, `Badge`, `Card`, `Avatar`, `Markdown` (marked + DOMPurify), `MoneyBadge`, `NewsChip`, `AccountSwitch`, `StopAutopilot` | `Markdown` |
@@ -134,35 +135,25 @@ Source: `src/App.jsx::App`. `gated(x)` = `RequireAuth > ErrorBoundary > Suspense
 | path | page | admin-only | notes |
 |---|---|---|---|
 | `/login` | `Login` | no | not gated; honours `?next=` |
-| `/` | `Today` | no | nav section Today |
-| `/portfolio` | `MineOverview` | no | `PORTFOLIO_TABS` Overview |
-| `/portfolio/holdings` | `MineHoldings` | no | `?plan=1` = rebalance |
-| `/portfolio/tax` | `MineTax` | no | |
-| `/portfolio/news` | `News` | no | |
-| `/portfolio/watchlist` | `Watchlist` | no | |
-| `/portfolio/import` | `Import` | no | no-broker onboarding: Console CSV (`POST /journal/import/zerodha-console`), CAS PDF + password (`POST /imports/cas`, multipart), consent note, `DELETE /imports`; linked from the Today setup checklist (`import_trades`, `import_funds`) and the empty Today/Journal states |
-| `/stock/:symbol` | `MineStock` | no | not a tab; header search target (`stockPath`) |
-| `/journal` | `JournalRoute` -> `Journal lockedAccount="mine"` | no | `?tab=habits\|guardrails`; `?tab=patterns\|learning` -> `habits` |
-| `/picks` | `Picks` | **yes** | `RequireAdmin` redirects non-admin to `/settings`; tab hidden by `visibleSections` |
-| `/ai` | `AiOverview` | no | `AI_TABS` Overview |
-| `/ai/activity` | `AiActivity` | no | |
-| `/ai/book` | `Portfolio` | no | |
-| `/lab` | `Strategies` | **yes** | `LAB_TABS` Strategies; `?book=` |
-| `/lab/limits` | `AiLimits` | **yes** | |
-| `/lab/options` | `OptionChain` | **yes** | `?u=NIFTY\|BANKNIFTY` |
-| `/lab/handbook` | `Handbook` | **yes** | `?tab=system\|trading\|ai\|ops\|journey` |
-| `/lab/runs` | `LabRuns` | **yes** | |
-| `/lab/forward` | `LabForward` | **yes** | |
-| `/lab/backlog` | `Backlog` | **yes** | |
-| `/settings` | `Settings` | no | `?tab=accounts\|safety\|ai\|about`; `?tab=guardrails` -> `/journal?tab=guardrails` |
+| `/` | `Home` | no | stub (redesign task 1); `components/home/{GoalTile,BriefCard,WeeklyLink}` are null stubs |
+| `/money` | `Money` | no | stub; tabs `?tab=` (overview, holdings, tax, journal) |
+| `/ideas`, `/ideas/history`, `/ideas/:id` | `Ideas`, `IdeasHistory`, `IdeaDetail` | no | stubs |
+| `/ai` | `Ai` | no | stub; tabs `?tab=` (scoreboard, positions, activity) |
+| `/market` | `Market` | no | stub; `?tab=news\|watchlist` |
+| `/stock/:symbol` | `Stock` | no | stub; header search target (`utils/stocks.js::stockPath`) |
+| `/reports/weekly` | `WeeklyReport` | no | stub |
+| `/settings` | `SettingsHome` -> `Settings`, or `AiLimits` for `?tab=limits` | no | stub wrapper until Settings is rebuilt |
+| `/settings/lab/{strategies,options,runs,forward,handbook,backlog}` | `Strategies`, `OptionChain`, `LabRuns`, `LabForward`, `Handbook`, `Backlog` | **yes** | `RequireAdmin`; `LAB_PAGES` in `utils/routes.js` |
 | `/profile` | `Profile` | no | |
 | `*` | `NotFound` (inside `Layout`) | no | gated |
 
-Redirects (`replace`, query string kept by `Moved`; `/mine/stock/:symbol` and `/research/stock/:symbol` -> `/stock/:symbol` via `StockMoved`): the table is `utils/routes.js::MOVED` (every old path to its final path in one hop; `routes.test.js` checks no chain), e.g. `/mine` -> `/portfolio`, `/mine/journal` -> `/journal`, `/mine/habits` -> `/journal?tab=habits`, `/research/news` -> `/portfolio/news`, `/ai/settings` -> `/lab/limits`, `/ai/strategies` -> `/lab`, `/system` -> `/lab/handbook`, `/import` -> `/portfolio/import`, `/research`, `/scanner` -> `/`.
+Old pages `Today`, `MineOverview`, `MineHoldings`, `MineTax`, `MineStock`, `Journal`, `Picks`, `AiOverview`, `AiActivity`, `Portfolio`, `News`, `Watchlist`, `Import` are no longer routed; wave 2 of the redesign reuses or deletes them.
 
-### Nav sections (`components/layout/sections.js`)
-- `SECTIONS` (6, all `primary`): Today `/` (exact, badge `attention`), Picks `/picks` (`admin`), AI `/ai`, Portfolio `/portfolio` (badge `pending`), Journal `/journal`, Lab `/lab` (`admin`). `Sidebar` (lg+) and `BottomNav` (phone) both filter through `utils/nav.js::visibleSections` (4 tabs for non-admins, 6 for admins; `barColumns` picks the grid class); `sectionActive` keeps a section lit on all its sub-paths. Settings is an icon in the `Masthead`, next to the compact stock search.
-- `PORTFOLIO_TABS`: Overview, Holdings, Tax, News, Watchlist, Import. `AI_TABS`: Overview, Activity, Book. `LAB_TABS`: Strategies, Autopilot limits, Options, Handbook, Runs, Backlog. `SystemTabs` (admin) = `HANDBOOK_TABS` + Future, under the Lab tabs.
+Redirects (`replace`, query string kept by `Moved` via `utils/routes.js::movedTarget`; `/mine/stock/:symbol` and `/research/stock/:symbol` -> `/stock/:symbol` via `StockMoved`): the table is `utils/routes.js::MOVED` (every old path to its final path in one hop; `routes.test.js` checks no chain), e.g. `/portfolio` -> `/money`, `/portfolio/holdings` -> `/money?tab=holdings`, `/portfolio/news` -> `/market?tab=news`, `/journal` -> `/money?tab=journal` (an old `?tab=habits|guardrails` becomes `jtab`), `/picks` -> `/ideas`, `/ai/book` -> `/ai?tab=positions`, `/lab` -> `/settings/lab/strategies`, `/lab/limits` -> `/settings?tab=limits`.
+
+### Shell (`components/layout/`)
+- `tabs.js::MAIN_TABS`: Home `/` (badge `attention`), Money, Ideas (badge `pending`), AI, Market; `tabActive` keeps a tab lit on sub-paths. `BottomTabs` (phone) and `SideRail` (lg+) render it; `Header` is on every page (stock search via `dashboard/SmartSearch` -> `stockPath`, market/feed dot, privacy eye, theme, profile -> `/settings`). `Layout` owns the counts and passes them down.
+- `sections.js` keeps `PORTFOLIO_TABS`, `AI_TABS`, `LAB_TABS` for the old pages that still use `SectionTabs` (`LAB_TABS` points at `/settings/lab/*`).
 
 ## Jobs and schedules
 
@@ -170,11 +161,12 @@ None run in the frontend build. Client-side timers: Today polls `/today` every 6
 
 ## Design tokens
 
-- Real tokens live in `src/index.css`: `@theme` maps Tailwind colours to CSS variables; `:root` (paper theme) and `.dark` (carbon copy, toggled by `ThemeProvider`) define them. Variables: `--paper`, `--paper-sunk`, `--ink`, `--ink-soft`, `--ink-faint`, `--rule`, `--rule-strong`, `--stamp` (violet `#3a32a0`), `--stamp-soft`, `--ai` (teal), `--gain`, `--loss`, `--gain-wash`, `--loss-wash`, `--sheet-shadow`, `--masthead-h`, `--status-bar`. Fonts: Archivo (sans), Archivo Narrow (`--font-narrow`, labels), Courier Prime (`--font-mono`), loaded from Google Fonts at the top of the file. Radius is 0 everywhere.
-- Utilities: `sheet`, `field-label`, `doc-meta`, `figure-lg`, `figure-md`, `rule-net`, `perforated`, `text-up`, `text-down`, `text-balance`; animations `stamp-land`, `restrike`; badge classes `.badge-mine|ai|paper`.
-- Privacy: wrap money in an element with class `private`; `html[data-private="on"] .private :is(.figure-md,.figure-lg)` blurs it (`index.css`). Pages that show the user's own money add `private` (Today, MineHoldings, Journal, `PaperShell`).
-- Prose design intent is in `DESIGN.md` (repo root); the header comment of `index.html` states the thesis (contract note, square corners, one violet stamp).
-- Components must use `var(--token)` colours (`text-[var(--ink-soft)]`, `border-[var(--rule-strong)]`), `cn()` from `utils/cn.js`, and `Doc.jsx` primitives; touch targets are `min-h-11` on phones.
+- Real tokens live in `src/index.css`: `:root` (light) and `.dark` (toggled by `ThemeProvider`) define `--bg --surface --surface-2 --border --text --text-muted --accent --accent-soft --gain --loss --warn --gain-wash --loss-wash --ai --radius`. Radius 12 (controls) / 16 (cards); body 15 px. Old names (`--paper`, `--ink`, `--rule`, `--stamp`, ...) are aliases to the new tokens so un-rebuilt components keep rendering; remove them when nothing references them.
+- Primitives in `src/components/ui/`: `Tile`, `Card`, `Stat`, `Tabs` + `useTabParam(ids, default, key)` (URL `?tab=`), `ListRow`, `Badge`, `Button`, `PageHeader`, `Empty`, `Skeleton`, `ErrorLine`, plus `format.js` (`inr`, `pct`, `tone`, `compactInr`, unit-tested). Every data section shows Skeleton while loading, one-line `ErrorLine` + Retry on failure, `Empty` with its action.
+- Legacy utilities still in `index.css`: `sheet`, `field-label`, `doc-meta`, `figure-lg`, `figure-md`, `rule-net`, `perforated`, `text-up`, `text-down`, `text-balance`; badge classes `.badge-mine|ai|paper`. Fonts: Archivo (sans).
+- Privacy: wrap money in an element with class `private`; `html[data-private="on"] .private :is(.figure-md,.figure-lg)` blurs it (`index.css`). The `ui/` primitives that print figures already carry `private` and `figure-md`.
+- Prose design intent is in `DESIGN.md` (repo root).
+- Components must use `var(--token)` colours (no raw hex), `cn()` from `utils/cn.js`; touch targets are `min-h-11`, text never below 12 px.
 
 ## Invariants
 
