@@ -13,7 +13,10 @@ Jayanti, Guru Nanak Jayanti) are left out on purpose, because a wrongly listed
 holiday skips a real session while a missing one only keeps today's behaviour.
 Replace this set with the official circular when NSE publishes it.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+
+_IST = timezone(timedelta(hours=5, minutes=30))
+OPEN, CLOSE = time(9, 15), time(15, 30)
 
 HOLIDAYS = frozenset(date.fromisoformat(d) for d in (
     # 2026, official
@@ -65,3 +68,20 @@ def trading_days_between(a: date, b: date) -> list[date]:
 
 def is_last_trading_day_of_week(day: date) -> bool:
     return is_trading_day(day) and next_trading_day(day).isocalendar()[:2] != day.isocalendar()[:2]
+
+
+def market_phase(now: datetime) -> str:
+    """pre (before 09:15), session (09:15 to <15:30), post (from 15:30) on a trading day, else closed. IST."""
+    local = now.astimezone(_IST)
+    if not is_trading_day(local.date()):
+        return "closed"
+    return "pre" if local.time() < OPEN else "session" if local.time() < CLOSE else "post"
+
+
+def next_open(now: datetime) -> datetime:
+    """The next 09:15 IST that has not started yet."""
+    local = now.astimezone(_IST)
+    day = local.date()
+    if not (is_trading_day(day) and local.time() < OPEN):
+        day = next_trading_day(day)
+    return datetime.combine(day, OPEN, tzinfo=_IST)

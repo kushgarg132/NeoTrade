@@ -11,6 +11,8 @@ import api, { endpoints, getPreferences } from '../utils/api';
 import { useRefetchOn } from '../hooks/useStream';
 import { cn } from '../utils/cn';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { stockPath } from '../utils/stocks';
+import { sectionsFor, digestLines } from '../utils/todayLayout';
 
 /**
  * Today: the first screen of the day. Can it trade (status strip), where is
@@ -275,6 +277,52 @@ const MarketBackdrop = ({ backdrop }) => {
   );
 };
 
+/** The pre-market or post-close digest, as plain lines under its own title. */
+const Digest = ({ title, text }) => {
+  const lines = digestLines(text).slice(1); // the first line is the title
+  return lines.length === 0 ? null : (
+    <Sheet title={title}>
+      <ul className="space-y-1 text-sm">
+        {lines.map((line, i) => <li key={i}>{line}</li>)}
+      </ul>
+    </Sheet>
+  );
+};
+
+const PicksTop = ({ picks }) => (!picks?.length ? null : (
+  <Sheet
+    title="Top picks"
+    actions={<Link to="/picks" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">All picks ›</Link>}
+  >
+    <ul className="divide-y divide-[var(--rule)]">
+      {picks.map((p) => (
+        <li key={p.symbol} className="flex items-baseline gap-2 py-2 text-sm">
+          <Link to={stockPath(p.symbol)} className="font-semibold hover:text-[var(--stamp)]">{p.symbol}</Link>
+          <span className="flex-1 min-w-0 truncate doc-meta normal-case">{p.label}</span>
+          {p.median != null && <Money value={p.median} percent className="text-sm" />}
+        </li>
+      ))}
+    </ul>
+  </Sheet>
+));
+
+const JournalPrompt = ({ count }) => (!count ? null : (
+  <Link to="/journal" className="sheet flex items-center gap-3 px-3 py-2.5 sm:px-4 min-h-11 text-sm hover:text-[var(--stamp)]">
+    <span className="flex-1">{count} {count === 1 ? 'trade' : 'trades'} to journal</span>
+    <ArrowRight className="w-4 h-4 text-[var(--ink-faint)]" />
+  </Link>
+));
+
+const ClosedNote = ({ nextOpen }) => (
+  <Sheet title="Market closed">
+    <p className="text-sm">
+      Market closed.{nextOpen && ` Opens ${new Date(nextOpen).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+      })} IST.`}
+    </p>
+  </Sheet>
+);
+
 const Today = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -321,6 +369,22 @@ const Today = () => {
     );
   }
 
+  // Which sections show, and in what order, follows the market phase (utils/todayLayout.js).
+  const sections = {
+    beforeOpen: data.premarket && <Digest title="Before the open" text={data.premarket} />,
+    picksTop: <PicksTop picks={data.picks_top} />,
+    doToday: <DoToday items={data.needs_you || []} />,
+    account: <Pulse pulse={data.pulse} failed={!!data.errors?.pulse} now={now}
+                    actions={data.mine_actions || []} total={data.mine_actions_total || 0} onChanged={load} />,
+    aiActivity: <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />,
+    markets: <MarketBackdrop backdrop={data.backdrop} />,
+    afterClose: data.postclose && <Digest title="After the close" text={data.postclose} />,
+    journalPrompt: <JournalPrompt count={data.unjournaled} />,
+    scoreboard: (data.scoreboard || data.errors?.scoreboard) && <Scoreboard board={data.scoreboard} />,
+    closedNote: <ClosedNote nextOpen={data.next_open} />,
+  };
+  const ids = sectionsFor(data.phase);
+
   return (
     <Layout>
       {/* Desktop: what needs deciding and the money on the left, the market as context on the right. */}
@@ -329,14 +393,10 @@ const Today = () => {
         <SetupChecklist setup={data.setup} />
         <div className="space-y-3 sm:space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-4 lg:items-start">
           <div className="space-y-3 sm:space-y-4">
-            <Pulse pulse={data.pulse} failed={!!data.errors?.pulse} now={now}
-                   actions={data.mine_actions || []} total={data.mine_actions_total || 0} onChanged={load} />
-            <DoToday items={data.needs_you || []} />
-            {(data.scoreboard || data.errors?.scoreboard) && <Scoreboard board={data.scoreboard} />}
-            <AiActivity rows={data.ai_activity} onStop={stop} autopilotOn={autopilotOn} />
+            {ids.filter((id) => id !== 'markets').map((id) => <React.Fragment key={id}>{sections[id]}</React.Fragment>)}
           </div>
           <div className="space-y-3 sm:space-y-4">
-            <MarketBackdrop backdrop={data.backdrop} />
+            {ids.includes('markets') && sections.markets}
           </div>
         </div>
       </div>

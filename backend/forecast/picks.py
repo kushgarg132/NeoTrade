@@ -85,6 +85,11 @@ def score(t: dict, pick: dict) -> Optional[dict]:
             "won": net > 0, "beat_nifty": net > nifty}
 
 
+def rank_key(p: dict) -> tuple:
+    """Best first when sorted with reverse=True (the Picks page order)."""
+    return p["median_excess"] * p["p_beat_nifty"], p["strength"]
+
+
 def forward(scored: list[dict]) -> dict:
     """Predicted P(up) in 10-point buckets against the realised win rate."""
     buckets: dict[float, list] = {}

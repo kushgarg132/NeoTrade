@@ -4,6 +4,7 @@ import asyncio
 from datetime import date, datetime, timezone
 
 import pandas as pd
+import pytest
 from mongomock_motor import AsyncMongoMockClient
 
 from backend import scheduler
@@ -92,3 +93,20 @@ async def test_the_daily_pass_does_not_run_on_a_holiday(monkeypatch):
     except (StopIteration, RuntimeError):  # next() on a spent iterator inside a coroutine
         pass
     assert runs == [1]  # Tuesday skipped (the holiday), Wednesday ran
+
+
+@pytest.mark.parametrize("at,phase", [
+    (datetime(2026, 10, 19, 9, 14, tzinfo=IST), "pre"),
+    (datetime(2026, 10, 19, 9, 15, tzinfo=IST), "session"),
+    (datetime(2026, 10, 19, 15, 29, tzinfo=IST), "session"),
+    (datetime(2026, 10, 19, 15, 30, tzinfo=IST), "post"),
+    (datetime(2026, 10, 24, 11, 0, tzinfo=IST), "closed"),   # Saturday
+    (datetime(2026, 10, 20, 10, 0, tzinfo=IST), "closed"),   # NSE holiday
+])
+def test_market_phase(at, phase):
+    assert cal.market_phase(at) == phase
+
+
+def test_next_open_skips_the_holiday():
+    assert cal.next_open(datetime(2026, 10, 19, 16, 0, tzinfo=IST)) == datetime(2026, 10, 21, 9, 15, tzinfo=IST)
+    assert cal.next_open(datetime(2026, 10, 19, 8, 0, tzinfo=IST)) == datetime(2026, 10, 19, 9, 15, tzinfo=IST)
