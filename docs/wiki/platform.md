@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 54813ea
+verified_at: b62529e
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -48,7 +48,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/marks.py` | best-effort current prices (Redis `quote:` then yfinance) | `mark_prices`, `cached_quotes`, `store_quotes` |
 | `backend/analytics.py` | P&L cards and the scorecard maths | `compute_pnl`, `compute_scorecard` |
 | `backend/routers/*.py` | HTTP handlers (map below) | one module per area |
-| `docker-compose.yml`, `backend/Dockerfile`, `backend/requirements.txt` | runtime image and stack; pinned SDKs `upstox-python-sdk==2.30.0`, `aiogram==3.31.0` (caps pydantic below 2.14) | services `backend`, `ingest` (no frontend service; Vercel serves it) |
+| `docker-compose.yml`, `backend/Dockerfile`, `backend/requirements.txt` | runtime image and stack; pinned SDKs `upstox-python-sdk==2.30.0`, `empyrical-reloaded==0.7.0` (backend/lab/metrics.py), `aiogram==3.31.0` (caps pydantic below 2.14) | services `backend`, `ingest` (no frontend service; Vercel serves it) |
 | `.github/workflows/ci.yml`, `deploy-backend.yml` | CI and push-to-deploy caller | see Deploy |
 
 Router modules by area (handlers in the table): `auth`, `settings` (prefs, strategies, OmniRoute admin, broker creds), `trading`, `suggestions`, `orders`, `chat_actions`, `analytics`, `broker`, `journal`, `guardrails`, `portfolio`, `mine`, `today`, `plan`, `picks`, `profile`, `watchlist`, `options`, `market_data`, `agents`. `backend/__init__.py` is a one-line package marker.

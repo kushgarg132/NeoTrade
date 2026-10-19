@@ -30,7 +30,8 @@ from backend.engine.execution.costs import calculate_indian_costs
 from backend.engine.session import IST
 from backend.factor.validate import deflated_sharpe
 from backend.lab.assumptions import DEFAULT
-from backend.learning.retune import ACCOUNT, MIN_DSR, _at, _daily, _sharpe
+from backend.lab.metrics import daily_returns
+from backend.learning.retune import ACCOUNT, MIN_DSR, _at, _sharpe
 from backend.risk.backtest_gate import (LOOKBACK_DAYS, MAX_DRAWDOWN, MIN_PROFIT_FACTOR, MIN_TRADES, MIN_WINDOW_DAYS,
                                         BacktestGateStore, passes_gate)
 from backend.strategies.blocks.vocab import EXITS, FILTERS, SETUPS, SWING_EXITS, SWING_FILTERS, SWING_SETUPS
@@ -258,7 +259,7 @@ async def _test(db, doc: dict, backtest, kwargs: dict, now: datetime) -> tuple[s
     r = await backtest(strategy, start, end, account)
     if swing:
         r = _since(r, cut, account["account_size"])
-    daily = _daily(r.trades, cut, end) * (ACCOUNT / account["account_size"])  # a fraction of the account that was sized
+    daily = daily_returns(r.trades, cut, end, ACCOUNT) * (ACCOUNT / account["account_size"])  # a fraction of the account that was sized
     sharpe = _sharpe(daily)
     finite = math.isfinite(sharpe) and math.isfinite(float(daily.to_numpy().sum()))  # _sharpe maps NaN to 0
     sharpe = sharpe if finite else None  # never stored: it would poison every later trial count

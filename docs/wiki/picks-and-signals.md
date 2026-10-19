@@ -1,6 +1,6 @@
 ---
 page: picks-and-signals
-covers: [backend/forecast/**, backend/factor/**, backend/lab/splits.py, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
+covers: [backend/lab/metrics.py, backend/forecast/**, backend/factor/**, backend/lab/splits.py, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
 verified_at: b62529e
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
@@ -27,7 +27,7 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 | backend/forecast/research/bandit_experiment_tool.py | Research only, not wired: LinUCB/Thompson sizing (0/0.5/1) and exit (horizon vs ATR trail 1.5/2/3) over Picks events; failed its bar 2026-10-18 (fixed rule +0.91% vs bandits +0.68-0.82%), trailing stops lost every year | `bandit_experiment_tool.py::event_table`, `::walk_forward`, `::EXITS` |
 | backend/routers/picks.py | `/picks` admin-only API | `routers/picks.py::router`, `::picks_today`, `::picks_history`; order = `forecast/picks.py::rank_key` (also used by `/today` `picks_top`) |
 | backend/factor/model.py | Pure momentum + low-vol scoring, selection with buffer, inverse-vol weights, trend/vol exposure | `factor/model.py::Params`, `::scores`, `::select`, `::weights`, `::exposure`, `::target_book`, `::volatility`, `::YEAR/HALF/MONTH` |
-| backend/factor/backtest.py | Daily MTM backtest: decide on close, trade next close, real charges + slippage (`simulate(..., ex=lab.assumptions.DAILY)`) | `factor/backtest.py::simulate`, `::_trade`, `::performance`, `::rebalance_days`, `::equal_weight`, `::buy_and_hold`, `::Result`, `::RISK_OFF_YIELD`=0.065 |
+| backend/factor/backtest.py | Daily MTM backtest: decide on close, trade next close, real charges + slippage (`simulate(..., ex=lab.assumptions.DAILY)`) | `factor/backtest.py::simulate`, `::_trade`, `::performance` (adds `summary`), `::rebalance_days`, `::equal_weight`, `::buy_and_hold`, `::Result`, `::RISK_OFF_YIELD`=0.065 |
 | backend/lab/splits.py | Shared walk-forward folds: one per calendar test year, optional rolling window, purge/embargo trading days | `splits.py::Fold`, `::yearly_folds` |
 | backend/factor/validate.py | Walk-forward variant selection (folds from `lab.splits.yearly_folds`, rolling `in_sample_years` window) + deflated Sharpe | `factor/validate.py::grid`, `::walk_forward`, `::deflated_sharpe`, `::WalkForward`, `::TRIALS_TRIED`=16 |
 | backend/factor/report.py | CLI `python -m backend.factor.report [--save]`: OOS verdict vs benchmarks | `factor/report.py::verdict`, `::run`, `::_save`, `::DSR_THRESHOLD`, `::MIN_OOS_YEARS`=8 |
@@ -46,7 +46,7 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 | backend/routers/suggestions.py | `/suggestions` inbox API | `routers/suggestions.py::scan_now`, `::list_suggestions`, `::reject_suggestion`, `::approve_suggestion_live`, `::_approve_equity_live`, `::_require_strategy` |
 | backend/learning/attribution.py | Pure: closed trades grouped by all/regime/reason/strength, shrunk expectancy | `attribution.py::attribute`, `::regime_on`, `::shrunk`, `::net`, `::MIN_TRADES`=10, `::PRIOR_TRADES`=10, `::STRENGTH_BUCKETS` |
 | backend/learning/adapt.py | Nightly bounded rules (pause/floor/regime) + `LearnedRules` read by the runner | `adapt.py::learn`, `::decide`, `::load_rules`, `::LearnedRules.blocks`, `::_closed_trades`, `::PAUSE_AFTER`=30, `::FLOOR_STEP`=0.05, `::FLOOR_CAP`=0.8 |
-| backend/learning/retune.py | Monthly param re-tune in a `nice` subprocess | `retune.py::retune_strategy`, `::run_all`, `::current_params`, `::start_if_due`, `::variant`, `::_daily`, `::_Memo`, `::MIN_DSR`=0.95, `::WINDOW_DAYS` |
+| backend/learning/retune.py | Monthly param re-tune in a `nice` subprocess | `retune.py::retune_strategy`, `::run_all`, `::current_params`, `::start_if_due`, `::variant`, `::_sharpe`, `lab/metrics.py::daily_returns` (was `_daily`), `::summary` (empyrical metrics), `::_Memo`, `::MIN_DSR`=0.95, `::WINDOW_DAYS` |
 | backend/learning/hypotheses.py | LLM proposes param ideas; queued, tested like re-tune variants | `hypotheses.py::propose`, `::validate`, `::test_queued`, `::BOUND`=4.0, `::MAX_PER_RUN`=3 |
 | backend/learning/library.py | Strategy library cards (card + gate + paper + learned + stats) | `library.py::catalog`, `::strategy_names`, `::_strategies` |
 | backend/learning/report.py | Learning snapshot + Friday Telegram note | `report.py::snapshot`, `::weekly_text`, `::facts` |
