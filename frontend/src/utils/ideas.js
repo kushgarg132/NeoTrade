@@ -30,18 +30,38 @@ export const ideaFromSuggestion = (s) => {
   };
 };
 
-export const ideaFromPick = (p, setup) => ({
-  id: `p-${p._id}`, kind: 'p', symbol: p.symbol, side: 'BUY',
-  setup: p.label, horizon: p.horizon,
-  headline: { label: 'median', value: p.expected?.median ?? null },
-  badge: { source: 'picks', name: p.setup },
-  entry: p.entry_ref, stop: null, target: null, qty: null, notional: null, risk: null,
-  reasons: [], thesis: null, why: p.explanation || null,
-  range: p.expected ? { p10: p.expected.p10, median: p.expected.median, p90: p.expected.p90 } : null,
-  pUp: p.p_up, pBeat: p.p_beat_nifty, pastN: p.n,
-  oosExcess: setup?.walk_forward?.oos_excess ?? null, oosN: setup?.walk_forward?.oos_n ?? null,
-  noEdge: p.edge === false, decided: false,
-});
+export const ideaFromPick = (p, setup) => {
+  const ex = p.expected?.excess;
+  const exMedian = ex?.median ?? p.median_excess ?? null;
+  return {
+    id: `p-${p._id}`, kind: 'p', symbol: p.symbol, side: 'BUY',
+    setup: p.label, horizon: p.horizon,
+    headline: exMedian != null ? { label: 'vs NIFTY', value: exMedian } : { label: 'median', value: p.expected?.median ?? null },
+    badge: { source: 'picks', name: p.setup },
+    entry: p.entry_ref, stop: null, target: null, qty: null, notional: null, risk: null,
+    reasons: [], thesis: null, why: p.explanation || null,
+    range: p.expected ? { p10: p.expected.p10, median: p.expected.median, p90: p.expected.p90 } : null,
+    excessRange: ex ? { p10: ex.p10, median: ex.median, p90: ex.p90 } : null,
+    forecast: p.forecast || null, similarN: p.similar_n ?? null, features: describeFeatures(p.features),
+    pUp: p.p_up, pBeat: p.p_beat_nifty, pastN: p.n,
+    oosExcess: setup?.walk_forward?.oos_excess ?? null, oosN: setup?.walk_forward?.oos_n ?? null,
+    noEdge: p.edge === false, decided: false,
+  };
+};
+
+/** The six similarity features of a pick in plain words (missing values are skipped). */
+export const describeFeatures = (f) => {
+  if (!f) return [];
+  const out = [];
+  const add = (v, rules) => { if (typeof v === 'number') out.push(rules.find(([t]) => v > t)[1]); };
+  add(f.dist_high, [[-0.03, 'near its 52-week high'], [-0.15, 'a bit below its 52-week high'], [-Infinity, 'well below its 52-week high']]);
+  add(f.vol60, [[0.025, 'more volatile than usual'], [0.015, 'normal volatility'], [-Infinity, 'calmer than usual']]);
+  add(f.mom, [[0.1, 'strong momentum'], [-0.05, 'flat momentum'], [-Infinity, 'losing momentum']]);
+  add(f.rel20, [[0.02, 'beating NIFTY over the last month'], [-0.02, 'in line with NIFTY lately'], [-Infinity, 'lagging NIFTY over the last month']]);
+  add(f.strength, [[0.5, 'strong signal today'], [-0.5, 'average signal today'], [-Infinity, 'weak signal today']]);
+  add(f.regime, [[0.5, 'market in an uptrend'], [-0.5, 'market sideways'], [-Infinity, 'market in a downtrend']]);
+  return out;
+};
 
 /** Positions (0-100) of p10 / median / p90 and the zero line on a track that always contains zero. */
 export const rangeBar = (p10, median, p90) => {

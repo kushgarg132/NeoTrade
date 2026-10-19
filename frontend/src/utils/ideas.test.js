@@ -51,3 +51,13 @@ test('groupHoldingActions groups exits under one title, in order', () => {
   const g = groupHoldingActions([{ kind: 'stop_hit' }, { kind: 'bad_news' }, { kind: 'target_hit' }, { kind: 'idea' }]);
   assert.deepEqual(g.map((x) => [x.title, x.items.length]), [['Exit alerts', 2], ['Bad news', 1]]);
 });
+test('pick with per-stock forecast headlines excess and describes features', () => {
+  const v = ideaFromPick({ ...pick, forecast: 'similar', similar_n: 150, expected: { ...pick.expected, excess: { p10: -0.05, median: 0.015, p90: 0.07 } },
+    features: { dist_high: -0.01, vol60: 0.01, mom: 0.2, rel20: 0.05, strength: 1, regime: 1 } });
+  assert.equal(v.headline.value, 0.015);
+  assert.equal(v.headline.label, 'vs NIFTY');
+  assert.equal(v.similarN, 150);
+  assert.equal(v.features[0], 'near its 52-week high');
+  assert.ok(v.features.includes('calmer than usual'));
+  assert.deepEqual(ideaFromPick(pick).features, []);
+});
