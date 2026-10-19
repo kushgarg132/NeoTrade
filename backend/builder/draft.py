@@ -30,7 +30,7 @@ from backend.engine.execution.costs import calculate_indian_costs
 from backend.engine.session import IST
 from backend.factor.validate import deflated_sharpe
 from backend.lab.assumptions import DEFAULT
-from backend.lab.metrics import daily_returns
+from backend.lab.metrics import daily_returns, summary
 from backend.learning.retune import ACCOUNT, MIN_DSR, _at, _sharpe
 from backend.risk.backtest_gate import (LOOKBACK_DAYS, MAX_DRAWDOWN, MIN_PROFIT_FACTOR, MIN_TRADES, MIN_WINDOW_DAYS,
                                         BacktestGateStore, passes_gate)
@@ -283,7 +283,8 @@ async def _test(db, doc: dict, backtest, kwargs: dict, now: datetime) -> tuple[s
     fields = {"sharpe": sharpe, "trial_history": history, "trials": len(trials), "tested_at": now, "metrics": {
         "year": {"trades": r.total_trades, "pf": round(r.profit_factor, 2), "dd": round(r.max_drawdown, 4),
                  "net": round(r.total_pnl, 2), "win_rate": round(r.win_rate, 4)},
-        "holdout": {"trades": len(holdout), "net": hold_net}}}
+        "holdout": {"trades": len(holdout), "net": hold_net},
+        "summary": summary(daily)}}  # CAGR / max DD for Lab > Runs
     await BacktestGateStore(db).record(strategy.spec.name, r)
     await _record_run(db, doc, fields, start, end)
     if not finite:

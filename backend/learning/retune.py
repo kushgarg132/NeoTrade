@@ -28,7 +28,7 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from backend.factor.validate import deflated_sharpe
-from backend.lab.metrics import daily_returns
+from backend.lab.metrics import daily_returns, summary
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +92,7 @@ async def retune_strategy(strategy, backtest, current: dict, start: datetime, sp
         trades = [t for t in result.trades if _at(t) >= split]
         out[label] = (daily_returns(trades, split, end, ACCOUNT), trades)
     doc["test"] = {label: _summary(r, t) for label, (r, t) in out.items()}
+    doc["summary"] = summary(out["best"][0])  # CAGR / max DD for Lab > Runs
     best_net, current_net = doc["test"]["best"]["net"], doc["test"]["current"]["net"]
     if best_net <= max(current_net, 0.0):
         return {**doc, "reason": f"out of sample it made ₹{best_net:,.0f} against ₹{current_net:,.0f} for the current params"}
@@ -153,7 +154,7 @@ async def _record_run(db, name: str, doc: dict, start: datetime, end: datetime) 
             kind="engine", name=f"retune:{name}", config={"window_days": (end - start).days}, execution=DEFAULT,
             window=(start.date(), end.date()), fingerprint=None, folds=[],
             metrics={"accepted": doc.get("accepted"), "reason": doc.get("reason"), "train": doc.get("train"),
-                     "test": doc.get("test")})
+                     "test": doc.get("test"), **({"summary": doc["summary"]} if doc.get("summary") else {})})
     except Exception as exc:
         logger.warning("lab run for retune %s not recorded: %s", name, exc)
 
