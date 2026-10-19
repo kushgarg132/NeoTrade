@@ -384,6 +384,27 @@ scored from there to the close; without it the scorer falls back to the day's op
 NIFTY move leak into excess. Option entries are not recorded. A suggestion is named after its strategy.
 The scorecard is cached for 60 seconds.
 
+## ML ranking (research, admin runs by hand)
+
+Does a LightGBM model on price and volume features rank stocks better than the Picks momentum rule?
+`backend/ml/features.py::long_table` builds one row per stock every 5th day (24 backward-looking
+features; label = net return entering t+1's open and leaving at the close of t+1+H, 10 bps slippage
+and CNC charges, `lab/assumptions.py::round_trip_return`; NIFTY over the same window). Per horizon
+(20 and 60 days) `backend/ml/evaluate.py::evaluate_table` walks forward one calendar year at a time
+(`lab/splits.py::yearly_folds`, 3 training years minimum, H+1 days purged, and a training row must
+have ended before the test year starts), fits a regressor on excess return and a classifier on
+P(up), and measures rank IC per year, Brier skill against the training base rate, and the top
+decile's mean net return per pick against the same decile of `momentum_vol_60`'s score.
+
+**The bar** (`evaluate.py::passes`): rank IC above 0 in every test year, IC t-stat above 2 (monthly
+means), top decile beating momentum after costs, and Brier skill above 0. Miss any one and the
+model is not wired anywhere; the reasons name each miss.
+
+Run it inside the jobs container: `docker exec neotrade-jobs nice python -m backend.ml.evaluate
+[--horizon 20]`. Each horizon leaves a `lab_runs` row (kind `ml`, name `lgbm_h<H>`), passed or not,
+with two caveats attached: no point-in-time NIFTY 200 membership (survivorship, +4-8% a year) and no
+fundamentals history. `python -m backend.lab rerun` does not re-run `ml` runs; this command is the rerun.
+
 ## Reproducing a run
 
 Every simulator leaves a `lab_runs` record (`backend/lab/runs.py::LabRunStore`). To check one still
