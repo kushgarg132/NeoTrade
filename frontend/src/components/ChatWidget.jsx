@@ -23,8 +23,8 @@ const OPENING = {
 
 /** Questions worth one tap, by the page the user is on. */
 const SUGGESTED = [
-  ['/mine/holdings', ['What should I trim?', 'Explain my biggest risk', 'What does the plan say to add?']],
-  ['/mine', ['How did I do this month?', "What's my costliest habit?"]],
+  ['/portfolio/holdings', ['What should I trim?', 'Explain my biggest risk', 'What does the plan say to add?']],
+  ['/portfolio', ['How did I do this month?', "What's my costliest habit?"]],
   ['/ai', ['Is the engine running?', 'Which proposal is strongest?', 'How far is any strategy from going live?']],
   ['/settings', ['What are my limits?', 'Did any guardrail trip today?']],
   ['/profile', ['What do you remember about me?', 'Does my portfolio fit my risk appetite?']],
@@ -61,7 +61,7 @@ const ActionCard = ({ action, onUpdate }) => {
       const refusal = kind !== 'cancel' && action.token && tokenRefusal(err);
       if (refusal) return onUpdate({ state: 'PROPOSED', note: refusal, token: undefined, until: undefined });
       // No response at all: the confirm may have run. Never call that a failure.
-      if (kind !== 'cancel' && !err?.response) onUpdate({ state: 'UNKNOWN', note: 'No answer from the server. The order may have gone through: check Mine › Journal before trying again.' });
+      if (kind !== 'cancel' && !err?.response) onUpdate({ state: 'UNKNOWN', note: 'No answer from the server. The order may have gone through: check Journal before trying again.' });
       else onUpdate({ state: 'FAILED', note: err?.response?.data?.detail || 'That did not go through.' });
     } finally {
       setBusy(false);
@@ -165,8 +165,8 @@ const ChatWidget = () => {
     setFollowups([]);
 
     let answer = '';
-    // A stock page carries its symbol in the URL (/research/stock/:symbol).
-    const symbol = matchPath('/research/stock/:symbol', location.pathname)?.params.symbol || location.state?.symbol;
+    // A stock page carries its symbol in the URL (/stock/:symbol).
+    const symbol = matchPath('/stock/:symbol', location.pathname)?.params.symbol || location.state?.symbol;
     const context = { page: location.pathname, symbol };
     const request = stream.request('chat', { message: text, history, context }, (event_) => {
       if (event_.event === 'suggestions') {

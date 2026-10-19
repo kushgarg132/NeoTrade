@@ -1,6 +1,8 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Sun, Moon, MessageSquare, Eye, EyeOff } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Sun, Moon, MessageSquare, Eye, EyeOff, Search, Settings } from 'lucide-react';
+import SmartSearch from '../dashboard/SmartSearch';
+import { stockPath } from '../../utils/stocks';
 import { usePrivacy, togglePrivacy } from '../../hooks/usePrivacy';
 import { useStreamStatus } from '../../hooks/useStream';
 import { useTheme } from '../../context/useTheme';
@@ -63,6 +65,12 @@ const ICON_BUTTON =
 const Masthead = ({ noteNumber }) => {
   const { theme, toggle } = useTheme();
   const hidden = usePrivacy();
+  const navigate = useNavigate();
+  const [searching, setSearching] = useState(false);
+  const openStock = (symbol) => {
+    setSearching(false);
+    navigate(stockPath(symbol));
+  };
 
   return (
     <header
@@ -81,6 +89,16 @@ const Masthead = ({ noteNumber }) => {
         </Link>
 
         <div className="flex items-center gap-2 shrink-0">
+          <SmartSearch compact className="hidden sm:block w-44 lg:w-60" onSearch={openStock} />
+          <button
+            type="button"
+            onClick={() => setSearching((v) => !v)}
+            className={cn(ICON_BUTTON, 'sm:hidden', searching && 'text-[var(--stamp)] border-[var(--stamp)]')}
+            aria-expanded={searching}
+            aria-label="Find a stock"
+          >
+            <Search className="w-4 h-4" />
+          </button>
           <FeedStatus className="mr-1" />
           <button type="button" onClick={toggleMarginNote} className={cn(ICON_BUTTON, 'lg:hidden')} aria-label="Open the margin note">
             <MessageSquare className="w-4 h-4" />
@@ -102,8 +120,16 @@ const Masthead = ({ noteNumber }) => {
           >
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
+          <Link to="/settings" className={ICON_BUTTON} aria-label="Settings">
+            <Settings className="w-4 h-4" />
+          </Link>
         </div>
       </div>
+      {searching && (
+        <div className="sm:hidden border-t border-[var(--rule)] px-3 py-2">
+          <SmartSearch compact autoFocus onSearch={openStock} />
+        </div>
+      )}
     </header>
   );
 };

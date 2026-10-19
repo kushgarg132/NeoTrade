@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
-import { RESEARCH_TABS } from '../components/layout/sections';
+import { PORTFOLIO_TABS } from '../components/layout/sections';
 import { Sheet, Tabs, Empty, Ruling } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
@@ -84,7 +84,7 @@ const News = () => {
   return (
     <Layout>
       <div className="space-y-4">
-        <SectionTabs tabs={RESEARCH_TABS} label="Research" />
+        <SectionTabs tabs={PORTFOLIO_TABS} label="Portfolio" />
         <Sheet
           title="News"
           actions={

@@ -12,7 +12,7 @@ import StrategyRow, { GO_LIVE_RULE, StrategyFold } from './StrategyRow';
 /**
  * The engine's standing instructions: how large it may trade and which
  * strategies stay on paper. Its on/off switches (daily runs, the 4 PM scan)
- * are on AI › Settings (components/settings/EngineSwitches.jsx). The daily loss limit is
+ * are on Lab › Autopilot limits (components/settings/EngineSwitches.jsx). The daily loss limit is
  * not edited here -- it guards the real broker account too, so it belongs to
  * Guardrails in Settings; this sheet only states it.
  */
@@ -86,7 +86,7 @@ const EngineSettings = () => {
         <p className="pt-3 doc-meta normal-case">
           Sizing risks up to 1% of {formatCurrency(prefs.account_size)} per trade at full
           conviction, scaled down as conviction falls. One set for paper and live:{' '}
-          <Link to="/ai/settings" className="underline">change them on AI › Settings</Link>, where the
+          <Link to="/lab/limits" className="underline">change them on Lab › Autopilot limits</Link>, where the
           engine's daily runs and scan are switched on and off too.
         </p>
       </Sheet>

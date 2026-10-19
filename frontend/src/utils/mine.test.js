@@ -16,13 +16,13 @@ test('taxYears runs from the current FY back to 2025 only (I5)', () => {
 
 test('actionTarget maps every type', () => {
   const t = (action) => actionTarget({ symbol: 'TCS', action });
-  assert.deepEqual(t({ type: 'stock' }), { to: '/mine/stock/TCS' });
-  assert.deepEqual(t({ type: 'tax' }), { to: '/mine/tax' });
-  assert.deepEqual(t({ type: 'rebalance' }), { to: '/mine/holdings?plan=1' });
+  assert.deepEqual(t({ type: 'stock' }), { to: '/stock/TCS' });
+  assert.deepEqual(t({ type: 'tax' }), { to: '/portfolio/tax' });
+  assert.deepEqual(t({ type: 'rebalance' }), { to: '/portfolio/holdings?plan=1' });
   assert.deepEqual(t({ type: 'ticket', side: 'SELL', quantity: 5, price: 90 }), {
     ticket: { symbol: 'TCS', side: 'SELL', quantity: 5, limitPrice: 90 },
   });
-  assert.deepEqual(t({ type: 'idea', suggestion_id: 'abc' }), { to: '/mine', idea: 'abc' });
+  assert.deepEqual(t({ type: 'idea', suggestion_id: 'abc' }), { to: '/portfolio', idea: 'abc' });
   assert.deepEqual(t({ type: 'none' }), {});
 });
 

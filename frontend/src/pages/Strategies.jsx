@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import Layout from '../components/Layout';
 import PaperShell from '../components/paper/PaperShell';
+import { LAB_TABS } from '../components/layout/sections';
 import Scorecard from '../components/paper/Scorecard';
 import TradeLedger from '../components/dashboard/TradeLedger';
 import LearningSheet from '../components/journal/LearningSheet';
@@ -149,11 +150,11 @@ const Strategies = () => {
 
   return (
     <Layout>
-      <PaperShell>
+      <PaperShell tabs={LAB_TABS} label="Lab">
         <Sheet
           title="Strategies"
           meta={cards ? counts.map(([n, label]) => `${n} ${label}`).join(' · ') : undefined}
-          actions={<Link to="/ai/settings" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Live switches ›</Link>}
+          actions={<Link to="/lab/limits" className="field-label text-[var(--stamp)] hover:underline min-h-9 inline-flex items-center">Live switches ›</Link>}
         >
           <Tabs tabs={[{ id: 'INTRADAY', label: 'Intraday' }, { id: 'LONGTERM', label: 'Long-term' }]}
                 active={mode} onSelect={setMode} label="Strategy timeframe" className="static z-auto mb-1" />

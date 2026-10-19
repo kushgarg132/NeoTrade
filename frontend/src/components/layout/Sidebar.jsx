@@ -5,6 +5,7 @@ import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
 import { SECTIONS, sectionActive, sectionCount } from './sections';
 import { usePendingCount } from '../../context/pendingContext';
+import { visibleSections } from '../../utils/nav';
 import { Avatar } from '../common/Avatar';
 
 const Sidebar = ({ attention = 0 }) => {
@@ -22,7 +23,7 @@ const Sidebar = ({ attention = 0 }) => {
       </div>
 
       <nav className="flex-1 py-2 overflow-y-auto" aria-label="Sections">
-        {SECTIONS.map((item) => {
+        {visibleSections(SECTIONS, user?.role === 'admin').map((item) => {
           const isActive = sectionActive(item, pathname);
           return (
           <React.Fragment key={item.path}>

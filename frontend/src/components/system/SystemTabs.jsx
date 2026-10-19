@@ -7,9 +7,9 @@ import { HANDBOOK_TABS } from '../../utils/handbook';
 const SystemTabs = ({ active, onSelect }) => {
   const navigate = useNavigate();
   const select = (id) => {
-    if (id === 'future') navigate('/system/future');
+    if (id === 'future') navigate('/lab/backlog');
     else if (onSelect) onSelect(id);
-    else navigate(id === 'system' ? '/system' : `/system?tab=${id}`);
+    else navigate(id === 'system' ? '/lab/handbook' : `/lab/handbook?tab=${id}`);
   };
   return <Tabs tabs={[...HANDBOOK_TABS, { id: 'future', label: 'Future' }]} active={active} onSelect={select} label="Handbook" />;
 };

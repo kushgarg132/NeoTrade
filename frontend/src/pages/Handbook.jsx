@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import Markdown from '../components/common/Markdown';
+import SectionTabs from '../components/layout/SectionTabs';
+import { LAB_TABS } from '../components/layout/sections';
 import SystemTabs from '../components/system/SystemTabs';
 import LivePanel from '../components/system/LivePanels';
 import { useTab } from '../hooks/useTab';
@@ -43,6 +45,7 @@ const Handbook = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
+        <SectionTabs tabs={LAB_TABS} label="Lab" />
         <SystemTabs active={tab} onSelect={setTab} />
         <article className="min-w-0 sheet px-3 py-3 sm:px-5 sm:py-4 text-sm leading-relaxed">
           {splitLive(DOCS[tab], PANELS).map((part, index) =>

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
+import SectionTabs from '../components/layout/SectionTabs';
+import { PORTFOLIO_TABS } from '../components/layout/sections';
 import { Sheet, Ruling } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { formatDateTime } from '../utils/formatters';
@@ -71,14 +73,15 @@ const Import = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
+        <SectionTabs tabs={PORTFOLIO_TABS} label="Portfolio" />
         <Sheet title="Import your files" meta="No broker needed">
           {!status ? <Ruling rows={3} /> : (
             <div className="space-y-6">
               <section>
                 <h2 className="field-label">Stock trades</h2>
                 <p className="text-sm text-[var(--ink-soft)] mt-1">
-                  Zerodha Console → Reports → Tradebook → download the CSV. Fills the <Link to="/mine/journal" className="underline">Journal</Link> and{' '}
-                  <Link to="/mine/tax" className="underline">Tax</Link>.
+                  Zerodha Console → Reports → Tradebook → download the CSV. Fills the <Link to="/journal" className="underline">Journal</Link> and{' '}
+                  <Link to="/portfolio/tax" className="underline">Tax</Link>.
                   {status.trades ? ` ${status.trades} imported so far.` : ''}
                 </p>
                 <button type="button" className={`${BUTTON} mt-2`} disabled={busy} onClick={() => csvInput.current?.click()}>Choose tradebook CSV</button>
@@ -89,7 +92,7 @@ const Import = () => {
                 <h2 className="field-label">Mutual funds</h2>
                 <p className="text-sm text-[var(--ink-soft)] mt-1">
                   A CAMS or KFintech consolidated statement (CAS), PDF, from camsonline.com or kfintech.com. Shows your funds in{' '}
-                  <Link to="/mine/holdings" className="underline">Holdings</Link>.
+                  <Link to="/portfolio/holdings" className="underline">Holdings</Link>.
                   {status.funds ? ` ${status.funds} fund${status.funds === 1 ? '' : 's'} imported${status.period ? `, statement to ${status.period.to}` : ''}; a new file replaces them.` : ''}
                 </p>
                 <label htmlFor="cas-password" className="field-label block mt-3">PDF password</label>

@@ -3,23 +3,27 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { SECTIONS, sectionActive, sectionCount } from './sections';
 import { usePendingCount } from '../../context/pendingContext';
+import { useAuth } from '../../context/AuthContext';
+import { visibleSections, barColumns } from '../../utils/nav';
 
 /**
- * The phone's primary navigation. Thumb-reachable, five destinations, safe-area
+ * The phone's primary navigation. Thumb-reachable, four to six destinations, safe-area
  * aware — the app is used one-handed during the session, and a hamburger that
  * hides the decisions queue behind a tap is the wrong affordance for that.
  */
 const BottomNav = ({ attention = 0 }) => {
   const { pathname } = useLocation();
   const counts = { attention, pending: usePendingCount() };
+  const { user } = useAuth();
+  const visible = visibleSections(SECTIONS, user?.role === 'admin');
   return (
   <nav
     className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-[var(--rule-strong)] bg-[var(--paper)]"
     style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     aria-label="Sections"
   >
-    <ul className="grid grid-cols-5">
-      {SECTIONS.filter((item) => item.primary).map((item) => {
+    <ul className={cn('grid', barColumns(visible.length))}>
+      {visible.filter((item) => item.primary).map((item) => {
         const isActive = sectionActive(item, pathname);
         return (
         <li key={item.path}>

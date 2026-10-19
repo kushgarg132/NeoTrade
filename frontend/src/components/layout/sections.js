@@ -1,34 +1,36 @@
-import { Sun, Wallet, Bot, Search, Settings } from 'lucide-react';
+import { Sun, Sparkles, Bot, Wallet, NotebookPen, FlaskConical } from 'lucide-react';
 
 /**
- * The sections, shared by the desktop index and the phone's bottom bar,
- * around the trader's two accounts (Phase 19): Today (where am I, what do I
- * do), Mine (my own account: holdings, what needs you, tax, journal), AI (the account
- * the app runs, paper until a strategy earns live), Research, More (setup).
- * `match` lists the path prefixes a section owns, so its tab stays lit on
- * every page inside it.
+ * The sections, shared by the desktop index and the phone's bottom bar (the
+ * daily workstation): Today (what to do now), Picks and Lab (admin only), AI
+ * (the account the app runs), Portfolio (my holdings, tax, news, watchlist),
+ * Journal (trades, habits, guardrails). `match` lists the path prefixes a
+ * section owns, so its tab stays lit on every page inside it.
  */
 export const SECTIONS = [
   // Badges: Today counts what needs you outside ideas (logins, waiting
-  // cards, interrupted approvals, guardrail alerts); Mine counts its Needs-you list.
+  // cards, interrupted approvals, guardrail alerts); Portfolio counts its Needs-you list.
   { icon: Sun, label: 'Today', path: '/', match: ['/'], exact: true, primary: true, counter: 'attention' },
-  { icon: Wallet, label: 'Mine', path: '/mine', match: ['/mine'], primary: true, counter: 'pending' },
+  { icon: Sparkles, label: 'Picks', path: '/picks', match: ['/picks'], primary: true, admin: true },
   { icon: Bot, label: 'AI', path: '/ai', match: ['/ai'], primary: true },
-  { icon: Search, label: 'Research', path: '/research', match: ['/research'], primary: true },
-  { icon: Settings, label: 'More', path: '/settings', match: ['/settings', '/profile', '/system'], primary: true },
+  { icon: Wallet, label: 'Portfolio', path: '/portfolio', match: ['/portfolio'], primary: true, counter: 'pending' },
+  { icon: NotebookPen, label: 'Journal', path: '/journal', match: ['/journal'], primary: true },
+  { icon: FlaskConical, label: 'Lab', path: '/lab', match: ['/lab'], primary: true, admin: true },
 ];
 
-/** The badge number for a section: `attention` for Today, ideas for Mine. */
+/** The badge number for a section: `attention` for Today, ideas for Portfolio. */
 export const sectionCount = (item, counts) => (item.counter ? counts[item.counter] || 0 : 0);
 
 export const sectionActive = (item, pathname) =>
   item.exact ? pathname === '/' : item.match.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
-export const MINE_TABS = [
-  { to: '/mine', label: 'Overview', end: true, counter: true },
-  { to: '/mine/holdings', label: 'Holdings' },
-  { to: '/mine/tax', label: 'Tax' },
-  { to: '/mine/journal', label: 'Journal' },
+export const PORTFOLIO_TABS = [
+  { to: '/portfolio', label: 'Overview', end: true, counter: true },
+  { to: '/portfolio/holdings', label: 'Holdings' },
+  { to: '/portfolio/tax', label: 'Tax' },
+  { to: '/portfolio/news', label: 'News' },
+  { to: '/portfolio/watchlist', label: 'Watchlist' },
+  { to: '/portfolio/import', label: 'Import' },
 ];
 
 /** The AI account: paper until a strategy passes both gates, then live. */
@@ -36,14 +38,13 @@ export const AI_TABS = [
   { to: '/ai', label: 'Overview', end: true },
   { to: '/ai/activity', label: 'Activity' },
   { to: '/ai/book', label: 'Book' },
-  { to: '/ai/strategies', label: 'Strategies' },
-  { to: '/ai/settings', label: 'Settings' },
 ];
 
-export const RESEARCH_TABS = [
-  { to: '/research', label: 'Search', end: true },
-  { to: '/research/news', label: 'News' },
-  { to: '/research/watchlist', label: 'Watchlist' },
-  // Admin-only until the SEBI RA registration exists (SectionTabs drops it for everyone else).
-  { to: '/research/picks', label: 'Picks', admin: true },
+/** The Lab: frozen and experimental features, admin only. */
+export const LAB_TABS = [
+  { to: '/lab', label: 'Strategies', end: true },
+  { to: '/lab/limits', label: 'Autopilot limits' },
+  { to: '/lab/options', label: 'Options' },
+  { to: '/lab/handbook', label: 'Handbook' },
+  { to: '/lab/backlog', label: 'Backlog' },
 ];

@@ -1,6 +1,5 @@
 import React, { Suspense, lazy, useEffect } from 'react';
-import { Routes, Route, Link, Navigate, useLocation, useNavigationType } from 'react-router-dom';
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+import { Routes, Route, Link, Navigate, useLocation, useNavigationType, useParams } from 'react-router-dom';
 const Strategies = lazy(() => import('./pages/Strategies'));
 const OptionChain = lazy(() => import('./pages/OptionChain'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
@@ -29,6 +28,7 @@ import { Sheet, Empty } from './components/doc/Doc';
 import { useAuth } from './context/AuthContext';
 import { stream } from './lib/ws';
 import RequireAdmin from './components/system/RequireAdmin';
+import { MOVED } from './utils/routes.js';
 
 const NotFound = () => (
   <Layout>
@@ -52,11 +52,21 @@ const Moved = ({ to }) => {
   return <Navigate to={`${to}${search}`} replace />;
 };
 
-/** /journal?tab=patterns|learning now lives under Mine → Habits. */
-const JournalMoved = () => {
+/** /journal?tab=patterns|learning now lives under the Habits tab. */
+const JournalRoute = () => {
   const { search } = useLocation();
-  const tab = new URLSearchParams(search).get('tab');
-  return <Navigate to={['patterns', 'learning'].includes(tab) ? '/mine/journal?tab=habits' : `/mine/journal${search}`} replace />;
+  const params = new URLSearchParams(search);
+  if (['patterns', 'learning'].includes(params.get('tab'))) {
+    return <Navigate to="/journal?tab=habits" replace />;
+  }
+  return <Journal lockedAccount="mine" />;
+};
+
+/** /mine/stock/:symbol and /research/stock/:symbol are now /stock/:symbol. */
+const StockMoved = () => {
+  const { symbol } = useParams();
+  const { search } = useLocation();
+  return <Navigate to={`/stock/${encodeURIComponent(symbol)}${search}`} replace />;
 };
 
 const App = () => {
@@ -100,48 +110,36 @@ const App = () => {
       <Route path="/login" element={<Login />} />
       {/* Today */}
       <Route path="/" element={gated(<Today />)} />
-      {/* Mine: the user's own account -- holdings, ideas for it, trades */}
-      <Route path="/mine" element={gated(<MineOverview />)} />
-      <Route path="/mine/holdings" element={gated(<MineHoldings />)} />
-      <Route path="/mine/tax" element={gated(<MineTax />)} />
-      <Route path="/mine/stock/:symbol" element={gated(<MineStock />)} />
-      <Route path="/mine/journal" element={gated(<Journal lockedAccount="mine" />)} />
-      <Route path="/mine/ideas" element={<Navigate to="/mine" replace />} />
-      <Route path="/mine/trades" element={<Navigate to="/mine/journal" replace />} />
-      <Route path="/mine/habits" element={<Navigate to="/mine/journal?tab=habits" replace />} />
+      {/* Portfolio: the user's own account -- holdings, tax, news, watchlist */}
+      <Route path="/portfolio" element={gated(<MineOverview />)} />
+      <Route path="/portfolio/holdings" element={gated(<MineHoldings />)} />
+      <Route path="/portfolio/tax" element={gated(<MineTax />)} />
+      <Route path="/portfolio/news" element={gated(<News />)} />
+      <Route path="/portfolio/watchlist" element={gated(<Watchlist />)} />
+      <Route path="/portfolio/import" element={gated(<Import />)} />
+      {/* One stock page: position (when held) plus the analysis */}
+      <Route path="/stock/:symbol" element={gated(<MineStock />)} />
+      {/* Journal: trades, habits, guardrails (?tab=) */}
+      <Route path="/journal" element={gated(<JournalRoute />)} />
+      {/* Picks: admin only until the SEBI RA registration exists */}
+      <Route path="/picks" element={gated(<RequireAdmin><Picks /></RequireAdmin>)} />
       {/* AI: the account the app runs, paper until a strategy earns live */}
       <Route path="/ai" element={gated(<AiOverview />)} />
       <Route path="/ai/activity" element={gated(<AiActivity />)} />
       <Route path="/ai/book" element={gated(<Portfolio />)} />
-      <Route path="/ai/strategies" element={gated(<Strategies />)} />
-      <Route path="/ai/settings" element={gated(<AiLimits />)} />
-      {/* Research */}
-      <Route path="/research" element={gated(<Dashboard />)} />
-      <Route path="/research/stock/:symbol" element={gated(<Dashboard />)} />
-      <Route path="/research/news" element={gated(<News />)} />
-      <Route path="/research/watchlist" element={gated(<Watchlist />)} />
-      <Route path="/research/picks" element={gated(<RequireAdmin><Picks /></RequireAdmin>)} />
-      {/* Not a tab (Upstox-only, no F&O trading here): reached from the NIFTY / BANK NIFTY cards. */}
-      <Route path="/research/options" element={gated(<OptionChain />)} />
-      {/* More */}
+      {/* Lab: frozen and experimental features, admin only */}
+      <Route path="/lab" element={gated(<RequireAdmin><Strategies /></RequireAdmin>)} />
+      <Route path="/lab/limits" element={gated(<RequireAdmin><AiLimits /></RequireAdmin>)} />
+      <Route path="/lab/options" element={gated(<RequireAdmin><OptionChain /></RequireAdmin>)} />
+      <Route path="/lab/handbook" element={gated(<RequireAdmin><Handbook /></RequireAdmin>)} />
+      <Route path="/lab/backlog" element={gated(<RequireAdmin><Backlog /></RequireAdmin>)} />
+      {/* Setup */}
       <Route path="/settings" element={gated(<Settings />)} />
       <Route path="/profile" element={gated(<Profile />)} />
-      <Route path="/import" element={gated(<Import />)} />
-      <Route path="/system" element={gated(<RequireAdmin><Handbook /></RequireAdmin>)} />
-      <Route path="/system/future" element={gated(<RequireAdmin><Backlog /></RequireAdmin>)} />
-      {/* Old links and bookmarks follow the move, query string included. */}
-      {[
-        ['/ai/decisions', '/mine'], ['/ai/autopilot', '/ai/settings'], ['/ai/limits', '/ai/settings'],
-        ['/practice', '/ai'], ['/practice/book', '/ai/book'], ['/practice/strategies', '/ai/strategies'],
-        ['/practice/setup', '/ai/settings'], ['/practice/decisions', '/mine'], ['/practice/library', '/ai/strategies'],
-        ['/ai/practice', '/ai'], ['/ai/practice/decisions', '/mine'], ['/ai/practice/book', '/ai/book'],
-        ['/ai/practice/holdings', '/ai/book'], ['/ai/practice/engine', '/ai'], ['/ai/practice/settings', '/ai/settings'],
-        ['/decisions', '/mine'], ['/suggestions', '/mine'], ['/paper', '/ai'], ['/paper/decisions', '/mine'],
-        ['/paper/holdings', '/ai/book'], ['/paper/engine', '/ai'], ['/paper/settings', '/ai/settings'], ['/trading', '/ai'],
-        ['/portfolio', '/mine/holdings'], ['/watchlist', '/research/watchlist'], ['/options', '/research/options'],
-        ['/scanner', '/research'], ['/research/scanner', '/research'],
-      ].map(([from, to]) => <Route key={from} path={from} element={<Moved to={to} />} />)}
-      <Route path="/journal" element={<JournalMoved />} />
+      {/* Old links and bookmarks follow the move in one hop, query string included. */}
+      <Route path="/mine/stock/:symbol" element={<StockMoved />} />
+      <Route path="/research/stock/:symbol" element={<StockMoved />} />
+      {MOVED.map(([from, to]) => <Route key={from} path={from} element={<Moved to={to} />} />)}
       <Route path="*" element={gated(<NotFound />)} />
     </Routes>
   );
