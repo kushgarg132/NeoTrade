@@ -1,56 +1,35 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  CartesianGrid, Bar, ComposedChart, ReferenceLine 
-} from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from '../common/Card';
-import { formatCurrency, formatCompactNumber, formatClock } from '../../utils/formatters';
-import { cn } from '../../utils/cn';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceDot, ReferenceLine } from 'recharts';
 import api, { endpoints } from '../../utils/api';
+import { formatClock, formatCurrency } from '../../utils/formatters';
+import { tradeMarkers } from '../../utils/stock';
 
 const INTRADAY_POLL_MS = 60_000;
+const RANGES = [['1D', 1], ['1M', 22], ['1Y', 252], ['5Y', 1260]]; // trading days; 1D is the intraday feed
 
-const CustomTooltip = ({ active, payload, label, currency }) => {
-  if (active && payload && payload.length) {
-    const p = payload[0].payload;
-    return (
-      <div className="sheet p-3">
-         <p className="text-xs text-muted-foreground mb-1">{label}</p>
-         <div className="space-y-0.5">
-            <div className="flex items-center gap-4 justify-between">
-              <span className="text-sm font-bold text-foreground">{formatCurrency(p.price, currency)}</span>
-              <span className={cn(
-                  "text-xs font-medium",
-                  p.close >= p.open ? "text-emerald-400" : "text-rose-400"
-              )}>
-                  {((p.close - p.open) / p.open * 100).toFixed(2)}%
-              </span>
-            </div>
-            <div className="flex items-center gap-4 justify-between text-xs text-muted-foreground">
-               <span>Vol:</span>
-               <span className="font-mono">{formatCompactNumber(p.volume)}</span>
-            </div>
-         </div>
-      </div>
-    );
-  }
-  return null;
-};
+const short = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-const TradingChart = ({ data, symbol, technicals, className, currency }) => {
-  const [timeframe, setTimeframe] = useState('1Y');
-  // Keyed by symbol, so another stock's candles never show while this one's load.
-  const [loaded, setIntraday] = useState(null);
+// Buys are filled circles, sells hollow squares: identity is never colour alone.
+const Buy = ({ cx, cy }) => <circle cx={cx} cy={cy} r={5} fill="var(--gain)" stroke="var(--surface)" strokeWidth={2} />;
+const Sell = ({ cx, cy }) => <rect x={cx - 4.5} y={cy - 4.5} width={9} height={9} fill="var(--surface)" stroke="var(--loss)" strokeWidth={2} />;
+
+/**
+ * Price chart with range chips. `closes`: [{date:'YYYY-MM-DD', close}] daily series; `trades` your fills;
+ * `thesis` draws target / stop lines. 1D swaps in the latest session's 5-minute candles.
+ */
+const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR' }) => {
+  const [range, setRange] = useState('1Y');
+  const [loaded, setLoaded] = useState(null); // keyed by symbol so another stock's candles never show
+  const isDay = range === '1D';
   const intraday = loaded?.symbol === symbol ? loaded.rows : null;
-  const isDay = timeframe === '1D';
 
-  // 1D: the latest session's 5-minute candles, refreshed each minute.
   useEffect(() => {
     if (!isDay || !symbol) return undefined;
     let gone = false;
-    const load = () => api.get(endpoints.intraday(symbol))
-      .then((res) => !gone && setIntraday({ symbol, rows: res.data }))
-      .catch(() => !gone && setIntraday({ symbol, rows: [] }));
+    const load = () =>
+      api.get(endpoints.intraday(symbol))
+        .then((res) => !gone && setLoaded({ symbol, rows: res.data }))
+        .catch(() => !gone && setLoaded({ symbol, rows: [] }));
     load();
     const timer = setInterval(load, INTRADAY_POLL_MS);
     return () => {
@@ -59,113 +38,82 @@ const TradingChart = ({ data, symbol, technicals, className, currency }) => {
     };
   }, [isDay, symbol]);
 
-  // Filter data based on timeframe
-  const filteredData = React.useMemo(() => {
-    if (isDay) return intraday || [];
-    if (!data) return [];
-    let days = 365;
-    if (timeframe === '1M') days = 22;
-    if (timeframe === '3M') days = 66;
-    if (timeframe === '6M') days = 132;
-    
-    // Slice from the end
-    return data.slice(-days);
-  }, [data, timeframe, isDay, intraday]);
+  const data = useMemo(() => {
+    if (isDay) return (intraday || []).map((r) => ({ date: formatClock(r.timestamp), close: Number(r.close) }));
+    return (closes || []).slice(-RANGES.find(([k]) => k === range)[1]);
+  }, [closes, range, isDay, intraday]);
 
-  // Format data for Recharts
-  const formattedData = filteredData.map(item => ({
-    ...item,
-    date: isDay
-      ? formatClock(item.timestamp)
-      : new Date(item.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
-    price: Number(item.close),
-    volume: Number(item.volume)
-  }));
+  const dots = useMemo(() => {
+    if (isDay) return [];
+    const have = new Set(data.map((d) => d.date));
+    return tradeMarkers(closes, trades).filter((m) => have.has(m.date));
+  }, [closes, trades, data, isDay]);
+
+  const lines = [
+    thesis?.target != null && { y: thesis.target, color: 'var(--gain)', label: `Target ${formatCurrency(thesis.target, currency)}` },
+    thesis?.stop != null && { y: thesis.stop, color: 'var(--loss)', label: `Stop ${formatCurrency(thesis.stop, currency)}` },
+  ].filter(Boolean);
+  const first = data[0]?.close;
+  const last = data.at(-1)?.close;
+  const up = last == null || first == null || last >= first;
 
   return (
-    <Card className={cn("flex flex-col h-[420px]", className)}>
-        <CardHeader className="flex flex-row items-center justify-between">
-            <div className="flex items-center gap-4">
-                <CardTitle>Price action</CardTitle>
-                <div className="flex border border-[var(--rule-strong)]">
-                    {[...(symbol ? ['1D'] : []), '1M', '3M', '6M', '1Y'].map(tf => (
-                         <button
-                            key={tf}
-                            onClick={() => setTimeframe(tf)}
-                            className={cn(
-                                "px-2.5 py-1 font-[family-name:var(--font-narrow)] text-[0.6875rem] font-semibold uppercase tracking-[0.11em] transition-colors",
-                                timeframe === tf
-                                    ? "bg-[var(--ink)] text-[var(--paper)]"
-                                    : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
-                            )}
-                        >
-                            {tf}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        </CardHeader>
-
-        <CardContent className="flex-1 p-0 relative">
-            {formattedData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={formattedData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
-                        <defs>
-                            <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="var(--stamp)" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="var(--stamp)" stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--rule)" vertical={false} />
-                        <XAxis 
-                            dataKey="date" 
-                            stroke="var(--ink-faint)"
-                            tick={{ fontSize: 11 }}
-                            tickLine={false}
-                            axisLine={false}
-                            minTickGap={30}
-                        />
-                        <YAxis 
-                            yAxisId="right"
-                            orientation="right"
-                            domain={['auto', 'auto']}
-                            stroke="var(--ink-faint)"
-                            tick={{ fontSize: 11 }}
-                            tickLine={false}
-                            axisLine={false}
-                            tickFormatter={(val) => {
-                                const locale = (currency === 'INR') ? 'en-IN' : 'en-US';
-                                return new Intl.NumberFormat(locale, { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 0 }).format(val);
-                            }}
-                            width={80}
-                        />
-                        <Tooltip content={(props) => <CustomTooltip {...props} currency={currency} />} cursor={{ stroke: 'var(--rule-strong)', strokeWidth: 1 }} />
-                        
-                        {technicals?.nearest_support && (
-                             <ReferenceLine yAxisId="right" y={technicals.nearest_support} stroke="var(--gain)" strokeDasharray="5 5" label={{ value: 'SUP', fill: 'var(--gain)', fontSize: 10, position: 'insideLeft' }} />
-                        )}
-                        {technicals?.nearest_resistance && (
-                             <ReferenceLine yAxisId="right" y={technicals.nearest_resistance} stroke="var(--loss)" strokeDasharray="5 5" label={{ value: 'RES', fill: 'var(--loss)', fontSize: 10, position: 'insideLeft' }} />
-                        )}
-
-                        <Area 
-                            yAxisId="right"
-                            type="monotone" 
-                            dataKey="price" 
-                            stroke="var(--stamp)" 
-                            strokeWidth={1.5}
-                            fillOpacity={1} 
-                            fill="url(#colorPrice)" 
-                        />
-                    </ComposedChart>
-                </ResponsiveContainer>
-            ) : (
-                <div className="flex h-full items-center justify-center text-muted-foreground">
-                    {isDay && intraday === null ? 'Loading…' : 'No Data Available'}
-                </div>
-            )}
-        </CardContent>
-    </Card>
+    <div>
+      <div role="group" aria-label="Chart range" className="flex gap-1 mb-3">
+        {RANGES.map(([k]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setRange(k)}
+            aria-pressed={range === k}
+            className={`min-h-11 flex-1 rounded-[12px] text-[14px] font-medium ${
+              range === k ? 'bg-[var(--accent)] text-[var(--surface)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'
+            }`}
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+      {data.length < 2 ? (
+        <div className="h-56 flex items-center justify-center text-[14px] text-[var(--text-muted)]">
+          {isDay && intraday === null ? 'Loading…' : 'No price history for this range.'}
+        </div>
+      ) : (
+        <div className="h-56 sm:h-72" role="img" aria-label={`Price, last ${formatCurrency(last, currency)}, ${dots.length} of your trades marked`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="date" tickFormatter={isDay ? undefined : short} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} minTickGap={48} tickLine={false} axisLine={{ stroke: 'var(--border)' }} />
+              <YAxis tick={{ fontSize: 12, fill: 'var(--text-muted)' }} width={52} tickLine={false} axisLine={false} domain={['auto', 'auto']} tickFormatter={(v) => Math.round(v).toLocaleString('en-IN')} />
+              <Tooltip
+                formatter={(v) => [formatCurrency(v, currency), 'Price']}
+                labelFormatter={isDay ? undefined : short}
+                contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 13 }}
+              />
+              <Line type="monotone" dataKey="close" stroke={up ? 'var(--gain)' : 'var(--loss)'} strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+              {!isDay && lines.map((l) => (
+                <ReferenceLine key={l.label} y={l.y} stroke={l.color} strokeWidth={1.5} strokeDasharray="5 4" ifOverflow="extendDomain" />
+              ))}
+              {dots.map((t, i) => (
+                <ReferenceDot key={i} x={t.date} y={t.price} shape={t.side === 'SELL' ? Sell : Buy} ifOverflow="extendDomain" />
+              ))}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      {!isDay && (dots.length > 0 || lines.length > 0) && (
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px] text-[var(--text-muted)]">
+          {dots.some((d) => d.side !== 'SELL') && <li className="inline-flex items-center gap-1.5"><svg width="10" height="10" aria-hidden="true"><Buy cx={5} cy={5} /></svg>Your buys</li>}
+          {dots.some((d) => d.side === 'SELL') && <li className="inline-flex items-center gap-1.5"><svg width="10" height="10" aria-hidden="true"><Sell cx={5} cy={5} /></svg>Your sells</li>}
+          {lines.map((l) => (
+            <li key={l.label} className="inline-flex items-center gap-1.5">
+              <svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke={l.color} strokeWidth="2" strokeDasharray="5 4" /></svg>
+              {l.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 };
 
