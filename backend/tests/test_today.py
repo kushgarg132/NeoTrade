@@ -236,3 +236,66 @@ def test_data_quality_alerts_show_only_to_the_admin(monkeypatch):
     admin, _ = _client(monkeypatch, role="admin")
     items = [n for n in admin.get("/api/v1/today").json()["needs_you"] if n["kind"] == "data_quality"]
     assert [(i["title"], i["link"]) for i in items] == [("Ingest loop quotes last beat 60 min ago", "/system")]
+
+
+def _at(monkeypatch, hour, minute=0, day=19):
+    at = datetime(2026, 10, day, hour, minute, tzinfo=IST)
+    monkeypatch.setattr(today_router, "_now", lambda: at.astimezone(timezone.utc))
+    return at
+
+
+def test_pre_market_has_the_premarket_text_only(monkeypatch):
+    _at(monkeypatch, 8, 50)
+    client, _ = _client(monkeypatch)
+    body = client.get("/api/v1/today").json()
+    assert body["phase"] == "pre" and body["postclose"] is None
+    assert body["premarket"].startswith("\u2600\ufe0f <b>Before the open</b>")
+    assert body["next_open"].startswith("2026-10-19T09:15")
+
+
+def test_post_close_has_the_postclose_text_only(monkeypatch):
+    _at(monkeypatch, 16, 0)
+    client, _ = _client(monkeypatch)
+    body = client.get("/api/v1/today").json()
+    assert body["phase"] == "post" and body["premarket"] is None
+    assert isinstance(body["postclose"], str) and "After the close" in body["postclose"]
+
+
+def test_a_holiday_weekday_is_closed(monkeypatch):
+    _at(monkeypatch, 10, day=20)
+    client, _ = _client(monkeypatch)
+    body = client.get("/api/v1/today").json()
+    assert body["phase"] == "closed" and body["premarket"] is None and isinstance(body["postclose"], str)
+
+
+def test_picks_top_is_admin_only_and_pre_only(monkeypatch):
+    def pick(sym, edge):
+        return {"_id": sym, "date": "2026-10-19", "symbol": sym, "label": sym + " setup", "median_excess": edge,
+                "p_beat_nifty": 1.0, "strength": 1, "expected": {"median": edge}}
+    rows = [pick("A", 1), pick("B", 4), pick("C", 3), pick("D", 2)]
+    _at(monkeypatch, 8, 50)
+    client, db = _client(monkeypatch, role="admin")
+    _seed(db, picks=rows)
+    assert [p["symbol"] for p in client.get("/api/v1/today").json()["picks_top"]] == ["B", "C", "D"]
+    client, db = _client(monkeypatch)
+    _seed(db, picks=rows)
+    assert client.get("/api/v1/today").json()["picks_top"] is None
+    _at(monkeypatch, 11)
+    client, db = _client(monkeypatch, role="admin")
+    _seed(db, picks=rows)
+    assert client.get("/api/v1/today").json()["picks_top"] is None
+
+
+def test_unjournaled_counts_todays_closed_trips_without_a_note(monkeypatch):
+    at = _at(monkeypatch, 16, 0)
+
+    def fill(sym, side, price, minute):
+        return {"_id": f"{sym}-{side}", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": sym,
+                "side": side, "quantity": 1, "price": price, "traded_at": at.replace(hour=10, minute=minute)}
+    client, db = _client(monkeypatch)
+    trades = []
+    for sym, minute in (("AAA", 1), ("BBB", 3), ("CCC", 5)):
+        trades += [fill(sym, "BUY", 100.0, minute), fill(sym, "SELL", 101.0, minute + 1)]
+    _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"upstox": "mine"}}], journal_trades=trades,
+          journal_notes=[{"_id": "alice:AAA-BUY", "user_id": "alice", "round_trip_id": "AAA-BUY", "note": "ok", "tags": []}])
+    assert client.get("/api/v1/today").json()["unjournaled"] == 2

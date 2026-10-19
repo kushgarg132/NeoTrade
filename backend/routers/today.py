@@ -14,6 +14,8 @@ from fastapi import APIRouter, Depends
 
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
+from backend.core import market_calendar
+from backend.core.market_calendar import market_phase
 from backend.database import db
 from backend.engine.session import IST
 
@@ -170,6 +172,35 @@ async def _backdrop(now: datetime) -> dict:
     return {**await market.backdrop(db.redis), "events": [{**e, "at": _aware(e["at"])} for e in events]}
 
 
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+async def _unjournaled(user_id: str, roles: dict, now: datetime) -> int:
+    """Today's closed round trips on the user's own account with no note yet."""
+    from backend.journal.accounts import brokers_of, filter_trades
+    from backend.journal.roundtrips import build_round_trips
+    from backend.journal.store import JournalStore
+
+    store = JournalStore(db.db)
+    trades = filter_trades(await store.list_trades(user_id), brokers_of(roles, "mine"))
+    day = now.astimezone(IST).date()
+    trips = [t for t in build_round_trips(trades)
+             if t.get("closed_at") and _aware(t["closed_at"]).astimezone(IST).date() == day]
+    notes = await store.notes_for(user_id)
+    return sum(1 for t in trips if not (notes.get(t["id"]) or {}).get("note"))
+
+
+async def _picks_top() -> list[dict]:
+    from backend.forecast.picks import PICKS, rank_key
+
+    latest = await db.db[PICKS].find_one({}, {"date": 1}, sort=[("date", -1)])
+    picks = await db.db[PICKS].find({"date": latest["date"]}).to_list(length=None) if latest else []
+    picks.sort(key=rank_key, reverse=True)
+    return [{"symbol": p["symbol"], "label": p.get("label"), "median": (p.get("expected") or {}).get("median")}
+            for p in picks[:3]]
+
+
 @router.get("")
 async def today(user: User = Depends(get_current_user), broker_states=Depends(get_broker_states)):
     from backend.engine.autorun import in_session
@@ -177,7 +208,9 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
     from backend.prefs import PrefsStore
     from backend.risk.kill_switch import KillSwitchStore
 
-    now = datetime.now(timezone.utc)
+    now = _now()
+    phase = market_phase(now)
+    admin = user.role == "admin"
     prefs = await PrefsStore(db.db).get(user.id)
     roles = prefs.get("broker_roles") or {}
     errors: dict[str, str] = {}
@@ -199,6 +232,13 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         row["at"] = _aware(row.get("at"))  # Mongo hands back naive UTC; say so to the browser
     return {
         "market": {"open": in_session(now), "as_of": now},
+        "phase": phase,
+        "next_open": market_calendar.next_open(now),
+        "premarket": await part("premarket", digest.premarket_for(db.db, user.id, now)) if phase == "pre" else None,
+        "postclose": await part("postclose", digest.postclose_for(db.db, user.id, now))
+        if phase in ("post", "closed") else None,
+        "unjournaled": await part("unjournaled", _unjournaled(user.id, roles, now)),
+        "picks_top": await part("picks_top", _picks_top()) if admin and phase == "pre" else None,
         "accounts": accounts,
         "live_armed": {"autopilot": bool(prefs.get("autopilot_enabled") and prefs.get("autopilot_live")),
                        "strategies": prefs.get("live_strategies") or []},

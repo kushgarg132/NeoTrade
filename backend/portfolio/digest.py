@@ -277,11 +277,41 @@ async def _users(db) -> list[str]:
         await db["user_prefs"].distinct("user_id", {"broker_roles": {"$exists": True, "$ne": {}}})))
 
 
-async def send_premarket(db, redis, now: datetime) -> int:
-    """Weekdays 08:45-09:15 IST, once a day per user."""
+async def premarket_for(db, user_id: str, now: datetime) -> str:
+    from backend.core.market_calendar import previous_trading_day
     from backend.portfolio.service import mine_holdings
     from backend.prefs import PrefsStore
     from backend.risk.paper_gate import for_mine
+
+    local = now.astimezone(IST)
+    prefs = await PrefsStore(db).get(user_id)
+    p = await pulse(db, user_id, now)
+    held = list(await mine_holdings(db, user_id))
+    # The previous session's close: on a Monday, Friday's (weekend news counts).
+    last_close = datetime.combine(previous_trading_day(local.date()), time(15, 30), tzinfo=IST)
+    overnight = await headlines_for(db, held, last_close)
+    ideas = len(await for_mine(db, user_id, await db["suggestions"].find(
+        {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200)))
+    moved = await last_session_move(db, await mine_holdings(db, user_id), local.date())
+    acts = await _actions(db, user_id, now)
+    return premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs), moved, acts)
+
+
+async def postclose_for(db, user_id: str, now: datetime, events: Optional[list[dict]] = None) -> str:
+    from backend.datalayer import market
+    from backend.engine import broker_recon
+    from backend.prefs import PrefsStore
+
+    if events is None:
+        events = await market.upcoming(db, hours=24, now=now)
+    roles = (await PrefsStore(db).get(user_id)).get("broker_roles") or {}
+    recon = broker_recon.summary(await broker_recon.latest(db, user_id, now.astimezone(IST).date()))
+    return postclose_text(await pulse(db, user_id, now), await pnl_since(db, user_id, roles, day_start(now)),
+                          events, await _actions(db, user_id, now), recon)
+
+
+async def send_premarket(db, redis, now: datetime) -> int:
+    """Weekdays 08:45-09:15 IST, once a day per user."""
     from backend.suggestions.notify import notify
 
     local = now.astimezone(IST)
@@ -292,19 +322,7 @@ async def send_premarket(db, redis, now: datetime) -> int:
         if not await redis.set(f"digest:pre:{user_id}:{local.date()}", "1", nx=True, px=86_400_000):
             continue
         try:
-            prefs = await PrefsStore(db).get(user_id)
-            p = await pulse(db, user_id, now)
-            held = list(await mine_holdings(db, user_id))
-            # The previous session's close: on a Monday, Friday's (weekend news counts).
-            from backend.core.market_calendar import previous_trading_day
-            last_close = datetime.combine(previous_trading_day(local.date()), time(15, 30), tzinfo=IST)
-            overnight = await headlines_for(db, held, last_close)
-            ideas = len(await for_mine(db, user_id, await db["suggestions"].find(
-                {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200)))
-            moved = await last_session_move(db, await mine_holdings(db, user_id), local.date())
-            acts = await _actions(db, user_id, now)
-            await notify(db, user_id, premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs), moved,
-                                                     acts), html=True)
+            await notify(db, user_id, await premarket_for(db, user_id, now), html=True)
             sent += 1
         except Exception as exc:
             logger.exception("pre-market digest failed for %s: %s", user_id, exc)
@@ -316,8 +334,6 @@ async def send_postclose(db, now: datetime) -> int:
     """After the 16:00 pass's review (backend/scheduler.py). Skipped when the
     pass runs as the next morning's catch-up: an evening message at 9 AM is noise."""
     from backend.datalayer import market
-    from backend.engine import broker_recon
-    from backend.prefs import PrefsStore
     from backend.suggestions.notify import notify
 
     if now.astimezone(IST).time() < time(15, 30):
@@ -326,10 +342,7 @@ async def send_postclose(db, now: datetime) -> int:
     sent = 0
     for user_id in await _users(db):
         try:
-            roles = (await PrefsStore(db).get(user_id)).get("broker_roles") or {}
-            recon = broker_recon.summary(await broker_recon.latest(db, user_id, now.astimezone(IST).date()))
-            text = postclose_text(await pulse(db, user_id, now), await pnl_since(db, user_id, roles, day_start(now)),
-                                  events, await _actions(db, user_id, now), recon)
+            text = await postclose_for(db, user_id, now, events)
             await notify(db, user_id, text, html=True)
             sent += 1
         except Exception as exc:

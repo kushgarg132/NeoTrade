@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from backend.auth.dependency import require_admin
 from backend.database import db
 from backend.datalayer.bars import today_ist
-from backend.forecast.picks import CAVEATS, PICKS, STUDY, forward
+from backend.forecast.picks import CAVEATS, PICKS, STUDY, forward, rank_key
 
 router = APIRouter(prefix="/picks", tags=["Picks"], dependencies=[Depends(require_admin)])
 
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/picks", tags=["Picks"], dependencies=[Depends(requir
 async def picks_today():
     latest = await db.db[PICKS].find_one({}, {"date": 1}, sort=[("date", -1)])
     picks = await db.db[PICKS].find({"date": latest["date"]}).to_list(length=None) if latest else []
-    picks.sort(key=lambda p: (p["median_excess"] * p["p_beat_nifty"], p["strength"]), reverse=True)
+    picks.sort(key=rank_key, reverse=True)
     scored = await db.db[PICKS].find({"outcome": {"$ne": None}}, {"p_up": 1, "outcome": 1}).to_list(length=None)
     study = await db.db[STUDY].find_one({"_id": "latest"}) or {}
     return {
