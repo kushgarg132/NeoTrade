@@ -157,7 +157,7 @@ async def test_callback_uses_existing_confirm_path(monkeypatch):
     send.assert_not_awaited()
 
 
-async def test_live_card_needs_two_server_checked_taps(env, monkeypatch):
+async def test_live_card_needs_two_server_checked_taps(env, monkeypatch, caplog):
     """End to end with the real confirm: the first tap places nothing and
     re-arms the card with a Send button carrying a one-time token; a second
     tap without that token, or with a forged one, places nothing; the real
@@ -180,7 +180,9 @@ async def test_live_card_needs_two_server_checked_taps(env, monkeypatch):
     assert send.startswith(f"nt:confirm2:{card['id']}.") and len(send.encode()) <= 64
 
     await tap(f"nt:confirm2:{card['id']}")  # no token: just re-armed
+    caplog.set_level("INFO")
     forged = await tap(f"nt:confirm2:{card['id']}.forged")
+    assert "confirm_expired" in caplog.text  # the refusal code, beside the card text
     assert env["broker"].placed == []
     assert forged.kwargs["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == f"nt:confirm:{card['id']}"
 

@@ -213,7 +213,7 @@ async def approve_suggestion_live(
     try:
         await live_confirm.redeem(db.redis, user.id, subject, terms, body.confirm_token)
     except live_confirm.TokenRefused as exc:
-        raise HTTPException(status_code=exc.status, detail=str(exc))
+        return exc.response()
     return await place_live_approval(suggestion_id, user, store, ledger, options_broker, mine_broker, mark_price)
 
 

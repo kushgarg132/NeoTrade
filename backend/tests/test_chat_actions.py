@@ -551,3 +551,65 @@ async def test_other_user_cannot_confirm_a_strategy_card(strategy_env):
     with pytest.raises(ActionRefused):
         await confirm(db, None, None, "bob", card["id"])
     assert await db["built_strategies"].count_documents({}) == 0
+
+
+async def test_redeem_codes_for_each_refusal_kind():
+    """Every refusal carries a stable machine-readable code; clients never match the text."""
+    async def refusal(token, user="alice", subject="s", terms=1):
+        with pytest.raises(live_confirm.TokenRefused) as caught:
+            await live_confirm.redeem(None, user, subject, terms, token)
+        return caught.value.code, caught.value.status
+
+    assert await refusal(None) == ("confirm_missing", 409)
+    assert await refusal("made-up") == ("confirm_expired", 409)
+    token = await live_confirm.issue(None, "alice", "s", 1)
+    assert await refusal(token, user="bob") == ("confirm_other_user", 403)
+    assert await refusal(token, terms=2) == ("confirm_mismatch", 409)
+    assert await refusal(token) == ("confirm_expired", 409)  # spent earlier: indistinguishable from expired
+
+    class _Racing:  # the key was there at read time, a rival tap deleted it first
+        async def get(self, key):
+            return json.dumps(live_confirm._binding("alice", "s", 1))
+
+        async def delete(self, key):
+            return 0
+
+    with pytest.raises(live_confirm.TokenRefused) as lost:
+        await live_confirm.redeem(_Racing(), "alice", "s", 1, "t")
+    assert lost.value.code == "confirm_spent"
+
+
+async def test_confirm_route_carries_the_refusal_code(env, monkeypatch):
+    """HTTP: `detail` stays text, `code` rides beside it (409, or 403 for another user's token)."""
+    from backend.auth.dependency import get_current_user
+    from backend.auth.models import User
+    from backend.routers import chat_actions
+
+    db = env["db"]
+    await PrefsStore(db).update("bob", {"per_trade_cap": 20000.0})
+    monkeypatch.setattr(chat_actions, "_db", lambda: db)
+    who = {"id": "alice"}
+    app = FastAPI()
+    app.include_router(chat_actions.router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = lambda: User(
+        id=who["id"], google_sub="g", email="a@x.com", name="A", created_at=datetime.now(timezone.utc))
+    app.dependency_overrides[chat_actions.get_credential_store] = lambda: None
+    client = TestClient(app)
+
+    def tap(card, token=None):
+        return client.post(f"/api/v1/chat/actions/{card['id']}/confirm", json={"confirm_token": token} if token else {})
+
+    def refused(resp, status, code):
+        assert resp.status_code == status and resp.json()["code"] == code and isinstance(resp.json()["detail"], str)
+
+    card, other, bobs = await _live_card(env), await _live_card(env), await _live_card(env, "bob")
+    token = tap(card).json()["confirm_token"]
+    refused(tap(card, "made-up"), 409, "confirm_expired")
+    who["id"] = "bob"
+    tap(bobs)
+    refused(tap(bobs, token), 403, "confirm_other_user")
+    who["id"] = "alice"
+    tap(other)
+    refused(tap(other, token), 409, "confirm_mismatch")
+    refused(tap(card, token), 409, "confirm_expired")  # spent on the wrong card above
+    assert env["broker"].placed == []

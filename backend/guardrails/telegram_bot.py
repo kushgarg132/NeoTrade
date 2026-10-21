@@ -408,6 +408,7 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
             done = True
     except TokenRefused as exc:
         # Nothing sent and the card is still open: offer Confirm again for a fresh token.
+        logger.info("telegram live confirm refused for user %s: %s", user_id, exc.code)
         await telegram.answer_callback(callback_id, str(exc)[:180], token)
         if card.get("message_id"):
             await telegram.edit_html(chat_id, card["message_id"],

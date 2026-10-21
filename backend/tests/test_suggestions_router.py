@@ -523,3 +523,29 @@ async def test_the_user_sees_pending_ideas_only_from_proven_strategies(monkeypat
     ]
     shown = await paper_gate.for_mine(AsyncMongoMockClient()["t"], "alice", ideas)
     assert [p["id"] for p in shown] == [1, 3]
+
+
+def test_approve_live_refusals_carry_a_code(mine_client, store, mongo):
+    """HTTP: `detail` stays text, `code` rides beside it (409, or 403 for another user's token)."""
+    import asyncio
+
+    from backend.risk import live_confirm
+
+    broker = _FakeMine()
+    _with_mine(mine_client, broker)
+    suggestion = asyncio.run(_seed(store))
+    url = f"/api/v1/suggestions/{suggestion['id']}/approve-live"
+    tap = lambda token=None: mine_client.post(url, json={"confirm_token": token} if token else None)  # noqa: E731
+
+    def refused(resp, status, code):
+        assert resp.status_code == status and resp.json()["code"] == code and isinstance(resp.json()["detail"], str)
+
+    first = tap().json()["confirm_token"]
+    refused(tap("made-up"), 409, "confirm_expired")
+    bobs = asyncio.run(live_confirm.issue(None, "bob", f"suggestion:{suggestion['id']}",
+                                          suggestions_router._order_terms(suggestion)))
+    refused(tap(bobs), 403, "confirm_other_user")
+    asyncio.run(mongo["suggestions"].update_one({"id": suggestion["id"]}, {"$set": {"quantity": 50}}))
+    refused(tap(first), 409, "confirm_mismatch")
+    refused(tap(first), 409, "confirm_expired")  # spent by the tap above
+    assert broker.placed == []

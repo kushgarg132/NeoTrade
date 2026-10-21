@@ -38,7 +38,7 @@ async def confirm_action(
     try:
         return await confirm(_db(), db.redis, credentials, user.id, action_id, confirm_token=body.confirm_token)
     except TokenRefused as exc:
-        raise HTTPException(status_code=exc.status, detail=str(exc))
+        return exc.response()
     except ActionRefused as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
