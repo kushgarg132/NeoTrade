@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/ml/**, backend/rl/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 0dd6383
+verified_at: 58c9d43
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -198,7 +198,9 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 
 Related, outside the globs: `/strategies/built*`, `/strategies/library` (→ `learning/library.py::catalog`), `/strategies/vocabulary`, `/strategies/describe` in `routers/settings.py`; `GET /journal/learning` (→ `learning/report.py::snapshot`, `routers/journal.py::get_learning`); `POST /system/builder/run` (`system/router.py`). Frontend paths: `frontend/src/utils/api.js` `picks`, `suggestions`.
 
-## Gotchas and known issues
+## Gotchas
+
+- `backend/routers/picks.py::served_today` builds the filtered list once; `GET /picks` and Today's `picks_top` (`backend/routers/today.py::_picks_top`) both use its `shown`, so the Home/Today card never lists a pick Ideas hides. and known issues
 - Fixed: `retune.py::start_if_due` claims the month with an atomic `update_one(upsert)` on a unique `month` index (`retune.py::ensure_indexes`); a `DuplicateKeyError` or an existing claim returns False.
 - `picks.py::compute` does not require `walk_forward.edge`. Picks from "no edge" setups are stored and badged (`edge: False`), by design (handbook).
 - `due_date` counts weekdays only. Exchange holidays push the real exit (`picks.py::compute` comment). `score` uses the NIFTY calendar.
