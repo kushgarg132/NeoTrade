@@ -192,13 +192,12 @@ async def _unjournaled(user_id: str, roles: dict, now: datetime) -> int:
 
 
 async def _picks_top() -> list[dict]:
-    from backend.forecast.picks import PICKS, rank_key
+    """Today's Picks card: the same filtered list Ideas shows (edge rule, cap of 3)."""
+    from backend.routers.picks import served_today
 
-    latest = await db.db[PICKS].find_one({}, {"date": 1}, sort=[("date", -1)])
-    picks = await db.db[PICKS].find({"date": latest["date"]}).to_list(length=None) if latest else []
-    picks.sort(key=rank_key, reverse=True)
+    shown = (await served_today())[3]["shown"]
     return [{"symbol": p["symbol"], "label": p.get("label"), "median": (p.get("expected") or {}).get("median")}
-            for p in picks[:3]]
+            for p in shown]
 
 
 @router.get("")

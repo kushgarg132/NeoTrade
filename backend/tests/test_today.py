@@ -270,13 +270,18 @@ def test_a_holiday_weekday_is_closed(monkeypatch):
 
 def test_picks_top_is_admin_only_and_pre_only(monkeypatch):
     def pick(sym, edge):
-        return {"_id": sym, "date": "2026-10-19", "symbol": sym, "label": sym + " setup", "median_excess": edge,
-                "p_beat_nifty": 1.0, "strength": 1, "expected": {"median": edge}}
+        return {"_id": sym, "date": "2026-10-19", "symbol": sym, "setup": "rs_leaders_regime", "label": sym + " setup",
+                "median_excess": edge, "p_beat_nifty": 1.0, "strength": 1, "expected": {"median": edge}}
     rows = [pick("A", 1), pick("B", 4), pick("C", 3), pick("D", 2)]
+    from backend.forecast.picks import STUDY
+    study = [{"_id": "latest", "setups": [{"setup": "rs_leaders_regime", "adjusted": {"edge": True}}]}]
     _at(monkeypatch, 8, 50)
     client, db = _client(monkeypatch, role="admin")
-    _seed(db, picks=rows)
+    _seed(db, picks=rows, **{STUDY: study})
     assert [p["symbol"] for p in client.get("/api/v1/today").json()["picks_top"]] == ["B", "C", "D"]
+    client, db = _client(monkeypatch, role="admin")
+    _seed(db, picks=rows)  # no study edges yet: the card shows nothing, like Ideas
+    assert client.get("/api/v1/today").json()["picks_top"] == []
     client, db = _client(monkeypatch)
     _seed(db, picks=rows)
     assert client.get("/api/v1/today").json()["picks_top"] is None

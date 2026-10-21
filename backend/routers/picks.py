@@ -14,8 +14,8 @@ from backend.marks import mark_prices
 router = APIRouter(prefix="/picks", tags=["Picks"], dependencies=[Depends(require_admin)])
 
 
-@router.get("")
-async def picks_today():
+async def served_today() -> tuple:
+    """(latest, picks, study, served): the latest pass's candidates and the filtered list the UI shows."""
     latest = await db.db[PICKS].find_one({}, {"date": 1}, sort=[("date", -1)])
     picks = await db.db[PICKS].find({"date": latest["date"]}).to_list(length=None) if latest else []
     picks.sort(key=rank_key, reverse=True)
@@ -24,7 +24,12 @@ async def picks_today():
     study = await db.db[STUDY].find_one({"_id": "latest"}) or {}
     edges = setup_edges(study)
     prices = await mark_prices(db.db, {p["symbol"] for p in older if has_edge(p, edges)})
-    served = serve(picks, older, prices, today, edges)
+    return latest, picks, study, serve(picks, older, prices, today, edges)
+
+
+@router.get("")
+async def picks_today():
+    latest, picks, study, served = await served_today()
     scored = await db.db[PICKS].find({"outcome": {"$ne": None}}, {"p_up": 1, "outcome": 1}).to_list(length=None)
     return {
         "date": latest and latest["date"],
