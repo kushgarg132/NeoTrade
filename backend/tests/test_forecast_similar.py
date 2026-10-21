@@ -101,3 +101,57 @@ def test_full_size_runtime_under_five_minutes():
     took = time.time() - t0
     print(f"compute on {n}x{days}: {took:.1f}s")
     assert took < 300
+
+
+# --- vol-scaled per-stock range ----------------------------------------------------
+
+def _vol_ev(n=1200, seed=0, scales=True):
+    """Events where net ~ N(0, vol60 * sqrt(H)) (or a flat 0.1 sd when `scales` is False)."""
+    ev = _ev(n=n, signal=False, seed=seed)
+    rng = np.random.default_rng(seed + 1)
+    ev["vol60"] = rng.uniform(0.01, 0.04, n)
+    ev["net"] = rng.normal(0, 1, n) * (ev["vol60"] * np.sqrt(20) if scales else 0.1)
+    return ev
+
+
+def test_standardization_round_trips():
+    net, vol = np.array([0.05, -0.1]), np.array([0.02, 0.03])
+    z = similar.standardize(net, vol, 20)
+    np.testing.assert_allclose(z * similar.horizon_vol(vol, 20), net)
+
+
+def test_range_scales_with_the_stocks_vol_and_centered_keeps_the_setup_median():
+    pool = _vol_ev()
+    (lo1, hi1), (lo2, hi2) = (similar.scaled_range(pool, v, 20) for v in (0.01, 0.02))
+    assert (hi2 - lo2) == pytest.approx(2 * (hi1 - lo1))
+    assert lo1 < pool["net"].median() < hi1 and lo2 < pool["net"].median() < hi2
+
+
+def test_scaled_wins_when_vol_drives_the_spread_and_pooled_wins_when_it_does_not():
+    assert similar.validate_range(_vol_ev(n=3000), 20)["chosen"] in ("vol_scaled", "vol_scaled_std")
+    assert similar.validate_range(_vol_ev(n=3000, scales=False), 20)["chosen"] is None
+
+
+def test_choose_needs_closer_coverage_and_lower_loss():
+    pooled = {"coverage": 0.80, "loss": 1.0}
+    assert similar.choose(pooled, {"a": {"coverage": 0.78, "loss": 0.5}}) is None   # worse coverage
+    assert similar.choose(pooled, {"a": {"coverage": 0.80, "loss": 1.1}}) is None   # worse loss
+    assert similar.choose(pooled, {"a": {"coverage": 0.80, "loss": 0.9}, "b": {"coverage": 0.8, "loss": 0.8}}) == "b"
+
+
+@pytest.mark.parametrize("chosen", ["vol_scaled", None])
+def test_pick_payload_carries_range_stock_only_when_chosen(monkeypatch, chosen):
+    from backend.tests.test_forecast_picks import _fires_on_last_day
+    t = setups.table(_frames(days=420, n=3))
+    monkeypatch.setattr(setups, "SETUPS", (setups.Setup("fake", "Fake", 2, _fires_on_last_day, lambda t, s, d: "x"),))
+    monkeypatch.setattr(study, "MIN_N", 1)
+    monkeypatch.setattr(similar, "MIN_POOL", 5)
+    monkeypatch.setattr(similar, "validate_range", lambda ev, h: {"n": 1, "chosen": chosen})
+    results, ps = picks.compute(t)
+    assert results["fake"]["vol_range"]["chosen"] == chosen and len(ps) == 1
+    e = ps[0]["expected"]
+    assert {"median", "p10", "p90", "excess"} <= set(e)  # pooled fields stay
+    if chosen is None:
+        assert "range_stock" not in e
+    else:
+        assert e["range_stock"]["method"] == "vol_scaled" and e["range_stock"]["p10"] < e["range_stock"]["p90"]
