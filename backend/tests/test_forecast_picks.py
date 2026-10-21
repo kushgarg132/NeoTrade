@@ -211,28 +211,34 @@ def test_factor_report_saves_the_keys_the_gate_reads(monkeypatch):
 
 from datetime import date  # noqa: E402
 
+EDGES = {"momentum": True, "pullback": False}
 
-def _p(day, symbol="A", excess=0.02, beat=0.6, entry=100.0, due="2026-10-30", label="Momentum"):
-    return {"_id": f"{day}:{symbol}", "date": day, "symbol": symbol, "label": label, "median_excess": excess,
+
+def _p(day, symbol="A", excess=0.02, beat=0.6, entry=100.0, due="2026-10-30", label="Momentum", setup="momentum"):
+    return {"_id": f"{day}:{symbol}", "date": day, "symbol": symbol, "setup": setup, "label": label, "median_excess": excess,
             "p_beat_nifty": beat, "entry_ref": entry, "due_date": due}
 
 
 TODAY = date(2026, 10, 21)  # Wed
 
 
-def test_no_edge_picks_are_hidden_with_a_reason():
-    out = picks.serve([_p("2026-10-21", "A", 0.0, 0.5, label="Pullback"), _p("2026-10-21", "B", 0.01, 0.54, label="Pullback"),
-                       _p("2026-10-21", "C")], [], {}, TODAY)
+def test_picks_of_a_setup_without_an_edge_or_a_low_beat_rate_are_hidden_with_a_reason():
+    out = picks.serve([_p("2026-10-21", "A", label="Pullback in uptrend", setup="pullback"),
+                       _p("2026-10-21", "B", label="Pullback in uptrend", setup="pullback"),
+                       _p("2026-10-21", "L", beat=0.54), _p("2026-10-21", "C")], [], {}, TODAY, EDGES)
     assert [p["symbol"] for p in out["shown"]] == ["C"]
-    assert out["hidden_count"] == 2 and out["hidden_reason"] == "2 Pullback picks hidden: no edge over NIFTY"
+    assert out["hidden_count"] == 3
+    assert out["hidden_reason"] == ("Pullback in uptrend (2 picks) hidden: no edge over the average stock this month; "
+                                    "1 pick hidden: under 55% chance of beating NIFTY")
 
 
 def test_an_earlier_pick_stays_within_5_trading_days_before_due_and_near_entry():
     t = [_p("2026-10-21", "T")]
     older = [_p("2026-10-16", "OK"), _p("2026-10-12", "TOO_OLD"),  # 6 trading days back (20 Oct is a holiday)
-             _p("2026-10-19", "DUE", due="2026-10-21"), _p("2026-10-19", "FAR"), _p("2026-10-19", "FLAT", excess=0.0)]
+             _p("2026-10-19", "DUE", due="2026-10-21"), _p("2026-10-19", "FAR"),
+             _p("2026-10-19", "FLAT", setup="pullback")]
     prices = {"OK": 101.9, "TOO_OLD": 100, "DUE": 100, "FAR": 103, "FLAT": 100}
-    out = picks.serve(t, older, prices, TODAY)
+    out = picks.serve(t, older, prices, TODAY, EDGES)
     assert {p["symbol"] for p in out["shown"]} == {"T", "OK"}
     ok = next(p for p in out["shown"] if p["symbol"] == "OK")
     assert ok["fired_on"] == "2026-10-16" and ok["days_since"] == 2 and ok["days_left"] == 7
@@ -243,13 +249,43 @@ def test_an_earlier_pick_stays_within_5_trading_days_before_due_and_near_entry()
 def test_ranked_by_excess_then_beat_and_capped_at_three():
     ps = [_p("2026-10-21", "A", 0.01, 0.9), _p("2026-10-21", "B", 0.03, 0.6), _p("2026-10-21", "C", 0.03, 0.7),
           _p("2026-10-21", "D", 0.02, 0.6)]
-    out = picks.serve(ps, [], {}, TODAY)
+    out = picks.serve(ps, [], {}, TODAY, EDGES)
     assert [p["symbol"] for p in out["shown"]] == ["C", "B", "D"]
     assert out["hidden_count"] == 1 and "top 3" in out["hidden_reason"]
 
 
+def test_experimental_setup_is_flagged():
+    out = picks.serve([_p("2026-10-21", "R", setup="rs_leaders_regime"), _p("2026-10-21", "M")], [], {},
+                      TODAY, {"rs_leaders_regime": True, "momentum": True})
+    assert {p["symbol"]: p["experimental"] for p in out["shown"]} == {"R": True, "M": False}
+
+
 def test_payload_has_shown_and_keeps_picks(mongo):
     asyncio.run(mongo.picks.insert_one({**_p("2026-10-21", "X", 0.0, 0.5), "strength": 1.0}))
+    asyncio.run(mongo.picks_study.insert_one({"_id": "latest", "setups": [{"setup": "momentum", "adjusted": {"edge": False}}]}))
     body = _client("admin").get("/api/v1/picks").json()
     assert [p["symbol"] for p in body["picks"]] == ["X"] and body["shown"] == []
     assert body["hidden_count"] == 1 and "no edge" in body["hidden_reason"]
+
+
+# --- the adjusted edge ------------------------------------------------------------
+
+def _events(excess_by_month):
+    rows = []
+    for i, ex in enumerate(excess_by_month):
+        for k in range(3):
+            rows.append((pd.Timestamp(2022 + i // 12, i % 12 + 1, 3), 0.01 * k + ex, 0.0))
+    return pd.DataFrame(rows, columns=["signal", "net", "nifty"])
+
+
+def test_adjusted_edge_subtracts_the_same_month_universe_baseline():
+    rng = np.random.default_rng(3)
+    ex = 0.05 + rng.normal(0, 0.01, 24)
+    ev = _events(ex)
+    months = pd.period_range("2022-01", periods=24, freq="M")
+    wf = {"years": [{"year": 2022}, {"year": 2023}]}
+    on_baseline = study.adjusted_edge(ev, pd.Series(0.05 + 0.01, index=months), wf)  # the average stock earned as much
+    assert on_baseline["excess"] < 0 and on_baseline["edge"] is False
+    beats = study.adjusted_edge(ev, pd.Series(0.0, index=months), wf)
+    assert beats["excess"] > 0.05 and beats["t"] >= study.ADJ_MIN_T and beats["edge"] is True
+    assert study.adjusted_edge(ev, pd.Series(0.0, index=months), {"years": []})["edge"] is False

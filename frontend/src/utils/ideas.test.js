@@ -48,6 +48,10 @@ test('older pick label: weekday, move, days left; nothing for today', () => {
   assert.equal(olderPickLabel(ideaFromPick({ ...pick, fired_on: '2026-10-21', days_since: 0, days_left: 9 })), null);
   assert.equal(olderPickLabel({ daysSince: 1, firedOn: '2026-10-20', moveSinceEntry: -0.012, daysLeft: 1 }), 'fired Tue · now −1.2% from entry · 1 day left');
 });
+test('experimental flag carries over', () => {
+  assert.equal(ideaFromPick({ ...pick, experimental: true }).experimental, true);
+  assert.equal(ideaFromPick(pick).experimental, false);
+});
 test('empty state names the hidden reason', () => {
   assert.equal(noPickText('3 Pullback picks hidden: no edge over NIFTY').title, 'No pick worth taking today');
   assert.match(noPickText('3 Pullback picks hidden: no edge over NIFTY').body, /^3 Pullback picks hidden: no edge over NIFTY\./);

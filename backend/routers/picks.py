@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from backend.auth.dependency import require_admin
 from backend.database import db
 from backend.datalayer.bars import today_ist
-from backend.forecast.picks import CAVEATS, PICKS, STUDY, forward, has_edge, rank_key, serve
+from backend.forecast.picks import CAVEATS, PICKS, STUDY, forward, has_edge, rank_key, serve, setup_edges
 from backend.marks import mark_prices
 
 router = APIRouter(prefix="/picks", tags=["Picks"], dependencies=[Depends(require_admin)])
@@ -21,10 +21,11 @@ async def picks_today():
     picks.sort(key=rank_key, reverse=True)
     today = today_ist()
     older = await db.db[PICKS].find({"date": {"$gte": (today - timedelta(days=14)).isoformat(), "$lt": latest["date"]}}).to_list(length=None) if latest else []
-    prices = await mark_prices(db.db, {p["symbol"] for p in older})
-    served = serve(picks, older, prices, today)
-    scored = await db.db[PICKS].find({"outcome": {"$ne": None}}, {"p_up": 1, "outcome": 1}).to_list(length=None)
     study = await db.db[STUDY].find_one({"_id": "latest"}) or {}
+    edges = setup_edges(study)
+    prices = await mark_prices(db.db, {p["symbol"] for p in older if has_edge(p, edges)})
+    served = serve(picks, older, prices, today, edges)
+    scored = await db.db[PICKS].find({"outcome": {"$ne": None}}, {"p_up": 1, "outcome": 1}).to_list(length=None)
     return {
         "date": latest and latest["date"],
         "picks": picks,  # every candidate of the latest pass (backward compatible); the UI reads `shown`

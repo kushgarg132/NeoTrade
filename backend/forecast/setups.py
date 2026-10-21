@@ -129,6 +129,41 @@ def _explain_momentum_vol(t: dict, symbol: str, day) -> str:
             f"(top decile, re-ranked each month)")
 
 
+RS_DAYS = 126
+
+
+def _rs(t: dict) -> pd.DataFrame:
+    """126-day return minus NIFTY's."""
+    return t["close"].pct_change(RS_DAYS, fill_method=None).sub(t["nifty_close"].pct_change(RS_DAYS), axis=0)
+
+
+def rs_leaders_regime(t: dict) -> pd.DataFrame:
+    """Month's first trading day: top decile of 126-day relative strength vs NIFTY, close above a rising 50- and
+    200-day average (rising = higher than 20 days ago), and NIFTY above its own 200-day average that day."""
+    close = t["close"]
+    rs = _rs(t)
+    s50, s200 = close.rolling(50, min_periods=50).mean(), close.rolling(200, min_periods=200).mean()
+    trend = (close > s50) & (close > s200) & (s50 > s50.shift(20)) & (s200 > s200.shift(20))
+    nc = t["nifty_close"]
+    bull = nc > nc.rolling(200, min_periods=200).mean()
+    out = pd.DataFrame(np.nan, index=close.index, columns=close.columns)
+    for day in _month_starts(close.index):
+        r = rs.loc[day].dropna()
+        if len(r) < 10 or not bull.loc[day]:
+            continue
+        top = r[r >= r.quantile(0.9)]
+        top = top[trend.loc[day, top.index]]
+        out.loc[day, top.index] = top.values
+    return out
+
+
+def _explain_rs_leaders(t: dict, symbol: str, day) -> str:
+    rs = _rs(t).loc[day, symbol]
+    stock = t["close"][symbol].pct_change(RS_DAYS, fill_method=None).loc[day]
+    return (f"126-day return {stock:+.0%} vs NIFTY {stock - rs:+.0%}: top decile of relative strength on the month's first day, "
+            f"above a rising 50- and 200-day average, with NIFTY above its 200-day average")
+
+
 @dataclass(frozen=True)
 class Setup:
     name: str
@@ -136,6 +171,7 @@ class Setup:
     horizon: int  # trading days held: entry t+1 open, exit close of t+1+horizon
     signals: Callable[[dict], pd.DataFrame]
     explain: Callable[[dict, str, object], str]
+    experimental: bool = False  # shown with an "Experimental" badge; still subject to the edge rule
 
 
 SETUPS = (
@@ -145,5 +181,6 @@ SETUPS = (
     Setup("pullback", "Pullback in uptrend", 20, pullback, _explain_pullback),
     Setup("low_vol", "Low-volatility leader", 60, low_vol, _explain_low_vol),
     Setup("momentum_vol_60", "Momentum over volatility", 60, momentum_vol, _explain_momentum_vol),
+    Setup("rs_leaders_regime", "Relative-strength leader", 60, rs_leaders_regime, _explain_rs_leaders, experimental=True),
 )
 BY_NAME = {s.name: s for s in SETUPS}

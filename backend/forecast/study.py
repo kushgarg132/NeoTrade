@@ -113,13 +113,62 @@ def walk_forward(ev: pd.DataFrame) -> dict:
     }
 
 
+ADJ_MIN_T = 2.0   # a setup has an edge when its adjusted out-of-sample excess is > 0 with at least this month-block t
+BOOT = 2000
+
+
+def every_month(t: dict) -> pd.DataFrame:
+    """Baseline fires: every stock on each month's first trading day (what a random pick earns in this universe)."""
+    from backend.forecast.setups import _month_starts
+
+    c = t["close"]
+    out = pd.DataFrame(np.nan, index=c.index, columns=c.columns)
+    out.loc[_month_starts(c.index)] = 1.0
+    return out.where(c.notna())
+
+
+class _Horizon:
+    def __init__(self, horizon):
+        self.horizon = horizon
+
+
+def baseline_by_month(t: dict, horizon: int) -> pd.Series:
+    """Mean excess over NIFTY of ALL universe stocks over `horizon`, by signal month. Today's universe beats NIFTY
+    on average (survivorship), so a setup must beat THIS, not zero."""
+    ev = events(t, _Horizon(horizon), every_month(t))
+    return (ev["net"] - ev["nifty"]).groupby(ev["signal"].dt.to_period("M")).mean()
+
+
+def adjusted_edge(ev: pd.DataFrame, baseline: pd.Series, wf: dict) -> dict:
+    """Out-of-sample (the years `walk_forward` tested) mean of excess over NIFTY minus the baseline of the signal
+    month, with a month-block bootstrap t. `edge` = mean > 0 and t >= ADJ_MIN_T."""
+    none = {"oos_n": 0, "excess": None, "t": None, "edge": False}
+    years = [y["year"] for y in wf["years"]]
+    o = ev[ev["signal"].dt.year.isin(years)] if not ev.empty else ev
+    if len(o) < 5:
+        return none
+    month = o["signal"].dt.to_period("M")
+    adj = (o["net"] - o["nifty"] - month.map(baseline).fillna(baseline.mean())).to_numpy()
+    g = pd.DataFrame({"m": month.astype(str).to_numpy(), "a": adj}).groupby("m")["a"].agg(["sum", "count"])
+    s, n = g["sum"].to_numpy(), g["count"].to_numpy()
+    mean = float(s.sum() / n.sum())
+    idx = np.random.default_rng(0).integers(0, len(s), (BOOT, len(s)))
+    sd = (s[idx].sum(1) / n[idx].sum(1)).std(ddof=1)
+    t_ = mean / sd if sd > 0 else None
+    return {"oos_n": int(len(o)), "excess": mean, "t": None if t_ is None else float(t_),
+            "edge": bool(mean > 0 and t_ is not None and t_ >= ADJ_MIN_T)}
+
+
 def run(t: dict, setups) -> tuple[dict, dict]:
     """-> ({setup: stats + walk_forward}, {setup: fires frame})."""
-    results, all_fires = {}, {}
+    results, all_fires, base = {}, {}, {}
     for s in setups:
         fires = s.signals(t)
         ev = events(t, s, fires)
-        results[s.name] = {"setup": s.name, "label": s.label, "horizon": s.horizon,
-                           **stats(ev), "walk_forward": walk_forward(ev)}
+        if s.horizon not in base:
+            base[s.horizon] = baseline_by_month(t, s.horizon)
+        wf = walk_forward(ev)
+        results[s.name] = {"setup": s.name, "label": s.label, "horizon": s.horizon, "experimental": getattr(s, "experimental", False),
+                           **stats(ev), "walk_forward": wf, "adjusted": adjusted_edge(ev, base[s.horizon], wf)}
         all_fires[s.name] = fires
     return results, all_fires

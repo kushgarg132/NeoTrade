@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import IdeaBadge from './IdeaBadge';
+import Badge from '../ui/Badge';
 import { olderPickLabel } from '../../utils/ideas';
 import { bareSymbol } from '../../utils/formatters';
 import { pct, tone } from '../ui/format';
@@ -18,6 +19,7 @@ const IdeaRow = ({ idea }) => (
       <div className="flex items-center gap-2 text-[13px] text-[var(--text-muted)]">
         <span className="truncate">{idea.setup}{idea.horizon && !olderPickLabel(idea) ? ` · ${idea.horizon}d` : ''}</span>
         <span className="shrink-0"><IdeaBadge badge={idea.badge} /></span>
+        {idea.experimental && <span className="shrink-0"><Badge>Experimental</Badge></span>}
       </div>
       {olderPickLabel(idea) && <div className="text-[12px] text-[var(--text-muted)] tabular-nums">{olderPickLabel(idea)}</div>}
       {idea.kind === 'p' && idea.spread && (

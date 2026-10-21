@@ -87,7 +87,7 @@ export const ideaFromPick = (p, setup) => {
     forecast: p.forecast || null, similarN: p.similar_n ?? null, features: describeFeatures(p.features),
     pUp: p.p_up, pBeat: p.p_beat_nifty, pastN: p.n,
     oosExcess: setup?.walk_forward?.oos_excess ?? null, oosN: setup?.walk_forward?.oos_n ?? null,
-    noEdge: p.edge === false, decided: false,
+    noEdge: p.edge === false, decided: false, experimental: p.experimental === true,
     firedOn: p.fired_on ?? null, daysSince: p.days_since ?? 0, daysLeft: p.days_left ?? null, moveSinceEntry: p.move_since_entry ?? null,
   };
 };
