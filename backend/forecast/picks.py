@@ -68,7 +68,7 @@ def compute(t: dict) -> tuple[dict, list[dict]]:
             rs = None
             if vr["chosen"] and x is not None and len(full) >= similar.MIN_POOL:
                 lo, hi = similar.scaled_range(full, float(x[0]), s.horizon, centered=vr["chosen"] == "vol_scaled")
-                rs = {"p10": lo, "p90": hi, "method": "vol_scaled"}
+                rs = {"p10": lo, "p90": hi, "method": vr["chosen"]}
             picks.append({
                 "_id": f"{day.date()}:{s.name}:{symbol}",
                 "date": day.date().isoformat(), "symbol": symbol, "setup": s.name, "label": s.label,

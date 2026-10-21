@@ -139,7 +139,7 @@ def test_choose_needs_closer_coverage_and_lower_loss():
     assert similar.choose(pooled, {"a": {"coverage": 0.80, "loss": 0.9}, "b": {"coverage": 0.8, "loss": 0.8}}) == "b"
 
 
-@pytest.mark.parametrize("chosen", ["vol_scaled", None])
+@pytest.mark.parametrize("chosen", ["vol_scaled", "vol_scaled_std", None])
 def test_pick_payload_carries_range_stock_only_when_chosen(monkeypatch, chosen):
     from backend.tests.test_forecast_picks import _fires_on_last_day
     t = setups.table(_frames(days=420, n=3))
@@ -154,4 +154,4 @@ def test_pick_payload_carries_range_stock_only_when_chosen(monkeypatch, chosen):
     if chosen is None:
         assert "range_stock" not in e
     else:
-        assert e["range_stock"]["method"] == "vol_scaled" and e["range_stock"]["p10"] < e["range_stock"]["p90"]
+        assert e["range_stock"]["method"] == chosen and e["range_stock"]["p10"] < e["range_stock"]["p90"]
