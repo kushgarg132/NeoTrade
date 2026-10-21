@@ -50,13 +50,30 @@ export const rupeeMove = (entry, median) => {
   return `≈ ${m < 0 ? '−' : '+'}₹${Math.abs(m).toFixed(1)} on ₹${entry.toFixed(1)}`;
 };
 
+/** "fired Mon · now +0.8% from entry · 14 days left" for a pick from an earlier day (null for today's). */
+export const olderPickLabel = (idea) => {
+  if (!idea?.daysSince || !idea.firedOn) return null;
+  const t = new Date(`${idea.firedOn}T00:00:00Z`);
+  const day = Number.isNaN(t.getTime()) ? null : t.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' });
+  const m = idea.moveSinceEntry;
+  return [day && `fired ${day}`,
+    typeof m === 'number' && `now ${m < 0 ? '−' : '+'}${Math.abs(m * 100).toFixed(1)}% from entry`,
+    idea.daysLeft != null && `${idea.daysLeft} day${idea.daysLeft === 1 ? '' : 's'} left`].filter(Boolean).join(' · ') || null;
+};
+
+/** Copy for the New ideas card when nothing is served. */
+export const noPickText = (hiddenReason) => ({
+  title: 'No pick worth taking today',
+  body: hiddenReason ? `${hiddenReason}. Past ones are in History.` : 'Nothing has an edge over NIFTY. Past ones are in History.',
+});
+
 export const ideaFromPick = (p, setup) => {
   const ex = p.expected?.excess;
   const exMedian = ex?.median ?? p.median_excess ?? null;
   return {
     id: `p-${p._id}`, kind: 'p', symbol: p.symbol, side: 'BUY',
     setup: p.label, horizon: p.horizon,
-    headline: typeof p.expected?.median === 'number' ? { label: whenLabel(p.horizon, p.due_date) || 'expected', value: p.expected.median }
+    headline: typeof p.expected?.median === 'number' ? { label: (p.days_since > 0 ? dueLabel(p.due_date) && `by ${dueLabel(p.due_date)}` : whenLabel(p.horizon, p.due_date)) || 'expected', value: p.expected.median }
       : exMedian != null ? { label: 'vs NIFTY', value: exMedian } : { label: 'median', value: null },
     expectedMedian: p.expected?.median ?? null, when: whenLabel(p.horizon, p.due_date), exMedian,
     // Prefer a per-stock range when the backend sends one (expected.range_stock), else the forecast's p10/p90.
@@ -71,6 +88,7 @@ export const ideaFromPick = (p, setup) => {
     pUp: p.p_up, pBeat: p.p_beat_nifty, pastN: p.n,
     oosExcess: setup?.walk_forward?.oos_excess ?? null, oosN: setup?.walk_forward?.oos_n ?? null,
     noEdge: p.edge === false, decided: false,
+    firedOn: p.fired_on ?? null, daysSince: p.days_since ?? 0, daysLeft: p.days_left ?? null, moveSinceEntry: p.move_since_entry ?? null,
   };
 };
 

@@ -17,7 +17,7 @@ from typing import Optional
 
 import pandas as pd
 
-from backend.core.market_calendar import add_trading_days
+from backend.core.market_calendar import add_trading_days, is_trading_day, trading_days_between
 from backend.datalayer import bars
 from backend.forecast import setups, similar, study
 
@@ -107,6 +107,54 @@ def score(t: dict, pick: dict) -> Optional[dict]:
 def rank_key(p: dict) -> tuple:
     """Best first when sorted with reverse=True (the Picks page order)."""
     return p["median_excess"] * p["p_beat_nifty"], p["strength"]
+
+
+MIN_EXCESS = 0.0          # served picks need an expected median excess over NIFTY above this
+MIN_P_BEAT = 0.55         # ... and at least this chance of beating NIFTY
+RECENT_DAYS = 5           # an earlier pick stays visible this many trading days
+MAX_MOVE = 0.02           # ... while its price is within this of entry_ref
+MAX_SHOWN = 3
+
+
+def has_edge(p: dict) -> bool:
+    return p["median_excess"] > MIN_EXCESS and p["p_beat_nifty"] >= MIN_P_BEAT
+
+
+def _trading_days_after(a: date, b: date) -> int:
+    """Trading days in (a, b]."""
+    return max(len(trading_days_between(a, b)) - (1 if is_trading_day(a) else 0), 0) if b > a else 0
+
+
+def serve(today_picks: list[dict], older: list[dict], prices: dict[str, float], today: date) -> dict:
+    """The served list from every stored candidate (storage is untouched). `today_picks` are the latest
+    pass; `older` earlier ones; `today` the real IST date. Pure."""
+    fired = date.fromisoformat(today_picks[0]["date"]) if today_picks else today
+    shown, no_edge, moved = [], {}, 0
+    for p in today_picks:
+        if has_edge(p):
+            shown.append({**p, "fired_on": p["date"], "days_since": 0, "days_left": _trading_days_after(today, date.fromisoformat(p["due_date"]))})
+        else:
+            no_edge[p["label"]] = no_edge.get(p["label"], 0) + 1
+    for p in older:
+        d = date.fromisoformat(p["date"])
+        since = _trading_days_after(d, fired)
+        if d >= fired or since > RECENT_DAYS or not has_edge(p) or today >= date.fromisoformat(p["due_date"]):
+            continue
+        now = prices.get(p["symbol"])
+        move = now / p["entry_ref"] - 1 if now and p["entry_ref"] else None
+        if move is None or abs(move) > MAX_MOVE:
+            moved += 1
+            continue
+        shown.append({**p, "fired_on": p["date"], "days_since": since, "price_now": now, "move_since_entry": move,
+                      "days_left": _trading_days_after(today, date.fromisoformat(p["due_date"]))})
+    shown.sort(key=lambda p: (p["median_excess"], p["p_beat_nifty"]), reverse=True)
+    over = max(len(shown) - MAX_SHOWN, 0)
+    reasons = [f"{n} {label} pick{'s' if n > 1 else ''} hidden: no edge over NIFTY" for label, n in no_edge.items()]
+    if moved:
+        reasons.append(f"{moved} earlier pick{'s' if moved > 1 else ''} hidden: price moved over {MAX_MOVE:.0%} from entry")
+    if over:
+        reasons.append(f"{over} more hidden: top {MAX_SHOWN} only")
+    return {"shown": shown[:MAX_SHOWN], "hidden_count": sum(no_edge.values()) + moved + over, "hidden_reason": "; ".join(reasons)}
 
 
 def forward(scored: list[dict]) -> dict:

@@ -39,7 +39,20 @@ test('confidence splits the composite into rule and AI parts', () => {
   assert.equal(ideaFromSuggestion({ ...sug, score: { rule: 0.6, ai: 0.5, final: 0.68 } }).score.rule, 0.6);
 });
 
-import { needCount, groupHoldingActions } from './ideas.js';
+import { needCount, groupHoldingActions, olderPickLabel, noPickText } from './ideas.js';
+
+test('older pick label: weekday, move, days left; nothing for today', () => {
+  const old = ideaFromPick({ ...pick, fired_on: '2026-10-19', days_since: 2, days_left: 14, move_since_entry: 0.008, due_date: '2026-11-09' });
+  assert.equal(olderPickLabel(old), 'fired Mon · now +0.8% from entry · 14 days left');
+  assert.equal(old.headline.label, 'by 9 Nov');
+  assert.equal(olderPickLabel(ideaFromPick({ ...pick, fired_on: '2026-10-21', days_since: 0, days_left: 9 })), null);
+  assert.equal(olderPickLabel({ daysSince: 1, firedOn: '2026-10-20', moveSinceEntry: -0.012, daysLeft: 1 }), 'fired Tue · now −1.2% from entry · 1 day left');
+});
+test('empty state names the hidden reason', () => {
+  assert.equal(noPickText('3 Pullback picks hidden: no edge over NIFTY').title, 'No pick worth taking today');
+  assert.match(noPickText('3 Pullback picks hidden: no edge over NIFTY').body, /^3 Pullback picks hidden: no edge over NIFTY\./);
+  assert.match(noPickText('').body, /Nothing has an edge/);
+});
 
 test('needCount: holdings actions (not idea rows) plus pending ideas; bad shapes count 0', () => {
   const acts = [{ kind: 'bad_news' }, { kind: 'results_soon' }, { kind: 'idea' }, { kind: 'stop_hit' }];

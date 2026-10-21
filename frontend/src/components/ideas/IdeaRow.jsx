@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import IdeaBadge from './IdeaBadge';
+import { olderPickLabel } from '../../utils/ideas';
 import { bareSymbol } from '../../utils/formatters';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
@@ -15,9 +16,10 @@ const IdeaRow = ({ idea }) => (
         <span className="text-[15px] font-semibold text-[var(--text)] truncate">{bareSymbol(idea.symbol)}</span>
       </div>
       <div className="flex items-center gap-2 text-[13px] text-[var(--text-muted)]">
-        <span className="truncate">{idea.setup}{idea.horizon ? ` · ${idea.horizon}d` : ''}</span>
+        <span className="truncate">{idea.setup}{idea.horizon && !olderPickLabel(idea) ? ` · ${idea.horizon}d` : ''}</span>
         <span className="shrink-0"><IdeaBadge badge={idea.badge} /></span>
       </div>
+      {olderPickLabel(idea) && <div className="text-[12px] text-[var(--text-muted)] tabular-nums">{olderPickLabel(idea)}</div>}
       {idea.kind === 'p' && idea.spread && (
         <div className="text-[12px] text-[var(--text-muted)] tabular-nums">
           {pct(idea.spread.p10, { sign: true, dp: 1 })} to {pct(idea.spread.p90, { sign: true, dp: 1 })}{idea.pUp != null ? ` · P(up) ${pct(idea.pUp, { dp: 0 })}` : ''}

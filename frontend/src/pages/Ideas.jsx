@@ -13,6 +13,7 @@ import { useLoad } from '../components/ideas/useLoad';
 import { useAuth } from '../context/AuthContext';
 import api, { endpoints } from '../utils/api';
 import { fetchIdeas } from '../hooks/useNeedCount';
+import { noPickText } from '../utils/ideas';
 
 /** Ideas: what needs you on your holdings first, then new ideas (your suggestions, plus Picks for admins). */
 const Ideas = () => {
@@ -31,10 +32,10 @@ const Ideas = () => {
         <Card title="New ideas">
           {fresh.loading ? <Skeleton rows={4} />
             : fresh.error ? <ErrorLine message="Could not load ideas." onRetry={fresh.reload} />
-            : fresh.data.length === 0 ? (
-              <Empty title="No new ideas" body="Ideas appear after the daily scan. Past ones are in History."
+            : fresh.data.items.length === 0 ? (
+              <Empty title={noPickText(fresh.data.hiddenReason).title} body={noPickText(fresh.data.hiddenReason).body}
                 action={<Link to="/ideas/history"><Button variant="secondary">Open history</Button></Link>} />
-            ) : fresh.data.map((i) => <IdeaRow key={i.id} idea={i} />)}
+            ) : fresh.data.items.map((i) => <IdeaRow key={i.id} idea={i} />)}
         </Card>
       </div>
     </Layout>

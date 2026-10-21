@@ -1,6 +1,7 @@
 """Picks (backend/forecast/): no look-ahead, charges, de-duplication,
 walk-forward honesty, admin-only routes, store-before-outcome then score."""
 
+import asyncio
 from datetime import datetime, timezone
 
 import numpy as np
@@ -204,3 +205,51 @@ def test_factor_report_saves_the_keys_the_gate_reads(monkeypatch):
     monkeypatch.setattr(database.db, "db", db, raising=False)
     asyncio.run(report._save({"verdict": {"passed": True}}))
     assert asyncio.run(BacktestGateStore(db).live_eligible(report.STRATEGY_NAME)) is True
+
+
+# --- the served list ------------------------------------------------------------
+
+from datetime import date  # noqa: E402
+
+
+def _p(day, symbol="A", excess=0.02, beat=0.6, entry=100.0, due="2026-10-30", label="Momentum"):
+    return {"_id": f"{day}:{symbol}", "date": day, "symbol": symbol, "label": label, "median_excess": excess,
+            "p_beat_nifty": beat, "entry_ref": entry, "due_date": due}
+
+
+TODAY = date(2026, 10, 21)  # Wed
+
+
+def test_no_edge_picks_are_hidden_with_a_reason():
+    out = picks.serve([_p("2026-10-21", "A", 0.0, 0.5, label="Pullback"), _p("2026-10-21", "B", 0.01, 0.54, label="Pullback"),
+                       _p("2026-10-21", "C")], [], {}, TODAY)
+    assert [p["symbol"] for p in out["shown"]] == ["C"]
+    assert out["hidden_count"] == 2 and out["hidden_reason"] == "2 Pullback picks hidden: no edge over NIFTY"
+
+
+def test_an_earlier_pick_stays_within_5_trading_days_before_due_and_near_entry():
+    t = [_p("2026-10-21", "T")]
+    older = [_p("2026-10-16", "OK"), _p("2026-10-12", "TOO_OLD"),  # 6 trading days back (20 Oct is a holiday)
+             _p("2026-10-19", "DUE", due="2026-10-21"), _p("2026-10-19", "FAR"), _p("2026-10-19", "FLAT", excess=0.0)]
+    prices = {"OK": 101.9, "TOO_OLD": 100, "DUE": 100, "FAR": 103, "FLAT": 100}
+    out = picks.serve(t, older, prices, TODAY)
+    assert {p["symbol"] for p in out["shown"]} == {"T", "OK"}
+    ok = next(p for p in out["shown"] if p["symbol"] == "OK")
+    assert ok["fired_on"] == "2026-10-16" and ok["days_since"] == 2 and ok["days_left"] == 7
+    assert ok["price_now"] == 101.9 and ok["move_since_entry"] == pytest.approx(0.019)
+    assert out["hidden_count"] == 1 and "moved" in out["hidden_reason"]  # FAR
+
+
+def test_ranked_by_excess_then_beat_and_capped_at_three():
+    ps = [_p("2026-10-21", "A", 0.01, 0.9), _p("2026-10-21", "B", 0.03, 0.6), _p("2026-10-21", "C", 0.03, 0.7),
+          _p("2026-10-21", "D", 0.02, 0.6)]
+    out = picks.serve(ps, [], {}, TODAY)
+    assert [p["symbol"] for p in out["shown"]] == ["C", "B", "D"]
+    assert out["hidden_count"] == 1 and "top 3" in out["hidden_reason"]
+
+
+def test_payload_has_shown_and_keeps_picks(mongo):
+    asyncio.run(mongo.picks.insert_one({**_p("2026-10-21", "X", 0.0, 0.5), "strength": 1.0}))
+    body = _client("admin").get("/api/v1/picks").json()
+    assert [p["symbol"] for p in body["picks"]] == ["X"] and body["shown"] == []
+    assert body["hidden_count"] == 1 and "no edge" in body["hidden_reason"]
