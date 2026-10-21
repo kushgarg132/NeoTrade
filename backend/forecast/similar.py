@@ -119,3 +119,79 @@ def validate(ev: pd.DataFrame) -> dict:
     pos = sum(i > 0 for i in ics)
     return {"skill": skill, "ic_years": {"positive": pos, "tested": len(ics)},
             "personalised": bool(skill is not None and skill > 0 and ics and pos / len(ics) >= IC_SHARE)}
+
+
+# --- per-stock range: the pool's standardized quantiles times the stock's own volatility ---
+LO, HI = 0.1, 0.9
+COVER_TARGET = 0.8
+
+
+def horizon_vol(vol60, horizon: int):
+    """Daily vol60 -> horizon-day vol (sqrt-time); the one unit events are standardized in."""
+    return np.asarray(vol60, float) * np.sqrt(horizon)
+
+
+def standardize(net, vol60, horizon: int):
+    return np.asarray(net, float) / horizon_vol(vol60, horizon)
+
+
+def _range(pool: pd.DataFrame, vol60, horizon: int, centered: bool):
+    """(p10, p90) per vol60 entry. centered: the pool's standardized spread around the pool's own
+    (setup) median; else the standardized quantiles times vol outright (median = standardized median)."""
+    zl, zm, zh = np.quantile(standardize(pool["net"], pool["vol60"], horizon), [LO, 0.5, HI])
+    s = horizon_vol(vol60, horizon)
+    if centered:
+        m = float(pool["net"].median())
+        return m + (zl - zm) * s, m + (zh - zm) * s
+    return zl * s, zh * s
+
+
+def scaled_range(pool: pd.DataFrame, vol60: float, horizon: int, centered: bool = True) -> tuple[float, float]:
+    lo, hi = _range(pool, vol60, horizon, centered)
+    return float(lo), float(hi)
+
+
+def _pinball(y, q, tau):
+    d = y - q
+    return float(np.mean(np.maximum(tau * d, (tau - 1) * d)))
+
+
+def _score(y, lo, hi) -> dict:
+    lo, hi = np.asarray(lo, float), np.asarray(hi, float)
+    return {"coverage": float(np.mean((y >= lo) & (y <= hi))), "width": float(np.mean(hi - lo)),
+            "loss": _pinball(y, lo, LO) + _pinball(y, hi, HI)}
+
+
+def choose(pooled: dict, variants: dict) -> str | None:
+    """Best variant (lowest loss) whose coverage is at least as close to 80% as pooled AND whose loss is lower."""
+    gap = lambda m: abs(m["coverage"] - COVER_TARGET)
+    ok = {k: m for k, m in variants.items() if gap(m) <= gap(pooled) and m["loss"] < pooled["loss"]}
+    return min(ok, key=lambda k: ok[k]["loss"]) if ok else None
+
+
+def validate_range(ev: pd.DataFrame, horizon: int) -> dict:
+    """Walk-forward (same folds/pool as `validate`) on net return: pooled p10/p90 vs vol-scaled.
+    -> {n, pooled, vol_scaled (setup median kept), vol_scaled_std (standardized median), each
+    {coverage,width,loss}, chosen: None|variant}"""
+    ys, lo, hi = [], {}, {}
+    for k in ("pooled", "vol_scaled", "vol_scaled_std"):
+        lo[k], hi[k] = [], []
+    folds = yearly_folds(list(ev["signal"].dt.date), min_train_years=3) if len(ev) else []
+    for fold in folds:
+        pool = ev[ev["exit"] < pd.Timestamp(fold.test_start)]
+        test = ev[ev["signal"].dt.year == fold.year]
+        if len(pool) < MIN_POOL or test.empty:
+            continue
+        ys += list(test["net"])
+        a, b = np.quantile(pool["net"], [LO, HI])
+        lo["pooled"] += [a] * len(test)
+        hi["pooled"] += [b] * len(test)
+        for k, c in (("vol_scaled", True), ("vol_scaled_std", False)):
+            l, h = _range(pool, test["vol60"], horizon, c)
+            lo[k] += list(l)
+            hi[k] += list(h)
+    if not ys:
+        return {"n": 0, "chosen": None}
+    y = np.array(ys)
+    m = {k: _score(y, lo[k], hi[k]) for k in lo}
+    return {"n": len(ys), **m, "chosen": choose(m["pooled"], {k: m[k] for k in ("vol_scaled", "vol_scaled_std")})}

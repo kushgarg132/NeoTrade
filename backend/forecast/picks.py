@@ -52,6 +52,8 @@ def compute(t: dict) -> tuple[dict, list[dict]]:
             continue
         ev = similar.event_features(t, study.events(t, s, fires[s.name]), fires[s.name])
         r["similar"] = similar.validate(ev)
+        r["vol_range"] = vr = similar.validate_range(ev, s.horizon)
+        full = ev[ev["exit"] < days[last]]
         frames = similar._frames(t)
         pool = ev[ev["exit"] < days[last]] if r["similar"]["personalised"] else None
         for symbol in fires[s.name].columns:
@@ -63,13 +65,18 @@ def compute(t: dict) -> tuple[dict, list[dict]]:
             f = similar.forecast(pool, x) if pool is not None and x is not None else None
             base = {"median": r["median"], "p10": r["p10"], "p90": r["p90"],
                     "excess": {"median": r["median_excess"], "p10": r["excess_p10"], "p90": r["excess_p90"]}}
+            rs = None
+            if vr["chosen"] and x is not None and len(full) >= similar.MIN_POOL:
+                lo, hi = similar.scaled_range(full, float(x[0]), s.horizon, centered=vr["chosen"] == "vol_scaled")
+                rs = {"p10": lo, "p90": hi, "method": "vol_scaled"}
             picks.append({
                 "_id": f"{day.date()}:{s.name}:{symbol}",
                 "date": day.date().isoformat(), "symbol": symbol, "setup": s.name, "label": s.label,
                 "horizon": s.horizon,
                 "due_date": add_trading_days(day.date(), s.horizon + 1).isoformat(),
                 "entry_ref": float(t["close"][symbol].iat[last]),
-                "expected": {k: f[k] for k in ("median", "p10", "p90", "excess")} if f else base,
+                "expected": {**({k: f[k] for k in ("median", "p10", "p90", "excess")} if f else base),
+                             **({"range_stock": rs} if rs else {})},
                 "p_up": f["p_up"] if f else r["p_up"],
                 "p_beat_nifty": f["p_beat_nifty"] if f else r["p_beat_nifty"], "n": r["n"],
                 "median_excess": f["excess"]["median"] if f else r["median_excess"],
