@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: c925cde
+verified_at: b4d0cd5
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -299,7 +299,7 @@ Response keys (from handler code):
 - `GET /system/status` `{as_of, deploy, jobs, news, data, ai}` (each may be `{error}`); `GET /health` `{api:"ok", ingest}`.
 - `GET /settings/preferences` the merged `DEFAULTS`+stored; `GET /settings/omniroute-tiers` `{tiers, fallback, features_off}`; `GET /settings/omniroute-usage` `{key_name, tokens, cost, providers, as_of, refreshing?}`.
 - `POST /suggestions/scan` 202 `{started, symbols}`; `POST /suggestions/{id}/approve-live` the settled suggestion; `POST /orders/propose` the stored chat action card.
-- `GET /picks` `{date, picks, setups, as_of, forward, caveats}`; `GET /plan/today` `{plan, versions, scorecards, weeks_beating}`; `GET /options/chain` `{underlying,name,expiry,spot,atm_strike,pcr,strikes}`.
+- `GET /picks` `{date, shown (served, max 3), hidden_count, hidden_reason, picks (all candidates), setups, as_of, forward, caveats}`; `GET /plan/today` `{plan, versions, scorecards, weeks_beating}`; `GET /options/chain` `{underlying,name,expiry,spot,atm_strike,pcr,strikes}`.
 
 ## Deploy
 

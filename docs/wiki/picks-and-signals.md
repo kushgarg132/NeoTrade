@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/ml/**, backend/rl/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: f96377f
+verified_at: b4d0cd5
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -33,7 +33,7 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 | backend/rl/evaluate.py | Research only, run by hand: yearly folds (3 train years, train episodes need `episode_end` before the test year); per test year `policy` vs `fixed` (setup horizon) vs `best_fixed` (best holding day on TRAIN); baseline = the better of the two fixed rules on train; pass bar: mean yearly improvement > 0, t >= 2, positive in >= 70% of years, policy max drawdown <= baseline's, and `MIN_TEST_YEARS`=8; `run` adds `family_passed` (>= 2 setups pass); records `lab_runs` kind `rl`, name `fqi_exit:<setup>`, passed or not. CLI `docker exec neotrade-jobs nice python -m backend.rl.evaluate [--setup momentum]` | `evaluate.py::evaluate_rows`, `::evaluate`, `::passes`, `::run`, `::main` |
 | backend/forecast/research/bandit_experiment_tool.py | Research only, not wired: LinUCB/Thompson sizing (0/0.5/1) and exit (horizon vs ATR trail 1.5/2/3) over Picks events; failed its bar 2026-10-18 (fixed rule +0.91% vs bandits +0.68-0.82%), trailing stops lost every year | `bandit_experiment_tool.py::event_table`, `::walk_forward`, `::EXITS` |
 | backend/forecast/research/perstock_experiment_tool.py | Research only, not wired: per-stock P(beat NIFTY) via buckets, shrinkage, LightGBM/logreg vs the pooled setup rate; 2026-10-21 none of 240 configs passed (Brier skill <= +0.004, models -0.007..-0.019) — picks keep the setup average | `perstock_experiment_tool.py::_check` |
-| backend/routers/picks.py | `/picks` admin-only API | `routers/picks.py::router`, `::picks_today`, `::picks_history`; order = `forecast/picks.py::rank_key` (also used by `/today` `picks_top`) |
+| backend/routers/picks.py | `/picks` admin-only API; `picks_today` serves `shown` = `forecast/picks.py::serve` (edge filter `MIN_EXCESS`=0 / `MIN_P_BEAT`=0.55 via `has_edge`; earlier picks stay `RECENT_DAYS`=5 trading days while before `due_date` and `mark_prices` within `MAX_MOVE`=2% of `entry_ref`; top `MAX_SHOWN`=3 by `median_excess` then `p_beat_nifty`). Storage and `autopilot/picks.py` still see every candidate | `routers/picks.py::router`, `::picks_today`, `::picks_history`; order = `forecast/picks.py::rank_key` (also used by `/today` `picks_top`) |
 | backend/factor/model.py | Pure momentum + low-vol scoring, selection with buffer, inverse-vol weights, trend/vol exposure | `factor/model.py::Params`, `::scores`, `::select`, `::weights`, `::exposure`, `::target_book`, `::volatility`, `::YEAR/HALF/MONTH` |
 | backend/factor/backtest.py | Daily MTM backtest: decide on close, trade next close, real charges + slippage (`simulate(..., ex=lab.assumptions.DAILY)`) | `factor/backtest.py::simulate`, `::_trade`, `::performance` (adds `summary`), `::rebalance_days`, `::equal_weight`, `::buy_and_hold`, `::Result`, `::RISK_OFF_YIELD`=0.065 |
 | backend/lab/splits.py | Shared walk-forward folds: one per calendar test year, optional rolling window, purge/embargo trading days | `splits.py::Fold`, `::yearly_folds` |
@@ -188,7 +188,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 
 | Method path | Handler | Auth | Response keys read by frontend |
 |---|---|---|---|
-| GET `/picks` | `routers/picks.py::picks_today` | admin | `date`, `picks[]` (`symbol,label,horizon,edge,explanation,expected{median,p10,p90},p_up,p_beat_nifty,n,entry_ref`), `setups[]` (`label,horizon,n,median,p_up,p_beat_nifty,walk_forward{edge,oos_excess,oos_n,brier,years[]{year,n,predicted_p_up,realised_p_up,mean_excess}}`), `as_of`, `forward{n,status,win_rate,beat_nifty_rate,buckets[]{bucket,n,predicted,realised}}`, `caveats` (`frontend/src/pages/Picks.jsx`) |
+| GET `/picks` | `routers/picks.py::picks_today` | admin | `date`, `shown[]` (the served list: a pick plus `fired_on,days_since,days_left`, and for earlier days `price_now,move_since_entry`), `hidden_count`, `hidden_reason`, `picks[]` (every candidate of the latest pass, kept for compatibility; `symbol,label,horizon,edge,explanation,expected{median,p10,p90},p_up,p_beat_nifty,n,entry_ref`), `setups[]` (`label,horizon,n,median,p_up,p_beat_nifty,walk_forward{edge,oos_excess,oos_n,brier,years[]{year,n,predicted_p_up,realised_p_up,mean_excess}}`), `as_of`, `forward{n,status,win_rate,beat_nifty_rate,buckets[]{bucket,n,predicted,realised}}`, `caveats` (`frontend/src/pages/Picks.jsx`) |
 | GET `/picks/history?days=1..3650` (90) | `::picks_history` | admin | `picks[]` (`_id,date,symbol,label,outcome`) |
 | POST `/suggestions/scan` 202 | `routers/suggestions.py::scan_now` | user | `{started, symbols}`; body `universe` ≤300 |
 | GET `/suggestions?mode&status&limit` | `::list_suggestions` | user | suggestion docs filtered by `for_mine` |
