@@ -18,11 +18,17 @@ const IdeaRow = ({ idea }) => (
         <span className="truncate">{idea.setup}{idea.horizon ? ` · ${idea.horizon}d` : ''}</span>
         <span className="shrink-0"><IdeaBadge badge={idea.badge} /></span>
       </div>
+      {idea.kind === 'p' && idea.spread && (
+        <div className="text-[12px] text-[var(--text-muted)] tabular-nums">
+          {pct(idea.spread.p10, { sign: true, dp: 1 })} to {pct(idea.spread.p90, { sign: true, dp: 1 })}{idea.pUp != null ? ` · P(up) ${pct(idea.pUp, { dp: 0 })}` : ''}
+          {idea.exMedian != null && <span className="text-[11px] opacity-80"> · vs NIFTY {pct(idea.exMedian, { sign: true, dp: 1 })}{idea.pBeat != null ? ` · beats ${pct(idea.pBeat, { dp: 0 })}` : ''}</span>}
+        </div>
+      )}
     </div>
     {idea.headline?.value != null && (
       <div className="shrink-0 text-right tabular-nums">
         <div className={`text-[15px] font-semibold ${toneText(tone(idea.headline.value))}`}>{pct(idea.headline.value, { sign: true, dp: 1 })}</div>
-        <div className="text-[12px] text-[var(--text-muted)]">{idea.headline.label}{idea.kind === 'p' && idea.pBeat != null ? ` · beats ${pct(idea.pBeat, { dp: 0 })}` : ''}</div>
+        <div className="text-[12px] text-[var(--text-muted)]">{idea.headline.label}{idea.kind === 'p' && idea.expectedMedian == null && idea.pBeat != null ? ` · beats ${pct(idea.pBeat, { dp: 0 })}` : ''}</div>
       </div>
     )}
     <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />

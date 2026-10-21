@@ -30,13 +30,38 @@ export const ideaFromSuggestion = (s) => {
   };
 };
 
+/** "20 Nov" from a date-only string (IST date, so pin to UTC and never shift it). */
+export const dueLabel = (d) => {
+  const t = d ? new Date(`${d}T00:00:00Z`) : null;
+  return t && !Number.isNaN(t.getTime()) ? t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : null;
+};
+
+/** "in 20 trading days · by 20 Nov" (either half may be missing). */
+export const whenLabel = (horizon, due) => {
+  const d = dueLabel(due);
+  const h = horizon ? `in ${horizon} trading day${horizon === 1 ? '' : 's'}` : null;
+  return [h, d && `by ${d}`].filter(Boolean).join(' · ') || null;
+};
+
+/** Expected move per share: "≈ ₹5.7 on ₹522.9" (null without an entry price or a median). */
+export const rupeeMove = (entry, median) => {
+  if (typeof entry !== 'number' || typeof median !== 'number' || !entry) return null;
+  const m = entry * median;
+  return `≈ ${m < 0 ? '−' : '+'}₹${Math.abs(m).toFixed(1)} on ₹${entry.toFixed(1)}`;
+};
+
 export const ideaFromPick = (p, setup) => {
   const ex = p.expected?.excess;
   const exMedian = ex?.median ?? p.median_excess ?? null;
   return {
     id: `p-${p._id}`, kind: 'p', symbol: p.symbol, side: 'BUY',
     setup: p.label, horizon: p.horizon,
-    headline: exMedian != null ? { label: 'vs NIFTY', value: exMedian } : { label: 'median', value: p.expected?.median ?? null },
+    headline: typeof p.expected?.median === 'number' ? { label: whenLabel(p.horizon, p.due_date) || 'expected', value: p.expected.median }
+      : exMedian != null ? { label: 'vs NIFTY', value: exMedian } : { label: 'median', value: null },
+    expectedMedian: p.expected?.median ?? null, when: whenLabel(p.horizon, p.due_date), exMedian,
+    // Prefer a per-stock range when the backend sends one (expected.range_stock), else the forecast's p10/p90.
+    spread: p.expected ? { p10: p.expected.range_stock?.p10 ?? p.expected.p10, p90: p.expected.range_stock?.p90 ?? p.expected.p90 } : null,
+    rupees: rupeeMove(p.entry_ref, p.expected?.median),
     badge: { source: 'picks', name: p.setup },
     entry: p.entry_ref, stop: null, target: null, qty: null, notional: null, risk: null,
     reasons: [], thesis: null, why: p.explanation || null,

@@ -158,6 +158,17 @@ const IdeaDetail = () => {
         )}
       </Card>
 
+      {idea.kind === 'p' && idea.expectedMedian != null && (
+        <Card title="Expected return">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className={`text-[24px] font-semibold tabular-nums ${toneText(idea.expectedMedian > 0 ? 'gain' : idea.expectedMedian < 0 ? 'loss' : 'neutral')}`}>{pct(idea.expectedMedian, { sign: true, dp: 1 })}</span>
+            {idea.when && <span className="text-[14px] text-[var(--text-muted)]">{idea.when}</span>}
+          </div>
+          {idea.rupees && <p className="mt-1 text-[14px] text-[var(--text)] tabular-nums">{idea.rupees}</p>}
+          {idea.spread && <p className="mt-1 text-[13px] text-[var(--text-muted)] tabular-nums">Range {pct(idea.spread.p10, { sign: true, dp: 1 })} to {pct(idea.spread.p90, { sign: true, dp: 1 })} (p10 to p90)</p>}
+        </Card>
+      )}
+
       {idea.range && (
         <Card title={idea.excessRange ? 'Likely result vs NIFTY' : 'Likely range'}>
           {idea.forecast && (

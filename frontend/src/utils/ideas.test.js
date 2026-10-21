@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { confidence, ideaFromSuggestion, ideaFromPick, rangeBar, parseIdeaId, describeFeatures } from './ideas.js';
+import { confidence, ideaFromSuggestion, ideaFromPick, rangeBar, parseIdeaId, describeFeatures, dueLabel, whenLabel, rupeeMove } from './ideas.js';
 
 const sug = { id: 'a1', symbol: 'TCS', side: 'BUY', quantity: 10, entry_ref: 100, stop: 95, target: 110, notional: 1000,
   strategy: 'macd_crossover', reason_codes: ['macd_crossover'], max_hold_days: 5, status: 'PENDING' };
@@ -51,11 +51,11 @@ test('groupHoldingActions groups exits under one title, in order', () => {
   const g = groupHoldingActions([{ kind: 'stop_hit' }, { kind: 'bad_news' }, { kind: 'target_hit' }, { kind: 'idea' }]);
   assert.deepEqual(g.map((x) => [x.title, x.items.length]), [['Exit alerts', 2], ['Bad news', 1]]);
 });
-test('pick with per-stock forecast headlines excess and describes features', () => {
+test('pick with per-stock forecast keeps excess and describes features', () => {
   const v = ideaFromPick({ ...pick, forecast: 'similar', similar_n: 150, expected: { ...pick.expected, excess: { p10: -0.05, median: 0.015, p90: 0.07 } },
     features: { dist_high: -0.01, vol60: 0.01, mom: 0.2, rel20: 0.05, strength: 1, regime: 1 } });
-  assert.equal(v.headline.value, 0.015);
-  assert.equal(v.headline.label, 'vs NIFTY');
+  assert.equal(v.exMedian, 0.015);
+  assert.equal(v.headline.value, 0.02);
   assert.equal(v.similarN, 150);
   assert.equal(v.features[0], 'near its 52-week high');
   assert.ok(v.features.includes('calmer than usual'));
@@ -66,4 +66,19 @@ test('describeFeatures reads regime as a fraction and skips setup-scaled strengt
   assert.deepEqual(words, ['market in an uptrend']);
   assert.deepEqual(describeFeatures({ regime: 0.01 }), ['market sideways']);
   assert.deepEqual(describeFeatures({ regime: -0.05 }), ['market in a downtrend']);
+});
+
+test('pick expected-return fields', () => {
+  const v = ideaFromPick({ ...pick, due_date: '2026-11-20', entry_ref: 522.9, expected: { median: 0.011, p10: -0.098, p90: 0.132, excess: { median: -0.0004 }, range_stock: { p10: -0.2, p90: 0.3 } } });
+  assert.deepEqual(v.headline, { label: 'in 10 trading days · by 20 Nov', value: 0.011 });
+  assert.deepEqual(v.spread, { p10: -0.2, p90: 0.3 });
+  assert.equal(v.rupees, '≈ +₹5.8 on ₹522.9');
+  assert.deepEqual(ideaFromPick(pick).spread, { p10: -0.04, p90: 0.08 });
+});
+test('date and rupee helpers', () => {
+  assert.equal(dueLabel('2026-11-03'), '3 Nov');
+  assert.equal(dueLabel(null), null);
+  assert.equal(whenLabel(1, null), 'in 1 trading day');
+  assert.equal(rupeeMove(100, -0.05), '≈ −₹5.0 on ₹100.0');
+  assert.equal(rupeeMove(null, 0.1), null);
 });
