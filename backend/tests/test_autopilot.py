@@ -10,7 +10,7 @@ import pytest
 from mongomock_motor import AsyncMongoMockClient
 
 from backend.autopilot import fence, service
-from backend.autopilot.fence import FenceState
+from backend.autopilot.fence import FenceState, round_trip_cost
 from backend.autopilot.service import AutopilotOrder
 from backend.core.models import Side
 from backend.engine.session import IST
@@ -438,3 +438,16 @@ async def test_the_autopilot_skips_ideas_the_open_has_already_broken(world, monk
 
     taken = {d["id"]: d.get("ai_order") for d in await db["suggestions"].find({}).to_list(None)}
     assert taken == {"gap": None, "chase": None, "ok": "FILLED"}
+
+
+def test_an_entry_whose_expected_gain_cannot_pay_its_round_trip_is_refused():
+    """2026-10-23: ₹3,000 lots cost ~0.8% a round trip; a pullback pick expected ~0%."""
+    small = AutopilotOrder(symbol="INFY", side=Side.BUY, quantity=2, product="CNC", source="picks", reason="t",
+                           context={"expected_return": 0.002})
+    assert "too small to pay for itself" in fence.check(small, 1500.0, _state(), PREFS)
+    ok = AutopilotOrder(symbol="INFY", side=Side.BUY, quantity=2, product="CNC", source="picks", reason="t",
+                        context={"expected_return": 0.04})
+    assert fence.check(ok, 1500.0, _state(), PREFS) is None
+    assert fence.check(_order(qty=2), 1500.0, _state(), PREFS) is None  # says nothing: no rule
+    cost = round_trip_cost(1500.0, 2, "CNC")
+    assert 3000 * 0.006 < cost < 3000 * 0.012  # charges + DP + 2 x 10 bps on a ₹3,000 lot

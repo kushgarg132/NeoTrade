@@ -79,7 +79,8 @@ async def enter(db, redis, user_id: str, now: datetime) -> list[dict]:
             reason=f"Pick: {p['label']} (P(up) {p['p_up']:.0%}, {p['horizon']}-day horizon).",
             strategy=f"{PREFIX}{p['setup']}", live=live,
             context={"pick_id": p["_id"], "due_date": p["due_date"], "strength": p["strength"],
-                     "reason_codes": [p["setup"]]}), now=now, quiet=True)
+                     "reason_codes": [p["setup"]], "expected_return": (p.get("expected") or {}).get("median")}),
+            now=now, quiet=True)
         results.append({"pick": p["_id"], **result})
     return results
 

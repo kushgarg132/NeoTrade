@@ -439,7 +439,9 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
         result = await service.submit(db, redis, user_id, service.AutopilotOrder(
             symbol=s["symbol"], side=Side(s["side"]), quantity=quantity, product="CNC",
             source=source, reason=f"{'News' if source == 'news' else 'Engine'} proposal ({s.get('strategy') or 'scan'}): {', '.join(s.get('reason_codes') or [])}",
-            strategy=s.get("strategy")),
+            strategy=s.get("strategy"),
+            # The whole way to target: generous, so the fence only drops ideas whose target cannot pay the charges.
+            context={"expected_return": s["target"] / unit - 1} if s.get("target") and s["side"] == "BUY" else None),
             now=now, suggestion_id=s["id"], quiet=True)
         if result["status"] in ("FILLED", "SENT"):
             # Still PENDING: the same idea is the user's to take on their own

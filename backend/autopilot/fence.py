@@ -19,6 +19,7 @@ from backend.core.models import Side
 
 PRODUCTS = {"CNC", "MIS"}
 NEWS_ENTRIES_PER_DAY = 3
+COST_MULTIPLE = 1.5  # an entry's expected gain must clear this many times its round-trip cost
 
 
 @dataclass
@@ -37,6 +38,15 @@ class FenceState:
 def trade_cap(prefs: dict, regime: Optional[str]) -> float:
     """The per-trade cap in force: halved while the market is risk-off."""
     return prefs["per_trade_cap"] / (2 if regime == "risk_off" else 1)
+
+
+def round_trip_cost(price: float, quantity: float, product: str) -> float:
+    """Charges on both sides at `price` plus the study's slippage both ways (lab/assumptions.py)."""
+    from backend.engine.execution.costs import fill_costs
+    from backend.lab.assumptions import DEFAULT
+
+    slippage = 2 * price * quantity * DEFAULT.slippage_bps / 10_000
+    return fill_costs(price, quantity, Side.BUY, product, False) + fill_costs(price, quantity, Side.SELL, product, False) + slippage
 
 
 @lru_cache(maxsize=1)
@@ -91,4 +101,12 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
     limit = prefs["max_trades_per_day"]
     if limit and state.entries_today >= limit:  # 0 is off, as on Settings > Safety
         return f"Already {state.entries_today} trades today (limit {limit})."
+    # An entry that says what it expects (a pick's median, an engine idea's target) must expect to pay
+    # for itself: on a ₹3,000 lot the fixed DP charge alone is ~0.5% of a sell (2026-10-23 scan).
+    expected = (getattr(order, "context", None) or {}).get("expected_return")
+    if expected is not None:
+        cost = round_trip_cost(price, order.quantity, order.product)
+        if expected * notional < COST_MULTIPLE * cost:
+            return (f"Expected gain ₹{expected * notional:,.0f} is under {COST_MULTIPLE:g}x the round-trip charges "
+                    f"and slippage (₹{cost:,.0f}): too small to pay for itself.")
     return None
