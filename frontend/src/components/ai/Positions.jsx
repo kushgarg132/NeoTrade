@@ -4,25 +4,29 @@ import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
 import Empty from '../ui/Empty';
 import ListRow from '../ui/ListRow';
-import { inr } from '../ui/format';
+import { Link } from 'react-router-dom';
+import Badge from '../ui/Badge';
+import { inr, pct } from '../ui/format';
 import { stockPath } from '../../utils/stocks';
 
 /** AI -> Positions: what the AI holds now, each row opens the stock. */
 const Positions = ({ state }) => {
-  if (state.error) return <ErrorLine message="Could not load the AI book." onRetry={state.retry} />;
+  if (state.error) return <ErrorLine message="Couldn't load the AI's positions." onRetry={state.retry} />;
   if (!state.loaded) return <Skeleton rows={4} />;
   const rows = Object.values(state.data || {}).filter((p) => p.quantity);
   const total = rows.reduce((sum, p) => sum + (p.unrealized_pnl || 0), 0);
-  if (rows.length === 0) return <Empty title="Nothing open" body="Positions the AI holds appear here." />;
+  if (rows.length === 0) return <Empty title="Nothing open" body="Positions the AI holds appear here once it places a trade."
+    action={<Link to="/settings?tab=limits" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Check autopilot in Limits</Link>} />;
   return (
-    <Card title={`${rows.length} open`} action={<span className={`private text-[15px] font-semibold tabular-nums ${total < 0 ? 'text-[var(--loss)]' : 'text-[var(--gain)]'}`}>{inr(total, { sign: true })}</span>}>
+    <Card title={<span className="inline-flex items-center gap-2">{rows.length} open <Badge kind="paper">Paper</Badge></span>} action={<span className={`private text-[15px] font-semibold tabular-nums ${total < 0 ? 'text-[var(--loss)]' : 'text-[var(--gain)]'}`}>{inr(total, { sign: true })}</span>}>
       {rows.map((p) => (
         <ListRow
           key={p.symbol}
           to={stockPath(p.symbol)}
           title={p.symbol}
+          dense
           sub={`${p.quantity} @ ${inr(p.avg_price)}`}
-          right={inr(p.unrealized_pnl, { sign: true })}
+          right={`${inr(p.unrealized_pnl, { sign: true })} (${pct(p.unrealized_pnl / (p.quantity * p.avg_price || 1), { sign: true })})`}
           rightTone={p.unrealized_pnl > 0 ? 'gain' : p.unrealized_pnl < 0 ? 'loss' : 'neutral'}
         />
       ))}

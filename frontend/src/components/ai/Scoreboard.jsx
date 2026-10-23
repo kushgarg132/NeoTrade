@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import Card from '../ui/Card';
 import Stat from '../ui/Stat';
 import Badge from '../ui/Badge';
@@ -12,8 +13,10 @@ import { inr } from '../ui/format';
 import { toneText } from '../ui/tone';
 import { scoreboard } from '../../utils/ai';
 
-const Section = ({ state, children, ...p }) => {
-  if (state.error) return <ErrorLine message="Could not load this." onRetry={state.retry} />;
+const Paper = () => <Badge kind="paper">Paper</Badge>;
+const settingsLink = (label) => <Link to="/settings?tab=limits" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">{label}</Link>;
+const Section = ({ state, children, what, ...p }) => {
+  if (state.error) return <ErrorLine message={`Couldn't load the AI's ${what}.`} onRetry={state.retry} />;
   if (!state.loaded) return <Skeleton rows={p.rows || 3} />;
   return children;
 };
@@ -30,18 +33,18 @@ const Scoreboard = ({ board, card, forward, capital, mineValue }) => {
   const strategies = card.data?.strategies || [];
   return (
     <div className="space-y-3">
-      <Card title="This month">
-        <Section state={board} rows={2}>
+      <Card title="This month" action={<Paper />}>
+        <Section state={board} rows={2} what="monthly score">
           <div className="grid grid-cols-3 gap-3">
             {s.versus.map((v) => <Stat key={v.label} label={v.label} value={<span className={toneText(v.tone)}>{v.value}</span>} />)}
           </div>
-          <p className="mt-2 text-[13px] text-[var(--text-muted)]">This month, closed trades net of charges, as % of the money each book works with (AI: its whole book, Picks, engine and news trades, against its capital; you: your holdings). NIFTY is not month-aligned: it is the index since the AI began{s.niftyFrom ? ` (${s.niftyFrom})` : ''}.</p>
+          <p className="mt-2 text-[13px] text-[var(--text-muted)]">Closed trades this month, after charges, as % of each book's capital. You = your own account. NIFTY is the index since the AI began{s.niftyFrom ? ` (${s.niftyFrom})` : ''}, not this month.</p>
         </Section>
       </Card>
-      <Card title="Track record">
-        <Section state={card} rows={2}>
+      <Card title="Track record" action={<Paper />}>
+        <Section state={card} rows={2} what="track record">
           {card.data?.totals?.trades === 0 ? (
-            <Empty title="No closed trades yet" body="Each closed AI trade lands here, net of charges." />
+            <Empty title="No closed trades yet" body="Each closed AI trade lands here, after charges. It starts once the autopilot places a trade." action={settingsLink('Check autopilot in Limits')} />
           ) : (
             <div className="grid grid-cols-2 gap-x-3 gap-y-3">
               {s.stats.map((v) => <Stat key={v.label} label={v.label} value={<span className={toneText(v.tone)}>{v.value}</span>} />)}
@@ -49,10 +52,10 @@ const Scoreboard = ({ board, card, forward, capital, mineValue }) => {
           )}
         </Section>
       </Card>
-      <Card title="Strategies">
-        <Section state={card} rows={3}>
+      <Card title="Strategies" action={<Paper />}>
+        <Section state={card} rows={3} what="strategies">
           {strategies.length === 0 ? (
-            <Empty title="No strategies yet" body="Strategies appear once the AI has a trade." />
+            <Empty title="No strategies yet" body="Each strategy the AI trades gets a line here with its proven status." action={settingsLink('Check autopilot in Limits')} />
           ) : strategies.map((st) => {
             const b = badgeFor(forward, 'engine', st.strategy);
             return (
@@ -63,6 +66,7 @@ const Scoreboard = ({ board, card, forward, capital, mineValue }) => {
                 right={<span className="inline-flex items-center gap-2">{b && <Badge kind={b.tone === 'success' ? 'proven' : 'unproven'}>{b.text}</Badge>}{inr(st.total ?? st.net, { sign: true })}</span>}
                 rightTone={(st.total ?? st.net) > 0 ? 'gain' : (st.total ?? st.net) < 0 ? 'loss' : 'neutral'}
                 chevron={false}
+                dense
               />
             );
           })}
