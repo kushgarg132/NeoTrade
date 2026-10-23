@@ -17,7 +17,11 @@ import { useForward } from '../components/ForwardBadge';
 import api, { endpoints } from '../utils/api';
 import { recordLine, statusOf } from '../utils/library';
 import { ideaFromSuggestion, ideaFromPick, parseIdeaId, GRADES } from '../utils/ideas';
-import { bareSymbol } from '../utils/formatters';
+import { bareSymbol, formatDateTime } from '../utils/formatters';
+import NewsChip from '../components/common/NewsChip';
+import useSymbolNews from '../hooks/useSymbolNews';
+import useStored from '../hooks/useStored';
+import { oneLine } from '../utils/aiText';
 import { inr, pct } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import { AiCard, AiText } from '../components/ai/AiSummary';
@@ -107,6 +111,26 @@ const Thesis = ({ text, at }) => {
   );
 };
 
+/** A pick's context: the stock's stored AI note (no model call here) and its latest scored headline. */
+const PickContext = ({ symbol }) => {
+  const sym = bareSymbol(symbol);
+  const note = useStored(endpoints.stockNote(sym));
+  const { news } = useSymbolNews([sym]);
+  const text = note.status === 'ok' ? oneLine(note.data.summary) : '';
+  if (!text && !news[sym]) return null;
+  return (
+    <div className="mt-3 pt-3 border-t border-[var(--border)] space-y-2">
+      {text && (
+        <div>
+          <span className="block text-[12px] text-[var(--text-muted)]">AI note{note.data?.as_of ? ` · ${formatDateTime(note.data.as_of)}` : ''}</span>
+          <AiText text={text} />
+        </div>
+      )}
+      <NewsChip entry={news[sym]} />
+    </div>
+  );
+};
+
 const IdeaDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -137,6 +161,7 @@ const IdeaDetail = () => {
         {idea.why && <p className="text-[15px] text-[var(--text)]">{idea.why}</p>}
         {idea.reasons.length > 0 && <ul className="list-disc pl-5 text-[15px] text-[var(--text)]">{idea.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
         {!idea.why && !idea.reasons.length && !idea.thesis && <p className="text-[14px] text-[var(--text-muted)]">No reasons recorded.</p>}
+        {idea.kind === 'p' && <PickContext symbol={idea.symbol} />}
       </Card>
 
       {idea.thesis && <Thesis text={idea.thesis} at={idea.createdAt} />}
@@ -147,6 +172,18 @@ const IdeaDetail = () => {
           {idea.stop != null && <Stat label="Stop" value={px(idea.stop)} />}
           {idea.target != null && <Stat label="Target" value={px(idea.target)} />}
         </div>
+        {idea.kind === 'p' && (idea.entryZone || idea.stretch != null || idea.rewardRisk != null) && (
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            {idea.entryZone && <Stat label="Buy up to" value={px(idea.entryZone[1])} />}
+            {idea.stretch != null && <Stat label="Stretch" value={px(idea.stretch)} />}
+            {idea.rewardRisk != null && <Stat label="Reward : risk" value={`${idea.rewardRisk.toFixed(1)} : 1`} />}
+          </div>
+        )}
+        {idea.kind === 'p' && idea.toStop != null && (
+          <p className="mt-3 text-[13px] text-[var(--text-muted)]">
+            Stop {pct(idea.toStop, { sign: true, dp: 1 })} from entry. Levels come from this setup's past range; they are not a promise.
+          </p>
+        )}
         {idea.kind === 's' && (idea.headline?.value != null || idea.toStop != null) && (
           <div className="mt-4 grid grid-cols-2 gap-3">
             {idea.headline?.value != null && <Stat label="If it hits target" value={<span className="text-[var(--gain)]">{pct(idea.headline.value, { sign: true, dp: 1 })}</span>} />}
