@@ -8,6 +8,7 @@ const Theme = () => {
   const { theme, setTheme } = useTheme();
   return (
     <Card title="Appearance">
+      <p className="mb-3 text-[14px] text-[var(--text-muted)]">Changes every screen on this device. Dark is easier on the eyes at night.</p>
       <div role="radiogroup" aria-label="Theme" className="flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
         {OPTIONS.map(([id, label]) => (
           <button key={id} type="button" role="radio" aria-checked={theme === id} onClick={() => setTheme(id)}
