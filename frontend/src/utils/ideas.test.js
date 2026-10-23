@@ -119,3 +119,9 @@ test('a pick carries its levels: stop, target, entry zone, stretch, reward:risk'
   assert.ok(Math.abs(v.toStop + 0.04) < 1e-9);
   assert.equal(ideaFromPick(pick).stop, null);
 });
+
+test('a backfilled pick says it was recomputed, not fired live', () => {
+  const v = ideaFromPick({ ...pick, backfilled: true, fired_on: '2026-10-01', days_since: 15, days_left: 7 });
+  assert.equal(v.backfilled, true);
+  assert.match(olderPickLabel(v), /^recomputed for Thu/);
+});

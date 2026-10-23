@@ -56,7 +56,7 @@ export const olderPickLabel = (idea) => {
   const t = new Date(`${idea.firedOn}T00:00:00Z`);
   const day = Number.isNaN(t.getTime()) ? null : t.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' });
   const m = idea.moveSinceEntry;
-  return [day && `fired ${day}`,
+  return [day && `${idea.backfilled ? 'recomputed for' : 'fired'} ${day}`,
     typeof m === 'number' && `now ${m < 0 ? '−' : '+'}${Math.abs(m * 100).toFixed(1)}% from entry`,
     idea.missedEntry && 'past the entry zone',
     idea.daysLeft != null && `${idea.daysLeft} day${idea.daysLeft === 1 ? '' : 's'} left`].filter(Boolean).join(' · ') || null;
@@ -102,6 +102,7 @@ export const ideaFromPick = (p, setup, gradeText = null) => {
     adjExcess: setup?.adjusted?.excess ?? null, adjT: setup?.adjusted?.t ?? null,
     grade: p.grade ?? null, gradeText: gradeText?.[p.grade] ?? null,
     missedEntry: p.missed_entry === true, beatsOdds: p.beats_nifty_odds ?? null,
+    backfilled: p.backfilled === true, // recomputed after the fact (picks.py::backfill), never in the forward record
     noEdge: p.edge === false, decided: false, experimental: p.experimental === true,
     firedOn: p.fired_on ?? null, daysSince: p.days_since ?? 0, daysLeft: p.days_left ?? null, moveSinceEntry: p.move_since_entry ?? null,
   };
