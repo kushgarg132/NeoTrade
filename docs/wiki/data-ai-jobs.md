@@ -15,7 +15,7 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | path | role | key symbols |
 |---|---|---|
 | `backend/datalayer/worker.py` | ingest entrypoint: leader lock, 16 loops, heartbeats | `worker.py::_loops`, `::run`, `::_run_loop`, `::beat`, `::heartbeat_ages`, `::main` |
-| `backend/datalayer/prices.py` | quotes + macro board loops | `prices.py::quotes`, `::macro`, `::macro_rows`, `::priority_symbols`, `::last_two`, `::MACRO` |
+| `backend/datalayer/prices.py` | quotes + macro board loops | `prices.py::quotes`, `::macro`, `::macro_rows` (cached rows with `at`, missing tickers left out; `market_data.py::_quotes` fetches only those, also used by `index_move.py::_peers`), `::priority_symbols`, `::last_two`, `::MACRO` |
 | `backend/datalayer/news_sources.py` | fetchers: RSS, Google News, GDELT, NSE filings; Nifty 200 csv | `news_sources.py::FEEDS`, `::poll`, `::fetch_rss`, `::fetch_gdelt`, `::fetch_nse`, `::universe_rows`, `::sectors`, `::nifty200_sectors` |
 | `backend/datalayer/news.py` | news pipeline: store, triage, prune, score, aggregate | `news.py::poll_loop`, `::process_loop`, `::store`, `::triage`, `::_prune`, `::score`, `::aggregate`, `::followed`, `::valid_impacts`, `::_deep_budget`, `::_score_due` |
 | `backend/datalayer/reactor.py` | alerts, news-triggered scans, shadow exits; shared `_claim` | `reactor.py::react`, `::scan`, `::shadow_exits`, `::_claim`, `::hits_for`, `::scan_targets`, `::ai_targets`, `::exit_hit` |

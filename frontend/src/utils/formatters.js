@@ -106,6 +106,27 @@ export const marketPhase = (now = new Date()) => {
   return 'open';
 };
 
+const LIVE = new Set(['open', 'pre', 'session']); // marketPhase() and GET /today `phase` both
+const STALE_LIVE_MS = 15 * 60_000;
+const STALE_CLOSED_MS = 4 * 86_400_000; // a long weekend plus a day
+
+/**
+ * The freshness line under a market figure: `at` is epoch seconds, ms or an ISO string,
+ * `phase` either marketPhase() or /today's. In session "as of 2:31 PM", stale past 15 min;
+ * closed "Market closed · last close", or the date once it is older than a long weekend.
+ * null when there is no `at`.
+ */
+export const asOf = (at, phase = marketPhase(), now = Date.now()) => {
+  if (at === null || at === undefined || at === '') return null;
+  const ms = typeof at === 'number' ? (at < 1e12 ? at * 1000 : at) : new Date(at).getTime();
+  if (!Number.isFinite(ms)) return null;
+  const age = now - ms;
+  if (LIVE.has(phase)) return { text: `as of ${formatClock(ms)}`, stale: age > STALE_LIVE_MS };
+  return age > STALE_CLOSED_MS
+    ? { text: `as of ${formatDateTime(ms)}`, stale: true }
+    : { text: 'Market closed · last close', stale: false };
+};
+
 /** Index levels are points, not rupees: grouped, two decimals, no symbol. */
 export const formatLevel = (value) => {
   if (value === null || value === undefined || isNaN(value)) return '—';

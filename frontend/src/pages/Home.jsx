@@ -69,10 +69,10 @@ const Home = () => {
           </Link>
         ))}
         <div className="grid grid-cols-2 gap-3">
-          <Tile title="Money" icon={Wallet} to="/money" value={h.money.value} sub={h.money.sub} tone={h.money.tone} subTone={h.money.subTone} />
+          <Tile title="Money" icon={Wallet} to="/money" value={h.money.value} sub={h.money.sub} tone={h.money.tone} subTone={h.money.subTone} meta={h.money.meta} />
           <Tile title="Ideas" icon={Lightbulb} to="/ideas" value={h.ideas.value} sub={h.ideas.sub} tone={h.ideas.tone} />
           <Tile title="AI" icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.sub} tone={h.ai.tone} />
-          <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} />
+          <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} meta={h.market.meta} />
         </div>
         {kind && <BriefCard title={kind === 'premarket' ? 'Before the open' : 'After the close'} text={today[kind]} summary={day} />}
         <GoalTile />

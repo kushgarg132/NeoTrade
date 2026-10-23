@@ -6,6 +6,7 @@ import ErrorLine from '../ui/ErrorLine';
 import Empty from '../ui/Empty';
 import ListRow from '../ui/ListRow';
 import Badge from '../ui/Badge';
+import AsOf from '../ui/AsOf';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
 import { sectorRows, breadth } from '../../utils/market';
@@ -104,6 +105,7 @@ const Indices = () => {
                    chevron={EXPLAINABLE.has(i.symbol)}
                    onClick={EXPLAINABLE.has(i.symbol) ? () => setOpen(i) : undefined} />
         ))}
+      {data?.length > 0 && <AsOf rows={data} />}
       {open && <IndexSheet index={open} onClose={() => setOpen(null)} />}
     </Card>
   );
@@ -167,6 +169,7 @@ const Movers = () => {
           <ListRow key={m.symbol} title={m.symbol} to={stockPath(m.symbol)}
                    right={<span className={toneText(tone(m.percent))}>{pct(m.percent / 100, { sign: true })}</span>} />
         ))}
+      {data?.length > 0 && <AsOf rows={data} />}
     </Card>
   );
 };

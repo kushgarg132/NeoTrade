@@ -17,3 +17,15 @@ test('formatClock: 12-hour IST', () => {
   assert.equal(formatClock('2026-10-06T18:30:00Z'), '12:00 AM');
   assert.equal(formatClock(null), '—');
 });
+
+test('asOf: clock in session, stale past 15 min; closed says last close, dated after a long weekend', async () => {
+  const { asOf } = await import('./formatters.js');
+  const now = Date.parse('2026-10-23T09:00:00Z'); // Fri 14:30 IST
+  assert.equal(asOf(null), null);
+  assert.deepEqual(asOf(now / 1000 - 60, 'open', now), { text: 'as of 2:29 PM', stale: false });
+  assert.equal(asOf(now - 16 * 60_000, 'session', now).stale, true);
+  assert.deepEqual(asOf(now - 3_600_000, 'closed', now), { text: 'Market closed · last close', stale: false });
+  const old = asOf(now - 5 * 86_400_000, 'post', now);
+  assert.equal(old.stale, true);
+  assert.match(old.text, /^as of 18 OCT 2026/);
+});

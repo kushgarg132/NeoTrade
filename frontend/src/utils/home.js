@@ -1,5 +1,6 @@
 import { inr, pct, tone } from '../components/ui/format.js';
 import { holdingActions } from './ideas.js';
+import { asOf } from './formatters.js';
 
 const REGIME = { risk_off: 'Risk off', risk_on: 'Risk on', neutral: 'Neutral' };
 const PHASE = { pre: 'Before the open', session: 'Market open', post: 'After the close', closed: 'Market closed' };
@@ -15,16 +16,19 @@ const p100 = (x, opts) => (typeof x === 'number' ? pct(x / 100, opts) : '—');
  * `need` is the useNeedCount result ({ count, actions, ideas }, null while loading) and `book` the
  * AI page's figures (utils/ai.js::aiBook), so the tiles read what their pages show.
  */
-export const tileHeadlines = (today, overview, indices, need = null, book = null) => {
+export const tileHeadlines = (today, overview, indices, need = null, book = null, now = Date.now()) => {
   const t = today || {};
+  const phase = t.phase || 'session';
+  const day = phase === 'session' ? 'today' : 'last session'; // before the open the change is yesterday's
   const h = overview?.headline;
   const pulse = t.pulse;
   const money = h || pulse
     ? {
         value: inr((h || pulse).value),
-        sub: `today ${p100((h || pulse).day_change_pct, { sign: true })}`,
+        sub: `${day} ${p100((h || pulse).day_change_pct, { sign: true })}`,
         tone: 'neutral', // the value is a balance, not a delta
         subTone: tone((h || pulse).day_change),
+        meta: asOf((h || pulse).as_of, phase, now),
       }
     : { value: '—', sub: 'Not read yet', tone: 'neutral' };
 
@@ -34,13 +38,13 @@ export const tileHeadlines = (today, overview, indices, need = null, book = null
     : { value: '—', sub: 'Unavailable', tone: 'neutral' };
 
   const ai = book && book.value != null
-    ? { value: inr(book.value), sub: `today ${inr(book.day, { sign: true })} (${pct(book.dayPct, { sign: true })})`, tone: 'neutral', subTone: tone(book.day) }
+    ? { value: inr(book.value), sub: `${day} ${inr(book.day, { sign: true })} (${pct(book.dayPct, { sign: true })})`, tone: 'neutral', subTone: tone(book.day) }
     : { value: '—', sub: 'No AI book yet', tone: 'neutral' };
 
   const nifty = (Array.isArray(indices) ? indices : []).find((r) => r.name === 'NIFTY 50');
   const regime = REGIME[t.backdrop?.regime?.label];
   const market = nifty && typeof nifty.percent === 'number'
-    ? { value: p100(nifty.percent, { sign: true }), sub: regime ? `NIFTY · ${regime}` : 'NIFTY', tone: tone(nifty.percent) }
+    ? { value: p100(nifty.percent, { sign: true }), sub: regime ? `NIFTY · ${regime}` : 'NIFTY', tone: tone(nifty.percent), meta: asOf(nifty.at, phase, now) }
     : { value: regime || '—', sub: 'NIFTY unavailable', tone: 'neutral' };
 
   return { money, ideas, ai, market };

@@ -53,3 +53,17 @@ test('alerts only when something needs attention', () => {
   assert.deepEqual(a.map((x) => x.id), ['login-mine', 'kill', 'live']);
   assert.equal(a[2].to, '/ai');
 });
+
+test('outside the session the day change is the last session, and tiles carry freshness', () => {
+  const now = Date.parse('2026-10-24T06:00:00Z'); // Saturday
+  const t = tileHeadlines(
+    { phase: 'closed' },
+    { headline: { value: 1000, day_change: 10, day_change_pct: 1, as_of: '2026-10-24T05:59:00Z' } },
+    [{ name: 'NIFTY 50', percent: 0.5, at: now / 1000 - 600 }],
+    null, null, now,
+  );
+  assert.equal(t.money.sub, 'last session +1.00%');
+  assert.equal(t.money.meta.text, 'Market closed · last close');
+  assert.equal(t.market.meta.text, 'Market closed · last close');
+  assert.equal(tileHeadlines({ phase: 'session' }, null, [{ name: 'NIFTY 50', percent: 0.5 }]).market.meta, null);
+});
