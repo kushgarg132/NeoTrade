@@ -27,3 +27,13 @@ test('tradeMarkers snaps to the last close on or before, drops earlier ones', ()
   ]);
   assert.deepEqual(tradeMarkers(null, null), []);
 });
+
+test('technical summary counts indicator readings and names the balance', async () => {
+  const { techSummary } = await import('./stock.js');
+  const s = techSummary({ price: 110, ema_20: 105, sma_50: 100, sma_200: 90, macd: 1, macd_signal: 0.5, rsi: 62 });
+  assert.equal(s.bull, 6);
+  assert.equal(s.label, 'Mostly bullish');
+  const m = techSummary({ price: 100, ema_20: 101, sma_50: 99, rsi: 75 });
+  assert.deepEqual([m.bull, m.bear, m.neutral, m.label], [1, 1, 1, 'Mixed']);
+  assert.equal(techSummary({}), null);
+});

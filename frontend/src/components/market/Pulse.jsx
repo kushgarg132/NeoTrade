@@ -37,7 +37,7 @@ const useSection = (load) => {
 
 const loadIndices = () => api.get(endpoints.marketIndices).then((r) => r.data);
 const loadToday = () => api.get(endpoints.today).then((r) => r.data.backdrop || {});
-const loadMovers = () => api.get(endpoints.trendingStocks).then((r) => r.data);
+const loadScan = () => api.get(endpoints.marketScan).then((r) => r.data);
 const loadSectors = () => api.get(endpoints.newsFeed, { params: { limit: 50, scope: 'SECTOR' } }).then((r) => sectorRows(r.data.items));
 
 const EXPLAINABLE = new Set(['^NSEI', '^NSEBANK', '^BSESN']); // the indices the explanation endpoint covers
@@ -158,19 +158,58 @@ const Sectors = () => {
   );
 };
 
-const Movers = () => {
-  const [{ data, error }, retry] = useSection(loadMovers);
+const Change = ({ value }) => <span className={toneText(tone(value))}>{pct(value / 100, { sign: true })}</span>;
+
+const MoverRows = ({ rows, sub }) => rows.map((m) => (
+  <ListRow key={m.symbol} title={m.symbol} sub={sub ? sub(m) : m.sector} to={stockPath(m.symbol)} right={<Change value={m.change_pct} />} />
+));
+
+/** One GET /market/scan (Nifty 200 from the quote cache, cached 5 min) feeds three cards. */
+const Scan = () => {
+  const [{ data, error }, retry] = useSection(loadScan);
+  const [side, setSide] = useState('gainers');
+  if (error) return <Card title="Nifty 200 today"><ErrorLine message="Could not load the market scan." onRetry={retry} /></Card>;
+  if (!data) return <Card title="Nifty 200 today"><Skeleton rows={4} /></Card>;
+  if (!data.breadth?.n) return <Card title="Nifty 200 today"><Empty title="No quotes yet" body="The scan fills in once the market feed has prices." /></Card>;
+  const far = (m, ref) => `${m.sector} · ${pct(m.price / ref - 1, { sign: true, dp: 1 })} from it`;
   return (
-    <Card title="Biggest movers">
-      {error ? <ErrorLine message="Could not load movers." onRetry={retry} />
-        : !data ? <Skeleton rows={4} />
-        : !data.length ? <Empty title="No movers yet" body="Gainers and losers show once the session has data." />
-        : data.map((m) => (
-          <ListRow key={m.symbol} title={m.symbol} to={stockPath(m.symbol)}
-                   right={<span className={toneText(tone(m.percent))}>{pct(m.percent / 100, { sign: true })}</span>} />
-        ))}
-      {data?.length > 0 && <AsOf rows={data} />}
-    </Card>
+    <>
+      <Card title="Biggest movers · Nifty 200" action={<Badge kind="neutral">{data.breadth.up} up · {data.breadth.down} down</Badge>}>
+        <div className="flex gap-2 mb-2" role="tablist">
+          {[['gainers', 'Gainers'], ['losers', 'Losers']].map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={side === id} onClick={() => setSide(id)}
+                    className={`min-h-11 px-3 rounded-[10px] text-[14px] font-semibold ${side === id ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <MoverRows rows={data[side].slice(0, 5)} />
+        <AsOf at={data.at} />
+      </Card>
+      <Card title="Sectors today">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {data.sectors.map((s) => (
+            <div key={s.sector} className={`rounded-[10px] p-2 ${s.change_pct > 0 ? 'bg-[var(--gain-wash)]' : s.change_pct < 0 ? 'bg-[var(--loss-wash)]' : 'bg-[var(--surface-2)]'}`}>
+              <div className="text-[13px] text-[var(--text)] truncate" title={s.sector}>{s.sector}</div>
+              <div className="text-[14px] font-semibold tabular-nums"><Change value={s.change_pct} /></div>
+              <div className="text-[12px] text-[var(--text-muted)]">{s.up} of {s.n} up</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card title="Near 52-week highs and lows">
+        {!data.near_high.length && !data.near_low.length
+          ? <p className="text-[14px] text-[var(--text-muted)]">No Nifty 200 name is within 2% of its 52-week high or low.</p>
+          : (
+            <>
+              {data.near_high.length > 0 && <h3 className="text-[13px] font-semibold text-[var(--text-muted)]">Near the high</h3>}
+              <MoverRows rows={data.near_high.slice(0, 5)} sub={(m) => far(m, m.high_52w)} />
+              {data.near_low.length > 0 && <h3 className="mt-3 text-[13px] font-semibold text-[var(--text-muted)]">Near the low</h3>}
+              <MoverRows rows={data.near_low.slice(0, 5)} sub={(m) => far(m, m.low_52w)} />
+            </>
+          )}
+      </Card>
+    </>
   );
 };
 
@@ -180,7 +219,7 @@ const Pulse = () => (
     <Indices />
     <Regime />
     <Sectors />
-    <Movers />
+    <Scan />
   </div>
 );
 

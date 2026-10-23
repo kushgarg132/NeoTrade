@@ -6,6 +6,7 @@ import Badge from '../ui/Badge';
 import ThesisEditor from '../mine/ThesisEditor';
 import StockFlags from '../analysis/StockFlags';
 import TradingLevels from '../analysis/TradingLevels';
+import TechnicalSummary from '../analysis/TechnicalSummary';
 import Fundamentals from '../analysis/Fundamentals';
 import SentimentPanel from '../analysis/SentimentPanel';
 import { REASONS } from '../../utils/mine';
@@ -54,6 +55,7 @@ const AnalysisTab = ({ symbol, mine, quick, ai, requestAi, onThesis }) => {
       {quick.error && <Card><ErrorLine message={quick.error} /></Card>}
       {quick.data && (
         <>
+          <TechnicalSummary t={quick.data.technical_analysis} />
           <StockFlags flags={quick.data.flags} />
           <TradingLevels t={quick.data.technical_analysis} currency={currency} />
           <Fundamentals company={company} currency={currency} />

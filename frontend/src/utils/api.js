@@ -164,6 +164,7 @@ export const endpoints = {
   marketBrief: '/market/brief',
   stockNote: (s) => `/research/${encodeURIComponent(s)}/note`,
   trendingStocks: '/market/trending',
+  marketScan: '/market/scan',
   marketQuotes: (symbols) => `/market/quotes?symbols=${encodeURIComponent(symbols.join(','))}`,
   // The backend derives the owner from the session token; there is no user
   // id in these paths any more.
