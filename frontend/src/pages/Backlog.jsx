@@ -1,9 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
 import { LAB_TABS } from '../components/layout/sections';
-import { Sheet, Empty, Ruling } from '../components/doc/Doc';
+import Card from '../components/ui/Card';
+import Empty from '../components/ui/Empty';
+import ErrorLine from '../components/ui/ErrorLine';
+import Skeleton from '../components/ui/Skeleton';
+import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
+import PageHeader from '../components/ui/PageHeader';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import { formatTimeAgo } from '../utils/formatters';
@@ -18,8 +24,8 @@ const AREAS = ['System', 'Data', 'Trading', 'AI', 'News', 'Journal', 'UI', 'Ops'
 const OPEN = [['doing', 'Doing'], ['next', 'Next'], ['idea', 'Ideas']];
 const CLOSED = [['done', 'Done'], ['dropped', 'Dropped']];
 const STATUSES = ['idea', 'next', 'doing', 'done', 'dropped'];
-const FIELD = 'w-full bg-transparent border-b border-[var(--border)] py-1 text-sm focus:outline-none focus:border-[var(--accent)]';
-const SMALL_BUTTON = 'min-h-11 sm:min-h-8 px-2 border border-[var(--border)] text-sm disabled:opacity-40';
+const FIELD = 'w-full bg-transparent border-b border-[var(--border)] py-1 text-[15px] min-h-11 focus:outline-none focus:border-[var(--accent)]';
+const SMALL_BUTTON = 'min-h-11 min-w-11 px-2 rounded-[8px] border border-[var(--border)] text-[15px] disabled:opacity-40 inline-flex items-center justify-center';
 
 const Editor = ({ item, onSave }) => {
   const [draft, setDraft] = useState({ why: item.why, notes: item.notes });
@@ -27,37 +33,37 @@ const Editor = ({ item, onSave }) => {
   return (
     <div className="mt-2 space-y-2">
       <label className="block">
-        <span className="field-label">Why</span>
+        <span className="text-[13px] text-[var(--text-muted)]">Why</span>
         <textarea rows={2} maxLength={2000} className={FIELD} value={draft.why}
                   onChange={(e) => setDraft((d) => ({ ...d, why: e.target.value }))} onBlur={blur('why')} />
       </label>
       <label className="block">
-        <span className="field-label">Notes</span>
+        <span className="text-[13px] text-[var(--text-muted)]">Notes</span>
         <textarea rows={3} maxLength={4000} className={FIELD} value={draft.notes}
                   onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} onBlur={blur('notes')} />
       </label>
       <div className="flex flex-wrap gap-3">
-        <label className="flex items-center gap-2 text-sm">
-          <span className="field-label">Status</span>
+        <label className="flex items-center gap-2 text-[15px]">
+          <span className="text-[13px] text-[var(--text-muted)]">Status</span>
           <select className={FIELD} value={item.status} onChange={(e) => onSave({ status: e.target.value })}>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-sm">
-          <span className="field-label">Effort</span>
+        <label className="flex items-center gap-2 text-[15px]">
+          <span className="text-[13px] text-[var(--text-muted)]">Effort</span>
           <select className={FIELD} value={item.effort || ''} onChange={(e) => onSave({ effort: e.target.value || null })}>
             <option value="">—</option>
             {['S', 'M', 'L'].map((e) => <option key={e} value={e}>{e}</option>)}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-sm">
-          <span className="field-label">Area</span>
+        <label className="flex items-center gap-2 text-[15px]">
+          <span className="text-[13px] text-[var(--text-muted)]">Area</span>
           <select className={FIELD} value={item.area} onChange={(e) => onSave({ area: e.target.value })}>
             {AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
         </label>
       </div>
-      {item.source && <p className="doc-meta normal-case">From {item.source} · updated {formatTimeAgo(item.updated_at)}</p>}
+      {item.source && <p className="text-[12px] text-[var(--text-muted)]">From {item.source} · updated {formatTimeAgo(item.updated_at)}</p>}
     </div>
   );
 };
@@ -75,21 +81,23 @@ const Item = ({ item, open, onToggle, onSave, onMove, onDelete, first, last }) =
   return (
     <li className="py-2.5">
       <div className="flex items-start gap-2">
-        <button type="button" onClick={onToggle} aria-expanded={open} className="min-w-0 flex-1 text-left min-h-11 sm:min-h-0">
-          <span className="block text-sm font-semibold">{item.title}</span>
-          <span className="doc-meta normal-case">
-            {[item.area, item.effort && `effort ${item.effort}`, !open && item.why].filter(Boolean).join(' · ')}
+        <button type="button" onClick={onToggle} aria-expanded={open} className="min-w-0 flex-1 text-left min-h-11">
+          <span className="block text-[15px] font-semibold">{item.title}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            <Badge>{item.area}</Badge>
+            {item.effort && <Badge>{`Effort ${item.effort}`}</Badge>}
+            {!open && item.why && <span className="min-w-0 truncate text-[13px] text-[var(--text-muted)]">{item.why}</span>}
           </span>
         </button>
         <div className="flex shrink-0 gap-1">
           <button type="button" aria-label="Move up" className={SMALL_BUTTON} disabled={first} onClick={() => onMove(-1)}>
-            <ArrowUp className="w-3.5 h-3.5" />
+            <ArrowUp className="w-4 h-4" />
           </button>
           <button type="button" aria-label="Move down" className={SMALL_BUTTON} disabled={last} onClick={() => onMove(1)}>
-            <ArrowDown className="w-3.5 h-3.5" />
+            <ArrowDown className="w-4 h-4" />
           </button>
-          <button type="button" onClick={remove}
-                  className={cn(SMALL_BUTTON, arming && 'border-[var(--loss)] text-[var(--loss)]')}>
+          <button type="button" onClick={remove} aria-label={arming ? 'Tap again to delete' : 'Delete item'}
+                  className={cn(SMALL_BUTTON, arming && 'border-[var(--loss)] text-[var(--loss)] px-3')}>
             {arming ? 'Delete?' : '×'}
           </button>
         </div>
@@ -108,11 +116,17 @@ const Backlog = () => {
   const [title, setTitle] = useState('');
   const [newArea, setNewArea] = useState('Product');
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api.get(endpoints.system.backlog)
-      .then((res) => setItems(res.data.items))
-      .catch((err) => setError(err?.response?.data?.detail || 'Could not load the backlog'));
+      .then((res) => setItems(res.data?.items ?? []))
+      .catch((err) => setError(err?.response?.data?.detail || 'The server did not answer'));
   }, []);
+  useEffect(load, [load]);
+  const retry = () => {
+    setError(null);
+    load();
+  };
+  const input = useRef(null);
 
   // Optimistic: apply now, put the old list back if the API refuses.
   const write = (next, request) => {
@@ -160,9 +174,7 @@ const Backlog = () => {
   const group = (status) =>
     (items || []).filter((i) => i.status === status && (!area || i.area === area)).sort((a, b) => a.rank - b.rank);
 
-  const list = (status) => {
-    const rows = group(status);
-    if (rows.length === 0) return <p className="doc-meta normal-case py-2">Nothing here.</p>;
+  const list = (rows) => {
     return (
       <ul className="divide-y divide-[var(--border)]">
         {rows.map((item, index) => (
@@ -175,46 +187,64 @@ const Backlog = () => {
     );
   };
 
+  const shown = [...OPEN, ...CLOSED].reduce((n, [status]) => n + group(status).length, 0);
+  const openCount = (items || []).filter((i) => !['done', 'dropped'].includes(i.status)).length;
+
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
         <SectionTabs tabs={LAB_TABS} label="Lab" />
-        <Sheet title="Future" meta={items ? `${items.filter((i) => !['done', 'dropped'].includes(i.status)).length} open` : undefined}>
-          <form onSubmit={add} className="flex flex-wrap items-end gap-2 pb-3 border-b border-[var(--border)]">
-            <input aria-label="New item" placeholder="Add an idea…" maxLength={140} value={title}
-                   onChange={(e) => setTitle(e.target.value)} className={cn(FIELD, 'flex-1 min-w-[12rem]')} />
-            <select aria-label="Area" value={newArea} onChange={(e) => setNewArea(e.target.value)} className={cn(FIELD, 'w-auto')}>
+        <PageHeader title="Backlog" right={items && <span className="text-[14px] text-[var(--text-muted)]">{openCount} open</span>} />
+        <p className="-mt-2 text-[14px] text-[var(--text-muted)]">Your list of future changes to NeoTrade. Idea, then Next, then Doing; Done and Dropped fold away.</p>
+        <Card>
+          <form onSubmit={add} className="flex items-end gap-2">
+            <input ref={input} aria-label="New item" placeholder="Add an idea…" maxLength={140} value={title}
+                   onChange={(e) => setTitle(e.target.value)} className={cn(FIELD, 'flex-1 min-w-0')} />
+            <select aria-label="Area" value={newArea} onChange={(e) => setNewArea(e.target.value)} className={cn(FIELD, 'w-auto shrink-0')}>
               {AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
-            <button type="submit" className="min-h-11 px-3 text-sm border border-[var(--border)]">Add</button>
+            <Button type="submit" className="shrink-0">Add</Button>
           </form>
-          <div className="flex flex-wrap gap-1.5 py-2" role="group" aria-label="Filter by area">
-            {['', ...AREAS].map((a) => (
-              <button key={a || 'all'} type="button" aria-pressed={area === a} onClick={() => setArea(a)}
-                      className={cn('min-h-9 px-2.5 field-label border',
-                        area === a ? 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)]')}>
-                {a || 'All'}
-              </button>
-            ))}
-          </div>
-          {note && <p role="alert" className="text-sm text-[var(--loss)] py-1">{note}</p>}
-          {error ? <Empty title="Could not load the backlog" detail={error} /> : items === null ? <Ruling rows={6} /> : (
-            <>
-              {OPEN.map(([status, label]) => (
-                <section key={status} className="mt-3">
-                  <h2 className="field-label text-[var(--text)]">{label} · {group(status).length}</h2>
-                  {list(status)}
-                </section>
-              ))}
-              {CLOSED.map(([status, label]) => (
-                <details key={status} className="mt-3">
-                  <summary className="field-label cursor-pointer min-h-11 sm:min-h-0 py-1">{label} · {group(status).length}</summary>
-                  {list(status)}
-                </details>
-              ))}
-            </>
+        </Card>
+        <div className="flex gap-1.5 overflow-x-auto" role="group" aria-label="Filter by area">
+          {['', ...AREAS].map((a) => (
+            <button key={a || 'all'} type="button" aria-pressed={area === a} onClick={() => setArea(a)}
+                    className={cn('shrink-0 min-h-11 px-3.5 rounded-full text-[14px] font-medium',
+                      area === a ? 'bg-[var(--accent)] text-[var(--surface)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]')}>
+              {a || 'All'}
+            </button>
+          ))}
+        </div>
+        {note && <p role="alert" className="text-[14px] text-[var(--loss)]">{note}</p>}
+        {error ? <ErrorLine message={`Could not load the backlog: ${error}.`} onRetry={retry} />
+          : items === null ? <Skeleton rows={6} />
+          : items.length === 0 ? (
+            <Empty title="The backlog is empty" body="Type an idea above and tap Add. It starts under Ideas."
+                   action={<Button onClick={() => input.current?.focus()}>Add the first item</Button>} />
+          ) : shown === 0 ? (
+            <Empty title={`Nothing filed under ${area}`} action={<Button variant="secondary" onClick={() => setArea('')}>Show all areas</Button>} />
+          ) : (
+            <Card>
+              {OPEN.map(([status, label]) => {
+                const rows = group(status);
+                return rows.length > 0 && (
+                  <section key={status} className="mb-3 last:mb-0">
+                    <h2 className="text-[15px] font-semibold">{label} · {rows.length}</h2>
+                    {list(rows)}
+                  </section>
+                );
+              })}
+              {CLOSED.map(([status, label]) => {
+                const rows = group(status);
+                return rows.length > 0 && (
+                  <details key={status} className="mt-1">
+                    <summary className="text-[14px] text-[var(--text-muted)] cursor-pointer min-h-11 flex items-center">{label} · {rows.length}</summary>
+                    {list(rows)}
+                  </details>
+                );
+              })}
+            </Card>
           )}
-        </Sheet>
       </div>
     </Layout>
   );
