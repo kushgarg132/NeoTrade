@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Wallet, Lightbulb, Bot, Newspaper } from 'lucide-react';
+import { Bot, Newspaper, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Tile from '../components/ui/Tile';
 import Skeleton from '../components/ui/Skeleton';
 import ErrorLine from '../components/ui/ErrorLine';
+import Badge from '../components/ui/Badge';
+import HeroRow from '../components/home/HeroRow';
 import BriefCard from '../components/home/BriefCard';
 import GoalTile from '../components/home/GoalTile';
 import WeeklyLink from '../components/home/WeeklyLink';
@@ -61,21 +63,22 @@ const Home = () => {
     }
     const h = tileHeadlines(today, overview, indices, need.loaded ? need : null, aiBook({ autopilot: today.autopilot, pnl, card }));
     const meta = (tile, m) => (failed[tile] || (tile === 'ideas' && need.error) ? REFRESH_FAILED : m);
-    const anyFailed = Object.values(failed).some(Boolean) || need.error;
+    const nifty = (Array.isArray(indices) ? indices : []).find((r) => r.name === 'NIFTY 50');
     const kind = briefKind(today.phase);
     const needs = need.count;
     return (
       <div className="space-y-3">
-        <p className="text-[15px] text-[var(--text-muted)]">
-          {phaseLabel(today.phase)}
-          {needs > 0 && <> · <Link to="/ideas" className="font-semibold text-[var(--accent)]">{needs} need{needs === 1 ? 's' : ''} you</Link></>}
-        </p>
-        {anyFailed && (
-          <p className="text-[13px] text-[var(--warn)]">
-            Some figures couldn't refresh and may be old.{' '}
-            <button type="button" onClick={load} className="font-semibold underline min-h-11">Retry</button>
-          </p>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center min-h-11 text-[14px] font-medium text-[var(--text-muted)]">{phaseLabel(today.phase)}</span>
+          {needs > 0 && (
+            <Link to="/ideas" title={h.ideas.sub}
+                  className="ml-auto inline-flex items-center gap-1 min-h-11 px-4 rounded-full bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+              {needs} need{needs === 1 ? 's' : ''} you
+              <ChevronRight className="w-4 h-4" aria-hidden="true" />
+            </Link>
+          )}
+        </div>
+        <HeroRow headline={overview?.headline || today.pulse} nifty={nifty} phase={today.phase} meta={meta('money', h.money.meta)} />
         {alerts(today).map((a) => (
           <Link key={a.id} to={a.to} role="alert"
                 className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2 text-[14px] font-medium text-[var(--loss)]">
@@ -83,16 +86,14 @@ const Home = () => {
             <span className="shrink-0 font-semibold underline">{a.action}</span>
           </Link>
         ))}
+        <SetupChecklist setup={today.setup} />
         <div className="grid grid-cols-2 gap-3">
-          <Tile title="Money" icon={Wallet} to="/money" value={h.money.value} sub={h.money.sub} tone={h.money.tone} subTone={h.money.subTone} meta={meta('money', h.money.meta)} />
-          <Tile title="Ideas" icon={Lightbulb} to="/ideas" value={h.ideas.value} sub={h.ideas.sub} tone={h.ideas.tone} meta={meta('ideas', null)} />
-          <Tile title="AI" icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.sub} tone={h.ai.tone} meta={meta('ai', null)} />
-          <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} meta={meta('market', h.market.meta)} />
+          <Tile title={<>AI <Badge kind="paper">Paper</Badge></>} icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.value === '—' ? 'Start the AI account' : h.ai.sub} tone={h.ai.tone} subTone={h.ai.subTone} meta={meta('ai', null)} />
+          <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.value === '—' ? 'Open Market' : h.market.sub} tone={h.market.tone} meta={meta('market', h.market.meta)} />
         </div>
         {kind && <BriefCard title={kind === 'premarket' ? 'Before the open' : 'After the close'} text={today[kind]} summary={day} />}
         <GoalTile />
         <WeeklyLink />
-        <SetupChecklist setup={today.setup} />
       </div>
     );
   };
