@@ -244,11 +244,18 @@ async def _deep(system: str, user: str) -> str:
     return await llm_service.get_completion(user, system_prompt=system, tier="deep", feature="news")
 
 
+_OUTAGE = object()  # the LLM never answered: not the items' fault, so no attempt is counted
+
+
 async def _ask(prompt: str, complete, model, **values):
-    """One prompt, retried once on invalid JSON; None if still invalid."""
+    """One prompt, retried once on invalid JSON; None if still invalid,
+    _OUTAGE if the provider is down or disabled."""
     system, user = render(prompt, **values)
     for attempt in (1, 2):
         response = await complete(system, user)
+        if response == "LLM_DISABLED" or response.startswith("Error generating response"):
+            logger.warning("%s: LLM unavailable, batch left for the next tick: %s", prompt, response[:200])
+            return _OUTAGE
         try:
             return model.model_validate_json(_extract_json(response))
         except (ValueError, ValidationError) as exc:
@@ -265,6 +272,8 @@ async def _failed(db, ids: list[str]) -> None:
 async def _triage_batch(db, docs: list[dict], now: datetime) -> None:
     listing = "\n".join(f"[{i}] [{d['scope_hint']}] {d['title']} ({d['source']})" for i, d in enumerate(docs))
     result = await _ask("triage_news", _fast, _Triages, items=listing)
+    if result is _OUTAGE:
+        return
     if result is None:
         await _failed(db, [d["_id"] for d in docs])
         return
@@ -353,6 +362,8 @@ async def _score_batch(db, docs, names, sector_of, sectors, now) -> None:
         lines.append(f"[{i}] ({d.get('scope', d['scope_hint'])}) {d['title']}\n{(d.get('content') or '')[:400]}\n"
                      f"Tagged: {tagged or 'none'}")
     result = await _ask("score_market_news", _deep, _Scores, sectors=", ".join(sectors), items="\n\n".join(lines))
+    if result is _OUTAGE:
+        return
     if result is None:
         await _failed(db, [d["_id"] for d in docs])
         return

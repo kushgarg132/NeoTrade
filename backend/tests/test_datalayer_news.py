@@ -195,6 +195,19 @@ async def test_an_invalid_batch_is_retried_whole_then_failed(mongo, monkeypatch)
     assert (await mongo[news.COLLECTION].find_one())["status"] == news.FAILED
 
 
+async def test_a_provider_outage_counts_no_attempt(mongo, monkeypatch):
+    await news.store(mongo, [_item("Fed signals hike")], [], now=NOW)
+
+    async def down(system, user):
+        return "Error generating response: Error code: 401 - No active credentials"
+
+    monkeypatch.setattr(news, "_fast", down)
+    for _ in range(news.MAX_ATTEMPTS + 1):
+        await news.triage(mongo, now=NOW)
+    doc = await mongo[news.COLLECTION].find_one()
+    assert doc["status"] != news.FAILED and not doc.get("attempts")
+
+
 async def test_scoring_validates_targets_and_flags_material(mongo, monkeypatch):
     await news.store(mongo, [_item("Brent jumps 8% after Gulf strike", symbols=["IOC"], scope="GLOBAL")], [], now=NOW)
     await mongo[news.COLLECTION].update_many({}, {"$set": {"status": news.TRIAGED, "scope": "GLOBAL"}})
@@ -355,6 +368,11 @@ async def test_off_hours_llm_pass_runs_hourly_in_fuller_batches(monkeypatch):
     monkeypatch.setattr(news, "_last_aggregate", float("inf"))
     monkeypatch.setattr(news, "_last_llm_pass", 0.0)
     monkeypatch.setattr("backend.engine.autorun.near_session", lambda now: False)
+
+    async def enabled(feature, db=None):
+        return True
+
+    monkeypatch.setattr("backend.app_settings.feature_enabled", enabled)
     db = {news.COLLECTION: NoTriaged()}
     await news.process_loop(db, None)
     await news.process_loop(db, None)               # within the hour: no LLM
