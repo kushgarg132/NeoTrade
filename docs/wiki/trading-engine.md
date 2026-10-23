@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: c925cde
+verified_at: 65f0f61
 ---
 # Trading engine
 
@@ -47,7 +47,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/risk/live_confirm.py` | Server-checked second tap for real money on `mine`: one-time 60 s token bound to user, subject, terms hash | `live_confirm.py::issue`, `::redeem`, `::TokenRefused` (`.code` confirm_missing/expired/spent/mismatch/other_user, `.response()`; Telegram logs the code) |
 | `backend/autopilot/fence.py` | Pure order fence (every autopilot order) | `fence.py::check`, `::FenceState`, `::trade_cap` |
 | `backend/autopilot/service.py` | Fence -> fill (paper/live) -> log -> Telegram | `service.py::submit`, `::_submit`, `::_state`, `::check_exits`, `::ledger_user`, `::book`, `::ai_book_query` |
-| `backend/autopilot/picks.py` | AI account trades stored Picks | `picks.py::enter`, `::exit_due`, `::live_allowed` |
+| `backend/autopilot/picks.py` | AI account trades stored Picks (the latest pass only, never `backfilled` ones) | `picks.py::enter`, `::exit_due`, `::live_allowed` |
 | `backend/brokers/protocol.py` | The `BrokerAdapter` interface | `protocol.py::BrokerAdapter`, `::BrokerSessionState` |
 | `backend/brokers/registry.py` | Only place that lists brokers | `registry.py::BROKERS`, `::get_broker_adapter`, `::UnknownBroker` |
 | `backend/brokers/roles.py` | `ai` / `mine` role routing, no fallback | `roles.py::adapter_for`, `::validate_roles`, `::RoleUnavailable` |
