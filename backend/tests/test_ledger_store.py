@@ -140,5 +140,25 @@ async def test_a_flipped_trade_books_only_its_own_realized_pnl(ledger):
     await fill_on_paper(ledger, order(Side.SELL, 20), 110.0, now)  # +100 on the long, then short 10 @110
     await fill_on_paper(ledger, order(Side.BUY, 10), 105.0, now)   # +50 on the short
 
+    from backend.lab.assumptions import DEFAULT, fill_price
+
+    px = lambda p, side: round(fill_price(p, side, DEFAULT), 2)  # paper fills pay the study's slippage
     pnl = {t["side"]: t["realized_pnl"] for t in await ledger.get_trades(status="CLOSED")}
-    assert pnl == {"BUY": 100.0, "SELL": 50.0}
+    assert pnl == pytest.approx({"BUY": (px(110.0, Side.SELL) - px(100.0, Side.BUY)) * 10,
+                                 "SELL": (px(110.0, Side.SELL) - px(105.0, Side.BUY)) * 10})
+
+
+async def test_paper_fills_pay_the_studys_slippage_against_the_trader(ledger):
+    """Paper filled at the bare mark, flattering it against the backtests (10 bps a side) that judge it."""
+    from backend.core.models import Order, Side
+    from backend.suggestions.service import fill_on_paper
+
+    now = datetime(2026, 10, 13, 4, 0, tzinfo=timezone.utc)
+    order = lambda side, product="CNC": Order(id=str(uuid.uuid4()), symbol="X", side=side, quantity=1,
+                                             order_type="MARKET", limit_price=None, product=product)
+    await fill_on_paper(ledger, order(Side.BUY), 100.0, now)
+    await fill_on_paper(ledger, order(Side.SELL), 100.0, now)
+    trade = (await ledger.get_trades(status="CLOSED"))[0]
+    assert trade["entry_price"] == 100.1 and trade["exit_price"] == 99.9
+    await fill_on_paper(ledger, order(Side.BUY, "NRML"), 50.0, now, is_option=True)
+    assert (await ledger.get_trades(status="OPEN"))[0]["entry_price"] == 50.0  # option premiums keep the mark

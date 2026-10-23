@@ -53,7 +53,7 @@ async def test_stale_intraday_trades_are_closed_at_their_mark(db):
     closed = await close_stale(ledger, stale, mark, NOW)
     assert closed == 1
     trade = await db["paper_trades"].find_one({"user_id": "alice", "symbol": "OLD"})
-    assert trade["status"] == "CLOSED" and trade["exit_price"] == 104.0
+    assert trade["status"] == "CLOSED" and trade["exit_price"] == 103.9  # the 104 mark less 10 bps slippage
 
 
 async def test_a_stale_trade_without_a_price_stays_for_the_next_pass(db):

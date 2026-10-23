@@ -49,6 +49,7 @@ from backend.engine.execution.broker import BrokerExecutionClient
 from backend.engine.execution.live_order_store import LiveOrderStore
 from backend.engine.execution.routing import RoutingExecutionClient
 from backend.engine.execution.simulated import SimulatedExecutionClient
+from backend.lab.assumptions import DEFAULT as DEFAULT_EXECUTION
 from backend.engine.persistence import LedgerStore, mine_book
 from backend.ws.hub import hub
 from backend.ws.publish import publisher_for
@@ -420,7 +421,8 @@ async def _launch_run(
         instruments, mode, poll_interval_seconds,
         user_id=user_id, credentials=credentials,
     )
-    paper_execution = SimulatedExecutionClient()
+    # The study's slippage, as in backtests: a market order at a live mark still pays the spread.
+    paper_execution = SimulatedExecutionClient(slippage_bps=DEFAULT_EXECUTION.slippage_bps)
     execution = (
         RoutingExecutionClient(paper=paper_execution, live_by_strategy=live_by_strategy)
         if live_by_strategy else paper_execution

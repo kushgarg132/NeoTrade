@@ -16,9 +16,8 @@ from backend.engine.execution.costs import fill_costs
 
 class SimulatedExecutionClient:
     def __init__(self, slippage_bps: float = 0.0, fill_on_next_open: bool = False) -> None:
-        # Backtests pass a slippage: a real market order pays the spread and
-        # some impact, always against the trader. Paper trading keeps 0 --
-        # it already fills at a live mark.
+        # Backtests and paper runs pass a slippage (lab/assumptions.py): a real
+        # market order pays the spread and some impact, always against the trader.
         self.slippage_bps = slippage_bps
         # Backtests also fill an equity market order at the NEXT bar's open:
         # the signal bar is only known once closed. Paper keeps the live mark.

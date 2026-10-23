@@ -164,7 +164,8 @@ async def test_exit_levels_alert_once_and_sell_nothing():
     alerts = await check_exits(db, "alice", now=NOW, marks_fn=marks)
 
     assert sorted((a["symbol"], a["reason"]) for a in alerts) == [("LOSER", "stop"), ("WINNER", "target")]
-    assert next(a for a in alerts if a["symbol"] == "WINNER")["gross_pnl"] == pytest.approx(210.0)
+    # 210 at the bare mark; the entry fill now pays 10 bps slippage (suggestions/service.py::fill_on_paper)
+    assert next(a for a in alerts if a["symbol"] == "WINNER")["gross_pnl"] == pytest.approx(209.0)
     assert await check_exits(db, "alice", now=NOW, marks_fn=marks) == []  # once per reason
     assert await db["paper_fills"].count_documents({"side": "SELL"}) == 0  # the user sells, not the app
     assert len(await LedgerStore(db, user_id="alice:mine").get_trades(status="OPEN")) == 3
