@@ -34,3 +34,9 @@ test('order flow untouched: Buy and Sell still open the ticket', () => {
   assert.match(page, /side: 'SELL'/);
   assert.match(page, /side: 'BUY'/);
 });
+
+test('stop-hit loss shows from-now and vs-cost, both private', () => {
+  assert.match(page, /\(stop - price\) \* pos\.qty/);
+  assert.match(page, /<span className="private">\{inr\(risk\.stopFromNow[^\n]*from now/);
+  assert.match(page, /<span className="private">\(\{inr\(risk\.stopPnl[^\n]*vs what you paid/);
+});

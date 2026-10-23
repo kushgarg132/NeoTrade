@@ -119,6 +119,7 @@ const Stock = () => {
     target: m?.thesis?.target ?? null,
     stopDist: stop != null && price ? (price - stop) / price : null,
     stopPnl: stop != null && pos ? (stop - pos.avg) * pos.qty : null,
+    stopFromNow: stop != null && pos && price != null ? (stop - price) * pos.qty : null,
   };
   const verdict = m?.verdict?.current;
   const sold = m?.position?.sold;
@@ -184,7 +185,9 @@ const Stock = () => {
                 <p className="private">
                   Stop {inr(risk.stop)}
                   {risk.stopDist != null && (risk.stopDist > 0 ? ` · ${pct(risk.stopDist, { dp: 1 })} below price` : ' · price is at or below your stop')}
-                  {` · if hit ${inr(risk.stopPnl, { sign: true })}`}
+                  {' · if hit: '}
+                  {risk.stopFromNow != null && <span className="private">{inr(risk.stopFromNow, { sign: true })} from now </span>}
+                  <span className="private">({inr(risk.stopPnl, { sign: true })} vs what you paid)</span>
                   {risk.target != null && ` · target ${inr(risk.target)}`}
                 </p>
               ) : (
