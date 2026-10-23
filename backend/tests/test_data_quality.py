@@ -34,6 +34,12 @@ class _Redis:
     async def hgetall(self, key):
         return self.hashes.get(key, {})
 
+    async def set(self, key, value, nx=False, px=None, ex=None):
+        if nx and key in self.values:
+            return None
+        self.values[key] = value
+        return True
+
 
 def _healthy(**overrides) -> _Redis:
     """Every ingest loop just beat, quotes are cached, Friday's pass ran."""
@@ -137,3 +143,42 @@ async def test_admin_alerts_add_the_nightly_stale_bars_and_stay_quiet_at_weekend
         "Stale bars: 2 symbol(s) behind 2026-10-16 (INFY, TCS)"]
     redis.values.pop("scheduler:last_pass")
     assert await data_quality.alerts(db, redis, SATURDAY) == []
+
+
+async def test_a_failing_llm_provider_is_named_until_a_call_succeeds():
+    """2026-10-21..23: kiro answered 401 for two days and only the logs knew."""
+    db = AsyncMongoMockClient()["test_db"]
+    await _picks_ran(db, datetime(2026, 10, 16, 10, 35, tzinfo=timezone.utc))
+    at = int(MONDAY_MORNING.timestamp())
+    error = json.dumps({"at": at - 60, "error": "Error code: 401 - No active credentials"})
+    failures = await data_quality.live(db, _healthy(**{"llm:last_error": error, "llm:last_ok": str(at - 600)}), MONDAY_MORNING)
+    assert failures == ["AI provider failing: Error code: 401 - No active credentials"]
+    assert await data_quality.live(db, _healthy(**{"llm:last_error": error, "llm:last_ok": str(at - 1)}), MONDAY_MORNING) == []
+    old = json.dumps({"at": at - data_quality.LLM_DOWN_AFTER - 1, "error": "x"})
+    assert await data_quality.live(db, _healthy(**{"llm:last_error": old}), MONDAY_MORNING) == []
+
+
+async def test_the_watch_alerts_on_a_failure_held_two_ticks_and_on_recovery():
+    db = AsyncMongoMockClient()["test_db"]
+    await _picks_ran(db, datetime(2026, 10, 16, 10, 35, tzinfo=timezone.utc))
+    redis = _healthy(**{f"quote:{universe()[0]}": None})
+    sent = []
+
+    async def send(db, text):
+        sent.append(text)
+
+    async def tick():
+        redis.values.pop(data_quality.WATCH_LOCK, None)  # a new 5-minute tick
+        await data_quality.watch_tick(db, redis, MONDAY_MORNING, send=send)
+
+    await tick()
+    assert sent == []  # one tick may be a slow loop
+    await tick()
+    assert len(sent) == 1 and sent[0].startswith("⚠️") and "Quotes loop failing" in sent[0]
+    await tick()
+    assert len(sent) == 1  # no repeat while it holds
+    redis.values[f"quote:{universe()[0]}"] = json.dumps({"ltp": 1.0})
+    await tick()
+    assert len(sent) == 2 and sent[1].startswith("✅") and "Quotes loop failing" in sent[1]
+    await data_quality.watch_tick(db, redis, MONDAY_MORNING, send=send)  # lock held: another worker's tick
+    assert len(sent) == 2

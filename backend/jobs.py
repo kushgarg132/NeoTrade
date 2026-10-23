@@ -32,13 +32,15 @@ def start_loops(db, redis) -> list[str]:
     from backend.engine import sweeps as order_sweeps
     from backend.guardrails import monitor as guardrail_monitor
     from backend.guardrails import telegram_bot
+    from backend.system import data_quality
 
     scheduler.start(db, redis)  # 16:00 daily pass, 09:20 catch-up
     order_sweeps.start(db)  # stuck approvals and late live fills
     guardrail_monitor.start(db, redis)  # the user's limits against their broker
     telegram_bot.start(db, redis)  # inbound polling, not a webhook
     autorun.start(db, redis)  # daily intraday paper run and the morning pass
-    return ["scheduler", "order_sweeps", "guardrail_monitor", "telegram_bot", "autorun"]
+    data_quality.start(db, redis)  # Telegram the admin when a live check fails or clears
+    return ["scheduler", "order_sweeps", "guardrail_monitor", "telegram_bot", "autorun", "data_quality_watch"]
 
 
 async def heartbeat_age(redis) -> int | None:

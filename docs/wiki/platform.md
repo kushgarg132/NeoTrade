@@ -40,7 +40,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/system/schedule.py` | job clock times for UI copy, read from `scheduler.RUN_HOUR/RUN_MINUTE`, `autorun.PLAN_AT/SESSION_OPEN/SESSION_CLOSE/MORNING/EXIT_CHECK_MINUTES`, `session.SQUARE_OFF_*`, `monitor.SESSION_*`; `GET /system/schedule` returns "HH:MM" IST strings | `get` |
 | `backend/system/status.py` | handbook live-panel data, 5 blocks, cached 30 s | `build_status`, `cached_status`, `BLOCKS` |
 | `backend/system/jobs.py` | `job:last:<name>` Redis hash writer/reader | `mark`, `last_runs`, `LOOPS` |
-| `backend/system/data_quality.py` | nightly check (stale bars vs the last trading day's session from 15:45, unlisted, silent feeds; `failures`) + live truth checks (ingest heartbeats > 2x interval (min 120 s) or gone, quotes loop, `scheduler:last_pass`, Picks study, due by 18:00 of the last trading day) | `check`, `live`, `alerts` (admin Today item, silent on weekends and NSE holidays), `last_trading_day_at` |
+| `backend/system/data_quality.py` | nightly check (stale bars vs the last trading day's session from 15:45, unlisted, silent feeds; `failures`) + live truth checks (ingest heartbeats > 2x interval (min 120 s) or gone, quotes loop, `scheduler:last_pass`, Picks study, due by 18:00 of the last trading day; LLM provider failing = `llm:last_error` newer than `llm:last_ok` and < 30 min old) | `check`, `live`, `alerts` (admin Today item, silent on weekends and NSE holidays), `last_trading_day_at`, `watch_loop`/`watch_tick` (jobs, 300 s, lock `data_quality:watch_lock`, state `data_quality:watch`: Telegram to every admin's linked chat when a `live` failure holds 2 ticks, and when it clears; digits ignored when matching) |
 | `backend/system/backlog.py`, `seed_backlog.py` | admin backlog store; one-time seed | `ItemIn`, `ItemPatch`, `list_items/create/update/delete`, `seed` |
 | `backend/locks.py` | token-checked Redis lock (used by the ingest worker only) | `acquire`, `renew`, `release` |
 | `backend/rate_limit.py` | fixed-window per-key limiter, fails open | `allow` |
@@ -120,7 +120,7 @@ All times IST. Background loops start in `jobs.py::start_loops`, called by the `
 | worker heartbeat | every 30 s (`ALIVE_TTL_SECONDS // 3`) | `runs.py::keep_alive` (API and jobs) | writes `worker:alive:<BOOT_ID>` |
 | orphan sweep | once at startup | `RunStore.close_orphaned` | a RUNNING row whose boot id has no live key becomes STOPPED, `error="orphaned by restart"` |
 | instrument expansion | startup, background | `server.py::_expand_instruments` | 20 h marker inside the loader |
-| background loops | see the Jobs page | `jobs.py::start_loops`: scheduler, order sweeps, guardrail monitor (60 s, 9:15-15:35), autorun (60 s), Telegram poll | |
+| background loops | see the Jobs page | `jobs.py::start_loops`: scheduler, order sweeps, guardrail monitor (60 s, 9:15-15:35), autorun (60 s), Telegram poll, data-quality watch (300 s) | |
 | ingest worker | separate container `neotrade-ingest` | `python -m backend.datalayer.worker` | Redis leader lock `ingest:leader` |
 
 `system/jobs.py::LOOPS` = `guardrail_monitor, order_sweeps, autorun, telegram`; `DAILY_PASS`, `DATA_QUALITY`, `BUILDER` are the other `job:last:*` names the status panel reads.

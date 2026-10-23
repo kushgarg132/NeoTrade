@@ -3,6 +3,8 @@ from backend.app_settings import current_llm_model, feature_enabled
 from backend.configs.settings import settings
 from typing import Optional, List, Any, AsyncIterator
 import contextlib
+import json
+import time
 import contextvars
 import logging
 from langchain_core.runnables import Runnable, RunnableConfig
@@ -103,6 +105,22 @@ class MultiKeyChain(Runnable):
 
 
 
+# The last success and failure of get_completion, read by
+# system/data_quality.py::_llm to tell "the provider is down" apart from one bad call.
+LLM_OK_KEY, LLM_ERROR_KEY = "llm:last_ok", "llm:last_error"
+
+
+async def _note(key: str, value: str) -> None:
+    from backend.database import db
+
+    if db.redis is None:
+        return
+    try:
+        await db.redis.set(key, value, ex=86400)
+    except Exception as exc:
+        logger.warning("could not record LLM health: %s", exc)
+
+
 class LLMService:
 
 
@@ -142,9 +160,11 @@ class LLMService:
             content = response.content
             if isinstance(content, list):  # some providers answer in content blocks
                 content = "".join(b if isinstance(b, str) else b.get("text", "") for b in content)
+            await _note(LLM_OK_KEY, str(int(time.time())))
             return content
         except Exception as e:
             logger.error(f"LLM Error: {e}")
+            await _note(LLM_ERROR_KEY, json.dumps({"at": int(time.time()), "error": str(e)[:300]}))
             return f"Error generating response: {str(e)}"
 
     async def _charge(self, feature: Optional[str]) -> None:

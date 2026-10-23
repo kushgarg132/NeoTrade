@@ -130,6 +130,7 @@ Prompts (`backend/prompts/*.md`, front matter `system:`; caller in parens): `tri
 | `scheduler:daily_lock` 2h; `scheduler:last_pass` no TTL | token; IST date | `scheduler.py::_run_locked` |
 | `job:last:{name}` hash `at,ok,note` | `daily_pass, data_quality, autorun, order_sweeps, guardrail_monitor, telegram, strategy_builder` | `system/jobs.py::mark` |
 | `rate:llm:{user}:{IST date}` | per-user LLM calls, 2d | `llm.py::_charge` via `rate_limit.allow` |
+| `llm:last_ok` (epoch s), `llm:last_error` (`{at,error}`) | 86400s; every `get_completion` success / exception | `llm.py::_note`; r: `data_quality.py::_llm` |
 
 ### Settings
 Env (`backend/configs/settings.py`): `NEWS_LLM_CALLS_PER_DAY=200`, `USER_LLM_CALLS_PER_DAY=150`, `PLAN_LLM_CALLS_PER_DAY=100`, `AI_TOOLS_ENABLED=True`, `OMNIROUTE_BASE_URL/MODEL`, `OMNIROUTE_API_KEY(S)`, `OMNIROUTE_FEATURE_KEYS` {feature: key}. Admin runtime switches (`app_settings.py`, 30 s cache per process): model per tier (`TIERS` fast/standard/deep), `FEATURES` = news, plan, research, chat, portfolio, learning (on/off), `lab_enabled` (default off). Per-user prefs read here: `universe, account_size, max_exposure, per_trade_cap, news_alerts` (held|held+watched|all|off), `autopilot_enabled, autopilot_news, autopilot_live, broker_roles, omniroute_model`.

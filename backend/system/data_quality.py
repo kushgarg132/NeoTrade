@@ -20,13 +20,22 @@ Informational, not failures: unlisted universe symbols, and silent news feeds
 - the quotes loop failing: no cached quote for any of the first few Nifty
   200 names;
 - `scheduler:last_pass` behind the last weekday whose pass should be done;
-- the Picks job's study not written for that day.
+- the Picks job's study not written for that day;
+- the LLM provider failing: the last `get_completion` error is newer than
+  its last success and under LLM_DOWN_AFTER old (kiro 401s, 2026-10-21..23).
 
-No NSE holiday calendar exists: weekends are the only gap the checks know,
-and `alerts` (the Today item) stays quiet on Saturday and Sunday.
+`watch_loop` (jobs process) runs `live` every WATCH_SECONDS and sends the
+admin a Telegram message when a failure has held for two ticks, and again
+when it clears.
+
+Trading days come from `core/market_calendar.py`; `alerts` (the Today
+item) stays quiet on non-trading days.
 """
 
+import asyncio
 import json
+import logging
+import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
@@ -36,6 +45,8 @@ from backend.datalayer.news import COLLECTION as NEWS
 from backend.datalayer.news_sources import FEEDS
 from backend.engine.session import IST
 
+logger = logging.getLogger(__name__)
+
 SILENT_AFTER = timedelta(days=3)  # RBI, SEBI and PIB can go a weekend without a release
 EXAMPLES = 8
 # The 16:00 pass may hold its lock for two hours (scheduler.LOCK_TTL_MS).
@@ -44,6 +55,9 @@ PASS_DONE = time(18, 0)
 # pass takes tens of seconds); below this a 15-second loop would flap.
 MIN_STALE_SECONDS = 120
 BELLWETHERS = 5  # first names of the Nifty 200 the quotes loop always covers
+LLM_DOWN_AFTER = 30 * 60  # an error older than this, with no success since, is just old news
+WATCH_SECONDS = 300
+WATCH_LOCK, WATCH_STATE = "data_quality:watch_lock", "data_quality:watch"
 
 
 def _names(symbols) -> str:
@@ -105,11 +119,24 @@ async def _picks(db, now: datetime) -> list[str]:
     return [] if ran and ran >= due else [f"Picks job has not run for {due.isoformat()} (last: {ran or 'never'})"]
 
 
+async def _llm(redis, now: datetime) -> list[str]:
+    from backend.llm import LLM_ERROR_KEY, LLM_OK_KEY
+
+    error, ok = await redis.mget([LLM_ERROR_KEY, LLM_OK_KEY])
+    if not error:
+        return []
+    error = json.loads(_text(error))
+    if error["at"] <= int(_text(ok) or 0) or now.timestamp() - error["at"] > LLM_DOWN_AFTER:
+        return []
+    return [f"AI provider failing: {error['error'][:160]}"]
+
+
 async def live(db, redis, now: Optional[datetime] = None) -> list[str]:
     now = now or datetime.now(timezone.utc)
     if redis is None:
         return await _picks(db, now)
-    return [*await _heartbeats(redis), *await _quotes(redis), *await _last_pass(redis, now), *await _picks(db, now)]
+    return [*await _heartbeats(redis), *await _quotes(redis), *await _last_pass(redis, now), *await _picks(db, now),
+            *await _llm(redis, now)]
 
 
 async def check(db, redis=None, now: Optional[datetime] = None) -> dict:
@@ -158,3 +185,50 @@ async def alerts(db, redis, now: Optional[datetime] = None) -> list[str]:
             nightly = [f"Data-quality check failed: {run['note']}"]
         out += [f for f in nightly if f.startswith("Stale bars") or f.startswith("Data-quality")]
     return out
+
+
+def _key(failure: str) -> str:
+    # "last beat 7 min ago" becomes "last beat # min ago": one alert per problem, not per tick
+    return re.sub(r"\d+", "#", failure)
+
+
+async def _send_admins(db, text: str) -> None:
+    from backend.guardrails import telegram
+    from backend.guardrails.store import GuardrailStore
+
+    async for admin in db["users"].find({"role": "admin"}, {"id": 1}):
+        channel = await GuardrailStore(db).telegram_channel(admin["id"])
+        if channel:
+            await telegram.send(channel[1], text, channel[0])
+
+
+async def watch_tick(db, redis, now: Optional[datetime] = None, send=_send_admins) -> None:
+    """Alerts on a failure seen on two ticks in a row (a loop's slow pass
+    must not page anyone), and on its recovery."""
+    if not await redis.set(WATCH_LOCK, "1", nx=True, px=(WATCH_SECONDS - 5) * 1000):
+        return
+    current = {_key(f): f for f in await live(db, redis, now)}
+    state = json.loads(_text(await redis.get(WATCH_STATE)) or "{}")
+    seen, alerted = state.get("seen", {}), state.get("alerted", {})
+    new = [f for k, f in current.items() if k in seen and k not in alerted]
+    cleared = [f for k, f in alerted.items() if k not in current]
+    alerted = {k: f for k, f in {**alerted, **{_key(f): f for f in new}}.items() if k in current}
+    if new:
+        await send(db, "⚠️ NeoTrade data problem\n" + "\n".join(f"• {f}" for f in new))
+    if cleared:
+        await send(db, "✅ NeoTrade recovered\n" + "\n".join(f"• {f}" for f in cleared))
+    await redis.set(WATCH_STATE, json.dumps({"seen": current, "alerted": alerted}))
+
+
+async def watch_loop(db, redis) -> None:
+    while True:
+        try:
+            if redis is not None:
+                await watch_tick(db, redis)
+        except Exception as exc:
+            logger.exception("data-quality watch failed: %s", exc)
+        await asyncio.sleep(WATCH_SECONDS)
+
+
+def start(db, redis) -> asyncio.Task:
+    return asyncio.create_task(watch_loop(db, redis))

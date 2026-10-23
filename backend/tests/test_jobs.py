@@ -7,7 +7,7 @@ from mongomock_motor import AsyncMongoMockClient
 
 from backend import jobs, server
 
-EXPECTED = {"scheduler", "order_sweeps", "guardrail_monitor", "telegram_bot", "autorun"}
+EXPECTED = {"scheduler", "order_sweeps", "guardrail_monitor", "telegram_bot", "autorun", "data_quality_watch"}
 
 
 @pytest.fixture
@@ -16,10 +16,12 @@ def started(monkeypatch):
     from backend import scheduler
     from backend.engine import autorun, sweeps
     from backend.guardrails import monitor, telegram_bot
+    from backend.system import data_quality
 
     names = []
     for name, mod in [("scheduler", scheduler), ("order_sweeps", sweeps), ("guardrail_monitor", monitor),
-                      ("telegram_bot", telegram_bot), ("autorun", autorun)]:
+                      ("telegram_bot", telegram_bot), ("autorun", autorun),
+                      ("data_quality_watch", data_quality)]:
         monkeypatch.setattr(mod, "start", lambda *a, _n=name, **k: names.append(_n))
     return names
 
