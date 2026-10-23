@@ -3,15 +3,10 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import IdeaBadge from './IdeaBadge';
 import Badge from '../ui/Badge';
+import { px, rewardRisk as rr } from './levels';
 import { olderPickLabel, GRADES } from '../../utils/ideas';
 import { bareSymbol } from '../../utils/formatters';
 import { pct, tone } from '../ui/format';
-
-// Price levels keep their paise.
-const px = (n) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-/** Reward : risk from the idea's own levels (a pick carries it; a suggestion is worked out from entry, stop, target). */
-const rr = (i) => i.rewardRisk ?? (i.entry != null && i.stop != null && i.target != null && i.entry !== i.stop
-  ? Math.abs(i.target - i.entry) / Math.abs(i.entry - i.stop) : null);
 import { toneText } from '../ui/tone';
 
 /** One idea in the list: action + symbol, setup and horizon, headline %, proven badge. */
@@ -30,9 +25,9 @@ const IdeaRow = ({ idea }) => (
       </div>
       {idea.entry != null && (
         <div className="flex flex-wrap gap-x-2 text-[13px] text-[var(--text)] tabular-nums">
-          <span className="whitespace-nowrap">Entry ₹{px(idea.entry)}</span>
-          {idea.stop != null && <span className="whitespace-nowrap">SL ₹{px(idea.stop)}</span>}
-          {idea.target != null && <span className="whitespace-nowrap">T ₹{px(idea.target)}</span>}
+          <span className="whitespace-nowrap">Entry {px(idea.entry)}</span>
+          {idea.stop != null && <span className="whitespace-nowrap">SL {px(idea.stop)}</span>}
+          {idea.target != null && <span className="whitespace-nowrap">T {px(idea.target)}</span>}
           {rr(idea) != null && <span className="whitespace-nowrap font-semibold">R:R {rr(idea).toFixed(1)}</span>}
         </div>
       )}

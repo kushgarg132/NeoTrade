@@ -24,27 +24,27 @@ import useStored from '../hooks/useStored';
 import { oneLine } from '../utils/aiText';
 import { inr, pct } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
-import { AiCard, AiText } from '../components/ai/AiSummary';
+import { AiLabel, AiText } from '../components/ai/AiSummary';
+import { px, rewardRisk } from '../components/ideas/levels';
 import { splitThesis } from '../utils/aiText';
 
 const STATUS = { APPROVED: 'You bought this', REJECTED: 'You skipped this', EXPIRED: 'Expired', FILLED: 'Filled', CANCELLED: 'Cancelled' };
 const PAPER = { 'live-ready': 'Paper record clears the live gate', paper: 'Paper record still building', untested: 'Not backtested yet', paused: 'Paused by the AI' };
 
-/** The suggestion's composite score and how much of it is the rules versus the AI. */
+/** One line: the composite score and how much of it is the rules versus the AI (the AI cannot rescue a trade the rules did not support). */
 const Confidence = ({ score }) => (
-  <Card title="Confidence">
-    <div className="flex items-baseline justify-between">
-      <span className="text-[28px] leading-9 font-bold tabular-nums text-[var(--text)]">{Math.round(score.final * 100)}<span className="text-[15px] font-medium text-[var(--text-muted)]"> / 100</span></span>
-    </div>
-    <div className="mt-2 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden" role="img" aria-label={`Composite score ${Math.round(score.final * 100)} out of 100`}>
-      <div className="h-full bg-[var(--accent)]" style={{ width: `${Math.max(0, Math.min(1, score.final)) * 100}%` }} />
-    </div>
-    {score.rule != null && (
-      <p className="mt-2 text-[13px] text-[var(--text-muted)]">
-        Rules {Math.round(score.rule * 100)} · AI {score.ai >= 0 ? '+' : '−'}{Math.abs(Math.round(score.ai * 100))}. The AI can move the score only a little: it cannot rescue a trade the rules did not support.
-      </p>
-    )}
-  </Card>
+  <p className="text-[14px] text-[var(--text)] tabular-nums" title="Composite score out of 100. The AI can move it only a little: it cannot rescue a trade the rules did not support.">
+    Confidence <b>{Math.round(score.final * 100)}/100</b>
+    {score.rule != null && <span className="text-[var(--text-muted)]"> · Rules {Math.round(score.rule * 100)} · AI {score.ai >= 0 ? '+' : '−'}{Math.abs(Math.round(score.ai * 100))}</span>}
+  </p>
+);
+
+/** A folded section: a native details, so no JS and keyboard-friendly. */
+const Fold = ({ title, children }) => (
+  <details className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)]">
+    <summary className="flex items-center min-h-11 px-4 text-[15px] font-semibold text-[var(--text)] cursor-pointer">{title}</summary>
+    <div className="px-4 pb-4 space-y-3">{children}</div>
+  </details>
 );
 
 /** Strategy track record: forward scorecard row (n/100, mean excess, hit rate) and the paper record. */
@@ -59,10 +59,10 @@ const StrategyRecord = ({ idea }) => {
   }, [idea.strategy]);
   if (!row && !card) return null;
   return (
-    <Card title="Track record" action={<IdeaBadge badge={idea.badge} />}>
+    <div>
       {row && (
         <div className="grid grid-cols-3 gap-3">
-          <Stat label="Scored" value={`${Math.min(row.n, 100)}/100`} />
+          <Stat label="Scored (of 100 needed)" value={`${Math.min(row.n, 100)}/100`} />
           <Stat label="Avg vs NIFTY" value={<span className={toneText(row.mean_excess > 0 ? 'gain' : row.mean_excess < 0 ? 'loss' : 'neutral')}>{pct(row.mean_excess, { sign: true })}</span>} />
           <Stat label="Hit rate" value={pct(row.hit_rate, { dp: 0 })} />
         </div>
@@ -72,7 +72,7 @@ const StrategyRecord = ({ idea }) => {
           Paper record: {recordLine(card)}. {PAPER[statusOf(card)]}.
         </p>
       )}
-    </Card>
+    </div>
   );
 };
 
@@ -92,14 +92,12 @@ const find = async (kind, key) => {
     : null;
 };
 
-// Price levels keep their paise (inr rounds to rupees).
-const px = (n) => (n == null ? '—' : `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-
 /** The AI thesis saved with the suggestion, with its risk sentences set apart when it names any. */
 const Thesis = ({ text, at }) => {
   const { why, risk } = splitThesis(text);
   return (
-    <AiCard title="Why this idea, and what could go wrong" asOf={at}>
+    <div>
+      <AiLabel at={at} />
       {why && <AiText text={why} />}
       {risk && (
         <div className="mt-3">
@@ -107,7 +105,7 @@ const Thesis = ({ text, at }) => {
           <AiText text={risk} className="text-[var(--text-muted)]" />
         </div>
       )}
-    </AiCard>
+    </div>
   );
 };
 
@@ -155,63 +153,72 @@ const IdeaDetail = () => {
         {idea.decided && <Badge kind="neutral">{STATUS[idea.status] || idea.status}</Badge>}
       </div>
 
-      {idea.score && <Confidence score={idea.score} />}
+      <Card title="Trade plan" action={<Badge kind="paper">Paper</Badge>}>
+        <div className="grid grid-cols-3 gap-3">
+          <Stat label="Entry" value={px(idea.entry)} />
+          <Stat label="Stop" value={px(idea.stop)} delta={idea.toStop != null ? pct(idea.toStop, { sign: true, dp: 1 }) : null} tone="loss" />
+          <Stat label="Target" value={px(idea.target)} />
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          <Stat label="R:R (reward : risk)" value={rewardRisk(idea) != null ? `${rewardRisk(idea).toFixed(1)} : 1` : '—'} />
+          {idea.kind === 'p' && idea.entryZone && <Stat label="Buy up to" value={px(idea.entryZone[1])} />}
+          {idea.kind === 'p' && idea.stretch != null && <Stat label="Stretch" value={px(idea.stretch)} />}
+          {idea.kind === 's' && idea.headline?.value != null && <Stat label="If it hits target" value={<span className="text-[var(--gain)]">{pct(idea.headline.value, { sign: true, dp: 1 })}</span>} />}
+        </div>
+        {idea.qty != null && (
+          <div className="mt-3 grid grid-cols-3 gap-3">
+            <Stat label="Quantity" value={idea.qty} />
+            <Stat label="Size" value={inr(idea.notional)} />
+            <Stat label="Risk if stopped" value={inr(idea.risk)} />
+          </div>
+        )}
+        {idea.score && <div className="mt-3"><Confidence score={idea.score} /></div>}
+        <p className="mt-3 text-[12px] text-[var(--text-muted)]">
+          Paper record · not advice.{idea.kind === 'p' ? " Levels come from this setup's past range; they are not a promise." : ' Levels are the engine\'s, set when the idea was made.'}
+        </p>
+      </Card>
 
-      <Card title="Why">
+      {idea.kind === 's' && !idea.decided && <BuyBar idea={idea} id={key} onDone={done} />}
+
+      <Fold title="Why this idea">
         {idea.why && <p className="text-[15px] text-[var(--text)]">{idea.why}</p>}
         {idea.reasons.length > 0 && <ul className="list-disc pl-5 text-[15px] text-[var(--text)]">{idea.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
         {!idea.why && !idea.reasons.length && !idea.thesis && <p className="text-[14px] text-[var(--text-muted)]">No reasons recorded.</p>}
         {idea.kind === 'p' && <PickContext symbol={idea.symbol} />}
-      </Card>
+        {idea.thesis && <Thesis text={idea.thesis} at={idea.createdAt} />}
+      </Fold>
 
-      {idea.thesis && <Thesis text={idea.thesis} at={idea.createdAt} />}
-
-      <Card title="Levels">
-        <div className="grid grid-cols-3 gap-3">
-          <Stat label="Entry" value={px(idea.entry)} />
-          {idea.stop != null && <Stat label="Stop" value={px(idea.stop)} />}
-          {idea.target != null && <Stat label="Target" value={px(idea.target)} />}
-        </div>
-        {idea.kind === 'p' && (idea.entryZone || idea.stretch != null || idea.rewardRisk != null) && (
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            {idea.entryZone && <Stat label="Buy up to" value={px(idea.entryZone[1])} />}
-            {idea.stretch != null && <Stat label="Stretch" value={px(idea.stretch)} />}
-            {idea.rewardRisk != null && <Stat label="Reward : risk" value={`${idea.rewardRisk.toFixed(1)} : 1`} />}
-          </div>
-        )}
-        {idea.kind === 'p' && idea.toStop != null && (
-          <p className="mt-3 text-[13px] text-[var(--text-muted)]">
-            Stop {pct(idea.toStop, { sign: true, dp: 1 })} from entry. Levels come from this setup's past range; they are not a promise.
-          </p>
-        )}
-        {idea.kind === 's' && (idea.headline?.value != null || idea.toStop != null) && (
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            {idea.headline?.value != null && <Stat label="If it hits target" value={<span className="text-[var(--gain)]">{pct(idea.headline.value, { sign: true, dp: 1 })}</span>} />}
-            {idea.toStop != null && <Stat label="If stopped out" value={<span className="text-[var(--loss)]">{pct(idea.toStop, { sign: true, dp: 1 })}</span>} />}
-          </div>
-        )}
-        {idea.qty != null && (
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <Stat label="Quantity" value={idea.qty} />
-            <Stat label="Size" value={inr(idea.notional)} />
-            <Stat label="Risk" value={inr(idea.risk)} />
-          </div>
-        )}
-      </Card>
+      {((idea.kind === 's' && idea.strategy) || idea.pastN != null) && (
+        <Fold title="Track record">
+          <div className="flex items-center gap-2"><IdeaBadge badge={idea.badge} /><span className="text-[12px] text-[var(--text-muted)]">Forward n/100 = outcomes scored live so far, out of the 100 needed.</span></div>
+          {idea.kind === 's' && idea.strategy && <StrategyRecord idea={idea} />}
+          {idea.pastN != null && (
+            <div>
+              {idea.gradeText && <p className="mb-3 text-[14px] text-[var(--text-muted)]">{idea.gradeText}{idea.missedEntry ? '. The price is now past the entry zone (3% above the signal price).' : '.'}</p>}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Stat label="Past events" value={idea.pastN} />
+                <Stat label="Out-of-sample vs NIFTY" value={pct(idea.oosExcess, { sign: true })} delta={idea.oosN != null ? `n ${idea.oosN}` : null} />
+                <Stat label="vs the average stock" value={pct(idea.adjExcess, { sign: true })} delta={idea.adjT != null ? `t ${idea.adjT.toFixed(1)}` : null} />
+              </div>
+              <p className="mt-3 text-[12px] text-[var(--text-muted)]">Out-of-sample = tested on past data held back from tuning the setup. n = events counted. t-score: above about 2 means the edge is unlikely to be luck.</p>
+            </div>
+          )}
+        </Fold>
+      )}
 
       {idea.kind === 'p' && idea.expectedMedian != null && (
-        <Card title="Expected return">
+        <Card title="Expected return" action={<Badge kind="paper">Paper</Badge>}>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className={`text-[24px] font-semibold tabular-nums ${toneText(idea.expectedMedian > 0 ? 'gain' : idea.expectedMedian < 0 ? 'loss' : 'neutral')}`}>{pct(idea.expectedMedian, { sign: true, dp: 1 })}</span>
             {idea.when && <span className="text-[14px] text-[var(--text-muted)]">{idea.when}</span>}
           </div>
           {idea.rupees && <p className="mt-1 text-[14px] text-[var(--text)] tabular-nums">{idea.rupees}</p>}
-          {idea.spread && <p className="mt-1 text-[13px] text-[var(--text-muted)] tabular-nums">Range {pct(idea.spread.p10, { sign: true, dp: 1 })} to {pct(idea.spread.p90, { sign: true, dp: 1 })} (p10 to p90)</p>}
+          {idea.spread && <p className="mt-1 text-[13px] text-[var(--text-muted)] tabular-nums">Range {pct(idea.spread.p10, { sign: true, dp: 1 })} to {pct(idea.spread.p90, { sign: true, dp: 1 })} (10th to 90th percentile: 8 in 10 similar past cases landed in this band)</p>}
         </Card>
       )}
 
       {idea.range && (
-        <Card title={idea.excessRange ? 'Likely result vs NIFTY' : 'Likely range'}>
+        <Card title={idea.excessRange ? 'Likely result vs NIFTY' : 'Likely range'} action={<Badge kind="paper">Paper</Badge>}>
           {idea.forecast && (
             <p className="mb-3 text-[13px] text-[var(--text-muted)]">
               {idea.forecast === 'similar' && idea.similarN != null
@@ -224,27 +231,11 @@ const IdeaDetail = () => {
             <ul className="mt-3 list-disc pl-5 text-[14px] text-[var(--text-muted)]">{idea.features.map((f) => <li key={f}>{f}</li>)}</ul>
           )}
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <Stat label="Chance up" value={pct(idea.pUp, { dp: 0 })} />
+            <Stat label="Chance up (past similar cases)" value={pct(idea.pUp, { dp: 0 })} />
             <Stat label="Beat NIFTY" value={pct(idea.pBeat, { dp: 0 })} />
           </div>
         </Card>
       )}
-
-      {idea.kind === 's' && idea.strategy && <StrategyRecord idea={idea} />}
-
-      {idea.pastN != null && (
-        <Card title="Track record">
-          {idea.gradeText && <p className="mb-3 text-[14px] text-[var(--text-muted)]">{idea.gradeText}{idea.missedEntry ? '. The price is now past the entry zone (3% above the signal price).' : '.'}</p>}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Stat label="Past events" value={idea.pastN} />
-            <Stat label="Out-of-sample vs NIFTY" value={pct(idea.oosExcess, { sign: true })} delta={idea.oosN != null ? `n ${idea.oosN}` : null} />
-            <Stat label="vs the average stock" value={pct(idea.adjExcess, { sign: true })} delta={idea.adjT != null ? `t ${idea.adjT.toFixed(1)}` : null} />
-            <div className="min-w-0"><div className="text-[13px] text-[var(--text-muted)]">Forward</div><div className="mt-1"><IdeaBadge badge={idea.badge} /></div></div>
-          </div>
-        </Card>
-      )}
-
-      {idea.kind === 's' && !idea.decided && <BuyBar idea={idea} id={key} onDone={done} />}
     </div>
   );
 
