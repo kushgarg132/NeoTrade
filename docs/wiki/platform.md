@@ -234,7 +234,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/market/index/{ticker}/analysis` | `backend/routers/market_data.py::get_index_analysis` | user |
 | GET | `/api/v1/market/brief` | `backend/routers/market_data.py::get_market_brief` (stored, no model call; 404 if none) | user |
 | GET | `/api/v1/research/{symbol}/note` | `backend/routers/market_data.py::get_cached_note` (cached analyst note, no model call; 404 if none) | user |
-| GET | `/api/v1/market/quotes` | `backend/routers/market_data.py::get_quotes` | user |
+| GET | `/api/v1/market/quotes` | `backend/routers/market_data.py::get_quotes` (<= 8 symbols; ingest `quote:` cache first via `_cached_quotes`, Yahoo for misses; rows `{symbol,price,change_pct,at}`) | user |
 | GET | `/api/v1/options/expiries` | `backend/routers/options.py::get_expiries` | user |
 | GET | `/api/v1/options/chain` | `backend/routers/options.py::get_chain` | user |
 | GET | `/api/v1/watchlist` | `backend/routers/watchlist.py::get_watchlist` | user |

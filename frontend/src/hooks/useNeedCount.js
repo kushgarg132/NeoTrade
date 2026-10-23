@@ -18,18 +18,30 @@ export const fetchIdeas = async (isAdmin) => {
   return { items: [...sug, ...picks], hiddenReason };
 };
 
-/** The one "needs you" count (Home line, Ideas tile, Ideas tab badge): { count, actions, ideas }. */
+/**
+ * The one "needs you" count (Home line, Ideas tile, Ideas tab badge): { count, actions, ideas, loaded, error, reload }.
+ * `count` is null until the first answer; a failed reload keeps the last good numbers and sets `error`
+ * (a failure used to read as 0).
+ */
 export const useNeedCount = () => {
   const isAdmin = useAuth().user?.role === 'admin';
-  const [s, setS] = useState({ actions: [], ideas: [] });
+  const [s, setS] = useState(null);
+  const [error, setError] = useState(false);
   const load = useCallback(() => {
     Promise.all([
-      api.get(endpoints.mine.actions).then((r) => r.data).catch(() => []),
-      fetchIdeas(isAdmin).then((r) => r.items).catch(() => []),
-    ]).then(([actions, ideas]) => setS({ actions, ideas }));
+      api.get(endpoints.mine.actions).then((r) => r.data).catch(() => null),
+      fetchIdeas(isAdmin).then((r) => r.items).catch(() => null),
+    ]).then(([actions, ideas]) => {
+      if (actions === null || ideas === null) return setError(true);
+      setS({ actions, ideas });
+      setError(false);
+    });
   }, [isAdmin]);
   useEffect(() => { load(); }, [load]);
   useReconnect(load);
   useTopic('suggestions', load);
-  return { ...s, count: needCount(s.actions, s.ideas) };
+  return {
+    actions: s?.actions || [], ideas: s?.ideas || [], count: s ? needCount(s.actions, s.ideas) : null,
+    loaded: s !== null, error, reload: load,
+  };
 };

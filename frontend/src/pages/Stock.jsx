@@ -9,6 +9,7 @@ import Button from '../components/ui/Button';
 import Skeleton from '../components/ui/Skeleton';
 import ErrorLine from '../components/ui/ErrorLine';
 import Empty from '../components/ui/Empty';
+import AsOf from '../components/ui/AsOf';
 import { inr, pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import OrderTicket from '../components/trading/OrderTicket';
@@ -19,7 +20,7 @@ import EventsTab from '../components/stock/EventsTab';
 import useStockAnalysis from '../components/stock/useStockAnalysis';
 import { verdictKind, verdictLabel } from '../components/stock/common';
 import api, { endpoints } from '../utils/api';
-import { bareSymbol, formatQuantity, formatDateTime } from '../utils/formatters';
+import { bareSymbol, formatQuantity, formatDateTime, marketPhase } from '../utils/formatters';
 import useStored from '../hooks/useStored';
 import { oneLine } from '../utils/aiText';
 import { positionSummary } from '../utils/stock';
@@ -56,6 +57,21 @@ const Stock = () => {
       .catch((err) => setMine({ data: null, status: err?.response?.status === 404 ? 'missing' : 'error', symbol }));
   }, [symbol]);
   useEffect(loadMine, [loadMine]);
+
+  // The price itself, every 60 s in session: GET /market/quotes reads the ingest quote cache.
+  // The snapshot's price was a one-shot that sat still for as long as the page stayed open.
+  const [liveRaw, setLive] = useState(null);
+  const live = liveRaw?.symbol === symbol ? liveRaw : null;
+  useEffect(() => {
+    if (!symbol) return undefined;
+    let current = true;
+    const poll = () => api.get(endpoints.marketQuotes([symbol]))
+      .then((r) => current && r.data[0] && setLive(r.data[0]))
+      .catch(() => {}); // the snapshot price stands in, and AsOf turns stale
+    poll();
+    const timer = setInterval(() => !document.hidden && marketPhase() !== 'closed' && poll(), 60_000);
+    return () => { current = false; clearInterval(timer); };
+  }, [symbol]);
   useEffect(() => {
     api.get(endpoints.mine.overview).then((res) => setPortfolio(res.data?.headline?.value ?? null)).catch(() => setPortfolio(null));
   }, []);
@@ -72,9 +88,10 @@ const Stock = () => {
     return (m?.closes?.length || 0) > fromQuick.length ? m.closes : fromQuick; // the longer history wins (5Y)
   }, [quick.data, m]);
 
-  const price = company?.current_price ?? closes.at(-1)?.close;
-  const prev = company?.previous_close;
-  const dayPct = company?.day_change_percent != null ? company.day_change_percent / 100 : prev ? price / prev - 1 : null;
+  const price = live?.price ?? company?.current_price ?? closes.at(-1)?.close;
+  const prev = live?.change_pct != null ? live.price / (1 + live.change_pct / 100) : company?.previous_close;
+  const dayPct = live?.change_pct != null ? live.change_pct / 100
+    : company?.day_change_percent != null ? company.day_change_percent / 100 : prev ? price / prev - 1 : null;
   const dayAbs = prev != null && price != null ? price - prev : null;
   const pos = positionSummary(m?.position, portfolio);
   const verdict = m?.verdict?.current;
@@ -107,10 +124,11 @@ const Stock = () => {
               <span className="text-[28px] leading-9 font-bold tabular-nums text-[var(--text)]">{currency === 'INR' ? inr(price) : price}</span>
               {dayPct != null && (
                 <span className={`text-[15px] font-semibold tabular-nums ${toneText(tone(dayPct))}`}>
-                  {dayAbs != null && currency === 'INR' && `${inr(dayAbs, { sign: true })} `}({pct(dayPct, { sign: true })}) today
+                  {dayAbs != null && currency === 'INR' && `${inr(dayAbs, { sign: true })} `}({pct(dayPct, { sign: true })}) {marketPhase() === 'open' ? 'today' : 'last session'}
                 </span>
               )}
             </div>
+            <AsOf at={live?.at} />
           </>
         )}
         {pos && (

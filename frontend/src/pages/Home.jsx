@@ -15,9 +15,10 @@ import { useReconnect, useRefetchOn } from '../hooks/useStream';
 import { useNeedCount } from '../hooks/useNeedCount';
 import { aiBook } from '../utils/ai';
 import { tileHeadlines, phaseLabel, briefKind, alerts } from '../utils/home';
+import { REFRESH_FAILED } from '../utils/formatters';
 
-// Home: a hub. One call each for today, the account overview and the indices;
-// a failing overview or index call only blanks its own figure.
+// Home: a hub. One call each for today, the account overview and the indices.
+// A failing call keeps its tile's last figure and marks it "Couldn't refresh".
 const Home = () => {
   const [today, setToday] = useState(null);
   const [overview, setOverview] = useState(null);
@@ -26,17 +27,23 @@ const Home = () => {
   const [card, setCard] = useState(null);
   const [day, setDay] = useState(null);
   const [error, setError] = useState(null);
+  const [failed, setFailed] = useState({}); // tile -> its last refresh failed
   const need = useNeedCount();
+  const reloadNeed = need.reload;
 
   const load = useCallback(() => {
+    const track = (tile, request, set) => request
+      .then((r) => { set(r.data); setFailed((f) => ({ ...f, [tile]: false })); })
+      .catch(() => setFailed((f) => ({ ...f, [tile]: true })));
     api.get(endpoints.today).then((r) => { setToday(r.data); setError(null); })
       .catch((e) => setError(e?.response?.data?.detail || 'Could not load today.'));
-    api.get(endpoints.mine.overview).then((r) => setOverview(r.data)).catch(() => {});
-    api.get(endpoints.analytics.pnl('paper')).then((r) => setPnl(r.data)).catch(() => {});
-    api.get(endpoints.analytics.scorecard('paper')).then((r) => setCard(r.data)).catch(() => {});
-    api.get(endpoints.marketIndices).then((r) => setIndices(r.data)).catch(() => {});
+    track('money', api.get(endpoints.mine.overview), setOverview);
+    track('ai', api.get(endpoints.analytics.pnl('paper')), setPnl);
+    track('ai', api.get(endpoints.analytics.scorecard('paper')), setCard);
+    track('market', api.get(endpoints.marketIndices), setIndices);
     api.get(endpoints.summaries.day).then((r) => setDay(r.data.summary)).catch(() => {}); // the digest below stands in
-  }, []);
+    reloadNeed();
+  }, [reloadNeed]);
   useEffect(() => {
     load();
     const timer = setInterval(() => !document.hidden && load(), 60_000);
@@ -52,7 +59,9 @@ const Home = () => {
         ? <ErrorLine message={error} onRetry={load} />
         : <Skeleton rows={4} />;
     }
-    const h = tileHeadlines(today, overview, indices, need, aiBook({ autopilot: today.autopilot, pnl, card }));
+    const h = tileHeadlines(today, overview, indices, need.loaded ? need : null, aiBook({ autopilot: today.autopilot, pnl, card }));
+    const meta = (tile, m) => (failed[tile] || (tile === 'ideas' && need.error) ? REFRESH_FAILED : m);
+    const anyFailed = Object.values(failed).some(Boolean) || need.error;
     const kind = briefKind(today.phase);
     const needs = need.count;
     return (
@@ -61,6 +70,12 @@ const Home = () => {
           {phaseLabel(today.phase)}
           {needs > 0 && <> · <Link to="/ideas" className="font-semibold text-[var(--accent)]">{needs} need{needs === 1 ? 's' : ''} you</Link></>}
         </p>
+        {anyFailed && (
+          <p className="text-[13px] text-[var(--warn)]">
+            Some figures couldn't refresh and may be old.{' '}
+            <button type="button" onClick={load} className="font-semibold underline min-h-11">Retry</button>
+          </p>
+        )}
         {alerts(today).map((a) => (
           <Link key={a.id} to={a.to} role="alert"
                 className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2 text-[14px] font-medium text-[var(--loss)]">
@@ -69,10 +84,10 @@ const Home = () => {
           </Link>
         ))}
         <div className="grid grid-cols-2 gap-3">
-          <Tile title="Money" icon={Wallet} to="/money" value={h.money.value} sub={h.money.sub} tone={h.money.tone} subTone={h.money.subTone} meta={h.money.meta} />
-          <Tile title="Ideas" icon={Lightbulb} to="/ideas" value={h.ideas.value} sub={h.ideas.sub} tone={h.ideas.tone} />
-          <Tile title="AI" icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.sub} tone={h.ai.tone} />
-          <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} meta={h.market.meta} />
+          <Tile title="Money" icon={Wallet} to="/money" value={h.money.value} sub={h.money.sub} tone={h.money.tone} subTone={h.money.subTone} meta={meta('money', h.money.meta)} />
+          <Tile title="Ideas" icon={Lightbulb} to="/ideas" value={h.ideas.value} sub={h.ideas.sub} tone={h.ideas.tone} meta={meta('ideas', null)} />
+          <Tile title="AI" icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.sub} tone={h.ai.tone} meta={meta('ai', null)} />
+          <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} meta={meta('market', h.market.meta)} />
         </div>
         {kind && <BriefCard title={kind === 'premarket' ? 'Before the open' : 'After the close'} text={today[kind]} summary={day} />}
         <GoalTile />

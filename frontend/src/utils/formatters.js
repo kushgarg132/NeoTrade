@@ -110,6 +110,9 @@ const LIVE = new Set(['open', 'pre', 'session']); // marketPhase() and GET /toda
 const STALE_LIVE_MS = 15 * 60_000;
 const STALE_CLOSED_MS = 4 * 86_400_000; // a long weekend plus a day
 
+/** A failed refresh, for a tile that keeps its last figure on screen. */
+export const REFRESH_FAILED = { text: "Couldn't refresh", stale: true };
+
 /**
  * The freshness line under a market figure: `at` is epoch seconds, ms or an ISO string,
  * `phase` either marketPhase() or /today's. In session "as of 2:31 PM", stale past 15 min;
@@ -121,9 +124,12 @@ export const asOf = (at, phase = marketPhase(), now = Date.now()) => {
   const ms = typeof at === 'number' ? (at < 1e12 ? at * 1000 : at) : new Date(at).getTime();
   if (!Number.isFinite(ms)) return null;
   const age = now - ms;
-  if (LIVE.has(phase)) return { text: `as of ${formatClock(ms)}`, stale: age > STALE_LIVE_MS };
+  if (LIVE.has(phase)) {
+    const stale = age > STALE_LIVE_MS;
+    return { text: `${stale ? 'Stale · ' : ''}as of ${formatClock(ms)}`, stale };
+  }
   return age > STALE_CLOSED_MS
-    ? { text: `as of ${formatDateTime(ms)}`, stale: true }
+    ? { text: `Stale · as of ${formatDateTime(ms)}`, stale: true }
     : { text: 'Market closed · last close', stale: false };
 };
 
