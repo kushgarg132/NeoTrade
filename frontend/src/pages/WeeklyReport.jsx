@@ -1,9 +1,10 @@
 import React, { useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
 import Stat from '../components/ui/Stat';
 import ListRow from '../components/ui/ListRow';
 import Empty from '../components/ui/Empty';
@@ -16,6 +17,7 @@ import { bareSymbol } from '../utils/formatters';
 import { inr, pct, tone } from '../components/ui/format';
 import { shiftWeek, weekRange } from '../utils/weekly';
 
+const act = 'inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold';
 const navCls = 'inline-flex items-center justify-center min-h-11 min-w-11 text-[var(--text-muted)] disabled:opacity-40';
 
 /** Last week for the user's own account; the same numbers Telegram sends on Sunday 18:00. */
@@ -45,43 +47,54 @@ const WeeklyReport = () => {
       </div>
       <AiSummary title="The week in words" state={words} className="mb-4" emptyBody="Written on Sunday evening, with the report." />
       {loading ? <Skeleton rows={6} />
-        : error ? <ErrorLine message="Could not load this week." onRetry={reload} />
+        : error ? <ErrorLine message="Couldn't load this week's report." onRetry={reload} />
         : (
           <div className="space-y-4">
-            <Card title="You against NIFTY">
-              {r.you.ret == null ? <Empty title="No curve for this week" body="Import trades or connect a broker to see it." /> : (
+            <Card title="Your account against NIFTY">
+              {r.you.ret == null ? <Empty title="No curve for this week" body="Your account's weekly return needs a connected broker or imported trades."
+                action={<Link to="/settings?tab=accounts" className={act}>Connect your broker</Link>} /> : (
                 <div className="grid grid-cols-3 gap-3">
-                  <Stat label="You" value={pct(r.you.ret, { sign: true })} tone={tone(r.you.ret)} />
+                  <Stat label="Your account" value={pct(r.you.ret, { sign: true })} tone={tone(r.you.ret)} />
                   <Stat label="NIFTY" value={pct(r.you.nifty, { sign: true })} tone={tone(r.you.nifty)} />
                   <Stat label="Excess" value={pct(r.you.excess, { sign: true })} tone={tone(r.you.excess)} />
                 </div>
               )}
               <div className="mt-3 pt-3 border-t border-[var(--border)]">
-                <Stat label="AI book" value={pct(r.ai.ret, { sign: true })} tone={tone(r.ai.ret)} />
+                <Stat label={<span className="inline-flex items-center gap-2">AI book <Badge kind="paper">Paper</Badge></span>} value={pct(r.ai.ret, { sign: true })} tone={tone(r.ai.ret)} />
+                <p className="mt-1 text-[13px] text-[var(--text-muted)]">Closed AI trades this week, after charges, as % of its capital.</p>
               </div>
             </Card>
-            <Card title="Best and worst">
-              {r.best.length + r.worst.length === 0 ? <Empty title="No closed trades" body="Nothing closed this week." /> : (
-                <ul>
-                  {[...r.best, ...r.worst].map((x) => (
-                    <ListRow key={x.symbol} title={bareSymbol(x.symbol)} right={inr(x.pnl, { sign: true })} rightTone={tone(x.pnl)} />
+            <Card title="Best and worst" action={<span className="text-[13px] text-[var(--text-muted)]">your account, by stock</span>}>
+              {r.best.length + r.worst.length === 0 ? <Empty title="No closed trades" body="Stocks you closed this week show here, best and worst first."
+                action={<Link to="/journal" className={act}>Open the journal</Link>} /> : (
+                <>
+                  {[['Best', r.best], ['Worst', r.worst]].filter(([, l]) => l.length).map(([label, list]) => (
+                    <div key={label}>
+                      <div className="text-[13px] font-semibold text-[var(--text-muted)] mt-1">{label}</div>
+                      <ul>
+                        {list.map((x) => (
+                          <ListRow key={x.symbol} dense chevron={false} title={bareSymbol(x.symbol)} right={inr(x.pnl, { sign: true })} rightTone={tone(x.pnl)} />
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+                </>
               )}
             </Card>
             <Card title="Ideas">
+              <p className="mb-2 text-[13px] text-[var(--text-muted)]">Scored ideas decided this week, split by whether you traded them.</p>
               <div className="grid grid-cols-2 gap-3">
                 {['taken', 'skipped'].map((k) => (
                   <Stat key={k} label={`${k[0].toUpperCase()}${k.slice(1)} (${r.ideas[k].n})`}
                     value={r.ideas[k].n ? pct(r.ideas[k].mean_excess, { sign: true }) : '—'}
-                    delta={r.ideas[k].n ? 'avg vs NIFTY' : 'none scored yet'} tone={tone(r.ideas[k].mean_excess)} />
+                    delta={r.ideas[k].n ? 'avg better or worse than NIFTY' : 'none scored yet'} tone={tone(r.ideas[k].mean_excess)} />
                 ))}
               </div>
             </Card>
-            <Card title="Journal">
+            <Card title="Journal" action={<span className="text-[13px] text-[var(--text-muted)]">your account</span>}>
               <div className="grid grid-cols-3 gap-3">
                 <Stat label="Trades" value={String(r.journal.trades)} />
-                <Stat label="Net" value={inr(r.journal.net, { sign: true })} tone={tone(r.journal.net)} />
+                <Stat label="Net, after charges" value={inr(r.journal.net, { sign: true })} tone={tone(r.journal.net)} />
                 <Stat label="Charges" value={inr(r.journal.charges)} />
               </div>
             </Card>
