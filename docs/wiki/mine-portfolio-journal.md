@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 58c9d43
+verified_at: 5952fb0
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -195,7 +195,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
     - `_mine_actions` top 3, plus the total
     - `scoreboard` (admin only)
     - `proposals_total`
-    - `_autopilot`
+    - `_autopilot` (`capital` = `account_size`, `exposure_cap` = `max_exposure`, `deployed` at entry prices)
     - `_setup` (6 steps)
     - `_backdrop`
 
