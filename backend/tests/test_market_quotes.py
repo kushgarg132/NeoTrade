@@ -37,7 +37,7 @@ def client(monkeypatch):
 def test_quotes_from_last_two_closes_in_request_order(client):
     http, use, _ = client
     use(pd.concat({"ITC.NS": _closes(400.0, 410.0), "INFY.NS": _closes(1500.0, 1485.0)}, axis=1))
-    body = http.get("/market/quotes", params={"symbols": "infy,ITC"}).json()
+    body = [{k: v for k, v in q.items() if k != "at"} for q in http.get("/market/quotes", params={"symbols": "infy,ITC"}).json()]
     assert body == [
         {"symbol": "INFY", "price": 1485.0, "change_pct": -1.0},
         {"symbol": "ITC", "price": 410.0, "change_pct": 2.5},
@@ -47,9 +47,8 @@ def test_quotes_from_last_two_closes_in_request_order(client):
 def test_single_symbol_flat_columns(client):
     http, use, _ = client
     use(_closes(100.0, 101.0))
-    assert http.get("/market/quotes", params={"symbols": "ITC"}).json() == [
-        {"symbol": "ITC", "price": 101.0, "change_pct": 1.0}
-    ]
+    (q,) = http.get("/market/quotes", params={"symbols": "ITC"}).json()
+    assert q.pop("at") > 0 and q == {"symbol": "ITC", "price": 101.0, "change_pct": 1.0}
 
 
 def test_symbol_without_data_is_omitted(client):
@@ -121,3 +120,22 @@ async def test_index_rows_come_from_the_cache_and_only_missing_ones_are_fetched(
     assert fetched == ["^BSESN"]
     assert [(r["name"], r["at"]) for r in rows][0] == ("NIFTY 50", 5.0)
     assert rows[1]["name"] == "SENSEX" and rows[1]["at"] > 5.0
+
+
+def test_quotes_come_from_the_ingest_cache_first(client, monkeypatch):
+    import json
+
+    from backend.database import db
+
+    http, use, calls = client
+
+    class Redis:
+        async def mget(self, keys):
+            return [json.dumps({"ltp": 110.0, "prev_close": 100.0, "at": 7.0}) if k == "quote:TCS" else None for k in keys]
+
+    monkeypatch.setattr(db, "redis", Redis())
+    use(_closes(50.0, 55.0))
+    rows = http.get("/market/quotes", params={"symbols": "TCS,INFY"}).json()
+    assert rows[0] == {"symbol": "TCS", "price": 110.0, "change_pct": 10.0, "at": 7.0}
+    assert rows[1]["symbol"] == "INFY" and rows[1]["price"] == 55.0 and rows[1]["at"] > 7.0
+    assert len(calls) == 1 and calls[0][0] == ["INFY.NS"]  # only the miss went to Yahoo

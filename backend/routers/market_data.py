@@ -294,24 +294,54 @@ def _quotes_sync(symbols: List[str]) -> List[Dict[str, Any]]:
             continue
         price, prev = float(closes.iloc[-1]), float(closes.iloc[-2])
         quotes.append({"symbol": symbol, "price": round(price, 2),
-                       "change_pct": round((price - prev) / prev * 100, 2) if prev else 0.0})
+                       "change_pct": round((price - prev) / prev * 100, 2) if prev else 0.0, "at": time.time()})
     return quotes
+
+
+async def _cached_quotes(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+    """The ingest worker's `quote:` rows (Nifty 200 plus held and watched names,
+    refreshed every 15 s to 10 min, backend/datalayer/prices.py::quotes)."""
+    import json
+
+    from backend.database import db
+    from backend.marks import QUOTE_KEY
+
+    if db.redis is None:
+        return {}
+    try:
+        raws = await db.redis.mget([QUOTE_KEY.format(s) for s in symbols])
+    except Exception as exc:
+        logger.warning("quote cache read failed: %s", exc)
+        return {}
+    found = {}
+    for symbol, raw in zip(symbols, raws):
+        q = json.loads(raw) if raw else {}
+        if q.get("ltp"):
+            prev = q.get("prev_close")
+            found[symbol] = {"symbol": symbol, "price": round(float(q["ltp"]), 2),
+                             "change_pct": round((q["ltp"] - prev) / prev * 100, 2) if prev else None, "at": q["at"]}
+    return found
 
 
 @router.get("/market/quotes")
 async def get_quotes(symbols: str):
-    """Prices for the search suggestions: up to 8 symbols, cached per set."""
+    """Last price, day change and `at` for up to 8 symbols (search suggestions,
+    the Stock page, the watchlist): the ingest quote cache first, Yahoo only
+    for the rest, cached per set."""
     wanted = list(dict.fromkeys(s.strip().upper().removesuffix(".NS") for s in symbols.split(",") if s.strip()))
     if not wanted or len(wanted) > _MAX_QUOTES:
         raise HTTPException(status_code=422, detail=f"Ask for 1 to {_MAX_QUOTES} symbols.")
-    key = ",".join(sorted(wanted))
-    hit = _quote_cache.get(key)
-    if hit is not None and time.monotonic() - hit[0] < QUOTES_TTL:
-        quotes = hit[1]
-    else:
-        quotes = await asyncio.to_thread(_quotes_sync, sorted(wanted))
-        if len(_quote_cache) >= _QUOTE_CACHE_MAX:
-            _quote_cache.clear()  # ponytail: wholesale reset, an LRU if hit rates ever matter
-        _quote_cache[key] = (time.monotonic(), quotes)
-    by_symbol = {q["symbol"]: q for q in quotes}
+    by_symbol = await _cached_quotes(wanted)
+    missing = sorted(s for s in wanted if s not in by_symbol)
+    if missing:
+        key = ",".join(missing)
+        hit = _quote_cache.get(key)
+        if hit is not None and time.monotonic() - hit[0] < QUOTES_TTL:
+            quotes = hit[1]
+        else:
+            quotes = await asyncio.to_thread(_quotes_sync, missing)
+            if len(_quote_cache) >= _QUOTE_CACHE_MAX:
+                _quote_cache.clear()  # ponytail: wholesale reset, an LRU if hit rates ever matter
+            _quote_cache[key] = (time.monotonic(), quotes)
+        by_symbol.update({q["symbol"]: q for q in quotes})
     return [by_symbol[s] for s in wanted if s in by_symbol]
