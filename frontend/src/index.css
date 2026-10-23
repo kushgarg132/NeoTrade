@@ -78,10 +78,10 @@
     --heat-0: var(--surface-2);
     --heat-pos-1: color-mix(in oklab, var(--gain) 22%, var(--surface));
     --heat-pos-2: color-mix(in oklab, var(--gain) 48%, var(--surface));
-    --heat-pos-3: color-mix(in oklab, var(--gain) 80%, var(--surface));
+    --heat-pos-3: color-mix(in oklab, var(--gain) 65%, var(--surface));
     --heat-neg-1: color-mix(in oklab, var(--loss) 22%, var(--surface));
     --heat-neg-2: color-mix(in oklab, var(--loss) 48%, var(--surface));
-    --heat-neg-3: color-mix(in oklab, var(--loss) 80%, var(--surface));
+    --heat-neg-3: color-mix(in oklab, var(--loss) 65%, var(--surface));
 
     /* Aliases: components not yet rebuilt still name the old contract-note tokens. */
     --paper: var(--bg);
@@ -121,10 +121,10 @@
     --heat-0: var(--surface-2);
     --heat-pos-1: color-mix(in oklab, var(--gain) 22%, var(--surface));
     --heat-pos-2: color-mix(in oklab, var(--gain) 48%, var(--surface));
-    --heat-pos-3: color-mix(in oklab, var(--gain) 80%, var(--surface));
+    --heat-pos-3: color-mix(in oklab, var(--gain) 65%, var(--surface));
     --heat-neg-1: color-mix(in oklab, var(--loss) 22%, var(--surface));
     --heat-neg-2: color-mix(in oklab, var(--loss) 48%, var(--surface));
-    --heat-neg-3: color-mix(in oklab, var(--loss) 80%, var(--surface));
+    --heat-neg-3: color-mix(in oklab, var(--loss) 65%, var(--surface));
   }
 
   * {

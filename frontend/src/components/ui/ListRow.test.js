@@ -12,3 +12,8 @@ test('ListRow takes a dense prop, off by default', () => {
 test('dense rows are 36 px; the default stays 56 px', () => {
   assert.match(src, /dense \? 'min-h-9 py-1' : 'min-h-14 py-2'/);
 });
+
+test('the right value blurs under hide-amounts unless marked public', () => {
+  assert.match(src, /privateValue = true/);
+  assert.match(src, /\$\{privateValue \? 'private ' : ''\}figure-md/);
+});
