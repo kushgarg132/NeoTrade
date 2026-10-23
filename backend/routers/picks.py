@@ -30,7 +30,7 @@ async def served_today() -> tuple:
 @router.get("")
 async def picks_today():
     latest, picks, study, served = await served_today()
-    scored = await db.db[PICKS].find({"outcome": {"$ne": None}}, {"p_up": 1, "outcome": 1}).to_list(length=None)
+    scored = await db.db[PICKS].find({"outcome": {"$ne": None}}, {"p_up": 1, "outcome": 1, "backfilled": 1}).to_list(length=None)
     return {
         "date": latest and latest["date"],
         "picks": picks,  # every candidate of the latest pass (backward compatible); the UI reads `shown`

@@ -53,7 +53,7 @@ async def enter(db, redis, user_id: str, now: datetime) -> list[dict]:
     # ponytail: a pick still before its due date is bought even if a missed
     # morning made it a session late; exact "next open" needs a holiday calendar.
     picks = [p for p in await db[PICKS].find({"date": latest["date"]}).to_list(length=None)
-             if p["due_date"] > today]
+             if p["due_date"] > today and not p.get("backfilled")]  # backfilled: hindsight, never bought
     traded = set(await db["paper_trades"].distinct(
         "context.pick_id", {"user_id": {"$in": [user_id, service.ledger_user(user_id)]},
                             "context.pick_id": {"$in": [p["_id"] for p in picks]}}))

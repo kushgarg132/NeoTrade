@@ -210,7 +210,9 @@ def serve(today_picks: list[dict], older: list[dict], prices: dict[str, float], 
 
 
 def forward(scored: list[dict]) -> dict:
-    """Predicted P(up) in 10-point buckets against the realised win rate."""
+    """Predicted P(up) in 10-point buckets against the realised win rate. Backfilled picks (recomputed
+    after the fact, `backfill`) are not forward picks and are left out."""
+    scored = [p for p in scored if not p.get("backfilled")]
     buckets: dict[float, list] = {}
     for p in scored:
         buckets.setdefault(min(int(p["p_up"] * 10), 9) / 10, []).append(p)
@@ -235,6 +237,7 @@ def live_refusal(scored: list[dict]) -> Optional[str]:
     None: at least MIN_FORWARD scored picks, calibrated within
     CALIBRATION_GAP (bucket gaps weighted by count) and a positive mean net
     excess over the Nifty."""
+    scored = [p for p in scored if not p.get("backfilled")]  # never real-money evidence
     record = forward(scored)
     n = record["n"]
     if n < MIN_FORWARD:
@@ -308,6 +311,38 @@ async def _forward(db, new: list[dict], now: datetime) -> None:
         logger.warning("forward records for picks not written: %s", exc)
 
 
+def _until(t: dict, day: date) -> dict:
+    """The wide table as it stood at the close of `day`."""
+    end = pd.Timestamp(day)
+    return {k: v.loc[:end] for k, v in t.items()}
+
+
+async def backfill(db, days: list[date], now: Optional[datetime] = None) -> int:
+    """Stores the picks `compute` would have made on each past `day` (the table cut at that close, so no
+    look-ahead), marked `backfilled: true` so `forward` and `live_refusal` never count them. No forward
+    records; the daily `run` scores them once they mature. Returns how many were new.
+
+        python -m backend.forecast.picks backfill 2026-10-01 2026-10-16
+    """
+    now = now or datetime.now(timezone.utc)
+    t = await load(db, now)
+    if t is None:
+        return 0
+    added = 0
+    for day in days:
+        if not is_trading_day(day):
+            continue
+        _, made = await asyncio.to_thread(compute, _until(t, day))
+        made = [p for p in made if p["date"] == day.isoformat()]
+        known = set(await db[PICKS].distinct("_id", {"_id": {"$in": [p["_id"] for p in made]}}))
+        new = [{**p, "created_at": now, "outcome": None, "backfilled": True} for p in made if p["_id"] not in known]
+        if new:
+            await db[PICKS].insert_many(new)
+        added += len(new)
+        logger.info("picks backfill %s: %d new", day, len(new))
+    return added
+
+
 async def run(db, now: Optional[datetime] = None) -> dict:
     now = now or datetime.now(timezone.utc)
     t = await load(db, now)
@@ -331,3 +366,20 @@ async def run(db, now: Optional[datetime] = None) -> dict:
             scored += 1
     logger.info("picks: %d new, %d scored", len(new), scored)
     return {"picks": len(new), "scored": scored}
+
+
+if __name__ == "__main__":
+    import sys
+
+    from backend.core.market_calendar import trading_days_between
+    from backend.database import db as _db
+
+    async def _main(a: str, b: str) -> None:
+        await _db.connect_to_database()
+        days = trading_days_between(date.fromisoformat(a), date.fromisoformat(b))
+        print(f"backfilled {await backfill(_db.db, days)} pick(s) over {len(days)} trading day(s)")
+
+    logging.basicConfig(level=logging.INFO)
+    if len(sys.argv) != 4 or sys.argv[1] != "backfill":
+        sys.exit("usage: python -m backend.forecast.picks backfill FROM TO")
+    asyncio.run(_main(sys.argv[2], sys.argv[3]))

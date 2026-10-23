@@ -340,3 +340,42 @@ def test_atr_is_the_mean_true_range():
 def test_served_picks_carry_levels():
     out = picks.serve([{**_p("2026-10-21", "A"), "expected": {"median": 0.05, "p10": -0.05, "p90": 0.1}}], [], {}, TODAY, GRADES)
     assert out["shown"][0]["levels"]["target"] == 105.0
+
+
+# --- backfill ------------------------------------------------------------------------
+
+def _scored(won, backfilled=False):
+    return {"p_up": 0.6, "outcome": {"won": won, "beat_nifty": won, "net": 0.05 if won else -0.05, "nifty": 0.0},
+            **({"backfilled": True} if backfilled else {})}
+
+
+def test_backfilled_picks_never_count_toward_the_forward_record_or_real_money():
+    real, back = [_scored(True)] * 3, [_scored(True, backfilled=True)] * 200
+    assert picks.forward(real + back)["n"] == 3
+    assert picks.live_refusal(real + back) == "Picks has 3 scored picks; real money needs 100."
+
+
+def test_backfill_cuts_the_table_at_each_day_and_marks_its_picks(monkeypatch):
+    import pandas as pd
+    mongo = AsyncMongoMockClient()["test_db"]
+    idx = pd.bdate_range("2026-09-28", "2026-10-05")
+    t = {"close": pd.DataFrame({"S": range(len(idx))}, index=idx), "nifty_close": pd.Series(range(len(idx)), index=idx)}
+    seen = []
+
+    async def load(db, now):
+        return t
+
+    def compute(table):
+        last = table["close"].index[-1].date().isoformat()
+        seen.append(last)
+        return {}, [{"_id": f"{last}:momentum:S", "date": last, "symbol": "S"}]
+
+    monkeypatch.setattr(picks, "load", load)
+    monkeypatch.setattr(picks, "compute", compute)
+    asyncio.run(mongo.picks.insert_one({"_id": "2026-10-01:momentum:S", "date": "2026-10-01"}))  # already stored
+    added = asyncio.run(picks.backfill(mongo, [date(2026, 10, 1), date(2026, 10, 2), date(2026, 10, 3)]))
+    assert seen == ["2026-10-01"]  # 2 Oct is Gandhi Jayanti, 3 Oct a Saturday
+    assert added == 0
+    added = asyncio.run(picks.backfill(mongo, [date(2026, 9, 30)]))
+    doc = asyncio.run(mongo.picks.find_one({"_id": "2026-09-30:momentum:S"}))
+    assert added == 1 and doc["backfilled"] is True and doc["outcome"] is None
