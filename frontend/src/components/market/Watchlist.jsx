@@ -7,6 +7,7 @@ import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
 import Empty from '../ui/Empty';
 import Button from '../ui/Button';
+import AsOf from '../ui/AsOf';
 import api, { endpoints } from '../../utils/api';
 import { stream } from '../../lib/ws';
 import { inr, pct, tone } from '../ui/format';
@@ -38,9 +39,10 @@ const Watchlist = () => {
         setRows((list) => list.map((r) => {
           if (r.symbol !== symbol) return r;
           const prev = r.previous_close;
+          const at = Date.now() / 1000;
           return prev
-            ? { ...r, current_price: data.price, day_change: data.price - prev, day_change_percent: (data.price / prev - 1) * 100 }
-            : { ...r, current_price: data.price };
+            ? { ...r, current_price: data.price, day_change: data.price - prev, day_change_percent: (data.price / prev - 1) * 100, at }
+            : { ...r, current_price: data.price, at };
         }));
       }));
     return () => offs.forEach((off) => off());
@@ -61,7 +63,7 @@ const Watchlist = () => {
     <Card title="Watchlist">
       {error ? <ErrorLine message="Could not load the watchlist." onRetry={load} />
         : !rows ? <Skeleton rows={4} />
-        : rows.length === 0 ? <Empty title="Nothing watched" body="Open a stock and add it to the watchlist from there." />
+        : rows.length === 0 ? <Empty title="Nothing watched" body="Open a stock and tap Watch next to its price." />
         : rows.map((s) => (
           <div key={s.symbol} className="flex items-center gap-3 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0">
             <button type="button" onClick={() => navigate(stockPath(s.symbol))} className="min-w-0 flex-1 text-left active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
@@ -82,6 +84,7 @@ const Watchlist = () => {
             </button>
           </div>
         ))}
+      {rows?.length > 0 && <AsOf rows={rows} />}
       {ticket && <OrderTicket {...ticket} onClose={() => setTicket(null)} />}
     </Card>
   );

@@ -168,6 +168,7 @@ export const endpoints = {
   // The backend derives the owner from the session token; there is no user
   // id in these paths any more.
   watchlist: {
+    list: '/watchlist',
     add: (symbol) => `/watchlist/add?symbol=${encodeURIComponent(symbol)}`,
     remove: (symbol) => `/watchlist/remove/${encodeURIComponent(symbol)}`,
     details: '/watchlist/details',

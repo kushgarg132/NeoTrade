@@ -5,6 +5,7 @@ or edit any other account's watchlist by guessing an id. It now comes from
 the session token only.
 """
 
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
@@ -66,12 +67,28 @@ async def remove_from_watchlist(symbol: str, user: User = Depends(get_current_us
 
 @router.get("/details", response_model=List[Dict[str, Any]])
 async def get_watchlist_details(user: User = Depends(get_current_user)):
+    """Price, day change and `at` from the ingest quote cache (watched names are
+    in its priority set), names from the instrument master; Yahoo only for a
+    symbol the cache lacks. It used to be one Yahoo `info` call per symbol, in turn."""
+    from backend.routers.market_data import _cached_quotes
+
     watchlist = await _load_or_create(user.id)
+    bare = [s.upper().removesuffix(".NS") for s in watchlist.symbols]
+    quotes = await _cached_quotes(bare)
+    names = {d["tradingsymbol"]: d.get("name") async for d in db.db["instruments"].find(
+        {"exchange": "NSE", "tradingsymbol": {"$in": bare}}, {"tradingsymbol": 1, "name": 1})}
     details = []
-    for sym in watchlist.symbols:
+    for sym, b in zip(watchlist.symbols, bare):
+        q = quotes.get(b)
+        if q:
+            prev = q["prev_close"]
+            details.append({"symbol": sym, "name": names.get(b) or b, "current_price": q["price"], "previous_close": prev,
+                            "day_change": q["price"] - prev if prev else None, "day_change_percent": q["change_pct"],
+                            "at": q["at"]})
+            continue
         try:
             info = await fetch_stock_info_logic(sym)
-            details.append(info.model_dump())
+            details.append({**info.model_dump(), "at": time.time()})
         except Exception:
             details.append({"symbol": sym, "error": "Failed to fetch data"})
     return details

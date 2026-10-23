@@ -136,6 +136,6 @@ def test_quotes_come_from_the_ingest_cache_first(client, monkeypatch):
     monkeypatch.setattr(db, "redis", Redis())
     use(_closes(50.0, 55.0))
     rows = http.get("/market/quotes", params={"symbols": "TCS,INFY"}).json()
-    assert rows[0] == {"symbol": "TCS", "price": 110.0, "change_pct": 10.0, "at": 7.0}
+    assert rows[0] == {"symbol": "TCS", "price": 110.0, "prev_close": 100.0, "change_pct": 10.0, "at": 7.0}
     assert rows[1]["symbol"] == "INFY" and rows[1]["price"] == 55.0 and rows[1]["at"] > 7.0
     assert len(calls) == 1 and calls[0][0] == ["INFY.NS"]  # only the miss went to Yahoo

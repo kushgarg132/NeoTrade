@@ -318,7 +318,7 @@ async def _cached_quotes(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
         q = json.loads(raw) if raw else {}
         if q.get("ltp"):
             prev = q.get("prev_close")
-            found[symbol] = {"symbol": symbol, "price": round(float(q["ltp"]), 2),
+            found[symbol] = {"symbol": symbol, "price": round(float(q["ltp"]), 2), "prev_close": prev,
                              "change_pct": round((q["ltp"] - prev) / prev * 100, 2) if prev else None, "at": q["at"]}
     return found
 

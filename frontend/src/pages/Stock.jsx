@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Star } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
@@ -57,6 +58,22 @@ const Stock = () => {
       .catch((err) => setMine({ data: null, status: err?.response?.status === 404 ? 'missing' : 'error', symbol }));
   }, [symbol]);
   useEffect(loadMine, [loadMine]);
+
+  // Watch / Watching: GET /watchlist once, then add or remove (the Watchlist page had no way to add).
+  const [watchRaw, setWatch] = useState(null); // { symbol, on } | null while unknown
+  const watching = watchRaw?.symbol === symbol ? watchRaw.on : null;
+  useEffect(() => {
+    if (!symbol) return;
+    api.get(endpoints.watchlist.list)
+      .then((r) => setWatch({ symbol, on: (r.data.symbols || []).some((s) => bareSymbol(s).toUpperCase() === symbol) }))
+      .catch(() => {});
+  }, [symbol]);
+  const toggleWatch = () => {
+    const on = !watching;
+    setWatch({ symbol, on });
+    (on ? api.post(endpoints.watchlist.add(symbol)) : api.delete(endpoints.watchlist.remove(symbol)))
+      .catch(() => setWatch({ symbol, on: !on }));
+  };
 
   // The price itself, every 60 s in session: GET /market/quotes reads the ingest quote cache.
   // The snapshot's price was a one-shot that sat still for as long as the page stayed open.
@@ -119,7 +136,16 @@ const Stock = () => {
           <ErrorLine message={quick.error} onRetry={reloadQuick} />
         ) : (
           <>
-            {company?.name && <p className="text-[14px] text-[var(--text-muted)] truncate">{company.name}</p>}
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[14px] text-[var(--text-muted)] truncate">{company?.name}</p>
+              {watching !== null && (
+                <button type="button" onClick={toggleWatch} aria-pressed={watching}
+                        className={`shrink-0 min-h-11 px-3 inline-flex items-center gap-1.5 rounded-[10px] text-[13px] font-semibold ${watching ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+                  <Star className="w-4 h-4" fill={watching ? 'currentColor' : 'none'} aria-hidden="true" />
+                  {watching ? 'Watching' : 'Watch'}
+                </button>
+              )}
+            </div>
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-[28px] leading-9 font-bold tabular-nums text-[var(--text)]">{currency === 'INR' ? inr(price) : price}</span>
               {dayPct != null && (
