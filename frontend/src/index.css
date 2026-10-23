@@ -72,6 +72,17 @@
     --masthead-h: 3.5rem;
     --status-bar: var(--text);
 
+    /* Charts (dataviz-validated categorical order; heat ramp = gain/loss mixed into the surface). */
+    --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #1baf7a;
+    --chart-4: #eda100; --chart-5: #e87ba4; --chart-6: #008300;
+    --heat-0: var(--surface-2);
+    --heat-pos-1: color-mix(in oklab, var(--gain) 22%, var(--surface));
+    --heat-pos-2: color-mix(in oklab, var(--gain) 48%, var(--surface));
+    --heat-pos-3: color-mix(in oklab, var(--gain) 80%, var(--surface));
+    --heat-neg-1: color-mix(in oklab, var(--loss) 22%, var(--surface));
+    --heat-neg-2: color-mix(in oklab, var(--loss) 48%, var(--surface));
+    --heat-neg-3: color-mix(in oklab, var(--loss) 80%, var(--surface));
+
     /* Aliases: components not yet rebuilt still name the old contract-note tokens. */
     --paper: var(--bg);
     --paper-sunk: var(--surface-2);
@@ -103,6 +114,17 @@
     --ai: #5fc9c0;
     --sheet-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px -16px rgba(0, 0, 0, 0.8);
     --status-bar: var(--bg);
+
+    /* Charts (dataviz-validated categorical order; heat ramp = gain/loss mixed into the surface). */
+    --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70;
+    --chart-4: #c98500; --chart-5: #d55181; --chart-6: #008300;
+    --heat-0: var(--surface-2);
+    --heat-pos-1: color-mix(in oklab, var(--gain) 22%, var(--surface));
+    --heat-pos-2: color-mix(in oklab, var(--gain) 48%, var(--surface));
+    --heat-pos-3: color-mix(in oklab, var(--gain) 80%, var(--surface));
+    --heat-neg-1: color-mix(in oklab, var(--loss) 22%, var(--surface));
+    --heat-neg-2: color-mix(in oklab, var(--loss) 48%, var(--surface));
+    --heat-neg-3: color-mix(in oklab, var(--loss) 80%, var(--surface));
   }
 
   * {
