@@ -6,14 +6,14 @@ import Badge from '../ui/Badge';
 import ThesisEditor from '../mine/ThesisEditor';
 import StockFlags from '../analysis/StockFlags';
 import TradingLevels from '../analysis/TradingLevels';
-import TechnicalSummary from '../analysis/TechnicalSummary';
+import TechGauge from './TechGauge';
 import Fundamentals from '../analysis/Fundamentals';
 import SentimentPanel from '../analysis/SentimentPanel';
 import { REASONS } from '../../utils/mine';
 import { day, verdictLabel, verdictKind } from './common';
 
 /** Verdict (when held), your thesis, the instant snapshot, then the AI read (requested on first open). */
-const AnalysisTab = ({ symbol, mine, quick, ai, requestAi, onThesis }) => {
+const AnalysisTab = ({ symbol, mine, quick, ai, requestAi, reloadQuick, onThesis }) => {
   useEffect(() => {
     if (!ai.requested) requestAi();
   }, [ai.requested, requestAi]);
@@ -52,10 +52,10 @@ const AnalysisTab = ({ symbol, mine, quick, ai, requestAi, onThesis }) => {
       )}
 
       {quick.loading && <Card><Skeleton rows={4} /></Card>}
-      {quick.error && <Card><ErrorLine message={quick.error} /></Card>}
+      {quick.error && <Card><ErrorLine message={`Could not load the price snapshot${quick.error !== 'Could not load' ? `: ${quick.error}` : ''}. Check your connection and retry.`} onRetry={reloadQuick} /></Card>}
       {quick.data && (
         <>
-          <TechnicalSummary t={quick.data.technical_analysis} />
+          <TechGauge t={quick.data.technical_analysis} />
           <StockFlags flags={quick.data.flags} />
           <TradingLevels t={quick.data.technical_analysis} currency={currency} />
           <Fundamentals company={company} currency={currency} />
