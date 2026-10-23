@@ -6,6 +6,7 @@ import Card from '../components/ui/Card';
 import Empty from '../components/ui/Empty';
 import Skeleton from '../components/ui/Skeleton';
 import ErrorLine from '../components/ui/ErrorLine';
+import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import HoldingActions from '../components/ideas/HoldingActions';
 import IdeaRow from '../components/ideas/IdeaRow';
@@ -29,7 +30,8 @@ const Ideas = () => {
           : acts.error ? <ErrorLine message="Could not load your holdings alerts." onRetry={acts.reload} />
           : <HoldingActions actions={acts.data} onChanged={() => { acts.reload(); fresh.reload(); }} />}
 
-        <Card title="New ideas">
+        <Card title="New ideas" action={<Badge kind="paper">Paper</Badge>}>
+          <p className="-mt-1 mb-2 text-[13px] text-[var(--text-muted)]">Trades the engine would take: entry, stop (SL), target (T) and reward : risk (R:R). Paper record · not advice.</p>
           {fresh.loading ? <Skeleton rows={4} />
             : fresh.error ? <ErrorLine message="Could not load ideas." onRetry={fresh.reload} />
             : fresh.data.items.length === 0 ? (
