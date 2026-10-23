@@ -20,7 +20,7 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 
 | path | role | key symbols |
 |---|---|---|
-| backend/forecast/picks.py | Daily Picks job: compute, store, score, forward record, live gate | `picks.py::compute`, `::score`, `::forward`, `::live_refusal`, `::load`, `::ensure_indexes`, `::run`, `::MAX_PICKS`=10, `::MIN_FORWARD`=100, `::CALIBRATION_GAP`=0.05, `::HISTORY_START`, `::CAVEATS` |
+| backend/forecast/picks.py | Daily Picks job: compute, store, score, forward record, live gate | `picks.py::compute`, `::score`, `::forward`, `::live_refusal`, `::load`, `::ensure_indexes`, `::run`, `::MAX_PICKS`=10 per setup (`::cap_per_setup`), `::backfill`, `::MIN_FORWARD`=100, `::CALIBRATION_GAP`=0.05, `::HISTORY_START`, `::CAVEATS` |
 | backend/forward/store.py | Forward record store (`forward_records`), idempotent writes that never raise | `store.py::ForwardStore` (`record`, `due`, `set_outcome`, `list`, `scored`, `ensure_indexes`), `::record_id`, `::COLLECTION` |
 | backend/forward/scorecard.py | Per source/name stats, the one proven rule, comparison with each existing money gate | `scorecard.py::stats`, `::label`, `::scorecard` (cached 60 s, `force` bypasses; admin id and account size looked up once per call), `::_gate`, `::MIN_N`=100, `::MIN_T`=2.0, `::MAX_GAP`=0.05 |
 | backend/forecast/setups.py | 6 setups (the 6th, `rs_leaders_regime`, 60d, `Setup.experimental=True`: month-start top-decile 126d RS vs NIFTY, rising 50/200d averages, NIFTY > its 200d) as pure functions over a wide bar table (no look-ahead) | `setups.py::table`, `::SETUPS`, `::BY_NAME`, `::Setup`, `::momentum`, `::low_vol`, `::momentum_vol`, `::breakout`, `::pullback`, `::rs_leaders_regime`, `::_top_decile`, `::_month_starts` |

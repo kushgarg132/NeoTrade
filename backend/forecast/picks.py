@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 PICKS = "picks"
 STUDY = "picks_study"
-MAX_PICKS = 10
+MAX_PICKS = 10  # per setup: a global cap let one setup's month-start fires crowd out another's (1 Oct 2026)
 MIN_FORWARD = 100  # scored forward picks before the forward record counts
 # Every stored bar (bars.DEEP_START, 2009 on): ~850k bars, a ~15s read and
 # ~4s of study on the VM (estimated 2026-10-17 from 280k bars read in 4.6s;
@@ -120,7 +120,18 @@ def compute(t: dict) -> tuple[dict, list[dict]]:
                 "strength": float(col[last]),
             })
     picks.sort(key=rank_key, reverse=True)
-    return results, picks[:MAX_PICKS]
+    return results, cap_per_setup(picks)
+
+
+def cap_per_setup(picks: list[dict]) -> list[dict]:
+    """The first MAX_PICKS of each setup, order kept. Pure."""
+    count: dict[str, int] = {}
+    out = []
+    for p in picks:
+        count[p["setup"]] = count.get(p["setup"], 0) + 1
+        if count[p["setup"]] <= MAX_PICKS:
+            out.append(p)
+    return out
 
 
 def score(t: dict, pick: dict) -> Optional[dict]:

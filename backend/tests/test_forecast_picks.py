@@ -379,3 +379,11 @@ def test_backfill_cuts_the_table_at_each_day_and_marks_its_picks(monkeypatch):
     added = asyncio.run(picks.backfill(mongo, [date(2026, 9, 30)]))
     doc = asyncio.run(mongo.picks.find_one({"_id": "2026-09-30:momentum:S"}))
     assert added == 1 and doc["backfilled"] is True and doc["outcome"] is None
+
+
+def test_the_store_cap_is_per_setup_so_one_setup_cannot_crowd_out_another():
+    """1 Oct 2026: ten momentum_vol_60 fires filled a global cap of 10 and every momentum pick was lost."""
+    ps = [{"setup": "momentum_vol_60", "n": i} for i in range(12)] + [{"setup": "momentum", "n": i} for i in range(3)]
+    kept = picks.cap_per_setup(ps)
+    assert sum(p["setup"] == "momentum_vol_60" for p in kept) == picks.MAX_PICKS
+    assert sum(p["setup"] == "momentum" for p in kept) == 3
