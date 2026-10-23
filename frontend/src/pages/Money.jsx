@@ -8,6 +8,8 @@ import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
 import Empty from '../components/ui/Empty';
 import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import { Link } from 'react-router-dom';
 import { inr, pct, tone } from '../components/ui/format';
 import OverviewTab from '../components/money/OverviewTab';
 import HoldingsTab from '../components/money/HoldingsTab';
@@ -54,26 +56,35 @@ const Money = () => {
           ) : !h ? (
             <Empty
               title="Nothing here yet"
-              body="Connect your broker, or import your trades and mutual funds from files."
-              action={<Button onClick={() => setTab('holdings')}>Import files</Button>}
+              body="Connect your broker and your holdings and trades come in on their own, or import your trades and mutual funds from files."
+              action={
+                <span className="flex flex-wrap justify-center gap-2">
+                  <Link to="/settings?tab=accounts" className="inline-flex items-center justify-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Connect your broker</Link>
+                  <Button variant="secondary" onClick={() => setTab('holdings')}>Import files</Button>
+                </span>
+              }
             />
           ) : (
             <>
-              <div className="text-[13px] text-[var(--text-muted)]">Your money</div>
+              <div className="flex items-center justify-between gap-2 text-[13px] text-[var(--text-muted)]">
+                <span>Your broker account</span>
+                {holdingsStale(h.holdings_as_of) && <Badge kind="unproven">Stale · {formatDateTime(h.holdings_as_of)}</Badge>}
+              </div>
               <div className="private figure-lg text-[32px] leading-10 font-bold tabular-nums text-[var(--text)]">{inr(h.value)}</div>
-              <div className="grid grid-cols-2 gap-4 mt-3">
+              <div className="grid grid-cols-3 gap-3 mt-3">
                 <Stat
                   label="Today"
                   value={inr(h.day_change, { sign: true })}
                   delta={pct(h.day_change_pct / 100, { sign: true })}
                   tone={tone(h.day_change)}
                 />
-                <Stat label="Yearly return (XIRR)" value={formatXirr(h.xirr)} delta={`NIFTY ${formatXirr(h.nifty_xirr)}`} />
+                <Stat label="Total P&L" value={inr(h.pnl, { sign: true })} delta={pct(h.pnl_pct / 100, { sign: true })} tone={tone(h.pnl)} />
+                <Stat label="Yearly (XIRR)" value={formatXirr(h.xirr)} delta={`NIFTY ${formatXirr(h.nifty_xirr)}`} />
               </div>
               <p className="text-[13px] text-[var(--text-muted)] mt-3">
                 {holdingsStale(h.holdings_as_of)
-                  ? `Holdings as of ${formatDateTime(h.holdings_as_of)}. Broker logged out.`
-                  : 'NIFTY: the same rupees put in on the same days.'}
+                  ? 'Broker logged out: these figures are not live.'
+                  : <>Put in <span className="private">{inr(h.value - h.pnl)}</span>. NIFTY: the same rupees put in on the same days.</>}
               </p>
             </>
           )}
