@@ -72,7 +72,7 @@ const Fundamentals = ({ company: c, currency }) => {
               {rows.map(([label, value]) => (
                 <div key={label} className="py-1.5 border-b border-[var(--border)] min-w-0">
                   <dt className="text-[13px] text-[var(--text-muted)] truncate">{label}</dt>
-                  <dd className="private tabular-nums text-[15px] font-medium text-[var(--text)]">{value ?? '—'}</dd>
+                  <dd className="tabular-nums text-[15px] font-medium text-[var(--text)]">{value ?? '—'}</dd>
                 </div>
               ))}
             </dl>

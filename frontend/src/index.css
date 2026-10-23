@@ -386,8 +386,13 @@ body::before {
 }
 
 /* Hide amounts (hooks/usePrivacy.js): every figure in the user's own money
-   regions is blurred past reading, for when someone can see the screen. */
-html[data-private="on"] .private :is(.figure-md, .figure-lg) {
+   regions is blurred past reading, for when someone can see the screen.
+   `.private` is either a region (blur its .figure-* and nested .private) or,
+   holding neither, an amount line that blurs whole. It used to match only
+   .figure-* nested inside .private, so `private figure-md` on one element
+   (every tile, Stat, ListRow) was never blurred. */
+html[data-private="on"] :is(.private .figure-md, .private .figure-lg, .private.figure-md, .private.figure-lg,
+                            .private:not(:has(.figure-md, .figure-lg, .private))) {
   filter: blur(0.4em);
   user-select: none;
 }
