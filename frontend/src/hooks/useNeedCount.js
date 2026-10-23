@@ -12,7 +12,7 @@ export const fetchIdeas = async (isAdmin) => {
   const picks = isAdmin
     ? await api.get(endpoints.picks.today).then((r) => {
       hiddenReason = r.data.hidden_reason || '';
-      return (r.data.shown || []).map((p) => ideaFromPick(p, r.data.setups.find((s) => s.setup === p.setup)));
+      return (r.data.shown || []).map((p) => ideaFromPick(p, r.data.setups.find((s) => s.setup === p.setup), r.data.grade_text));
     }).catch(() => [])
     : [];
   return { items: [...sug, ...picks], hiddenReason };

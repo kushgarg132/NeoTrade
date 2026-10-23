@@ -293,13 +293,13 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 Response keys (from handler code):
 
 - `POST /auth/google` `{token, user{id,google_sub,email,name,picture,created_at,role}}`; `/auth/refresh` `{token}`; `/auth/logout` `{message}`; `/auth/me` the `User`.
-- `GET /today` `market{open,as_of}`, `phase`, `next_open`, `premarket`, `postclose`, `unjournaled`, `picks_top[{symbol,label,median}]`, `accounts`, `live_armed{autopilot,strategies}`, `kill_switch`, `pulse`, `needs_you[]`, `mine_actions` (top 3), `mine_actions_total`, `scoreboard` (admin), `proposals_total`, `ai_activity`, `autopilot{enabled,live,capital=account_size,exposure_cap=max_exposure,deployed}`, `setup{done,total,steps}`, `backdrop`, `errors`. `GET /today/attention` `{count}`.
+- `GET /today` `market{open,as_of}`, `phase`, `next_open`, `premarket`, `postclose`, `unjournaled`, `picks_top[{symbol,label,median}]` (grade A only), `accounts`, `live_armed{autopilot,strategies}`, `kill_switch`, `pulse`, `needs_you[]`, `mine_actions` (top 3), `mine_actions_total`, `scoreboard` (admin), `proposals_total`, `ai_activity`, `autopilot{enabled,live,capital=account_size,exposure_cap=max_exposure,deployed}`, `setup{done,total,steps}`, `backdrop`, `errors`. `GET /today/attention` `{count}`.
 - `GET /analytics/pnl` `today{realized,unrealized,trades,wins,losses,turnover,costs,net}`, `month{...,win_rate,best,worst}`, `all_time`, `open{positions,exposure,equity}` (`analytics.py::compute_pnl`); the `pnl/updated` socket event has the same keys plus `paper` and `live{mine,ai}`. `?venue=live` returns `{mine:<pnl>, ai:<pnl>}` (not the flat shape): the real-money books are separate, never summed. `GET /analytics/scorecard` `venue, account_size, days, strategies, totals, nifty_return_pct`.
 - `GET /trading/runs` list of run docs; `POST /trading/start` `{run_id}`; `POST /trading/stop` `{run_id, stopped}`; `GET /trading/kill-switch` `{tripped, reason?, equity?, tripped_at?}`; `GET /trading/positions` symbol -> position dict.
 - `GET /system/status` `{as_of, deploy, jobs, news, data, ai}` (each may be `{error}`); `GET /health` `{api:"ok", ingest}`.
 - `GET /settings/preferences` the merged `DEFAULTS`+stored; `GET /settings/omniroute-tiers` `{tiers, fallback, features_off}`; `GET /settings/omniroute-usage` `{key_name, tokens, cost, providers, as_of, refreshing?}`.
 - `POST /suggestions/scan` 202 `{started, symbols}`; `POST /suggestions/{id}/approve-live` the settled suggestion; `POST /orders/propose` the stored chat action card.
-- `GET /picks` `{date, shown (served, max 3), hidden_count, hidden_reason, picks (all candidates), setups, as_of, forward, caveats}`; `GET /plan/today` `{plan, versions, scorecards, weeks_beating}`; `GET /options/chain` `{underlying,name,expiry,spot,atm_strike,pcr,strikes}`.
+- `GET /picks` `{date, shown (served, max 3 per grade A/B/C), hidden_count, hidden_reason, grades, grade_text, picks (all candidates), setups, as_of, forward, caveats}`; `GET /plan/today` `{plan, versions, scorecards, weeks_beating}`; `GET /options/chain` `{underlying,name,expiry,spot,atm_strike,pcr,strikes}`.
 
 ## Deploy
 

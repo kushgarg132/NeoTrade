@@ -58,16 +58,24 @@ export const olderPickLabel = (idea) => {
   const m = idea.moveSinceEntry;
   return [day && `fired ${day}`,
     typeof m === 'number' && `now ${m < 0 ? '−' : '+'}${Math.abs(m * 100).toFixed(1)}% from entry`,
+    idea.missedEntry && 'past the entry zone',
     idea.daysLeft != null && `${idea.daysLeft} day${idea.daysLeft === 1 ? '' : 's'} left`].filter(Boolean).join(' · ') || null;
+};
+
+/** A pick's grade (GET /picks `grade`, from the setup's adjusted edge over the average stock). */
+export const GRADES = {
+  A: { label: 'A · Proven', kind: 'proven' },
+  B: { label: 'B · Promising', kind: 'neutral' },
+  C: { label: 'C · Unproven', kind: 'unproven' },
 };
 
 /** Copy for the New ideas card when nothing is served. */
 export const noPickText = (hiddenReason) => ({
-  title: 'No pick worth taking today',
-  body: hiddenReason ? `${hiddenReason}. Past ones are in History.` : 'Nothing has an edge over NIFTY. Past ones are in History.',
+  title: 'No picks right now',
+  body: hiddenReason ? `${hiddenReason}. Past ones are in History.` : 'No setup has fired on a stock still before its due date. Past ones are in History.',
 });
 
-export const ideaFromPick = (p, setup) => {
+export const ideaFromPick = (p, setup, gradeText = null) => {
   const ex = p.expected?.excess;
   const exMedian = ex?.median ?? p.median_excess ?? null;
   return {
@@ -87,6 +95,9 @@ export const ideaFromPick = (p, setup) => {
     forecast: p.forecast || null, similarN: p.similar_n ?? null, features: describeFeatures(p.features),
     pUp: p.p_up, pBeat: p.p_beat_nifty, pastN: p.n,
     oosExcess: setup?.walk_forward?.oos_excess ?? null, oosN: setup?.walk_forward?.oos_n ?? null,
+    adjExcess: setup?.adjusted?.excess ?? null, adjT: setup?.adjusted?.t ?? null,
+    grade: p.grade ?? null, gradeText: gradeText?.[p.grade] ?? null,
+    missedEntry: p.missed_entry === true, beatsOdds: p.beats_nifty_odds ?? null,
     noEdge: p.edge === false, decided: false, experimental: p.experimental === true,
     firedOn: p.fired_on ?? null, daysSince: p.days_since ?? 0, daysLeft: p.days_left ?? null, moveSinceEntry: p.move_since_entry ?? null,
   };

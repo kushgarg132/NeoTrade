@@ -53,9 +53,9 @@ test('experimental flag carries over', () => {
   assert.equal(ideaFromPick(pick).experimental, false);
 });
 test('empty state names the hidden reason', () => {
-  assert.equal(noPickText('3 Pullback picks hidden: no edge over NIFTY').title, 'No pick worth taking today');
+  assert.equal(noPickText('3 Pullback picks hidden: no edge over NIFTY').title, 'No picks right now');
   assert.match(noPickText('3 Pullback picks hidden: no edge over NIFTY').body, /^3 Pullback picks hidden: no edge over NIFTY\./);
-  assert.match(noPickText('').body, /Nothing has an edge/);
+  assert.match(noPickText('').body, /No setup has fired/);
 });
 
 test('needCount: holdings actions (not idea rows) plus pending ideas; bad shapes count 0', () => {
@@ -98,4 +98,17 @@ test('date and rupee helpers', () => {
   assert.equal(whenLabel(1, null), 'in 1 trading day');
   assert.equal(rupeeMove(100, -0.05), '≈ −₹5.0 on ₹100.0');
   assert.equal(rupeeMove(null, 0.1), null);
+});
+
+test('a pick carries its grade, grade text, entry-zone flag and the edge over the average stock', async () => {
+  const { GRADES } = await import('./ideas.js');
+  const v = ideaFromPick({ ...pick, grade: 'B', missed_entry: true, beats_nifty_odds: false, days_since: 3, fired_on: '2026-10-16', days_left: 5 },
+    { adjusted: { excess: 0.004, t: 1.1 } }, { B: 'Promising: ahead of the average stock' });
+  assert.equal(v.grade, 'B');
+  assert.equal(GRADES[v.grade].label, 'B · Promising');
+  assert.equal(v.gradeText, 'Promising: ahead of the average stock');
+  assert.equal(v.adjExcess, 0.004);
+  assert.equal(v.beatsOdds, false);
+  assert.match(olderPickLabel(v), /past the entry zone · 5 days left$/);
+  assert.equal(ideaFromPick(pick).grade, null);
 });

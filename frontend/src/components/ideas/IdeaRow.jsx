@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import IdeaBadge from './IdeaBadge';
 import Badge from '../ui/Badge';
-import { olderPickLabel } from '../../utils/ideas';
+import { olderPickLabel, GRADES } from '../../utils/ideas';
 import { bareSymbol } from '../../utils/formatters';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
@@ -19,6 +19,7 @@ const IdeaRow = ({ idea }) => (
       <div className="flex items-center gap-2 text-[13px] text-[var(--text-muted)]">
         <span className="truncate">{idea.setup}{idea.horizon && !olderPickLabel(idea) ? ` · ${idea.horizon}d` : ''}</span>
         <span className="shrink-0"><IdeaBadge badge={idea.badge} /></span>
+        {GRADES[idea.grade] && <span className="shrink-0"><Badge kind={GRADES[idea.grade].kind}>{GRADES[idea.grade].label}</Badge></span>}
         {idea.experimental && <span className="shrink-0"><Badge>Experimental</Badge></span>}
       </div>
       {olderPickLabel(idea) && <div className="text-[12px] text-[var(--text-muted)] tabular-nums">{olderPickLabel(idea)}</div>}

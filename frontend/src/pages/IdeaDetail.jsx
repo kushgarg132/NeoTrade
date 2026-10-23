@@ -16,7 +16,7 @@ import Badge from '../components/ui/Badge';
 import { useForward } from '../components/ForwardBadge';
 import api, { endpoints } from '../utils/api';
 import { recordLine, statusOf } from '../utils/library';
-import { ideaFromSuggestion, ideaFromPick, parseIdeaId } from '../utils/ideas';
+import { ideaFromSuggestion, ideaFromPick, parseIdeaId, GRADES } from '../utils/ideas';
 import { bareSymbol } from '../utils/formatters';
 import { inr, pct } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
@@ -80,9 +80,12 @@ const find = async (kind, key) => {
     return s ? ideaFromSuggestion(s) : null;
   }
   const today = (await api.get(endpoints.picks.today)).data;
-  const pick = today.picks.find((p) => p._id === key)
+  // The served row carries the grade and entry-zone flags; a raw or past pick takes its setup's grade.
+  const pick = (today.shown || []).find((p) => p._id === key) || today.picks.find((p) => p._id === key)
     || (await api.get(endpoints.picks.history(90))).data.picks.find((p) => p._id === key);
-  return pick ? ideaFromPick(pick, today.setups.find((s) => s.setup === pick.setup)) : null;
+  return pick
+    ? ideaFromPick({ grade: today.grades?.[pick.setup], ...pick }, today.setups.find((s) => s.setup === pick.setup), today.grade_text)
+    : null;
 };
 
 // Price levels keep their paise (inr rounds to rupees).
@@ -124,6 +127,7 @@ const IdeaDetail = () => {
         <span className="text-[13px] text-[var(--text-muted)]">{idea.setup}{idea.horizon ? ` · ${idea.horizon}d` : ''}</span>
         <IdeaBadge badge={idea.badge} />
         {idea.noEdge && <span className="text-[12px] font-semibold text-[var(--warn)]">No edge</span>}
+        {GRADES[idea.grade] && <Badge kind={GRADES[idea.grade].kind}>{GRADES[idea.grade].label}</Badge>}
         {idea.decided && <Badge kind="neutral">{STATUS[idea.status] || idea.status}</Badge>}
       </div>
 
@@ -193,9 +197,11 @@ const IdeaDetail = () => {
 
       {idea.pastN != null && (
         <Card title="Track record">
-          <div className="grid grid-cols-3 gap-3">
+          {idea.gradeText && <p className="mb-3 text-[14px] text-[var(--text-muted)]">{idea.gradeText}{idea.missedEntry ? '. The price is now past the entry zone (3% above the signal price).' : '.'}</p>}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Stat label="Past events" value={idea.pastN} />
             <Stat label="Out-of-sample vs NIFTY" value={pct(idea.oosExcess, { sign: true })} delta={idea.oosN != null ? `n ${idea.oosN}` : null} />
+            <Stat label="vs the average stock" value={pct(idea.adjExcess, { sign: true })} delta={idea.adjT != null ? `t ${idea.adjT.toFixed(1)}` : null} />
             <div className="min-w-0"><div className="text-[13px] text-[var(--text-muted)]">Forward</div><div className="mt-1"><IdeaBadge badge={idea.badge} /></div></div>
           </div>
         </Card>
