@@ -116,13 +116,14 @@ def test_a_failing_part_degrades_not_errors(monkeypatch):
 
 def test_autopilot_summary_counts_open_positions_against_capital(monkeypatch):
     client, db = _client(monkeypatch)
-    _seed(db, user_prefs=[{"user_id": "alice", "autopilot_enabled": True, "max_exposure": 15000.0}],
+    _seed(db, user_prefs=[{"user_id": "alice", "autopilot_enabled": True, "max_exposure": 15000.0, "account_size": 25000.0}],
           paper_trades=[{"user_id": "alice", "symbol": "INFY", "status": "OPEN", "quantity": 3,
                          "entry_price": 1500.0, "venue": "paper", "strategy": "autopilot:chat", "via": "autopilot:chat"},
                         {"user_id": "alice", "symbol": "TCS", "status": "OPEN", "quantity": 10,
                          "entry_price": 3000.0, "venue": "paper", "strategy": "macd_crossover"}])
     summary = client.get("/api/v1/today").json()["autopilot"]
-    assert summary == {"enabled": True, "live": False, "capital": 15000.0, "deployed": 4500.0}
+    # capital is the book (account_size), not the exposure cap: the AI tile read ₹10 lakh off max_exposure
+    assert summary == {"enabled": True, "live": False, "capital": 25000.0, "exposure_cap": 15000.0, "deployed": 4500.0}
 
 
 def test_you_vs_picks_is_admin_only(monkeypatch):

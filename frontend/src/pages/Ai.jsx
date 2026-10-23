@@ -72,7 +72,7 @@ const Ai = () => {
             </div>
             <div className="mt-1 text-[13px] text-[var(--text-muted)]">
               {ap ? (on ? 'Autopilot on' : 'Autopilot off') : 'Could not load the autopilot.'}
-              {ap?.capital ? <span className="private"> · {inr(ap.deployed)} of {inr(ap.capital)} deployed</span> : null}
+              {ap?.exposure_cap ? <span className="private"> · {inr(ap.deployed)} of {inr(ap.exposure_cap)} cap deployed</span> : null}
             </div>
             {on && <div className="mt-3"><StopAi onStopped={() => { setStopped(true); today.reload(); }} /></div>}
           </>
