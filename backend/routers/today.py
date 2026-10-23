@@ -194,10 +194,10 @@ async def _unjournaled(user_id: str, roles: dict, now: datetime) -> int:
 
 
 async def _picks_top() -> list[dict]:
-    """Today's Picks card: the same filtered list Ideas shows (edge rule, cap of 3)."""
+    """Today's Picks card: the grade-A (proven) part of the list Ideas shows."""
     from backend.routers.picks import served_today
 
-    shown = (await served_today())[3]["shown"]
+    shown = [p for p in (await served_today())[3]["shown"] if p["grade"] == "A"]
     return [{"symbol": p["symbol"], "label": p.get("label"), "median": (p.get("expected") or {}).get("median")}
             for p in shown]
 

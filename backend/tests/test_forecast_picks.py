@@ -211,52 +211,71 @@ def test_factor_report_saves_the_keys_the_gate_reads(monkeypatch):
 
 from datetime import date  # noqa: E402
 
-EDGES = {"momentum": True, "pullback": False}
+GRADES = {"momentum": "A", "pullback": "B", "breakout": "C"}
 
 
 def _p(day, symbol="A", excess=0.02, beat=0.6, entry=100.0, due="2026-10-30", label="Momentum", setup="momentum"):
-    return {"_id": f"{day}:{symbol}", "date": day, "symbol": symbol, "setup": setup, "label": label, "median_excess": excess,
-            "p_beat_nifty": beat, "entry_ref": entry, "due_date": due}
+    return {"_id": f"{day}:{setup}:{symbol}", "date": day, "symbol": symbol, "setup": setup, "label": label,
+            "median_excess": excess, "p_beat_nifty": beat, "entry_ref": entry, "due_date": due}
 
 
 TODAY = date(2026, 10, 21)  # Wed
 
 
-def test_picks_of_a_setup_without_an_edge_or_a_low_beat_rate_are_hidden_with_a_reason():
-    out = picks.serve([_p("2026-10-21", "A", label="Pullback in uptrend", setup="pullback"),
-                       _p("2026-10-21", "B", label="Pullback in uptrend", setup="pullback"),
-                       _p("2026-10-21", "L", beat=0.54), _p("2026-10-21", "C")], [], {}, TODAY, EDGES)
-    assert [p["symbol"] for p in out["shown"]] == ["C"]
-    assert out["hidden_count"] == 3
-    assert out["hidden_reason"] == ("Pullback in uptrend (2 picks) hidden: no edge over the average stock this month; "
-                                    "1 pick hidden: under 55% chance of beating NIFTY")
+def test_setups_are_graded_from_the_adjusted_edge():
+    study_doc = {"setups": [
+        {"setup": "momentum", "adjusted": {"excess": 0.007, "t": 2.2, "edge": True}},
+        {"setup": "pullback", "adjusted": {"excess": 0.004, "t": 1.1, "edge": False}},
+        {"setup": "momentum_vol_60", "adjusted": {"excess": 0.004, "t": 0.4, "edge": False}},
+        {"setup": "low_vol", "adjusted": {"excess": -0.02, "t": -2.3, "edge": False}},
+        {"setup": "fresh"}]}
+    assert picks.setup_grades(study_doc) == {"momentum": "A", "pullback": "B", "momentum_vol_60": "C", "low_vol": "C", "fresh": "C"}
 
 
-def test_an_earlier_pick_stays_within_5_trading_days_before_due_and_near_entry():
+def test_every_grade_is_served_a_first_and_a_low_beat_rate_is_a_label_not_a_filter():
+    """2026-10-23: only pullback fired, it had no edge, and Ideas sat empty."""
+    out = picks.serve([_p("2026-10-21", "P", setup="pullback", label="Pullback in uptrend"),
+                       _p("2026-10-21", "X", setup="breakout"), _p("2026-10-21", "L", beat=0.5)], [], {}, TODAY, GRADES)
+    assert [(p["symbol"], p["grade"]) for p in out["shown"]] == [("L", "A"), ("P", "B"), ("X", "C")]
+    assert out["shown"][0]["beats_nifty_odds"] is False and out["shown"][1]["beats_nifty_odds"] is True
+    assert out["hidden_count"] == 0 and out["grade_text"]["A"].startswith("Proven")
+
+
+def test_an_earlier_pick_stays_until_due_and_a_big_move_is_flagged_not_hidden():
     t = [_p("2026-10-21", "T")]
-    older = [_p("2026-10-16", "OK"), _p("2026-10-12", "TOO_OLD"),  # 6 trading days back (20 Oct is a holiday)
-             _p("2026-10-19", "DUE", due="2026-10-21"), _p("2026-10-19", "FAR"),
-             _p("2026-10-19", "FLAT", setup="pullback")]
-    prices = {"OK": 101.9, "TOO_OLD": 100, "DUE": 100, "FAR": 103, "FLAT": 100}
-    out = picks.serve(t, older, prices, TODAY, EDGES)
-    assert {p["symbol"] for p in out["shown"]} == {"T", "OK"}
-    ok = next(p for p in out["shown"] if p["symbol"] == "OK")
-    assert ok["fired_on"] == "2026-10-16" and ok["days_since"] == 2 and ok["days_left"] == 7
-    assert ok["price_now"] == 101.9 and ok["move_since_entry"] == pytest.approx(0.019)
-    assert out["hidden_count"] == 1 and "moved" in out["hidden_reason"]  # FAR
+    older = [_p("2026-10-01", "MONTH", due="2026-12-24"),  # a month-start 60-day pick, weeks later
+             _p("2026-10-19", "DUE", due="2026-10-21"), _p("2026-10-19", "FAR"), _p("2026-10-16", "OK")]
+    prices = {"MONTH": 101.0, "DUE": 100, "FAR": 105, "OK": 101.9}
+    out = picks.serve(t, older, prices, TODAY, GRADES)
+    by = {p["symbol"]: p for p in out["shown"]}
+    assert set(by) == {"T", "OK", "MONTH"} and out["hidden_count"] == 1  # DUE is past due; FAR is the 4th A
+    assert by["OK"]["fired_on"] == "2026-10-16" and by["OK"]["days_since"] == 2 and by["OK"]["days_left"] == 7
+    assert by["OK"]["price_now"] == 101.9 and by["OK"]["move_since_entry"] == pytest.approx(0.019)
+    assert by["OK"]["missed_entry"] is False
+    far = picks.serve([], [_p("2026-10-19", "FAR")], {"FAR": 105}, TODAY, GRADES)["shown"][0]
+    assert far["missed_entry"] is True and far["move_since_entry"] == pytest.approx(0.05)
 
 
-def test_ranked_by_excess_then_beat_and_capped_at_three():
+def test_the_same_setup_and_symbol_on_several_days_shows_once_newest_first():
+    out = picks.serve([_p("2026-10-21", "R", setup="pullback")],
+                      [_p("2026-10-19", "R", setup="pullback"), _p("2026-10-16", "R", setup="pullback"),
+                       _p("2026-10-16", "S", setup="pullback"), _p("2026-10-15", "S", setup="pullback")],
+                      {"S": 100.0}, TODAY, GRADES)
+    assert [(p["symbol"], p["fired_on"]) for p in out["shown"]] == [("R", "2026-10-21"), ("S", "2026-10-16")]
+
+
+def test_in_zone_first_then_ranked_by_excess_and_capped_at_three_per_grade():
     ps = [_p("2026-10-21", "A", 0.01, 0.9), _p("2026-10-21", "B", 0.03, 0.6), _p("2026-10-21", "C", 0.03, 0.7),
           _p("2026-10-21", "D", 0.02, 0.6)]
-    out = picks.serve(ps, [], {}, TODAY, EDGES)
+    missed = _p("2026-10-19", "M", 0.09, 0.9)
+    out = picks.serve(ps, [missed], {"M": 110.0}, TODAY, GRADES)
     assert [p["symbol"] for p in out["shown"]] == ["C", "B", "D"]
-    assert out["hidden_count"] == 1 and "top 3" in out["hidden_reason"]
+    assert out["hidden_count"] == 2 and out["hidden_reason"] == "2 more grade A hidden: top 3 per grade"
 
 
 def test_experimental_setup_is_flagged():
     out = picks.serve([_p("2026-10-21", "R", setup="rs_leaders_regime"), _p("2026-10-21", "M")], [], {},
-                      TODAY, {"rs_leaders_regime": True, "momentum": True})
+                      TODAY, {"rs_leaders_regime": "A", "momentum": "A"})
     assert {p["symbol"]: p["experimental"] for p in out["shown"]} == {"R": True, "M": False}
 
 
@@ -264,8 +283,8 @@ def test_payload_has_shown_and_keeps_picks(mongo):
     asyncio.run(mongo.picks.insert_one({**_p("2026-10-21", "X", 0.0, 0.5), "strength": 1.0}))
     asyncio.run(mongo.picks_study.insert_one({"_id": "latest", "setups": [{"setup": "momentum", "adjusted": {"edge": False}}]}))
     body = _client("admin").get("/api/v1/picks").json()
-    assert [p["symbol"] for p in body["picks"]] == ["X"] and body["shown"] == []
-    assert body["hidden_count"] == 1 and "no edge" in body["hidden_reason"]
+    assert [p["symbol"] for p in body["picks"]] == ["X"]
+    assert [(p["symbol"], p["grade"]) for p in body["shown"]] == [("X", "C")] and body["grades"] == {"momentum": "C"}
 
 
 # --- the adjusted edge ------------------------------------------------------------

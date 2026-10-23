@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from backend.auth.dependency import require_admin
 from backend.database import db
 from backend.datalayer.bars import today_ist
-from backend.forecast.picks import CAVEATS, PICKS, STUDY, forward, has_edge, rank_key, serve, setup_edges
+from backend.forecast.picks import CAVEATS, PICKS, STUDY, forward, rank_key, serve, setup_grades
 from backend.marks import mark_prices
 
 router = APIRouter(prefix="/picks", tags=["Picks"], dependencies=[Depends(require_admin)])
@@ -20,11 +20,11 @@ async def served_today() -> tuple:
     picks = await db.db[PICKS].find({"date": latest["date"]}).to_list(length=None) if latest else []
     picks.sort(key=rank_key, reverse=True)
     today = today_ist()
-    older = await db.db[PICKS].find({"date": {"$gte": (today - timedelta(days=14)).isoformat(), "$lt": latest["date"]}}).to_list(length=None) if latest else []
+    # Every earlier pick still before its due date (a 60-day setup stays up to ~3 months).
+    older = await db.db[PICKS].find({"date": {"$lt": latest["date"]}, "due_date": {"$gt": today.isoformat()}}).to_list(length=None) if latest else []
     study = await db.db[STUDY].find_one({"_id": "latest"}) or {}
-    edges = setup_edges(study)
-    prices = await mark_prices(db.db, {p["symbol"] for p in older if has_edge(p, edges)})
-    return latest, picks, study, serve(picks, older, prices, today, edges)
+    prices = await mark_prices(db.db, {p["symbol"] for p in older})
+    return latest, picks, study, serve(picks, older, prices, today, setup_grades(study))
 
 
 @router.get("")

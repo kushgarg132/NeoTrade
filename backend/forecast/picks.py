@@ -109,20 +109,29 @@ def rank_key(p: dict) -> tuple:
     return p["median_excess"] * p["p_beat_nifty"], p["strength"]
 
 
-MIN_P_BEAT = 0.55         # served picks need at least this chance of beating NIFTY ...
-RECENT_DAYS = 5           # ... an earlier pick stays visible this many trading days
-MAX_MOVE = 0.02           # ... while its price is within this of entry_ref
-MAX_SHOWN = 3
-# ... and their setup must have an edge over the average stock (`study.adjusted_edge`, stored in picks_study).
+MIN_P_BEAT = 0.55         # a label now ("beats_nifty_odds"), not a filter
+ENTRY_ZONE = 0.03         # an earlier pick up to this far above its signal price is still a fair entry
+MAX_SHOWN = 3             # per grade
+B_MIN_T = 1.0
+GRADES = ("A", "B", "C")
+# What each grade means, from the setup's adjusted out-of-sample excess over the average stock
+# (`study.adjusted_edge`, stored in picks_study). Every number there is already net of charges.
+GRADE_TEXT = {
+    "A": "Proven: beat the average stock out of sample (t >= 2)",
+    "B": "Promising: ahead of the average stock out of sample, not yet proven",
+    "C": "Unproven: no edge over the average stock so far",
+}
 
 
-def setup_edges(study_doc: dict) -> dict[str, bool]:
-    """setup -> has an edge, from the stored study (a study without `adjusted` has none yet: nothing is served)."""
-    return {s["setup"]: bool((s.get("adjusted") or {}).get("edge")) for s in (study_doc or {}).get("setups", [])}
-
-
-def has_edge(p: dict, edges: dict) -> bool:
-    return bool(edges.get(p["setup"])) and p["p_beat_nifty"] >= MIN_P_BEAT
+def setup_grades(study_doc: dict) -> dict[str, str]:
+    """setup -> "A" (adjusted edge), "B" (excess > 0 and t >= B_MIN_T) or "C". A study without `adjusted`
+    grades everything C."""
+    out = {}
+    for s in (study_doc or {}).get("setups", []):
+        a = s.get("adjusted") or {}
+        ex, t = a.get("excess"), a.get("t")
+        out[s["setup"]] = "A" if a.get("edge") else "B" if ex is not None and ex > 0 and t is not None and t >= B_MIN_T else "C"
+    return out
 
 
 def _trading_days_after(a: date, b: date) -> int:
@@ -130,44 +139,41 @@ def _trading_days_after(a: date, b: date) -> int:
     return max(len(trading_days_between(a, b)) - (1 if is_trading_day(a) else 0), 0) if b > a else 0
 
 
-def serve(today_picks: list[dict], older: list[dict], prices: dict[str, float], today: date, edges: dict) -> dict:
-    """The served list from every stored candidate (storage is untouched). `today_picks` are the latest
-    pass; `older` earlier ones; `today` the real IST date; `edges` from `setup_edges`. Pure."""
+def serve(today_picks: list[dict], older: list[dict], prices: dict[str, float], today: date, grades: dict) -> dict:
+    """The served list from every stored candidate (storage is untouched): each pick still before its due
+    date, graded by its setup (`setup_grades`), the newest per setup and symbol, at most MAX_SHOWN per grade,
+    A first; within a grade, picks still in their entry zone first, then by median excess and P(beat NIFTY).
+    `today_picks` are the latest pass, `older` earlier ones, `today` the real IST date. Pure."""
     fired = date.fromisoformat(today_picks[0]["date"]) if today_picks else today
     exp = lambda p: bool(setups.BY_NAME[p["setup"]].experimental) if p["setup"] in setups.BY_NAME else False
-    shown, no_edge, low_p, moved = [], {}, 0, 0
+    rows, seen = [], set()
     for p in today_picks:
-        if has_edge(p, edges):
-            shown.append({**p, "fired_on": p["date"], "days_since": 0, "experimental": exp(p),
-                          "days_left": _trading_days_after(today, date.fromisoformat(p["due_date"]))})
-        elif not edges.get(p["setup"]):
-            no_edge.setdefault(p["label"], [0, p["setup"]])[0] += 1
-        else:
-            low_p += 1
-    for p in older:
+        seen.add((p["setup"], p["symbol"]))
+        rows.append({**p, "days_since": 0, "price_now": None, "move_since_entry": None})
+    for p in sorted(older, key=lambda p: p["date"], reverse=True):
         d = date.fromisoformat(p["date"])
-        since = _trading_days_after(d, fired)
-        if d >= fired or since > RECENT_DAYS or not has_edge(p, edges) or today >= date.fromisoformat(p["due_date"]):
+        if d >= fired or today >= date.fromisoformat(p["due_date"]) or (p["setup"], p["symbol"]) in seen:
             continue
+        seen.add((p["setup"], p["symbol"]))
         now = prices.get(p["symbol"])
-        move = now / p["entry_ref"] - 1 if now and p["entry_ref"] else None
-        if move is None or abs(move) > MAX_MOVE:
-            moved += 1
-            continue
-        shown.append({**p, "fired_on": p["date"], "days_since": since, "price_now": now, "move_since_entry": move,
-                      "experimental": exp(p), "days_left": _trading_days_after(today, date.fromisoformat(p["due_date"]))})
-    shown.sort(key=lambda p: (p["median_excess"], p["p_beat_nifty"]), reverse=True)
-    over = max(len(shown) - MAX_SHOWN, 0)
-    reasons = [f"{label} ({n} pick{'s' if n > 1 else ''}) hidden: no edge over the average stock this month"
-               for label, (n, _) in no_edge.items()]
-    if low_p:
-        reasons.append(f"{low_p} pick{'s' if low_p > 1 else ''} hidden: under {MIN_P_BEAT:.0%} chance of beating NIFTY")
-    if moved:
-        reasons.append(f"{moved} earlier pick{'s' if moved > 1 else ''} hidden: price moved over {MAX_MOVE:.0%} from entry")
-    if over:
-        reasons.append(f"{over} more hidden: top {MAX_SHOWN} only")
-    count = sum(n for n, _ in no_edge.values()) + low_p + moved + over
-    return {"shown": shown[:MAX_SHOWN], "hidden_count": count, "hidden_reason": "; ".join(reasons)}
+        rows.append({**p, "days_since": _trading_days_after(d, fired), "price_now": now,
+                     "move_since_entry": now / p["entry_ref"] - 1 if now and p.get("entry_ref") else None})
+    for r in rows:
+        move = r["move_since_entry"]
+        r.update({"fired_on": r["date"], "experimental": exp(r), "grade": grades.get(r["setup"], "C"),
+                  "missed_entry": move is not None and move > ENTRY_ZONE,
+                  "beats_nifty_odds": r["p_beat_nifty"] >= MIN_P_BEAT,
+                  "days_left": _trading_days_after(today, date.fromisoformat(r["due_date"]))})
+    rows.sort(key=lambda r: (r["grade"], r["missed_entry"], -r["median_excess"], -r["p_beat_nifty"]))
+    shown, reasons, count = [], [], 0
+    for g in GRADES:
+        of_grade = [r for r in rows if r["grade"] == g]
+        shown += of_grade[:MAX_SHOWN]
+        if len(of_grade) > MAX_SHOWN:
+            count += len(of_grade) - MAX_SHOWN
+            reasons.append(f"{len(of_grade) - MAX_SHOWN} more grade {g} hidden: top {MAX_SHOWN} per grade")
+    return {"shown": shown, "hidden_count": count, "hidden_reason": "; ".join(reasons), "grades": grades,
+            "grade_text": GRADE_TEXT}
 
 
 def forward(scored: list[dict]) -> dict:
