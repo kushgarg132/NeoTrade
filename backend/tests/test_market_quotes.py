@@ -139,3 +139,19 @@ def test_quotes_come_from_the_ingest_cache_first(client, monkeypatch):
     assert rows[0] == {"symbol": "TCS", "price": 110.0, "prev_close": 100.0, "change_pct": 10.0, "at": 7.0}
     assert rows[1]["symbol"] == "INFY" and rows[1]["price"] == 55.0 and rows[1]["at"] > 7.0
     assert len(calls) == 1 and calls[0][0] == ["INFY.NS"]  # only the miss went to Yahoo
+
+
+def test_market_scan_ranks_movers_finds_52_week_extremes_and_averages_sectors():
+    rows = [{"symbol": s, "name": s, "sector": sec} for s, sec in
+            [("A", "IT"), ("B", "IT"), ("C", "Banks"), ("D", "Banks"), ("E", "Banks")]]
+    q = lambda price, pct: {"price": price, "change_pct": pct, "at": 5.0}
+    quotes = {"A": q(99.0, 3.0), "B": q(50.0, -1.0), "C": q(10.2, -4.0), "D": q(20.0, 1.0), "E": q(30.0, None)}
+    ranges = {"A": (100.0, 60.0), "B": (90.0, 40.0), "C": (20.0, 10.0), "D": (21.0, 5.0)}
+    out = market_data.market_scan(rows, quotes, ranges)
+    assert [m["symbol"] for m in out["gainers"]] == ["A", "D"]
+    assert [m["symbol"] for m in out["losers"]] == ["C", "B"]
+    assert [m["symbol"] for m in out["near_high"]] == ["A"]  # 99 within 2% of 100; D at 20 is 4.8% off 21
+    assert [m["symbol"] for m in out["near_low"]] == ["C"]
+    assert out["sectors"] == [{"sector": "IT", "change_pct": 1.0, "up": 1, "n": 2},
+                              {"sector": "Banks", "change_pct": -1.5, "up": 1, "n": 2}]
+    assert out["breadth"] == {"up": 2, "down": 2, "n": 4} and out["at"] == 5.0

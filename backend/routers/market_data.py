@@ -323,6 +323,67 @@ async def _cached_quotes(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
     return found
 
 
+SCAN_TTL = 5 * 60
+SCAN_TOP = 10
+NEAR_52W = 0.02  # within 2% of the 52-week high or low counts as "near"
+
+
+def market_scan(rows: List[Dict[str, str]], quotes: Dict[str, Dict[str, Any]], ranges: Dict[str, tuple]) -> Dict[str, Any]:
+    """The Nifty 200 at a glance from cached quotes and a year of daily bars: top gainers and losers, names
+    near their 52-week high or low, and each sector's average day change. `rows` from
+    news_sources.universe_rows, `quotes` from _cached_quotes, `ranges` symbol -> (52w high, 52w low). Pure."""
+    movers = []
+    for r in rows:
+        q = quotes.get(r["symbol"])
+        if q and q.get("change_pct") is not None:
+            hi, lo = ranges.get(r["symbol"], (None, None))
+            movers.append({"symbol": r["symbol"], "name": r["name"], "sector": r["sector"], "price": q["price"],
+                           "change_pct": q["change_pct"], "high_52w": hi, "low_52w": lo})
+    by_change = sorted(movers, key=lambda m: m["change_pct"], reverse=True)
+    near_high = sorted((m for m in movers if m["high_52w"] and m["price"] >= m["high_52w"] * (1 - NEAR_52W)),
+                       key=lambda m: m["price"] / m["high_52w"], reverse=True)
+    near_low = sorted((m for m in movers if m["low_52w"] and m["price"] <= m["low_52w"] * (1 + NEAR_52W)),
+                      key=lambda m: m["price"] / m["low_52w"])
+    groups: Dict[str, list] = {}
+    for m in movers:
+        groups.setdefault(m["sector"], []).append(m["change_pct"])
+    sectors = sorted(({"sector": k, "change_pct": round(sum(v) / len(v), 2), "up": sum(x > 0 for x in v), "n": len(v)}
+                      for k, v in groups.items()), key=lambda x: x["change_pct"], reverse=True)
+    return {
+        "gainers": [m for m in by_change if m["change_pct"] > 0][:SCAN_TOP],
+        "losers": [m for m in reversed(by_change) if m["change_pct"] < 0][:SCAN_TOP],
+        "near_high": near_high[:SCAN_TOP], "near_low": near_low[:SCAN_TOP], "sectors": sectors,
+        "breadth": {"up": sum(m["change_pct"] > 0 for m in movers), "down": sum(m["change_pct"] < 0 for m in movers),
+                    "n": len(movers)},
+        "at": max((quotes[m["symbol"]]["at"] for m in movers), default=None),
+    }
+
+
+async def _scan() -> Dict[str, Any]:
+    from datetime import timedelta
+
+    from backend.database import db
+    from backend.datalayer import news_sources
+    from backend.datalayer.bars import BARS, today_ist
+
+    rows = news_sources.universe_rows()
+    symbols = [r["symbol"] for r in rows]
+    quotes = await _cached_quotes(symbols)
+    if not quotes or db.db is None:
+        return {}  # the ingest worker has not run: not cached, asked again next time
+    since = (today_ist() - timedelta(days=365)).isoformat()
+    ranges = {r["_id"]: (r["hi"], r["lo"]) async for r in db.db[BARS].aggregate([
+        {"$match": {"symbol": {"$in": symbols}, "date": {"$gte": since}}},
+        {"$group": {"_id": "$symbol", "hi": {"$max": "$high"}, "lo": {"$min": "$low"}}}])}
+    return market_scan(rows, quotes, ranges)
+
+
+@router.get("/market/scan")
+async def get_market_scan():
+    """Nifty 200 gainers, losers, 52-week highs and lows, sector moves (cached 5 min)."""
+    return await cached("scan", SCAN_TTL, _scan) or {}
+
+
 @router.get("/market/quotes")
 async def get_quotes(symbols: str):
     """Last price, day change and `at` for up to 8 symbols (search suggestions,
