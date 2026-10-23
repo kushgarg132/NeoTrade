@@ -98,3 +98,23 @@ async def test_a_new_trade_records_the_strategy_that_opened_it(ledger):
 
     (trade,) = await ledger.get_trades()
     assert trade["strategy"] == "orb_breakout"
+
+
+@pytest.mark.asyncio
+async def test_open_positions_count_at_market_per_strategy(ledger):
+    """2026-10-23: 6 closed AI trades and 7 open ones; a strategy holding losers read as flat."""
+    await ledger.trades.insert_many([
+        _trade(22, 100, 10, strategy="macd_crossover"),
+        {"user_id": "alice", "id": "o1", "symbol": "TCS", "status": "OPEN", "side": "BUY", "quantity": 2,
+         "entry_price": 100.0, "strategy": "macd_crossover", "venue": "paper", "entry_at": datetime(2026, 9, 22, tzinfo=timezone.utc)},
+        {"user_id": "alice", "id": "o2", "symbol": "INFY", "status": "OPEN", "side": "BUY", "quantity": 1,
+         "entry_price": 50.0, "strategy": "picks:momentum", "venue": "paper", "entry_at": datetime(2026, 9, 22, tzinfo=timezone.utc)},
+    ])
+    card = await compute_scorecard(ledger, "paper", account_size=100_000, marks={"TCS": 90.0, "INFY": 60.0})
+    by = {s["strategy"]: s for s in card["strategies"]}
+    assert by["macd_crossover"]["open"] == 1 and by["macd_crossover"]["unrealized"] == -20.0
+    assert by["macd_crossover"]["total"] == pytest.approx(90 - 20)
+    assert by["picks:momentum"]["trades"] == 0 and by["picks:momentum"]["total"] == 10.0  # open only: still listed
+    assert card["totals"]["open"] == 2 and card["totals"]["unrealized"] == -10.0
+    plain = await compute_scorecard(ledger, "paper", account_size=100_000)
+    assert "picks:momentum" not in {s["strategy"] for s in plain["strategies"]}  # no marks: closed-only as before

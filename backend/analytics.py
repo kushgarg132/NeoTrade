@@ -166,9 +166,26 @@ def _summary(nets: list[float]) -> dict:
     }
 
 
+def open_by_strategy(open_trades: list[dict], marks: dict[str, float]) -> dict[str, dict]:
+    """strategy -> {open, unrealized}: open positions at the mark, gross (their entry charges are already in
+    `costs` and the exit's are not known yet); a position with no mark counts at 0. Pure."""
+    out: dict[str, dict] = {}
+    for t in open_trades:
+        row = out.setdefault(t.get("strategy") or "unattributed", {"open": 0, "unrealized": 0.0})
+        row["open"] += 1
+        mark, entry, qty = marks.get(t.get("symbol")), t.get("entry_price"), t.get("quantity") or 0.0
+        if mark and entry:
+            row["unrealized"] += (mark - entry) * qty * (1 if t.get("side", "BUY") == "BUY" else -1)
+    return {k: {**v, "unrealized": round(v["unrealized"], 2)} for k, v in out.items()}
+
+
 async def compute_scorecard(
     ledger: LedgerStore, venue: Optional[Venue], account_size: float, mode: Optional[str] = None,
+    marks: Optional[dict[str, float]] = None,
 ) -> dict:
+    """Closed trades net of charges, per day and per strategy; with `marks` (symbol -> price) each strategy
+    also carries its open positions at market (`open`, `unrealized`, `total` = net + unrealized), so a
+    strategy holding losers no longer reads as flat until it sells."""
     closed = sorted(
         (t for t in await ledger.get_trades(status="CLOSED", limit=5000, venue=venue, mode=mode) if t.get("exit_at")),
         key=lambda t: t["exit_at"],
@@ -191,13 +208,19 @@ async def compute_scorecard(
     daily = list(days.values())
     totals = _summary([day["pnl"] for day in daily])
     trade_level = _summary([n for nets in by_strategy.values() for n in nets])
+    opens = (open_by_strategy(await ledger.get_trades(status="OPEN", limit=5000, venue=venue, mode=mode), marks)
+             if marks is not None else {})
+    for name in opens:
+        by_strategy.setdefault(name, [])
+    zero = {"open": 0, "unrealized": 0.0}
     return {
         "venue": venue,
         "account_size": account_size,
         "days": daily,
         "strategies": sorted(
-            ({"strategy": name, **_summary(nets)} for name, nets in by_strategy.items()),
-            key=lambda s: s["net"], reverse=True,
+            ({"strategy": name, **_summary(nets), **opens.get(name, zero),
+              "total": sum(nets) + opens.get(name, zero)["unrealized"]} for name, nets in by_strategy.items()),
+            key=lambda s: s["total"], reverse=True,
         ),
         "totals": {
             **trade_level,
@@ -207,6 +230,8 @@ async def compute_scorecard(
             "max_drawdown_pct": totals["max_drawdown"] / account_size * 100 if account_size else None,
             "return_pct": trade_level["net"] / account_size * 100 if account_size else None,
             "costs": costs,
+            "open": sum(o["open"] for o in opens.values()),
+            "unrealized": round(sum(o["unrealized"] for o in opens.values()), 2),
             "trading_days": len(daily),
             "winning_days": totals["wins"],
             "best_day": max(daily, key=lambda d: d["pnl"]) if daily else None,

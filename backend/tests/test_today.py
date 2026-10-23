@@ -88,7 +88,7 @@ def test_needs_you_lists_long_term_proposals_only(monkeypatch):
     assert len(ideas) == 1 and "TCS" in ideas[0]
 
 
-def test_you_vs_picks_counts_only_the_ai_books_pick_trades(monkeypatch):
+def test_you_vs_the_ai_counts_the_whole_ai_book_not_only_pick_trades(monkeypatch):
     client, db = _client(monkeypatch, role="admin")
     _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"kite": "ai", "upstox": "mine"}}],
           journal_trades=[
@@ -98,11 +98,11 @@ def test_you_vs_picks_counts_only_the_ai_books_pick_trades(monkeypatch):
                "side": "SELL", "quantity": 10, "price": 110.0, "traded_at": DAY + timedelta(minutes=2)}],
           paper_trades=[{"user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "CLOSED",
                          "strategy": "picks:momentum", "via": "autopilot:picks", "realized_pnl": -50.0, "costs": 5.0, "exit_at": DAY + timedelta(minutes=3), "venue": "paper"},
-                        {"user_id": "alice", "symbol": "SBIN", "side": "BUY", "status": "CLOSED",  # not a pick
+                        {"user_id": "alice", "symbol": "SBIN", "side": "BUY", "status": "CLOSED",  # not a pick: counts too
                          "strategy": "autopilot:chat", "via": "autopilot:chat", "realized_pnl": 900.0, "costs": 5.0, "exit_at": DAY + timedelta(minutes=3), "venue": "paper"}])
     pnl = client.get("/api/v1/today").json()["scoreboard"]["today"]
     # Both sides net of charges: the broker book carries none, so Mine's are estimated.
-    assert pnl["ai"] == -55.0 and pnl["ai_charges"] == 5.0
+    assert pnl["ai"] == round(-50 - 5 + 900 - 5, 2) and pnl["ai_charges"] == 10.0
     assert 0 < pnl["mine_charges"] < 5 and pnl["mine"] == round(100.0 - pnl["mine_charges"], 2)
 
 

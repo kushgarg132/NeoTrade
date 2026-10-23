@@ -75,8 +75,12 @@ async def get_scorecard(
 ):
     """The engine's track record, day by day and per strategy, net of
     charges -- what decides whether a strategy has earned real money."""
+    from backend.marks import mark_prices
+
     prefs = await PrefsStore(db.db).get(user.id)
-    card = await compute_scorecard(ledger, venue, prefs["account_size"], mode=mode)
+    held = {t["symbol"] for t in await ledger.get_trades(status="OPEN", limit=5000, venue=venue, mode=mode)}
+    card = await compute_scorecard(ledger, venue, prefs["account_size"], mode=mode,
+                                   marks=await mark_prices(db.db, held) if held else {})
     card["nifty_return_pct"] = None
     first_day = card["totals"]["first_day"]
     if first_day:

@@ -179,11 +179,11 @@ def month_start(now: datetime) -> datetime:
 
 
 async def scoreboard(db, user_id: str, roles: dict, now: datetime) -> dict:
-    """You vs Picks: the user's account against the AI book's trades credited
-    to a pick, closed and net of charges, today and this month. The `ai` key
-    keeps its name so the shape is unchanged."""
-    return {"today": await pnl_since(db, user_id, roles, day_start(now), picks_only=True),
-            "month": await pnl_since(db, user_id, roles, month_start(now), picks_only=True)}
+    """You vs the AI: the user's account against the whole AI book (Picks, engine and news trades),
+    closed and net of charges, today and this month. It counted only trades credited to a pick, so the
+    AI's engine losses never showed against you."""
+    return {"today": await pnl_since(db, user_id, roles, day_start(now)),
+            "month": await pnl_since(db, user_id, roles, month_start(now))}
 
 
 # ------------------------------------------------------------------ Telegram
