@@ -135,17 +135,9 @@ async def _headlines(ticker: str) -> List[Dict[str, Any]]:
 
 async def _peers(ticker: str) -> List[Dict[str, Any]]:
     # Imported here: backend.routers.market_data imports this module.
-    from backend.routers.market_data import GLOBAL_INDICES, INDICES, fetch_ticker_data
+    from backend.routers.market_data import GLOBAL_INDICES, INDICES, _quotes
 
-    others = {name: sym for name, sym in {**INDICES, **GLOBAL_INDICES}.items() if sym != ticker}
-    from backend.database import db
-    from backend.datalayer.prices import macro_rows
-
-    cached = await macro_rows(db.redis, others)
-    if cached is not None:
-        return cached
-    results = await asyncio.gather(*(fetch_ticker_data(sym, name) for name, sym in others.items()))
-    return [r for r in results if r]
+    return await _quotes({name: sym for name, sym in {**INDICES, **GLOBAL_INDICES}.items() if sym != ticker})
 
 
 async def _movers(ticker: str) -> List[Dict[str, Any]]:

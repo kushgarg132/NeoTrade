@@ -102,6 +102,9 @@ def _movers_sync() -> List[Dict[str, Any]]:
         price, prev = float(series.iloc[-1]), float(series.iloc[-2])
         movers.append({"name": symbol, "symbol": symbol, "value": price, "change": price - prev,
                        "percent": (price - prev) / prev * 100 if prev else 0.0})
+    now = time.time()
+    for m in movers:
+        m["at"] = now
     movers.sort(key=lambda m: m["percent"], reverse=True)
     gainers = [m for m in movers if m["percent"] > 0][:5]
     losers = [m for m in reversed(movers) if m["percent"] < 0][:5]
@@ -114,11 +117,13 @@ async def _quotes(names_to_symbols: Dict[str, str]) -> List[Dict[str, Any]]:
     from backend.database import db
     from backend.datalayer.prices import macro_rows
 
-    rows = await macro_rows(db.redis, names_to_symbols)
-    if rows is not None:
-        return rows
-    results = await asyncio.gather(*(fetch_ticker_data(sym, name) for name, sym in names_to_symbols.items()))
-    return [r for r in results if r is not None]
+    rows = {r["name"]: r for r in await macro_rows(db.redis, names_to_symbols)}
+    missing = [name for name in names_to_symbols if name not in rows]
+    if missing:
+        now = time.time()
+        fetched = await asyncio.gather(*(fetch_ticker_data(names_to_symbols[name], name) for name in missing))
+        rows.update({r["name"]: {**r, "at": now} for r in fetched if r})
+    return [rows[name] for name in names_to_symbols if name in rows]
 
 
 @router.get("/market/indices")

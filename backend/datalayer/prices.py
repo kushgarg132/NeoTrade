@@ -133,20 +133,19 @@ async def macro(db, redis) -> None:
         )
 
 
-async def macro_rows(redis, names_to_tickers: dict[str, str]):
-    """Rows for `names_to_tickers` from the cache, in order, or None if any
-    is missing (the caller then fetches itself)."""
+async def macro_rows(redis, names_to_tickers: dict[str, str]) -> list[dict]:
+    """The cached rows for `names_to_tickers`, in order, each with `at` (epoch
+    seconds it was fetched). Missing tickers are left out: the caller fetches
+    only those (one dead ticker used to send every call down the slow path)."""
     if redis is None:
-        return None
+        return []
     try:
         raws = await redis.mget([MACRO_KEY.format(t) for t in names_to_tickers.values()])
     except Exception as exc:
         logger.warning("macro cache read failed: %s", exc)
-        return None
-    if not all(raws):
-        return None
-    rows = [json.loads(r) for r in raws]
-    for row, name in zip(rows, names_to_tickers):
-        row.pop("at", None)
-        row["name"] = name
+        return []
+    rows = []
+    for raw, name in zip(raws, names_to_tickers):
+        if raw:
+            rows.append({**json.loads(raw), "name": name})
     return rows

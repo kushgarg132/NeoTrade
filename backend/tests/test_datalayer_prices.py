@@ -81,9 +81,9 @@ async def test_macro_writes_cache_and_daily_series(mongo, monkeypatch):
     assert row["name"] == "Brent crude" and row["percent"] == pytest.approx(10.0)
     assert (await mongo["macro_series"].find_one())["value"] == 88.0
 
-    assert await prices.macro_rows(redis, {"Brent": "BZ=F", "Gold": "GC=F"}) is None  # one missing: caller fetches
-    assert await prices.macro_rows(redis, {"Brent": "BZ=F"}) == [
-        {"name": "Brent", "symbol": "BZ=F", "value": 88.0, "change": 8.0, "percent": pytest.approx(10.0)}]
+    rows = await prices.macro_rows(redis, {"Brent": "BZ=F", "Gold": "GC=F"})  # Gold missing: caller fetches only it
+    assert rows == [{"name": "Brent", "symbol": "BZ=F", "value": 88.0, "change": 8.0,
+                     "percent": pytest.approx(10.0), "at": pytest.approx(time.time(), abs=60)}]
 
 
 async def test_mark_prices_uses_fresh_cache_and_writes_through(mongo, monkeypatch):
