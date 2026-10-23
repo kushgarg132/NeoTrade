@@ -308,3 +308,35 @@ def test_adjusted_edge_subtracts_the_same_month_universe_baseline():
     beats = study.adjusted_edge(ev, pd.Series(0.0, index=months), wf)
     assert beats["excess"] > 0.05 and beats["t"] >= study.ADJ_MIN_T and beats["edge"] is True
     assert study.adjusted_edge(ev, pd.Series(0.0, index=months), {"years": []})["edge"] is False
+
+
+# --- price levels ------------------------------------------------------------------
+
+def test_levels_take_the_tighter_stop_and_the_stocks_own_range():
+    p = {"entry_ref": 100.0, "atr": 2.0, "expected": {"median": 0.04, "p10": -0.08, "p90": 0.12,
+                                                      "range_stock": {"p10": -0.06, "p90": 0.15}}}
+    lv = picks.levels(p)
+    assert lv["entry_zone"] == [100.0, 103.0]
+    assert lv["target"] == 104.0 and lv["stretch"] == 115.0
+    assert lv["stop"] == 96.0  # 2 ATR (96) is tighter than the stock's p10 (94)
+    assert lv["reward_risk"] == 1.0
+
+
+def test_levels_never_put_a_stop_above_entry_or_a_target_below_it():
+    lv = picks.levels({"entry_ref": 100.0, "expected": {"median": -0.001, "p10": 0.01, "p90": 0.05}})
+    assert lv["stop"] is None and lv["target"] is None and lv["reward_risk"] is None and lv["stretch"] == 105.0
+    assert picks.levels({"entry_ref": 100.0, "expected": {}}) is None
+
+
+def test_atr_is_the_mean_true_range():
+    import pandas as pd
+    idx = pd.bdate_range("2026-10-01", periods=16)
+    close = pd.DataFrame({"S": [100.0] * 16}, index=idx)
+    t = {"close": close, "high": close + 1, "low": close - 1}
+    assert picks._atr(t, "S", 15) == pytest.approx(2.0)
+    assert picks._atr({"close": close, "high": close, "low": close}, "S", 15) is None
+
+
+def test_served_picks_carry_levels():
+    out = picks.serve([{**_p("2026-10-21", "A"), "expected": {"median": 0.05, "p10": -0.05, "p90": 0.1}}], [], {}, TODAY, GRADES)
+    assert out["shown"][0]["levels"]["target"] == 105.0

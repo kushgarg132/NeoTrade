@@ -40,6 +40,38 @@ CAVEATS = [
 ]
 
 
+ATR_DAYS = 14
+STOP_ATR = 2.0  # a stop no further than this many ATRs below entry
+
+
+def _atr(t: dict, symbol: str, last: int) -> Optional[float]:
+    """Average true range over the ATR_DAYS bars to `last`, in rupees; None without the bars."""
+    h, l, c = (t[k][symbol].iloc[max(last - ATR_DAYS, 0):last + 1] for k in ("high", "low", "close"))
+    tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1).iloc[1:]
+    v = float(tr.mean()) if len(tr) else float("nan")
+    return v if v == v and v > 0 else None
+
+
+def levels(p: dict) -> Optional[dict]:
+    """Price levels for a pick, from its stored range: entry zone (entry_ref to ENTRY_ZONE above), target
+    (median), stretch (p90), stop (the tighter of p10 and STOP_ATR x ATR below entry; always below entry) and
+    reward:risk. The range is the stock's own (`range_stock`) when the backend chose one. Pure."""
+    e, x = p.get("entry_ref"), p.get("expected") or {}
+    if not e or x.get("median") is None:
+        return None
+    rs = x.get("range_stock") or {}
+    lo, hi = rs.get("p10", x.get("p10")), rs.get("p90", x.get("p90"))
+    stops = [e * (1 + lo)] if lo is not None and lo < 0 else []
+    if p.get("atr"):
+        stops.append(e - STOP_ATR * p["atr"])
+    stop = max(stops) if stops else None
+    target = e * (1 + x["median"]) if x["median"] > 0 else None
+    r2 = lambda v: None if v is None else round(v, 2)
+    return {"entry_zone": [r2(e), r2(e * (1 + ENTRY_ZONE))], "target": r2(target),
+            "stretch": r2(e * (1 + hi)) if hi is not None and hi > 0 else None, "stop": r2(stop),
+            "reward_risk": round((target - e) / (e - stop), 2) if target and stop and stop < e else None}
+
+
 def compute(t: dict) -> tuple[dict, list[dict]]:
     """(per-setup results, today's picks) from a wide table. Pure."""
     results, fires = study.run(t, setups.SETUPS)
@@ -75,6 +107,7 @@ def compute(t: dict) -> tuple[dict, list[dict]]:
                 "horizon": s.horizon,
                 "due_date": add_trading_days(day.date(), s.horizon + 1).isoformat(),
                 "entry_ref": float(t["close"][symbol].iat[last]),
+                "atr": _atr(t, symbol, last),
                 "expected": {**({k: f[k] for k in ("median", "p10", "p90", "excess")} if f else base),
                              **({"range_stock": rs} if rs else {})},
                 "p_up": f["p_up"] if f else r["p_up"],
@@ -160,7 +193,7 @@ def serve(today_picks: list[dict], older: list[dict], prices: dict[str, float], 
                      "move_since_entry": now / p["entry_ref"] - 1 if now and p.get("entry_ref") else None})
     for r in rows:
         move = r["move_since_entry"]
-        r.update({"fired_on": r["date"], "experimental": exp(r), "grade": grades.get(r["setup"], "C"),
+        r.update({"fired_on": r["date"], "experimental": exp(r), "grade": grades.get(r["setup"], "C"), "levels": levels(r),
                   "missed_entry": move is not None and move > ENTRY_ZONE,
                   "beats_nifty_odds": r["p_beat_nifty"] >= MIN_P_BEAT,
                   "days_left": _trading_days_after(today, date.fromisoformat(r["due_date"]))})
