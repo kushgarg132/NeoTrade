@@ -46,7 +46,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/rate_limit.py` | fixed-window per-key limiter, fails open | `allow` |
 | `backend/log_redaction.py` | strips `token=` and Telegram bot tokens from logs | `RedactTokens`, `install`, `_PATTERNS` |
 | `backend/marks.py` | best-effort current prices (Redis `quote:` then yfinance) | `mark_prices`, `cached_quotes`, `store_quotes` |
-| `backend/analytics.py` | P&L cards and the scorecard maths | `compute_pnl`, `compute_scorecard` |
+| `backend/analytics.py` | P&L cards and the scorecard maths (`compute_scorecard(..., marks)`: with marks each strategy adds `open`, `unrealized`, `total` from `open_by_strategy`, totals add `open`, `unrealized`; `GET /analytics/scorecard` passes `mark_prices` of open symbols) | `compute_pnl`, `compute_scorecard`, `open_by_strategy` |
 | `backend/routers/*.py` | HTTP handlers (map below) | one module per area |
 | `docker-compose.yml`, `backend/Dockerfile`, `backend/requirements.txt` | runtime image and stack; pinned SDKs `upstox-python-sdk==2.30.0`, `empyrical-reloaded==0.7.0` (backend/lab/metrics.py), `lightgbm==4.6.0` (backend/ml/, native API; no scikit-learn), `aiogram==3.31.0` (caps pydantic below 2.14) | services `backend`, `ingest` (no frontend service; Vercel serves it) |
 | `.github/workflows/ci.yml`, `deploy-backend.yml` | CI and push-to-deploy caller | see Deploy |

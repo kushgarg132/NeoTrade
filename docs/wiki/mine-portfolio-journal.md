@@ -224,7 +224,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
   - `daily_reviews` sends "worth a closer look" instead of the verdict.
   - The `conviction` rebalance rule returns 403 when the gate is closed. AI candidates are listed only when it is
     open.
-  - `scoreboard` (You vs Picks) is admin-only in `today.py::today`.
+  - `scoreboard` (You vs the AI: `digest.py::scoreboard` = `pnl_since` over the whole AI book, closed and net of charges; it was Picks-only until 2026-10-24) is admin-only in `today.py::today`.
 - **Rules decide; AI explains.** `portfolio/rules.py::stock_verdict` scores via `scoring/composite.py::score_intent`, so
   AI_CAP and RULE_FLOOR apply and below the floor the verdict is HOLD. `review.py::write_review` never changes a
   verdict, and it degrades to no prose rather than failing.
