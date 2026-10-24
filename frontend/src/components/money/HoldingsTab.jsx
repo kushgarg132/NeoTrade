@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Empty from '../ui/Empty';
+import ErrorLine from '../ui/ErrorLine';
 import Skeleton from '../ui/Skeleton';
 import ListRow from '../ui/ListRow';
 import { inr, pct, compactInr } from '../ui/format';
@@ -87,7 +88,7 @@ const Row = ({ h, news }) => {
 
 const HoldingsTab = () => {
   const [params, setParams] = useSearchParams();
-  const { snapshot, loading, reload } = useHoldings({ poll: true });
+  const { snapshot, loading, error, reload } = useHoldings({ poll: true });
   const [sort, setSort] = useState('day');
   const [ticket, setTicket] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -126,6 +127,8 @@ const HoldingsTab = () => {
       >
         {loading ? (
           <Skeleton rows={4} />
+        ) : error ? (
+          <ErrorLine message="Couldn't load your holdings." onRetry={() => reload()} />
         ) : !snapshot || all.length === 0 ? (
           <Empty
             title="No holdings yet"

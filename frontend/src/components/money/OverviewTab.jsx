@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import Card from '../ui/Card';
 import ListRow from '../ui/ListRow';
 import Empty from '../ui/Empty';
+import ErrorLine from '../ui/ErrorLine';
 import Skeleton from '../ui/Skeleton';
 import { inr, pct, tone } from '../ui/format';
 import ValueChart from './ValueChart';
@@ -28,7 +29,7 @@ const WhyMoved = () => {
 
 /** Why it moved, value vs NIFTY and today's three biggest movers with a one-line why. `headline` comes from /mine/overview. */
 const OverviewTab = ({ headline }) => {
-  const { snapshot, loading } = useHoldings();
+  const { snapshot, loading, error, reload } = useHoldings();
   const movers = useMemo(() => topMovers((snapshot?.holdings || []).filter((h) => h.kind !== 'MF'), 3), [snapshot]);
   const { news } = useSymbolNews(movers.map((m) => m.symbol));
 
@@ -43,6 +44,8 @@ const OverviewTab = ({ headline }) => {
       <Card title="Biggest movers today" action={<Link to="/money?tab=holdings" className="inline-flex items-center min-h-11 text-[14px] font-semibold text-[var(--accent)]">All holdings<ChevronRight className="w-4 h-4" aria-hidden="true" /></Link>}>
         {loading ? (
           <Skeleton rows={3} />
+        ) : error ? (
+          <ErrorLine message="Couldn't load your holdings." onRetry={() => reload()} />
         ) : movers.length === 0 ? (
           <Empty title="No moves to show" body="Movers appear once your holdings have a price today." />
         ) : (

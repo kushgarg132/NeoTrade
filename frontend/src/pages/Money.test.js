@@ -52,3 +52,11 @@ test('overview does not stack empties when there is no headline, and drops the d
 test('value chart uses chartTheme', () => {
   assert.match(chart, /chartTheme/);
 });
+
+test('a failed holdings load shows ErrorLine + Retry, not the empty state', () => {
+  const hook = read('../components/money/useHoldings.js');
+  assert.match(hook, /error: error && !snapshot/);
+  assert.match(hook, /status !== 404/);
+  assert.match(holdings, /error \? \(\s*<ErrorLine[^>]*onRetry/);
+  assert.match(overview, /error \? \(\s*<ErrorLine[^>]*onRetry/);
+});
