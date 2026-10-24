@@ -305,7 +305,7 @@ async def premarket_for(db, user_id: str, now: datetime) -> str:
 
     local = now.astimezone(IST)
     prefs = await PrefsStore(db).get(user_id)
-    p = await pulse(db, user_id, now)
+    p = await cached_pulse(db, user_id, now)
     held = list(await mine_holdings(db, user_id))
     # The previous session's close: on a Monday, Friday's (weekend news counts).
     last_close = datetime.combine(previous_trading_day(local.date()), time(15, 30), tzinfo=IST)
@@ -330,7 +330,7 @@ async def postclose_for(db, user_id: str, now: datetime, events: Optional[list[d
     # weekend/holiday ("closed" phase): the last session's day, not today's empty one
     day = last_trading_day(now.astimezone(IST).date())
     recon = broker_recon.summary(await broker_recon.latest(db, user_id, day))
-    return postclose_text(await pulse(db, user_id, now),
+    return postclose_text(await cached_pulse(db, user_id, now),
                           await pnl_since(db, user_id, roles, datetime.combine(day, time(0, 0), tzinfo=IST)),
                           events, await _actions(db, user_id, now), recon)
 
