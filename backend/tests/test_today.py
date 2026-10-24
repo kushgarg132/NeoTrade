@@ -22,6 +22,7 @@ def _client(monkeypatch, states=None, broken=False, role="user"):
     db = AsyncMongoMockClient()["test_db"]
     monkeypatch.setattr(today_router.db, "db", db)
     monkeypatch.setattr(today_router.db, "redis", None)
+    asyncio.run(db["users"].insert_one({"id": "alice", "role": role}))  # engine ideas are admin-only
 
     async def broker_states(user_id, brokers):
         if broken:
@@ -60,7 +61,7 @@ def test_login_needed_for_a_role_whose_broker_is_logged_out(monkeypatch):
 
 
 def test_ideas_are_mine_actions_and_cards_stay_in_needs_you(monkeypatch):
-    client, db = _client(monkeypatch)
+    client, db = _client(monkeypatch, role="admin")
     _seed(db, suggestions=[
         {"id": "late", "user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "PENDING", "mode": "LONGTERM",
          "quantity": 1, "expires_at": NOW + timedelta(days=3), "created_at": NOW},
@@ -77,7 +78,7 @@ def test_ideas_are_mine_actions_and_cards_stay_in_needs_you(monkeypatch):
 
 def test_needs_you_lists_long_term_proposals_only(monkeypatch):
     """Decisions shows long-term proposals only; Today must not count others."""
-    client, db = _client(monkeypatch)
+    client, db = _client(monkeypatch, role="admin")
     _seed(db, suggestions=[
         {"id": "lt", "user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "PENDING", "mode": "LONGTERM",
          "quantity": 1, "expires_at": NOW + timedelta(days=1), "created_at": NOW},
@@ -184,10 +185,18 @@ def test_a_login_shows_on_the_next_poll(monkeypatch):
     assert client.get("/api/v1/today").json()["accounts"]["mine"]["state"] == "ACTIVE"
 
 
+def test_engine_ideas_are_hidden_from_non_admins(monkeypatch):
+    client, db = _client(monkeypatch)
+    _seed(db, suggestions=[{"id": "p1", "user_id": "alice", "symbol": "S1", "side": "BUY", "status": "PENDING",
+                            "mode": "LONGTERM", "quantity": 2, "entry_ref": 100.0, "notional": 200.0,
+                            "score": {"final": 0.61}, "expires_at": NOW + timedelta(days=1), "created_at": NOW}])
+    assert client.get("/api/v1/today").json()["mine_actions"] == []
+
+
 def test_proposals_carry_their_terms_and_the_full_count(monkeypatch):
     """Today shows the top few of Mine's list; an idea says how sure the engine
     is and which suggestion to approve, and the totals say how many wait."""
-    client, db = _client(monkeypatch)
+    client, db = _client(monkeypatch, role="admin")
     _seed(db, suggestions=[
         {"id": f"p{i}", "user_id": "alice", "symbol": f"S{i}", "side": "BUY", "status": "PENDING", "mode": "LONGTERM",
          "quantity": 2, "entry_ref": 100.0, "notional": 200.0, "score": {"final": 0.61},

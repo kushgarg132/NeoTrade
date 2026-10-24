@@ -4,10 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import { useReconnect, useTopic } from './useStream';
 import { ideaFromSuggestion, ideaFromPick, needCount } from '../utils/ideas';
 
-/** Pending ideas: your suggestions, plus the served Picks (`shown`) for admins (a Picks failure never hides the
+/** Pending ideas: your suggestions, plus the served Picks (`shown`), both admin-only (a Picks failure never hides the
  *  suggestions). Returns { items, hiddenReason }. */
 export const fetchIdeas = async (isAdmin) => {
-  const sug = await api.get(endpoints.suggestions.list({ status: 'PENDING' })).then((r) => r.data.map(ideaFromSuggestion));
+  // Engine ideas are admin-only (the API 403s anyone else), so a non-admin never asks.
+  const sug = isAdmin
+    ? await api.get(endpoints.suggestions.list({ status: 'PENDING' })).then((r) => r.data.map(ideaFromSuggestion))
+    : [];
   let hiddenReason = '';
   const picks = isAdmin
     ? await api.get(endpoints.picks.today).then((r) => {

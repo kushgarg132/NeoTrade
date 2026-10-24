@@ -117,7 +117,7 @@ bullish Scanner and paper approvals are gone.
   still open.
 - **Market closed.** Most hours of most days. Prices do not move; the UI should say so
   rather than implying a frozen feed.
-- **Decision pending, expiring.** Long-term suggestions expire after ~3 days.
+- **Decision pending, expiring.** Long-term suggestions (admin-only) expire after ~3 days.
 - **Broker disconnected.** Kite tokens die daily at 06:00 IST; other brokers have their own
   expiries.
 - **Loss.** Red numbers are a normal, frequent state, not an error condition.
@@ -143,7 +143,8 @@ Not an advisor. NeoTrade never tells a user what to buy or sell for a fee. The o
 for money needs SEBI Research Analyst registration, which this product does not have and
 does not seek. Paid features are tools that work on the user's own trades and the user's own
 rules: journal, insights, guardrails, and backtests of rules the user wrote. The engine's
-suggestions are never a paid feature.
+suggestions are admin-only (like Picks, owner decision 2026-10-24: they read as advice) and
+never a paid feature.
 
 Not a broker — NeoTrade routes orders through the user's own broker and holds no funds. Not
 social. Not a signal-selling service: no user's trades or scores are visible to another, and

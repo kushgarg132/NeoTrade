@@ -1,19 +1,21 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '../../utils/cn';
-import { MAIN_TABS, tabActive } from './tabs';
+import { useAuth } from '../../context/AuthContext';
+import { tabsFor, tabActive } from './tabs';
 
-/** Phone navigation: five tabs, thumb-reachable, safe-area aware. */
+/** Phone navigation: up to five tabs, thumb-reachable, safe-area aware. */
 const BottomTabs = ({ counts = {} }) => {
   const { pathname } = useLocation();
+  const tabs = tabsFor(useAuth().user?.role === 'admin');
   return (
     <nav
       className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-[var(--border)] bg-[var(--surface)]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Main"
     >
-      <ul className="grid grid-cols-5">
-        {MAIN_TABS.map((item) => {
+      <ul className={tabs.length === 5 ? 'grid grid-cols-5' : 'grid grid-cols-4'}>
+        {tabs.map((item) => {
           const on = tabActive(item, pathname);
           const n = counts[item.counter] || 0;
           return (
