@@ -41,15 +41,14 @@ def test_one_rule_alone_is_a_hold_two_strong_ones_a_sell():
     assert two["score"]["rule"] == pytest.approx(0.85)
 
 
-def test_ai_cannot_make_a_verdict_and_moves_conviction_at_most_thirty_percent():
+def test_ai_cannot_make_a_verdict_and_does_not_move_conviction_while_sizing_weight_is_zero():
     row = {"symbol": "X", "pnl_pct": -30.0, "weight_pct": 5.0}
     # Terrible news on a single-rule holding: still HOLD, AI cannot rescue it.
     assert stock_verdict(row, _health(), LIMITS, -1.0)["verdict"] == "HOLD"
     weak = _health(close=90, sma200=100)  # loss + below 200dma = 0.55
     good_news = stock_verdict(row, weak, LIMITS, 1.0)["score"]["final"]
     bad_news = stock_verdict(row, weak, LIMITS, -1.0)["score"]["final"]
-    assert bad_news > good_news  # bad news supports a sell, good news argues against it
-    assert bad_news - good_news == pytest.approx(0.30)
+    assert bad_news == good_news  # AI_SIZING_WEIGHT=0: stored, not weighed
 
 
 def test_add_needs_room_under_the_size_limit():

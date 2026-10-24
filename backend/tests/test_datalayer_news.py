@@ -5,7 +5,7 @@ import pytest
 from mongomock_motor import AsyncMongoMockClient
 
 from backend.datalayer import news, news_sources
-from backend.scoring.composite import AI_CAP, score_intent
+from backend.scoring.composite import score_intent
 from backend.core.models import Intent, Side
 
 NOW = datetime(2026, 10, 5, 8, 0, tzinfo=timezone.utc)
@@ -291,9 +291,9 @@ async def test_aggregate_blends_company_sector_and_market(mongo):
     out = await news.aggregate(mongo, empty, NAMES, SECTOR_OF, now=NOW)
     assert out["symbols"] == {} and not [k for k in empty.data if k.startswith("sentiment:")]
 
-    # Still one capped ai_score: a maximal blend moves conviction by at most AI_CAP.
+    # Still one capped ai_score; AI_SIZING_WEIGHT=0 means it no longer moves conviction.
     intent = Intent(symbol="TCS", side=Side.BUY, strength=0.5, reason_codes=["x"])
-    assert score_intent(intent, 1.0).final - score_intent(intent, -1.0).final == pytest.approx(AI_CAP)
+    assert score_intent(intent, 1.0).final == score_intent(intent, -1.0).final
 
 
 async def test_analysis_reads_the_layer_and_reuses_an_up_to_date_note(mongo, monkeypatch):

@@ -65,13 +65,12 @@ def test_score_intent_none_ai_sentiment_treated_as_neutral():
     assert result.ai_score == 0.0
 
 
-def test_ai_sentiment_can_nudge_final_score_up_or_down():
-    """The other half of the design: above the floor, AI can still move the
-    needle in either direction for the same rule_score."""
+def test_final_ignores_ai_while_sizing_weight_is_zero():
+    """AI is stored (ai_score) but does not move `final` until validated."""
     intent = Intent(symbol="TEST", side=Side.BUY, strength=0.8, reason_codes=["r"])
-    bullish = score_intent(intent, 1.0)
-    bearish = score_intent(intent, -1.0)
-    assert bullish.final > bearish.final
+    finals = {score_intent(intent, a).final for a in (-1.0, 0.0, 1.0)}
+    assert len(finals) == 1
+    assert score_intent(intent, 1.0).ai_score == 1.0
 
 
 @pytest.mark.parametrize("side, flavor, bearish", [
@@ -84,5 +83,5 @@ def test_ai_sentiment_can_nudge_final_score_up_or_down():
 def test_good_news_supports_bullish_trades_and_argues_against_bearish_ones(side, flavor, bearish):
     intent = Intent(symbol="TEST", side=side, strength=0.8, reason_codes=["r"], option_flavor=flavor)
     good, bad = score_intent(intent, 1.0), score_intent(intent, -1.0)
-    assert (good.final < bad.final) is bearish
-    assert abs(good.final - bad.final) <= AI_CAP + 1e-9
+    assert (good.ai_score < bad.ai_score) is bearish
+    assert good.final == bad.final
