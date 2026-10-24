@@ -4,7 +4,11 @@ import { RefreshCw, Loader2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import SectionTabs from '../components/layout/SectionTabs';
 import { LAB_TABS } from '../components/layout/sections';
-import { Sheet, Field, Empty, Ruling } from '../components/doc/Doc';
+import Card from '../components/ui/Card';
+import Tabs from '../components/ui/Tabs';
+import Skeleton from '../components/ui/Skeleton';
+import Empty from '../components/ui/Empty';
+import ErrorLine from '../components/ui/ErrorLine';
 import { Button } from '../components/common/Button';
 import api, { endpoints } from '../utils/api';
 import { formatLevel, formatCompactNumber, formatNoteDate, marketPhase } from '../utils/formatters';
@@ -22,7 +26,8 @@ const UNDERLYINGS = [
   { id: 'NIFTY', label: 'NIFTY 50' },
   { id: 'BANKNIFTY', label: 'Bank Nifty' },
 ];
-const AROUND_ATM = 10;
+const AROUND_ATM = 8;
+const clock = (d) => d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' });
 
 const oi = (leg) => (leg?.oi == null ? '—' : formatCompactNumber(leg.oi));
 const oiChange = (leg) =>
@@ -42,22 +47,19 @@ const OptionChain = () => {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);
+  const [fetchedAt, setFetchedAt] = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadExpiries = () =>
     api
       .get(endpoints.options.expiries(underlying))
       .then((res) => {
-        if (cancelled) return;
-        setExpiries(res.data);
-        setExpiry(res.data[0] || null);
+        setExpiries(res.data ?? []);
+        setExpiry(res.data?.[0] || null);
         setError(null);
       })
-      .catch((err) => !cancelled && setError(err?.response?.data?.detail || 'Could not load expiries'));
-    return () => {
-      cancelled = true;
-    };
-  }, [underlying]);
+      .catch((err) => setError(err?.response?.data?.detail || 'Could not load expiries'));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadExpiries(); }, [underlying]);
 
   const loadChain = (which = expiry) => {
     if (!which) return;
@@ -66,6 +68,7 @@ const OptionChain = () => {
       .get(endpoints.options.chain(underlying, which))
       .then((res) => {
         setChain(res.data);
+        setFetchedAt(new Date());
         setError(null);
       })
       .catch((err) => setError(err?.response?.data?.detail || 'Could not load the chain'))
@@ -88,49 +91,41 @@ const OptionChain = () => {
     setParams({ u: id });
   };
 
+  const retry = () => (expiry ? loadChain() : loadExpiries());
+  const stat = (label, value, big) => (
+    <div className="min-w-0">
+      <p className="text-[12px] text-[var(--text-muted)]">{label}</p>
+      <p className={cn('figure-md tabular-nums', big ? 'text-[20px] font-bold' : 'text-[16px]')}>{value}</p>
+    </div>
+  );
+
   return (
     <Layout>
       <div className="space-y-4">
         <SectionTabs tabs={LAB_TABS} label="Lab" />
-        <Sheet
+        <Card
           title="Option chain"
-          meta={marketPhase() === 'open' ? 'Live · Upstox' : 'Market closed · last prices · Upstox'}
-          actions={
-            <Button variant="secondary" size="sm" onClick={() => loadChain()} disabled={busy || !expiry}>
-              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          action={
+            <Button variant="secondary" size="sm" onClick={() => loadChain()} disabled={busy || !expiry} aria-busy={busy} className="min-h-11">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               Refresh
             </Button>
           }
-          bodyClassName="p-0"
         >
-          <div className="grid grid-cols-2 border-b border-[var(--border)]" role="tablist" aria-label="Underlying">
-            {UNDERLYINGS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={underlying === item.id}
-                onClick={() => pickUnderlying(item.id)}
-                className={cn(
-                  'min-h-11 px-4 text-xs font-semibold border-b-2 -mb-px transition-colors',
-                  underlying === item.id
-                    ? 'border-[var(--accent)] text-[var(--text)]'
-                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+          <p className="text-[13px] text-[var(--text-muted)] mb-3">
+            {marketPhase() === 'open' ? 'Live · Upstox' : 'Market closed · last prices · Upstox'}
+            {fetchedAt && ` · Fetched ${clock(fetchedAt)} IST`}
+          </p>
+          <Tabs tabs={UNDERLYINGS.map((u) => ({ id: u.id, label: u.label }))} value={underlying} onChange={pickUnderlying} label="Underlying" />
 
           {expiries && expiries.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-[var(--surface-2)]">
-              <label className="flex items-center gap-2">
-                <span className="field-label">Expiry</span>
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
+              <label className="flex items-center gap-2 text-[14px] text-[var(--text-muted)]">
+                Expiry
                 <select
                   value={expiry || ''}
                   onChange={(event) => setExpiry(event.target.value)}
-                  className="bg-[var(--surface)] border border-[var(--border)] px-2 py-1 figure-md text-sm"
+                  className="min-h-11 rounded-[8px] bg-[var(--surface)] border border-[var(--border)] px-2 figure-md text-[14px]"
                 >
                   {expiries.map((date) => (
                     <option key={date} value={date}>
@@ -142,46 +137,47 @@ const OptionChain = () => {
               <button
                 type="button"
                 onClick={() => setAll((value) => !value)}
-                className="field-label text-[var(--accent)] hover:underline"
+                className="min-h-11 px-2 text-[14px] font-semibold text-[var(--accent)]"
               >
-                {all ? `Near the money only` : 'All strikes'}
+                {all ? 'Near the money only' : 'All strikes'}
               </button>
             </div>
           )}
-        </Sheet>
+        </Card>
 
         {error ? (
-          <Sheet>
-            <Empty
-              title="No option chain"
-              detail={error}
-              action={
-                <Link to="/settings" className="field-label text-[var(--accent)] hover:underline">
-                  Broker settings
-                </Link>
-              }
-            />
-          </Sheet>
+          <Card>
+            <ErrorLine message={`Couldn’t load the ${underlying === 'NIFTY' ? 'NIFTY 50' : 'Bank Nifty'} chain. ${error}`} onRetry={retry} />
+            <Link to="/settings" className="inline-flex items-center min-h-11 text-[14px] font-semibold text-[var(--accent)]">Check broker settings</Link>
+          </Card>
+        ) : expiries && expiries.length === 0 ? (
+          <Empty
+            title="No expiries listed"
+            body="The chain needs your Upstox connection."
+            action={<Link to="/settings" className="inline-flex items-center min-h-11 px-3 font-semibold text-[var(--accent)]">Connect Upstox</Link>}
+          />
         ) : !chain ? (
-          <Sheet>
-            <Ruling rows={8} />
-          </Sheet>
+          <Card><Skeleton rows={8} /></Card>
         ) : (
-          <Sheet title={chain.name} meta={formatNoteDate(new Date(`${chain.expiry}T00:00:00+05:30`))} bodyClassName="p-0">
-            <div className="grid grid-cols-3 gap-4 px-4 py-3 border-b border-[var(--border)]">
-              <Field label="Spot" value={formatLevel(chain.spot)} />
-              <Field label="At the money" value={chain.atm_strike == null ? '—' : formatLevel(chain.atm_strike)} />
-              <Field label="Put / call OI" value={chain.pcr == null ? '—' : chain.pcr.toFixed(2)} />
+          <section className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] py-4 overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-4 mb-3">
+              <h2 className="text-[15px] font-semibold">{chain.name}</h2>
+              <span className="text-[13px] text-[var(--text-muted)]">{formatNoteDate(new Date(`${chain.expiry}T00:00:00+05:30`))}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3 px-4 pb-3 border-b border-[var(--border)]">
+              {stat('Spot', formatLevel(chain.spot), true)}
+              {stat('At the money', chain.atm_strike == null ? '—' : formatLevel(chain.atm_strike))}
+              {stat('PCR (put/call OI)', chain.pcr == null ? '—' : chain.pcr.toFixed(2))}
             </div>
 
-            <table className="w-full text-sm border-collapse table-fixed">
+            <table className="w-full text-[14px] border-collapse table-fixed">
               <thead>
-                <tr className="border-b border-[var(--border)]">
-                  <th className="field-label py-2 px-2 text-left" scope="col" aria-label="Call open interest">OI</th>
-                  <th className="field-label py-2 px-2 text-right" scope="col">Call</th>
-                  <th className="field-label py-2 px-2 text-center bg-[var(--surface-2)]" scope="col">Strike</th>
-                  <th className="field-label py-2 px-2 text-left" scope="col">Put</th>
-                  <th className="field-label py-2 px-2 text-right" scope="col" aria-label="Put open interest">OI</th>
+                <tr className="border-b border-[var(--border)] text-[12px] text-[var(--text-muted)]">
+                  <th className="py-2 px-2 text-left font-medium" scope="col" aria-label="Call open interest">OI</th>
+                  <th className="py-2 px-2 text-right font-medium" scope="col">Call</th>
+                  <th className="py-2 px-2 text-center font-medium bg-[var(--surface-2)]" scope="col">Strike</th>
+                  <th className="py-2 px-2 text-left font-medium" scope="col">Put</th>
+                  <th className="py-2 px-2 text-right font-medium" scope="col" aria-label="Put open interest">OI</th>
                 </tr>
               </thead>
               <tbody>
@@ -190,48 +186,39 @@ const OptionChain = () => {
                   const putItm = chain.spot != null && row.strike > chain.spot;
                   const atm = row.strike === chain.atm_strike;
                   return (
-                    <tr
-                      key={row.strike}
-                      className={cn(
-                        'border-b border-[var(--border)]',
-                        atm && 'border-y-2 border-y-[var(--accent)]'
-                      )}
-                    >
-                      <td className={cn('py-2 px-2 align-top', callItm && 'bg-[var(--accent-soft)]')}>
+                    <tr key={row.strike} className={cn('border-b border-[var(--border)]', atm && 'border-y-2 border-y-[var(--accent)]')}>
+                      <td className={cn('py-1.5 px-2 align-top', callItm && 'bg-[var(--accent-soft)]')}>
                         <span className="figure-md block">{oi(row.call)}</span>
-                        <span className={cn('doc-meta normal-case', row.call?.oi_change > 0 ? 'text-up' : 'text-down')}>
-                          {oiChange(row.call)}
-                        </span>
+                        <span className={cn('text-[12px]', row.call?.oi_change > 0 ? 'text-up' : 'text-down')}>{oiChange(row.call)}</span>
                       </td>
-                      <td className={cn('py-2 px-2 text-right align-top', callItm && 'bg-[var(--accent-soft)]')}>
+                      <td className={cn('py-1.5 px-2 text-right align-top', callItm && 'bg-[var(--accent-soft)]')}>
                         <span className="figure-md whitespace-nowrap">{premium(row.call)}</span>
-                        {ivShown(row.call?.iv) && <span className="block doc-meta normal-case whitespace-nowrap text-[12px]">IV {row.call.iv.toFixed(1)}</span>}
+                        {ivShown(row.call?.iv) && <span className="block text-[12px] text-[var(--text-muted)] whitespace-nowrap">IV {row.call.iv.toFixed(1)}</span>}
                       </td>
-                      <td className="py-2 px-1 text-center align-top bg-[var(--surface-2)]">
-                        <span className={cn('figure-md whitespace-nowrap', atm && 'text-[var(--accent)]')}>
+                      <td className="py-1.5 px-1 text-center align-top bg-[var(--surface-2)]">
+                        <span className={cn('figure-md whitespace-nowrap', atm && 'text-[var(--accent)] font-bold')}>
                           {Math.round(row.strike).toLocaleString('en-IN')}
                         </span>
+                        {atm && <span className="block text-[12px] font-semibold text-[var(--accent)]">ATM</span>}
                       </td>
-                      <td className={cn('py-2 px-2 align-top', putItm && 'bg-[var(--accent-soft)]')}>
+                      <td className={cn('py-1.5 px-2 align-top', putItm && 'bg-[var(--accent-soft)]')}>
                         <span className="figure-md whitespace-nowrap">{premium(row.put)}</span>
-                        {ivShown(row.put?.iv) && <span className="block doc-meta normal-case whitespace-nowrap text-[12px]">IV {row.put.iv.toFixed(1)}</span>}
+                        {ivShown(row.put?.iv) && <span className="block text-[12px] text-[var(--text-muted)] whitespace-nowrap">IV {row.put.iv.toFixed(1)}</span>}
                       </td>
-                      <td className={cn('py-2 px-2 text-right align-top', putItm && 'bg-[var(--accent-soft)]')}>
+                      <td className={cn('py-1.5 px-2 text-right align-top', putItm && 'bg-[var(--accent-soft)]')}>
                         <span className="figure-md block">{oi(row.put)}</span>
-                        <span className={cn('doc-meta normal-case', row.put?.oi_change > 0 ? 'text-up' : 'text-down')}>
-                          {oiChange(row.put)}
-                        </span>
+                        <span className={cn('text-[12px]', row.put?.oi_change > 0 ? 'text-up' : 'text-down')}>{oiChange(row.put)}</span>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-            <p className="px-4 py-3 doc-meta normal-case">
-              OI: open interest. Shaded: in the money. OI change is since the previous session. Prices refresh when you tap
-              Refresh. Market data only, not advice.
+            <p className="px-4 pt-3 text-[13px] text-[var(--text-muted)]">
+              OI: open interest. IV: implied volatility. ATM: strike nearest spot. Shaded: in the money. OI change is since the
+              previous session. Prices refresh when you tap Refresh. Market data only, not advice.
             </p>
-          </Sheet>
+          </section>
         )}
       </div>
     </Layout>
