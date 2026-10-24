@@ -25,8 +25,19 @@ def plain(html: str) -> str:
     return unescape(_TAGS.sub("", html or "")).strip()
 
 
+def _rounded(node):
+    """Floats to 2 dp, so a model never echoes 2.0491571895134424% back (grounding allows the rounding)."""
+    if isinstance(node, float):
+        return round(node, 2)
+    if isinstance(node, dict):
+        return {k: _rounded(v) for k, v in node.items()}
+    if isinstance(node, (list, tuple)):
+        return [_rounded(v) for v in node]
+    return node
+
+
 def as_facts(data) -> str:
-    return json.dumps(data, default=str, ensure_ascii=False, indent=1)
+    return json.dumps(_rounded(data), default=str, ensure_ascii=False, indent=1)
 
 
 def pct(x: Optional[float]) -> Optional[float]:

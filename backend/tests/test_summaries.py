@@ -454,3 +454,10 @@ async def test_habits_endpoint_is_the_users_latest(client, db, llm):
     holder["user"] = "carol"
     assert http.get("/api/v1/summaries/habits").json() == {"summary": None}
     assert llm.calls == []
+def test_facts_round_floats_so_the_model_never_echoes_raw_ones():
+    from backend.summaries import core
+
+    text = core.as_facts({"weight_pct": 2.0491571895134424, "value": 7880.48991394043, "qty": 12,
+                          "rows": [{"pnl_pct": -13.349999}]})
+    assert "2.05" in text and "7880.49" in text and "-13.35" in text and '"qty": 12' in text
+    assert "2.049157" not in text and "7880.4899" not in text
