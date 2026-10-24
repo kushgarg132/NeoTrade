@@ -36,7 +36,7 @@ const PickBar = ({ idea, onDone }) => {
       {failure && <p role="alert" className="text-[14px] text-[var(--loss)]">{failure}</p>}
       <div className="grid grid-cols-2 gap-2">
         <Button variant="secondary" onClick={skip} disabled={busy}>Skip</Button>
-        <Button onClick={() => setTicket(true)} disabled={busy}>{`Buy ${bareSymbol(idea.symbol)}…`}</Button>
+        <Button onClick={() => setTicket(true)} disabled={busy}>Buy</Button>
       </div>
       {ticket && <OrderTicket symbol={idea.symbol} side="BUY" lastPrice={idea.entry} limitPrice={idea.entryZone?.[1]} onClose={() => setTicket(false)} onDone={onDone} />}
     </div>

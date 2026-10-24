@@ -17,7 +17,7 @@ const rowLink = (a) => actionTarget(a).to || (a.symbol ? stockPath(a.symbol) : n
 
 /**
  * Your holdings: every /mine/actions row about what you own (exit alerts, bad news, results soon...),
- * grouped under a plain title. Buttons are named for the row (`holdingButtons`): its own action (Sell 24 TCS…,
+ * grouped under a plain title. Buttons are named for the row (`holdingButtons`): its own action (Sell,
  * Read news, Trim…), then snooze 7 days and dismiss under row-specific labels.
  */
 const HoldingActions = ({ actions, onChanged }) => {

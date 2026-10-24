@@ -131,13 +131,13 @@ import { holdingButtons } from './ideas.js';
 test('holding rows get buttons named for what they are about', () => {
   const sell = { type: 'ticket', side: 'SELL', quantity: 24, price: 90 };
   assert.deepEqual(holdingButtons({ kind: 'stop_hit', symbol: 'TCS.NS', action: sell }),
-    { primary: { label: 'Sell 24 TCS…', ticket: true }, later: 'Later', dismiss: 'Keep holding' });
+    { primary: { label: 'Sell', ticket: true }, later: 'Later', dismiss: 'Keep holding' });
   assert.deepEqual(holdingButtons({ kind: 'verdict_worse', symbol: 'JINDALSAW', action: { ...sell, quantity: 5 } }).primary,
-    { label: 'Sell 5 JINDALSAW…', ticket: true });
+    { label: 'Sell', ticket: true });
   assert.deepEqual(holdingButtons({ kind: 'verdict_worse', symbol: 'X', action: { type: 'stock' } }),
     { primary: { label: 'Open stock', link: true }, later: 'Later', dismiss: 'Got it' });
   assert.deepEqual(holdingButtons({ kind: 'add', symbol: 'X', action: { type: 'ticket', side: 'BUY', quantity: 3 } }),
-    { primary: { label: 'Buy 3 X…', ticket: true }, later: 'Later', dismiss: 'Not now' });
+    { primary: { label: 'Buy', ticket: true }, later: 'Later', dismiss: 'Not now' });
   assert.deepEqual(holdingButtons({ kind: 'overweight', symbol: 'X', action: { type: 'rebalance' } }).primary, { label: 'Trim…', link: true });
   assert.deepEqual(holdingButtons({ kind: 'results_soon', symbol: 'X', action: { type: 'stock' } }),
     { primary: null, later: 'Remind me later', dismiss: 'Got it' });

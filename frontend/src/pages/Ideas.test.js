@@ -34,7 +34,7 @@ const bar = read('../components/ideas/BuyBar.jsx');
 test('a pending engine idea gets its own Skip / Buy N SYMBOL bar in the row, Picks do not', () => {
   assert.match(row, /idea\.kind === 's' && !idea\.decided && onDone/);
   assert.match(row, /<BuyBar idea=\{idea\} id=\{parseIdeaId\(idea\.id\)\.key\} onDone=\{onDone\} compact/);
-  assert.match(bar, /compact \? `\$\{verb\} \$\{idea\.qty\} \$\{bareSymbol\(idea\.symbol\)\}…`/);
+  assert.match(bar, /compact \? verb :/);
   assert.match(page, /<IdeaRow key=\{i\.id\} idea=\{i\} onDone=\{fresh\.reload\}/);
 });
 
@@ -49,7 +49,7 @@ test('a pick row gets Skip (dismiss) and Buy SYMBOL… that opens the order tick
   assert.match(row, /idea\.kind === 'p' && onDone/);
   assert.match(row, /api\.post\(endpoints\.picks\.dismiss\(parseIdeaId\(idea\.id\)\.key\)\)/);
   assert.match(row, /<OrderTicket symbol=\{idea\.symbol\} side="BUY" lastPrice=\{idea\.entry\} limitPrice=\{idea\.entryZone\?\.\[1\]\}/);
-  assert.match(row, /`Buy \$\{bareSymbol\(idea\.symbol\)\}…`/);
+  assert.match(row, /disabled=\{busy\}>Buy<\/Button>/);
 });
 
 test('holding rows render the row-specific buttons from holdingButtons', () => {

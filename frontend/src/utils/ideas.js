@@ -1,6 +1,5 @@
 // One view model for the Ideas screens: a stored suggestion or a Picks row.
 import { strategyName } from './library.js';
-import { bareSymbol } from './formatters.js';
 
 /** Route id: `s-<suggestionId>` or `p-<pickId>` (pick ids hold colons, so only the first dash splits). */
 export const parseIdeaId = (id) => {
@@ -173,7 +172,7 @@ export const holdingButtons = (item) => {
   const kind = item?.kind;
   let primary = null;
   if (a.type === 'ticket') {
-    primary = { label: `${a.side === 'BUY' ? 'Buy' : 'Sell'} ${a.quantity} ${bareSymbol(item.symbol)}…`, ticket: true };
+    primary = { label: a.side === 'BUY' ? 'Buy' : 'Sell', ticket: true };
   } else if (kind === 'bad_news' && a.url) {
     primary = { label: 'Read news', href: a.url };
   } else if (HOLDING_LINK[kind]) {
