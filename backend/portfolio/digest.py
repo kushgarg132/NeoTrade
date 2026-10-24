@@ -209,7 +209,7 @@ def _action_lines(actions: list[dict]) -> list[str]:
     return [f"Needs you ({len(actions)}):"] + [f"• {escape(a['title'])}" for a in actions[:TOP_ACTIONS]]
 
 
-def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: int, ai: dict,
+def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: Optional[int], ai: dict,
                    yesterday: Optional[dict] = None, actions: Optional[list[dict]] = None) -> str:
     lines = ["☀️ <b>Before the open</b>"]
     if p:
@@ -221,8 +221,9 @@ def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: int, ai
         lines += [f"• {escape(sym)}: {escape(n['title'] or '')}" for sym, n in list(overnight.items())[:5]]
     else:
         lines.append("No material news on your holdings since the close.")
-    lines.append(f"Ideas for your account: {ideas}" if ideas else
-                 "No ideas for your account: no strategy has earned it yet.")
+    if ideas is not None:  # None: not an admin, engine ideas are admin-only
+        lines.append(f"Ideas for your account: {ideas}" if ideas else
+                     "No ideas for your account: no strategy has earned it yet.")
     mode = "off" if not ai.get("enabled") else ("live" if ai.get("live") else "paper")
     lines.append(f"AI account: autopilot {mode}, {_rupees(ai.get('deployed'))} deployed.")
     return "\n".join(lines)
@@ -290,8 +291,10 @@ async def premarket_for(db, user_id: str, now: datetime) -> str:
     # The previous session's close: on a Monday, Friday's (weekend news counts).
     last_close = datetime.combine(previous_trading_day(local.date()), time(15, 30), tzinfo=IST)
     overnight = await headlines_for(db, held, last_close)
+    from backend.suggestions.notify import is_admin
+
     ideas = len(await for_mine(db, user_id, await db["suggestions"].find(
-        {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200)))
+        {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200))) if await is_admin(db, user_id) else None
     moved = await last_session_move(db, await mine_holdings(db, user_id), local.date())
     acts = await _actions(db, user_id, now)
     return premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs), moved, acts)

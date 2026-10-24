@@ -253,10 +253,10 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/trading/instruments` | `backend/routers/trading.py::search_instruments` | user |
 | POST | `/api/v1/trading/backtests/{strategy_name}` | `backend/routers/trading.py::run_gate_backtest` | admin |
 | GET | `/api/v1/trading/backtests/{strategy_name}` | `backend/routers/trading.py::latest_gate_backtest` | user |
-| POST | `/api/v1/suggestions/scan` | `backend/routers/suggestions.py::scan_now` | user |
-| GET | `/api/v1/suggestions` | `backend/routers/suggestions.py::list_suggestions` | user |
-| POST | `/api/v1/suggestions/{suggestion_id}/reject` | `backend/routers/suggestions.py::reject_suggestion` | user |
-| POST | `/api/v1/suggestions/{suggestion_id}/approve-live` | `backend/routers/suggestions.py::approve_suggestion_live` | user |
+| POST | `/api/v1/suggestions/scan` | `backend/routers/suggestions.py::scan_now` | admin |
+| GET | `/api/v1/suggestions` | `backend/routers/suggestions.py::list_suggestions` | admin |
+| POST | `/api/v1/suggestions/{suggestion_id}/reject` | `backend/routers/suggestions.py::reject_suggestion` | admin |
+| POST | `/api/v1/suggestions/{suggestion_id}/approve-live` | `backend/routers/suggestions.py::approve_suggestion_live` | admin |
 | GET | `/api/v1/analytics/pnl` | `backend/routers/analytics.py::get_pnl` | user |
 | GET | `/api/v1/analytics/scorecard` | `backend/routers/analytics.py::get_scorecard` | user |
 | GET | `/api/v1/broker/list` | `backend/routers/broker.py::list_brokers` | user |

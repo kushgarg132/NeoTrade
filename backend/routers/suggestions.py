@@ -15,7 +15,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend.auth.dependency import get_current_user
+from backend.auth.dependency import get_current_user, require_admin
 from backend.auth.models import User
 from backend.database import db
 from backend.data.providers.yfinance_provider import YFinanceProvider
@@ -39,7 +39,8 @@ from backend.suggestions.thesis import attach_theses
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/suggestions", tags=["Suggestions"])
+# Admin-only, like Picks (owner decision 2026-10-24, audit W1): engine ideas read as advice.
+router = APIRouter(prefix="/suggestions", tags=["Suggestions"], dependencies=[Depends(require_admin)])
 
 
 def get_suggestion_store() -> SuggestionStore:

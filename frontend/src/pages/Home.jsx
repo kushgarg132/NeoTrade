@@ -14,6 +14,7 @@ import WeeklyLink from '../components/home/WeeklyLink';
 import SetupChecklist from '../components/home/SetupChecklist';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useRefetchOn } from '../hooks/useStream';
+import { useAuth } from '../context/AuthContext';
 import { useNeedCount } from '../hooks/useNeedCount';
 import { aiBook } from '../utils/ai';
 import { tileHeadlines, phaseLabel, briefKind, alerts } from '../utils/home';
@@ -31,6 +32,7 @@ const Home = () => {
   const [error, setError] = useState(null);
   const [failed, setFailed] = useState({}); // tile -> its last refresh failed
   const need = useNeedCount();
+  const isAdmin = useAuth().user?.role === 'admin';
   const reloadNeed = need.reload;
 
   const load = useCallback(() => {
@@ -71,7 +73,7 @@ const Home = () => {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center min-h-11 text-[14px] font-medium text-[var(--text-muted)]">{phaseLabel(today.phase)}</span>
           {needs > 0 && (
-            <Link to="/ideas" title={h.ideas.sub}
+            <Link to={isAdmin ? '/ideas' : '/money'} title={h.ideas.sub}
                   className="ml-auto inline-flex items-center gap-1 min-h-11 px-4 rounded-full bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
               {needs} need{needs === 1 ? 's' : ''} you
               <ChevronRight className="w-4 h-4" aria-hidden="true" />
