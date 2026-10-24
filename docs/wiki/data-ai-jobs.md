@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: 37d23f6
+verified_at: df46e02
 ---
 # Data layer, AI and background jobs
 
@@ -40,7 +40,7 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | path | role | key symbols |
 |---|---|---|
 | `backend/chat/agent.py` | ReAct agent stream: thinking/content/step/action/answer_end/suggestions | `agent.py::stream_chat`, `::_Trailer`, `::NEXT_MARKER`, `::suggest_followups`, `::TOOL_LABELS` |
-| `backend/chat/context.py` | day snapshot sent with every message; profile text | `context.py::build_snapshot`, `::SECTIONS`, `::format_snapshot`, `::format_profile`, `::plan_names` |
+| `backend/chat/context.py` | day snapshot sent with every message (its `decisions` section, `get_decisions` and the approve action are admin-only: other roles get no engine ideas); profile text | `context.py::build_snapshot`, `::SECTIONS`, `::format_snapshot`, `::format_profile`, `::plan_names` |
 | `backend/chat/tools.py` | read tools bound to caller's user_id; `query_my_data` allowlist | `tools.py::read_tools`, `::USER_DATA`, `::SHARED_DATA`, `::_safe_filter`, `::MAX_ROWS`, `::MAX_CHARS` |
 | `backend/chat/actions.py` | propose-only action tools + the only executor (`confirm`) | `actions.py::action_tools`, `::ChatActionStore`, `::confirm`, `::_execute`, `::_order_checks`, `::_modify_checks`, `::SETTINGS`, `::ACTION_TTL`, `::CARD_PREFIX`, `::ActionRefused` |
 | `backend/chat/account_actions.py` | exit / cancel / modify / stop-loss on role `mine` account | `account_actions.py::propose_exit`, `::propose_cancel`, `::propose_modify`, `::propose_stop`, `::execute`, `::mine_adapter` |
