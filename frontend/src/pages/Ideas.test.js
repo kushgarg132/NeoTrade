@@ -44,3 +44,10 @@ test('the row buttons never open the detail page and keep the real-money second 
   assert.match(bar, /Tap again to send\./);
   assert.match(bar, /confirm_token: token\.current/);
 });
+
+test('a pick row gets Skip (dismiss) and Buy SYMBOL… that opens the order ticket at the pick levels', () => {
+  assert.match(row, /idea\.kind === 'p' && onDone/);
+  assert.match(row, /api\.post\(endpoints\.picks\.dismiss\(parseIdeaId\(idea\.id\)\.key\)\)/);
+  assert.match(row, /<OrderTicket symbol=\{idea\.symbol\} side="BUY" lastPrice=\{idea\.entry\} limitPrice=\{idea\.entryZone\?\.\[1\]\}/);
+  assert.match(row, /`Buy \$\{bareSymbol\(idea\.symbol\)\}…`/);
+});

@@ -196,6 +196,7 @@ export const endpoints = {
   picks: {
     today: '/picks',
     history: (days = 90) => `/picks/history?days=${days}`,
+    dismiss: (id) => `/picks/${encodeURIComponent(id)}/dismiss`,
   },
   builtStrategies: '/strategies/built',
   strategyVocabulary: '/strategies/vocabulary',

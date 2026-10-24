@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import IdeaBadge from './IdeaBadge';
 import BuyBar from './BuyBar';
+import Button from '../ui/Button';
+import OrderTicket from '../trading/OrderTicket';
+import api, { endpoints } from '../../utils/api';
 import Badge from '../ui/Badge';
 import { px, rewardRisk as rr } from './levels';
 import { olderPickLabel, GRADES, parseIdeaId } from '../../utils/ideas';
@@ -10,7 +13,37 @@ import { bareSymbol } from '../../utils/formatters';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
 
-/** One idea in the list: action + symbol, setup and horizon, headline %, proven badge; a pending engine idea gets its own Skip / Buy bar. */
+/** A pick's own actions: Skip hides it from this list (`POST /picks/{id}/dismiss`); Buy opens the
+ * order ticket at the pick's entry, limited to the top of its entry zone (real money keeps the ticket's second tap). */
+const PickBar = ({ idea, onDone }) => {
+  const [ticket, setTicket] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState(null);
+  const skip = async () => {
+    setBusy(true);
+    setFailure(null);
+    try {
+      await api.post(endpoints.picks.dismiss(parseIdeaId(idea.id).key));
+      onDone();
+    } catch {
+      setFailure('Could not skip this pick');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      {failure && <p role="alert" className="text-[14px] text-[var(--loss)]">{failure}</p>}
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="secondary" onClick={skip} disabled={busy}>Skip</Button>
+        <Button onClick={() => setTicket(true)} disabled={busy}>{`Buy ${bareSymbol(idea.symbol)}…`}</Button>
+      </div>
+      {ticket && <OrderTicket symbol={idea.symbol} side="BUY" lastPrice={idea.entry} limitPrice={idea.entryZone?.[1]} onClose={() => setTicket(false)} onDone={onDone} />}
+    </div>
+  );
+};
+
+/** One idea in the list: action + symbol, setup and horizon, headline %, proven badge; a pending engine idea or a pick gets its own Skip / Buy bar. */
 const IdeaRow = ({ idea, onDone }) => (
   <div className="py-1.5 border-b border-[var(--border)] last:border-b-0">
     <Link to={`/ideas/${encodeURIComponent(idea.id)}`} className="flex items-center gap-3 min-h-11 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
@@ -52,6 +85,7 @@ const IdeaRow = ({ idea, onDone }) => (
     {idea.kind === 's' && !idea.decided && onDone && (
       <div className="mt-1.5"><BuyBar idea={idea} id={parseIdeaId(idea.id).key} onDone={onDone} compact /></div>
     )}
+    {idea.kind === 'p' && onDone && <div className="mt-1.5"><PickBar idea={idea} onDone={onDone} /></div>}
   </div>
 );
 
