@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Sheet, Statement, Row, Cell } from '../doc/Doc';
+import Card from '../ui/Card';
+import ErrorLine from '../ui/ErrorLine';
+import Skeleton from '../ui/Skeleton';
 import { Button } from '../common/Button';
 import api, { endpoints } from '../../utils/api';
 import { formatDateTime, formatQuantity, formatTimeAgo } from '../../utils/formatters';
@@ -118,27 +120,27 @@ const ROWS = {
   ],
 };
 
-const LivePanel = ({ name, status }) => {
+const LivePanel = ({ name, status, onRetry }) => {
   const block = status?.[name] || (status?.error ? { error: status.error } : null);
   let body;
-  if (!status) body = <p className="doc-meta normal-case">Reading…</p>;
-  else if (!block || block.error) body = <p className="text-sm">Unavailable: {block?.error || 'no data'}</p>;
+  if (!status) body = <Skeleton rows={3} />;
+  else if (!block || block.error) body = <ErrorLine message={`Could not read ${TITLES[name].replace(' now', '')} status: ${block?.error || 'the server sent nothing'}.`} onRetry={onRetry} />;
   else {
     body = (
-      <Statement inline columns={[{ key: 'item', label: 'Item' }, { key: 'value', label: 'Now', align: 'right' }]}>
+      <dl className="divide-y divide-[var(--border)]">
         {ROWS[name](block).map(([label, value]) => (
-          <Row key={label}>
-            <Cell className="text-[var(--text-muted)]">{label}</Cell>
-            <Cell align="right" mono className="whitespace-normal [overflow-wrap:anywhere] [flex-shrink:1!important] [min-width:0!important]">{value}</Cell>
-          </Row>
+          <div key={label} className="flex items-start justify-between gap-3 py-2 text-[14px]">
+            <dt className="min-w-0 flex-1 text-[var(--text-muted)] [overflow-wrap:anywhere]">{label}</dt>
+            <dd className="min-w-0 max-w-[60%] text-right tabular-nums [overflow-wrap:anywhere]">{value}</dd>
+          </div>
         ))}
-      </Statement>
+      </dl>
     );
   }
   return (
-    <Sheet title={TITLES[name]} meta={status ? `as of ${formatTimeAgo(status.as_of)}` : 'live'} className="my-3">
+    <Card title={TITLES[name]} action={<span className="text-[12px] text-[var(--text-muted)]">{status ? `as of ${formatTimeAgo(status.as_of)}` : 'live'}</span>} className="my-4 bg-[var(--surface-2)]">
       {body}
-    </Sheet>
+    </Card>
   );
 };
 export default LivePanel;
