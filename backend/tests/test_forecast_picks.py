@@ -387,3 +387,16 @@ def test_the_store_cap_is_per_setup_so_one_setup_cannot_crowd_out_another():
     kept = picks.cap_per_setup(ps)
     assert sum(p["setup"] == "momentum_vol_60" for p in kept) == picks.MAX_PICKS
     assert sum(p["setup"] == "momentum" for p in kept) == 3
+
+
+def test_dismissed_pick_leaves_the_users_shown_list(mongo):
+    asyncio.run(mongo.picks.insert_one({**_p("2026-10-21", "X", 0.0, 0.5), "strength": 1.0}))
+    pid = asyncio.run(mongo.picks.find_one({"symbol": "X"}))["_id"]
+    client = _client("admin")
+    assert [p["symbol"] for p in client.get("/api/v1/picks").json()["shown"]] == ["X"]
+    assert client.post(f"/api/v1/picks/{pid}/dismiss").status_code == 200
+    body = client.get("/api/v1/picks").json()
+    assert body["shown"] == [] and [p["symbol"] for p in body["picks"]] == ["X"]  # raw candidates untouched
+    row = asyncio.run(mongo.picks_dismissed.find_one({}))
+    assert row["user_id"] == "u1" and row["pick_id"] == pid
+    assert _client("user").post(f"/api/v1/picks/{pid}/dismiss").status_code == 403

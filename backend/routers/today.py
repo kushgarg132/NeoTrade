@@ -193,11 +193,11 @@ async def _unjournaled(user_id: str, roles: dict, now: datetime) -> int:
     return sum(1 for t in trips if not (notes.get(t["id"]) or {}).get("note"))
 
 
-async def _picks_top() -> list[dict]:
+async def _picks_top(user_id: str) -> list[dict]:
     """Today's Picks card: the grade-A (proven) part of the list Ideas shows."""
     from backend.routers.picks import served_today
 
-    shown = [p for p in (await served_today())[3]["shown"] if p["grade"] == "A"]
+    shown = [p for p in (await served_today(user_id))[3]["shown"] if p["grade"] == "A"]
     return [{"symbol": p["symbol"], "label": p.get("label"), "median": (p.get("expected") or {}).get("median")}
             for p in shown]
 
@@ -239,7 +239,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         "postclose": await part("postclose", digest.postclose_for(db.db, user.id, now))
         if phase in ("post", "closed") else None,
         "unjournaled": await part("unjournaled", _unjournaled(user.id, roles, now)) if phase == "post" else None,
-        "picks_top": await part("picks_top", _picks_top()) if admin and phase == "pre" else None,
+        "picks_top": await part("picks_top", _picks_top(user.id)) if admin and phase == "pre" else None,
         "accounts": accounts,
         "live_armed": {"autopilot": bool(prefs.get("autopilot_enabled") and prefs.get("autopilot_live")),
                        "strategies": prefs.get("live_strategies") or []},

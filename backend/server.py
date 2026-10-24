@@ -89,6 +89,7 @@ async def ensure_collection_indexes(d) -> None:
         await KillSwitchStore(d).ensure_indexes()
         await LabRunStore(d).ensure_indexes()
         await d["mine_action_state"].create_index([("user_id", 1), ("action_id", 1)], unique=True)
+        await d["picks_dismissed"].create_index([("user_id", 1), ("pick_id", 1)], unique=True)
         await d["corporate_events"].create_index([("symbol", 1), ("kind", 1), ("date", 1)], unique=True)
         await d["corporate_events_meta"].create_index("symbol", unique=True)
         await d["watchlist"].create_index("user_id", unique=True)
