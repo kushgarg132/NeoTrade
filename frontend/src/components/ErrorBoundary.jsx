@@ -1,6 +1,6 @@
 import React from 'react';
-import { Sheet, Empty } from './doc/Doc';
-import { Button } from './common/Button';
+import Empty from './ui/Empty';
+import Button from './ui/Button';
 
 /**
  * A crash in one page (a data shape the frontend didn't expect, a bad API
@@ -22,17 +22,11 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.error) {
       return (
-        <Sheet title="Something tore">
-          <Empty
-            title="This section could not be rendered"
-            detail="The statement hit an unexpected error. Reloading the page usually clears it."
-            action={
-              <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
-                Reload
-              </Button>
-            }
-          />
-        </Sheet>
+        <Empty
+          title="This part of the page didn't load"
+          body="Some data came back in a shape the page didn't expect. Reload to try again; the rest of the app still works."
+          action={<Button variant="secondary" onClick={() => window.location.reload()}>Reload</Button>}
+        />
       );
     }
     return this.props.children;

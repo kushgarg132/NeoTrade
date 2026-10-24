@@ -33,6 +33,8 @@ const TABS = [
   { id: 'events', label: 'Events' },
 ];
 
+const cause = (e) => (e && e !== 'Could not load' ? `: ${e}` : '');
+
 const Stat = ({ label, value, valueClass = '' }) => (
   <div className="min-w-0">
     <div className="text-[13px] text-[var(--text-muted)]">{label}</div>
@@ -111,6 +113,14 @@ const Stock = () => {
     : company?.day_change_percent != null ? company.day_change_percent / 100 : prev ? price / prev - 1 : null;
   const dayAbs = prev != null && price != null ? price - prev : null;
   const pos = positionSummary(m?.position, portfolio);
+  const stop = m?.thesis?.stop;
+  const risk = {
+    stop: stop ?? null,
+    target: m?.thesis?.target ?? null,
+    stopDist: stop != null && price ? (price - stop) / price : null,
+    stopPnl: stop != null && pos ? (stop - pos.avg) * pos.qty : null,
+    stopFromNow: stop != null && pos && price != null ? (stop - price) * pos.qty : null,
+  };
   const verdict = m?.verdict?.current;
   const sold = m?.position?.sold;
 
@@ -121,7 +131,7 @@ const Stock = () => {
       </Card>
     ) : <Card><Skeleton rows={5} /></Card>,
     news: <NewsTab mine={m} ai={ai} onAnalysis={() => setTab('analysis')} />,
-    analysis: <AnalysisTab symbol={symbol} mine={m} quick={quick} ai={ai} requestAi={requestAi} onThesis={(t) => setMine((s) => ({ ...s, data: { ...s.data, thesis: t } }))} />,
+    analysis: <AnalysisTab symbol={symbol} mine={m} quick={quick} ai={ai} requestAi={requestAi} reloadQuick={reloadQuick} onThesis={(t) => setMine((s) => ({ ...s, data: { ...s.data, thesis: t } }))} />,
     events: <EventsTab mine={m} ai={ai} />,
   }[tab];
 
@@ -133,7 +143,7 @@ const Stock = () => {
         {quick.loading && price == null ? (
           <Skeleton rows={2} />
         ) : quick.error && price == null ? (
-          <ErrorLine message={quick.error} onRetry={reloadQuick} />
+          <ErrorLine message={`Could not load the price for ${symbol}${cause(quick.error)}. Check your connection and retry.`} onRetry={reloadQuick} />
         ) : (
           <>
             <div className="flex items-center justify-between gap-3">
@@ -159,19 +169,38 @@ const Stock = () => {
         )}
         {pos && (
           <div className="mt-3 pt-3 border-t border-[var(--border)]">
+            <p className="text-[13px] text-[var(--text-muted)] mb-2">Your position · your broker account</p>
             <div className="grid grid-cols-2 gap-3">
-              <Stat label="You hold" value={`${formatQuantity(pos.qty)} · avg ${inr(pos.avg)}`} />
+              <Stat label="Quantity · avg" value={`${formatQuantity(pos.qty)} · ${inr(pos.avg)}`} />
               <Stat
-                label="Gain"
+                label="P&L"
                 value={`${inr(pos.pnl, { sign: true })}${pos.pnlPct != null ? ` (${pct(pos.pnlPct, { sign: true, dp: 1 })})` : ''}`}
                 valueClass={toneText(tone(pos.pnl))}
               />
+              {pos.value != null && <Stat label="Value now" value={inr(pos.value)} />}
+              {pos.weight != null && <Stat label="Of your portfolio" value={pct(pos.weight, { dp: 1 })} />}
             </div>
-            {pos.weight != null && <p className="mt-2 text-[13px] text-[var(--text-muted)]">{pct(pos.weight, { dp: 1 })} of your portfolio</p>}
+            <div className="mt-2 text-[14px] text-[var(--text)]" data-testid="stop-line">
+              {risk.stop != null ? (
+                <p>
+                  Stop <span className="private">{inr(risk.stop)}</span>
+                  {risk.stopDist != null && (risk.stopDist > 0 ? ` · ${pct(risk.stopDist, { dp: 1 })} below price` : ' · price is at or below your stop')}
+                  {' · if hit: '}
+                  {risk.stopFromNow != null && <span className="private">{inr(risk.stopFromNow, { sign: true })} from now </span>}
+                  <span className="private">({inr(risk.stopPnl, { sign: true })} vs what you paid)</span>
+                  {risk.target != null && <> · target <span className="private">{inr(risk.target)}</span></>}
+                </p>
+              ) : (
+                <p className="text-[var(--text-muted)]">
+                  No stop set.{' '}
+                  <button type="button" onClick={() => setTab('analysis')} className="min-h-11 font-semibold text-[var(--accent)]">Set one in Analysis</button>
+                </p>
+              )}
+            </div>
           </div>
         )}
         {sold && <p className="mt-3 text-[14px] text-[var(--text-muted)]">You no longer hold this. Past trades are on the chart.</p>}
-        {mine.status === 'error' && <ErrorLine message="Could not load your position." onRetry={loadMine} />}
+        {mine.status === 'error' && <ErrorLine message="Could not load your position from your broker account. Prices and charts still work." onRetry={loadMine} />}
       </Card>
 
       {noteText && (
@@ -183,7 +212,7 @@ const Stock = () => {
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} label="Stock sections" />
       <div className="mt-3">
-        {tab === 'chart' && quick.error && !closes.length ? <Empty title="No price data" body={quick.error} action={<Button variant="secondary" onClick={reloadQuick}>Retry</Button>} /> : panel}
+        {tab === 'chart' && quick.error && !closes.length ? <Empty title="No price data" body={`Could not load the price history for ${symbol}${cause(quick.error)}.`} action={<Button variant="secondary" onClick={reloadQuick}>Retry</Button>} /> : panel}
       </div>
 
       <div className="h-28 lg:h-20" aria-hidden="true" />
@@ -192,6 +221,7 @@ const Stock = () => {
           {pos && <Button variant="secondary" className="flex-1" onClick={() => setTicket({ symbol, side: 'SELL', lastPrice: price })}>Sell</Button>}
           <Button className="flex-1" disabled={price == null} onClick={() => setTicket({ symbol, side: 'BUY', lastPrice: price })}>{pos ? 'Buy more' : 'Buy'}</Button>
         </div>
+        {price == null && <p className="mx-auto max-w-5xl mt-1 text-[13px] text-[var(--text-muted)]">Buy is off until a price loads for {symbol}.</p>}
       </div>
       {ticket && <OrderTicket {...ticket} onClose={() => setTicket(null)} onDone={loadMine} />}
     </Layout>

@@ -15,6 +15,17 @@ import Lab from '../components/settings/Lab';
 // Old ?tab= values from before the regroup.
 const LEGACY = { broker: 'accounts', portfolio: 'limits', safety: 'limits', guardrails: 'limits', ai: 'profile', about: 'lab', beta: 'lab' };
 
+// One plain line per tab: what it is for, before any control.
+const TAB_HELP = {
+  accounts: 'Connect your broker so NeoTrade can import your trades. Orders go out only when you confirm one.',
+  alerts: 'Where NeoTrade reaches you when you are away from the app.',
+  limits: 'Your own rules (daily loss, position size) and portfolio limits. Breaches are flagged.',
+  profile: 'Who you are, and what the AI assistant knows about you.',
+  theme: 'Light or dark.',
+  goal: 'One target and a date. Home shows how far along you are.',
+  lab: 'Admin only: experimental features and beta usage.',
+};
+
 const SettingsHome = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -31,6 +42,7 @@ const SettingsHome = () => {
     <Layout>
       <PageHeader title="Settings" />
       <Tabs tabs={tabs} value={tab} onChange={setTab} label="Settings sections" wrap />
+      <p className="pt-3 text-[14px] text-[var(--text-muted)]">{TAB_HELP[tab]}</p>
       <div className="pt-3">
         {tab === 'accounts' && <Accounts />}
         {tab === 'alerts' && <Alerts />}

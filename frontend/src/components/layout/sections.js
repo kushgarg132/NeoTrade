@@ -18,7 +18,8 @@ export const AI_TABS = [
 /** The Lab: frozen and experimental features, admin only. */
 export const LAB_TABS = [
   { to: '/settings/lab/strategies', label: 'Strategies', end: true },
-  { to: '/settings?tab=limits', label: 'Autopilot limits' },
+  // `end`: without it NavLink matches /settings as a prefix and lights this tab on every Lab page.
+  { to: '/settings?tab=limits', label: 'Autopilot limits', end: true },
   { to: '/settings/lab/options', label: 'Options' },
   { to: '/settings/lab/handbook', label: 'Handbook' },
   { to: '/settings/lab/runs', label: 'Runs' },

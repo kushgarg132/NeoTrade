@@ -3,9 +3,10 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/useTheme';
-import { formatNoteDate } from '../utils/formatters';
+import Card from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
 
-/** The cover sheet: what NeoTrade does for a trader, then Google sign-in. */
+/** Sign-in: one line on what NeoTrade is, then Google sign-in. */
 const Login = () => {
   const { login } = useAuth();
   const { theme } = useTheme();
@@ -32,31 +33,19 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--surface-2)] flex items-center justify-center p-4">
-      <div className="w-full max-w-sm sheet">
-        <div className="px-6 py-5 border-b border-[var(--border)] text-center">
-          <h1 className="font-[family-name:var(--font-narrow)] font-bold text-sm">
-            Contract Note
-          </h1>
-          <p className="doc-meta mt-1.5">NeoTrade · NSE · {formatNoteDate()}</p>
+    <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-4">
+      <Card className="w-full max-w-sm !p-6">
+        <h1 className="text-2xl font-bold text-[var(--text)]">NeoTrade</h1>
+        <p className="text-[15px] text-[var(--text)] mt-3">
+          Your broker account, reviewed daily. Plus an AI account that trades on paper until a
+          strategy proves itself.
+        </p>
+        <div className="mt-3">
+          <Badge kind="paper">Paper until proven</Badge>
         </div>
-
-        <div className="px-6 py-8">
-          <p className="text-sm text-[var(--text)] mb-5">
-            A journal and guardrails for your own trading, on top of the broker you already use.
-          </p>
-          <dl className="space-y-4 mb-8">
-            {[
-              ['Journal', 'Every trade from Zerodha, Upstox or Angel One, imported for you, on a calendar of daily P&L.'],
-              ['Patterns', 'Where your money actually goes: time of day, trading after losses, sizing up, holding losers.'],
-              ['Guardrails', 'Your own loss limit, trade cap and cooldown, checked every minute, alerted on your phone.'],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <dt className="field-label">{label}</dt>
-                <dd className="text-sm text-[var(--text-muted)] mt-0.5">{value}</dd>
-              </div>
-            ))}
-          </dl>
+        <p className="text-sm text-[var(--text-muted)] mt-3 mb-6">
+          Works with Zerodha, Upstox and Angel One.
+        </p>
 
           <div className="flex justify-center">
             <GoogleLogin
@@ -69,7 +58,7 @@ const Login = () => {
           </div>
 
           {brokerCode && (
-            <p className="mt-5 doc-meta normal-case text-center">
+            <p className="mt-5 text-sm text-[var(--text-muted)] text-center">
               Sign in to finish connecting your broker. Your login code:{' '}
               <span className="select-all break-all text-[var(--text)]">{brokerCode}</span>
             </p>
@@ -83,12 +72,11 @@ const Login = () => {
               {error}
             </p>
           )}
-        </div>
 
-        <p className="px-6 py-3 border-t border-[var(--border)] doc-meta text-center normal-case">
+        <p className="mt-6 pt-4 border-t border-[var(--border)] text-xs text-[var(--text-muted)] text-center">
           Free while in beta. Not investment advice. NeoTrade never holds your money.
         </p>
-      </div>
+      </Card>
     </div>
   );
 };

@@ -10,9 +10,11 @@ import { marketPhase } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 
 const PHASE = { open: 'Market open', pre: 'Pre-open', closed: 'Market closed' };
+// Phones get a word too: the dot's colour never carries the state alone.
+const SHORT = { open: 'Open', pre: 'Pre-open', closed: 'Closed' };
 const BTN = 'inline-flex items-center justify-center min-h-11 min-w-11 rounded-[12px] text-[var(--text-muted)]';
 
-/** The dot: green while the market is open and the feed is live, amber when the feed is struggling. */
+/** The dot and its word: green while the market is open and the feed is live, amber/red (and "Stale"/"Offline") when the feed is struggling. */
 const MarketDot = () => {
   const feed = useStreamStatus();
   const phase = marketPhase();
@@ -20,6 +22,7 @@ const MarketDot = () => {
   return (
     <span role="img" aria-label={`${PHASE[phase]}. Feed ${feed}.`} className="inline-flex items-center gap-1.5 px-1 text-[12px] text-[var(--text-muted)]">
       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+      <span className="sm:hidden">{feed === 'offline' ? 'Offline' : feed === 'reconnecting' ? 'Stale' : SHORT[phase]}</span>
       <span className="hidden sm:inline">{PHASE[phase]}</span>
     </span>
   );
@@ -51,7 +54,8 @@ const Header = () => {
           <button type="button" onClick={togglePrivacy} className={cn(BTN, hidden && 'text-[var(--accent)]')} aria-pressed={hidden} aria-label={hidden ? 'Show amounts' : 'Hide amounts'}>
             {hidden ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
-          <button type="button" onClick={toggle} className={BTN} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
+          {/* Phones: theme lives in Settings, freeing room for the market word. */}
+          <button type="button" onClick={toggle} className={cn(BTN, 'hidden sm:inline-flex')} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
           <Link to="/settings" className={BTN} aria-label="Profile and settings">

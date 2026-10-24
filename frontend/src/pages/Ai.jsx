@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Tabs, { useTabParam } from '../components/ui/Tabs';
 import Badge from '../components/ui/Badge';
+import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
 import Scoreboard from '../components/ai/Scoreboard';
 import Positions from '../components/ai/Positions';
@@ -62,19 +64,24 @@ const Ai = () => {
 
   return (
     <Layout>
-      <PageHeader title="AI" right={ap && <Badge kind={ap.live ? 'live' : 'paper'}>{ap.live ? 'Live' : 'Paper'}</Badge>} />
+      <PageHeader title="AI" />
       <div className="mb-3 rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-4">
         {!today.loaded || !pnl.loaded ? <Skeleton rows={2} /> : (
           <>
+            <div className="flex items-center gap-2 text-[13px] text-[var(--text-muted)]">
+              <span>AI book</span>
+              <Badge kind={ap?.live ? 'live' : 'paper'}>{ap?.live ? 'Live' : 'Paper'}</Badge>
+              {ap && <Badge kind={on ? 'proven' : 'neutral'}>{on ? 'Autopilot on' : 'Autopilot off'}</Badge>}
+            </div>
             <div className="private figure-md text-[28px] leading-8 font-bold tabular-nums text-[var(--text)]">{inr(value)}</div>
-            <div className={`private tabular-nums text-[15px] ${toneText(tone(day))}`}>
+            <div className={`private tabular-nums text-[17px] font-semibold ${toneText(tone(day))}`}>
               Today {inr(day, { sign: true })} ({pct(dayPct, { sign: true })})
             </div>
             <div className="mt-1 text-[13px] text-[var(--text-muted)]">
-              {ap ? (on ? 'Autopilot on' : 'Autopilot off') : 'Could not load the autopilot.'}
-              {ap?.exposure_cap ? <span className="private"> · {inr(ap.deployed)} of {inr(ap.exposure_cap)} cap deployed</span> : null}
+              {ap ? (ap.exposure_cap ? <span className="private">{inr(ap.deployed)} of {inr(ap.exposure_cap)} cap deployed</span> : 'No exposure cap set') : <ErrorLine message="Couldn't load the autopilot status." onRetry={today.retry} />}
             </div>
             {on && <div className="mt-3"><StopAi onStopped={() => { setStopped(true); today.reload(); }} /></div>}
+            {ap && !on && <Link to="/settings?tab=limits" className="mt-2 inline-flex items-center min-h-11 text-[15px] font-semibold text-[var(--accent)]">Turn the autopilot on in Limits</Link>}
           </>
         )}
       </div>

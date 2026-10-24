@@ -12,13 +12,15 @@ const LIVE_POLL_MS = 5_000;
 export default function useHoldings({ poll = false } = {}) {
   const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const load = useCallback(
     (stale = () => false) =>
       api
         .get(endpoints.portfolio.get, { params: { account: 'mine', live: true } })
-        .then((res) => !stale() && setSnapshot(res.data))
-        .catch(() => {})
+        .then((res) => { if (!stale()) { setSnapshot(res.data); setError(false); } })
+        // 404 = no review yet (not an error); any other failure only counts when nothing is on screen to keep.
+        .catch((err) => { if (!stale()) setError(err?.response?.status !== 404); })
         .finally(() => !stale() && setLoading(false)),
     []
   );
@@ -43,5 +45,5 @@ export default function useHoldings({ poll = false } = {}) {
   }, [load, poll]);
   useRefetchOn(['portfolio', 'trades'], () => load());
 
-  return { snapshot, loading, reload: load };
+  return { snapshot, loading, error: error && !snapshot, reload: load };
 }

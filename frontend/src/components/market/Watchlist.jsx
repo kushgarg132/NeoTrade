@@ -63,7 +63,7 @@ const Watchlist = () => {
     <Card title="Watchlist">
       {error ? <ErrorLine message="Could not load the watchlist." onRetry={load} />
         : !rows ? <Skeleton rows={4} />
-        : rows.length === 0 ? <Empty title="Nothing watched" body="Open a stock and tap Watch next to its price." />
+        : rows.length === 0 ? <Empty title="Nothing watched" body="Open a stock and tap Watch next to its price. Start from today's movers." action={<Button variant="secondary" onClick={() => navigate('/market?tab=pulse')}>See top movers</Button>} />
         : rows.map((s) => (
           <div key={s.symbol} className="flex items-center gap-3 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0">
             <button type="button" onClick={() => navigate(stockPath(s.symbol))} className="min-w-0 flex-1 text-left active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
