@@ -459,3 +459,33 @@ def test_parked_strategy_entries_are_refused_but_exits_are_not(strategy):
     assert "parked" in fence.check(buy, 100.0, _state(), PREFS)
     sell = AutopilotOrder(symbol="INFY", side=Side.SELL, quantity=1, product="CNC", source="engine", reason="t", strategy=strategy)
     assert fence.check(sell, 100.0, _state(held={"INFY": (1, "CNC")}), PREFS) is None
+
+
+async def test_the_autopilot_refuses_a_dip_and_a_re_entry_after_a_stop(world, monkeypatch):
+    """BHEL: entry_ref 427.35, stop 384.6, stopped 21 Oct at 417.55, bought again 22 Oct at 407.20."""
+    from backend.engine import autorun
+    from backend.suggestions.store import SuggestionStore
+
+    db, _ = world
+    await _prefs(db)
+    prices = {"BHEL": 407.20, "INFY": 990.0, "WIPRO": 940.0, "TCS": 990.0}
+
+    async def marks(db_, symbols, **_):
+        return {s: prices[s] for s in symbols}
+
+    monkeypatch.setattr("backend.marks.mark_prices", marks)
+    base = {"user_id": "alice", "side": "BUY", "mode": "LONGTERM", "quantity": 4, "status": "PENDING",
+            "strategy": "orb_breakout", "score": {"final": 0.6}}
+    await db["suggestions"].insert_many([
+        {**base, "id": "bhel", "symbol": "BHEL", "entry_ref": 427.35, "stop": 384.6},
+        {**base, "id": "stopped", "symbol": "INFY", "entry_ref": 1000.0, "stop": 900.0},
+        {**base, "id": "dip", "symbol": "WIPRO", "entry_ref": 1000.0, "stop": 900.0},  # 6% under, limit is 5%
+        {**base, "id": "ok", "symbol": "TCS", "entry_ref": 1000.0, "stop": 900.0},
+    ])
+    for sym in ("BHEL", "INFY"):
+        await db["paper_trades"].insert_one({"user_id": "alice", "symbol": sym, "status": "CLOSED",
+                                             "realized_pnl": -50.0, "exit_at": OPEN - timedelta(days=1)})
+    pending = await SuggestionStore(db).list("alice", status="PENDING")
+    await autorun._autopilot_proposals(db, None, SuggestionStore(db), "alice", pending, OPEN)
+    taken = {d["id"]: d.get("ai_order") for d in await db["suggestions"].find({}).to_list(None)}
+    assert taken == {"bhel": None, "stopped": None, "dip": None, "ok": "FILLED"}
