@@ -42,7 +42,7 @@ class _BuyEveryBarStrategy:
     def on_bar(self, ctx, bar) -> None:
         ctx.submit(Intent(
             symbol=SYMBOL, side=Side.BUY, strength=1.0,
-            reason_codes=["test"], stop_hint=bar.close - 50.0,  # wide stop -> real size
+            reason_codes=["test"], stop_hint=bar.close - 70.0,  # wide stop -> real size, out of reach of the 100 -> 40 crash
         ))
 
     def on_fill(self, ctx, fill) -> None:
