@@ -10,8 +10,10 @@ from backend.core.models import Fill, Position, Side
 class Portfolio:
     def __init__(self) -> None:
         self.positions: dict[str, Position] = {}
+        self.costs_paid = 0.0
 
     def apply(self, fill: Fill) -> None:
+        self.costs_paid += fill.costs
         delta = fill.quantity if fill.side == Side.BUY else -fill.quantity
         pos = self.positions.get(fill.symbol)
 
@@ -49,9 +51,9 @@ class Portfolio:
 
     def equity(self, mark_prices: dict[str, float]) -> float:
         """Cumulative P&L (realized + mark-to-market unrealized) across all
-        positions. Not full account equity (no cash/margin tracking exists
+        positions, net of the costs of every fill applied (the kill switch reads this). Not full account equity (no cash/margin tracking exists
         yet) -- that's out of this task's scope."""
-        total = sum(pos.realized_pnl for pos in self.positions.values())
+        total = sum(pos.realized_pnl for pos in self.positions.values()) - self.costs_paid
         for symbol, pos in self.positions.items():
             if pos.quantity == 0:
                 continue

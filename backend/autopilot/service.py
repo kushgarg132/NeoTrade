@@ -13,7 +13,7 @@ from backend.autopilot import fence
 from backend.brokers.roles import RoleUnavailable, adapter_for
 from backend.core.models import Order, Side
 from backend.engine.autorun import in_session
-from backend.engine.persistence import LedgerStore
+from backend.engine.persistence import LedgerStore, trade_net
 from backend.engine.session import IST
 from backend.marks import ORDER_MAX_AGE_SECONDS, mark_prices
 from backend.prefs import PrefsStore
@@ -120,7 +120,7 @@ async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime, redis
     deployed = sum(t["quantity"] * marks.get(t["symbol"], t.get("entry_price") or 0) for t in open_trades)
     unrealized = sum((marks.get(t["symbol"], t.get("entry_price") or 0) - (t.get("entry_price") or 0)) * t["quantity"]
                      for t in open_trades)
-    realized = sum(t.get("realized_pnl") or 0 for t in mine
+    realized = sum(trade_net(t) for t in mine
                    if t.get("status") == "CLOSED" and (_aware(t.get("exit_at")) or day_start) >= day_start)
     # A live order sent but not confirmed filled still counts until reconciled.
     entries = await db["autopilot_log"].count_documents(

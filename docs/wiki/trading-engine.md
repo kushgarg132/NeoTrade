@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: 9595c0e
+verified_at: 37d23f6
 ---
 # Trading engine
 
@@ -196,7 +196,7 @@ All IST; trading days only (`core/market_calendar.py`: weekends + static NSE hol
 - Kill switch trips once per user per IST day and never re-arms (`$setOnInsert`); blocks INTRADAY entries only; `daily_loss_limit` 0 = off; `day_realized` carried across restarts.
 - One run per `(user, mode)` (Redis lock + `RunStore.list_active`); one auto-run owner per slot (`autorun:*`); one open position row per `(user,symbol)` (unique index) so an entry on a held symbol is skipped (`run` step 6).
 - Position ownership: only `holders[symbol]`'s strategy may add/exit (`size_intents`); exits close what is held, never flip (`size = abs(held)`).
-- Cost realism: backtest 10 bps adverse slippage, next-bar-open fills for equity; paper pays the same 10 bps since 2026-10-24 (intraday paper runs `routers/trading.py` `SimulatedExecutionClient(slippage_bps=DEFAULT)`; every other paper fill `suggestions/service.py::fill_on_paper`, equity only, option premiums keep the mark); live fills are charged the same modelled schedule as paper (`costs.py::fill_costs`; `live_orders` rows store `product`/`option` for late fills, `live_order_store.py::fill_row_costs`; rows from before that book 0).
+- Cost realism: backtest 10 bps adverse slippage, next-bar-open fills for equity; paper pays the same 10 bps since 2026-10-24 (intraday paper runs `routers/trading.py` `SimulatedExecutionClient(slippage_bps=DEFAULT, fill_on_next_open=True)`; `Portfolio.equity` (kill switch) is net of `costs_paid`, `paper_trades.net_pnl` = gross - costs (`persistence.py::trade_net` derives it for old rows) feeds every loss limit and win/loss count; every other paper fill `suggestions/service.py::fill_on_paper`, equity only, option premiums keep the mark); live fills are charged the same modelled schedule as paper (`costs.py::fill_costs`; `live_orders` rows store `product`/`option` for late fills, `live_order_store.py::fill_row_costs`; rows from before that book 0).
 - Gate thresholds: backtest `MIN_WINDOW_DAYS=365`, `MIN_TRADES=30`, `MIN_PROFIT_FACTOR=1.3`, `MAX_DRAWDOWN=0.15` (`backtest_gate.py`); paper `MIN_PAPER_DAYS=20`, `MIN_PAPER_TRADES=30`, PF 1.3 (None = no losers = pass), net > 0, DD <= 5% of `account_size` (`paper_gate.py::paper_record`).
 - Idea gate for the user: `paper_gate.py::for_mine` shows a pending LONGTERM idea only when `proven_strategies`; decided rows always show.
 - `venue_filter`: "paper" means "not live", so untagged old rows never leak into the live book (`persistence.py::venue_filter`).
