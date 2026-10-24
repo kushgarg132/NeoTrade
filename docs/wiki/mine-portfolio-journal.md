@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 0ecdf6d
+verified_at: fb0cf62
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -153,7 +153,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
     It merges the following sources:
     - stop/target levels against `exits.mark_prices`
     - open `<user>:mine` paper_trades with `alerted`
-    - snapshot `verdict_worse`, `overweight` and `add` (via `rebalance.target_gaps`/`suggest`)
+    - snapshot `verdict_worse` (a turn to SELL on a held name carries a SELL `ticket` for the held quantity at the mark, else `{type: stock}`), `overweight` and `add` (via `rebalance.target_gaps`/`suggest`); `bad_news` carries the article `url`
     - negative-direction headlines
     - proven ideas (`risk/paper_gate.py::for_mine`)
     - `review_by` due dates
