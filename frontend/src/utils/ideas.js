@@ -1,5 +1,6 @@
 // One view model for the Ideas screens: a stored suggestion or a Picks row.
 import { strategyName } from './library.js';
+import { bareSymbol } from './formatters.js';
 
 /** Route id: `s-<suggestionId>` or `p-<pickId>` (pick ids hold colons, so only the first dash splits). */
 export const parseIdeaId = (id) => {
@@ -158,3 +159,30 @@ export const groupHoldingActions = (actions) => {
 /** The ONE "needs you" number: holdings actions plus pending ideas (your suggestions, and today's Picks for admins). */
 export const needCount = (actions, ideas) =>
   holdingActions(actions).length + (Array.isArray(ideas) ? ideas.length : 0);
+
+const HOLDING_DISMISS = {
+  stop_hit: 'Keep holding', target_hit: 'Keep holding', idea_exit: 'Keep holding', add: 'Not now',
+  verdict_worse: 'Got it', overweight: 'Got it', results_soon: 'Got it', ex_dividend: 'Got it', bad_news: 'Got it', review_due: 'Got it',
+};
+const HOLDING_LINK = { overweight: 'Trim…', review_due: 'Review thesis', verdict_worse: 'Open stock' };
+
+/** A "Your holdings" row's buttons, named for what the row is about: `primary` (a ticket, an in-app link or
+ * an article, or none), then the snooze label (`later`) and the dismiss label. The calls behind them never change. */
+export const holdingButtons = (item) => {
+  const a = item?.action || {};
+  const kind = item?.kind;
+  let primary = null;
+  if (a.type === 'ticket') {
+    primary = { label: `${a.side === 'BUY' ? 'Buy' : 'Sell'} ${a.quantity} ${bareSymbol(item.symbol)}…`, ticket: true };
+  } else if (kind === 'bad_news' && a.url) {
+    primary = { label: 'Read news', href: a.url };
+  } else if (HOLDING_LINK[kind]) {
+    primary = { label: HOLDING_LINK[kind], link: true };
+  }
+  const exit = a.type === 'ticket' && a.side === 'SELL';
+  return {
+    primary,
+    later: kind === 'results_soon' || kind === 'ex_dividend' ? 'Remind me later' : 'Later',
+    dismiss: exit ? 'Keep holding' : HOLDING_DISMISS[kind] || 'Dismiss',
+  };
+};

@@ -51,3 +51,11 @@ test('a pick row gets Skip (dismiss) and Buy SYMBOL… that opens the order tick
   assert.match(row, /<OrderTicket symbol=\{idea\.symbol\} side="BUY" lastPrice=\{idea\.entry\} limitPrice=\{idea\.entryZone\?\.\[1\]\}/);
   assert.match(row, /`Buy \$\{bareSymbol\(idea\.symbol\)\}…`/);
 });
+
+test('holding rows render the row-specific buttons from holdingButtons', () => {
+  assert.match(hold, /const b = holdingButtons\(a\)/);
+  assert.match(hold, /\{b\.primary\.label\}/);
+  assert.match(hold, /\{b\.later\}/);
+  assert.match(hold, /\{b\.dismiss\}/);
+  assert.match(hold, /rel="noopener noreferrer"/);
+});

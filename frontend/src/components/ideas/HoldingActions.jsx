@@ -10,14 +10,15 @@ import { useLoad } from './useLoad';
 import api, { endpoints } from '../../utils/api';
 import { actionTarget } from '../../utils/mine';
 import { stockPath } from '../../utils/stocks';
-import { groupHoldingActions } from '../../utils/ideas';
+import { groupHoldingActions, holdingButtons } from '../../utils/ideas';
 
 /** Where tapping a row leads: its own page when it has one, else the stock's page. */
 const rowLink = (a) => actionTarget(a).to || (a.symbol ? stockPath(a.symbol) : null);
 
 /**
  * Your holdings: every /mine/actions row about what you own (exit alerts, bad news, results soon...),
- * grouped under a plain title. Sell (when the row carries an order), Later (snooze 7 days), Dismiss.
+ * grouped under a plain title. Buttons are named for the row (`holdingButtons`): its own action (Sell 24 TCS…,
+ * Read news, Trim…), then snooze 7 days and dismiss under row-specific labels.
  */
 const HoldingActions = ({ actions, onChanged }) => {
   const [ticket, setTicket] = useState(null);
@@ -44,6 +45,7 @@ const HoldingActions = ({ actions, onChanged }) => {
           <ul>
             {g.items.map((a) => {
               const to = rowLink(a);
+              const b = holdingButtons(a);
               const body = (
                 <>
                   <div className="min-w-0 flex-1">
@@ -64,10 +66,12 @@ const HoldingActions = ({ actions, onChanged }) => {
                       <p className="text-[14px] text-[var(--text)]"><AmountText text={notes[a.id].text} /></p>
                     </div>
                   )}
-                  <div className={`mt-2 grid gap-2 ${a.action?.type === 'ticket' ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                    {a.action?.type === 'ticket' && <Button variant="danger" onClick={() => setTicket(actionTarget(a).ticket)}>{a.action.side === 'BUY' ? 'Buy' : 'Sell'}</Button>}
-                    <Button variant="secondary" onClick={() => act('snooze', a.id)}>Later</Button>
-                    <Button variant="secondary" onClick={() => act('dismiss', a.id)}>Dismiss</Button>
+                  <div className={`mt-2 grid gap-2 ${b.primary ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    {b.primary?.ticket && <Button variant={a.action.side === 'BUY' ? 'primary' : 'danger'} className="px-2 text-[14px] leading-tight" onClick={() => setTicket(actionTarget(a).ticket)}>{b.primary.label}</Button>}
+                    {b.primary?.link && to && <Link to={to}><Button className="w-full px-2 text-[14px] leading-tight">{b.primary.label}</Button></Link>}
+                    {b.primary?.href && <a href={b.primary.href} target="_blank" rel="noopener noreferrer"><Button className="w-full px-2 text-[14px] leading-tight">{b.primary.label}</Button></a>}
+                    <Button variant="secondary" className="px-2 text-[14px] leading-tight" onClick={() => act('snooze', a.id)}>{b.later}</Button>
+                    <Button variant="secondary" className="px-2 text-[14px] leading-tight" onClick={() => act('dismiss', a.id)}>{b.dismiss}</Button>
                   </div>
                 </li>
               );
