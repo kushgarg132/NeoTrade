@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/ml/**, backend/rl/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: a7bd7bb
+verified_at: df46e02
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -117,7 +117,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 4. In the runner, `scoring/composite.py::score_intent` (None below RULE_FLOOR) and `LearnedRules.blocks` apply. `SuggestionSink.__call__` records only when `armed` (final session). An equity SELL is allowed only up to `held`. One PENDING per (user, symbol, mode) (`store.has_pending`). → `SuggestionStore.create` (+ WS `suggestions/created`).
 5. `store.keep_best(user, "LONGTERM", 5)` expires the rest as `outranked`. It skips docs with `ai_order` set.
 6. `thesis.py::attach_theses` (≤10): `ResearchAgent.run(symbol)` under `use_model(prefs.omniroute_model)` → `store.attach_thesis` (text + `_rescored` score; the sentiment sign is flipped for a non-option SELL suggestion, which wins when the stock falls), WS `enriched`.
-7. Scheduler: `risk/paper_gate.py::for_mine` filters, then Telegram via `notify.py::proposals_text`.
+7. Scheduler: `risk/paper_gate.py::for_mine` filters, then Telegram via `notify.py::proposals_text` (an `IdeaText`: `notify` drops it for non-admins; engine ideas are admin-only since 2026-10-24, as are `/suggestions`, `mine/actions.py::ideas` and the pre-market digest idea line).
 
 **3. Decide a suggestion** (`routers/suggestions.py`)
 1. Reject: `store.decide(status="REJECTED")`. This is allowed even past `expires_at`.
@@ -170,7 +170,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 
 ## Invariants
 
-- **AI ≤ 30 % of conviction**: `composite.py::CompositeScore.__post_init__` clamps `ai_weight` to `[0, AI_CAP]` on a frozen dataclass and range-checks `rule_score` (0..1) and `ai_score` (−1..1). Tested in `test_composite_score.py`.
+- **AI ≤ 30 % of conviction, weight 0 in sizing** (`composite.py::AI_SIZING_WEIGHT`=0.0, owner 2026-10-24: `final` is at neutral AI, `ai_score` still stored): `composite.py::CompositeScore.__post_init__` clamps `ai_weight` to `[0, AI_CAP]` on a frozen dataclass and range-checks `rule_score` (0..1) and `ai_score` (−1..1). Tested in `test_composite_score.py`.
 - **AI can't rescue**: `composite.py::score_intent` returns None if `intent.strength < RULE_FLOOR`. Sentiment is flipped for bearish trades (`is_bearish`).
 - **One conviction formula**: `thesis.py::_rescored` reuses `CompositeScore`. Never add a second blend.
 - Learning only tightens: a floor rises by ≤ `FLOOR_STEP`, never past `FLOOR_CAP`, starts at `RULE_FLOOR` (`adapt.py::decide`). Statistics decide, never the LLM (`adapt.py` docstring; `hypotheses.py` only queues; `draft.py` model never decides).
@@ -191,10 +191,10 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 |---|---|---|---|
 | GET `/picks` | `routers/picks.py::picks_today` | admin | `date`, `shown[]` (the served list: a pick plus `grade,missed_entry,beats_nifty_odds,experimental,fired_on,days_since,days_left`, and for earlier days `price_now,move_since_entry`), `hidden_count`, `hidden_reason` (only "N more grade X hidden: top 3 per grade"), `grades{setup:A|B|C}`, `grade_text{A,B,C}`, `picks[]` (every candidate of the latest pass, kept for compatibility; `symbol,label,horizon,edge,explanation,expected{median,p10,p90},p_up,p_beat_nifty,n,entry_ref`), `setups[]` (`label,horizon,n,median,p_up,p_beat_nifty,walk_forward{edge,oos_excess,oos_n,brier,years[]{year,n,predicted_p_up,realised_p_up,mean_excess}}`), `as_of`, `forward{n,status,win_rate,beat_nifty_rate,buckets[]{bucket,n,predicted,realised}}`, `caveats` (`frontend/src/pages/Picks.jsx`) |
 | GET `/picks/history?days=1..3650` (90) | `::picks_history` | admin | `picks[]` (`_id,date,symbol,label,outcome`) |
-| POST `/suggestions/scan` 202 | `routers/suggestions.py::scan_now` | user | `{started, symbols}`; body `universe` ≤300 |
-| GET `/suggestions?mode&status&limit` | `::list_suggestions` | user | suggestion docs filtered by `for_mine` |
-| POST `/suggestions/{id}/reject` | `::reject_suggestion` | user | decided doc; 404 if not pending |
-| POST `/suggestions/{id}/approve-live` body `{confirm_token}` | `::approve_suggestion_live` -> `::place_live_approval` | user | no token: `{status:'NEEDS_SECOND_TAP', confirm_token, expires_in}`; with it: settled doc (`status`, `reason`, `order_id`, `venue`, `filled_quantity`); 409/400/502/503 errors (403 another user's token) |
+| POST `/suggestions/scan` 202 | `routers/suggestions.py::scan_now` | admin | `{started, symbols}`; body `universe` ≤300 |
+| GET `/suggestions?mode&status&limit` | `::list_suggestions` | admin | suggestion docs filtered by `for_mine` |
+| POST `/suggestions/{id}/reject` | `::reject_suggestion` | admin | decided doc; 404 if not pending |
+| POST `/suggestions/{id}/approve-live` body `{confirm_token}` | `::approve_suggestion_live` -> `::place_live_approval` | admin | no token: `{status:'NEEDS_SECOND_TAP', confirm_token, expires_in}`; with it: settled doc (`status`, `reason`, `order_id`, `venue`, `filled_quantity`); 409/400/502/503 errors (403 another user's token) |
 
 Related, outside the globs: `/strategies/built*`, `/strategies/library` (→ `learning/library.py::catalog`), `/strategies/vocabulary`, `/strategies/describe` in `routers/settings.py`; `GET /journal/learning` (→ `learning/report.py::snapshot`, `routers/journal.py::get_learning`); `POST /system/builder/run` (`system/router.py`). Frontend paths: `frontend/src/utils/api.js` `picks`, `suggestions`.
 

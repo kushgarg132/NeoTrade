@@ -208,6 +208,7 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
     from backend import app_settings
     if enabled and not await app_settings.lab_on("the intraday auto-run", db):
         enabled = set()  # running slots stop below, as if turned off mid-session
+        done["idle"] = "lab off"
 
     try:
         await _login_reminders(db, redis, now)
@@ -282,6 +283,7 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
         await _release(redis, slot)
 
         if not await _may_start(runs, user_id, mode, now, redis=redis):
+            done.setdefault("idle", "no live feed, skip-day plan or already run today")
             continue
         if not await redis.set(_key(slot), _TOKEN, nx=True, px=KEY_TTL_MS):
             continue  # another worker owns this run
@@ -393,6 +395,25 @@ async def _catch_up(db, redis, day) -> None:
         logger.exception("catch-up daily pass for %s failed: %s", day, exc)
 
 
+REENTRY_COOLDOWN_SESSIONS = 3
+
+
+async def _recent_losers(db, user_id: str, now: datetime) -> set[str]:
+    """AI-book symbols closed at a loss within the last 3 sessions (BHEL, 21-22 Oct:
+    stopped at 417.55, bought again at 407.20). paper_trades keeps no exit reason, so
+    a losing close stands in for 'stopped out'."""
+    from backend.autopilot.service import ai_book_query
+    from backend.engine.persistence import trade_net
+
+    start = now.astimezone(IST).date()
+    for _ in range(REENTRY_COOLDOWN_SESSIONS):
+        start = previous_trading_day(start)
+    since = datetime.combine(start, time(0, 0), tzinfo=IST)
+    rows = await db["paper_trades"].find({"$and": [ai_book_query(user_id), {
+        "status": "CLOSED", "exit_at": {"$gte": since}}]}).to_list(length=None)
+    return {r["symbol"] for r in rows if trade_net(r) < 0}  # net: a gross win the charges turned into a loss counts
+
+
 async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dict], now: datetime,
                                source: str = "engine", heading: str = "morning pass") -> list[dict]:
     """Hands pending stock proposals to the autopilot (backend/autopilot/),
@@ -431,6 +452,12 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
                 continue
             if price > entry * (1 + MAX_ENTRY_DRIFT):
                 refused.append(f"{s['symbol']} (₹{price:,.2f}, more than {MAX_ENTRY_DRIFT:.0%} over its entry ₹{entry:,.2f})")
+                continue
+            if s.get("stop") and s["stop"] < entry and price < entry * (1 - (entry - s["stop"]) / entry / 2):
+                refused.append(f"{s['symbol']} (₹{price:,.2f}, past halfway to its stop ₹{s['stop']:,.2f})")
+                continue
+            if s["symbol"] in await _recent_losers(db, user_id, now):
+                refused.append(f"{s['symbol']} (stopped out in the last {REENTRY_COOLDOWN_SESSIONS} sessions)")
                 continue
         unit = price or entry
         quantity = min(int(s["quantity"]), int(cap // unit)) if unit > 0 else 0
@@ -505,7 +532,10 @@ async def autorun_loop(db, redis) -> None:
             result = await tick(db, redis)
             if result["started"] or result["stopped"]:
                 logger.info("auto-run: %s", result)
-            await mark(redis, "autorun", True, f"started {len(result['started'])}, stopped {len(result['stopped'])}")
+            note = f"started {len(result['started'])}, stopped {len(result['stopped'])}"
+            if result.get("idle"):
+                note += f"; nothing started: {result['idle']}"
+            await mark(redis, "autorun", True, note)
         except Exception as exc:
             logger.exception("auto-run tick failed: %s", exc)
             await mark(redis, "autorun", False, f"{type(exc).__name__}: {exc}")

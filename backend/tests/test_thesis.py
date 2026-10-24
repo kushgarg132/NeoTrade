@@ -96,7 +96,7 @@ async def test_research_sentiment_replaces_the_neutral_ai_half_of_the_score():
     score = (await SuggestionStore(mongo).get("alice", "s1"))["score"]
     assert score["rule"] == 0.8
     assert score["ai"] == 0.6
-    assert score["final"] == pytest.approx(0.7 * 0.8 + 0.3 * 0.8)  # (0.6 + 1) / 2 = 0.8
+    assert score["final"] == pytest.approx(0.7 * 0.8 + 0.3 * 0.5)  # AI_SIZING_WEIGHT=0: neutral AI half
 
 
 async def test_negative_sentiment_lowers_conviction_and_out_of_range_is_clamped():
@@ -107,7 +107,7 @@ async def test_negative_sentiment_lowers_conviction_and_out_of_range_is_clamped(
 
     score = (await SuggestionStore(mongo).get("alice", "s1"))["score"]
     assert score["ai"] == -1.0
-    assert score["final"] == pytest.approx(0.7 * 0.8)
+    assert score["final"] == pytest.approx(0.7 * 0.8 + 0.3 * 0.5)
 
 
 async def test_no_sentiment_reading_leaves_the_score_alone():

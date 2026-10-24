@@ -49,6 +49,7 @@ class BacktestGateStore:
             "strategy_name": strategy_name,
             "run_at": datetime.now(timezone.utc),
             "passed": passes_gate(result),
+            "reason": "no trades in window" if result.total_trades == 0 else None,
             "result": result.model_dump(mode="json"),
         })
 

@@ -32,7 +32,10 @@ def _action(kind: str, symbol: str, key, title: str, detail: str, at: datetime, 
 async def ideas(db, user_id: str) -> list[dict]:
     """Pending ideas for the user's own account: proven strategies only."""
     from backend.risk.paper_gate import for_mine
+    from backend.suggestions.notify import is_admin
 
+    if not await is_admin(db, user_id):  # engine ideas are admin-only (audit W1)
+        return []
     return await for_mine(db, user_id, await db["suggestions"].find(
         PENDING_IDEAS | {"user_id": user_id}).to_list(length=200))
 

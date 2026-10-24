@@ -5,16 +5,10 @@ through the shared runner.run() loop, then reports through the existing
 
 import logging
 import time
-import uuid
-from collections import deque
 from datetime import datetime
 
-import pandas as pd
-
-from backend.strategies.indicators import Indicators
 from backend.core.models import BacktestResult
 from backend.core.clock import SimClock
-from backend.core.models import Order, Side
 from backend.data.feeds.historical import HistoricalFeed
 from backend.data.protocols import MarketDataProvider
 from backend.engine.execution.simulated import SimulatedExecutionClient
@@ -25,7 +19,6 @@ from backend.engine.runner import run
 from backend.instruments.models import Instrument
 from backend.lab.assumptions import DEFAULT
 from backend.options.backtest import ModelOptions
-from backend.suggestions.exits import trail_level
 
 logger = logging.getLogger(__name__)
 PROGRESS_EVERY = 20_000  # bars between progress log lines
@@ -61,73 +54,6 @@ async def run_backtest(
     bar_timestamps: list[datetime] = []
     original_feed_iter = feed.__aiter__
 
-    # Every equity position opened with a stop/target exits when a later
-    # bar's low/high crosses it, at that level (the stop first when both
-    # cross -- the conservative reading of an OHLC bar). It used to cover
-    # long-term buys only, on the close, so intraday stops were never tested.
-    # A swing order (context max_hold_days / trail_atr) also exits at the
-    # close of the bar that completes its hold, and at a stop that rises to
-    # the highest close since entry minus k x the 14-bar ATR, set from the
-    # bars before the one tested -- as suggestions/exits.py does live.
-    levels: dict[str, dict] = {}
-    recent: dict[str, deque] = {}  # each symbol's last 15 bars: the trail's ATR
-    original_submit = execution.submit
-
-    async def submit_noting_levels(order: Order) -> str:
-        context = order.context or {}
-        held = portfolio.positions.get(order.symbol)
-        if order.product == "CNC" and order.side == Side.SELL and (held is None or held.quantity < order.quantity):
-            return order.id  # a delivery account cannot short (suggestions/service.py refuses it too)
-        if order.contract is None and context.get("stop") is not None and (held is None or held.quantity == 0):
-            levels[order.symbol] = {
-                "stop": context["stop"], "target": context.get("target"), "product": order.product,
-                "hold": context.get("max_hold_days"), "k": context.get("trail_atr"), "bars": 0, "high": None}
-        return await original_submit(order)
-
-    execution.submit = submit_noting_levels  # type: ignore[method-assign]
-
-    async def exit_on_levels(bar) -> None:
-        symbol = feed.symbol_for_token.get(bar.instrument_token)
-        past = recent.setdefault(symbol, deque(maxlen=15))
-        try:
-            await exit_at_level(symbol, bar, past)
-        finally:
-            past.append(bar)
-
-    async def exit_at_level(symbol, bar, past, entry_bar: bool = False) -> None:
-        """`entry_bar`: the position filled at this bar's open, so the rest of
-        the bar can still reach its stop or target (no trail, no hold count)."""
-        position = portfolio.positions.get(symbol)
-        if symbol not in levels or position is None or position.quantity == 0:
-            return
-        lv = levels[symbol]
-        stop, target = lv["stop"], lv["target"]
-        long = position.quantity > 0
-        if long and lv["k"] and not entry_bar:  # past[-1] is the entry bar on the first bar held
-            lv["high"] = max(lv["high"] or past[-1].close, past[-1].close)
-            atr = Indicators.atr(*(pd.Series([getattr(b, f) for b in past]) for f in ("high", "low", "close"))).iloc[-1]
-            if not pd.isna(atr):  # kept: a widening ATR never lowers it
-                lv["stop"] = stop = max(stop, trail_level(lv["high"], float(atr), lv["k"]))
-        if long:
-            level = stop if bar.low <= stop else (target if target is not None and bar.high >= target else None)
-            gapped = bar.open <= stop
-        else:
-            level = stop if bar.high >= stop else (target if target is not None and bar.low <= target else None)
-            gapped = bar.open >= stop
-        if level == stop and gapped:
-            level = bar.open  # a stop cannot fill better than the first price traded through it
-        if not entry_bar:
-            lv["bars"] += 1
-            if level is None and lv["hold"] and lv["bars"] >= lv["hold"]:
-                level = bar.close
-        if level is None:
-            return
-        del levels[symbol]
-        await execution.fill_now(Order(
-            id=str(uuid.uuid4()), symbol=symbol, side=Side.SELL if long else Side.BUY,
-            quantity=abs(position.quantity), order_type="MARKET", limit_price=None, product=lv["product"],
-        ), level, bar.timestamp)
-
     async def timestamped_bars():
         # BacktestResult.start_date/end_date report the *actual* span of
         # candles a data provider returned, not the range the caller asked
@@ -140,16 +66,9 @@ async def run_backtest(
             if len(bar_timestamps) % PROGRESS_EVERY == 0:
                 logger.info("backtest %s: %d bars, at %s, %d fills, %.0fs",
                             names, len(bar_timestamps), bar.timestamp, len(trades), time.monotonic() - began)
-            symbol = feed.symbol_for_token.get(bar.instrument_token)
-            held = portfolio.positions.get(symbol)
-            flat = held is None or held.quantity == 0
-            await exit_on_levels(bar)
             if model_options is not None:
                 model_options.observe(feed.symbol_for_token[bar.instrument_token], bar)
             yield bar
-            held = portfolio.positions.get(symbol)
-            if flat and held is not None and held.quantity != 0:
-                await exit_at_level(symbol, bar, None, entry_bar=True)
 
     trades: list[dict] = []
     # A round trip: from the fill that opens a position to the one that
@@ -173,7 +92,6 @@ async def run_backtest(
             open_pnl[fill.symbol] = open_pnl.get(fill.symbol, 0.0) + gross - fill.costs
             if post.quantity == 0:
                 round_trips.append(open_pnl.pop(fill.symbol))
-                levels.pop(fill.symbol, None)  # closed some other way: its stop is gone with it
             trades.append({
                 "order_id": fill.order_id,
                 "symbol": fill.symbol,

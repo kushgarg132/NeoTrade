@@ -13,6 +13,7 @@ from typing import Awaitable, Callable
 
 from backend.core.models import Order, Position, Side
 from backend.engine.persistence import LedgerStore
+from backend.engine.runner import level_for
 from backend.engine.session import IST
 from backend.suggestions.service import fill_on_paper
 
@@ -24,9 +25,11 @@ def _day(value: datetime):
     return aware.astimezone(IST).date()
 
 
-async def adopt_intraday(db, user_id: str, now: datetime) -> tuple[dict[str, Position], dict[str, str], list[dict]]:
-    """(positions, holders, stale): today's open intraday paper trades as
-    positions plus their owning strategy; earlier days' as trades to close."""
+async def adopt_intraday(db, user_id: str, now: datetime) -> tuple[dict[str, Position], dict[str, str], list[dict], dict[str, dict]]:
+    """(positions, holders, stale, levels): today's open intraday paper trades as
+    positions plus their owning strategy and exit levels (rebuilt from the
+    latest trade's stored context; none without a stop); earlier days' as
+    trades to close."""
     open_trades = await db["paper_trades"].find(
         # The autopilot's MIS trades in this book are its own to square off.
         {"user_id": user_id, "mode": "INTRADAY", "status": "OPEN", "venue": {"$in": ["paper", None]},
@@ -42,7 +45,7 @@ async def adopt_intraday(db, user_id: str, now: datetime) -> tuple[dict[str, Pos
 
     # A stock can carry several open trades (runs that started empty opened a
     # fresh one for a stock already held): net them into one position.
-    positions, holders = {}, {}
+    positions, holders, levels = {}, {}, {}
     for symbol, trades in by_symbol.items():
         signed = [(1 if t["side"] == "BUY" else -1) * float(t["quantity"]) for t in trades]
         net = sum(signed)
@@ -54,7 +57,11 @@ async def adopt_intraday(db, user_id: str, now: datetime) -> tuple[dict[str, Pos
         latest = max(trades, key=lambda t: t["entry_at"])
         if latest.get("strategy"):
             holders[symbol] = latest["strategy"]
-    return positions, holders, stale
+        seed = level_for(Order(id="adopted", symbol=symbol, side=Side.BUY, quantity=1, order_type="MARKET",
+                               product="MIS", context=latest.get("context")), None)
+        if seed:
+            levels[symbol] = {**seed, "fresh": False}
+    return positions, holders, stale, levels
 
 
 async def close_stale(

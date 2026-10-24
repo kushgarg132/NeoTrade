@@ -19,6 +19,12 @@ from typing import Optional
 from backend.core.models import Fill, Order, Position, Venue
 
 
+def trade_net(trade: dict) -> float:
+    """A trade's P&L after costs; rows from before `net_pnl` existed derive it."""
+    net = trade.get("net_pnl")
+    return net if net is not None else (trade.get("realized_pnl") or 0.0) - (trade.get("costs") or 0.0)
+
+
 def mine_book(user_id: str) -> str:
     """The ledger of real orders the app placed on the user's own (`mine`)
     account. Apart from `user_id` (the AI account's paper book) and
@@ -146,6 +152,8 @@ class LedgerStore:
                     "exit_at": fill.timestamp,
                     "realized_pnl": position.realized_pnl - open_trade.get("realized_base", 0.0),
                     "costs": open_trade.get("costs", 0.0) + fill.costs,
+                    "net_pnl": position.realized_pnl - open_trade.get("realized_base", 0.0)
+                    - open_trade.get("costs", 0.0) - fill.costs,
                 }},
             )
             if flipped:  # the rest of the fill opens a trade on the other side
@@ -159,6 +167,8 @@ class LedgerStore:
                 "entry_price": position.avg_price,
                 "realized_pnl": position.realized_pnl - open_trade.get("realized_base", 0.0),
                 "costs": open_trade.get("costs", 0.0) + fill.costs,
+                "net_pnl": position.realized_pnl - open_trade.get("realized_base", 0.0)
+                - open_trade.get("costs", 0.0) - fill.costs,
             }},
         )
 

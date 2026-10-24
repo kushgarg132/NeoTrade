@@ -136,3 +136,34 @@ def test_a_big_older_earnings_miss_outweighs_a_fresh_minor_puff_piece():
         (_article("Ex-dividend in three days", age_days=112), _ArticleScore(index=3, is_relevant=True, score=0.0, impact=2)),
     ]
     assert _weighted_sentiment(scored, NOW) < -0.15  # bearish, like the report
+
+
+@pytest.mark.asyncio
+async def test_llm_outage_writes_no_analyst_or_sentiment_key(wired):
+    llm, redis = wired
+    llm.side_effect = ["Error generating response: down"] * 3
+    out = await AnalystAgent().analyze({"symbol": "SBIN"})
+    assert out["sentiment_analysis"]["scored"] is False
+    assert redis.store == {}
+    with pytest.raises(Exception):
+        agent_module._NewsScores.model_validate_json("{}")
+
+
+@pytest.mark.asyncio
+async def test_four_day_old_brief_is_not_served_as_current():
+    from backend.datalayer.market import BRIEF_KEY, backdrop
+
+    r = _Redis()
+    r.store[BRIEF_KEY] = json.dumps({"text": "Markets rally.", "at": (NOW - timedelta(days=4)).timestamp()})
+    ctx = await backdrop(r)
+    assert "Markets rally" not in ctx["brief"] and "stale since" in ctx["brief"] and ctx["as_of"]
+    r.store[BRIEF_KEY] = json.dumps({"text": "Fresh.", "at": (NOW - timedelta(hours=1)).timestamp()})
+    assert (await backdrop(r))["brief"] == "Fresh."
+
+
+def test_failed_score_leaves_suggestion_score_unchanged():
+    from types import SimpleNamespace
+    from backend.suggestions.thesis import _rescored
+
+    report = SimpleNamespace(sentiment_score=0.0, sentiment={"scored": False})
+    assert _rescored({"rule": 0.6, "ai": 0.5, "final": 0.5}, report, {"side": "BUY"}) is None

@@ -10,6 +10,7 @@ from backend.chat.tools import read_tools
 
 async def _seed(db):
     now = datetime.now(timezone.utc)
+    await db["users"].insert_one({"id": "alice", "role": "admin"})
     for user, symbol in (("alice", "SJVN"), ("bob", "BOBCO")):
         await db["suggestions"].insert_one({
             "id": f"s-{user}", "user_id": user, "symbol": symbol, "side": "BUY", "mode": "LONGTERM",
@@ -103,3 +104,9 @@ async def test_chat_passes_fact_errors_through():
         assert "db down" in await tools["search_news"].ainvoke({"scope": "MARKET"})
     with patch("backend.chat.tools.user_facts.strategy_library", broken):
         assert "db down" in await tools["get_strategy_library"].ainvoke({})
+
+
+async def test_non_admin_get_decisions_is_empty():
+    db = AsyncMongoMockClient()["test_db"]
+    await _seed(db)
+    assert await _tools(db, "bob")["get_decisions"].ainvoke({}) == "[]"

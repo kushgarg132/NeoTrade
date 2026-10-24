@@ -6,9 +6,12 @@ them -- this function and the Strategy contract it drives don't change.
 import asyncio
 import logging
 import uuid
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Awaitable, Callable, Optional
+
+import pandas as pd
 
 from backend.ai.sentiment import get_cached_sentiment
 from backend.risk.rules import RiskRules
@@ -26,6 +29,8 @@ from backend.options.sizing import size_option_intent
 from backend.risk.kill_switch import should_trip
 from backend.engine.execution.costs import calculate_indian_costs
 from backend.scoring.composite import CompositeScore, score_intent
+from backend.strategies.indicators import Indicators
+from backend.suggestions.exits import trail_level
 
 logger = logging.getLogger(__name__)
 
@@ -410,6 +415,48 @@ async def _plan_exit_orders(exits: list[dict], portfolio: Portfolio, holders: di
     return orders
 
 
+def level_for(order: Order, bar_timestamp) -> Optional[dict]:
+    """The exit levels an equity entry order carries in its context, or None
+    without a stop. Enforced by run() on every bar for as long as it is held."""
+    context = order.context or {}
+    if order.contract is not None or context.get("stop") is None:
+        return None
+    return {"stop": context["stop"], "target": context.get("target"), "product": order.product,
+            "hold": context.get("max_hold_days"), "k": context.get("trail_atr"), "bars": 0, "high": None,
+            "fresh": True, "noted": bar_timestamp}
+
+
+def _level_hit(lv: dict, position, bar, past, entry_bar: bool) -> Optional[float]:
+    """The price `position` exits at on `bar`, or None. The stop wins when the
+    bar crosses both it and the target (the conservative reading of an OHLC
+    bar); a gap through the stop fills at the open. A swing order (max_hold_days
+    / trail_atr) also exits at the close of the bar that completes its hold, and
+    at a stop that rises to the highest close since entry minus k x the 14-bar
+    ATR, set from the bars before the one tested. `entry_bar`: the position
+    filled at this bar's open, so the rest of the bar can still reach its stop
+    or target (no trail, no hold count)."""
+    stop, target = lv["stop"], lv["target"]
+    long = position.quantity > 0
+    if long and lv["k"] and not entry_bar:  # past[-1] is the entry bar on the first bar held
+        lv["high"] = max(lv["high"] or past[-1].close, past[-1].close)
+        atr = Indicators.atr(*(pd.Series([getattr(b, f) for b in past]) for f in ("high", "low", "close"))).iloc[-1]
+        if not pd.isna(atr):  # kept: a widening ATR never lowers it
+            lv["stop"] = stop = max(stop, trail_level(lv["high"], float(atr), lv["k"]))
+    if long:
+        level = stop if bar.low <= stop else (target if target is not None and bar.high >= target else None)
+        gapped = bar.open <= stop
+    else:
+        level = stop if bar.high >= stop else (target if target is not None and bar.low <= target else None)
+        gapped = bar.open >= stop
+    if level == stop and gapped:
+        level = bar.open  # a stop cannot fill better than the first price traded through it
+    if not entry_bar:
+        lv["bars"] += 1
+        if level is None and lv["hold"] and lv["bars"] >= lv["hold"]:
+            level = bar.close
+    return level
+
+
 async def _option_exit_orders(
     bar_symbol: Optional[str],
     bar,
@@ -468,6 +515,7 @@ async def run(
     expand: Optional[Callable[[list[str]], Awaitable[list]]] = None,
     shadow_exit: Optional[Callable[[str, str], Awaitable[None]]] = None,
     forward: Optional[Callable[[Order, Intent, float, datetime], Awaitable[None]]] = None,
+    levels: Optional[dict[str, dict]] = None,
 ) -> None:
     """`symbol_for_token` is not in the plan's pseudocode signature; it's
     needed because `Bar` identifies instruments by `instrument_token` while
@@ -501,6 +549,8 @@ async def run(
     `on_progress`, if given, is awaited after every bar with running counts
     (bars seen, signals raised, orders sent, the last bar's symbol and time)
     so a live run can show it is alive. Throttling is the caller's job.
+
+    `levels` seeds the exit levels of positions already open (see `level_for`).
     """
     symbol_for_token = symbol_for_token or {}
     ctx = SimpleStrategyContext(clock, portfolio, symbol_for_token)
@@ -524,17 +574,50 @@ async def run(
     progress = {"bars": 0, "signals": 0, "orders": 0, "below_cost": 0, "last_symbol": None, "last_bar_at": None}
 
     seen = 0
+    levels = dict(levels or {})  # symbol -> exit levels of the open equity position
+    recent: dict[str, deque] = {}  # each symbol's last 15 bars: the trail's ATR
+    simulated = hasattr(execution, "fill_now")  # paper/backtest: fills at a given level at once
+    exiting: set[str] = set()  # symbols with a reduce-only exit in flight: no second one on top
+
+    async def exit_at_level(symbol, bar, past, entry_bar: bool = False) -> bool:
+        """Exits `symbol` if `bar` reached its stop, target, trail or hold.
+        Paper fills at the level (or the open on a gap); a broker gets a MARKET exit."""
+        position = portfolio.positions.get(symbol)
+        lv = levels.get(symbol)
+        if (lv is None or position is None or position.quantity == 0 or (lv["fresh"] and not entry_bar)
+                or symbol in exiting):  # an exit is already in flight for it
+            return False
+        level = _level_hit(lv, position, bar, past, entry_bar)
+        if level is None:
+            return False
+        del levels[symbol]
+        order = Order(
+            id=str(uuid.uuid4()), symbol=symbol, side=Side.SELL if position.quantity > 0 else Side.BUY,
+            quantity=abs(position.quantity), order_type="MARKET", limit_price=None, product=lv["product"],
+            strategy_name=holders.get(symbol),
+        )
+        if ledger is not None:
+            await ledger.record_order(order)
+        # A Routing client decides per order: paper fills at the level, a broker gets the MARKET.
+        if simulated and getattr(execution, "is_paper", lambda o: True)(order):
+            await execution.fill_now(order, level, bar.timestamp)
+        else:
+            exiting.add(symbol)
+            await execution.submit(order)
+        return True
 
     async def apply_fills() -> None:
         async for fill in execution.fills():
             quantity_before = portfolio.positions[fill.symbol].quantity if fill.symbol in portfolio.positions else 0.0
             portfolio.apply(fill)
+            exiting.discard(fill.symbol)
             if ledger is not None:
                 await ledger.on_fill(fill, quantity_before, portfolio.positions[fill.symbol])
             name = strategy_of_order.get(fill.order_id) or holders.get(fill.symbol)
             after = portfolio.positions[fill.symbol].quantity
             if after == 0:
                 holders.pop(fill.symbol, None)
+                levels.pop(fill.symbol, None)  # closed some other way: its stop is gone with it
             elif quantity_before == 0 or (quantity_before > 0) != (after > 0):
                 if name is not None:
                     holders[fill.symbol] = name  # opened (or flipped) by this strategy
@@ -589,6 +672,19 @@ async def run(
             # opened the opposite side on the next bar.
             await apply_fills()
 
+        # Stops, targets, trails and holds come before any strategy: every run
+        # (backtest, paper, live) enforces the levels an entry order carried.
+        held_at_open = False
+        if symbol is not None:
+            past = recent.setdefault(symbol, deque(maxlen=15))
+            try:
+                if not bar.warmup and await exit_at_level(symbol, bar, past):
+                    await apply_fills()
+            finally:
+                past.append(bar)
+            held = portfolio.positions.get(symbol)
+            held_at_open = held is not None and held.quantity != 0
+
         if symbol is not None:
             for strategy in strategies:
                 if symbol in strategy.spec.universe and bar.timeframe == strategy.spec.timeframe:
@@ -636,6 +732,12 @@ async def run(
         booked = None
         for order in orders:
             held = portfolio.positions.get(order.symbol)
+            if simulated and order.product == "CNC" and order.side == Side.SELL and (held is None or held.quantity < order.quantity):
+                continue  # a delivery account cannot short (suggestions/service.py refuses it too)
+            if held is not None and held.quantity != 0 and (order.side == Side.SELL) == (held.quantity > 0):
+                if order.symbol in exiting:
+                    continue  # an exit for this position is already in flight
+                exiting.add(order.symbol)
             if ledger is not None and (held is None or held.quantity == 0):
                 # One position row per symbol in the book: an entry on a stock
                 # someone else holds there (a long-term or autopilot trade bought
@@ -652,6 +754,8 @@ async def run(
                 await ledger.record_order(order)
             if order.strategy_name:
                 strategy_of_order[order.id] = order.strategy_name
+            if (held is None or held.quantity == 0) and (lv := level_for(order, bar.timestamp)) is not None:
+                levels[order.symbol] = lv
             await execution.submit(order)
 
         # A live ExecutionClient (BrokerExecutionClient/RoutingExecutionClient,
@@ -666,6 +770,17 @@ async def run(
             await execution.poll_once()
 
         await apply_fills()
+
+        # A position that filled at this bar's open can still reach its stop or
+        # target in the rest of the bar; one that filled later in it starts
+        # being checked on the next bar.
+        if symbol in levels and levels[symbol]["fresh"]:
+            held = portfolio.positions.get(symbol)
+            if held is not None and held.quantity != 0:
+                if held_at_open:
+                    await exit_at_level(symbol, bar, None, entry_bar=True)
+                if symbol in levels:  # not exited just now
+                    levels[symbol]["fresh"] = False
 
         if ledger is not None:
             await ledger.snapshot_positions(portfolio.positions)

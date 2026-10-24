@@ -9,5 +9,8 @@ export const MAIN_TABS = [
   { icon: Newspaper, label: 'Market', path: '/market' },
 ];
 
+/** Ideas (engine suggestions and Picks) are admin-only, so everyone else sees four tabs. */
+export const tabsFor = (isAdmin) => MAIN_TABS.filter((t) => isAdmin || t.path !== '/ideas');
+
 export const tabActive = (item, pathname) =>
   item.path === '/' ? pathname === '/' : pathname === item.path || pathname.startsWith(`${item.path}/`);

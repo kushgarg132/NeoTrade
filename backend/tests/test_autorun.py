@@ -560,6 +560,22 @@ async def test_the_auto_intraday_run_waits_for_a_live_broker_feed(world):
     it starts on the first tick after the login."""
     await world.enable()
     world.live["ready"] = False
-    assert (await _tick(world, MONDAY_10AM))["started"] == []
+    done = await _tick(world, MONDAY_10AM)
+    assert done["started"] == [] and "no live feed" in done["idle"]  # the heartbeat note says why
     world.live["ready"] = True
     assert (await _tick(world, MONDAY_10AM + timedelta(minutes=1)))["started"] == ["alice"]
+
+
+async def test_recent_losers_judges_net_pnl():
+    from datetime import datetime, timezone
+    from mongomock_motor import AsyncMongoMockClient
+    from backend.engine.autorun import _recent_losers
+
+    db = AsyncMongoMockClient()["test_db"]
+    now = datetime.now(timezone.utc)
+    base = {"user_id": "u", "venue": "paper", "status": "CLOSED", "exit_at": now}
+    await db["paper_trades"].insert_many([
+        {**base, "symbol": "GROSSWIN", "realized_pnl": 10.0, "costs": 25.0},
+        {**base, "symbol": "NETWIN", "realized_pnl": 50.0, "costs": 5.0},
+    ])
+    assert await _recent_losers(db, "u", now) == {"GROSSWIN"}

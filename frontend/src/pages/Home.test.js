@@ -20,7 +20,7 @@ test('hero empty state names the action and links to accounts', () => {
 });
 
 test('Needs you is a 44px tappable control, not a body-text link', () => {
-  assert.match(page, /to="\/ideas"[^>]*min-h-11/);
+  assert.match(page, /to=\{isAdmin \? .\/ideas. : .\/money.\}[^>]*min-h-11/);
   assert.doesNotMatch(page, /<> · <Link/);
 });
 

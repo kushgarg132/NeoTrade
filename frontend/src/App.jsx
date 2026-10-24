@@ -99,9 +99,9 @@ const App = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={gated(<Home />)} />
       <Route path="/money" element={gated(<Money />)} />
-      <Route path="/ideas" element={gated(<Ideas />)} />
-      <Route path="/ideas/history" element={gated(<IdeasHistory />)} />
-      <Route path="/ideas/:id" element={gated(<IdeaDetail />)} />
+      <Route path="/ideas" element={gated(<RequireAdmin><Ideas /></RequireAdmin>)} />
+      <Route path="/ideas/history" element={gated(<RequireAdmin><IdeasHistory /></RequireAdmin>)} />
+      <Route path="/ideas/:id" element={gated(<RequireAdmin><IdeaDetail /></RequireAdmin>)} />
       <Route path="/ai" element={gated(<Ai />)} />
       <Route path="/market" element={gated(<Market />)} />
       <Route path="/stock/:symbol" element={gated(<Stock />)} />

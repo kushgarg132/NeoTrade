@@ -4,7 +4,7 @@ import { LogOut } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../common/Avatar';
-import { MAIN_TABS, tabActive } from './tabs';
+import { tabsFor, tabActive } from './tabs';
 
 /** Desktop navigation: the bottom tabs as a left rail. */
 const SideRail = ({ counts = {} }) => {
@@ -14,7 +14,7 @@ const SideRail = ({ counts = {} }) => {
     <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-56 flex-col border-r border-[var(--border)] bg-[var(--surface)] z-30">
       <Link to="/" className="px-5 h-14 flex items-center text-[17px] font-bold text-[var(--text)]">NeoTrade</Link>
       <nav className="flex-1 px-2 py-2 space-y-1" aria-label="Main">
-        {MAIN_TABS.map((item) => {
+        {tabsFor(user?.role === 'admin').map((item) => {
           const on = tabActive(item, pathname);
           const n = counts[item.counter] || 0;
           return (

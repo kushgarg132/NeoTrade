@@ -11,6 +11,7 @@ from backend.chat.context import build_snapshot, format_snapshot, plan_names
 
 async def _seed(db):
     now = datetime.now(timezone.utc)
+    await db["users"].insert_one({"id": "alice", "role": "admin"})
     for user, symbol, limit in (("alice", "SJVN", 5000.0), ("bob", "BOBCO", 9999.0)):
         await db["suggestions"].insert_one({
             "id": f"s-{user}", "user_id": user, "symbol": symbol, "side": "BUY", "mode": "LONGTERM",
@@ -48,3 +49,10 @@ def test_plan_names_reads_bold_bullets():
     assert plan_names(plan, "sell") == ["WIPRO", "BDL"]
     assert plan_names(plan, "add") == ["HFCL"]
     assert plan_names(None, "add") == []
+
+
+async def test_non_admin_snapshot_shows_no_ideas():
+    db = AsyncMongoMockClient()["test_db"]
+    await _seed(db)
+    snap = await build_snapshot(db, None, "bob")
+    assert snap["decisions"]["pending"] == 0 and snap["decisions"]["top"] == []

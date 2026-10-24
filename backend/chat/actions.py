@@ -142,6 +142,10 @@ class ChatActionStore:
 # ---------------------------------------------------------------------------
 
 async def _pending_suggestion(db, user_id: str, suggestion_id: str, live: bool) -> dict:
+    from backend.suggestions.notify import is_admin
+
+    if not await is_admin(db, user_id):  # engine ideas are admin-only advice
+        raise ActionRefused("Engine ideas are not available on this account.")
     suggestion = await SuggestionStore(db).get(user_id, suggestion_id)
     if suggestion is None or suggestion["status"] != "PENDING":
         raise ActionRefused("No such pending proposal.")

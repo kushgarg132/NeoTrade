@@ -65,7 +65,10 @@ async def _broker(db, user_id, now):
 
 async def _decisions(db, user_id, now):
     from backend.risk.paper_gate import for_mine
+    from backend.suggestions.notify import is_admin
 
+    if not await is_admin(db, user_id):  # engine ideas are admin-only advice
+        return {"as_of": now.isoformat(), "pending": 0, "top": []}
     pending = await for_mine(db, user_id, await SuggestionStore(db).list(user_id, status="PENDING", limit=200))
     top = sorted(pending, key=lambda s: (s.get("score") or {}).get("final") or 0, reverse=True)[:3]
     return {

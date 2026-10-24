@@ -32,7 +32,8 @@ the code disagree, the code is right — fix the handbook in the same commit.
 
 ## Invariants — never break these silently
 
-- **AI is capped at 30% of conviction.** `AI_CAP = 0.30`, clamped inside a frozen dataclass
+- **AI is capped at 30% of conviction, and currently weighted 0 in sizing** (`AI_SIZING_WEIGHT = 0.0`,
+  owner decision 2026-10-24, until validated). `AI_CAP = 0.30`, clamped inside a frozen dataclass
   at `backend/scoring/composite.py:15,25-30`. Not a convention — enforced and tested.
 - **AI cannot rescue a trade the rules did not support.** `RULE_FLOOR = 0.45`;
   `score_intent()` returns `None` below it.

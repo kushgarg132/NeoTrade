@@ -44,6 +44,8 @@ RISK_OFF, RISK_ON = -0.5, 0.3
 BRIEF_SESSION_SECONDS = 60 * 60
 BRIEF_OFF_SECONDS = 6 * 3600
 BRIEF_MIN_GAP_SECONDS = 15 * 60
+BRIEF_TTL_SECONDS = 48 * 3600
+BRIEF_STALE_SESSION_SECONDS, BRIEF_STALE_OFF_SECONDS = 12 * 3600, 36 * 3600  # older: not served as current
 BRIEF_ITEMS = 25
 
 
@@ -250,7 +252,7 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
         return False
     doc = {"text": text, "at": now.timestamp(), "regime": regime_now.get("label"),
            "items": [str(d["_id"]) for d in items]}
-    await redis.set(BRIEF_KEY, json.dumps(doc))
+    await redis.set(BRIEF_KEY, json.dumps(doc), ex=BRIEF_TTL_SECONDS)
     return True
 
 
@@ -269,7 +271,16 @@ async def backdrop(redis) -> dict:
     if redis is None:
         return {}
     try:
-        return {"brief": (await _json(redis, BRIEF_KEY) or {}).get("text"), "regime": await _json(redis, REGIME_KEY)}
+        doc = await _json(redis, BRIEF_KEY) or {}
+        text, as_of = doc.get("text"), None
+        if text:
+            now = datetime.now(timezone.utc)
+            as_of = datetime.fromtimestamp(doc.get("at", 0), timezone.utc)  # no stamp: treated as stale
+            limit = BRIEF_STALE_SESSION_SECONDS if near_session(now) else BRIEF_STALE_OFF_SECONDS
+            if (now - as_of).total_seconds() > limit:
+                text = f"brief unavailable (stale since {as_of.astimezone(IST):%a %d %b %H:%M} IST)"
+        return {"brief": text, "as_of": as_of.isoformat() if as_of else None,
+                "regime": await _json(redis, REGIME_KEY)}
     except Exception as exc:
         logger.warning("market backdrop unavailable: %s", exc)
         return {}

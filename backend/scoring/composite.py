@@ -14,6 +14,12 @@ from backend.core.models import Intent, Side
 
 AI_CAP = 0.30
 RULE_FLOOR = 0.45  # rule_score below this: the trade is dead regardless of AI
+# Share of the AI score that reaches `final` (sizing). 0.0 until AI sentiment is
+# validated against outcomes (audit D-C5, owner decision 2026-10-24): paper sizing
+# then equals backtest sizing (redis=None, neutral AI). `ai_score` is still stored.
+# At 0.0, final = (1 - ai_weight) * rule + ai_weight * 0.5, e.g. 0.7*rule + 0.15 at
+# ai_weight 0.3: the neutral-AI blend, not rule_score itself.
+AI_SIZING_WEIGHT = 0.0
 
 
 @dataclass(frozen=True)
@@ -31,7 +37,7 @@ class CompositeScore:
 
     @property
     def final(self) -> float:
-        return (1 - self.ai_weight) * self.rule_score + self.ai_weight * ((self.ai_score + 1) / 2)
+        return (1 - self.ai_weight) * self.rule_score + self.ai_weight * ((self.ai_score * AI_SIZING_WEIGHT + 1) / 2)
 
 
 def is_bearish(intent: Intent) -> bool:

@@ -50,7 +50,7 @@ from backend.engine.execution.live_order_store import LiveOrderStore
 from backend.engine.execution.routing import RoutingExecutionClient
 from backend.engine.execution.simulated import SimulatedExecutionClient
 from backend.lab.assumptions import DEFAULT as DEFAULT_EXECUTION
-from backend.engine.persistence import LedgerStore, mine_book
+from backend.engine.persistence import LedgerStore, mine_book, trade_net
 from backend.ws.hub import hub
 from backend.ws.publish import publisher_for
 from backend.engine.portfolio import Portfolio
@@ -422,7 +422,7 @@ async def _launch_run(
         user_id=user_id, credentials=credentials,
     )
     # The study's slippage, as in backtests: a market order at a live mark still pays the spread.
-    paper_execution = SimulatedExecutionClient(slippage_bps=DEFAULT_EXECUTION.slippage_bps)
+    paper_execution = SimulatedExecutionClient(slippage_bps=DEFAULT_EXECUTION.slippage_bps, fill_on_next_open=True)
     execution = (
         RoutingExecutionClient(paper=paper_execution, live_by_strategy=live_by_strategy)
         if live_by_strategy else paper_execution
@@ -436,13 +436,14 @@ async def _launch_run(
     # exposure, the kill switch and the 15:15 square-off see them) and closes
     # any left over from an earlier day. A restart used to forget them.
     holders: dict[str, str] = {}
+    levels: dict[str, dict] = {}
     day_realized = 0.0
     if mode == "INTRADAY":
         from backend.engine.adopt import adopt_intraday, close_stale
         from backend.routers.suggestions import _live_mark_price
 
         now = datetime.now(timezone.utc)
-        adopted, holders, stale = await adopt_intraday(db.db, user_id, now)
+        adopted, holders, stale, levels = await adopt_intraday(db.db, user_id, now)
         for symbol, position in adopted.items():
             portfolio.positions.setdefault(symbol, position)
         if stale:
@@ -450,7 +451,7 @@ async def _launch_run(
         # What earlier runs booked today, so a restart does not re-arm the loss limit.
         day_start = datetime.combine(now.astimezone(IST).date(), dt_time(0, 0), tzinfo=IST)
         day_realized = sum(
-            t.get("realized_pnl") or 0.0
+            trade_net(t)
             for t in await ledger.get_trades(status="CLOSED", venue="paper", limit=2000)
             if t.get("exit_at") and t["exit_at"] >= day_start
             and not (t.get("via") or "").startswith("autopilot:")
@@ -470,7 +471,7 @@ async def _launch_run(
         master=master if premium_source is not None else None, premium_source=premium_source,
         on_progress=progress_reporter(user_id, run_id, runs, cycle=len(instruments)),
         learned=await load_rules(db.db, user_id),
-        holders=holders,
+        holders=holders, levels=levels,
         plan=PlanGate(redis_source(db.redis, user_id)) if mode == "INTRADAY" and db.redis is not None else None,
         expand=(make_expand(master, feed, YFinanceProvider(), strategies, symbol_for_token, today)
                 if mode == "INTRADAY" else None),

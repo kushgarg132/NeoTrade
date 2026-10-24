@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: e66f48b
+verified_at: df46e02
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -17,7 +17,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 
 | path | role | key symbols |
 |---|---|---|
-| backend/mine/actions.py | Builds the ranked "Needs you" list, handles dismiss and snooze, and sends stop/target alerts | `mine/actions.py::RANK`, `::build`, `::ideas`, `::_levels`, `::dismiss`, `::snooze`, `::level_alerts`, `::levels_text` |
+| backend/mine/actions.py | Builds the ranked "Needs you" list, handles dismiss and snooze, and sends stop/target alerts | `mine/actions.py::RANK`, `::build`, `::ideas` (admin-only: empty for other roles), `::_levels`, `::dismiss`, `::snooze`, `::level_alerts`, `::levels_text` |
 | backend/mine/events.py | Results and ex-dividend dates from yfinance, plus dividends received | `events.py::refresh`, `::loop`, `::upcoming`, `::dividends_received`, `::_fetch_sync` |
 | backend/mine/history.py | Daily value curve `mine_daily`, replayed from journal trades; XIRR | `history.py::xirr`, `::_inputs`, `::_compute`, `::_store`, `::backfill`, `::write_all`, `::series`, `::returns` |
 | backend/mine/lots.py | FIFO lots, realised matches, broker reconciliation, split detection | `lots.py::_fifo`, `::open_lots`, `::realised`, `::unmatched`, `::split_ratio`, `::reconcile`, `::mine_trades` |
@@ -32,7 +32,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/portfolio/health.py | Per-stock fundamentals, trend and headlines, cached daily | `health.py::stock_health`, `::price_trend`, `::profit_trend` |
 | backend/portfolio/review.py | LLM write-up (summary, notes, plan); explains only | `review.py::write_review`, `MAX_HOLDINGS` |
 | backend/portfolio/rebalance.py | Target weights, rebalance plan, one-tap suggestion, charges, sell tax | `rebalance.py::target_weights`, `::target_gaps`, `::plan_rebalance`, `::suggest`, `::charges`, `::sell_tax`, `::multiplier`, `DEFAULT_TARGETS` |
-| backend/portfolio/digest.py | Pulse (account right now), scoreboard, 08:45 and post-close Telegram digests | `digest.py::pulse`, `::verdicts_visible`, `::headlines_for`, `::pnl_since`, `::scoreboard`, `::send_premarket`, `::send_postclose`, `::premarket_for`, `::postclose_for` (per-user bodies, shared with `/today`), `::premarket_text`, `::postclose_text`, `::last_session_move`, `::_day_summary` (after each digest: Home "Your day", `summaries/day.py::generate`; `send_postclose(db, now, redis)`) |
+| backend/portfolio/digest.py | Pulse (account right now), scoreboard, 08:45 and post-close Telegram digests | `digest.py::pulse`, `::verdicts_visible`, `::headlines_for`, `::pnl_since`, `::scoreboard`, `::send_premarket`, `::send_postclose`, `::premarket_for`, `::postclose_for` (per-user bodies, shared with `/today`), `::premarket_text` (no ideas line for non-admins), `::postclose_text`, `::last_session_move`, `::_day_summary` (after each digest: Home "Your day", `summaries/day.py::generate`; `send_postclose(db, now, redis)`) |
 | backend/journal/store.py | `journal_trades` / `journal_notes` persistence | `journal/store.py::JournalStore.add_trades`, `.list_trades`, `.notes_for`, `.set_note` |
 | backend/journal/roundtrips.py | Groups fills into round trips; instrument kind (pure) | `roundtrips.py::build_round_trips`, `::daily_pnl`, `::instrument_kind`, `::underlying_of` |
 | backend/journal/sync.py | Pulls today's trade book from ACTIVE brokers; Upstox history backfill | `sync.py::sync_user_trades`, `::import_upstox_history`, `::connected_brokers` |
