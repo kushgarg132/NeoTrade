@@ -103,7 +103,9 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
         if show_verdicts and worsened(r.get("previous_verdict"), r.get("verdict", "")):
             out.append(_action("verdict_worse", s, f"{r['previous_verdict']}>{r['verdict']}",
                                f"{s}: {r['previous_verdict']} → {r['verdict']}",
-                               ", ".join(r.get("reason_codes") or []).replace("_", " "), snap_at, {"type": "stock"}))
+                               ", ".join(r.get("reason_codes") or []).replace("_", " "), snap_at,
+                               {"type": "ticket", "side": "SELL", "quantity": held[s], "price": marks.get(s)}
+                               if r["verdict"] == "SELL" and s in held else {"type": "stock"}))
         if "overweight" in (r.get("reason_codes") or []) and s in held:
             weight = f"{r['weight_pct']:.0f}% of your account. " if r.get("weight_pct") is not None else ""
             out.append(_action("overweight", s, "limit", f"{s} is above your size limit",
@@ -123,7 +125,7 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
         if (n.get("direction") or 0) < 0:
             out.append(_action("bad_news", s, n.get("url"), f"{s}: {n.get('title') or 'bad news'}",
                                "Negative news in the last 36 hours.", n.get("published_at") or now,
-                               {"type": "stock"}))
+                               {"type": "stock", "url": n.get("url")}))
 
     for i in await ideas(db, user_id):
         conviction = (i.get("score") or {}).get("final")

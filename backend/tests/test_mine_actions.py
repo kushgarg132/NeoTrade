@@ -206,3 +206,16 @@ def test_postclose_text_lists_top_actions():
     assert "Needs you (4)" in text and "A hit your stop" in text and "B: &lt;cuts&gt; guidance" in text
     assert "C results" in text and "D goes ex-dividend" not in text
     assert "A hit your stop" in digest.premarket_text(None, {}, 0, {}, None, acts)
+
+
+async def test_verdict_to_sell_carries_a_sell_ticket_and_bad_news_its_url(db):
+    await _seed(db, ("HOLD", "SELL"))
+    built = {a["kind"]: a for a in await actions.build(db, "alice", NOW, True)}
+    assert built["verdict_worse"]["action"] == {"type": "ticket", "side": "SELL", "quantity": 10, "price": 85.0}
+    assert built["bad_news"]["action"] == {"type": "stock", "url": "https://n/b"}
+
+
+async def test_verdict_worse_not_to_sell_stays_a_stock_link(db):
+    await _seed(db, ("HOLD", "REVIEW"))
+    found = [a for a in await actions.build(db, "alice", NOW, True) if a["kind"] == "verdict_worse"]
+    assert found and found[0]["action"] == {"type": "stock"}
