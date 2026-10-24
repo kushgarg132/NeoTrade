@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from backend.core.models import Venue
-from backend.engine.persistence import LedgerStore
+from backend.engine.persistence import LedgerStore, trade_net
 from backend.engine.session import IST
 
 
@@ -67,7 +67,7 @@ async def compute_pnl(
     # Net of charges, the figure Practice shows; older rows without `costs` count none.
     costs = lambda trades: sum(t.get("costs") or 0.0 for t in trades)  # noqa: E731
     realized_all = sum(t["realized_pnl"] for t in closed)
-    month_wins = [t for t in month if t["realized_pnl"] > 0]
+    month_wins = [t for t in month if trade_net(t) > 0]
 
     entered_today = [
         t for t in await ledger.get_trades(limit=2000, venue=venue, mode=mode)
@@ -79,8 +79,8 @@ async def compute_pnl(
             "realized": realized_today,
             "unrealized": unrealized,
             "trades": len(today),
-            "wins": len([t for t in today if t["realized_pnl"] > 0]),
-            "losses": len([t for t in today if t["realized_pnl"] < 0]),
+            "wins": len([t for t in today if trade_net(t) > 0]),
+            "losses": len([t for t in today if trade_net(t) < 0]),
             "turnover": sum(t["quantity"] * t["entry_price"] for t in entered_today),
             "costs": costs(today),
             "net": realized_today - costs(today),
@@ -100,7 +100,7 @@ async def compute_pnl(
             "costs": costs(closed),
             "net": realized_all - costs(closed),
             "trades": len(closed),
-            "wins": len([t for t in closed if t["realized_pnl"] > 0]),
+            "wins": len([t for t in closed if trade_net(t) > 0]),
         },
         "open": {
             "positions": open_count,
