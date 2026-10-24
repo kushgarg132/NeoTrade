@@ -132,7 +132,7 @@ async def market_backdrop(db, redis, user_id) -> dict:
     raws = await redis.mget([f"sector_sentiment:{s}" for s in names]) if redis is not None else []
     sector_scores = {s: round(json.loads(r)["score"], 2) for s, r in zip(names, raws)
                      if r and json.loads(r).get("score") is not None}
-    return {"brief": context.get("brief"), "regime": context.get("regime"),
+    return {"brief": context.get("brief"), "brief_as_of": context.get("as_of"), "regime": context.get("regime"),
             "markets": await macro_rows(redis, MACRO), "flows": json.loads(flows) if flows else None,
             "sector_news_sentiment": sector_scores}
 

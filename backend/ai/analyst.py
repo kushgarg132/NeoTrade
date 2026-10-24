@@ -72,8 +72,8 @@ class _Event(BaseModel):
 
 
 class _NewsScores(BaseModel):
-    articles: List[_ArticleScore] = []
-    events: List[_Event] = []
+    articles: List[_ArticleScore]
+    events: List[_Event]
 
 
 def _extract_json(text: str) -> str:
@@ -153,7 +153,8 @@ class AnalystAgent:
         output = await self._analyze(symbol)
         # No news (or a failed fetch) cost no LLM calls; caching it would
         # only hide news that arrives later.
-        if output["news_articles"]:
+        # A failed score or report is not cached either: a blip would pin a neutral 0.0 for 4h.
+        if output["news_articles"] and output["sentiment_analysis"].get("scored"):
             await self._store(symbol, output)
         return output
 
@@ -200,6 +201,7 @@ class AnalystAgent:
             events=json.dumps([e.model_dump() for e in raw_events]),
         )
 
+        scored = scores is not None and summary != "Unable to generate summary."
         label = "bullish" if sentiment > 0.15 else "bearish" if sentiment < -0.15 else "neutral"
         logger.info("AnalystAgent: %s sentiment %.2f from %d/%d relevant article(s)",
                     symbol, sentiment, len(relevant), len(articles))
@@ -217,6 +219,7 @@ class AnalystAgent:
                 "risk_score": max_impact,  # Proxy for risk from news
                 "article_count": len(articles),
                 "relevant_count": len(relevant),
+                "scored": scored,  # False: the LLM failed, sentiment_score 0.0 is "unknown", not neutral
             },
         ).model_dump(mode="json")
 
