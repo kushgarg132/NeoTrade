@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: c5296b6
+verified_at: 7439c01
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -142,7 +142,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
    - Each symbol is scaled by `lots.split_ratio`, and sells are clipped to what the curve holds.
    - It adds a "gap lot" on the first snapshot's day, at its average price, for shares the journal never saw. That
      sets `partial=True`.
-8. **Mine overview**: `routers/mine.py::overview` takes `digest.cached_pulse` (one `pulse` per user per process for `PULSE_TTL_S`=30 s, concurrent reads share it; `/today` uses it too, scheduled digests call `pulse`) as the headline and adds XIRR from
+8. **Mine overview**: `routers/mine.py::overview` takes `digest.cached_pulse` (one `pulse` per user per process for `PULSE_TTL_S`=30 s, concurrent reads share it; `/today` and `::premarket_for`/`::postclose_for` use it too) as the headline and adds XIRR from
    `history.returns`, with dividends from `events.dividends_received` as extra positive flows. It adds the month
    drivers (`::_month_contributions`) and all-time drivers (`pulse.pnl_by_symbol`), plus the mix (`snapshot.concentration`).
 9. **Pulse**: `digest.py::pulse` runs `fetch_holdings` for logged-in brokers. Logged-out rows go through
