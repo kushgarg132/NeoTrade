@@ -134,7 +134,10 @@ def read_tools(db, redis, user_id: str) -> list:
 
     async def get_decisions(status: Literal["pending", "decided"] = "pending", symbol: Optional[str] = None) -> str:
         from backend.risk.paper_gate import for_mine
+        from backend.suggestions.notify import is_admin
 
+        if not await is_admin(db, user_id):  # engine ideas are admin-only advice
+            return _json([])
         items = await for_mine(db, user_id, await SuggestionStore(db).list(user_id, limit=200))
         items = [s for s in items if (s["status"] == "PENDING") == (status == "pending")]
         if symbol:

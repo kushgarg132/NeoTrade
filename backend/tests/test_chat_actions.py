@@ -51,6 +51,7 @@ async def env(monkeypatch):
         instrument_type="EQ", segment="NSE", lot_size=1, tick_size=0.05,
     )])
     await PrefsStore(db).update("alice", {"per_trade_cap": 20000.0, "daily_loss_limit": 1000.0})
+    await db["users"].insert_one({"id": "alice", "role": "admin"})
     for user in ("alice", "bob"):
         await db["suggestions"].insert_one({
             "id": f"s-{user}", "user_id": user, "symbol": "INFY", "side": "BUY", "mode": "LONGTERM",
@@ -613,3 +614,9 @@ async def test_confirm_route_carries_the_refusal_code(env, monkeypatch):
     refused(tap(other, token), 409, "confirm_mismatch")
     refused(tap(card, token), 409, "confirm_expired")  # spent on the wrong card above
     assert env["broker"].placed == []
+
+
+async def test_non_admin_cannot_approve_an_idea(env):
+    out = await _tools(env["db"], "bob")["propose_approve"].ainvoke({"suggestion_id": "s-bob", "live": True})
+    assert "not available" in out
+    assert (await env["db"]["suggestions"].find_one({"id": "s-bob"}))["status"] == "PENDING"
