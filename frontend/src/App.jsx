@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect } from 'react';
-import { Routes, Route, Link, Navigate, useLocation, useNavigationType, useParams } from 'react-router-dom';
+import { Routes, Route, Link, Navigate, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 const Strategies = lazy(() => import('./pages/Strategies'));
 const OptionChain = lazy(() => import('./pages/OptionChain'));
 const Handbook = lazy(() => import('./pages/Handbook'));
@@ -30,7 +30,7 @@ import Button from './components/ui/Button';
 import { useAuth } from './context/AuthContext';
 import { stream } from './lib/ws';
 import RequireAdmin from './components/system/RequireAdmin';
-import { MOVED, LAB_PAGES, movedTarget } from './utils/routes.js';
+import { MOVED, LAB_PAGES, movedTarget, brokerReturnTarget } from './utils/routes.js';
 
 const NotFound = () => (
   <Layout>
@@ -63,8 +63,15 @@ const LAB = {
 
 const App = () => {
   const { user } = useAuth();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigationType = useNavigationType();
+  const navigate = useNavigate();
+
+  // A broker login that came back to some other page goes on to Accounts, which submits its code.
+  useEffect(() => {
+    const to = user && brokerReturnTarget(pathname, search);
+    if (to) navigate(to, { replace: true });
+  }, [user, pathname, search, navigate]);
 
   // A tapped link opens the next page at its top, not at the scroll offset
   // the last page was left at. Back/forward (POP) keeps the browser's own

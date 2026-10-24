@@ -150,8 +150,8 @@ const BrokerSheet = () => {
     setNote(null);
     try {
       const res = await api.get(endpoints.broker.loginUrl(broker));
-      window.open(res.data.url, '_blank', 'noopener');
-      setNote(`Complete the ${BROKER_LABEL[broker]} login, then paste the code from the redirect URL if it isn't picked up automatically.`);
+      // This tab, not a pop-up: iOS blocks window.open after an await. The redirect comes back here with the code.
+      window.location.assign(res.data.url);
     } catch (err) {
       setNote(err?.response?.data?.detail || 'Could not build the login URL');
     } finally {

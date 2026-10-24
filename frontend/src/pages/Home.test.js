@@ -39,3 +39,12 @@ test('Home: AI tile label follows autopilot.live, Market tile says data is unava
   assert.match(page, /failed=\{failed\.money\} onRetry=\{load\}/);
   assert.match(hero, /failed && \(!headline[^\n]*<ErrorLine/);
 });
+
+test('a login alert opens the broker login in this tab (an iOS pop-up after await is blocked)', () => {
+  const src = readFileSync(new URL('./Home.jsx', import.meta.url), 'utf8');
+  const acc = readFileSync(new URL('../components/settings/Accounts.jsx', import.meta.url), 'utf8');
+  assert.match(src, /endpoints\.broker\.loginUrl\(a\.login\)/);
+  assert.match(src, /window\.location\.assign\(res\.data\.url\)/);
+  assert.match(acc, /window\.location\.assign\(res\.data\.url\)/);
+  assert.doesNotMatch(acc, /window\.open\(res\.data\.url/);
+});

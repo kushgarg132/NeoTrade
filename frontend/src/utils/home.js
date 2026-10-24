@@ -67,7 +67,7 @@ export const alerts = (today) => {
   const out = [];
   for (const [role, info] of Object.entries(t.accounts || {})) {
     if (info?.state !== 'ACTIVE') {
-      out.push({ id: `login-${role}`, text: `${BROKERS[info.broker] || info.broker || 'Broker'}${role === 'ai' ? ' (AI)' : ''} login expired`, to: '/settings?tab=accounts', action: 'Log in' });
+      out.push({ id: `login-${role}`, text: `${BROKERS[info.broker] || info.broker || 'Broker'}${role === 'ai' ? ' (AI)' : ''} login expired`, to: '/settings?tab=accounts', login: info.broker, action: 'Log in' });
     }
   }
   if (t.kill_switch?.tripped) out.push({ id: 'kill', text: 'Daily loss limit hit: live trading stopped', to: '/ai', action: 'See AI' });

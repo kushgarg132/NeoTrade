@@ -67,3 +67,10 @@ test('outside the session the day change is the last session, and tiles carry fr
   assert.equal(t.market.meta.text, 'Market closed · last close');
   assert.equal(tileHeadlines({ phase: 'session' }, null, [{ name: 'NIFTY 50', percent: 0.5 }]).market.meta, null);
 });
+
+test('an expired login alert names its broker so the tap can open that broker login', () => {
+  const [up, ai] = alerts({ accounts: { mine: { broker: 'upstox', state: 'EXPIRED' }, ai: { broker: 'kite', state: 'EXPIRED' } } });
+  assert.equal(up.login, 'upstox');
+  assert.equal(ai.login, 'kite');
+  assert.equal(up.to, '/settings?tab=accounts'); // the fallback when the login URL cannot be built
+});

@@ -20,6 +20,16 @@ import { aiBook } from '../utils/ai';
 import { tileHeadlines, phaseLabel, briefKind, alerts } from '../utils/home';
 import { REFRESH_FAILED } from '../utils/formatters';
 
+/** An expired-login alert goes straight to that broker's login, in this tab: iOS blocks a pop-up opened
+ * after an await, and the broker's redirect lands on Settings -> Accounts, which finishes the connect.
+ * If the URL cannot be built, the link's own target (Accounts) still opens. */
+const openBrokerLogin = (e, a) => {
+  e.preventDefault();
+  api.get(endpoints.broker.loginUrl(a.login))
+    .then((res) => window.location.assign(res.data.url))
+    .catch(() => window.location.assign(a.to));
+};
+
 // Home: a hub. One call each for today, the account overview and the indices.
 // A failing call keeps its tile's last figure and marks it "Couldn't refresh".
 const Home = () => {
@@ -82,7 +92,7 @@ const Home = () => {
         </div>
         <HeroRow headline={overview?.headline || today.pulse} nifty={nifty} phase={today.phase} failed={failed.money} onRetry={load} meta={meta('money', h.money.meta)} />
         {alerts(today).map((a) => (
-          <Link key={a.id} to={a.to} role="alert"
+          <Link key={a.id} to={a.to} role="alert" onClick={a.login ? (e) => openBrokerLogin(e, a) : undefined}
                 className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2 text-[14px] font-medium text-[var(--loss)]">
             <span>{a.text}</span>
             <span className="shrink-0 font-semibold underline">{a.action}</span>

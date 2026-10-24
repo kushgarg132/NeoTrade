@@ -57,3 +57,13 @@ export const movedTarget = (from, to, search) => {
   }
   return withSearch(to, q.toString() ? `?${q}` : '');
 };
+
+/** Where a broker's login redirect (Upstox ?code=, Kite ?request_token=) should land when it came back to
+ * some other page: Settings -> Accounts, which submits the code. Null when there is nothing to move. */
+export const brokerReturnTarget = (pathname, search) => {
+  const params = new URLSearchParams(search);
+  if (!params.get('code') && !params.get('request_token')) return null;
+  if (pathname === '/settings' && params.get('tab') === 'accounts') return null;
+  params.delete('tab');
+  return `/settings?tab=accounts&${params.toString()}`;
+};
