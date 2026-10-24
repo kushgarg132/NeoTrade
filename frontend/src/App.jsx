@@ -8,13 +8,16 @@ const LabRuns = lazy(() => import('./pages/LabRuns'));
 const LabForward = lazy(() => import('./pages/LabForward'));
 const Profile = lazy(() => import('./pages/Profile'));
 const SettingsHome = lazy(() => import('./pages/SettingsHome'));
-const Home = lazy(() => import('./pages/Home'));
-const Money = lazy(() => import('./pages/Money'));
-const Ideas = lazy(() => import('./pages/Ideas'));
+// The five tabs: their chunks are fetched once the first screen is idle, so a tab switch never waits on one.
+const TAB_PAGES = [() => import('./pages/Home'), () => import('./pages/Money'), () => import('./pages/Ideas'),
+  () => import('./pages/Ai'), () => import('./pages/Market')];
+const Home = lazy(TAB_PAGES[0]);
+const Money = lazy(TAB_PAGES[1]);
+const Ideas = lazy(TAB_PAGES[2]);
 const IdeaDetail = lazy(() => import('./pages/IdeaDetail'));
 const IdeasHistory = lazy(() => import('./pages/IdeasHistory'));
-const Ai = lazy(() => import('./pages/Ai'));
-const Market = lazy(() => import('./pages/Market'));
+const Ai = lazy(TAB_PAGES[3]);
+const Market = lazy(TAB_PAGES[4]);
 const Stock = lazy(() => import('./pages/Stock'));
 const WeeklyReport = lazy(() => import('./pages/WeeklyReport'));
 import Login from './pages/Login';
@@ -70,6 +73,13 @@ const App = () => {
   useEffect(() => {
     if (navigationType !== 'POP') window.scrollTo(0, 0);
   }, [pathname, navigationType]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1500));
+    const id = idle(() => TAB_PAGES.forEach((load) => load().catch(() => {})));
+    return () => (window.cancelIdleCallback || clearTimeout)(id);
+  }, [user]);
 
   // One socket for the whole session, opened once signed in and closed on the
   // way out so a logged-out tab never holds an authenticated connection.
