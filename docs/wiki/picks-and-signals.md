@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/ml/**, backend/rl/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: a7bd7bb
+verified_at: 37d23f6
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -170,7 +170,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 
 ## Invariants
 
-- **AI ≤ 30 % of conviction**: `composite.py::CompositeScore.__post_init__` clamps `ai_weight` to `[0, AI_CAP]` on a frozen dataclass and range-checks `rule_score` (0..1) and `ai_score` (−1..1). Tested in `test_composite_score.py`.
+- **AI ≤ 30 % of conviction, weight 0 in sizing** (`composite.py::AI_SIZING_WEIGHT`=0.0, owner 2026-10-24: `final` is at neutral AI, `ai_score` still stored): `composite.py::CompositeScore.__post_init__` clamps `ai_weight` to `[0, AI_CAP]` on a frozen dataclass and range-checks `rule_score` (0..1) and `ai_score` (−1..1). Tested in `test_composite_score.py`.
 - **AI can't rescue**: `composite.py::score_intent` returns None if `intent.strength < RULE_FLOOR`. Sentiment is flipped for bearish trades (`is_bearish`).
 - **One conviction formula**: `thesis.py::_rescored` reuses `CompositeScore`. Never add a second blend.
 - Learning only tightens: a floor rises by ≤ `FLOOR_STEP`, never past `FLOOR_CAP`, starts at `RULE_FLOOR` (`adapt.py::decide`). Statistics decide, never the LLM (`adapt.py` docstring; `hypotheses.py` only queues; `draft.py` model never decides).
