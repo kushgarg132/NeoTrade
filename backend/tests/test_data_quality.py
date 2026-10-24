@@ -1,5 +1,7 @@
 import json
 import time
+
+import pytest
 from datetime import datetime, timedelta, timezone
 
 from mongomock_motor import AsyncMongoMockClient
@@ -39,6 +41,15 @@ class _Redis:
             return None
         self.values[key] = value
         return True
+
+
+@pytest.fixture(autouse=True)
+def _lab_on(monkeypatch):
+    from backend.app_settings import AppSettingsStore
+
+    async def on(self):
+        return True
+    monkeypatch.setattr(AppSettingsStore, "get_lab_enabled", on)
 
 
 def _healthy(**overrides) -> _Redis:
@@ -182,3 +193,52 @@ async def test_the_watch_alerts_on_a_failure_held_two_ticks_and_on_recovery():
     assert len(sent) == 2 and sent[1].startswith("✅") and "Quotes loop failing" in sent[1]
     await data_quality.watch_tick(db, redis, MONDAY_MORNING, send=send)  # lock held: another worker's tick
     assert len(sent) == 2
+
+
+WEDNESDAY_11 = datetime(2026, 10, 21, 5, 30, tzinfo=timezone.utc)  # 11:00 IST
+
+
+async def _ok_db(at=WEDNESDAY_11):
+    db = AsyncMongoMockClient()["test_db"]
+    await _picks_ran(db, datetime(2026, 10, 19, 10, 35, tzinfo=timezone.utc))
+    return db
+
+
+async def _failures(db, now=WEDNESDAY_11):
+    redis = _healthy(**{"scheduler:last_pass": "2026-10-20"})
+    return await data_quality.live(db, redis, now)
+
+
+async def test_an_off_lab_on_a_trading_day_is_a_fault_and_not_at_weekends(monkeypatch):
+    from backend.app_settings import AppSettingsStore
+
+    async def off(self):
+        return False
+    monkeypatch.setattr(AppSettingsStore, "get_lab_enabled", off)
+    db = await _ok_db()
+    assert [f for f in await _failures(db) if f.startswith("Lab is off")]
+    assert not any(f.startswith("Lab is off") for f in await data_quality.live(db, _healthy(), SATURDAY))
+
+
+async def test_an_auto_user_without_a_fresh_intraday_run_is_named():
+    db = await _ok_db()
+    await db["user_prefs"].insert_one({"user_id": "u1", "auto_paper_intraday": True})
+    assert await _failures(db) == ["No INTRADAY run today for u1 (auto-run is on)"]
+    assert await _failures(db, datetime(2026, 10, 21, 3, 30, tzinfo=timezone.utc)) == []  # 09:00: too early
+    start = datetime(2026, 10, 21, 3, 50, tzinfo=timezone.utc)  # 09:20 IST
+    run = {"user_id": "u1", "mode": "INTRADAY", "status": "RUNNING", "started_at": start,
+           "progress": {"last_bar_at": (WEDNESDAY_11 - timedelta(minutes=20)).isoformat()}}
+    await db["trading_runs"].insert_one(run)
+    assert "saw no bar for 20 min" in (await _failures(db))[0]
+    await db["trading_runs"].update_one({}, {"$set": {"progress.last_bar_at": (WEDNESDAY_11 - timedelta(minutes=2)).isoformat()}})
+    assert await _failures(db) == []
+
+
+async def test_a_collapsed_news_triage_rate_is_named_and_a_steady_one_is_not():
+    db = await _ok_db()
+    steady = [{"triaged_at": WEDNESDAY_11 - timedelta(minutes=m)} for m in range(0, 7 * 24 * 60, 2)]  # 30/h
+    await db["news_items"].insert_many(steady)
+    assert await _failures(db) == []
+    await db["news_items"].delete_many({"triaged_at": {"$gte": WEDNESDAY_11 - timedelta(hours=3)}})
+    await db["news_items"].insert_one({"triaged_at": WEDNESDAY_11 - timedelta(hours=1)})
+    assert (await _failures(db))[0].startswith("News triage stalled")

@@ -208,6 +208,7 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
     from backend import app_settings
     if enabled and not await app_settings.lab_on("the intraday auto-run", db):
         enabled = set()  # running slots stop below, as if turned off mid-session
+        done["idle"] = "lab off"
 
     try:
         await _login_reminders(db, redis, now)
@@ -282,6 +283,7 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
         await _release(redis, slot)
 
         if not await _may_start(runs, user_id, mode, now, redis=redis):
+            done.setdefault("idle", "no live feed, skip-day plan or already run today")
             continue
         if not await redis.set(_key(slot), _TOKEN, nx=True, px=KEY_TTL_MS):
             continue  # another worker owns this run
@@ -505,7 +507,10 @@ async def autorun_loop(db, redis) -> None:
             result = await tick(db, redis)
             if result["started"] or result["stopped"]:
                 logger.info("auto-run: %s", result)
-            await mark(redis, "autorun", True, f"started {len(result['started'])}, stopped {len(result['stopped'])}")
+            note = f"started {len(result['started'])}, stopped {len(result['stopped'])}"
+            if result.get("idle"):
+                note += f"; nothing started: {result['idle']}"
+            await mark(redis, "autorun", True, note)
         except Exception as exc:
             logger.exception("auto-run tick failed: %s", exc)
             await mark(redis, "autorun", False, f"{type(exc).__name__}: {exc}")

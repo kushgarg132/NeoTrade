@@ -23,6 +23,10 @@ Informational, not failures: unlisted universe symbols, and silent news feeds
 - the Picks job's study not written for that day;
 - the LLM provider failing: the last `get_completion` error is newer than
   its last success and under LLM_DOWN_AFTER old (kiro 401s, 2026-10-21..23).
+- (Phase 23.0) silent stops, on trading days only: the Lab switch off; an
+  `auto_paper_intraday` user with no INTRADAY run today (after 09:30 IST) or
+  whose running run saw no bar for 15 min (until 15:30); news triage under
+  20% of its 7-day hourly mean over the last 3 hours (08:00-20:00 IST).
 
 `watch_loop` (jobs process) runs `live` every WATCH_SECONDS and sends the
 admin a Telegram message when a failure has held for two ticks, and again
@@ -57,6 +61,10 @@ MIN_STALE_SECONDS = 120
 BELLWETHERS = 5  # first names of the Nifty 200 the quotes loop always covers
 LLM_DOWN_AFTER = 30 * 60  # an error older than this, with no success since, is just old news
 WATCH_SECONDS = 300
+RUN_CHECK_FROM, RUN_CHECK_UNTIL = time(9, 30), time(15, 30)
+BAR_STALE_AFTER = timedelta(minutes=15)
+NEWS_FROM, NEWS_UNTIL = time(8, 0), time(20, 0)
+NEWS_WINDOW, NEWS_BASELINE, NEWS_MIN_RATIO = timedelta(hours=3), timedelta(days=7), 0.2
 WATCH_LOCK, WATCH_STATE = "data_quality:watch_lock", "data_quality:watch"
 
 
@@ -131,12 +139,77 @@ async def _llm(redis, now: datetime) -> list[str]:
     return [f"AI provider failing: {error['error'][:160]}"]
 
 
+async def _lab(db) -> list[str]:
+    from backend.app_settings import AppSettingsStore
+
+    if await AppSettingsStore(db).get_lab_enabled():
+        return []
+    return ["Lab is off: the intraday auto-run, news scoring and nightly learning are not running"]
+
+
+def _as_ist(value) -> Optional[datetime]:
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
+    if value is None:
+        return None
+    return value.astimezone(IST) if value.tzinfo else value.replace(tzinfo=timezone.utc).astimezone(IST)
+
+
+async def _intraday_runs(db, redis, now: datetime) -> list[str]:
+    from backend.plan import store as plan_store
+
+    local = now.astimezone(IST)
+    if not RUN_CHECK_FROM <= local.time() < RUN_CHECK_UNTIL:
+        return []
+    day_start = datetime.combine(local.date(), time(0, 0), tzinfo=IST)
+    failures = []
+    async for prefs in db["user_prefs"].find({"auto_paper_intraday": True}, {"user_id": 1}):
+        user = prefs["user_id"]
+        if redis is not None:
+            plan = await plan_store.current(redis, user, local.date())
+            if plan and plan.get("skip_day"):
+                continue  # today's game plan sits the run out on purpose
+        runs = await db["trading_runs"].find(
+            {"user_id": user, "mode": "INTRADAY", "started_at": {"$gte": day_start}}).sort("started_at", -1).to_list(length=None)
+        if not runs:
+            failures.append(f"No INTRADAY run today for {user} (auto-run is on)")
+            continue
+        running = next((r for r in runs if r["status"] == "RUNNING"), None)
+        if running:
+            seen = _as_ist((running.get("progress") or {}).get("last_bar_at")) or _as_ist(running["started_at"])
+            if local - seen > BAR_STALE_AFTER:
+                failures.append(f"INTRADAY run for {user} saw no bar for {(local - seen) // timedelta(minutes=1)} min")
+    return failures
+
+
+async def _news_rate(db, now: datetime) -> list[str]:
+    local = now.astimezone(IST)
+    if not NEWS_FROM <= local.time() < NEWS_UNTIL:
+        return []
+
+    async def count(since):
+        return await db[NEWS].count_documents({"triaged_at": {"$gte": since, "$lte": now}})
+
+    # ponytail: baseline is the all-hours 7-day mean (night hours dilute it, so it errs quiet); use day hours only if it proves too lax.
+    mean = await count(now - NEWS_BASELINE) / (NEWS_BASELINE / timedelta(hours=1))
+    rate = await count(now - NEWS_WINDOW) / (NEWS_WINDOW / timedelta(hours=1))
+    if mean and rate < NEWS_MIN_RATIO * mean:
+        return [f"News triage stalled: {rate:.0f}/h over the last 3 h vs a 7-day mean of {mean:.0f}/h"]
+    return []
+
+
+async def _silent_stops(db, redis, now: datetime) -> list[str]:
+    if not is_trading_day(now.astimezone(IST).date()):
+        return []
+    return [*await _lab(db), *await _intraday_runs(db, redis, now), *await _news_rate(db, now)]
+
+
 async def live(db, redis, now: Optional[datetime] = None) -> list[str]:
     now = now or datetime.now(timezone.utc)
     if redis is None:
-        return await _picks(db, now)
+        return [*await _picks(db, now), *await _silent_stops(db, None, now)]
     return [*await _heartbeats(redis), *await _quotes(redis), *await _last_pass(redis, now), *await _picks(db, now),
-            *await _llm(redis, now)]
+            *await _llm(redis, now), *await _silent_stops(db, redis, now)]
 
 
 async def check(db, redis=None, now: Optional[datetime] = None) -> dict:
