@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: df46e02
+verified_at: 0ecdf6d
 ---
 # Data layer, AI and background jobs
 
@@ -58,7 +58,7 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | `backend/plan/replay.py` | nightly plan(A) vs no-plan(B) replay; `weeks_beating` | `replay.py::replay_day`, `::replay_all`, `::weeks_beating`, `::SCORECARDS` |
 | `backend/plan/notify.py` | Telegram text for plans (not for fallback) | `notify.py::plan_text`, `::notify_plan` |
 | `backend/routers/plan.py` | `GET /plan/today` | `plan.py::plan_today` |
-| `backend/summaries/core.py` | shared by every AI summary: Redis NX claim per user+kind+period, grounded text, failure back-off (6 h), Mongo `ai_summaries` | `core.py::produce`, `::get`, `::latest`, `::shown`, `::FAIL_BACKOFF` |
+| `backend/summaries/core.py` | shared by every AI summary: Redis NX claim per user+kind+period, facts rendered by `::as_facts` with floats rounded to 2 dp, grounded text, failure back-off (6 h), Mongo `ai_summaries` | `core.py::produce`, `::get`, `::latest`, `::shown`, `::FAIL_BACKOFF` |
 | `backend/summaries/day.py` | Home "Your day": 3 lines pre-open and post-close, feature `portfolio`, tier `fast` | `day.py::generate`, `::TTL` |
 | `backend/summaries/holding.py` | note under each bad-news / results-soon action, cached by action id, feature `news`, tier `fast` | `holding.py::run_all`, `::run_user`, `::note_for`, `::PER_RUN`, `::PER_DAY` |
 | `backend/summaries/activity.py` | AI > Activity "what the AI did today and why": autopilot_log + game plan + AI book P&L, feature `plan`, tier `standard` | `activity.py::generate`, `::run_all` |
