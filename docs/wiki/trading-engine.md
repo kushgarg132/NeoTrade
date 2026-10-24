@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: 9595c0e
+verified_at: 37d23f6
 ---
 # Trading engine
 
@@ -47,7 +47,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/risk/live_confirm.py` | Server-checked second tap for real money on `mine`: one-time 60 s token bound to user, subject, terms hash | `live_confirm.py::issue`, `::redeem`, `::TokenRefused` (`.code` confirm_missing/expired/spent/mismatch/other_user, `.response()`; Telegram logs the code) |
 | `backend/autopilot/fence.py` | Pure order fence (every autopilot order) | `fence.py::check`, `::FenceState`, `::trade_cap`, `::round_trip_cost` |
 | `backend/autopilot/service.py` | Fence -> fill (paper/live) -> log -> Telegram | `service.py::submit`, `::_submit`, `::_state`, `::check_exits`, `::ledger_user`, `::book`, `::ai_book_query` |
-| `backend/autopilot/picks.py` | AI account trades stored Picks (the latest pass only, never `backfilled` ones) | `picks.py::enter`, `::exit_due`, `::live_allowed` |
+| `backend/autopilot/picks.py` | AI account trades stored Picks (the latest pass only, never `backfilled` ones; grade-A setups only, ranked by adjusted excess) | `picks.py::enter`, `::exit_due`, `::live_allowed` |
 | `backend/brokers/protocol.py` | The `BrokerAdapter` interface | `protocol.py::BrokerAdapter`, `::BrokerSessionState` |
 | `backend/brokers/registry.py` | Only place that lists brokers | `registry.py::BROKERS`, `::get_broker_adapter`, `::UnknownBroker` |
 | `backend/brokers/roles.py` | `ai` / `mine` role routing, no fallback | `roles.py::adapter_for`, `::validate_roles`, `::RoleUnavailable` |
@@ -192,7 +192,7 @@ All IST; trading days only (`core/market_calendar.py`: weekends + static NSE hol
 - Any order with no `strategy_name` routes to paper (`routing.py::_client_for`); a priced option contract goes live only through an adapter with `supports_options` (Kite, Upstox; Angel One raises).
 - A strategy routes live only if: toggled live AND ACTIVE `ai` broker AND autopilot on+live AND backtest gate AND paper gate (`trading.py::_launch_run`). Live engine orders never go straight to a broker: `AutopilotExecutionClient` -> `service.submit` -> fence. Everything uncertain falls back to paper.
 - Only `autopilot/` places orders on the `ai` account, only after `fence.check` (CLAUDE.md exception); nothing routes an AI order to `mine` (`roles.py::adapter_for` never falls back across roles).
-- Fence (`fence.py::check`): market open for every order incl. exits; NSE CNC/MIS only; SELL only what the autopilot holds in that product (never short); exits never blocked by caps or the switch; entries need `autopilot_enabled`, no kill trip (`autopilot_state.tripped_day` OR `kill_switch_trips`), no `event_soon`, Nifty 200 (`factor/data.universe`), not already held, not held by another strategy in the same book, notional <= `trade_cap` (halved `risk_off`), deployed + notional <= `max_exposure`, `max_trades_per_day` (0 off), and when the order's `context.expected_return` is set (Picks: `expected.median`, `autopilot/picks.py::enter`; engine/news proposals: target / mark - 1, `autorun.py::_autopilot_proposals`) expected gain >= `COST_MULTIPLE`=1.5 x `round_trip_cost` (both sides' `fill_costs` + 2 x 10 bps slippage); `source=news` also needs `autopilot_news`, not risk-off, <= `NEWS_ENTRIES_PER_DAY`=3. Regime only tightens.
+- Fence (`fence.py::check`): market open for every order incl. exits; NSE CNC/MIS only; SELL only what the autopilot holds in that product (never short); exits never blocked by caps or the switch; entries need `autopilot_enabled`, no kill trip (`autopilot_state.tripped_day` OR `kill_switch_trips`), no `event_soon`, Nifty 200 (`factor/data.universe`), not a parked strategy (`fence.PARKED` + `built:*`; no edge, audit 2026-10-24), not already held, not held by another strategy in the same book, notional <= `trade_cap` (halved `risk_off`), deployed + notional <= `max_exposure`, `max_trades_per_day` (0 off), and when the order's `context.expected_return` is set (Picks: `expected.median`, `autopilot/picks.py::enter`; engine/news proposals: target / mark - 1, `autorun.py::_autopilot_proposals`) expected gain >= `COST_MULTIPLE`=1.5 x `round_trip_cost` (both sides' `fill_costs` + 2 x 10 bps slippage); `source=news` also needs `autopilot_news`, not risk-off, <= `NEWS_ENTRIES_PER_DAY`=3. Regime only tightens.
 - Kill switch trips once per user per IST day and never re-arms (`$setOnInsert`); blocks INTRADAY entries only; `daily_loss_limit` 0 = off; `day_realized` carried across restarts.
 - One run per `(user, mode)` (Redis lock + `RunStore.list_active`); one auto-run owner per slot (`autorun:*`); one open position row per `(user,symbol)` (unique index) so an entry on a held symbol is skipped (`run` step 6).
 - Position ownership: only `holders[symbol]`'s strategy may add/exit (`size_intents`); exits close what is held, never flip (`size = abs(held)`).

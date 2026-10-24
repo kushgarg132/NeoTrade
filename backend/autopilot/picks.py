@@ -20,7 +20,7 @@ from typing import Optional
 from backend.autopilot import fence, service
 from backend.core.models import Side
 from backend.engine.session import IST, is_past_square_off_time
-from backend.forecast.picks import PICKS, live_refusal
+from backend.forecast.picks import PICKS, STUDY, live_refusal, setup_grades
 from backend.marks import ORDER_MAX_AGE_SECONDS, mark_prices
 from backend.prefs import PrefsStore
 
@@ -57,14 +57,18 @@ async def enter(db, redis, user_id: str, now: datetime) -> list[dict]:
     traded = set(await db["paper_trades"].distinct(
         "context.pick_id", {"user_id": {"$in": [user_id, service.ledger_user(user_id)]},
                             "context.pick_id": {"$in": [p["_id"] for p in picks]}}))
-    picks = [p for p in picks if p["_id"] not in traded]
+    # Only grade-A setups (adjusted out-of-sample edge) are bought; best adjusted excess first (audit T3, 2026-10-24).
+    study = await db[STUDY].find_one({"_id": "latest"}) or {}
+    grades = setup_grades(study)
+    adj = {s["setup"]: (s.get("adjusted") or {}).get("excess") or 0.0 for s in study.get("setups", [])}
+    picks = [p for p in picks if p["_id"] not in traded and grades.get(p["setup"]) == "A"]
     if not picks:
         return []
     prefs = await PrefsStore(db).get(user_id)
     live = await live_allowed(db, prefs)
     cap = fence.trade_cap(prefs, (await service.regime_now(redis)).get("label"))
     marks = await mark_prices(db, {p["symbol"] for p in picks}, max_age_seconds=ORDER_MAX_AGE_SECONDS)
-    picks.sort(key=lambda p: (p["median_excess"] * p["p_beat_nifty"], p["strength"]), reverse=True)
+    picks.sort(key=lambda p: (adj[p["setup"]], p["strength"]), reverse=True)
     results = []
     for p in picks:
         price = marks.get(p["symbol"])

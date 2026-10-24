@@ -47,7 +47,13 @@ def world(monkeypatch):
     return db, sent, regime
 
 
-async def _setup(db, role="admin", **prefs):
+def _study(**grades):
+    """picks_study doc: setup -> (adjusted excess, t); t >= 2 is grade A, t 0 is C."""
+    return {"_id": "latest", "setups": [{"setup": k, "adjusted": {"excess": e, "t": t, "edge": t >= 2}} for k, (e, t) in grades.items()]}
+
+
+async def _setup(db, role="admin", study=None, **prefs):
+    await db["picks_study"].insert_one(study or _study(momentum=(0.02, 3.0), reversal=(0.01, 3.0), weak=(-0.01, 0.0)))
     await db["users"].insert_one({"id": "alice", "role": role})
     await db["user_prefs"].insert_one({"user_id": "alice", "broker_roles": {"kite": "ai", "upstox": "mine"},
                                        **PREFS, **prefs})
@@ -105,7 +111,7 @@ async def test_exits_run_even_with_the_autopilot_off_and_a_late_one_goes_at_once
 async def test_sizing_stays_inside_the_per_trade_cap_and_max_invested(world):
     db, _, regime = world
     await _setup(db, max_exposure=7_000.0)
-    await db["picks"].insert_many([_pick("INFY", excess=0.03), _pick("TCS", excess=0.01)])
+    await db["picks"].insert_many([_pick("INFY", setup="momentum"), _pick("TCS", setup="reversal")])
     results = await trading.enter(db, None, "alice", MORNING)
     assert results[0]["status"] == "FILLED" and results[1]["status"] == "REFUSED"
     assert "max invested" in results[1]["reason"]
@@ -189,3 +195,11 @@ async def test_live_picks_go_to_the_ai_account_never_mine(world, monkeypatch):
     [result] = await trading.enter(db, None, "alice", MORNING)
     assert roles == ["ai"] and result["status"] == "REFUSED" and result["mode"] == "live"
     assert await _trades(db) == []
+
+
+async def test_only_grade_a_setups_are_bought_best_adjusted_excess_first(world):
+    db, _, _ = world
+    await _setup(db)
+    await db["picks"].insert_many([_pick("INFY", setup="weak"), _pick("TCS", setup="reversal"), _pick("HDFCBANK", setup="momentum")])
+    await trading.enter(db, None, "alice", MORNING)
+    assert [t["symbol"] for t in await _trades(db)] == ["HDFCBANK", "TCS"]  # grade C "weak" never bought

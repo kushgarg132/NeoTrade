@@ -249,9 +249,9 @@ async def test_the_engines_practice_trades_do_not_count_against_the_autopilot(wo
     await _prefs(db)
     await db["paper_trades"].insert_many([
         {"user_id": "alice", "symbol": "TCS", "side": "BUY", "status": "OPEN", "quantity": 100,
-         "entry_price": 1000.0, "strategy": "macd_crossover", "venue": "paper"},
+         "entry_price": 1000.0, "strategy": "orb_breakout", "venue": "paper"},
         {"user_id": "alice", "symbol": "SBIN", "side": "BUY", "status": "CLOSED", "realized_pnl": -5000.0,
-         "strategy": "macd_crossover", "venue": "paper", "exit_at": OPEN.replace(hour=10)},
+         "strategy": "orb_breakout", "venue": "paper", "exit_at": OPEN.replace(hour=10)},
     ])
     assert (await service.submit(db, None, "alice", _order(qty=2), now=OPEN))["status"] == "FILLED"
     refused = await service.submit(db, None, "alice", _order(symbol="TCS"), now=OPEN)
@@ -374,13 +374,13 @@ async def test_an_autopilot_trade_counts_for_the_strategy_whose_idea_it_was(worl
 
     db, _ = world
     await _prefs(db)
-    order = replace(_order(qty=2), source="engine", strategy="macd_crossover")
+    order = replace(_order(qty=2), source="engine", strategy="orb_breakout")
     await service.submit(db, None, "alice", order, now=OPEN)
     await service.submit(db, None, "alice", replace(order, side=Side.SELL), now=OPEN)
 
     (trade,) = await db["paper_trades"].find({"user_id": "alice"}).to_list(None)
-    assert trade["strategy"] == "macd_crossover" and trade["via"] == "autopilot:engine"
-    checks = (await paper_records(db, "alice", ["macd_crossover"], 25_000.0))["macd_crossover"]["checks"]
+    assert trade["strategy"] == "orb_breakout" and trade["via"] == "autopilot:engine"
+    checks = (await paper_records(db, "alice", ["orb_breakout"], 25_000.0))["orb_breakout"]["checks"]
     assert next(c for c in checks if c["rule"] == "trades")["have"] == 1
 
 
@@ -427,7 +427,7 @@ async def test_the_autopilot_skips_ideas_the_open_has_already_broken(world, monk
 
     monkeypatch.setattr("backend.marks.mark_prices", marks)
     base = {"user_id": "alice", "side": "BUY", "mode": "LONGTERM", "quantity": 4, "status": "PENDING",
-            "strategy": "macd_crossover", "score": {"final": 0.6}}
+            "strategy": "orb_breakout", "score": {"final": 0.6}}
     await db["suggestions"].insert_many([
         {**base, "id": "gap", "symbol": "INFY", "entry_ref": 1050.0, "stop": 1010.0},   # opened under its stop
         {**base, "id": "chase", "symbol": "TCS", "entry_ref": 900.0, "stop": 850.0},    # 11% past its entry
@@ -451,3 +451,11 @@ def test_an_entry_whose_expected_gain_cannot_pay_its_round_trip_is_refused():
     assert fence.check(_order(qty=2), 1500.0, _state(), PREFS) is None  # says nothing: no rule
     cost = round_trip_cost(1500.0, 2, "CNC")
     assert 3000 * 0.006 < cost < 3000 * 0.012  # charges + DP + 2 x 10 bps on a ₹3,000 lot
+
+
+@pytest.mark.parametrize("strategy", ["analyst_verdict", "mean_reversion", "built:abc"])
+def test_parked_strategy_entries_are_refused_but_exits_are_not(strategy):
+    buy = AutopilotOrder(symbol="INFY", side=Side.BUY, quantity=1, product="CNC", source="engine", reason="t", strategy=strategy)
+    assert "parked" in fence.check(buy, 100.0, _state(), PREFS)
+    sell = AutopilotOrder(symbol="INFY", side=Side.SELL, quantity=1, product="CNC", source="engine", reason="t", strategy=strategy)
+    assert fence.check(sell, 100.0, _state(held={"INFY": (1, "CNC")}), PREFS) is None

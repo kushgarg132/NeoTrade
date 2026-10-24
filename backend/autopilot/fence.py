@@ -19,6 +19,9 @@ from backend.core.models import Side
 
 PRODUCTS = {"CNC", "MIS"}
 NEWS_ENTRIES_PER_DAY = 3
+# Strategies with no measured edge (trading-edge audit 2026-10-24): no new autopilot entries; exits stay open.
+PARKED = frozenset({"analyst_verdict", "technical_breakout", "macd_crossover", "mean_reversion",
+                    "trend_day_pullback", "gap_fill_fade", "relative_strength_sector"})
 COST_MULTIPLE = 1.5  # an entry's expected gain must clear this many times its round-trip cost
 
 
@@ -73,6 +76,9 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
         return None
     if not prefs.get("autopilot_enabled"):
         return "The autopilot is off."
+    strategy = getattr(order, "strategy", None) or ""
+    if strategy in PARKED or strategy.startswith("built:"):
+        return "strategy parked: no edge (audit 2026-10-24)"
     notional = price * order.quantity
     if state.kill_tripped:
         return "The daily loss limit was hit: no new entries today."
