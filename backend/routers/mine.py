@@ -75,7 +75,7 @@ async def overview(user: User = Depends(get_current_user)):
 
     now = datetime.now(timezone.utc)
     today = now.astimezone(IST).date()
-    pulse = await digest.pulse(db.db, user.id, now)
+    pulse = await digest.cached_pulse(db.db, user.id, now)
     snapshot = await latest_snapshot(db.db, user.id)
     headline = None
     if pulse:

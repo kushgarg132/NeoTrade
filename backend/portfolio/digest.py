@@ -6,6 +6,7 @@ Telegram messages built from it -- 08:45 IST before the open, and after the
 Pricing never calls a broker: the last snapshot's holdings are repriced from
 market quotes (service.quoted), so Today can poll it every minute."""
 
+import asyncio
 import logging
 from datetime import datetime, time, timedelta, timezone
 from html import escape
@@ -118,6 +119,24 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
                     "why": why.get(r["symbol"])} for r in top],
         "verdict_changes": changes,
     }
+
+
+PULSE_TTL_S = 30
+_PULSE_CACHE: dict = {}  # (id(db), user_id) -> (monotonic at, task)
+
+
+async def cached_pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[dict]:
+    """`pulse` for a page request, shared for PULSE_TTL_S per user and process: it reads the
+    broker and quotes, the slowest part of Home/Money/AI (0.1-0.5 s), and those pages ask together."""
+    from time import monotonic  # this module's `time` is datetime.time
+
+    key = (id(db), user_id)
+    hit = _PULSE_CACHE.get(key)
+    if hit and monotonic() - hit[0] < PULSE_TTL_S and not (hit[1].done() and hit[1].exception()):
+        return await asyncio.shield(hit[1])
+    task = asyncio.ensure_future(pulse(db, user_id, now))
+    _PULSE_CACHE[key] = (monotonic(), task)
+    return await asyncio.shield(task)
 
 
 async def last_session_move(db, held: dict[str, float], today) -> Optional[dict]:

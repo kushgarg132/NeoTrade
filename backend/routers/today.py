@@ -244,7 +244,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         "live_armed": {"autopilot": bool(prefs.get("autopilot_enabled") and prefs.get("autopilot_live")),
                        "strategies": prefs.get("live_strategies") or []},
         "kill_switch": kill,
-        "pulse": await part("pulse", digest.pulse(db.db, user.id, now)),
+        "pulse": await part("pulse", digest.cached_pulse(db.db, user.id, now)),
         "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now, user.role == "admin")) or [],
         "mine_actions": (acts := await part("mine_actions", _mine_actions(user.id, now)) or [])[:TOP_ACTIONS],
         "mine_actions_total": len(acts),
