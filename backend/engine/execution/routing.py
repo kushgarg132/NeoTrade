@@ -31,6 +31,13 @@ class RoutingExecutionClient:
             return self._paper
         return live
 
+    def is_paper(self, order: Order) -> bool:
+        return self._client_for(order) is self._paper
+
+    async def fill_now(self, order: Order, price: float, timestamp) -> str:
+        # Only for a paper-routed order (runner checks is_paper first).
+        return await self._paper.fill_now(order, price, timestamp)
+
     async def submit(self, order: Order) -> str:
         return await self._client_for(order).submit(order)
 

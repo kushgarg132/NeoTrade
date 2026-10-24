@@ -577,6 +577,7 @@ async def run(
     levels = dict(levels or {})  # symbol -> exit levels of the open equity position
     recent: dict[str, deque] = {}  # each symbol's last 15 bars: the trail's ATR
     simulated = hasattr(execution, "fill_now")  # paper/backtest: fills at a given level at once
+    exiting: set[str] = set()  # symbols with a reduce-only exit in flight: no second one on top
 
     async def exit_at_level(symbol, bar, past, entry_bar: bool = False) -> bool:
         """Exits `symbol` if `bar` reached its stop, target, trail or hold.
@@ -596,9 +597,11 @@ async def run(
         )
         if ledger is not None:
             await ledger.record_order(order)
-        if simulated:
+        # A Routing client decides per order: paper fills at the level, a broker gets the MARKET.
+        if simulated and getattr(execution, "is_paper", lambda o: True)(order):
             await execution.fill_now(order, level, bar.timestamp)
         else:
+            exiting.add(symbol)
             await execution.submit(order)
         return True
 
@@ -606,6 +609,7 @@ async def run(
         async for fill in execution.fills():
             quantity_before = portfolio.positions[fill.symbol].quantity if fill.symbol in portfolio.positions else 0.0
             portfolio.apply(fill)
+            exiting.discard(fill.symbol)
             if ledger is not None:
                 await ledger.on_fill(fill, quantity_before, portfolio.positions[fill.symbol])
             name = strategy_of_order.get(fill.order_id) or holders.get(fill.symbol)
@@ -729,6 +733,10 @@ async def run(
             held = portfolio.positions.get(order.symbol)
             if simulated and order.product == "CNC" and order.side == Side.SELL and (held is None or held.quantity < order.quantity):
                 continue  # a delivery account cannot short (suggestions/service.py refuses it too)
+            if held is not None and held.quantity != 0 and (order.side == Side.SELL) == (held.quantity > 0):
+                if order.symbol in exiting:
+                    continue  # an exit for this position is already in flight
+                exiting.add(order.symbol)
             if ledger is not None and (held is None or held.quantity == 0):
                 # One position row per symbol in the book: an entry on a stock
                 # someone else holds there (a long-term or autopilot trade bought
