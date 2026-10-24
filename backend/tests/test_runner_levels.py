@@ -98,3 +98,32 @@ async def test_routing_run_paper_exit_fills_at_level_once_on_the_square_off_bar(
               per_trade_cap=5_000.0)
     assert [(f.side, f.price) for f in fills] == [(Side.BUY, 102.0), (Side.SELL, 95.0)]
     assert portfolio.positions["ITC"].quantity == 0
+
+
+@pytest.mark.asyncio
+async def test_strategy_exit_and_level_hit_on_the_same_bar_book_one_sell():
+    """A strategy SELL queued on the bar its position filled at the open, which then reaches the stop: one SELL, flat."""
+    class _BuyThenSell(_BuyOnce):
+        bars = 0
+
+        def on_bar(self, ctx, bar):
+            self.bars += 1
+            if self.bars == 2:
+                ctx.submit(Intent(symbol="ITC", side=Side.SELL, strength=1.0, reason_codes=["t"], stop_hint=110.0))
+            else:
+                super().on_bar(ctx, bar)
+
+    execution, portfolio, fills = SimulatedExecutionClient(fill_on_next_open=True), Portfolio(), []
+    original = execution.fills
+
+    async def recording():
+        async for f in original():
+            fills.append(f)
+            yield f
+
+    execution.fills = recording
+    await run(strategies=[_BuyThenSell()], feed=_Feed([(100, 101, 99, 100), (102, 103, 94, 96), (96, 97, 95, 96)]),
+              execution=execution, portfolio=portfolio, clock=SimClock(), symbol_for_token={1: "ITC"},
+              account_size=25_000.0, max_exposure=15_000.0, per_trade_cap=5_000.0)
+    assert [f.side for f in fills] == [Side.BUY, Side.SELL]
+    assert portfolio.positions["ITC"].quantity == 0

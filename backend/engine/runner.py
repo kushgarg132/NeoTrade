@@ -584,7 +584,8 @@ async def run(
         Paper fills at the level (or the open on a gap); a broker gets a MARKET exit."""
         position = portfolio.positions.get(symbol)
         lv = levels.get(symbol)
-        if lv is None or position is None or position.quantity == 0 or (lv["fresh"] and not entry_bar):
+        if (lv is None or position is None or position.quantity == 0 or (lv["fresh"] and not entry_bar)
+                or symbol in exiting):  # an exit is already in flight for it
             return False
         level = _level_hit(lv, position, bar, past, entry_bar)
         if level is None:
