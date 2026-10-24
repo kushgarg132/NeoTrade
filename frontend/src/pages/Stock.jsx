@@ -182,13 +182,13 @@ const Stock = () => {
             </div>
             <div className="mt-2 text-[14px] text-[var(--text)]" data-testid="stop-line">
               {risk.stop != null ? (
-                <p className="private">
-                  Stop {inr(risk.stop)}
+                <p>
+                  Stop <span className="private">{inr(risk.stop)}</span>
                   {risk.stopDist != null && (risk.stopDist > 0 ? ` · ${pct(risk.stopDist, { dp: 1 })} below price` : ' · price is at or below your stop')}
                   {' · if hit: '}
                   {risk.stopFromNow != null && <span className="private">{inr(risk.stopFromNow, { sign: true })} from now </span>}
                   <span className="private">({inr(risk.stopPnl, { sign: true })} vs what you paid)</span>
-                  {risk.target != null && ` · target ${inr(risk.target)}`}
+                  {risk.target != null && <> · target <span className="private">{inr(risk.target)}</span></>}
                 </p>
               ) : (
                 <p className="text-[var(--text-muted)]">

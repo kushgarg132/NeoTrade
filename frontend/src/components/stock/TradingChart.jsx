@@ -3,6 +3,7 @@ import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, Cartes
 import api, { endpoints } from '../../utils/api';
 import { formatClock, formatCurrency } from '../../utils/formatters';
 import { tradeMarkers } from '../../utils/stock';
+import { AXIS, GRID, TOOLTIP_STYLE } from '../ui/chartTheme';
 
 const INTRADAY_POLL_MS = 60_000;
 const RANGES = [['1D', 1], ['1M', 22], ['1Y', 252], ['5Y', 1260]]; // trading days; 1D is the intraday feed
@@ -50,8 +51,8 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR' }) => {
   }, [closes, trades, data, isDay]);
 
   const lines = [
-    thesis?.target != null && { y: thesis.target, color: 'var(--gain)', label: `Target ${formatCurrency(thesis.target, currency)}` },
-    thesis?.stop != null && { y: thesis.stop, color: 'var(--loss)', label: `Stop ${formatCurrency(thesis.stop, currency)}` },
+    thesis?.target != null && { y: thesis.target, color: 'var(--gain)', name: 'Target', amount: formatCurrency(thesis.target, currency) },
+    thesis?.stop != null && { y: thesis.stop, color: 'var(--loss)', name: 'Stop', amount: formatCurrency(thesis.stop, currency) },
   ].filter(Boolean);
   const first = data[0]?.close;
   const last = data.at(-1)?.close;
@@ -82,17 +83,17 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR' }) => {
         <div className="h-56 sm:h-72" role="img" aria-label={`Price, last ${formatCurrency(last, currency)}, ${dots.length} of your trades marked`}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="date" tickFormatter={isDay ? undefined : short} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} minTickGap={48} tickLine={false} axisLine={{ stroke: 'var(--border)' }} />
-              <YAxis tick={{ fontSize: 12, fill: 'var(--text-muted)' }} width={52} tickLine={false} axisLine={false} domain={['auto', 'auto']} tickFormatter={(v) => Math.round(v).toLocaleString('en-IN')} />
+              <CartesianGrid {...GRID} />
+              <XAxis dataKey="date" tickFormatter={isDay ? undefined : short} {...AXIS} minTickGap={48} />
+              <YAxis {...AXIS} width={52} axisLine={false} domain={['auto', 'auto']} tickFormatter={(v) => Math.round(v).toLocaleString('en-IN')} />
               <Tooltip
                 formatter={(v) => [formatCurrency(v, currency), 'Price']}
                 labelFormatter={isDay ? undefined : short}
-                contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 13 }}
+                contentStyle={TOOLTIP_STYLE}
               />
               <Line type="monotone" dataKey="close" stroke={up ? 'var(--gain)' : 'var(--loss)'} strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
               {!isDay && lines.map((l) => (
-                <ReferenceLine key={l.label} y={l.y} stroke={l.color} strokeWidth={1.5} strokeDasharray="5 4" ifOverflow="extendDomain" />
+                <ReferenceLine key={l.name} y={l.y} stroke={l.color} strokeWidth={1.5} strokeDasharray="5 4" ifOverflow="extendDomain" />
               ))}
               {dots.map((t, i) => (
                 <ReferenceDot key={i} x={t.date} y={t.price} shape={t.side === 'SELL' ? Sell : Buy} ifOverflow="extendDomain" />
@@ -106,9 +107,9 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR' }) => {
           {dots.some((d) => d.side !== 'SELL') && <li className="inline-flex items-center gap-1.5"><svg width="10" height="10" aria-hidden="true"><Buy cx={5} cy={5} /></svg>Your buys</li>}
           {dots.some((d) => d.side === 'SELL') && <li className="inline-flex items-center gap-1.5"><svg width="10" height="10" aria-hidden="true"><Sell cx={5} cy={5} /></svg>Your sells</li>}
           {lines.map((l) => (
-            <li key={l.label} className="inline-flex items-center gap-1.5">
+            <li key={l.name} className="inline-flex items-center gap-1.5">
               <svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke={l.color} strokeWidth="2" strokeDasharray="5 4" /></svg>
-              {l.label}
+              {l.name} <span className="private">{l.amount}</span>
             </li>
           ))}
         </ul>

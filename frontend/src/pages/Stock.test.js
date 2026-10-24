@@ -40,3 +40,16 @@ test('stop-hit loss shows from-now and vs-cost, both private', () => {
   assert.match(page, /<span className="private">\{inr\(risk\.stopFromNow[^\n]*from now/);
   assert.match(page, /<span className="private">\(\{inr\(risk\.stopPnl[^\n]*vs what you paid/);
 });
+
+// Hide-amounts blurs a `.private` only when it holds no `.private` descendant, so the stop line must
+// not wrap its own private spans, and the chart legend must blur the amounts too.
+test('stop and target amounts are their own private spans, with no private wrapper', () => {
+  const stock = readFileSync(new URL('./Stock.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(stock, /<p className="private">\s*Stop/);
+  assert.match(stock, /Stop <span className="private">\{inr\(risk\.stop\)\}/);
+  assert.match(stock, /target <span className="private">\{inr\(risk\.target\)\}/);
+  const chart = readFileSync(new URL('../components/stock/TradingChart.jsx', import.meta.url), 'utf8');
+  assert.match(chart, /<span className="private">\{l\.amount\}/);
+  assert.match(chart, /\{\.\.\.AXIS\}/);
+  assert.match(chart, /TOOLTIP_STYLE/);
+});
