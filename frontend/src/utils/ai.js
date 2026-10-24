@@ -21,7 +21,7 @@ export const scoreboard = ({ month, card, capital, mineValue } = {}) => {
       { label: 'Win rate', value: t ? pct(t.win_rate, { dp: 0 }) : '—' },
       { label: 'Trades', value: t ? String(t.trades) : '—' },
       { label: 'Charges', value: t ? inr(t.costs) : '—' },
-      { label: 'Max drawdown', value: t ? p(t.max_drawdown_pct) : '—', tone: t?.max_drawdown > 0 ? 'loss' : 'neutral' },
+      { label: 'Max drawdown (peak to trough)', value: t ? p(t.max_drawdown_pct) : '—', tone: t?.max_drawdown > 0 ? 'loss' : 'neutral' },
     ],
   };
 };
