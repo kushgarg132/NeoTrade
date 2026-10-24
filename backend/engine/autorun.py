@@ -395,6 +395,24 @@ async def _catch_up(db, redis, day) -> None:
         logger.exception("catch-up daily pass for %s failed: %s", day, exc)
 
 
+REENTRY_COOLDOWN_SESSIONS = 3
+
+
+async def _recent_losers(db, user_id: str, now: datetime) -> set[str]:
+    """AI-book symbols closed at a loss within the last 3 sessions (BHEL, 21-22 Oct:
+    stopped at 417.55, bought again at 407.20). paper_trades keeps no exit reason, so
+    a losing close stands in for 'stopped out'."""
+    from backend.autopilot.service import ai_book_query
+
+    start = now.astimezone(IST).date()
+    for _ in range(REENTRY_COOLDOWN_SESSIONS):
+        start = previous_trading_day(start)
+    since = datetime.combine(start, time(0, 0), tzinfo=IST)
+    rows = await db["paper_trades"].find({"$and": [ai_book_query(user_id), {
+        "status": "CLOSED", "exit_at": {"$gte": since}, "realized_pnl": {"$lt": 0}}]}).to_list(length=None)
+    return {r["symbol"] for r in rows}
+
+
 async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dict], now: datetime,
                                source: str = "engine", heading: str = "morning pass") -> list[dict]:
     """Hands pending stock proposals to the autopilot (backend/autopilot/),
@@ -433,6 +451,12 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
                 continue
             if price > entry * (1 + MAX_ENTRY_DRIFT):
                 refused.append(f"{s['symbol']} (₹{price:,.2f}, more than {MAX_ENTRY_DRIFT:.0%} over its entry ₹{entry:,.2f})")
+                continue
+            if s.get("stop") and s["stop"] < entry and price < entry * (1 - (entry - s["stop"]) / entry / 2):
+                refused.append(f"{s['symbol']} (₹{price:,.2f}, past halfway to its stop ₹{s['stop']:,.2f})")
+                continue
+            if s["symbol"] in await _recent_losers(db, user_id, now):
+                refused.append(f"{s['symbol']} (stopped out in the last {REENTRY_COOLDOWN_SESSIONS} sessions)")
                 continue
         unit = price or entry
         quantity = min(int(s["quantity"]), int(cap // unit)) if unit > 0 else 0
