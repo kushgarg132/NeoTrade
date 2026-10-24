@@ -26,7 +26,7 @@ const Metric = ({ label, value, valueTone = 'neutral' }) => (
   </div>
 );
 
-const Records = ({ records }) => (records === null ? <Skeleton rows={3} /> : records.length === 0 ? (
+const Records = ({ records, onRetry }) => (records === null ? <Skeleton rows={3} /> : records === false ? <ErrorLine message="Couldn't load the records." onRetry={onRetry} /> : records.length === 0 ? (
   <p className="py-2 text-[14px] text-[var(--text-muted)]">No records for this one yet. They appear as decisions are recorded.</p>
 ) : (
   <div>
@@ -59,14 +59,17 @@ const LabForward = () => {
   }, []);
   useEffect(load, [load]);
 
-  const pick = (row) => {
+  const fetchRecords = (row) => {
     setRecords(null);
+    api.get(endpoints.forward.records, { params: { source: row.source, name: row.name } })
+      .then((res) => setRecords(res.data?.records ?? []))
+      .catch(() => setRecords(false));
+  };
+  const pick = (row) => {
     const key = `${row.source}:${row.name}`;  // by value: a refetched row is a new object
     if (open === key) return setOpen(null);
     setOpen(key);
-    api.get(endpoints.forward.records, { params: { source: row.source, name: row.name } })
-      .then((res) => setRecords(res.data?.records ?? []))
-      .catch(() => setRecords([]));
+    fetchRecords(row);
   };
 
   return (
@@ -110,7 +113,7 @@ const LabForward = () => {
                     {r.progress}/100 scored{r.n > r.progress ? ` (${r.n} total)` : ''} · {gateText(r.gate)}
                   </div>
                 </button>
-                {isOpen && <div className="pb-2 pl-2"><Records records={records} /></div>}
+                {isOpen && <div className="pb-2 pl-2"><Records records={records} onRetry={() => fetchRecords(r)} /></div>}
               </div>
             );
           })}

@@ -32,3 +32,10 @@ test('setup checklist sits above the tiles; one stale banner only', () => {
   assert.ok(page.indexOf('<SetupChecklist') < page.indexOf('<Tile'));
   assert.doesNotMatch(page, /Some figures couldn't refresh/);
 });
+
+test('Home: AI tile label follows autopilot.live, Market tile says data is unavailable, hero shows an error', () => {
+  assert.match(page, /today\.autopilot\?\.live \? 'live' : 'paper'/);
+  assert.doesNotMatch(page, /Open Market/);
+  assert.match(page, /failed=\{failed\.money\} onRetry=\{load\}/);
+  assert.match(hero, /failed && \(!headline[^\n]*<ErrorLine/);
+});

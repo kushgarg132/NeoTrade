@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import Empty from '../ui/Empty';
+import ErrorLine from '../ui/ErrorLine';
 import { inr, pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
 
@@ -10,7 +11,8 @@ import { toneText } from '../ui/tone';
  * `headline` is /mine/overview's headline (or /today's pulse), `nifty` the NIFTY 50 row of /market/indices.
  * Percents arrive as 1.65 (= 1.65%).
  */
-const HeroRow = ({ headline, nifty, phase, meta }) => {
+const HeroRow = ({ headline, nifty, phase, meta, failed, onRetry }) => {
+  if (failed && (!headline || typeof headline.value !== 'number')) return <ErrorLine message="Couldn't load your account value." onRetry={onRetry} />;
   if (!headline || typeof headline.value !== 'number') {
     return (
       <Empty title="No account value yet" body="Your value and today's change show here once a broker is connected."

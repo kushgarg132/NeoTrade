@@ -81,8 +81,8 @@ const WeeklyReport = () => {
                 </>
               )}
             </Card>
-            <Card title="Ideas">
-              <p className="mb-2 text-[13px] text-[var(--text-muted)]">Scored ideas decided this week, split by whether you traded them.</p>
+            <Card title="Ideas" action={<Badge kind="paper">Paper</Badge>}>
+              <p className="mb-2 text-[13px] text-[var(--text-muted)]">Paper-scored ideas decided this week, split by whether you traded them.</p>
               <div className="grid grid-cols-2 gap-3">
                 {['taken', 'skipped'].map((k) => (
                   <Stat key={k} label={`${k[0].toUpperCase()}${k.slice(1)} (${r.ideas[k].n})`}

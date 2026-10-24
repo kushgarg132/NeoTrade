@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Tabs, { useTabParam } from '../components/ui/Tabs';
 import Badge from '../components/ui/Badge';
+import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
 import Scoreboard from '../components/ai/Scoreboard';
 import Positions from '../components/ai/Positions';
@@ -69,7 +70,7 @@ const Ai = () => {
           <>
             <div className="flex items-center gap-2 text-[13px] text-[var(--text-muted)]">
               <span>AI book</span>
-              {ap && <Badge kind={ap.live ? 'live' : 'paper'}>{ap.live ? 'Live' : 'Paper'}</Badge>}
+              <Badge kind={ap?.live ? 'live' : 'paper'}>{ap?.live ? 'Live' : 'Paper'}</Badge>
               {ap && <Badge kind={on ? 'proven' : 'neutral'}>{on ? 'Autopilot on' : 'Autopilot off'}</Badge>}
             </div>
             <div className="private figure-md text-[28px] leading-8 font-bold tabular-nums text-[var(--text)]">{inr(value)}</div>
@@ -77,7 +78,7 @@ const Ai = () => {
               Today {inr(day, { sign: true })} ({pct(dayPct, { sign: true })})
             </div>
             <div className="mt-1 text-[13px] text-[var(--text-muted)]">
-              {ap ? (ap.exposure_cap ? <span className="private">{inr(ap.deployed)} of {inr(ap.exposure_cap)} cap deployed</span> : 'No exposure cap set') : "Couldn't load the autopilot status."}
+              {ap ? (ap.exposure_cap ? <span className="private">{inr(ap.deployed)} of {inr(ap.exposure_cap)} cap deployed</span> : 'No exposure cap set') : <ErrorLine message="Couldn't load the autopilot status." onRetry={today.retry} />}
             </div>
             {on && <div className="mt-3"><StopAi onStopped={() => { setStopped(true); today.reload(); }} /></div>}
             {ap && !on && <Link to="/settings?tab=limits" className="mt-2 inline-flex items-center min-h-11 text-[15px] font-semibold text-[var(--accent)]">Turn the autopilot on in Limits</Link>}

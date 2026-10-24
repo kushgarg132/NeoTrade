@@ -24,15 +24,16 @@ const Activity = ({ state, plan }) => {
     <div className="space-y-3">
     {top}
     <PlanCard data={plan} />
-    <Card title="Last 30" action={<Badge kind="paper">Paper</Badge>}>
+    <Card title="Last 30">
       <ul>
         {rows.map((r, i) => (
           <li key={`${r.at}-${i}`} className="py-2 border-b border-[var(--border)] last:border-b-0">
             <div className="flex items-center gap-2 flex-wrap text-[15px] text-[var(--text)]">
+              <Badge kind={String(r.mode).toUpperCase() === 'LIVE' ? 'live' : 'paper'}>{String(r.mode).toUpperCase() === 'LIVE' ? 'Live' : 'Paper'}</Badge>
               <Badge kind={r.status === 'FILLED' ? 'proven' : r.status === 'SENT' ? 'neutral' : 'alert'}>{r.status}</Badge>
               <span className="font-medium">{r.side} {r.quantity} {r.symbol}</span>
             </div>
-            <div className="text-[13px] text-[var(--text-muted)]">{[r.source, r.mode, formatDateTime(r.at)].filter(Boolean).join(' · ')}</div>
+            <div className="text-[13px] text-[var(--text-muted)]">{[r.source, formatDateTime(r.at)].filter(Boolean).join(' · ')}</div>
             {r.reason && <p className="mt-0.5 text-[14px] text-[var(--text)]">{r.reason}</p>}
           </li>
         ))}

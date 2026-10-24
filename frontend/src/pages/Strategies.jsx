@@ -159,7 +159,7 @@ const Strategies = () => {
   const tradesNow = trades.mode === book.key ? trades : { rows: null };
 
   const gate = (name) =>
-    promotion ? readiness(promotion[name], live.includes(name)) : promotionFailed ? 'Couldn’t load what it still needs. Retry above.' : '…';
+    promotion ? readiness(promotion[name], live.includes(name)) : promotionFailed ? 'Couldn’t load what it still needs. Retry below.' : '…';
   const short = (name) =>
     promotion ? shortStatus(promotion[name]).replace(/^ready$/, 'Ready for real money') : promotionFailed ? 'Couldn’t load what it still needs.' : '…';
   const counts = cards ? SUMMARY.map(([s, label]) => [cards.filter((c) => statusOf(c) === s).length, label]).filter(([n]) => n) : [];

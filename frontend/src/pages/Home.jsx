@@ -78,7 +78,7 @@ const Home = () => {
             </Link>
           )}
         </div>
-        <HeroRow headline={overview?.headline || today.pulse} nifty={nifty} phase={today.phase} meta={meta('money', h.money.meta)} />
+        <HeroRow headline={overview?.headline || today.pulse} nifty={nifty} phase={today.phase} failed={failed.money} onRetry={load} meta={meta('money', h.money.meta)} />
         {alerts(today).map((a) => (
           <Link key={a.id} to={a.to} role="alert"
                 className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2 text-[14px] font-medium text-[var(--loss)]">
@@ -88,8 +88,8 @@ const Home = () => {
         ))}
         <SetupChecklist setup={today.setup} />
         <div className="grid grid-cols-2 gap-3">
-          <Tile title={<>AI <Badge kind="paper">Paper</Badge></>} icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.value === '—' ? 'Start the AI account' : h.ai.sub} tone={h.ai.tone} subTone={h.ai.subTone} meta={meta('ai', null)} />
-          <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.value === '—' ? 'Open Market' : h.market.sub} tone={h.market.tone} meta={meta('market', h.market.meta)} />
+          <Tile title={<>AI <Badge kind={today.autopilot?.live ? 'live' : 'paper'}>{today.autopilot?.live ? 'Live' : 'Paper'}</Badge></>} icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.value === '—' ? 'Start the AI account' : h.ai.sub} tone={h.ai.tone} subTone={h.ai.subTone} meta={meta('ai', null)} />
+          <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} meta={meta('market', h.market.meta)} />
         </div>
         {kind && <BriefCard title={kind === 'premarket' ? 'Before the open' : 'After the close'} text={today[kind]} summary={day} />}
         <GoalTile />

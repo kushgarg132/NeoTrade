@@ -33,3 +33,12 @@ test('scoreboard Empty states name an action; errors name what failed', () => {
   assert.ok((board.match(/<Empty[^>]*action=/g) || []).length >= 2);
   assert.match(board, /Couldn.t load the AI/);
 });
+
+test('Paper or Live comes from the data: per Activity row, and the book badge defaults to Paper with a Retry', () => {
+  const act = rd('../components/ai/Activity.jsx');
+  assert.doesNotMatch(act, /title="Last 30" action=/);
+  assert.match(act, /r\.mode\)\.toUpperCase\(\) === 'LIVE'/);
+  const ai = rd('./Ai.jsx');
+  assert.match(ai, /kind=\{ap\?\.live \? 'live' : 'paper'\}/);
+  assert.match(ai, /<ErrorLine message="Couldn't load the autopilot status\." onRetry=\{today\.retry\}/);
+});

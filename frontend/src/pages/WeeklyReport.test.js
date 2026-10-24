@@ -24,3 +24,7 @@ test('ideas carry a plain gloss for excess', () => {
   assert.match(page, /better or worse than NIFTY|vs NIFTY/);
   assert.match(page, /after charges/i);
 });
+
+test('the Ideas card is labelled Paper', () => {
+  assert.match(page, /<Card title="Ideas" action=\{<Badge kind="paper">Paper<\/Badge>\}>/);
+});
