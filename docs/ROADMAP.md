@@ -31,6 +31,7 @@ where to start — nothing else in this repo tracks it.
 | 20 | Mine redesign: the trader's own account gets a past (daily value, XIRR vs NIFTY), a to-do list (Needs you), tax lots and India tax estimates, and a thesis per stock; Mine = Overview · Holdings · Tax · Journal, Ideas/Plan/Review cut | 19 | **done 2026-10-15, built** — spec `docs/superpowers/specs/2026-10-15-mine-redesign-design.md`, plan `docs/superpowers/plans/2026-10-15-mine-redesign.md` |
 | 21 | Private trading workstation: make NeoTrade dependable for its owner before any commercial, registration or public-user work. Truth/safety → daily workflow → Research Lab → forward record → ML ranking → isolated RL experiments. | 20 | **done 2026-10-19** |
 | 22 | Revenue without SEBI registration: back office Pro for traders + the Picks engine as research software for registered analyst firms (lawyer's review, five design-partner firms, analyst workbench with compliance kit, billing, launch) | 21 | planned — plan doc https://claude.ai/code/artifact/7e6019ff-c866-47da-9f27-fcbe90ab52b5 |
+| 23 | Trading edge: make backtest and paper one system, then trade only where there is evidence (23.0 stop the bleeding, 23.1 edge, 23.2 simplification, 23.3 live readiness) | owner questions Q1-Q4 in the audit | **planned 2026-10-24** — audit `docs/audits/2026-10-24-trading-edge-audit.md` |
 
 Two orderings are not negotiable: **Phase 3 before Phase 5** (no real order may be
 placeable before the kill-switch and the gate exist), and **Phase 1 before anything that
@@ -970,6 +971,81 @@ launch-ready (domain, legal pages, DPDP consent/deletion, Google sign-in publish
 **Never build:** a call published to someone who pays the owner, a public track record of his
 picks, or auto-execution for other people. Architecture stays a modular monolith (one repo, one
 image, `api` / `jobs` / `ingest` processes, one MongoDB with a tenant on every row).
+
+## Phase 23 — Trading edge: trustworthy numbers, then edge — **planned 2026-10-24**
+
+Written from the three-persona audit `docs/audits/2026-10-24-trading-edge-audit.md`. Item IDs,
+file:line references, success metrics and the debate behind each decision live there. This
+section holds only the order and the done-when criteria.
+
+**Why now:** 0 of 33 strategies pass the gate. The backtest and paper are different systems:
+stops and targets exist only in `engine/backtest.py`, and paper fills at the close or the mark
+while the backtest fills at the next open. At the 5k cap a CNC round trip costs 81 bps, and the
+Picks study nets its costs at 100k. The AI account trades grade-C `pullback` even though
+`momentum` and `rs_leaders_regime` are the only setups with an edge. Since 10-16 the intraday
+engine, the news pipeline and the game plan have each stopped without any alert.
+
+**Owner questions first (Q1-Q4 in the audit):**
+- Q1: was Lab switched off on purpose?
+- Q2: the account size.
+- Q3: setting the AI weight in sizing to 0, which changes a `composite.py` invariant.
+- Q4: whether `/suggestions` goes admin-only before a second user.
+
+**Order:**
+- **23.0, P0, stop the bleeding.** All items are S, except P0-3 (M).
+  - P0-1: Picks enters grade A only.
+  - P0-2: park `analyst_verdict` and the KILL strategies on the autopilot.
+  - P0-3: one exit engine inside `run()`.
+  - P0-4: paper fills at the next open, with a price re-check at entry.
+  - P0-5: a golden parity test.
+  - P0-6: net of cost everywhere (`net_pnl`, `Portfolio.costs_paid`).
+  - P0-7: silent-stop alerts (engine, bars, news rate).
+  - P0-8: the analyst never caches a failed score.
+  - P0-9: the brief gets an `as_of`, a maximum age and a TTL.
+  - P0-10: honest re-run of the 4 stale intraday strategies and `gap_and_go`.
+- **23.1, P1, edge:**
+  - a significance gate (t≥2, n≥100, 2 regimes, out-of-sample, deflated by trial count);
+  - costs at real size, calibrated against a contract note;
+  - a point-in-time universe;
+  - MTM daily metrics;
+  - a drift guard and a cooldown after a stop;
+  - tighter loss limits and a sector cap;
+  - Picks MAE/MFE, decay and capacity;
+  - one universe with an ADV floor;
+  - deterministic `ai_views` with hysteresis;
+  - a `signal_log` and a per-fill cost breakdown;
+  - plan exits that need a price or loss condition.
+- **23.2, P2, simplification:**
+  - delete about 1,470 lines (`forecast/research/*_tool.py`, `ml/`, `rl/`, `lightgbm`);
+  - one `round_trip_cost`, one `book_fill`, one ATR;
+  - a `candles_5m` store;
+  - `llm.complete()` with `LLMError` and an `llm_calls` log, then callers migrated one at a time;
+  - stop the weekly AI strategy drafting;
+  - write positions on fills instead of on every bar.
+- **23.3, P3, live readiness** (no real money before every gate is met):
+  - idempotent orders with a broker tag;
+  - reconciliation as an entry gate;
+  - a kill switch that flattens and halts;
+  - a broker-side stop on live approvals;
+  - feed-staleness halts;
+  - an in-hours deploy guard, an external probe and persistent logs;
+  - one minimum-quantity live round trip, reconciled;
+  - `rediss://`.
+
+**Done-when:**
+- 23.0:
+  - the parity test passes;
+  - every strategy on the scorecard has an honest backtest row less than 30 days old;
+  - the autopilot enters only grade-A Picks;
+  - a simulated engine or news stall alerts.
+- 23.1: at least one strategy passes the new gate at live size, or the audit's KILL list is
+  carried out.
+- 23.2: one friction function, one fill builder and one exit engine (each verified by grep),
+  and every LLM call writes an `llm_calls` row.
+- 23.3: every gate in the audit's P3 table is met, and one live round trip has been reconciled.
+
+**Not in this phase:** see the audit's "Do not build" list. In short: no new strategies, no
+RL/ML paths, no new AI call sites, no beta while W1 is open, and no F&O work.
 
 ## Phase 20 — Mine redesign — **done 2026-10-15**
 
