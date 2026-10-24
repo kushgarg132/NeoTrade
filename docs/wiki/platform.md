@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 0ecdf6d
+verified_at: c5296b6
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -11,7 +11,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 
 | path | role | key symbols |
 |---|---|---|
-| `backend/server.py` | app factory, CORS, router mounts, startup/shutdown, `/health` | `server.py::app`, `startup_db_client`, `shutdown_db_client`, `_expand_instruments`, `health` |
+| `backend/server.py` | app factory, `timing.py::add_timing` (a `Server-Timing: app;dur=<ms>` header on every response, a WARNING `slow request METHOD path N ms` above `SLOW_MS`=300), CORS, router mounts, startup/shutdown, `/health` | `server.py::app`, `startup_db_client`, `shutdown_db_client`, `_expand_instruments`, `health` |
 | `backend/jobs.py` | the `jobs` process: background loops, `jobs:heartbeat` | `jobs.py::start_loops`, `main`, `heartbeat_age` |
 | `backend/database.py` | Mongo (motor, tz-aware UTC) + Redis clients, one global | `database.py::db`, `DatabaseManager`, `mongo_client` |
 | `backend/configs/settings.py` | pydantic-settings env config (`.env`, case-sensitive, extras ignored) | `settings.py::Settings`, `settings` |

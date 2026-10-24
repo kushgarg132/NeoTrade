@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: ba2b5a0
+verified_at: c5296b6
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -19,8 +19,8 @@ The whole UI: a plain-JSX (no TypeScript) React 19 / React Router 7 / Tailwind v
 | `src/main.jsx` | provider stack and SW registration (PROD only) | `GoogleOAuthProvider > BrowserRouter > ThemeProvider > AuthProvider > App` |
 | `src/App.jsx` | route table (`gated()` wrapper, `LAB` map behind `RequireAdmin`), `MOVED` redirects, scroll-to-top, opens the socket when `user` is set | `App`, `Moved`, `StockMoved`, `NotFound` |
 | `src/utils/routes.js` | every real path and the old-path redirect table | `ROUTES`, `ADMIN_ROUTES`, `LAB_PAGES`, `MOVED`, `withSearch`, `movedTarget` |
-| `src/utils/api.js` | axios instance, token + refresh interceptors, preferences cache, ALL endpoint builders | `api`, `refreshAccessToken`, `hardLogout`, `getPreferences`, `endpoints`, `AUTH_TOKEN_STORAGE_KEY` |
-| `src/lib/ws.js` | the single `Stream` socket: subscribe, reconnect with backoff, one-shot `request` | `stream`, `Stream.request`, `isExpired` |
+| `src/utils/api.js` | axios instance, token + refresh interceptors, the GET cache (`api.get` goes through `utils/getCache.js::makeGetCache`: in-flight dedupe + 30 s TTL keyed on token+url+params; any post/put/patch/delete clears it; `cache: false` opts out, used by the 5 s live holdings poll and Strategies), ALL endpoint builders | `api`, `refreshAccessToken`, `hardLogout`, `getPreferences`, `clearGetCache`, `endpoints`, `AUTH_TOKEN_STORAGE_KEY` |
+| `src/lib/ws.js` | the single `Stream` socket: subscribe, reconnect with backoff, one-shot `request`; a message on `LIVE_TOPICS` (trades, pnl, suggestions, news, guardrails) or a reconnect calls `clearGetCache` | `stream`, `Stream.request`, `isExpired` |
 | `src/context/AuthContext.jsx` | `user` / `loading` / `login(idToken)` / `logout()` | `AuthProvider`, `useAuth` |
 | `src/context/ThemeContext.jsx`, `themeContext.js`, `useTheme.js` | light/dark; toggles `.dark` on `<html>` | `ThemeProvider`, storage key `asi_sheet` |
 | `src/context/pendingContext.js` | needs-you count shared from `Layout` (only `SectionTabs` reads it) | `PendingContext`, `usePendingCount` |
@@ -66,7 +66,7 @@ The frontend owns no database. Everything below is browser state.
 | localStorage | `neotrade_private` | `hooks/usePrivacy.js` | `on`/`off`; mirrored to `<html data-private>` |
 | localStorage | `neotrade.recentStocks` | `utils/stocks.js::rememberStock` | max 8 symbols, guarded by try/catch |
 | cookie (httpOnly, set by backend) | refresh token, path `/api/v1/auth` | sent via `withCredentials` | never readable from JS |
-| in-memory | `prefsCache` | `utils/api.js::getPreferences` | 5 s TTL (`PREFS_TTL_MS`), dropped by any non-GET to `/settings/preferences` |
+| in-memory | GET cache | `utils/getCache.js` via `utils/api.js` | 30 s TTL per token+url+params; cleared by any write, a `LIVE_TOPICS` message or a socket reconnect (`getPreferences` is a plain cached GET). `App.jsx` also fetches the five tab chunks (`TAB_PAGES`) once the first screen is idle |
 | in-memory | `refreshPromise` | `utils/api.js::refreshAccessToken` | at most one refresh in flight |
 | Service worker caches | `shell-v1`, `assets-v1` | `public/sw.js` | bump `VERSION` to purge |
 
