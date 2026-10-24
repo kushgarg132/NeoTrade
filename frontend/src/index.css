@@ -120,11 +120,11 @@
     --chart-4: #c98500; --chart-5: #d55181; --chart-6: #008300;
     --heat-0: var(--surface-2);
     --heat-pos-1: color-mix(in oklab, var(--gain) 22%, var(--surface));
-    --heat-pos-2: color-mix(in oklab, var(--gain) 48%, var(--surface));
-    --heat-pos-3: color-mix(in oklab, var(--gain) 65%, var(--surface));
+    --heat-pos-2: color-mix(in oklab, var(--gain) 36%, var(--surface));
+    --heat-pos-3: color-mix(in oklab, var(--gain) 50%, var(--surface));
     --heat-neg-1: color-mix(in oklab, var(--loss) 22%, var(--surface));
-    --heat-neg-2: color-mix(in oklab, var(--loss) 48%, var(--surface));
-    --heat-neg-3: color-mix(in oklab, var(--loss) 65%, var(--surface));
+    --heat-neg-2: color-mix(in oklab, var(--loss) 36%, var(--surface));
+    --heat-neg-3: color-mix(in oklab, var(--loss) 50%, var(--surface));
   }
 
   * {

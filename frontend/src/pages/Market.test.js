@@ -39,5 +39,14 @@ test('every empty section names an action', () => {
 });
 
 test('market quotes are not blurred by hide-amounts', () => {
-  assert.doesNotMatch(pulse, /ListRow/); // ListRow right values carry the `private` blur class
+  // ListRow blurs its value unless privateValue={false}: every Pulse row must opt out.
+  assert.equal((pulse.match(/<ListRow /g) || []).length, (pulse.match(/<ListRow privateValue=\{false\} /g) || []).length);
+});
+
+test('dark heat steps keep the % figure readable (step 3 mixes at most 50%)', () => {
+  const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+  const dark = css.slice(css.indexOf('  .dark {'));
+  assert.match(dark, /--heat-pos-3: color-mix\(in oklab, var\(--gain\) 50%/);
+  assert.match(dark, /--heat-neg-3: color-mix\(in oklab, var\(--loss\) 50%/);
+  assert.doesNotMatch(pulse, /opacity-80/);
 });

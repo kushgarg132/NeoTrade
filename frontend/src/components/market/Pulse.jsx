@@ -7,6 +7,7 @@ import Empty from '../ui/Empty';
 import Button from '../ui/Button';
 import { Link } from 'react-router-dom';
 import Badge from '../ui/Badge';
+import ListRow from '../ui/ListRow';
 import AsOf from '../ui/AsOf';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
@@ -41,24 +42,6 @@ const loadIndices = () => api.get(endpoints.marketIndices).then((r) => r.data);
 const loadToday = () => api.get(endpoints.today).then((r) => r.data.backdrop || {});
 const loadScan = () => api.get(endpoints.marketScan).then((r) => r.data);
 const loadSectors = () => api.get(endpoints.newsFeed, { params: { limit: 50, scope: 'SECTOR' } }).then((r) => sectorRows(r.data.items));
-
-/** One quote line. Public market data, so no `private` blur (the shared list row blurs its value). */
-const Row = ({ title, sub, right, rightTone = 'neutral', to, onClick, dense = false }) => {
-  const body = (
-    <>
-      <div className="min-w-0 flex-1">
-        <div className={`${dense ? 'text-[14px]' : 'text-[15px]'} font-medium text-[var(--text)] truncate`}>{title}</div>
-        {sub && <div className="text-[12px] text-[var(--text-muted)] truncate">{sub}</div>}
-      </div>
-      {right != null && <div className={`shrink-0 text-right ${dense ? 'text-[14px]' : 'text-[15px]'} tabular-nums ${toneText(rightTone)}`}>{right}</div>}
-      {(to || onClick) && <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />}
-    </>
-  );
-  const cls = `flex w-full items-center gap-3 ${dense ? 'min-h-11 py-1' : 'min-h-14 py-2'} text-left border-b border-[var(--border)] last:border-b-0 ${to || onClick ? 'active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]' : ''}`;
-  if (to) return <Link to={to} className={cls}>{body}</Link>;
-  if (onClick) return <button type="button" onClick={onClick} className={cls}>{body}</button>;
-  return <div className={cls}>{body}</div>;
-};
 
 const EXPLAINABLE = new Set(['^NSEI', '^NSEBANK', '^BSESN']); // the indices the explanation endpoint covers
 
@@ -117,7 +100,7 @@ const Indices = () => {
         : !data ? <Skeleton rows={4} />
         : !data.length ? <Empty title="No index quotes yet" body="They appear once the market feed is up." action={<Button variant="secondary" onClick={retry}>Refresh</Button>} />
         : data.map((i) => (
-          <Row key={i.name} title={i.name}
+          <ListRow privateValue={false} key={i.name} title={i.name}
                    sub={Number.isFinite(i.change) ? `${i.change > 0 ? '+' : ''}${i.change.toFixed(2)} pts` : null}
                    right={<><span className="text-[var(--text)]">{Number(i.value).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>{'  '}{pct(i.percent / 100, { sign: true })}</>}
                    rightTone={tone(i.percent)}
@@ -171,7 +154,7 @@ const Sectors = () => {
           <>
             <p className="mb-1 text-[13px] text-[var(--text-muted)]">From scored headlines, not prices: + is good news for the sector, - is bad.</p>
             {data.map((s) => (
-              <Row key={s.sector} dense title={s.sector} sub={`${s.count} ${s.count === 1 ? 'story' : 'stories'}`}
+              <ListRow privateValue={false} key={s.sector} dense title={s.sector} sub={`${s.count} ${s.count === 1 ? 'story' : 'stories'}`}
                    right={`${s.score > 0 ? '+' : ''}${s.score}`} rightTone={tone(s.score)} />
             ))}
           </>
@@ -183,7 +166,7 @@ const Sectors = () => {
 const Change = ({ value }) => <span className={toneText(tone(value))}>{pct(value / 100, { sign: true })}</span>;
 
 const MoverRows = ({ rows, sub }) => rows.map((m) => (
-  <Row key={m.symbol} dense title={m.symbol} sub={sub ? sub(m) : m.sector} to={stockPath(m.symbol)}
+  <ListRow privateValue={false} key={m.symbol} dense title={m.symbol} sub={sub ? sub(m) : m.sector} to={stockPath(m.symbol)}
        right={<><span className="text-[var(--text)]">{Number(m.price).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>{'  '}<Change value={m.change_pct} /></>} />
 ));
 
@@ -231,7 +214,7 @@ const Scan = () => {
             <div key={s.sector} className="rounded-[10px] p-2 text-[var(--text)]" style={{ background: heatColor(s.change_pct, maxAbs) }}>
               <div className="text-[13px] truncate" title={s.sector}>{s.sector}</div>
               <div className="text-[15px] font-semibold tabular-nums">{pct(s.change_pct / 100, { sign: true })}</div>
-              <div className="text-[12px] opacity-80">{s.up} of {s.n} up</div>
+              <div className="text-[12px]">{s.up} of {s.n} up</div>
             </div>
           ))}
         </div>

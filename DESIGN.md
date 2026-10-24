@@ -16,7 +16,7 @@ A calm, phone-first money app: one task per screen, big numbers, plain words. Re
 | `--accent` | #4338ca | #8f97ff | links, active tab, primary button |
 | `--gain` / `--loss` / `--warn` | #0d7a4e / #b42318 / #9a5b00 | #4cc38a / #f07167 / #e2a63b | tone, never decoration |
 | `--chart-1`…`--chart-6` | #2a78d6 #eb6834 #1baf7a #eda100 #e87ba4 #008300 | #3987e5 #d95926 #199e70 #c98500 #d55181 #008300 | chart series, in this order, never cycled (dataviz-validated) |
-| `--heat-neg-3`…`--heat-0`…`--heat-pos-3` | `--loss` / `--gain` mixed 22/48/65% into `--surface`; 0 = `--surface-2` | same formula | heatmap cells by % change (`heatColor`) |
+| `--heat-neg-3`…`--heat-0`…`--heat-pos-3` | `--loss` / `--gain` mixed 22/48/65% into `--surface`; 0 = `--surface-2` | same formula, but 22/36/50% so the % figure keeps 4.5:1 or more (gain 5.3:1 at step 3) | heatmap cells by % change (`heatColor`) |
 
 Radius 12 (controls) and 16 (cards). Spacing on a 4 px grid. Body 15 px, nothing functional below 12 px,
 touch targets 44 px. Numbers use tabular figures. No raw hex in components: tokens only. The old
@@ -36,6 +36,7 @@ names (`--paper`, `--ink`, `--rule`, `--stamp`) are aliases until the last compo
   that fills it. One failing section never blanks a page.
 - Money the user owns carries the `private` class so the header's hide-amounts toggle blurs it.
 - Navigation: five tabs (Home, Money, Ideas, AI, Market) as a bottom bar on phones and a left rail on desktop;
-  the header holds search, market dot, privacy, theme and profile/settings.
+  the header holds search, market dot, privacy, theme and profile/settings; on phones the theme button is hidden and
+  theme is set in Settings.
 - Colour is never the only carrier of meaning: gains and losses carry a sign; heat cells print their signed %;
   charts with 2+ series show a legend (light-mode chart slots 3-5 sit below 3:1 on white).
