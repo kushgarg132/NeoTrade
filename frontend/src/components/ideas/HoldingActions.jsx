@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
+import Empty from '../ui/Empty';
 import OrderTicket from '../trading/OrderTicket';
 import { AiLabel, AmountText } from '../ai/AiSummary';
 import { useLoad } from './useLoad';
@@ -27,7 +28,14 @@ const HoldingActions = ({ actions, onChanged }) => {
   const { data: notes } = useLoad(useCallback(() => api.get(endpoints.summaries.holdings).then((r) => r.data.notes), [count]));
   const act = (verb, id) => api.post(endpoints.mine[verb](id)).then(onChanged).catch(() => {});
   const groups = groupHoldingActions(actions);
-  if (!groups.length) return null;
+  if (!groups.length) {
+    return (
+      <Card title="Your holdings">
+        <Empty title="Nothing needs you on your holdings" body="Stop and target hits, bad news and results dates for what you own in your broker account show up here."
+          action={<Link to="/money"><Button variant="secondary">Open Money</Button></Link>} />
+      </Card>
+    );
+  }
   return (
     <Card title="Your holdings">
       {groups.map((g) => (
