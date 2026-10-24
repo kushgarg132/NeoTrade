@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: a7bd7bb
+verified_at: 37d23f6
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -40,7 +40,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/system/schedule.py` | job clock times for UI copy, read from `scheduler.RUN_HOUR/RUN_MINUTE`, `autorun.PLAN_AT/SESSION_OPEN/SESSION_CLOSE/MORNING/EXIT_CHECK_MINUTES`, `session.SQUARE_OFF_*`, `monitor.SESSION_*`; `GET /system/schedule` returns "HH:MM" IST strings | `get` |
 | `backend/system/status.py` | handbook live-panel data, 5 blocks, cached 30 s | `build_status`, `cached_status`, `BLOCKS` |
 | `backend/system/jobs.py` | `job:last:<name>` Redis hash writer/reader | `mark`, `last_runs`, `LOOPS` |
-| `backend/system/data_quality.py` | nightly check (stale bars vs the last trading day's session from 15:45, unlisted, silent feeds; `failures`) + live truth checks (ingest heartbeats > 2x interval (min 120 s) or gone, quotes loop, `scheduler:last_pass`, Picks study, due by 18:00 of the last trading day; LLM provider failing = `llm:last_error` newer than `llm:last_ok` and < 30 min old) | `check`, `live`, `alerts` (admin Today item, silent on weekends and NSE holidays), `last_trading_day_at`, `watch_loop`/`watch_tick` (jobs, 300 s, lock `data_quality:watch_lock`, state `data_quality:watch`: Telegram to every admin's linked chat when a `live` failure holds 2 ticks, and when it clears; digits ignored when matching) |
+| `backend/system/data_quality.py` | nightly check (stale bars vs the last trading day's session from 15:45, unlisted, silent feeds; `failures`) + live truth checks (ingest heartbeats > 2x interval (min 120 s) or gone, quotes loop, `scheduler:last_pass`, Picks study, due by 18:00 of the last trading day; LLM provider failing = `llm:last_error` newer than `llm:last_ok` and < 30 min old; trading days only (`_silent_stops`): Lab off, an `auto_paper_intraday` user with no INTRADAY `trading_runs` row today (09:30-15:30 IST) or a RUNNING run with `progress.last_bar_at` > 15 min old, news triage under 20% of its 7-day hourly mean over the last 3 h (08:00-20:00 IST); `engine/autorun.py` heartbeat note says why nothing started) | `check`, `live`, `alerts` (admin Today item, silent on weekends and NSE holidays), `last_trading_day_at`, `watch_loop`/`watch_tick` (jobs, 300 s, lock `data_quality:watch_lock`, state `data_quality:watch`: Telegram to every admin's linked chat when a `live` failure holds 2 ticks, and when it clears; digits ignored when matching) |
 | `backend/system/backlog.py`, `seed_backlog.py` | admin backlog store; one-time seed | `ItemIn`, `ItemPatch`, `list_items/create/update/delete`, `seed` |
 | `backend/locks.py` | token-checked Redis lock (used by the ingest worker only) | `acquire`, `renew`, `release` |
 | `backend/rate_limit.py` | fixed-window per-key limiter, fails open | `allow` |

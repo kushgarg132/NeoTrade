@@ -560,6 +560,7 @@ async def test_the_auto_intraday_run_waits_for_a_live_broker_feed(world):
     it starts on the first tick after the login."""
     await world.enable()
     world.live["ready"] = False
-    assert (await _tick(world, MONDAY_10AM))["started"] == []
+    done = await _tick(world, MONDAY_10AM)
+    assert done["started"] == [] and "no live feed" in done["idle"]  # the heartbeat note says why
     world.live["ready"] = True
     assert (await _tick(world, MONDAY_10AM + timedelta(minutes=1)))["started"] == ["alice"]
