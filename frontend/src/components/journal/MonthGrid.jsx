@@ -57,7 +57,7 @@ const MonthGrid = ({ month, byDay, selected, onSelect }) => {
             >
               <span className={small}>{Number(day.slice(8))}</span>
               {row && (
-                <span className={cn('tabular-nums text-[11px] font-medium leading-tight whitespace-nowrap', tone)}>
+                <span className={cn('tabular-nums text-[12px] font-medium leading-tight whitespace-nowrap', tone)}>
                   {row.pnl > 0 ? '+' : row.pnl < 0 ? '−' : ''}
                   {cellFigure.format(Math.abs(row.pnl))}
                 </span>

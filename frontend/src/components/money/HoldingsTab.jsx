@@ -46,7 +46,7 @@ const Cell = ({ top, sub, topCls = 'text-[var(--text)]', subCls = 'text-[var(--t
 );
 
 // symbol+qty | LTP, today % | P&L rupees, % | weight, value
-const COLS = 'grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] gap-x-2 items-center';
+const COLS = 'grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.8fr)] gap-x-2 items-center';
 
 const Head = () => (
   <div className={`${COLS} text-[12px] text-[var(--text-muted)] pb-1 border-b border-[var(--border)]`} aria-hidden="true">
@@ -61,11 +61,9 @@ const Row = ({ h, news }) => {
   const body = (
     <>
       <div className="min-w-0">
-        <div className="text-[15px] font-semibold text-[var(--text)] truncate">{mf ? h.name || h.symbol : h.symbol}</div>
-        <div className="text-[12px] text-[var(--text-muted)] tabular-nums truncate">
-          <span className="private">{formatQuantity(h.quantity)}</span>
-          {h.verdict && <> · <span className="font-semibold text-[var(--text)]">{VERDICT_LABEL[h.verdict] || h.verdict}</span></>}
-        </div>
+        <div className="text-[15px] font-semibold text-[var(--text)] break-words">{mf ? h.name || h.symbol : h.symbol}</div>
+        <div className="text-[12px] text-[var(--text-muted)] tabular-nums truncate"><span className="private">{formatQuantity(h.quantity)}</span></div>
+        {h.verdict && <div className="text-[12px] font-semibold text-[var(--text)]">{VERDICT_LABEL[h.verdict] || h.verdict}</div>}
       </div>
       <Cell top={h.last_price != null ? inr(h.last_price) : '—'} sub={day != null ? pct(day, { sign: true }) : '—'} subCls={toneText(tone(day))} />
       <div className="private">
