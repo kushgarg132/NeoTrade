@@ -253,16 +253,17 @@ const BrokerSheet = () => {
         </div>
       }
     >
-      <p className="text-sm text-[var(--text-muted)]">
-        A connected {BROKER_LABEL[broker]} session imports your trades into the journal and lets
-        guardrails check your account.{' '}
-        {broker === 'angel_one'
-          ? 'Intraday runs still use delayed quotes — live ticks from Angel One aren’t supported yet.'
-          : 'It also supplies live tick data for intraday runs.'}{' '}
-        On your own account a real order goes out only when you confirm one (Ideas, the order
-        ticket, the chat), or from a guardrail square-off you’ve set to Live. On the AI account,
-        only when its autopilot is Live.
-      </p>
+      <p className="text-[14px] font-medium text-[var(--text)]">What connecting does</p>
+      <ul className="mt-1 list-disc pl-5 space-y-1 text-[14px] text-[var(--text-muted)]">
+        <li>Imports your {BROKER_LABEL[broker]} trades into the journal and lets guardrails check your account.</li>
+        <li>
+          {broker === 'angel_one'
+            ? 'Intraday runs still use delayed quotes; live ticks from Angel One are not supported yet.'
+            : 'Supplies live tick data for intraday runs.'}
+        </li>
+        <li>Your own account: a real order goes out only when you confirm one (Ideas, order ticket, chat) or a guardrail square-off set to Live fires.</li>
+        <li>AI account: the autopilot orders only when it is Live.</li>
+      </ul>
       {state.state !== 'UNCONFIGURED' && <BrokerRole broker={broker} />}
 
       {state.state === 'UNCONFIGURED' ? (

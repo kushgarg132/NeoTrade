@@ -7,6 +7,10 @@ import api, { endpoints, getPreferences } from '../../utils/api';
 import { cn } from '../../utils/cn';
 
 const KINDS = [['value', 'Reach a value'], ['beat_nifty', 'Beat NIFTY']];
+const KIND_HELP = {
+  value: 'Your portfolio value reaches the target amount by the date.',
+  beat_nifty: 'Your portfolio return stays ahead of NIFTY 50 by this many percentage points by the date.',
+};
 const input = 'w-full min-h-11 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[15px] tabular-nums text-[var(--text)] focus:outline-none focus:border-[var(--accent)]';
 
 /** Settings › Goal: one target and a date; Home tracks it. */
@@ -21,7 +25,7 @@ const Goal = () => {
     .catch(() => setFailed(true));
   useEffect(() => { load(); }, []);
 
-  if (failed) return <Card title="Goal"><ErrorLine message="Could not load your goal." onRetry={load} /></Card>;
+  if (failed) return <Card title="Goal"><ErrorLine message="Couldn't load your goal. Home can't track it until this loads." onRetry={load} /></Card>;
   if (!form) return <Card title="Goal"><Skeleton rows={3} /></Card>;
 
   const set = (k, v) => { setForm({ ...form, [k]: v }); setMsg(null); };
@@ -63,6 +67,7 @@ const Goal = () => {
             </button>
           ))}
         </div>
+        <p className="text-[14px] text-[var(--text-muted)]">{form.target ? KIND_HELP[form.kind] : `No goal set yet. ${KIND_HELP[form.kind]} Enter a target and a date, then save.`}</p>
         <label className="block">
           <span className="text-[13px] font-medium text-[var(--text-muted)]">
             {form.kind === 'value' ? 'Target value (₹)' : 'Points ahead of NIFTY (%)'}

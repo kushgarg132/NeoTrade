@@ -21,7 +21,7 @@ const Alerts = () => {
   const { telegram, error } = state;
   return (
     <Card title="Telegram alerts">
-      {error ? <ErrorLine message="Could not load alert status." onRetry={retry} />
+      {error ? <ErrorLine message="Couldn't load Telegram link status." onRetry={retry} />
         : !telegram ? <Skeleton rows={2} />
         : (
           <div className="space-y-3">
@@ -30,7 +30,7 @@ const Alerts = () => {
               {telegram.own_bot && <span className="text-[13px] text-[var(--text-muted)]">via @{telegram.own_bot}</span>}
             </div>
             <p className="text-[14px] text-[var(--text-muted)]">
-              Guardrail breaches, trade ideas and the daily brief arrive on Telegram once linked.
+              {telegram.linked ? 'Guardrail breaches, trade ideas and the daily brief arrive on Telegram.' : 'Not linked yet, so none of these reach you: guardrail breaches, trade ideas, the daily brief.'}
             </p>
             <Link to="/settings?tab=limits" className="inline-flex items-center min-h-11 text-[15px] font-semibold text-[var(--accent)]">
               {telegram.linked ? 'Manage in Limits' : 'Link Telegram in Limits'}
