@@ -25,7 +25,7 @@ test('Needs you is a 44px tappable control, not a body-text link', () => {
 });
 
 test('the AI tile carries the Paper label', () => {
-  assert.match(page, /title=\{[^}]*Paper/);
+  assert.match(page, /title=\{<>AI <Badge kind=\{today\.autopilot\?\.live[^\n]*'Paper'/);
 });
 
 test('setup checklist sits above the tiles; one stale banner only', () => {

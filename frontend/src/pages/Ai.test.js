@@ -10,7 +10,7 @@ const pos = rd('../components/ai/Positions.jsx');
 const act = rd('../components/ai/Activity.jsx');
 
 test('book header carries the Paper label next to the value and today', () => {
-  assert.match(page, /ap\.live[\s\S]*Paper/);
+  assert.match(page, /ap\?\.live[\s\S]*Paper/);
   assert.match(page, /AI book/);
 });
 
@@ -25,7 +25,7 @@ test('positions: dense rows, Paper label, signed percent, Empty with an action',
 });
 
 test('activity: dense rows, Paper label, Empty with an action', () => {
-  assert.match(act, /kind="paper"/);
+  assert.match(act, /'paper'/);
   assert.match(act, /<Empty[\s\S]*action=/);
 });
 
