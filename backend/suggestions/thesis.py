@@ -73,6 +73,8 @@ def _rescored(score: Optional[dict], report, suggestion: dict) -> Optional[dict]
     sentiment = getattr(report, "sentiment_score", None)
     if not score or sentiment is None:
         return None
+    if (getattr(report, "sentiment", None) or {}).get("scored") is False:
+        return None  # the news score failed: 0.0 is "unknown", keep the stored score
     ai = max(-1.0, min(1.0, float(sentiment)))
     # Sentiment is about the stock; a trade that wins when it falls takes the opposite side of it.
     # (An option suggestion is a cash-secured put, which wins when it rises.)

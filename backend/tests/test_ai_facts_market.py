@@ -67,7 +67,7 @@ async def test_news_filters_and_trims_impacts(mongo):
 async def test_backdrop_reads_regime_brief_flows(mongo):
     redis = FakeRedis()
     await redis.set("market:regime", json.dumps({"label": "risk_off", "score": -0.6}))
-    await redis.set("market:brief", json.dumps({"text": "Crude spikes."}))
+    await redis.set("market:brief", json.dumps({"text": "Crude spikes.", "at": __import__("time").time()}))
     await redis.set("market:flows", json.dumps({"FII": -1200.0, "DII": 900.0, "date": "05-Oct-2026"}))
     out = await market.market_backdrop(mongo, redis, None)
     assert out["regime"]["label"] == "risk_off" and out["brief"] == "Crude spikes." and out["flows"]["FII"] == -1200.0
