@@ -123,7 +123,7 @@ const Strategies = () => {
   const [learningOpen, setLearningOpen] = useState(false);
   const [built, setBuilt] = useState(null);
   const loadBuilt = useCallback(
-    () => api.get(endpoints.builtStrategies).then((res) => setBuilt(res.data)).catch(() => setBuilt((b) => b || {})), []);
+    () => api.get(endpoints.builtStrategies, { cache: false }).then((res) => setBuilt(res.data)).catch(() => setBuilt((b) => b || {})), []);
   useEffect(() => { loadBuilt(); }, [loadBuilt]);
   const mineSlugs = new Set(Object.values(built || {}).flat().filter((r) => r.mine).map((r) => `built:${r.slug}`));
 

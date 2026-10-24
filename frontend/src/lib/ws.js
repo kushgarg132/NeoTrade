@@ -1,4 +1,7 @@
-import { AUTH_TOKEN_STORAGE_KEY, refreshAccessToken } from '../utils/api';
+import { AUTH_TOKEN_STORAGE_KEY, refreshAccessToken, clearGetCache } from '../utils/api';
+
+// Events that change what some GET returns: one clears the GET cache (utils/getCache.js).
+const LIVE_TOPICS = new Set(['trades', 'pnl', 'suggestions', 'news', 'guardrails']);
 
 /**
  * Cheap client-side peek at a JWT's own `exp` claim -- no signature check,
@@ -96,7 +99,10 @@ class Stream {
       this.attempt = 0;
       this.setStatus('live');
       this.flushSubscriptions();
-      if (this.wasLive) this.reconnectHandlers.forEach((fn) => fn());
+      if (this.wasLive) {
+        clearGetCache(); // events were missed while offline
+        this.reconnectHandlers.forEach((fn) => fn());
+      }
       this.wasLive = true;
     };
 
@@ -108,6 +114,7 @@ class Stream {
         return;
       }
       if (message.event === 'ping') return;
+      if (LIVE_TOPICS.has(message.topic)) clearGetCache(); // the event may change what a GET returns
       const listeners = this.handlers.get(message.topic);
       if (listeners) listeners.forEach((fn) => fn(message));
     };

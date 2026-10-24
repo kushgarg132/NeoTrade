@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { detailToText } from './errors';
 import { safeGet } from './storage';
+import { makeGetCache } from './getCache';
 
 // In production this must be same-origin (relative), not the backend's own
 // nip.io host: the refresh-token cookie is SameSite=None, which browsers
@@ -120,30 +121,19 @@ api.interceptors.response.use(
 
 export const AUTH_TOKEN_STORAGE_KEY = TOKEN_STORAGE_KEY;
 
-/**
- * One preferences read per page, not one per component: a page mounts several
- * readers at once, and they share this request and its result for a few
- * seconds. Any write to preferences drops it, so the next read is fresh.
- */
-const PREFS_PATH = '/settings/preferences';
-const PREFS_TTL_MS = 5000;
-let prefsCache = null; // { promise, at }
-
-export const getPreferences = () => {
-  if (!prefsCache || Date.now() - prefsCache.at > PREFS_TTL_MS) {
-    const promise = api.get(PREFS_PATH);
-    prefsCache = { promise, at: Date.now() };
-    promise.catch(() => {
-      if (prefsCache?.promise === promise) prefsCache = null;
-    });
-  }
-  return prefsCache.promise;
-};
-
-api.interceptors.request.use((config) => {
-  if (config.url === PREFS_PATH && config.method !== 'get') prefsCache = null;
-  return config;
+// GETs go through a 30 s cache (utils/getCache.js); any write and any live event (lib/ws.js) clears it,
+// so what a page shows never lags something that just happened. A poller passes `cache: false`.
+const getCache = makeGetCache(api.get.bind(api), { ttlMs: 30_000, key: () => safeGet(TOKEN_STORAGE_KEY) || '' });
+export const clearGetCache = () => getCache.clear();
+api.get = (url, config) => getCache.get(url, config);
+['post', 'put', 'patch', 'delete'].forEach((method) => {
+  const send = api[method].bind(api);
+  api[method] = (...args) => send(...args).finally(clearGetCache);
 });
+
+/** Preferences: several readers on one page share one request through the GET cache above. */
+const PREFS_PATH = '/settings/preferences';
+export const getPreferences = () => api.get(PREFS_PATH);
 
 /**
  * The engine keeps two books: `paper` (practice money, the Paper tab) and

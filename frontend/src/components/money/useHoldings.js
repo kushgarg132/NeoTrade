@@ -17,12 +17,12 @@ export default function useHoldings({ poll = false } = {}) {
   const load = useCallback(
     (stale = () => false) =>
       api
-        .get(endpoints.portfolio.get, { params: { account: 'mine', live: true } })
+        .get(endpoints.portfolio.get, { params: { account: 'mine', live: true }, cache: !poll })
         .then((res) => { if (!stale()) { setSnapshot(res.data); setError(false); } })
         // 404 = no review yet (not an error); any other failure only counts when nothing is on screen to keep.
         .catch((err) => { if (!stale()) setError(err?.response?.status !== 404); })
         .finally(() => !stale() && setLoading(false)),
-    []
+    [poll]
   );
 
   useEffect(() => {
