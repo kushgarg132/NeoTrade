@@ -403,14 +403,15 @@ async def _recent_losers(db, user_id: str, now: datetime) -> set[str]:
     stopped at 417.55, bought again at 407.20). paper_trades keeps no exit reason, so
     a losing close stands in for 'stopped out'."""
     from backend.autopilot.service import ai_book_query
+    from backend.engine.persistence import trade_net
 
     start = now.astimezone(IST).date()
     for _ in range(REENTRY_COOLDOWN_SESSIONS):
         start = previous_trading_day(start)
     since = datetime.combine(start, time(0, 0), tzinfo=IST)
     rows = await db["paper_trades"].find({"$and": [ai_book_query(user_id), {
-        "status": "CLOSED", "exit_at": {"$gte": since}, "realized_pnl": {"$lt": 0}}]}).to_list(length=None)
-    return {r["symbol"] for r in rows}
+        "status": "CLOSED", "exit_at": {"$gte": since}}]}).to_list(length=None)
+    return {r["symbol"] for r in rows if trade_net(r) < 0}  # net: a gross win the charges turned into a loss counts
 
 
 async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dict], now: datetime,

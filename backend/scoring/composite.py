@@ -17,6 +17,8 @@ RULE_FLOOR = 0.45  # rule_score below this: the trade is dead regardless of AI
 # Share of the AI score that reaches `final` (sizing). 0.0 until AI sentiment is
 # validated against outcomes (audit D-C5, owner decision 2026-10-24): paper sizing
 # then equals backtest sizing (redis=None, neutral AI). `ai_score` is still stored.
+# At 0.0, final = (1 - ai_weight) * rule + ai_weight * 0.5, e.g. 0.7*rule + 0.15 at
+# ai_weight 0.3: the neutral-AI blend, not rule_score itself.
 AI_SIZING_WEIGHT = 0.0
 
 
