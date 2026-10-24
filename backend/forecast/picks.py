@@ -113,7 +113,7 @@ def compute(t: dict) -> tuple[dict, list[dict]]:
                 "p_up": f["p_up"] if f else r["p_up"],
                 "p_beat_nifty": f["p_beat_nifty"] if f else r["p_beat_nifty"], "n": r["n"],
                 "median_excess": f["excess"]["median"] if f else r["median_excess"],
-                "edge": r["walk_forward"]["edge"],
+                "edge": r["adjusted"]["edge"],  # baseline-adjusted, as the grade (walk_forward["edge"] has no baseline)
                 "forecast": "similar" if f else "setup", "similar_n": f["n"] if f else None,
                 "features": dict(zip(similar.FEATURES, map(float, x))) if x is not None else None,
                 "explanation": s.explain(t, symbol, day),
