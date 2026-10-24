@@ -8,11 +8,13 @@ import { bareSymbol } from '../../utils/formatters';
 import { inr } from '../ui/format';
 
 /**
- * Buy / Skip for one pending suggestion. Buy is real money on the user's own
+ * Buy / Skip for one pending suggestion (`compact`: the Ideas list row, labelled
+ * with the idea's own quantity and symbol). Buy is real money on the user's own
  * account and keeps the server's second tap: the first call returns a one-time
  * token, the second sends it (armed 600 ms after it appears).
  */
-const BuyBar = ({ idea, id, onDone }) => {
+const BuyBar = ({ idea, id, onDone, compact = false }) => {
+  const verb = idea.side === 'SELL' ? 'Sell' : 'Buy';
   const [busy, setBusy] = useState(null);
   const [failure, setFailure] = useState(null);
   const [armed, setArmed] = useState(false); // first tap done, token held
@@ -77,7 +79,7 @@ const BuyBar = ({ idea, id, onDone }) => {
         </Button>
         <Button variant={armed ? 'danger' : 'primary'} onClick={buy} disabled={busy !== null}>
           {busy === 'buy' && <Loader2 className="w-4 h-4 animate-spin" />}
-          {armed ? 'Send real order' : idea.side === 'SELL' ? 'Sell…' : 'Buy…'}
+          {armed ? 'Send real order' : compact ? `${verb} ${idea.qty} ${bareSymbol(idea.symbol)}…` : `${verb}…`}
         </Button>
       </div>
     </div>

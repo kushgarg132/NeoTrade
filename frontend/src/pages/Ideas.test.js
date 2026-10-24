@@ -28,3 +28,19 @@ test('both sections have an Empty that names an action, and the admin gate is ke
 test('the holdings alert error names what is affected', () => {
   assert.match(page, /Could not load your holdings alerts\./);
 });
+
+const bar = read('../components/ideas/BuyBar.jsx');
+
+test('a pending engine idea gets its own Skip / Buy N SYMBOL bar in the row, Picks do not', () => {
+  assert.match(row, /idea\.kind === 's' && !idea\.decided && onDone/);
+  assert.match(row, /<BuyBar idea=\{idea\} id=\{parseIdeaId\(idea\.id\)\.key\} onDone=\{onDone\} compact/);
+  assert.match(bar, /compact \? `\$\{verb\} \$\{idea\.qty\} \$\{bareSymbol\(idea\.symbol\)\}…`/);
+  assert.match(page, /<IdeaRow key=\{i\.id\} idea=\{i\} onDone=\{fresh\.reload\}/);
+});
+
+test('the row buttons never open the detail page and keep the real-money second tap', () => {
+  // The info part is the link; the bar sits outside it.
+  assert.ok(row.indexOf('</Link>') < row.indexOf('<BuyBar'));
+  assert.match(bar, /Tap again to send\./);
+  assert.match(bar, /confirm_token: token\.current/);
+});

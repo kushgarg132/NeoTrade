@@ -37,7 +37,7 @@ const Ideas = () => {
             : fresh.data.items.length === 0 ? (
               <Empty title={noPickText(fresh.data.hiddenReason).title} body={noPickText(fresh.data.hiddenReason).body}
                 action={<Link to="/ideas/history"><Button variant="secondary">Open history</Button></Link>} />
-            ) : fresh.data.items.map((i) => <IdeaRow key={i.id} idea={i} />)}
+            ) : fresh.data.items.map((i) => <IdeaRow key={i.id} idea={i} onDone={fresh.reload} />)}
         </Card>
       </div>
     </Layout>
