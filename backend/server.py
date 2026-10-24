@@ -52,6 +52,10 @@ app = FastAPI(
     redoc_url=f"{settings.API_PREFIX}/redoc"
 )
 
+from backend.timing import add_timing
+
+add_timing(app)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
