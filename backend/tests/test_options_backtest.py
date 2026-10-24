@@ -105,3 +105,22 @@ async def test_gate_backtest_of_options_needs_synced_contracts():
     await InstrumentMaster(db).upsert_many([_underlying()])
     with pytest.raises(ValueError, match="connect Kite"):
         await backtest_for_gate(db, "orb_options", _Provider([]), START)
+
+
+async def test_gate_backtest_feeds_gap_strategies_previous_closes_and_flags_no_trades():
+    from backend.risk import gate_backtest as gb
+    db = AsyncMongoMockClient()["test_db"]
+    await InstrumentMaster(db).upsert_many([_underlying("ASTRAL")])
+    await db["daily_bars"].insert_one({"symbol": "ASTRAL", "date": "2024-11-29", "close": 1250.0})
+    seen = {}
+    real = gb.build_default_strategies
+
+    def spy(**kw):
+        seen.update(kw)
+        return real(**kw)
+
+    with patch.object(gb, "build_default_strategies", spy):
+        await backtest_for_gate(db, "gap_and_go", _Provider([1300.0] * 30), START + timedelta(days=1))
+    assert seen["prev_closes"]["2024-12-02"] == {"ASTRAL": 1250.0}
+    doc = await BacktestGateStore(db).latest("gap_and_go")
+    assert doc["passed"] is False and doc["reason"] == "no trades in window"

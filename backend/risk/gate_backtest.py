@@ -21,6 +21,7 @@ from backend.options.backtest import ModelOptions
 from backend.options.resolver import FO_UNDERLYINGS
 from backend.risk.backtest_gate import LOOKBACK_DAYS, BacktestGateStore
 from backend.strategies.registry import build_default_strategies
+from backend.datalayer.bars import prev_closes
 from backend.datalayer.catalysts import catalyst_map
 from backend.datalayer.news_sources import nifty200_sectors
 
@@ -107,6 +108,11 @@ async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> 
     universe = [i.tradingsymbol for i in instruments]
     from backend.builder import store
     await store.refresh(db)
+    # Same input live builds (routers/trading.py): the gap strategies need the
+    # previous close, which bars alone lack on a window's first day. One entry per weekday.
+    start_day = (now - timedelta(days=LOOKBACK_DAYS)).date()
+    days = [d for i in range(LOOKBACK_DAYS + 1) if (d := start_day + timedelta(days=i)).weekday() < 5]
+    closes = {d.isoformat(): await prev_closes(db, universe, d) for d in days}
     strategies = [
         s for s in build_default_strategies(
             universe=universe, symbol_for_token=symbol_for_token,
@@ -114,7 +120,7 @@ async def backtest_for_gate(db, strategy_name: str, provider, now: datetime) -> 
             regime_of=await store.regime_of(db),
             params=await current_params(db),
             catalysts=await catalyst_map(db, (now - timedelta(days=LOOKBACK_DAYS)).date(), now.date()),
-            sector_of=nifty200_sectors(),
+            sector_of=nifty200_sectors(), prev_closes=closes,
         )
         if s.spec.name == strategy_name
     ]
