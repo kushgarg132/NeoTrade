@@ -35,7 +35,7 @@ async def test_todays_open_intraday_trades_are_adopted_with_their_owner(db):
         _trade("ITC", "BUY", 5, 400.0, datetime(2026, 10, 5, 6, 0, tzinfo=timezone.utc), mode="LONGTERM"),
         _trade("OLD", "BUY", 7, 100.0, datetime(2026, 10, 3, 6, 0, tzinfo=timezone.utc)),
     ])
-    positions, holders, stale = await adopt_intraday(db, "alice", NOW)
+    positions, holders, stale, _ = await adopt_intraday(db, "alice", NOW)
     assert {s: (p.quantity, p.avg_price) for s, p in positions.items()} == {"CONCOR": (11, 436.85), "ASTRAL": (-3, 1351.2)}
     assert holders == {"CONCOR": "vwap_reversion", "ASTRAL": "orb_breakout"}
     assert [t["symbol"] for t in stale] == ["OLD"]
@@ -99,7 +99,56 @@ async def test_several_open_trades_on_one_stock_are_netted(db):
         {**_trade("ASTRAL", "SELL", 3, 1351.2, t), "id": "a1"},
         {**_trade("ASTRAL", "BUY", 3, 1357.0, t), "id": "a2"},
     ])
-    positions, holders, _ = await adopt_intraday(db, "alice", NOW)
+    positions, holders, _, _ = await adopt_intraday(db, "alice", NOW)
     assert positions["CONCOR"].quantity == 33
     assert round(positions["CONCOR"].avg_price, 2) == round((22 * 440.0 + 11 * 435.5) / 33, 2)
     assert "ASTRAL" not in positions and "ASTRAL" not in holders  # nets to flat
+
+
+async def test_adopted_position_keeps_its_stop_after_a_restart(db):
+    from backend.engine.runner import run  # noqa: F401  (levels seed shape is run()'s)
+
+    ctx = {"stop": 95.0, "target": 120.0, "max_hold_days": None, "trail_atr": None}
+    t = datetime(2026, 10, 5, 6, 20, tzinfo=timezone.utc)
+    await db["paper_trades"].insert_many([
+        {**_trade("AAA", "BUY", 10, 100.0, t), "context": ctx},
+        {**_trade("BBB", "BUY", 10, 100.0, t), "context": {}},  # no stop: nothing to seed
+    ])
+    _, _, _, levels = await adopt_intraday(db, "alice", NOW)
+    assert set(levels) == {"AAA"}
+    assert levels["AAA"]["stop"] == 95.0 and levels["AAA"]["target"] == 120.0
+    assert levels["AAA"]["fresh"] is False and levels["AAA"]["product"] == "MIS"
+
+
+async def test_restarted_run_exits_an_adopted_long_at_its_stop(db):
+    from datetime import timedelta
+    from backend.core.clock import SimClock
+    from backend.core.models import Bar
+    from backend.engine.execution.simulated import SimulatedExecutionClient
+    from backend.engine.portfolio import Portfolio
+    from backend.engine.protocols import StrategySpec
+    from backend.engine.runner import run
+
+    class _Idle:
+        spec = StrategySpec(name="vwap_reversion", mode="INTRADAY", timeframe="5m", warmup_bars=0, universe=["ITC"])
+
+        def on_start(self, ctx): ...
+        def on_fill(self, ctx, fill): ...
+        def on_bar(self, ctx, bar): ...
+
+    t = datetime(2026, 10, 5, 6, 20, tzinfo=timezone.utc)
+    await db["paper_trades"].insert_one({**_trade("ITC", "BUY", 10, 100.0, t), "context": {"stop": 95.0}})
+    positions, holders, _, levels = await adopt_intraday(db, "alice", NOW)
+    portfolio = Portfolio()
+    portfolio.positions.update(positions)
+
+    class _Feed:
+        async def __aiter__(self):
+            for i, (o, h, l, c) in enumerate([(100, 101, 99, 100), (100, 100, 94, 96)]):
+                yield Bar(instrument_token=1, timeframe="5m", timestamp=NOW + timedelta(minutes=5 * i),
+                          open=o, high=h, low=l, close=c, volume=1000.0)
+
+    await run(strategies=[_Idle()], feed=_Feed(), execution=SimulatedExecutionClient(fill_on_next_open=True),
+              portfolio=portfolio, clock=SimClock(), symbol_for_token={1: "ITC"}, account_size=25_000.0,
+              max_exposure=15_000.0, per_trade_cap=5_000.0, holders=holders, levels=levels)
+    assert "ITC" not in portfolio.positions or portfolio.positions["ITC"].quantity == 0
