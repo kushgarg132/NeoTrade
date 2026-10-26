@@ -39,11 +39,18 @@ def _month_starts(days: pd.DatetimeIndex) -> list:
     return [d for prev, d in zip(days[:-1], days[1:]) if d.month != prev.month]
 
 
-def _top_decile(close: pd.DataFrame, rank: Callable[[object], pd.Series]) -> pd.DataFrame:
-    """The top tenth of `rank(day)` (best first) on each month's first trading day."""
+def _in_index(t: dict, day, s: pd.Series) -> pd.Series:
+    """`s` cut to the stocks in the index on `day` (`t["member"]`), so ranks are taken among them."""
+    m = t.get("member")
+    return s if m is None else s[m.loc[day].reindex(s.index, fill_value=False).to_numpy()]
+
+
+def _top_decile(t: dict, rank: Callable[[object], pd.Series]) -> pd.DataFrame:
+    """The top tenth of `rank(day)` (best first), among index members, on each month's first trading day."""
+    close = t["close"]
     out = pd.DataFrame(np.nan, index=close.index, columns=close.columns)
     for day in _month_starts(close.index):
-        ranked = rank(day)
+        ranked = _in_index(t, day, rank(day))
         if len(ranked) >= 10:
             top = ranked.iloc[: len(ranked) // 10]
             out.loc[day, top.index] = top.values
@@ -51,7 +58,7 @@ def _top_decile(close: pd.DataFrame, rank: Callable[[object], pd.Series]) -> pd.
 
 
 def _ranked(t: dict, params: Params) -> pd.DataFrame:
-    return _top_decile(t["close"], lambda day: scores(t["close"], day, params))
+    return _top_decile(t, lambda day: scores(t["close"], day, params))
 
 
 def momentum(t: dict) -> pd.DataFrame:
@@ -74,7 +81,7 @@ def _mom_vol_parts(close: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 def momentum_vol(t: dict) -> pd.DataFrame:
     r12_1, vol = _mom_vol_parts(t["close"])
     score = r12_1 / vol.replace(0, np.nan)
-    return _top_decile(t["close"], lambda day: score.loc[day].dropna().sort_values(ascending=False))
+    return _top_decile(t, lambda day: score.loc[day].dropna().sort_values(ascending=False))
 
 
 def breakout(t: dict) -> pd.DataFrame:
@@ -148,7 +155,7 @@ def rs_leaders_regime(t: dict) -> pd.DataFrame:
     bull = nc > nc.rolling(200, min_periods=200).mean()
     out = pd.DataFrame(np.nan, index=close.index, columns=close.columns)
     for day in _month_starts(close.index):
-        r = rs.loc[day].dropna()
+        r = _in_index(t, day, rs.loc[day].dropna())
         if len(r) < 10 or not bull.loc[day]:
             continue
         top = r[r >= r.quantile(0.9)]

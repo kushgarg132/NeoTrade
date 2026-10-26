@@ -271,7 +271,11 @@ async def load(db, now: datetime) -> Optional[dict]:
     frames = await bars.read(db, universe, HISTORY_START, today)
     if bars.NIFTY not in frames or len(frames) < 2:
         return None
-    return setups.table(frames)
+    from backend.forecast import members
+
+    t = setups.table(frames)
+    t["member"] = members.mask(t["close"].index, t["close"].columns)  # no survivorship: each day's own index
+    return t
 
 
 async def ensure_indexes(db) -> None:

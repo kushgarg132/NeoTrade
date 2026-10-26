@@ -117,6 +117,12 @@ ADJ_MIN_T = 2.0   # a setup has an edge when its adjusted out-of-sample excess i
 BOOT = 2000
 
 
+def members_only(t: dict, fires: pd.DataFrame) -> pd.DataFrame:
+    """`fires` kept only where the stock was in the index that day (`t["member"]`, forecast/members.py)."""
+    m = t.get("member")
+    return fires if m is None else fires.where(m.reindex(index=fires.index, columns=fires.columns, fill_value=False))
+
+
 def every_month(t: dict) -> pd.DataFrame:
     """Baseline fires: every stock on each month's first trading day (what a random pick earns in this universe)."""
     from backend.forecast.setups import _month_starts
@@ -124,7 +130,7 @@ def every_month(t: dict) -> pd.DataFrame:
     c = t["close"]
     out = pd.DataFrame(np.nan, index=c.index, columns=c.columns)
     out.loc[_month_starts(c.index)] = 1.0
-    return out.where(c.notna())
+    return members_only(t, out.where(c.notna()))
 
 
 class _Horizon:
@@ -134,7 +140,7 @@ class _Horizon:
 
 def baseline_by_month(t: dict, horizon: int) -> pd.Series:
     """Mean excess over NIFTY of ALL universe stocks over `horizon`, by signal month. Today's universe beats NIFTY
-    on average (survivorship), so a setup must beat THIS, not zero."""
+    on average (survivorship; the member mask cuts it, gaps in the archived lists leave some), so a setup must beat THIS, not zero."""
     ev = events(t, _Horizon(horizon), every_month(t))
     return (ev["net"] - ev["nifty"]).groupby(ev["signal"].dt.to_period("M")).mean()
 
@@ -190,7 +196,7 @@ def run(t: dict, setups) -> tuple[dict, dict]:
     """-> ({setup: stats + walk_forward}, {setup: fires frame})."""
     results, all_fires, base = {}, {}, {}
     for s in setups:
-        fires = s.signals(t)
+        fires = members_only(t, s.signals(t))
         ev = events(t, s, fires)
         if s.horizon not in base:
             base[s.horizon] = baseline_by_month(t, s.horizon)

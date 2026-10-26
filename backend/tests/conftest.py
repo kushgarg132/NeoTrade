@@ -23,6 +23,7 @@ import pytest
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "real_gate: run risk/paper_gate.proven_strategies for real")
+    config.addinivalue_line("markers", "real_members: read forecast/members.py's committed index lists for real")
     config.addinivalue_line("markers", "real_lab: read the admin Lab switch (app_settings.lab_on) for real")
 
 
@@ -57,6 +58,18 @@ def _every_strategy_proven(request, monkeypatch):
 
     monkeypatch.setattr(paper_gate, "proven_strategies", proven)
     monkeypatch.setattr(paper_gate, "for_mine", everything)
+
+
+@pytest.fixture(autouse=True)
+def _every_symbol_a_member(request, monkeypatch):
+    """Test tables use made-up symbols (S0, S1...) that no index list holds: every one counts as a
+    member, except in tests of the membership itself (marked real_members)."""
+    if request.node.get_closest_marker("real_members"):
+        return
+    import pandas as pd
+    from backend.forecast import members
+
+    monkeypatch.setattr(members, "mask", lambda days, symbols: pd.DataFrame(True, index=days, columns=list(symbols)))
 
 
 @pytest.fixture(autouse=True)
