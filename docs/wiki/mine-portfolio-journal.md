@@ -31,6 +31,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/portfolio/rules.py | SELL/HOLD/ADD and REVIEW/KEEP rules, scored through composite (pure) | `portfolio/rules.py::stock_verdict`, `::fund_verdict`, `::sell_codes`, `::add_codes`, `::worsened`, `SEVERITY` |
 | backend/portfolio/health.py | Per-stock fundamentals, trend and headlines, cached daily | `health.py::stock_health`, `::price_trend`, `::profit_trend` |
 | backend/portfolio/review.py | LLM write-up (summary, notes, plan); explains only | `review.py::write_review`, `MAX_HOLDINGS` |
+| backend/portfolio/ai_rebalance.py | AI final rebalance list: model answers target % per stock (prompt `prompts/rebalance_ai.md`), clamped to caps, sized by `plan_rebalance` | `ai_rebalance.py::ai_targets`, `::clamp_targets`, `MAX_HOLDINGS` |
 | backend/portfolio/rebalance.py | Target weights, rebalance plan, one-tap suggestion, charges, sell tax | `rebalance.py::target_weights`, `::target_gaps`, `::plan_rebalance`, `::suggest`, `::charges`, `::sell_tax`, `::plan_tax`, `::plan_after`, `::multiplier`, `DEFAULT_TARGETS` |
 | backend/portfolio/digest.py | Pulse (account right now), scoreboard, 08:45 and post-close Telegram digests | `digest.py::pulse`, `::verdicts_visible`, `::headlines_for`, `::pnl_since`, `::scoreboard`, `::send_premarket`, `::send_postclose`, `::premarket_for`, `::postclose_for` (per-user bodies, shared with `/today`), `::premarket_text` (no ideas line for non-admins), `::postclose_text`, `::last_session_move`, `::_day_summary` (after each digest: Home "Your day", `summaries/day.py::generate`; `send_postclose(db, now, redis)`) |
 | backend/journal/store.py | `journal_trades` / `journal_notes` persistence | `journal/store.py::JournalStore.add_trades`, `.list_trades`, `.notes_for`, `.set_note` |
@@ -139,6 +140,10 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
    estimate (`::plan_tax`): gains and losses across every sell netted with `mine/tax.py::_set_off` (a sell at a loss
    lowers the total), before the FY LTCG exemption. `after` (`::plan_after`) is the book once every trade fills:
    weight now over today's book, after over book + new money, ETFs as their own sector, cash left as `cash_pct`.
+   `POST /portfolio/rebalance/ai` (`::rebalance_ai`, shared setup `::_prepare`) gives the model every holding's
+   figures, verdict, score, AI note and tax-if-sold, the review's plan, up to 20 allowed candidates and the formula's
+   own plan; `ai_rebalance.py::clamp_targets` caps its answer (stock cap, sector cap, sum <= 100) and the targets run
+   as `overrides` through the same `plan_rebalance`. The AI never sizes a trade or names a stock outside the candidates.
 7. **Value curve**: `history.py::write_all` (16:00) calls `::backfill` for each user in
    `portfolio_snapshots.distinct(user_id)`, then `::_compute` and `::_store`. `::_inputs` builds the replay events.
    - It uses `mine_trades` (STOCK only, mine brokers) minus MF symbols.
@@ -274,6 +279,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | POST /portfolio/refresh | `::refresh` | user | as above; 409 if no holdings and no errors |
 | GET /portfolio/rebalance/candidates | `::rebalance_candidates` | user | `[{symbol,price,source,score,preselect}]` |
 | POST /portfolio/rebalance | `::rebalance` | user (conviction needs the gate) | `total,cash_left,trades,tax{short_gain,long_gain,est_tax,undated},after{rows[{symbol,kind,sector,value_now,value_after,weight_now,weight_after}],sectors[{sector,weight_now,weight_after}],cash_pct},skipped,excluded,uninvested_pct,stale_since`; 429/409/403 |
+| POST /portfolio/rebalance/ai | `::rebalance_ai` | verdicts audience (`verdicts_visible_to`), 3/min | `plan` (same shape as /rebalance), `targets{symbol:pct}` (clamped), `reasons{symbol:text}`, `summary`; 403/429/409/502 (model gave nothing usable) |
 | GET /journal?account= | `routers/journal.py::get_journal` | user | `account,round_trips,calendar,insights,brokers_connected,summary{trips,pnl,wins,by_kind},mirror{costs,benchmark}` |
 | GET /journal/ai-vs-me | `::ai_vs_me` | user | monthly rows; no caller in `frontend/src/utils/api.js` |
 | POST /journal/sync | `::sync_journal` | user | `{imported,brokers,failed}` |
@@ -357,6 +363,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | backend/tests/test_portfolio_review.py | health, rule verdicts via composite, AI write-up, verdict switch and masking (phases 3-5) |
 | backend/tests/test_rebalance.py | `target_weights`, `plan_rebalance`, `suggest`, `sell_tax`, `plan_tax`, `plan_after` |
 | backend/tests/test_portfolio_rebalance_router.py | `/portfolio/rebalance`, candidates, targets, row actions on GET /portfolio |
+| backend/tests/test_ai_rebalance.py | `clamp_targets`, `ai_targets` prompt/parse, `/portfolio/rebalance/ai` gate, caps, 502 |
 | backend/tests/test_portfolio_digest.py | pulse, movers and news, verdict changes, scoreboard, premarket/postclose text |
 | backend/tests/test_today.py | `GET /today` parts and errors, `/today/attention` |
 | backend/tests/test_journal.py | normalisation, round trips, idempotent store, Console CSV, Upstox history |

@@ -110,9 +110,12 @@ async def refresh(
 REBALANCE_PER_MINUTE = 10
 
 
+MAX_REBALANCE_CANDIDATES = 20
+
+
 class RebalanceRequest(BaseModel):
     new_money: float = Field(default=0, ge=0, le=1e12, allow_inf_nan=False)
-    candidates: list[str] = Field(default_factory=list, max_length=20)
+    candidates: list[str] = Field(default_factory=list, max_length=MAX_REBALANCE_CANDIDATES)
     targets: Optional[RebalanceTargets] = None
 
 
@@ -182,15 +185,14 @@ async def rebalance_candidates(user: User = Depends(get_current_user)):
     return out
 
 
-@router.post("/rebalance")
-async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_user)):
-    """Trades that move the book toward its targets. Nothing is placed: each
-    trade opens a pre-filled ticket the user confirms."""
-    if not await allow(db.redis, f"rebalance:{user.id}", REBALANCE_PER_MINUTE, 60):
-        raise HTTPException(status_code=429, detail="Too many rebalance runs: try again in a minute")
+async def _prepare(request: RebalanceRequest, user: User, all_candidates: bool = False) -> dict:
+    """Everything a plan needs, priced today and scoped to the user's own
+    account. `all_candidates`: every allowed name (up to the request limit),
+    not just the ticked ones -- the AI list weighs them all."""
     snapshot = await latest_snapshot(db.db, user.id)
     if snapshot is None:
         raise HTTPException(status_code=409, detail="Refresh your portfolio first")
+    review = snapshot  # the review's own rows (health, verdict, note) and plan, before re-scoping
     from backend.brokers.roles import brokers_for
     from backend.core.clock import SystemClock
     from backend.engine.session import IST
@@ -220,10 +222,55 @@ async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_
     held = {r["symbol"] for r in snapshot.get("holdings", [])}
     allowed = {s: (source, score) for s, source, score in await _candidate_symbols(user, held)}
     wanted = [s for s in dict.fromkeys(request.candidates) if s in allowed]
+    if all_candidates:
+        wanted = list(dict.fromkeys(wanted + list(allowed)))[:MAX_REBALANCE_CANDIDATES]
     prices = await _closes(wanted)
     candidates = [{"symbol": s, "price": prices[s], "kind": "STOCK", "sector": None,
                    "source": allowed[s][0], "score": allowed[s][1]} for s in wanted if s in prices]
-    lots = {s: open_lots(trades, s) for s in held}
-    today = now.astimezone(IST).date()
-    out = plan_rebalance(snapshot.get("holdings", []), candidates, targets, request.new_money, lots, today)
-    return {**out, "stale_since": snapshot.get("stale_since")}
+    return {"snapshot": snapshot, "review": review, "candidates": candidates, "targets": targets, "ticked": set(request.candidates),
+            "lots": {s: open_lots(trades, s) for s in held}, "today": now.astimezone(IST).date()}
+
+
+@router.post("/rebalance")
+async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_user)):
+    """Trades that move the book toward its targets. Nothing is placed: each
+    trade opens a pre-filled ticket the user confirms."""
+    if not await allow(db.redis, f"rebalance:{user.id}", REBALANCE_PER_MINUTE, 60):
+        raise HTTPException(status_code=429, detail="Too many rebalance runs: try again in a minute")
+    p = await _prepare(request, user)
+    out = plan_rebalance(p["snapshot"].get("holdings", []), p["candidates"], p["targets"], request.new_money,
+                         p["lots"], p["today"])
+    return {**out, "stale_since": p["snapshot"].get("stale_since")}
+
+
+REBALANCE_AI_PER_MINUTE = 3
+
+
+@router.post("/rebalance/ai")
+async def rebalance_ai(request: RebalanceRequest, user: User = Depends(get_current_user)):
+    """The AI's final list (portfolio/ai_rebalance.py): its target per stock,
+    clamped to the caps and planned by the same `plan_rebalance`, beside the
+    formula's plan. Same audience as the verdicts. Nothing is placed."""
+    from backend.portfolio.ai_rebalance import ai_targets, clamp_targets
+
+    if not await verdicts_visible_to(user):
+        raise HTTPException(status_code=403, detail="The AI rebalance is not available on this account")
+    if not await allow(db.redis, f"rebalance-ai:{user.id}", REBALANCE_AI_PER_MINUTE, 60):
+        raise HTTPException(status_code=429, detail="Too many AI rebalance runs: try again in a minute")
+    p = await _prepare(request, user, all_candidates=True)
+    snapshot, targets, holdings = p["snapshot"], p["targets"], p["snapshot"].get("holdings", [])
+    ticked = [c for c in p["candidates"] if c["symbol"] in p["ticked"]]
+    formula = plan_rebalance(holdings, ticked, targets, request.new_money, p["lots"], p["today"])
+    full = p["review"]
+    context = {r["symbol"]: r for r in full.get("holdings", [])}
+    answer = await ai_targets(holdings, context, p["candidates"], targets, request.new_money, formula,
+                              full.get("plan"), p["lots"], p["today"])
+    if answer is None:
+        raise HTTPException(status_code=502, detail="The AI could not build a list just now: try again")
+    sector_of = {r["symbol"]: (r.get("sector") if r.get("kind") == "STOCK" else None) for r in holdings}
+    sector_of.update({c["symbol"]: None for c in p["candidates"]})
+    picked = clamp_targets(answer["targets"], sector_of, targets)
+    chosen = [c for c in p["candidates"] if picked.get(c["symbol"], 0) > 0]
+    plan = plan_rebalance(holdings, chosen, {**targets, "overrides": picked}, request.new_money, p["lots"], p["today"])
+    return {"plan": {**plan, "stale_since": snapshot.get("stale_since")}, "targets": picked,
+            "reasons": {s: r for s, r in answer["reasons"].items() if s in picked}, "summary": answer["summary"]}
