@@ -7,6 +7,7 @@ import { TicketButton } from '../trading/OrderTicket';
 import api, { endpoints, getPreferences } from '../../utils/api';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { ticketFrom, executeAll } from '../../utils/ticket';
+import RebalanceAfter from './RebalanceAfter';
 import { cn } from '../../utils/cn';
 
 /**
@@ -244,10 +245,21 @@ const Rebalance = ({ snapshot, onTrade }) => {
                   {tax.undated > 0 && ` ${tax.undated} sell${tax.undated > 1 ? 's' : ''} not fully dated in your journal: real tax may differ.`}
                 </p>
               </div>
+              {armed ? (
+                <div className="mb-3 border border-[var(--border)] px-3 py-3">
+                  <p className="text-sm font-semibold mb-3">Your portfolio after these trades</p>
+                  <RebalanceAfter after={result.after} />
+                </div>
+              ) : result.after?.rows?.length > 0 && (
+                <details className="mb-3 border border-[var(--border)] px-3">
+                  <summary className="cursor-pointer min-h-11 flex items-center text-sm font-semibold">See portfolio after these trades</summary>
+                  <div className="pb-3"><RebalanceAfter after={result.after} /></div>
+                </details>
+              )}
               {onTrade && !run && (armed ? (
                 <div role="alert" className="mb-3 border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2 space-y-2">
                   <p className="text-sm">
-                    Places {trades.length} real order{trades.length > 1 ? 's' : ''} on your broker: sells first, then buys, each a
+                    Check the portfolio above. Places {trades.length} real order{trades.length > 1 ? 's' : ''} on your broker: sells first, then buys, each a
                     limit order at the plan price. Stops at the first order that fails.
                   </p>
                   <div className="grid grid-cols-2 gap-2">
@@ -256,7 +268,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
                   </div>
                 </div>
               ) : (
-                <Button variant="primary" className="mb-3 w-full" onClick={() => setArmed(true)}>Execute all {trades.length} trades</Button>
+                <Button variant="primary" className="mb-3 w-full" onClick={() => setArmed(true)}>Review & execute all {trades.length} trades</Button>
               ))}
               {run && (
                 <div className="mb-3 border border-[var(--border)] px-3 py-2" role="status" aria-live="polite">
