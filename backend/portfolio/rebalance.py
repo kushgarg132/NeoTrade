@@ -155,6 +155,31 @@ def plan_tax(trades: list[dict]) -> dict:
             "undated": sum(1 for t in taxed if t["unknown_qty"] > 0)}
 
 
+def plan_after(names: list[dict], trades: list[dict], total: float, cash_left: float) -> dict:
+    """The book once every trade fills: each name (kind, sector, weight now and
+    after) and the sector mix. Now is over today's book, after over the whole
+    plan (book + new money), with what stays in cash as its own line."""
+    moved = defaultdict(float)
+    for t in trades:
+        moved[t["symbol"]] += t["value"] if t["side"] == "BUY" else -t["value"]
+    book = sum(n["value"] for n in names) or 1.0
+    rows, sectors = [], defaultdict(lambda: [0.0, 0.0])
+    for n in names:
+        after = max(n["value"] + moved[n["symbol"]], 0.0)
+        if n["value"] <= 0 and after <= 0:
+            continue
+        sector = "ETF" if n["kind"] != "STOCK" else n.get("sector") or "Unknown"
+        now_w, after_w = n["value"] / book * 100, after / total * 100 if total > 0 else 0.0
+        rows.append({"symbol": n["symbol"], "kind": n["kind"], "sector": sector, "value_now": round(n["value"], 2),
+                     "value_after": round(after, 2), "weight_now": round(now_w, 2), "weight_after": round(after_w, 2)})
+        sectors[sector][0] += now_w
+        sectors[sector][1] += after_w
+    rows.sort(key=lambda r: -r["weight_after"])
+    mix = [{"sector": k, "weight_now": round(v[0], 2), "weight_after": round(v[1], 2)}
+           for k, v in sorted(sectors.items(), key=lambda kv: -kv[1][1])]
+    return {"rows": rows, "sectors": mix, "cash_pct": round(max(cash_left, 0) / total * 100, 2) if total > 0 else 0.0}
+
+
 def plan_rebalance(holdings: list[dict], candidates: list[dict], targets: dict, new_money: float,
                    lots: dict, today) -> dict:
     names, excluded = universe(holdings)
@@ -226,6 +251,7 @@ def plan_rebalance(holdings: list[dict], candidates: list[dict], targets: dict, 
     # cash: said out loud, so a rebalance never quietly sells a book to cash.
     uninvested = max(0.0, 1 - sum(weights.values())) * 100 if weights else 0.0
     return {"total": round(total, 2), "cash_left": round(cash - spent, 2), "trades": trades, "tax": plan_tax(sells),
+            "after": plan_after(names, trades, total, cash - spent),
             "skipped": skipped, "excluded": excluded, "uninvested_pct": round(uninvested, 2)}
 
 

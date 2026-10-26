@@ -174,3 +174,16 @@ def test_plan_tax_nets_a_loss_against_gains():
     # A long loss never offsets a short gain.
     t = plan_tax([tax(2_000, 0), tax(0, -9_000, u=3), {"tax": None}])
     assert t["est_tax"] == 400 and t["long_gain"] == -9_000 and t["undated"] == 1
+
+
+def test_plan_after_shows_every_name_and_the_sector_mix():
+    book = [h("A", 80_000), h("B", 20_000, sector="Banks"), h("N", 50_000, kind="ETF", sector=None)]
+    out = plan_rebalance(book, [], EQUAL, 0, {}, TODAY)["after"]
+    by = {r["symbol"]: r for r in out["rows"]}
+    assert set(by) == {"A", "B", "N"} and by["N"]["sector"] == "ETF" and by["N"]["kind"] == "ETF"
+    assert by["A"]["weight_now"] == pytest.approx(80_000 / 150_000 * 100, abs=0.01)
+    assert by["A"]["weight_after"] < by["A"]["weight_now"] and by["B"]["weight_after"] > by["B"]["weight_now"]
+    mix = {m["sector"]: m for m in out["sectors"]}
+    assert set(mix) == {"IT", "Banks", "ETF"}
+    total_after = sum(m["weight_after"] for m in out["sectors"]) + out["cash_pct"]
+    assert total_after == pytest.approx(100, abs=0.5)  # charges are the rest
