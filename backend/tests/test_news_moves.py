@@ -50,11 +50,14 @@ def test_themes_and_accuracy_line():
     assert news_moves.themes(items, {"BANKA"}, SECTORS) == [
         {"theme": "rates", "n": 2, "impact": 14.0, "direction": 0.0},
         {"theme": "results", "n": 1, "impact": 8.0, "direction": -1.0}]
-    doc = {"cells": [{"scope": "COMPANY", "horizon": "5d", "measure": "raw", "hit": 0.5, "n": 10},
-                     {"scope": "COMPANY", "horizon": "5d", "measure": "excess", "hit": 0.42, "n": 765},
-                     {"scope": "SECTOR", "horizon": "5d", "measure": "excess", "hit": 65, "n": 257},
-                     {"scope": "MARKET", "horizon": "5d", "measure": "excess", "hit": 0.59, "n": 596}]}
-    assert news_moves.accuracy_line(doc) == {"company": {"hit_pct": 42.0, "n": 765}, "sector": {"hit_pct": 65.0, "n": 257}}
+    def cell(scope, measure, hit, n, key="all", impact="all"):
+        return {"group": "theme", "scope": scope, "key": key, "impact": impact, "horizon": "5d",
+                "measure": measure, "hit": hit, "n": n}
+    doc = {"cells": [cell("COMPANY", "move", 0.42, 765), cell("COMPANY", "pre_move", 0.6, 40),  # pre_move too thin
+                     cell("COMPANY", "move", 0.9, 50, key="earnings"),  # a theme's own cell is not the scope's
+                     cell("SECTOR", "pre_move", 0.65, 320), cell("SECTOR", "move", 0.5, 400),
+                     cell("MARKET", "move", 0.59, 596)]}
+    assert news_moves.accuracy_line(doc) == {"company": {"hit_pct": 42.0, "n": 765}, "sector": {"hit_pct": 65.0, "n": 320}}
     assert news_moves.accuracy_line(None) is None and news_moves.accuracy_line({"cells": []}) is None
 
 
@@ -101,9 +104,9 @@ async def test_week_attributes_big_weekly_movers_and_reads_the_latest_accuracy(d
               "2026-10-19": {"BANKA": 90.0, "IT1": 101.0, "^NSEI": 99.0}}     # Friday's close
     monkeypatch.setattr("backend.datalayer.bars.prev_closes", AsyncMock(side_effect=lambda db_, names, day: {
         s: c for s, c in closes[day.isoformat()].items() if s in names}))
-    await db["news_accuracy"].insert_many([
-        {"at": NOW - timedelta(days=8), "cells": [{"scope": "COMPANY", "horizon": "5d", "hit": 0.9, "n": 1}]},
-        {"at": NOW, "cells": [{"scope": "COMPANY", "horizon": "5d", "hit": 0.42, "n": 765}]}])
+    await db["news_accuracy"].insert_one({"_id": "latest", "as_of": NOW, "cells": [
+        {"group": "theme", "scope": "COMPANY", "key": "all", "impact": "all", "horizon": "5d", "measure": "move",
+         "hit": 0.42, "n": 765}]})
     start = datetime(2026, 10, 12, tzinfo=IST)
     week = await news_moves.week(db, "alice", start, start + timedelta(days=7))
     assert [m["symbol"] for m in week["movers"]] == ["BANKA"]               # IT1 +2% vs NIFTY is not big

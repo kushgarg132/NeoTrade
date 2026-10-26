@@ -91,18 +91,26 @@ def themes(items: list[dict], held: set[str], sector_of: dict, top: int = THEMES
 
 
 def accuracy_line(doc: Optional[dict]) -> Optional[dict]:
-    """5-day COMPANY and SECTOR hit rates (percent) from a `news_accuracy` report, or None.
-    An excess-vs-NIFTY measure is preferred when the report has several."""
+    """5-day COMPANY and SECTOR hit rates (percent) from the `news_accuracy` report
+    (`datalayer/accuracy.py`): each scope's all-themes, all-impacts cell, measured from the
+    pre-publication close once that has `SCAN_MIN_N` rows, else from the scoring snapshot. None without one."""
+    from backend.datalayer.accuracy import SCAN_HORIZON, SCAN_MIN_N
+
     if not doc:
         return None
+
+    def cell(scope, measure):
+        return next((c for c in doc.get("cells") or [] if c.get("group") == "theme" and c.get("scope") == scope
+                     and c.get("key") == "all" and c.get("impact") == "all" and c.get("horizon") == SCAN_HORIZON
+                     and c.get("measure") == measure and c.get("hit") is not None), None)
+
     out = {}
     for scope in ("COMPANY", "SECTOR"):
-        cells = [c for c in doc.get("cells") or [] if str(c.get("scope", "")).upper() == scope
-                 and str(c.get("horizon", "")).lower() == "5d" and c.get("hit") is not None]
-        cells.sort(key=lambda c: "excess" not in str(c.get("measure", "")).lower())
-        if cells:
-            hit = cells[0]["hit"]
-            out[scope.lower()] = {"hit_pct": round(hit * 100 if hit <= 1 else hit, 1), "n": cells[0].get("n")}
+        c = cell(scope, "pre_move")
+        if not c or c["n"] < SCAN_MIN_N:
+            c = cell(scope, "move")
+        if c:
+            out[scope.lower()] = {"hit_pct": round(c["hit"] * 100, 1), "n": c["n"]}
     return out or None
 
 
@@ -170,5 +178,5 @@ async def week(db, user_id: str, start: datetime, end: datetime) -> dict:
         hit = themes(items, set(held), sector_of)
     else:
         hit = []
-    doc = await db["news_accuracy"].find_one({}, sort=[("at", -1), ("_id", -1)])
+    doc = await db["news_accuracy"].find_one({"_id": "latest"})
     return {"movers": movers, "themes": hit, "accuracy": accuracy_line(doc)}
