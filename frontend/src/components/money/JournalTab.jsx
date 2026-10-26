@@ -33,6 +33,41 @@ const SUBTABS = [{ id: 'trades', label: 'Trades' }, { id: 'habits', label: 'Habi
 const SUBTAB_IDS = SUBTABS.map((t) => t.id);
 const small = 'inline-flex items-center gap-1.5 min-h-11 px-3 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] text-[14px] font-medium text-[var(--text)] disabled:opacity-50';
 
+/** The strongest scored news in the 24h before a trip's entry and exit (backend journal/news.py). */
+const tripNews = (t) => [['Entry', t.news], ['Exit', t.exit_news]].filter(([, n]) => n);
+const newsWord = (n) => (n.direction > 0 ? 'good news' : n.direction < 0 ? 'bad news' : 'news');
+const hoursBefore = (m) => (m < 60 ? `${m} min` : `${Math.round(m / 60)} h`);
+
+/** Small chips inside the trip row (a button, so no links here); the headlines show when it is tapped. */
+const NewsChips = ({ trip }) => {
+  const items = tripNews(trip);
+  if (items.length === 0) return null;
+  return (
+    <span className="flex flex-wrap gap-1.5 mt-1">
+      {items.map(([label, n]) => (
+        <span key={label} className={`rounded-full bg-[var(--surface-2)] px-2 text-[12px] leading-5 ${toneText(tone(n.direction))}`}>
+          {label}: {newsWord(n)}
+        </span>
+      ))}
+    </span>
+  );
+};
+
+const TripHeadlines = ({ trip }) => {
+  const items = tripNews(trip);
+  if (items.length === 0) return null;
+  return (
+    <ul className="mb-2 space-y-1 text-[13px]">
+      {items.map(([label, n]) => (
+        <li key={label} className="text-[var(--text-muted)]">
+          <span className={toneText(tone(n.direction))}>{label}, {hoursBefore(n.minutes_before)} before: </span>
+          {n.url ? <a href={n.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">{n.headline || 'headline'}</a> : (n.headline || 'headline not stored')}
+        </li>
+      ))}
+    </ul>
+  );
+};
+
 const Finding = ({ finding }) => (
   <li className="py-3 border-b border-[var(--border)] last:border-b-0">
     <div className="flex items-baseline justify-between gap-3">
@@ -315,10 +350,16 @@ const JournalTab = ({ onImport }) => {
                           {formatQuantity(t.quantity)} · {inr(t.entry_price)} to {t.exit_price === null ? 'open' : inr(t.exit_price)}
                           {t.tags?.length > 0 && ` · ${t.tags.join(' · ')}`}
                         </span>
+                        <NewsChips trip={t} />
                       </span>
                       <span className={`figure-md shrink-0 text-[15px] tabular-nums ${toneText(tone(t.pnl))}`}>{inr(t.pnl, { sign: true })}</span>
                     </button>
-                    {openTrip === t.id && <NoteEditor trip={t} onSaved={onNoteSaved} />}
+                    {openTrip === t.id && (
+                      <>
+                        <TripHeadlines trip={t} />
+                        <NoteEditor trip={t} onSaved={onNoteSaved} />
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
