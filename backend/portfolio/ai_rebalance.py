@@ -6,6 +6,7 @@ overrides, so quantities, charges, tax and the after-view stay code's.
 Prompt: backend/prompts/rebalance_ai.md. Same audience as the verdicts.
 """
 
+import asyncio
 import json
 import logging
 import math
@@ -19,6 +20,7 @@ from backend.prompts import render
 
 logger = logging.getLogger(__name__)
 
+RESULTS_DAYS = 30  # a results date further out than this is not a reason to act now
 MAX_HOLDINGS = 40  # ponytail: one call, largest holdings first; batch if bigger books lose detail
 
 
@@ -42,6 +44,24 @@ def clamp_targets(raw, sector_of: dict, targets: dict) -> dict[str, float]:
     if total > 100:
         out = {s: v * 100 / total for s, v in out.items()}
     return {s: round(v, 2) for s, v in out.items()}
+
+
+async def news_context(db, redis, symbols: list[str], results: dict | None = None) -> dict[str, dict]:
+    """{symbol: {"sentiment": -1..1 or None, "results": "YYYY-MM-DD" or None}} through the fact layer.
+    None sentiment means the cache has nothing (no news), never a neutral 0. `results`: dates already
+    read (the router reads them for the trade rows), else read here."""
+    from backend.ai.facts.market import next_results, sentiment
+
+    if results is None:
+        results = (await next_results(db, redis, None, symbols=symbols, days=RESULTS_DAYS)).get("dates", {})
+    reads = await asyncio.gather(*(sentiment(db, redis, None, symbol=s) for s in symbols))
+    return {s: {"sentiment": r.get("stock"), "results": results.get(s)} for s, r in zip(symbols, reads)}
+
+
+def _news_part(n: dict | None) -> str:
+    n = n or {}
+    news = "no news" if n.get("sentiment") is None else f"news sentiment {n['sentiment']:+.2f}"
+    return f"{news}, " + (f"next results {n['results']}" if n.get("results") else f"no results date in {RESULTS_DAYS} days")
 
 
 def _tax_line(row: dict, lots: list, today) -> str:
@@ -70,9 +90,11 @@ def _formula_lines(plan: dict, rule: str) -> str:
 
 
 async def ai_targets(holdings: list[dict], context: dict, candidates: list[dict], targets: dict,
-                     new_money: float, formula: dict, review_plan, lots: dict, today) -> dict | None:
+                     new_money: float, formula: dict, review_plan, lots: dict, today,
+                     news: dict | None = None) -> dict | None:
     """{"targets": {symbol: pct}, "reasons": {symbol: text}, "summary": md}, unclamped,
-    or None when the model is off or answers badly."""
+    or None when the model is off or answers badly. `news`: news_context(), per symbol."""
+    news = news or {}
     rows = sorted(holdings, key=lambda r: -(r.get("weight_pct") or 0))[:MAX_HOLDINGS]
     lines = []
     for r in rows:
@@ -80,13 +102,13 @@ async def ai_targets(holdings: list[dict], context: dict, candidates: list[dict]
         full.setdefault("reason_codes", [])
         score = (full.get("score") or {}).get("final")
         lines.append(_holding_line(full) + f". Verdict {full.get('verdict') or 'n/a'}, score {_fmt(score)}. "
-                     f"AI note: {full.get('note') or 'none'}. {_tax_line(full, lots.get(r['symbol'], []), today)}")
-    cands = "\n".join(f"- {c['symbol']} ({c['source']}): score {_fmt(c.get('score'))}, price {_fmt(c['price'])}"
-                      for c in candidates) or "none"
+                     f"AI note: {full.get('note') or 'none'}. {_news_part(news.get(r['symbol']))}. {_tax_line(full, lots.get(r['symbol'], []), today)}")
+    cands = "\n".join(f"- {c['symbol']} ({c['source']}): score {_fmt(c.get('score'))}, price {_fmt(c['price'])}, "
+                      f"{_news_part(news.get(c['symbol']))}" for c in candidates) or "none"
     system, prompt = render(
         "rebalance_ai", max_stock_pct=targets.get("max_stock_pct", 100), max_sector_pct=targets.get("max_sector_pct", 100),
         new_money=_fmt(new_money), holdings="\n".join(lines), candidates=cands, review_plan=review_plan or "none",
-        rule=targets.get("rule", "cap"), formula=_formula_lines(formula, targets.get("rule", "cap")),
+        rule=targets.get("rule", "cap"), results_days=RESULTS_DAYS, formula=_formula_lines(formula, targets.get("rule", "cap")),
     )
     text = (await llm_service.get_completion(prompt, system_prompt=system, tier="deep", feature="portfolio") or "").strip()
     match = re.search(r"\{.*\}", text, re.S)

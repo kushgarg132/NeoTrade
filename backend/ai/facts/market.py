@@ -117,6 +117,20 @@ async def sentiment(db, redis, user_id, symbol: str) -> dict:
             "market": score(mkt)}
 
 
+@fact("next_results", "Next results (earnings) date of each NSE stock within the next `days` days, from the "
+      "corporate events calendar; a stock with none known is left out.", source="corporate_events")
+async def next_results(db, redis, user_id, symbols: list[str], days: int = 30) -> dict:
+    from backend.datalayer.bars import today_ist
+    from backend.mine.events import upcoming
+
+    events = await upcoming(db, {_bare(s) for s in symbols}, today_ist(), max(1, min(int(days), 90)))
+    dates: dict[str, str] = {}
+    for e in events:  # sorted by date: the first one per symbol is the next
+        if e["kind"] == "results":
+            dates.setdefault(e["symbol"], e["date"])
+    return {"dates": dates}
+
+
 @fact("market_backdrop", "The Indian market right now: AI brief, rule-based regime (risk_on/neutral/risk_off and "
       "why), indices/futures/crude/gold/USDINR/US10Y, FII/DII flows, news sentiment per NSE sector.",
       source="datalayer")

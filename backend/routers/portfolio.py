@@ -231,6 +231,22 @@ async def _prepare(request: RebalanceRequest, user: User, all_candidates: bool =
             "lots": {s: open_lots(trades, s) for s in held}, "today": now.astimezone(IST).date()}
 
 
+async def _results_dates(symbols) -> dict[str, str]:
+    """Next results date within RESULTS_DAYS per symbol, read through the fact layer."""
+    from backend.ai.facts.market import next_results
+    from backend.portfolio.ai_rebalance import RESULTS_DAYS
+
+    symbols = sorted(set(symbols))
+    if not symbols:
+        return {}
+    return (await next_results(db.db, db.redis, None, symbols=symbols, days=RESULTS_DAYS)).get("dates", {})
+
+
+def _with_results(plan: dict, dates: dict) -> dict:
+    """Each trade row carries `next_results` (ISO date or None) for the sheet."""
+    return {**plan, "trades": [{**t, "next_results": dates.get(t["symbol"])} for t in plan["trades"]]}
+
+
 @router.post("/rebalance")
 async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_user)):
     """Trades that move the book toward its targets. Nothing is placed: each
@@ -240,6 +256,7 @@ async def rebalance(request: RebalanceRequest, user: User = Depends(get_current_
     p = await _prepare(request, user)
     out = plan_rebalance(p["snapshot"].get("holdings", []), p["candidates"], p["targets"], request.new_money,
                          p["lots"], p["today"])
+    out = _with_results(out, await _results_dates(t["symbol"] for t in out["trades"]))
     return {**out, "stale_since": p["snapshot"].get("stale_since")}
 
 
@@ -251,7 +268,7 @@ async def rebalance_ai(request: RebalanceRequest, user: User = Depends(get_curre
     """The AI's final list (portfolio/ai_rebalance.py): its target per stock,
     clamped to the caps and planned by the same `plan_rebalance`, beside the
     formula's plan. Same audience as the verdicts. Nothing is placed."""
-    from backend.portfolio.ai_rebalance import ai_targets, clamp_targets
+    from backend.portfolio.ai_rebalance import ai_targets, clamp_targets, news_context
 
     if not await verdicts_visible_to(user):
         raise HTTPException(status_code=403, detail="The AI rebalance is not available on this account")
@@ -263,8 +280,11 @@ async def rebalance_ai(request: RebalanceRequest, user: User = Depends(get_curre
     formula = plan_rebalance(holdings, ticked, targets, request.new_money, p["lots"], p["today"])
     full = p["review"]
     context = {r["symbol"]: r for r in full.get("holdings", [])}
+    symbols = list(dict.fromkeys([r["symbol"] for r in holdings] + [c["symbol"] for c in p["candidates"]]))
+    dates = await _results_dates(symbols)
+    news = await news_context(db.db, db.redis, symbols, dates)
     answer = await ai_targets(holdings, context, p["candidates"], targets, request.new_money, formula,
-                              full.get("plan"), p["lots"], p["today"])
+                              full.get("plan"), p["lots"], p["today"], news=news)
     if answer is None:
         raise HTTPException(status_code=502, detail="The AI could not build a list just now: try again")
     sector_of = {r["symbol"]: (r.get("sector") if r.get("kind") == "STOCK" else None) for r in holdings}
@@ -272,5 +292,6 @@ async def rebalance_ai(request: RebalanceRequest, user: User = Depends(get_curre
     picked = clamp_targets(answer["targets"], sector_of, targets)
     chosen = [c for c in p["candidates"] if picked.get(c["symbol"], 0) > 0]
     plan = plan_rebalance(holdings, chosen, {**targets, "overrides": picked}, request.new_money, p["lots"], p["today"])
+    plan = _with_results(plan, dates)
     return {"plan": {**plan, "stale_since": snapshot.get("stale_since")}, "targets": picked,
             "reasons": {s: r for s, r in answer["reasons"].items() if s in picked}, "summary": answer["summary"]}

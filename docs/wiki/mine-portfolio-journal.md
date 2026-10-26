@@ -31,7 +31,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/portfolio/rules.py | SELL/HOLD/ADD and REVIEW/KEEP rules, scored through composite (pure) | `portfolio/rules.py::stock_verdict`, `::fund_verdict`, `::sell_codes`, `::add_codes`, `::worsened`, `SEVERITY` |
 | backend/portfolio/health.py | Per-stock fundamentals, trend and headlines, cached daily | `health.py::stock_health`, `::price_trend`, `::profit_trend` |
 | backend/portfolio/review.py | LLM write-up (summary, notes, plan); explains only | `review.py::write_review`, `MAX_HOLDINGS` |
-| backend/portfolio/ai_rebalance.py | AI final rebalance list: model answers target % per stock (prompt `prompts/rebalance_ai.md`), clamped to caps, sized by `plan_rebalance` | `ai_rebalance.py::ai_targets`, `::clamp_targets`, `MAX_HOLDINGS` |
+| backend/portfolio/ai_rebalance.py | AI final rebalance list: model answers target % per stock (prompt `prompts/rebalance_ai.md`), clamped to caps, sized by `plan_rebalance`; per-symbol news sentiment and next results date for the prompt | `ai_rebalance.py::ai_targets`, `::clamp_targets`, `::news_context`, `::_news_part`, `MAX_HOLDINGS`, `RESULTS_DAYS` |
 | backend/portfolio/rebalance.py | Target weights, rebalance plan, one-tap suggestion, charges, sell tax | `rebalance.py::target_weights`, `::target_gaps`, `::plan_rebalance`, `::suggest`, `::charges`, `::sell_tax`, `::plan_tax`, `::plan_after`, `::multiplier`, `DEFAULT_TARGETS` |
 | backend/portfolio/digest.py | Pulse (account right now), scoreboard, 08:45 and post-close Telegram digests | `digest.py::pulse`, `::verdicts_visible`, `::headlines_for`, `::pnl_since`, `::scoreboard`, `::send_premarket`, `::send_postclose`, `::premarket_for`, `::postclose_for` (per-user bodies, shared with `/today`), `::premarket_text` (no ideas line for non-admins), `::postclose_text`, `::last_session_move`, `::_day_summary` (after each digest: Home "Your day", `summaries/day.py::generate`; `send_postclose(db, now, redis)`) |
 | backend/journal/store.py | `journal_trades` / `journal_notes` persistence | `journal/store.py::JournalStore.add_trades`, `.list_trades`, `.notes_for`, `.set_note` |
@@ -39,8 +39,8 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/journal/sync.py | Pulls today's trade book from ACTIVE brokers; Upstox history backfill | `sync.py::sync_user_trades`, `::import_upstox_history`, `::connected_brokers` |
 | backend/journal/console_csv.py | Parses the Zerodha Console tradebook CSV | `console_csv.py::parse_console_tradebook` |
 | backend/journal/mirror.py | Estimated charges, trade frequency, return vs NIFTY | `mirror.py::costs`, `::benchmark`, `::text` |
-| backend/journal/insights.py | Behaviour findings over closed trips (pure) | `insights.py::build_insights`, `MIN_TRIPS` |
-| backend/journal/news.py | Attaches the strongest news impact in the 24h before each trip opened | `news.py::attach_news` |
+| backend/journal/insights.py | Behaviour findings over closed trips (pure), incl. news habits (`against_news`, `chasing_news`, `bought_after_good_news`, `bought_after_bad_news`, `sold_after_bad_news`) | `insights.py::build_insights`, `MIN_TRIPS`, `NEWS_IMPACT` |
+| backend/journal/news.py | Attaches the strongest news impact (with headline, url) in the 24h before each trip's entry (`news`) and exit (`exit_news`); an exit item carries `after_5d_pct` from stored daily bars (None without them) | `news.py::attach_news`, `::_after_pct`, `AFTER_BARS` |
 | backend/journal/accounts.py | Splits by account; monthly AI-vs-me | `accounts.py::filter_trades`, `::brokers_of`, `::ai_vs_me` |
 | backend/journal/beta.py | `journal_opens` tracking; Phase 12 metrics | `beta.py::record_open`, `::beta_metrics` |
 | backend/guardrails/rules.py | Breach evaluation (pure) | `guardrails/rules.py::evaluate`, `::_option_breaches`, `::_is_hedged` |
@@ -121,7 +121,8 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
    fills.
 3. **GET /journal**: `routers/journal.py::get_journal`. It records the open, filters with `accounts.py::filter_trades`
    by `account`, then runs `roundtrips.py::build_round_trips`, `mirror.py::costs` (all fills),
-   `mirror.py::benchmark` (closed-trip fills only), notes, `news.py::attach_news` and `insights.py::build_insights`.
+   `mirror.py::benchmark` (closed-trip fills only), notes, `news.py::attach_news` (sets `news` and `exit_news` on every
+   returned trip) and `insights.py::build_insights`.
 4. **Portfolio refresh**: `POST /portfolio/refresh` or `portfolio/service.py::daily_reviews` runs
    `portfolio/service.py::refresh_portfolio`, which proceeds as follows.
    1. `::fetch_holdings` reads the ACTIVE brokers and carries the previous snapshot's rows for the others.
@@ -142,8 +143,12 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
    weight now over today's book, after over book + new money, ETFs as their own sector, cash left as `cash_pct`.
    `POST /portfolio/rebalance/ai` (`::rebalance_ai`, shared setup `::_prepare`) gives the model every holding's
    figures, verdict, score, AI note and tax-if-sold, the review's plan, up to 20 allowed candidates and the formula's
-   own plan; `ai_rebalance.py::clamp_targets` caps its answer (stock cap, sector cap, sum <= 100) and the targets run
+   own plan, plus each holding's and candidate's news sentiment (`sentiment:{SYM}` via the `sentiment` fact; absent = "no news", not 0)
+   and next results date (`next_results` fact, `RESULTS_DAYS` = 30); the prompt tells it company-level news direction measured ~42%
+   against NIFTY, so company headlines are context only. `ai_rebalance.py::clamp_targets` caps its answer (stock cap, sector cap, sum <= 100) and the targets run
    as `overrides` through the same `plan_rebalance`. The AI never sizes a trade or names a stock outside the candidates.
+   Both endpoints add `next_results` (ISO date or None, within 30 days, `routers/portfolio.py::_results_dates` /
+   `::_with_results`, from `corporate_events` through the `next_results` fact) to every trade row.
 7. **Value curve**: `history.py::write_all` (16:00) calls `::backfill` for each user in
    `portfolio_snapshots.distinct(user_id)`, then `::_compute` and `::_store`. `::_inputs` builds the replay events.
    - It uses `mine_trades` (STOCK only, mine brokers) minus MF symbols.
@@ -278,9 +283,9 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | GET /portfolio?account=all\|ai\|mine&live= | `routers/portfolio.py::get_portfolio` | user | snapshot minus `raw_holdings`, plus `verdicts_visible`; rows add `suggested`, `thesis_target`; 404 before the first refresh |
 | POST /portfolio/refresh | `::refresh` | user | as above; 409 if no holdings and no errors |
 | GET /portfolio/rebalance/candidates | `::rebalance_candidates` | user | `[{symbol,price,source,score,preselect}]` |
-| POST /portfolio/rebalance | `::rebalance` | user (conviction needs the gate) | `total,cash_left,trades,tax{short_gain,long_gain,est_tax,undated},after{rows[{symbol,kind,sector,value_now,value_after,weight_now,weight_after}],sectors[{sector,weight_now,weight_after}] (stocks only),types[{kind,weight_now,weight_after}],cash_pct},skipped,excluded,uninvested_pct,stale_since`; 429/409/403 |
+| POST /portfolio/rebalance | `::rebalance` | user (conviction needs the gate) | `total,cash_left,trades[...,next_results],tax{short_gain,long_gain,est_tax,undated},after{rows[{symbol,kind,sector,value_now,value_after,weight_now,weight_after}],sectors[{sector,weight_now,weight_after}] (stocks only),types[{kind,weight_now,weight_after}],cash_pct},skipped,excluded,uninvested_pct,stale_since`; 429/409/403 |
 | POST /portfolio/rebalance/ai | `::rebalance_ai` | verdicts audience (`verdicts_visible_to`), 3/min | `plan` (same shape as /rebalance), `targets{symbol:pct}` (clamped), `reasons{symbol:text}`, `summary`; 403/429/409/502 (model gave nothing usable) |
-| GET /journal?account= | `routers/journal.py::get_journal` | user | `account,round_trips,calendar,insights,brokers_connected,summary{trips,pnl,wins,by_kind},mirror{costs,benchmark}` |
+| GET /journal?account= | `routers/journal.py::get_journal` | user | `account,round_trips[...,news,exit_news{direction,impact,headline,url,minutes_before,after_5d_pct}],calendar,insights,brokers_connected,summary{trips,pnl,wins,by_kind},mirror{costs,benchmark}` |
 | GET /journal/ai-vs-me | `::ai_vs_me` | user | monthly rows; no caller in `frontend/src/utils/api.js` |
 | POST /journal/sync | `::sync_journal` | user | `{imported,brokers,failed}` |
 | POST /imports/cas (multipart `file`,`password`) | `routers/imports.py::import_cas` | user | `{funds,transactions,period}`; 422 on wrong password / non-PDF / over 10 MB / NSDL-CDSL |
@@ -368,7 +373,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | backend/tests/test_today.py | `GET /today` parts and errors, `/today/attention` |
 | backend/tests/test_journal.py | normalisation, round trips, idempotent store, Console CSV, Upstox history |
 | backend/tests/test_options_journal.py | instrument kind, by-kind summary, options in guardrails |
-| backend/tests/test_journal_insights.py, test_journal_mirror.py, test_journal_news.py, test_journal_beta.py | `build_insights`, `mirror.costs`/`benchmark`, `attach_news`, `beta_metrics` |
+| backend/tests/test_journal_insights.py, test_journal_mirror.py, test_journal_news.py, test_journal_beta.py | `build_insights`, `mirror.costs`/`benchmark`, `attach_news` (entry, exit, after-5d), news habit findings, `beta_metrics` |
 | backend/tests/test_account_analysis.py | `journal/accounts.py::ai_vs_me` |
 | backend/tests/test_guardrails.py | `rules.evaluate`, once-per-breach alerting, daily-loss kill-switch trip |
 | backend/tests/test_square_off.py | `exit_orders`, preview never places, live once a day, AI broker untouched |

@@ -32,7 +32,7 @@ async def test_attach_news_uses_the_underlying_and_the_24h_window(mongo):
         _news("b", "TCS", T0 + timedelta(days=1) - timedelta(hours=30)),   # older than 24h before trip 1
     ])
     out = await attach_news(mongo, trips)
-    assert out[0]["news"] == {"direction": -0.7, "impact": 8, "minutes_before": 10}
+    assert out[0]["news"] == {"direction": -0.7, "impact": 8, "minutes_before": 10, "headline": None, "url": None}
     assert out[1]["news"] is None
 
 
@@ -71,3 +71,57 @@ async def test_attach_news_scales_with_a_long_journal(mongo):
     out = await attach_news(mongo, trips)
     assert time.monotonic() - began < 3.0
     assert all(t["news"] is not None for t in out)
+
+
+async def test_attach_news_tags_the_exit_and_what_the_stock_did_next(mongo):
+    from backend.datalayer.bars import today_ist
+
+    today = today_ist()
+    closed = datetime.combine(today - timedelta(days=10), datetime.min.time(), tzinfo=timezone.utc) + timedelta(hours=6)
+    trip = {**_trip(0), "opened_at": closed - timedelta(days=3), "closed_at": closed}
+    await mongo["news_items"].insert_one({**_news("x", "TCS", closed - timedelta(hours=2), direction=-0.6),
+                                          "title": "TCS cuts guidance", "url": "https://e.x/tcs"})
+    # 100 on the exit day, then 5 bars later 110: +10%.
+    days = [today - timedelta(days=d) for d in range(10, -1, -1)]
+    await mongo["daily_bars"].insert_many([{"symbol": "TCS", "date": d.isoformat(), "close": 100.0 + 2 * i}
+                                           for i, d in enumerate(days)])
+    out = (await attach_news(mongo, [trip]))[0]
+    assert out["news"] is None  # nothing in the 24h before entry
+    assert out["exit_news"] == {"direction": -0.6, "impact": 8, "headline": "TCS cuts guidance",
+                                "url": "https://e.x/tcs", "minutes_before": 120, "after_5d_pct": 10.0}
+
+
+async def test_exit_news_without_bars_has_no_after_move(mongo):
+    trip = _trip(0)
+    await mongo["news_items"].insert_one(_news("x", "TCS", trip["closed_at"] - timedelta(minutes=30)))
+    out = (await attach_news(mongo, [trip]))[0]
+    assert out["exit_news"]["after_5d_pct"] is None
+
+
+def _with(i, news=None, exit_news=None, pnl=-100.0, direction="LONG"):
+    return {**_trip(i, pnl=pnl, direction=direction), "news": news, "exit_news": exit_news}
+
+
+def test_bought_after_good_and_bad_news_findings():
+    good = {"direction": 0.6, "impact": 7, "minutes_before": 120}
+    bad = {"direction": -0.6, "impact": 7, "minutes_before": 120}
+    trips = ([_with(i, news=good, pnl=200.0) for i in range(5)] + [_with(10 + i, news=bad) for i in range(5)]
+             + [_with(20 + i, news=good, direction="SHORT") for i in range(5)] + [_with(30 + i) for i in range(4)])
+    kinds = {f["kind"]: f for f in build_insights(trips)}
+    assert kinds["bought_after_good_news"]["title"] == "Bought after good news"
+    assert kinds["bought_after_good_news"]["trips"] == 5 and kinds["bought_after_good_news"]["pnl"] == 1000.0
+    assert kinds["bought_after_bad_news"]["trips"] == 5 and kinds["bought_after_bad_news"]["pnl"] == -500.0
+    assert "sold_after_bad_news" not in kinds
+
+
+def test_sold_after_bad_news_reports_the_next_five_days_only_from_five_trips():
+    def exit_bad(move):
+        return {"direction": -0.7, "impact": 8, "minutes_before": 30, "after_5d_pct": move}
+    four = [_with(i, exit_news=exit_bad(4.0)) for i in range(4)] + [_with(10 + i) for i in range(5)]
+    assert "sold_after_bad_news" not in {f["kind"] for f in build_insights(four)}
+    five = four + [_with(20, exit_news=exit_bad(None))]
+    found = {f["kind"]: f for f in build_insights(five)}["sold_after_bad_news"]
+    assert found["trips"] == 5 and found["title"] == "Sold after bad news"
+    assert found["note"] == "In the 5 trading days after you sold, the stock moved +4.0% on average (4 of 5 with stored prices)"
+    blind = [_with(i, exit_news=exit_bad(None)) for i in range(5)]
+    assert "not shown" in {f["kind"]: f for f in build_insights(blind)}["sold_after_bad_news"]["note"]

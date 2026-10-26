@@ -31,8 +31,8 @@ async def test_ai_list_is_capped_and_sized_by_code(mdb, monkeypatch):  # noqa: F
     await _snapshot(mdb)
     seen = {}
 
-    async def fake(holdings, context, candidates, targets, new_money, formula, plan, lots, today):
-        seen["formula"] = formula
+    async def fake(holdings, context, candidates, targets, new_money, formula, plan, lots, today, news=None):
+        seen["formula"], seen["news"] = formula, news
         return {"targets": {"A": 90, "B": 15, "C": 15, "NOPE": 20}, "reasons": {"A": "trim", "NOPE": "x"}, "summary": "- s"}
 
     monkeypatch.setattr("backend.portfolio.ai_rebalance.ai_targets", fake)
@@ -44,12 +44,14 @@ async def test_ai_list_is_capped_and_sized_by_code(mdb, monkeypatch):  # noqa: F
     trades = {t["symbol"]: t for t in body["plan"]["trades"]}
     assert trades["A"]["side"] == "SELL" and "tax" in body["plan"] and "after" in body["plan"]
     assert seen["formula"]["trades"]  # the model saw the formula's own plan
+    assert seen["news"]["A"] == {"sentiment": None, "results": None}  # no cache: "no news", not 0
+    assert all("next_results" in t for t in body["plan"]["trades"])
 
 
 async def test_ai_list_says_so_when_the_model_fails(mdb, monkeypatch):  # noqa: F811
     await _snapshot(mdb)
 
-    async def nothing(*a):
+    async def nothing(*a, **kw):
         return None
 
     monkeypatch.setattr("backend.portfolio.ai_rebalance.ai_targets", nothing)
@@ -75,9 +77,13 @@ async def test_ai_targets_renders_the_prompt_and_reads_the_answer(monkeypatch):
     monkeypatch.setattr(ai_rebalance.llm_service, "get_completion", complete)
     out = await ai_rebalance.ai_targets(rows, {"A": {"verdict": "SELL", "note": "n1"}},
                                         [{"symbol": "P", "source": "ai", "score": 0.7, "price": 50.0}],
-                                        CAPS, 0, formula, None, {}, date(2026, 10, 26))
+                                        CAPS, 0, formula, None, {}, date(2026, 10, 26),
+                                        news={"A": {"sentiment": -0.4, "results": "2026-11-03"}})
     assert out == {"targets": {"A": 10}, "reasons": {"A": "overweight at 100%"}, "summary": "- trim A"}
     assert "Verdict SELL" in got["prompt"] and "P (ai): score 0.70" in got["prompt"] and "at most 15%" in got["prompt"]
+    assert "news sentiment -0.40, next results 2026-11-03" in got["prompt"]
+    assert "P (ai): score 0.70, price 50.00, no news, no results date in 30 days" in got["prompt"]
+    assert "42%" in got["prompt"]
 
     async def junk(*a, **kw):
         return "no json"

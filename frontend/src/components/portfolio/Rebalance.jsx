@@ -10,6 +10,8 @@ import { ticketFrom, executeAll } from '../../utils/ticket';
 import RebalanceAfter from './RebalanceAfter';
 import Markdown from '../common/Markdown';
 import { cn } from '../../utils/cn';
+import NewsChip from '../common/NewsChip';
+import useSymbolNews from '../../hooks/useSymbolNews';
 
 /**
  * The rebalance helper: targets from a rule (equal weight, or caps per stock
@@ -47,6 +49,25 @@ const Tax = ({ tax }) => {
     <span className="figure-md text-sm">
       {formatCurrency(tax.est_tax)}
       {tax.unknown_qty > 0 && <span className="block doc-meta normal-case">{tax.unknown_qty} undated</span>}
+    </span>
+  );
+};
+
+const RESULTS_DAY = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+
+/** Context under a trade: its latest material headline (coloured by that headline's direction, not the
+ * blended sentiment) and its results date when the server knows one within 30 days. */
+const TradeContext = ({ trade, news }) => {
+  const entry = news?.material ? { ...news, sentiment: null } : null;
+  if (!entry && !trade.next_results) return null;
+  return (
+    <span className="block mt-0.5">
+      <NewsChip entry={entry} className="max-w-[16rem] sm:max-w-xs" />
+      {trade.next_results && (
+        <span className="block doc-meta normal-case text-[var(--warn)]">
+          Results {RESULTS_DAY.format(new Date(`${trade.next_results}T12:00:00+05:30`))}
+        </span>
+      )}
     </span>
   );
 };
@@ -129,6 +150,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
   const reasons = view === 'ai' && ai?.data ? ai.data.reasons : {};
   const trade = (t) => onTrade && onTrade(ticketFrom({ symbol: t.symbol, suggested: t }));
   const trades = shown?.trades || [];
+  const { news } = useSymbolNews(trades.map((t) => t.symbol));
   // Tax is the whole plan's, netted on the server: a sell at a loss lowers the total.
   const tax = shown?.tax || { est_tax: 0, short_gain: 0, long_gain: 0, undated: 0 };
   const chargesTotal = trades.reduce((sum, t) => sum + (t.charges || 0), 0);
@@ -345,6 +367,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
                       <span className="min-w-0">
                         <span className="figure-md text-sm">{t.symbol}</span>
                         {reasons[t.symbol] && <span className="block doc-meta normal-case">{reasons[t.symbol]}</span>}
+                        <TradeContext trade={t} news={news[t.symbol]} />
                       </span>
                       {onTrade && <TicketButton label={tradeLabel(t)} tone={t.side === 'SELL' ? 'loss' : 'gain'} onClick={() => trade(t)} />}
                     </div>
@@ -372,6 +395,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
                       <Cell>
                         <Scrip symbol={t.symbol} />
                         {reasons[t.symbol] && <span className="block doc-meta normal-case max-w-xs">{reasons[t.symbol]}</span>}
+                        <TradeContext trade={t} news={news[t.symbol]} />
                       </Cell>
                       <Cell mono className={t.side === 'SELL' ? 'text-down' : 'text-up'}>{tradeLabel(t)}</Cell>
                       <Cell align="right" mono>{formatCurrency(t.value)}</Cell>

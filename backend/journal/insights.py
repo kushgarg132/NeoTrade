@@ -178,6 +178,23 @@ def build_insights(trips: list[dict]) -> list[dict]:
         findings.append(_finding("chasing_news", f"Entered within {CHASE_MINUTES} minutes of big news", chasing,
                                  closed))
 
+    # Buying (a stock, future or call) after strong good / bad news, and selling one on strong bad news
+    # (exit_news, 24h before the exit) with what the stock did over the next 5 trading days.
+    def bought(t):
+        return t.get("direction") == "LONG" and t.get("kind") != "PUT"
+    for sign, label in ((1, "good"), (-1, "bad")):
+        group = [t for t in strong if bought(t) and t["news"]["direction"] * sign > 0]
+        if len(group) >= MIN_TRIPS:
+            findings.append(_finding(f"bought_after_{label}_news", f"Bought after {label} news", group, closed))
+    sold_bad = [t for t in closed if bought(t) and (t.get("exit_news") or {}).get("impact", 0) >= NEWS_IMPACT
+                and t["exit_news"]["direction"] < 0]
+    if len(sold_bad) >= MIN_TRIPS:
+        moves = [t["exit_news"]["after_5d_pct"] for t in sold_bad if t["exit_news"].get("after_5d_pct") is not None]
+        note = (f"In the 5 trading days after you sold, the stock moved {sum(moves) / len(moves):+.1f}% on average "
+                f"({len(moves)} of {len(sold_bad)} with stored prices)" if moves
+                else "No stored daily prices for these stocks, so what they did next is not shown")
+        findings.append(_finding("sold_after_bad_news", "Sold after bad news", sold_bad, closed, note=note))
+
     winners = [t for t in closed if t["pnl"] > 0]
     losers = [t for t in closed if t["pnl"] < 0]
     if len(winners) >= MIN_TRIPS and len(losers) >= MIN_TRIPS:
