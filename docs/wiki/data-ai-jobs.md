@@ -74,7 +74,7 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | `backend/research/flags.py` | plain-fact chips, never buy/sell | `flags.py::stock_flags` |
 | `backend/research/index_move.py` | AI "why did the index move", Redis-cached | `index_move.py::explain_index_move`, `::_ttl`, `::CACHE_KEY`, `::ExplanationUnavailable` |
 | `backend/ai/analyst.py` | per-stock news score + note (2 LLM calls), 4h cache | `analyst.py::AnalystAgent`, `::_score_news`, `::_report`, `::_extract_json`, `::CACHE_TTL_SECONDS` |
-| `backend/routers/news.py` | news HTTP router (`/news/feed`, `/news/symbols`) + Google News helpers | `news.py::news_feed`, `::symbol_news`, `::fetch_news_logic`, `::fresh_headlines`, `::fetch_google_news`, `::_title_key` |
+| `backend/routers/news.py` | news HTTP router (`/news/feed`, `/news/symbols`, `/news/symbol/{symbol}`) + Google News helpers | `news.py::news_feed`, `::symbol_news`, `::symbol_history`, `::fetch_news_logic`, `::fresh_headlines`, `::fetch_google_news`, `::_title_key` |
 | `backend/research/search.py` | query to instrument; optional LLM peers | `search.py::resolve_company_query`, `::_find_peers` |
 | `backend/datalayer/stock_info.py` | yfinance company info and price history (logic only, no routes) | `stock_info.py::fetch_stock_info_logic`, `::fetch_price_history_logic` |
 | `backend/chat/lc_tools.py` | LangChain tools (stock info, price history, symbol resolve) | `lc_tools.py::fetch_stock_info_tool`, `::fetch_price_history_tool`, `::resolve_symbol_tool` |
@@ -240,6 +240,7 @@ All behind `get_current_user` (router-level dependency in `backend/server.py`, p
 |---|---|---|
 | GET `/news/feed?scope&mine&material&before&limit<=100` | `routers/news.py::news_feed` | `items[]`: `id,title,url,source,published_at,scope,themes,event,impacts,symbols,material,status` (`frontend/src/utils/api.js::newsFeed`) |
 | GET `/news/symbols?symbols=A,B` (<=100) | `news.py::symbol_news` | `symbols{SYM:{sentiment,headline,url,direction,impact,material,published_at}}` (72h window) |
+| GET `/news/symbol/{symbol}?days=180` (1-365) | `news.py::symbol_history` | `{symbol, items[{id,title,url,published_at,direction,impact,material}]}`: SCORED items whose `impacts.target` or `symbols` name it, newest first, max 500; direction/impact are that symbol's own impact, `material` = own impact >= 6 (uses the `(impacts.target,published_at)` and `(symbols,published_at)` indexes) |
 | GET `/plan/today` | `routers/plan.py::plan_today` | `plan, versions[{version,at,trigger,risk_multiplier,skip_day,rationale}], scorecards[{date,a,b,plan_versions}], weeks_beating` (`frontend/src/utils/plan.js`) |
 | GET `/chat/actions/pending` | `chat_actions.py::pending_actions` | `[{id,kind,summary,venue,needs_second_tap,expires_at}]` |
 | POST `/chat/actions/{id}/confirm` body `{confirm_token}` | `chat_actions.py::confirm_action` | `status` CONFIRMED / NEEDS_SECOND_TAP (+ `confirm_token`, `expires_in`), `result`; 409 `detail` on `ActionRefused`; `TokenRefused` -> its status (409/403) with body `{detail: text, code: confirm_*}` |

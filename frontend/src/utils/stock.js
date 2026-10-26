@@ -28,6 +28,48 @@ export const tradeMarkers = (closes, trades) =>
     })
     .filter(Boolean);
 
+const IST_MS = 5.5 * 3600 * 1000;
+export const NEWS_MARKER_CAP = 200;
+
+/**
+ * Material news on a price series (GET /news/symbol/{symbol} `items`), one marker per trading day.
+ * An item lands on the first close on or after its IST date (weekend / after-hours news shows on the
+ * session it could move), news after the last close lands on the last close, news before the first is
+ * dropped. Same-day items collapse: `count`, `impact` = the largest, `direction` = sign of the summed
+ * direction x impact (0 = mixed), `items` newest first. More than `cap` days keeps the most impactful.
+ */
+export const newsMarkers = (data, items, cap = NEWS_MARKER_CAP) => {
+  if (!data?.length || !items?.length) return [];
+  const dates = data.map((d) => d.date);
+  const byDate = new Map();
+  for (const it of items) {
+    if (!it.material || !it.published_at) continue;
+    const day = new Date(new Date(it.published_at).getTime() + IST_MS).toISOString().slice(0, 10);
+    if (day < dates[0]) continue;
+    let lo = 0;
+    let hi = dates.length - 1;
+    while (lo < hi) { // first date >= day, else the last one
+      const mid = (lo + hi) >> 1;
+      if (dates[mid] >= day) hi = mid; else lo = mid + 1;
+    }
+    const m = byDate.get(dates[lo]) || { date: dates[lo], price: data[lo].close, items: [], net: 0, impact: 0 };
+    m.items.push(it);
+    m.net += (it.direction || 0) * (it.impact || 0);
+    m.impact = Math.max(m.impact, it.impact || 0);
+    byDate.set(dates[lo], m);
+  }
+  let out = [...byDate.values()];
+  if (out.length > cap) out = out.sort((a, b) => b.impact - a.impact).slice(0, cap);
+  return out
+    .map(({ net, ...m }) => ({
+      ...m,
+      count: m.items.length,
+      direction: Math.sign(net),
+      items: m.items.sort((a, b) => String(b.published_at).localeCompare(String(a.published_at))),
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+};
+
 /**
  * Investing.com-style technical summary over the snapshot's indicators (GET quick-analyze `technical_analysis`):
  * each reading is bullish, bearish or neutral. Worded as a reading of the indicators, never as "buy" or "sell".

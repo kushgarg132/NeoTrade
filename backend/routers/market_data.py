@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
+import json
 import yfinance as yf
 import logging
 import asyncio
@@ -380,8 +381,32 @@ async def _scan() -> Dict[str, Any]:
 
 @router.get("/market/scan")
 async def get_market_scan():
-    """Nifty 200 gainers, losers, 52-week highs and lows, sector moves (cached 5 min)."""
-    return await cached("scan", SCAN_TTL, _scan) or {}
+    """Nifty 200 gainers, losers, 52-week highs and lows, sector moves (cached 5 min), each sector with its
+    news sentiment read fresh (one MGET; not cached with the scan)."""
+    scan = await cached("scan", SCAN_TTL, _scan) or {}
+    if not scan.get("sectors"):
+        return scan
+    from backend.database import db
+
+    raws = []
+    if db.redis is not None:
+        try:
+            raws = await db.redis.mget([f"sector_sentiment:{s['sector']}" for s in scan["sectors"]])
+        except Exception as exc:
+            logger.warning("sector sentiment unavailable for the scan: %s", exc)
+    return {**scan, "sectors": with_sentiment(scan["sectors"], raws)}
+
+
+def with_sentiment(sectors: List[Dict[str, Any]], raws: list) -> List[Dict[str, Any]]:
+    """Each sector row plus `sentiment` (-1..1) from its `sector_sentiment:{sector}` JSON; absent, unreadable
+    or a None score is None, never 0. `raws` in `sectors` order (may be shorter, e.g. Redis down). Pure."""
+    def score(raw):
+        try:
+            value = json.loads(raw)["score"]
+            return None if value is None else round(float(value), 2)
+        except (TypeError, ValueError, KeyError):
+            return None
+    return [{**s, "sentiment": score(raws[i] if i < len(raws) else None)} for i, s in enumerate(sectors)]
 
 
 @router.get("/market/quotes")

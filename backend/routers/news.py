@@ -238,3 +238,35 @@ async def symbol_news(symbols: str = "", user: User = Depends(get_current_user))
             continue
         out[symbol] = {"sentiment": sentiment, **empty, **latest.get(symbol, {})}
     return {"symbols": out}
+
+
+HISTORY_LIMIT = 500
+
+
+@router.get("/news/symbol/{symbol}")
+async def symbol_history(symbol: str, days: int = Query(180, ge=1, le=365), user: User = Depends(get_current_user)):
+    """Scored news on one stock over `days`, newest first (at most 500), for
+    the chart's news markers: each item with THIS symbol's direction and
+    impact, material judged on that impact (an item only tagged with the
+    symbol has direction/impact None and is not material)."""
+    from backend.database import db
+    from backend.datalayer.news import COLLECTION, SCORED
+    from backend.datalayer.prices import _bare
+    from backend.strategies.longterm.analyst_verdict import MATERIALITY_THRESHOLD
+
+    sym = _bare(symbol.strip()).upper()
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    # Both $or branches ride an index: (impacts.target,published_at) and (symbols,published_at).
+    docs = await db.db[COLLECTION].find(
+        {"status": SCORED, "published_at": {"$gte": since}, "$or": [{"impacts.target": sym}, {"symbols": sym}]},
+        {"title": 1, "url": 1, "published_at": 1, "impacts": 1},
+    ).sort("published_at", -1).to_list(length=HISTORY_LIMIT)
+    items = []
+    for doc in docs:
+        own = next((i for i in doc.get("impacts") or [] if i.get("type") == "symbol" and i.get("target") == sym), {})
+        published = doc["published_at"]
+        items.append({"id": doc["_id"], "title": doc.get("title"), "url": doc.get("url"),
+                      "published_at": published if published.tzinfo else published.replace(tzinfo=timezone.utc),
+                      "direction": own.get("direction"), "impact": own.get("impact"),
+                      "material": (own.get("impact") or 0) >= MATERIALITY_THRESHOLD})
+    return {"symbol": sym, "items": items}

@@ -165,3 +165,25 @@ def test_symbol_news_reads_sentiment_in_one_round_trip(monkeypatch):
     database.redis.get = counting_get
     body = client.get("/news/symbols", params={"symbols": "TCS,INFY"}).json()["symbols"]
     assert body["TCS"]["sentiment"] == 0.3 and body["INFY"]["sentiment"] == -0.2 and gets == []
+
+
+def test_symbol_history_returns_scored_items_with_this_symbols_impact(monkeypatch):
+    now = datetime.now(timezone.utc)
+
+    def item(_id, days, impacts, symbols=(), status="SCORED"):
+        return {"_id": _id, "title": f"title {_id}", "url": f"https://x/{_id}", "status": status,
+                "published_at": now - timedelta(days=days), "impacts": impacts, "symbols": list(symbols)}
+    client = _symbols_client(monkeypatch, [
+        item("big", 2, [{"type": "sector", "target": "IT", "impact": 9, "direction": 0.9},
+                        {"type": "symbol", "target": "TCS", "impact": 8, "direction": -0.7}]),
+        item("tagged", 1, [], symbols=["TCS"]),
+        item("other", 1, [{"type": "symbol", "target": "INFY", "impact": 9, "direction": 0.5}]),
+        item("unscored", 1, [], symbols=["TCS"], status="TRIAGED"),
+        item("old", 40, [{"type": "symbol", "target": "TCS", "impact": 9, "direction": 0.5}]),
+    ], {})
+    body = client.get("/news/symbol/tcs.NS", params={"days": 30}).json()
+    assert body["symbol"] == "TCS" and [i["id"] for i in body["items"]] == ["tagged", "big"]
+    tagged, big = body["items"]
+    assert big["direction"] == -0.7 and big["impact"] == 8 and big["material"] is True
+    assert tagged["direction"] is None and tagged["material"] is False
+    assert client.get("/news/symbol/TCS", params={"days": 400}).status_code == 422

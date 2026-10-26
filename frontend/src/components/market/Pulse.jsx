@@ -11,7 +11,7 @@ import ListRow from '../ui/ListRow';
 import AsOf from '../ui/AsOf';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
-import { sectorRows } from '../../utils/market';
+import { divergence, sectorRows } from '../../utils/market';
 import { formatDateTime } from '../../utils/formatters';
 import { stockPath } from '../../utils/stocks';
 import { X, ChevronRight } from 'lucide-react';
@@ -215,10 +215,19 @@ const Scan = () => {
               <div className="text-[13px] truncate" title={s.sector}>{s.sector}</div>
               <div className="text-[15px] font-semibold tabular-nums">{pct(s.change_pct / 100, { sign: true })}</div>
               <div className="text-[12px]">{s.up} of {s.n} up</div>
+              {s.sentiment != null && (
+                <div className="mt-1 flex items-center gap-1 text-[12px] tabular-nums">
+                  <span aria-hidden="true" className="inline-block size-2 shrink-0 rounded-full" style={{ background: s.sentiment > 0 ? 'var(--gain)' : s.sentiment < 0 ? 'var(--loss)' : 'var(--text-muted)' }} />
+                  News {s.sentiment > 0 ? '+' : ''}{s.sentiment.toFixed(2)}
+                </div>
+              )}
+              {divergence(s) && (
+                <div className="mt-1 inline-block rounded-full border border-[var(--text)] px-1.5 text-[12px] font-semibold">{divergence(s)}</div>
+              )}
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[12px] text-[var(--text-muted)]">Average move of the Nifty 200 stocks in each sector. Deeper colour, bigger move.</p>
+        <p className="mt-2 text-[12px] text-[var(--text-muted)]">Average move of the Nifty 200 stocks in each sector. Deeper colour, bigger move. News: the sector's headline mood (-1 to +1); flagged when it disagrees with the price.</p>
       </Card>
       <Card title="Near 52-week highs and lows">
         <p className="mb-1 text-[13px] text-[var(--text-muted)]">52-week high: the highest price in the past year. Listed here: within 2% of it (or of the low).</p>
