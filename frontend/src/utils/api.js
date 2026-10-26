@@ -255,6 +255,7 @@ export const endpoints = {
     get: '/portfolio',
     refresh: '/portfolio/refresh',
     rebalance: '/portfolio/rebalance',
+    rebalanceAi: '/portfolio/rebalance/ai',
     candidates: '/portfolio/rebalance/candidates',
   },
   imports: {

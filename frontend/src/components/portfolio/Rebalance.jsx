@@ -8,6 +8,7 @@ import api, { endpoints, getPreferences } from '../../utils/api';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { ticketFrom, executeAll } from '../../utils/ticket';
 import RebalanceAfter from './RebalanceAfter';
+import Markdown from '../common/Markdown';
 import { cn } from '../../utils/cn';
 
 /**
@@ -58,6 +59,8 @@ const Rebalance = ({ snapshot, onTrade }) => {
   const [result, setResult] = useState(null);
   const [armed, setArmed] = useState(false); // first tap on Execute all; the second places the orders
   const [run, setRun] = useState(null); // per-order results while / after executing all
+  const [ai, setAi] = useState(null); // { busy } | { data } | { error }: the AI's final list for this result
+  const [view, setView] = useState('formula'); // which list the Trades sheet shows: 'formula' | 'ai'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -99,6 +102,8 @@ const Rebalance = ({ snapshot, onTrade }) => {
       setResult(res.data);
       setArmed(false);
       setRun(null);
+      setAi(null);
+      setView('formula');
     } catch (err) {
       const detail = err?.response?.data?.detail;
       setError(typeof detail === 'string' ? detail : 'Those targets could not be used: caps must be above 0 and at most 100, and overrides add up to 100% or less.');
@@ -107,10 +112,25 @@ const Rebalance = ({ snapshot, onTrade }) => {
     }
   };
 
+  const askAi = async () => {
+    setAi({ busy: true });
+    setArmed(false);
+    try {
+      const res = await api.post(endpoints.portfolio.rebalanceAi, { new_money: Number(newMoney) || 0, candidates: ticked });
+      setAi({ data: res.data });
+      setView('ai');
+      setRun(null);
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      setAi({ error: typeof detail === 'string' ? detail : 'The AI could not build a list just now: try again.' });
+    }
+  };
+  const shown = view === 'ai' && ai?.data ? ai.data.plan : result;
+  const reasons = view === 'ai' && ai?.data ? ai.data.reasons : {};
   const trade = (t) => onTrade && onTrade(ticketFrom({ symbol: t.symbol, suggested: t }));
-  const trades = result?.trades || [];
+  const trades = shown?.trades || [];
   // Tax is the whole plan's, netted on the server: a sell at a loss lowers the total.
-  const tax = result?.tax || { est_tax: 0, short_gain: 0, long_gain: 0, undated: 0 };
+  const tax = shown?.tax || { est_tax: 0, short_gain: 0, long_gain: 0, undated: 0 };
   const chargesTotal = trades.reduce((sum, t) => sum + (t.charges || 0), 0);
   const running = run?.some((r) => r.status === 'running');
   const execute = async () => {
@@ -223,15 +243,42 @@ const Rebalance = ({ snapshot, onTrade }) => {
         </div>
       </Sheet>
 
-      {result && (
-        <Sheet title="Trades" meta={`${trades.length} · cash left ${formatCurrency(result.cash_left)}`}>
-          {result.uninvested_pct > 0.5 && (
+      {shown && (
+        <Sheet title="Trades" meta={`${trades.length} · cash left ${formatCurrency(shown.cash_left)}`}>
+          {shown.uninvested_pct > 0.5 && (
             <p role="status" className="mb-2 text-sm border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2">
-              Your caps leave {formatPercent(result.uninvested_pct)} of the book uninvested: there are not enough
+              Your caps leave {formatPercent(shown.uninvested_pct)} of the book uninvested: there are not enough
               stocks or sectors to fill them. Raise the caps or use Equal weight to stay invested.
             </p>
           )}
-          {result.stale_since && <p className="doc-meta normal-case pb-2">Prices from the last close: log in to your broker for live ones.</p>}
+          {shown.stale_since && <p className="doc-meta normal-case pb-2">Prices from the last close: log in to your broker for live ones.</p>}
+          {snapshot?.verdicts_visible && (
+            <div className="mb-3 space-y-2">
+              {ai?.data ? (
+                <div role="radiogroup" aria-label="Which list" className="grid grid-cols-2 border border-[var(--border)]">
+                  {[['formula', 'Formula'], ['ai', 'AI final list']].map(([id, label]) => (
+                    <button key={id} type="button" role="radio" aria-checked={view === id} disabled={running}
+                      onClick={() => { setView(id); setArmed(false); setRun(null); }}
+                      className={cn('min-h-11 text-sm font-semibold', view === id ? 'bg-[var(--accent)] text-[var(--surface)]' : 'text-[var(--text-muted)]')}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <Button variant="secondary" className="w-full" onClick={askAi} disabled={ai?.busy}>
+                  {ai?.busy ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> AI is weighing everything…</> : 'Ask AI for a final list'}
+                </Button>
+              )}
+              {ai?.error && <p role="alert" className="text-sm text-[var(--loss)]">{ai.error}</p>}
+              {view === 'ai' && ai?.data?.summary && (
+                <div className="border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2 text-sm">
+                  <p className="field-label mb-1">Why the AI changed it</p>
+                  <Markdown>{ai.data.summary}</Markdown>
+                  <p className="doc-meta normal-case mt-1">The AI picked target weights from verdicts, scores, news and tax; capped to your limits and sized by the same formula.</p>
+                </div>
+              )}
+            </div>
+          )}
           {trades.length === 0 ? (
             <Empty title="Nothing to do" detail="Your holdings are already close to their targets." />
           ) : (
@@ -248,12 +295,12 @@ const Rebalance = ({ snapshot, onTrade }) => {
               {armed ? (
                 <div className="mb-3 border border-[var(--border)] px-3 py-3">
                   <p className="text-sm font-semibold mb-3">Your portfolio after these trades</p>
-                  <RebalanceAfter after={result.after} />
+                  <RebalanceAfter after={shown.after} />
                 </div>
-              ) : result.after?.rows?.length > 0 && (
+              ) : shown.after?.rows?.length > 0 && (
                 <details className="mb-3 border border-[var(--border)] px-3">
                   <summary className="cursor-pointer min-h-11 flex items-center text-sm font-semibold">See portfolio after these trades</summary>
-                  <div className="pb-3"><RebalanceAfter after={result.after} /></div>
+                  <div className="pb-3"><RebalanceAfter after={shown.after} /></div>
                 </details>
               )}
               {onTrade && !run && (armed ? (
@@ -295,7 +342,10 @@ const Rebalance = ({ snapshot, onTrade }) => {
                 {trades.map((t) => (
                   <li key={`${t.symbol}-${t.side}`} className="py-3">
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="figure-md text-sm">{t.symbol}</span>
+                      <span className="min-w-0">
+                        <span className="figure-md text-sm">{t.symbol}</span>
+                        {reasons[t.symbol] && <span className="block doc-meta normal-case">{reasons[t.symbol]}</span>}
+                      </span>
                       {onTrade && <TicketButton label={tradeLabel(t)} tone={t.side === 'SELL' ? 'loss' : 'gain'} onClick={() => trade(t)} />}
                     </div>
                     <div className="mt-2 grid grid-cols-3 gap-3">
@@ -319,7 +369,10 @@ const Rebalance = ({ snapshot, onTrade }) => {
                 >
                   {trades.map((t) => (
                     <Row key={`${t.symbol}-${t.side}`}>
-                      <Cell><Scrip symbol={t.symbol} /></Cell>
+                      <Cell>
+                        <Scrip symbol={t.symbol} />
+                        {reasons[t.symbol] && <span className="block doc-meta normal-case max-w-xs">{reasons[t.symbol]}</span>}
+                      </Cell>
                       <Cell mono className={t.side === 'SELL' ? 'text-down' : 'text-up'}>{tradeLabel(t)}</Cell>
                       <Cell align="right" mono>{formatCurrency(t.value)}</Cell>
                       <Cell align="right" mono>{formatPercent(t.weight_now)} → {formatPercent(t.weight_after)}</Cell>
@@ -333,9 +386,9 @@ const Rebalance = ({ snapshot, onTrade }) => {
               </div>
             </>
           )}
-          {[...(result.skipped || []), ...(result.excluded || [])].length > 0 && (
+          {[...(shown.skipped || []), ...(shown.excluded || [])].length > 0 && (
             <ul className="mt-3 doc-meta normal-case space-y-0.5">
-              {[...(result.skipped || []), ...(result.excluded || [])].map((s) => (
+              {[...(shown.skipped || []), ...(shown.excluded || [])].map((s) => (
                 <li key={`${s.symbol}-${s.reason}`}>{s.symbol}: {s.reason}</li>
               ))}
             </ul>
