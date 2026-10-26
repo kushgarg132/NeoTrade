@@ -489,3 +489,33 @@ async def test_the_autopilot_refuses_a_dip_and_a_re_entry_after_a_stop(world, mo
     await autorun._autopilot_proposals(db, None, SuggestionStore(db), "alice", pending, OPEN)
     taken = {d["id"]: d.get("ai_order") for d in await db["suggestions"].find({}).to_list(None)}
     assert taken == {"bhel": None, "stopped": None, "dip": None, "ok": "FILLED"}
+
+
+async def test_the_autopilot_quietly_leaves_ideas_outside_its_universe_to_the_user(world, monkeypatch):
+    """SJVN, 16 refusals to 2026-10-23: a scan idea outside the Nifty 200 is the user's, not a fence refusal."""
+    from backend.engine import autorun
+    from backend.suggestions.store import SuggestionStore
+
+    db, _ = world
+    await _prefs(db)
+    sent = []
+
+    async def marks(db_, symbols, **_):
+        return {s: 1000.0 for s in symbols}
+
+    async def notify(db_, user_id, text, *a, **kw):
+        sent.append(text)
+
+    monkeypatch.setattr("backend.marks.mark_prices", marks)
+    monkeypatch.setattr("backend.suggestions.notify.notify", notify)
+    base = {"user_id": "alice", "side": "BUY", "mode": "LONGTERM", "quantity": 4, "status": "PENDING",
+            "strategy": "orb_breakout", "score": {"final": 0.6}, "entry_ref": 990.0, "stop": 950.0}
+    await db["suggestions"].insert_many([{**base, "id": "out", "symbol": "NOTANIFTY"},
+                                         {**base, "id": "in", "symbol": "INFY"}])
+    pending = await SuggestionStore(db).list("alice", status="PENDING")
+    await autorun._autopilot_proposals(db, None, SuggestionStore(db), "alice", pending, OPEN)
+    docs = {d["id"]: d for d in await db["suggestions"].find({}).to_list(None)}
+    assert docs["in"]["ai_order"] == "FILLED"
+    assert docs["out"].get("ai_order") is None and docs["out"]["status"] == "PENDING"  # still the user's idea
+    assert sent and all("NOTANIFTY" not in t for t in sent)
+    assert await db["autopilot_log"].count_documents({"symbol": "NOTANIFTY"}) == 0

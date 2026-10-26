@@ -439,7 +439,8 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
                               max_age_seconds=ORDER_MAX_AGE_SECONDS)
     bought, refused = [], []
     for s in sorted(pending, key=lambda s: (s.get("score") or {}).get("final") or 0.0, reverse=True):
-        if s.get("ai_order") or s.get("option_contract") or (
+        # Outside the fence's universe (Nifty 200) the idea is the user's alone: skipped, not refused.
+        if s.get("ai_order") or s.get("option_contract") or s["symbol"] not in fence.universe() or (
                 proven is not None and s.get("strategy") not in proven):
             continue
         entry, price = s.get("entry_ref") or 0, marks.get(s["symbol"])

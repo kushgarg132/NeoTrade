@@ -367,14 +367,14 @@ async def test_with_the_autopilot_on_engine_proposals_go_to_it(world, longterm, 
         submitted.append((order.symbol, order.source))
         assert quiet and suggestion_id == order.symbol  # one summary note; exits can find the proposal
         assert order.quantity == 10  # resized: min(10, per_trade_cap // entry 55) = 10
-        return {"status": "FILLED", "price": 55.0} if order.symbol == "SJVN" else {"status": "REFUSED", "reason": "cap"}
+        return {"status": "FILLED", "price": 55.0} if order.symbol == "INFY" else {"status": "REFUSED", "reason": "cap"}
 
     monkeypatch.setattr(service, "submit", submit)
     await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True, "autopilot_enabled": True})
     world.redis.data["scheduler:last_pass"] = "2026-09-25"
     store = SuggestionStore(world.db)
     now = datetime(2026, 9, 28, 9, 21, tzinfo=IST)
-    for symbol in ("SJVN", "NHPC"):
+    for symbol in ("INFY", "NHPC"):
         await store.collection.insert_one({
             "id": symbol, "user_id": "alice", "mode": "LONGTERM", "symbol": symbol, "side": "BUY",
             "quantity": 10, "entry_ref": 55.0, "stop": 50.0, "target": 65.0, "option_contract": None,
@@ -383,10 +383,10 @@ async def test_with_the_autopilot_on_engine_proposals_go_to_it(world, longterm, 
 
     await _tick(world, now)
 
-    assert sorted(submitted) == [("NHPC", "engine"), ("SJVN", "engine")]
+    assert sorted(submitted) == [("INFY", "engine"), ("NHPC", "engine")]
     by = {s["symbol"]: (s["status"], s.get("ai_order")) for s in await store.list("alice", limit=10)}
-    # The AI took SJVN; the idea stays pending, the user's to take on their own account.
-    assert by == {"SJVN": ("PENDING", "FILLED"), "NHPC": ("PENDING", None)}
+    # The AI took INFY; the idea stays pending, the user's to take on their own account.
+    assert by == {"INFY": ("PENDING", "FILLED"), "NHPC": ("PENDING", None)}
 
 
 @pytest.mark.asyncio
@@ -415,7 +415,7 @@ async def test_live_autopilot_takes_only_proposals_from_proven_strategies(world,
     world.redis.data["scheduler:last_pass"] = "2026-09-25"
     store = SuggestionStore(world.db)
     now = datetime(2026, 9, 28, 9, 21, tzinfo=IST)
-    for symbol, strategy in (("SJVN", "good"), ("NHPC", "bad")):
+    for symbol, strategy in (("INFY", "good"), ("NHPC", "bad")):
         await store.collection.insert_one({
             "id": symbol, "user_id": "alice", "mode": "LONGTERM", "symbol": symbol, "side": "BUY",
             "quantity": 10, "entry_ref": 55.0, "stop": 50.0, "target": 65.0, "option_contract": None,
@@ -424,9 +424,9 @@ async def test_live_autopilot_takes_only_proposals_from_proven_strategies(world,
 
     await _tick(world, now)
 
-    assert submitted == ["SJVN"]
+    assert submitted == ["INFY"]
     by = {s["symbol"]: (s["status"], s.get("ai_order")) for s in await store.list("alice", limit=10)}
-    assert by == {"SJVN": ("PENDING", "SENT"), "NHPC": ("PENDING", None)}
+    assert by == {"INFY": ("PENDING", "SENT"), "NHPC": ("PENDING", None)}
 
 
 @pytest.mark.asyncio
