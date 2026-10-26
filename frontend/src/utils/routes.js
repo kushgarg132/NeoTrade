@@ -1,5 +1,5 @@
 /** Every real route path, and the old paths that redirect to them in one hop. */
-export const LAB_PAGES = ['strategies', 'options', 'runs', 'forward', 'handbook', 'backlog'];
+export const LAB_PAGES = ['strategies', 'options', 'runs', 'forward', 'news', 'handbook', 'backlog'];
 
 export const ROUTES = [
   '/', '/money', '/ideas', '/ideas/history', '/ideas/:id', '/ai', '/market', '/stock/:symbol',

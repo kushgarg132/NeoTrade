@@ -125,3 +125,49 @@ async def test_late_item_without_bars_is_flagged_and_kept_out_of_the_weights(mon
 
     rows = [{"scope": "COMPANY", "themes": ["earnings"], "direction": 0.8, "move_1d": 0.02, "late": True}] * 20
     assert outcomes.compute_weights(rows) == {}
+
+
+@pytest.mark.asyncio
+async def test_new_rows_measure_from_the_close_before_publication(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = Redis()
+
+    async def followed(db):
+        return {}, SECTORS
+
+    monkeypatch.setattr("backend.datalayer.news.followed", followed)
+    await db["news_items"].insert_one({
+        "_id": "a1", "title": "T", "status": "SCORED", "material": True, "scored_at": NOW,
+        "published_at": NOW - timedelta(minutes=5), "scope": "COMPANY", "themes": ["earnings"],  # 10:25 IST
+        "impacts": [{"type": "symbol", "target": "TCS", "direction": 0.7, "impact": 7},
+                    {"type": "market", "target": "INDIA", "direction": 0.2, "impact": 6}]})
+    for symbol, pre, later in (("TCS", 95.0, 120.0), ("INFY", 190.0, 200.0), ("^NSEI", 19800.0, 21000.0)):
+        await db["daily_bars"].insert_many([{"symbol": symbol, "date": "2026-10-04", "close": pre},
+                                            {"symbol": symbol, "date": "2026-10-24", "close": later}])
+    # An old row (before N0.2) is never given the new fields.
+    await db["news_outcomes"].insert_one({"_id": "old", "type": "symbol", "target": "TCS", "base": {"TCS": 90.0},
+                                          "bench": 19000.0, "base_at": NOW - timedelta(days=30), "move_1d": 0.01})
+    redis.prices(20000, TCS=100, INFY=200)
+    assert await outcomes.record(db, redis, NOW) == 2
+    docs = {d["type"]: d async for d in db["news_outcomes"].find({"_id": {"$ne": "old"}})}
+    sym, mkt = docs["symbol"], docs["market"]
+    assert sym["base"] == {"TCS": 100} and sym["pre_base"] == {"TCS": 95.0} and sym["pre_bench"] == 19800.0
+    assert sym["sector_pre_base"] == {"INFY": 190.0}  # its peers, not itself
+    assert sym["moved_before"] == pytest.approx(100 / 95 - 20000 / 19800)  # already reacted before we scored
+    assert mkt["moved_before"] == pytest.approx(20000 / 19800 - 1) and "sector_pre_base" not in mkt
+
+    redis.prices(20200, TCS=104, INFY=206)
+    assert await outcomes.measure(db, redis, NOW + timedelta(days=1)) == 2
+    sym = await db["news_outcomes"].find_one({"type": "symbol", "_id": {"$ne": "old"}})
+    assert sym["move_1d"] == pytest.approx(0.04 - 0.01)
+    assert sym["pre_move_1d"] == pytest.approx(104 / 95 - 20200 / 19800)
+    assert sym["sector_move_1d"] == pytest.approx(104 / 95 - 206 / 190)
+
+    assert await outcomes.measure(db, redis, NOW + timedelta(days=20)) == 0  # the horizon bar may not be in yet
+    assert await outcomes.measure(db, redis, NOW + timedelta(days=21, hours=1)) == 2  # 20d from closes
+    sym = await db["news_outcomes"].find_one({"type": "symbol", "_id": {"$ne": "old"}})
+    assert sym["move_20d"] == pytest.approx(0.2 - 0.05)
+    assert sym["pre_move_20d"] == pytest.approx(120 / 95 - 21000 / 19800)
+    assert sym["sector_move_20d"] == pytest.approx(120 / 95 - 200 / 190)
+    assert await outcomes.measure(db, redis, NOW + timedelta(days=22)) == 0  # once
+    assert "move_20d" not in await db["news_outcomes"].find_one({"_id": "old"})

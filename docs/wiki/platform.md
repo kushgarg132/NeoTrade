@@ -153,6 +153,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | POST | `/api/v1/auth/logout` | `backend/routers/auth.py::logout` | none |
 | GET | `/api/v1/auth/me` | `backend/routers/auth.py::get_me` | user |
 | GET | `/api/v1/news/feed` | `backend/routers/news.py::news_feed` | user |
+| GET | `/api/v1/news/accuracy` | `backend/routers/news.py::news_accuracy` | admin |
 | GET | `/api/v1/news/symbols` | `backend/routers/news.py::symbol_news` | user |
 | GET | `/api/v1/news/symbol/{symbol}?days<=365` | `backend/routers/news.py::symbol_history` | user |
 | GET | `/api/v1/news/results` | `backend/routers/news.py::symbol_results` | user |

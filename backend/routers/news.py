@@ -7,7 +7,7 @@ import logging
 import time
 from backend.configs.settings import settings
 
-from backend.auth.dependency import get_current_user
+from backend.auth.dependency import get_current_user, require_admin
 from backend.auth.models import User
 from backend.core.models import NewsArticle
 import random
@@ -180,6 +180,22 @@ async def news_feed(
         if item["published_at"].tzinfo is None:  # Mongo hands back naive UTC
             item["published_at"] = item["published_at"].replace(tzinfo=timezone.utc)
     return {"items": items}
+
+
+@router.get("/news/accuracy")
+async def news_accuracy(refresh: bool = False, _admin: User = Depends(require_admin)):
+    """The latest news accuracy report (datalayer/accuracy.py), built weekly
+    by the ingest worker; `refresh` rebuilds it now. 404 before the first build."""
+    from backend.database import db
+    from backend.datalayer import accuracy
+
+    doc = await accuracy.build(db.db) if refresh else await db.db[accuracy.COLLECTION].find_one({"_id": "latest"})
+    if not doc:
+        raise HTTPException(status_code=404, detail="No news accuracy report yet")
+    doc.pop("_id", None)
+    if doc["as_of"].tzinfo is None:  # Mongo hands back naive UTC
+        doc["as_of"] = doc["as_of"].replace(tzinfo=timezone.utc)
+    return {**doc, "company_scan_ok": accuracy.company_scan_ok(doc)}
 
 
 SYMBOLS_LIMIT = 100

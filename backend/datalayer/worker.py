@@ -41,7 +41,7 @@ class Loop(NamedTuple):
 
 
 def _loops() -> list[Loop]:
-    from backend.datalayer import bars, market, news, outcomes, prices, reactor
+    from backend.datalayer import accuracy, bars, market, news, outcomes, prices, reactor
     from backend.mine import events
     from backend.plan import revise
 
@@ -58,6 +58,7 @@ def _loops() -> list[Loop]:
         Loop("news_scan", 120, reactor.scan),
         Loop("news_exits", 60, reactor.shadow_exits),
         Loop("news_outcomes", 5 * 60, outcomes.loop),
+        Loop("news_accuracy", 3600, accuracy.loop),  # builds once per 7 days
         Loop("bars", 15 * 60, bars.loop),
         Loop("fundamentals", 30 * 60, bars.fundamentals_loop),
         Loop("plan_revise", 60, revise.loop),
