@@ -96,6 +96,13 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
     rows.sort(key=lambda r: abs(_move_pct(r)), reverse=True)
     top = rows[:MOVERS]
     why = await headlines_for(db, [r["symbol"] for r in top], now - NEWS_LOOKBACK)
+    try:  # display only: a failure leaves the list empty, never the pulse
+        from backend.portfolio import news_moves
+        moved = await news_moves.today(db, [{"symbol": r["symbol"], "move_pct": _move_pct(r),
+                                             "rupees": r.get("day_change") or 0} for r in rows], now)
+    except Exception as exc:
+        logger.warning("pulse: news moves failed for %s: %s", user_id, exc)
+        moved = []
     changes = []
     # Only from the latest trading day's review: a failing review must not
     # replay the same "HOLD -> SELL" in Do today and every evening message.
@@ -118,6 +125,7 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
         "movers": [{"symbol": r["symbol"], "move_pct": round(_move_pct(r), 2), "day_change": round(r["day_change"] or 0, 2),
                     "why": why.get(r["symbol"])} for r in top],
         "verdict_changes": changes,
+        "news_moves": moved,
     }
 
 
@@ -248,6 +256,16 @@ def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: Optiona
     return "\n".join(lines)
 
 
+def news_why(m: dict) -> str:
+    """One news move's reason: the headline, else whether it simply followed NIFTY."""
+    if m.get("cause"):
+        return m["cause"].get("title") or ""
+    from backend.portfolio.news_moves import BIG_PCT
+
+    vs = m.get("vs_nifty")
+    return "moved with the market" if vs is not None and abs(vs) < BIG_PCT else "no news found"
+
+
 def postclose_text(p: Optional[dict], today: dict, events: list[dict], actions: Optional[list[dict]] = None,
                    recon: Optional[str] = None) -> str:
     actions = actions or []
@@ -257,7 +275,11 @@ def postclose_text(p: Optional[dict], today: dict, events: list[dict], actions: 
     if p:
         lines.append(f"Your account: {_rupees(p['value'])}, today {_rupees(p['day_change'], True)}{_pct(p['day_change_pct'])}, "
                      f"overall {_rupees(p['pnl'], True)}{_pct(p['pnl_pct'])}")
-        if p["movers"]:
+        if p.get("news_moves"):  # what news moved your money (portfolio/news_moves.py), biggest rupees first
+            lines.append("What moved your money:")
+            for m in p["news_moves"][:MOVERS]:
+                lines.append(f"• {escape(m['symbol'])} {m['move_pct']:+.1f}% — {escape(news_why(m))}")
+        elif p["movers"]:
             lines.append("Moved most:")
             for m in p["movers"]:
                 why = f" — {escape(m['why']['title'])}" if m.get("why") and m["why"].get("title") else ""

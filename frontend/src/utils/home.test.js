@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tileHeadlines, briefKind, showWeekly, alerts } from './home.js';
+import { tileHeadlines, briefKind, showWeekly, alerts, newsWhy } from './home.js';
+
+test('newsWhy names the headline, else the market, else no news', () => {
+  assert.equal(newsWhy({ cause: { title: 'Q2 miss' }, vs_nifty: -6 }), 'Q2 miss');
+  assert.equal(newsWhy({ cause: null, vs_nifty: 0.4 }), 'Moved with the market');
+  assert.equal(newsWhy({ cause: null, vs_nifty: -3.5 }), 'No news found');
+  assert.equal(newsWhy({ cause: null, vs_nifty: null }), 'No news found');
+});
 
 test('missing data gives dashes, never throws', () => {
   const t = tileHeadlines(null, null, null);

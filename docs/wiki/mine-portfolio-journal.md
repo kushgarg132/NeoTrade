@@ -22,7 +22,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/mine/history.py | Daily value curve `mine_daily`, replayed from journal trades; XIRR | `history.py::xirr`, `::_inputs`, `::_compute`, `::_store`, `::backfill`, `::write_all`, `::series`, `::returns` |
 | backend/mine/lots.py | FIFO lots, realised matches, broker reconciliation, split detection | `lots.py::_fifo`, `::open_lots`, `::realised`, `::unmatched`, `::split_ratio`, `::reconcile`, `::mine_trades` |
 | backend/routers/mine.py (`GET /mine/review/latest`) | The latest non-empty AI portfolio `summary` on the user's `portfolio_snapshots` as `{text, date}` (IST day); no LLM; 404 until one exists | `mine.py::latest_review` |
-| backend/reports/weekly.py | Weekly report dict (last ISO week: account vs NIFTY from `mine_daily`, AI book, ideas taken vs skipped, journal net) + Telegram text; Sundays from 18:00, once per user per week | `weekly.py::build`, `::text`, `::send`, `::last_completed`, `::parse_week`, `::week_id`, `::SEND_AT`; served by `routers/reports.py::weekly_report` |
+| backend/reports/weekly.py | Weekly report dict (last ISO week: account vs NIFTY from `mine_daily`, AI book, ideas taken vs skipped, journal net, `news` = `news_moves.week`) + Telegram text (a "News behind big moves" line when any); Sundays from 18:00, once per user per week | `weekly.py::build`, `::text`, `::send`, `::last_completed`, `::parse_week`, `::week_id`, `::SEND_AT`; served by `routers/reports.py::weekly_report` |
 | backend/mine/stock.py | One-stock detail page | `stock.py::detail`, `::_verdicts`, `::_news` |
 | backend/mine/tax.py | Indian FY capital-gains estimate (pure) | `tax.py::report`, `::est_tax`, `::long_from`, `::is_long`, `::current_fy`, `STCG_RATE`, `LTCG_RATE`, `LTCG_EXEMPTION` |
 | backend/mine/thesis.py | User's why/target/stop/review_by per holding | `thesis.py::ThesisIn`, `::ThesisStore`, `SYMBOL` |
@@ -34,6 +34,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/portfolio/ai_rebalance.py | AI final rebalance list: model answers target % per stock (prompt `prompts/rebalance_ai.md`), clamped to caps, sized by `plan_rebalance` | `ai_rebalance.py::ai_targets`, `::clamp_targets`, `MAX_HOLDINGS` |
 | backend/portfolio/rebalance.py | Target weights, rebalance plan, one-tap suggestion, charges, sell tax | `rebalance.py::target_weights`, `::target_gaps`, `::plan_rebalance`, `::suggest`, `::charges`, `::sell_tax`, `::plan_tax`, `::plan_after`, `::multiplier`, `DEFAULT_TARGETS` |
 | backend/portfolio/digest.py | Pulse (account right now), scoreboard, 08:45 and post-close Telegram digests | `digest.py::pulse`, `::verdicts_visible`, `::headlines_for`, `::pnl_since`, `::scoreboard`, `::send_premarket`, `::send_postclose`, `::premarket_for`, `::postclose_for` (per-user bodies, shared with `/today`), `::premarket_text` (no ideas line for non-admins), `::postclose_text`, `::last_session_move`, `::_day_summary` (after each digest: Home "Your day", `summaries/day.py::generate`; `send_postclose(db, now, redis)`) |
+| backend/portfolio/news_moves.py | What news moved your money (news plan N1.5/N1.6, display only, no LLM): Today's big moves (beyond ±2% vs NIFTY, NIFTY from the ingest macro feed, or the top 3 rupee movers) matched to the strongest SCORED material item (matching impact >= `MATERIALITY_THRESHOLD`) on the stock or its Nifty 200 sector since the previous session's 15:30 close; the weekly part (movers beyond ±4% vs NIFTY from stored closes, up to 2 items each, top 5 themes over held names/sectors, the latest `news_accuracy` 5d COMPANY/SECTOR hit rates, excess measure preferred, or None) | `news_moves.py::big_moves`, `::causes`, `::attribute`, `::themes`, `::accuracy_line`, `::today`, `::week`, `::BIG_PCT`, `::WEEK_BIG_PCT` |
 | backend/journal/store.py | `journal_trades` / `journal_notes` persistence | `journal/store.py::JournalStore.add_trades`, `.list_trades`, `.notes_for`, `.set_note` |
 | backend/journal/roundtrips.py | Groups fills into round trips; instrument kind (pure) | `roundtrips.py::build_round_trips`, `::daily_pnl`, `::instrument_kind`, `::underlying_of` |
 | backend/journal/sync.py | Pulls today's trade book from ACTIVE brokers; Upstox history backfill | `sync.py::sync_user_trades`, `::import_upstox_history`, `::connected_brokers` |
@@ -155,7 +156,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
    drivers (`::_month_contributions`) and all-time drivers (`pulse.pnl_by_symbol`), plus the mix (`snapshot.concentration`).
 9. **Pulse**: `digest.py::pulse` runs `fetch_holdings` for logged-in brokers. Logged-out rows go through
    `service.quoted`, then `scorecard_for` runs on mine brokers. It adds movers (top 3 by |move %|) with
-   `headlines_for` (36h). Verdict changes are included only if the snapshot is from the previous weekday or later and
+   `headlines_for` (36h), and `news_moves` = `news_moves.today` over every stock row (`{symbol,move_pct,vs_nifty,rupees,cause{title,url,scope,direction,impact}|null}`, rupees-first; a failure leaves `[]`). `postclose_text` lists the first 3 under "What moved your money" (`digest.py::news_why`: headline, else "moved with the market" within 2% of NIFTY, else "no news found"), falling back to "Moved most" when empty. Verdict changes are included only if the snapshot is from the previous weekday or later and
    `verdicts_visible`.
 10. **Needs you**: `GET /mine/actions`, Today and both digests call `mine/actions.py::build(db, user, now, show_verdicts)`.
     It merges the following sources:
@@ -365,6 +366,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | backend/tests/test_portfolio_rebalance_router.py | `/portfolio/rebalance`, candidates, targets, row actions on GET /portfolio |
 | backend/tests/test_ai_rebalance.py | `clamp_targets`, `ai_targets` prompt/parse, `/portfolio/rebalance/ai` gate, caps, 502 |
 | backend/tests/test_portfolio_digest.py | pulse, movers and news, verdict changes, scoreboard, premarket/postclose text |
+| backend/tests/test_news_moves.py | big-move selection, cause ranking, themes, accuracy line, pulse `news_moves` (own account only, failure-safe), weekly attribution, weekly narrative news facts |
 | backend/tests/test_today.py | `GET /today` parts and errors, `/today/attention` |
 | backend/tests/test_journal.py | normalisation, round trips, idempotent store, Console CSV, Upstox history |
 | backend/tests/test_options_journal.py | instrument kind, by-kind summary, options in guardrails |

@@ -127,9 +127,17 @@ async def build(db, user_id: str, week: str) -> dict:
     prefs = await PrefsStore(db).get(user_id)
     journal, closed = await _journal(db, user_id, prefs.get("broker_roles") or {}, start, end)
     best, worst = _extremes(closed)
+    from backend.portfolio import news_moves
+
+    try:  # display and narrative context only: the report goes without it
+        news = await news_moves.week(db, user_id, start, end)
+    except Exception as exc:
+        logger.warning("weekly report: news attribution failed for %s: %s", user_id, exc)
+        news = {"movers": [], "themes": [], "accuracy": None}
     return {"week": week, "you": await _returns(db, user_id, start.date()),
             "ai": await _ai(db, user_id, prefs.get("account_size") or 0, start, end),
-            "best": best, "worst": worst, "ideas": await _ideas(db, user_id, start, end), "journal": journal}
+            "best": best, "worst": worst, "ideas": await _ideas(db, user_id, start, end), "journal": journal,
+            "news": news}
 
 
 # ------------------------------------------------------------------ Telegram
@@ -154,6 +162,11 @@ def text(r: dict, narrative: Optional[str] = None) -> str:
     for key in ("taken", "skipped"):
         g = ideas[key]
         lines.append(f"Ideas {key}: {g['n']}" + (f" ({_p(g['mean_excess'])} vs NIFTY)" if g["n"] else ""))
+    moved = (r.get("news") or {}).get("movers") or []
+    if moved:
+        lines.append("News behind big moves: " + "; ".join(
+            f"{escape(m['symbol'])} {m['move_pct']:+.1f}%" + (f" ({escape(m['items'][0]['title'] or '')})" if m["items"] else "")
+            for m in moved[:3]))
     lines.append(f"Journal: {j['trades']} trades, net {_r(j['net'])} after {_r(j['charges'])[1:]} charges")
     if narrative:  # the AI's paragraph (summaries/weekly.py), closing the message
         lines += ["", escape(narrative)]

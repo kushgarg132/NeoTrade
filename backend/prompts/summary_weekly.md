@@ -9,4 +9,7 @@ The week's figures:
 Habits the journal found in their closed trades (each compared with the rest of their trades; may be empty):
 {{patterns}}
 
-Write one paragraph of at most 90 words, no heading, no bullets, no Markdown, in three beats: what worked (the best result or the lead over the index), what did not (the worst result, a lag, or charges), and one habit to watch (from the habits above, else from the week's figures). If the week had no closed trades or no return curve, say so plainly instead of padding. Copy every figure exactly as it appears above.
+News on their holdings this week: big movers against NIFTY with the items published before them, the news themes that touched their holdings most, and the measured 5-day hit rate of company and sector news (empty when not measured). News that preceded a move is context, not proof it caused it:
+{{news}}
+
+Write one paragraph of at most 90 words, no heading, no bullets, no Markdown, in three beats: what worked (the best result or the lead over the index), what did not (the worst result, a lag, or charges), and one habit to watch (from the habits above, else from the week's figures). Mention the news only if a big mover had an item behind it, and if you do, add its hit rate when one is given. If the week had no closed trades or no return curve, say so plainly instead of padding. Copy every figure exactly as it appears above.
