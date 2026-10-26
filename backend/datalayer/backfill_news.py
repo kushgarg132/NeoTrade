@@ -20,7 +20,7 @@ followed; a high hit rate here is an upper bound, not an edge.
 
     python -m backend.datalayer.backfill_news fetch 2024-10 2026-10 [--shard 1/2]
     python -m backend.datalayer.backfill_news estimate
-    python -m backend.datalayer.backfill_news score --max-calls 200
+    python -m backend.datalayer.backfill_news score --max-calls 200 [--model agy/gemini-3.8-flash-low]
     python -m backend.datalayer.backfill_news outcomes
     python -m backend.datalayer.backfill_news report
 """
@@ -31,6 +31,7 @@ import math
 import time
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
+from typing import Optional
 from urllib.parse import quote_plus
 
 import pandas as pd
@@ -39,6 +40,7 @@ import requests
 from backend.datalayer import accuracy, bars, news, news_sources
 from backend.datalayer.outcomes import BENCH, CLOSE, _members, basket_return
 from backend.engine.session import IST
+from backend.llm import use_model
 from backend.prompts import render
 
 logger = logging.getLogger(__name__)
@@ -189,9 +191,15 @@ def prune(docs: list[dict]) -> list[tuple[dict, str]]:
     return out
 
 
-async def score(db, max_calls: int) -> dict:
+async def score(db, max_calls: int, model: Optional[str] = None) -> dict:
     """Triage first (scoring needs triaged items), then score, both on the
-    fast tier, PARALLEL calls at a time, until max_calls are spent."""
+    fast tier (or `model`, an OmniRoute model id), PARALLEL calls at a time,
+    until max_calls are spent."""
+    with use_model(model):
+        return await _score(db, max_calls)
+
+
+async def _score(db, max_calls: int) -> dict:
     names, sector_of = _universe()
     sectors = news_sources.sectors()
     coll, used = db[ITEMS], {"triage": 0, "score": 0}
@@ -332,6 +340,7 @@ if __name__ == "__main__":
     parser.add_argument("span", nargs="*", help="fetch: FIRST LAST months, e.g. 2024-10 2026-10")
     parser.add_argument("--shard", default="1/1", help="fetch: K/N, run N of these side by side (K = 1..N)")
     parser.add_argument("--max-calls", type=int, default=0, help="score: LLM calls this run (required)")
+    parser.add_argument("--model", default=None, help="score: OmniRoute model id instead of the fast tier's")
     args = parser.parse_args()
 
     async def _main() -> None:
@@ -349,7 +358,7 @@ if __name__ == "__main__":
         elif args.command == "score":
             if args.max_calls <= 0:
                 parser.error("score needs --max-calls N (run estimate first)")
-            print(await score(db, args.max_calls))
+            print(await score(db, args.max_calls, args.model))
         elif args.command == "outcomes":
             print(f"stored {await outcomes(db)} outcome(s)")
         else:

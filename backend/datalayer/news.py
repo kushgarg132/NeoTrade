@@ -29,7 +29,6 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ValidationError
 
 from backend.ai.sentiment import weighted_sentiment
-from backend.app_settings import current_llm_model
 from backend.ai.analyst import _extract_json
 from backend.routers.news import _title_key
 from backend.configs.settings import settings
@@ -399,8 +398,10 @@ async def _score_batch(db, docs, names, sector_of, sectors, now, coll: str = COL
         await _failed(db, [d["_id"] for d in docs], now, coll)
         return
     scored = {s.index: s for s in result.items}
-    # The scoring tier's model, so the accuracy report can compare scorers.
-    model = await current_llm_model(tier=tier)
+    # The model that scored (tier's, or a use_model override), so the accuracy report can compare scorers.
+    from backend.llm import model_for
+
+    model = await model_for(tier)
     for i, doc in enumerate(docs):
         s = scored.get(i)
         impacts = valid_impacts(s.impacts, set(names), set(sectors)) if s else []

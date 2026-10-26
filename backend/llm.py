@@ -27,6 +27,11 @@ class DailyLimitReached(Exception):
 LIMIT_MESSAGE = "You've used today's AI allowance. It resets at midnight IST."
 
 
+async def model_for(tier: Optional[str] = None) -> str:
+    """The model a call made now would use: a use_model() override, else the tier's."""
+    return _model_override.get() or await current_llm_model(tier=tier)
+
+
 @contextlib.contextmanager
 def use_model(model: Optional[str], user_id: Optional[str] = None):
     """Ambient per-user model override for the duration of a `with` block.
@@ -196,7 +201,7 @@ class LLMService:
         if not keys:
             return None
 
-        model = _model_override.get() or await current_llm_model(tier=tier)
+        model = await model_for(tier)
         llms = []
         for key in keys:
             llms.append(ChatOpenAI(
