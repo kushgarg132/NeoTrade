@@ -43,9 +43,8 @@ const LabRuns = () => {
   const [comparing, setComparing] = useState(false);
 
   const load = useCallback(() => {
-    setError(null);
     api.get(endpoints.labRuns.list)
-      .then((res) => setRuns(res.data?.runs ?? []))
+      .then((res) => { setError(null); setRuns(res.data?.runs ?? []); })
       .catch(() => setError("Couldn't load the Lab runs."));
   }, []);
   useEffect(load, [load]);

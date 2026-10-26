@@ -52,9 +52,8 @@ const LabForward = () => {
   const [records, setRecords] = useState(null);
 
   const load = useCallback(() => {
-    setError(null);
     api.get(endpoints.forward.scorecard)
-      .then((res) => setRows(res.data?.rows ?? []))
+      .then((res) => { setError(null); setRows(res.data?.rows ?? []); })
       .catch(() => setError("Couldn't load the forward record."));
   }, []);
   useEffect(load, [load]);

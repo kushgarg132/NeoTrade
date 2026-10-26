@@ -4,7 +4,7 @@ import { makeGetCache } from './getCache.js';
 
 const counting = () => {
   const calls = [];
-  const get = (url, config = {}) => { calls.push(url); return Promise.resolve({ data: { url, n: calls.length } }); };
+  const get = (url) => { calls.push(url); return Promise.resolve({ data: { url, n: calls.length } }); };
   return { calls, get };
 };
 
