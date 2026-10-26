@@ -41,7 +41,7 @@ PAPER_APPROVALS_GONE = ("There is no paper approval any more: the AI account pap
                         "Approve with real money on your account, or decline.")
 SETTINGS = {
     "daily_loss_limit": float, "per_trade_cap": float, "max_trades_per_day": int,
-    "cooldown_after_losses": int, "cooldown_minutes": int,
+    "cooldown_after_losses": int, "cooldown_minutes": int, "no_buy_before_results_days": int,
     "auto_paper_intraday": bool, "auto_paper_longterm": bool, "guardrails_enabled": bool,
 }
 
@@ -202,6 +202,12 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
         raise ActionRefused("The market is closed; live orders go only between 9:15 AM and 3:30 PM IST on weekdays.")
     if await KillSwitchStore(db).is_tripped(user_id, now.astimezone(IST).date()):
         raise ActionRefused("Your daily loss limit was hit today: no new live orders.")
+    if params["side"] == "BUY":
+        from backend.mine.events import buy_blocked
+
+        why = await buy_blocked(db, await PrefsStore(db).get(user_id), symbol, now.astimezone(IST).date())
+        if why:
+            raise ActionRefused(why)
     adapter = await _active_broker(user_id, credentials)
     if adapter is None:
         raise ActionRefused("No broker is connected. Log in to your broker in Settings first.")

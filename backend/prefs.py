@@ -32,6 +32,9 @@ DEFAULTS = {
     "max_option_trades_per_day": 0,
     "max_option_lots": 0,
     "warn_naked_options": False,
+    # No new buy of a stock whose results are this many days away or fewer
+    # (N2.4): refused in NeoTrade's own buy paths, alerted for broker-app buys. 0 is off.
+    "no_buy_before_results_days": 0,
     # What happens to open NSE intraday positions when the daily loss limit
     # is hit: "off", "preview" (alert with the orders it would place), or
     # "live" (place them). Never defaults to live.

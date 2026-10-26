@@ -298,9 +298,15 @@ async def _approve_equity_live(suggestion, user_id, store, ledger, mine_broker, 
     if adapter is None:
         raise HTTPException(status_code=409, detail="Connect your broker and set it as My account in Settings to approve with real money.")
     value = await mark_price(suggestion["symbol"]) * suggestion["quantity"]
-    cap = (await PrefsStore(db.db).get(user_id))["per_trade_cap"]
+    prefs = await PrefsStore(db.db).get(user_id)
+    cap = prefs["per_trade_cap"]
     if value > cap:
         raise HTTPException(status_code=409, detail=f"₹{value:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
+    from backend.mine.events import buy_blocked
+
+    why = await buy_blocked(db.db, prefs, suggestion["symbol"], now.astimezone(IST).date())
+    if why:
+        raise HTTPException(status_code=409, detail=why)
 
     if await store.decide(user_id, suggestion["id"], status="SENDING", reason="live") is None:
         raise HTTPException(status_code=409, detail="This proposal was already decided or has expired.")

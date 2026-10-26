@@ -76,3 +76,13 @@ async def test_dividends_scale_journal_qty_by_split_ratio(db, monkeypatch):
            "traded_at": datetime.fromisoformat("2026-01-01").replace(tzinfo=timezone.utc)}
     out = await events.dividends_received(db, [buy], "TCS", TODAY, ratio=2)
     assert out[0]["qty"] == 20 and out[0]["amount"] == 100.0
+
+
+async def test_buy_blocked_fetches_an_unheld_symbol_and_respects_the_window(db, monkeypatch):
+    calls = _patch(monkeypatch, {"TCS.NS": [{"kind": "results", "date": "2026-10-17", "amount": None}]})
+    prefs = {"guardrails_enabled": True, "no_buy_before_results_days": 2}
+    why = await events.buy_blocked(db, prefs, "TCS", TODAY)
+    assert "in 2 days" in why and "2026-10-17" in why
+    assert await events.buy_blocked(db, {**prefs, "no_buy_before_results_days": 1}, "TCS", TODAY) is None
+    assert await events.buy_blocked(db, {**prefs, "no_buy_before_results_days": 0}, "INFY", TODAY) is None
+    assert calls == ["TCS.NS"]  # fetched once that day; off never fetches

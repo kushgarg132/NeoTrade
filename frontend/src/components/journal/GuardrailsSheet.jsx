@@ -9,7 +9,7 @@ import useSchedule from '../../hooks/useSchedule';
 
 const GUARD_FIELDS = [
   'max_trades_per_day', 'cooldown_after_losses', 'cooldown_minutes', 'daily_loss_limit',
-  'max_option_trades_per_day', 'max_option_lots',
+  'max_option_trades_per_day', 'max_option_lots', 'no_buy_before_results_days',
 ];
 
 const GuardrailsSheet = () => {
@@ -152,6 +152,7 @@ const GuardrailsSheet = () => {
       {numberRow('cooldown_minutes', 'Cooldown length, minutes', 'Any trade opened inside it is flagged.')}
       {numberRow('max_option_trades_per_day', 'Options trades per day', 'Alert when you open more options trades than this. 0 is off.')}
       {numberRow('max_option_lots', 'Lots per options trade', 'Alert when one options position is bigger than this many lots. Needs Kite connected for lot sizes. 0 is off.')}
+      {numberRow('no_buy_before_results_days', 'No buys before results, days', 'Refuse a buy from NeoTrade, and alert on one from your broker app, when the stock reports results within this many days. 0 is off.')}
 
       <Row
         label="Warn on unhedged option selling"

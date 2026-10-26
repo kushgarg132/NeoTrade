@@ -106,7 +106,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 **Prefs and app settings read here**
 - Prefs: `broker_roles`, `account_size`, `rebalance_targets`, `portfolio_max_loss_pct`, `portfolio_max_weight_pct`,
   `guardrails_enabled`, `daily_loss_limit`, `max_trades_per_day`, `cooldown_after_losses`, `cooldown_minutes`,
-  `max_option_trades_per_day`, `max_option_lots`, `warn_naked_options`, `auto_square_off` (off/preview/live),
+  `max_option_trades_per_day`, `max_option_lots`, `warn_naked_options`, `no_buy_before_results_days` (N2.4; refused in NeoTrade buy paths, alerted as `results_buy` for broker-app buys), `auto_square_off` (off/preview/live),
   `autopilot_enabled/live`, `live_strategies`, `max_exposure`, `omniroute_model`.
 - App setting: `portfolio_verdicts` (`admin` | `all`), read via `AppSettingsStore.get_portfolio_verdicts`.
 
@@ -185,7 +185,11 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 13. **Guardrail tick**: `guardrails/monitor.py::run_tick` takes the lock and loops over prefs with `guardrails_enabled`, calling
     `::check_user`.
     1. `sync_user_trades(include_pnl=True, skip=ai)` returns `day_pnl` (realised plus unrealised across positions).
-    2. Today's trips, excluding the AI broker, go to `guardrails/rules.py::evaluate`.
+    2. Today's trips, excluding the AI broker, go to `guardrails/rules.py::evaluate`, with the next results date of each
+       stock bought today (`mine/events.py::next_results`, fetched on demand) when `rules.py::results_days` is on.
+       Breach `results_buy:<trip>` when a LONG STOCK trip is within `no_buy_before_results_days` of results (`::results_block`).
+       The same rule refuses a BUY before it is sent: `mine/events.py::buy_blocked` in `chat/actions.py::_order_checks`
+       (chat and the order ticket) and `routers/suggestions.py::_approve_equity_live`. Unknown date (fetch failed) = allowed.
     3. Each new breach is recorded with `GuardrailStore.record`. `daily_loss` calls `KillSwitchStore.trip`.
     4. `_alert` publishes to the socket and Telegram.
     5. On `daily_loss` with `auto_square_off` set to preview or live, `guardrails/monitor.py::square_off` runs `exit_orders` per non-AI

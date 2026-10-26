@@ -152,6 +152,7 @@ def read_tools(db, redis, user_id: str) -> list:
         return _json({
             **{k: prefs.get(k) for k in LIMIT_KEYS},
             "cooldown_after_losses": prefs.get("cooldown_after_losses"), "cooldown_minutes": prefs.get("cooldown_minutes"),
+            "no_buy_before_results_days": prefs.get("no_buy_before_results_days"),
             "account_size": prefs.get("account_size"), "max_exposure": prefs.get("max_exposure"),
             "alerts_today": [{"title": a.get("title"), "detail": a.get("detail")} for a in alerts],
         })

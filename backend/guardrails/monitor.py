@@ -33,13 +33,14 @@ from backend.brokers.roles import brokers_for
 from backend.brokers.registry import BROKERS, get_broker_adapter
 from backend.engine.session import IST
 from backend.guardrails import telegram
-from backend.guardrails.rules import evaluate
+from backend.guardrails.rules import evaluate, results_days
 from backend.guardrails.square_off import describe, exit_orders
 from backend.guardrails.store import GuardrailStore
 from backend.instruments.master import InstrumentMaster
 from backend.journal.roundtrips import build_round_trips
 from backend.journal.store import JournalStore
 from backend.journal.sync import sync_user_trades
+from backend.mine import events
 from backend.prefs import PrefsStore
 from backend.risk.kill_switch import KillSwitchStore
 from backend.ws.hub import hub
@@ -83,7 +84,14 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
             if contract is not None:
                 lot_sizes[trip["symbol"]] = contract.lot_size
 
-    for breach in evaluate(trips, synced["day_pnl"], prefs, lot_sizes):
+    # Next results dates of stocks bought today, for the results rule.
+    results = {}
+    days = results_days(prefs)
+    for trip in trips:
+        if days and trip["kind"] == "STOCK" and trip["direction"] == "LONG" and trip["symbol"] not in results:
+            results[trip["symbol"]] = await events.next_results(db, trip["symbol"], day, days)
+
+    for breach in evaluate(trips, synced["day_pnl"], prefs, lot_sizes, results, day):
         if not await store.record(user_id, day, breach):
             continue
         fresh.append(breach)

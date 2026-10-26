@@ -94,6 +94,7 @@ class PreferencesPatch(BaseModel):
     max_option_trades_per_day: Optional[int] = Field(default=None, ge=0, le=500)
     max_option_lots: Optional[int] = Field(default=None, ge=0, le=1000)
     warn_naked_options: Optional[bool] = None
+    no_buy_before_results_days: Optional[int] = Field(default=None, ge=0, le=30)
     portfolio_max_loss_pct: Optional[float] = Field(default=None, gt=0, le=100)
     portfolio_max_weight_pct: Optional[float] = Field(default=None, gt=0, le=100)
     auto_square_off: Optional[Literal["off", "preview", "live"]] = None

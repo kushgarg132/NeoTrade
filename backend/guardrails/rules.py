@@ -16,9 +16,14 @@ Rules, all set by the user in Settings (0 means off):
 - naked short option (warn_naked_options): an option sold while no bought
   option on the same underlying was open -- a sold option's loss has no
   fixed ceiling unless a bought one caps it.
+- buy before results (no_buy_before_results_days): a stock bought with its
+  results that many days away or fewer. NeoTrade's own buy paths refuse it
+  (`results_block`); a broker-app buy is alerted. A risk control, not an
+  edge claim (news plan N2.4).
 """
 
-from datetime import timedelta
+from datetime import date, timedelta
+from typing import Optional
 
 from backend.engine.session import IST, clock
 
@@ -74,10 +79,36 @@ def _option_breaches(trips: list[dict], prefs: dict, lot_sizes: dict) -> list[di
     return breaches
 
 
-def evaluate(trips: list[dict], day_pnl: float, prefs: dict, lot_sizes: dict | None = None) -> list[dict]:
+def results_days(prefs: dict) -> int:
+    """The rule's window in days, 0 when off (guardrails switched off too)."""
+    return int(prefs.get("no_buy_before_results_days") or 0) if prefs.get("guardrails_enabled") else 0
+
+
+def results_block(symbol: str, results_on: Optional[str], today: date, days: int) -> Optional[str]:
+    """Why a buy of `symbol` breaks the rule, or None. `results_on`: its next results date (ISO) or None."""
+    if not days or not results_on:
+        return None
+    left = (date.fromisoformat(results_on) - today).days
+    if not 0 <= left <= days:
+        return None
+    when = "today" if left == 0 else "tomorrow" if left == 1 else f"in {left} days"
+    return f"{symbol} reports results {when} ({results_on}); your rule blocks new buys {days} day(s) before results."
+
+
+def evaluate(trips: list[dict], day_pnl: float, prefs: dict, lot_sizes: dict | None = None,
+             results: dict | None = None, today: date | None = None) -> list[dict]:
     """`lot_sizes` maps an options symbol to its contract lot size, for the
-    lot limit; symbols missing from it are not checked."""
+    lot limit; symbols missing from it are not checked. `results` maps a stock
+    bought today to its next results date, for the results rule."""
     breaches = _option_breaches(trips, prefs, lot_sizes or {})
+
+    days = results_days(prefs)
+    for trip in trips:
+        if days and today and trip.get("kind") == "STOCK" and trip["direction"] == "LONG":
+            why = results_block(trip["symbol"], (results or {}).get(trip["symbol"]), today, days)
+            if why:
+                breaches.append({"key": f"results_buy:{trip['id']}", "rule": "results_buy",
+                                 "title": "Bought just before results", "detail": why})
 
     limit = abs(prefs.get("daily_loss_limit") or 0)
     if limit and day_pnl <= -limit:

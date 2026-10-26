@@ -72,6 +72,22 @@ async def loop(db, redis, now: Optional[datetime] = None) -> None:
     logger.info("ingest corp_events: %d/%d symbol(s)", n, len(held))
 
 
+async def next_results(db, symbol: str, today: date, days: int) -> Optional[str]:
+    """`symbol`'s next results date within `days` (ISO), or None. Fetches it
+    first when not checked today: the calendar only covers held symbols, and
+    a buy is usually of one that is not held yet."""
+    await refresh(db, {symbol}, today)
+    return next((e["date"] for e in await upcoming(db, [symbol], today, days) if e["kind"] == "results"), None)
+
+
+async def buy_blocked(db, prefs: dict, symbol: str, today: date) -> Optional[str]:
+    """The results guardrail for a buy NeoTrade is about to send: why it is refused, or None."""
+    from backend.guardrails.rules import results_block, results_days
+
+    days = results_days(prefs)
+    return results_block(symbol, await next_results(db, symbol, today, days), today, days) if days else None
+
+
 async def upcoming(db, symbols, today: date, days: int) -> list[dict]:
     lo, hi = today.isoformat(), (today + timedelta(days=days)).isoformat()
     cur = db[EVENTS].find({"symbol": {"$in": list(symbols)}, "date": {"$gte": lo, "$lte": hi}}, {"_id": 0})

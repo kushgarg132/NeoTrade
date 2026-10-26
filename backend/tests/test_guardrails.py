@@ -214,3 +214,21 @@ async def test_closing_an_older_position_is_not_a_new_trip(monkeypatch):
     monkeypatch.setattr(monitor.hub, "publish", AsyncMock())
     prefs = {**PREFS, "user_id": "alice", "max_trades_per_day": 1}
     assert await monitor.check_user(db, None, None, prefs, _ist(10, 31)) == []
+
+
+def _buy(i, symbol, kind="STOCK", direction="LONG"):
+    return {**_trip(i, 10, 0, None, symbol=symbol), "kind": kind, "direction": direction}
+
+
+def test_results_rule_flags_long_stock_buys_inside_the_window_only():
+    prefs = {**PREFS, "daily_loss_limit": 0, "guardrails_enabled": True, "no_buy_before_results_days": 3}
+    today = datetime(2026, 9, 1).date()
+    results = {"TCS": "2026-09-04", "INFY": "2026-09-05", "SBIN": "2026-09-01"}
+    trips = [_buy(1, "TCS"), _buy(2, "INFY"), _buy(3, "SBIN", direction="SHORT"), _buy(4, "SBIN"),
+             _buy(5, "NIFTY26SEP25000CE", kind="CALL")]
+    breaches = evaluate(trips, 0, prefs, results=results, today=today)
+    assert [b["key"] for b in breaches] == ["results_buy:t1", "results_buy:t4"]
+    assert "today" in breaches[1]["detail"] and "in 3 days" in breaches[0]["detail"]
+    # Off: 0 days, or guardrails switched off.
+    assert evaluate(trips, 0, {**prefs, "no_buy_before_results_days": 0}, results=results, today=today) == []
+    assert evaluate(trips, 0, {**prefs, "guardrails_enabled": False}, results=results, today=today) == []
