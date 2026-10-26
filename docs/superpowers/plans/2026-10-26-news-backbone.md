@@ -74,6 +74,8 @@ This keeps the invariants in `.claude/CLAUDE.md`:
 | N0.4 | **Pipeline that cannot rot silently.** Retry `FAILED` with backoff (3 tries over 24h), then `DEAD`; alert when triage/score lag passes 30 min in session or NEW passes 500 (the 10-24 audit's silent-stop item). | `datalayer/news.py`, `system/status.py`, Telegram admin alert | Stalled-triage test fires the alert |
 | N0.5 | **History to test on.** Backfill 2+ years of company, sector and market headlines from GDELT and NSE filings for the Nifty 200, scored by the same triage/score prompts (cheap tier, batched, its own daily budget separate from `NEWS_LLM_CALLS_PER_DAY`). Outcomes from stored daily bars. Without this, Phases N2 and N3 can only be forward-tested for months. | `datalayer/news_sources.py` (GDELT history), a one-off `python -m backend.datalayer.backfill_news` | ≥ 50k scored historical items; outcomes measured from bars |
 
+**N0.5 status (2026-10-26):** tool built (`backend/datalayer/backfill_news.py`). GDELT is out: its DOC API throttles this VM (the live poll shares the IP). Sources are Google News month searches (day-level dates, 100 results per search cap: the market query hits it) and NSE filings (exact times). Owner approved building with a cost estimate before any LLM run. Caveat: the scorer post-dates the history, so the backfilled hit rate is an upper bound.
+
 **Cost:** N0.5 is the expensive step, an LLM call per batch of about 150 headlines. Run it on the
 fast tier with a hard budget, and check the cost estimate before running.
 

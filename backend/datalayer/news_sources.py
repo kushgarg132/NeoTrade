@@ -15,6 +15,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from typing import Optional
 from urllib.parse import quote_plus
 
 import requests
@@ -105,8 +106,9 @@ def _text(html: str) -> str:
     return BeautifulSoup(html or "", "html.parser").get_text(" ", strip=True)[:1000]
 
 
-def parse_rss(xml: bytes, feed: str, scope_hint: str, symbols=()) -> list[dict]:
-    cutoff = datetime.now(timezone.utc) - MAX_AGE
+def parse_rss(xml: bytes, feed: str, scope_hint: str, symbols=(), max_age: Optional[timedelta] = MAX_AGE) -> list[dict]:
+    """`max_age` None keeps every item (the history backfill)."""
+    cutoff = datetime.now(timezone.utc) - max_age if max_age else datetime.min.replace(tzinfo=timezone.utc)
     items = []
     for item in BeautifulSoup(xml, features="xml").find_all("item"):
         title = item.title.get_text(strip=True) if item.title else ""

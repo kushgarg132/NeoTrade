@@ -178,7 +178,7 @@ async def ensure_indexes(db) -> None:
 
 
 async def store(db, items: list[dict], aliases, now: Optional[datetime] = None,
-                names: Optional[dict[str, str]] = None) -> int:
+                names: Optional[dict[str, str]] = None, coll: str = COLLECTION) -> int:
     """Upserts `items`; returns how many were new. A story seen again only
     gains the new feed and symbols. NSE filings skip triage: they are about
     the named company by construction."""
@@ -202,7 +202,7 @@ async def store(db, items: list[dict], aliases, now: Optional[datetime] = None,
             "expire_at": now + (RELEVANT_TTL if filing else IRRELEVANT_TTL),
             **({"relevant": True, "scope": "COMPANY", "themes": [], "region": "IN", "triaged_at": now} if filing else {}),
         }
-        result = await db[COLLECTION].update_one(
+        result = await db[coll].update_one(
             {"_id": item_id(item["title"])},
             {"$setOnInsert": insert, "$addToSet": {"symbols": {"$each": symbols}, "feeds": item["feed"]}},
             upsert=True,
@@ -272,9 +272,9 @@ async def _ask(prompt: str, complete, model, **values):
     return None
 
 
-async def _failed(db, ids: list[str], now: datetime) -> None:
-    await db[COLLECTION].update_many({"_id": {"$in": ids}}, {"$inc": {"attempts": 1}})
-    await db[COLLECTION].update_many({"_id": {"$in": ids}, "attempts": {"$gte": MAX_ATTEMPTS}},
+async def _failed(db, ids: list[str], now: datetime, coll: str = COLLECTION) -> None:
+    await db[coll].update_many({"_id": {"$in": ids}}, {"$inc": {"attempts": 1}})
+    await db[coll].update_many({"_id": {"$in": ids}, "attempts": {"$gte": MAX_ATTEMPTS}},
                                      {"$set": {"status": FAILED, "failed_at": now}})
 
 
@@ -298,23 +298,23 @@ async def retry_failed(db, now: datetime) -> int:
     return len(docs)
 
 
-async def _triage_batch(db, docs: list[dict], now: datetime) -> None:
+async def _triage_batch(db, docs: list[dict], now: datetime, coll: str = COLLECTION) -> None:
     listing = "\n".join(f"[{i}] [{d['scope_hint']}] {d['title']} ({d['source']})" for i, d in enumerate(docs))
     result = await _ask("triage_news", _fast, _Triages, items=listing)
     if result is _OUTAGE:
         return
     if result is None:
-        await _failed(db, [d["_id"] for d in docs], now)
+        await _failed(db, [d["_id"] for d in docs], now, coll)
         return
     kept = {t.index: t for t in result.items}
     for i, doc in enumerate(docs):
         t = kept.get(i)
         if t is not None:
-            await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": {
+            await db[coll].update_one({"_id": doc["_id"]}, {"$set": {
                 "status": TRIAGED, "relevant": True, "scope": t.scope if t.scope in SCOPES else doc["scope_hint"],
                 "themes": t.themes[:3], "region": t.region, "triaged_at": now, "expire_at": now + RELEVANT_TTL}})
         else:
-            await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": {
+            await db[coll].update_one({"_id": doc["_id"]}, {"$set": {
                 "status": IRRELEVANT, "relevant": False, "triaged_at": now}})
 
 
@@ -386,25 +386,25 @@ def valid_impacts(impacts: list[_Impact], symbols: set[str], sectors: set[str]) 
     return out
 
 
-async def _score_batch(db, docs, names, sector_of, sectors, now) -> None:
+async def _score_batch(db, docs, names, sector_of, sectors, now, coll: str = COLLECTION, tier: str = "deep") -> None:
     lines = []
     for i, d in enumerate(docs):
         tagged = "; ".join(f"{s} ({names.get(s, s)}, {sector_of.get(s, 'sector unknown')})" for s in d.get("symbols", []))
         lines.append(f"[{i}] ({d.get('scope', d['scope_hint'])}) {d['title']}\n{(d.get('content') or '')[:400]}\n"
                      f"Tagged: {tagged or 'none'}")
-    result = await _ask("score_market_news", _deep, _Scores, sectors=", ".join(sectors), items="\n\n".join(lines))
+    result = await _ask("score_market_news", _deep if tier == "deep" else _fast, _Scores, sectors=", ".join(sectors), items="\n\n".join(lines))
     if result is _OUTAGE:
         return
     if result is None:
-        await _failed(db, [d["_id"] for d in docs], now)
+        await _failed(db, [d["_id"] for d in docs], now, coll)
         return
     scored = {s.index: s for s in result.items}
-    # The deep tier's model, so the accuracy report can compare scorers.
-    model = await current_llm_model(tier="deep")
+    # The scoring tier's model, so the accuracy report can compare scorers.
+    model = await current_llm_model(tier=tier)
     for i, doc in enumerate(docs):
         s = scored.get(i)
         impacts = valid_impacts(s.impacts, set(names), set(sectors)) if s else []
-        await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": {
+        await db[coll].update_one({"_id": doc["_id"]}, {"$set": {
             "status": SCORED, "impacts": impacts, "event": (s.event if s else "")[:120], "scored_at": now,
             "model": model, "material": any(i["impact"] >= MATERIALITY_THRESHOLD for i in impacts)}})
 
