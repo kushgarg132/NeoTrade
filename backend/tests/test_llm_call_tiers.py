@@ -16,6 +16,7 @@ EXPECTED = {
     "instruments/resolve.py": ["fast"],
     "research/index_move.py": ["standard"],
     "portfolio/review.py": ["deep"],
+    "portfolio/ai_rebalance.py": ["deep"],
     "learning/report.py": ["standard"],
     "learning/hypotheses.py": ["deep"],
     "builder/draft.py": ["deep"],                         # the weekly strategy drafts
@@ -30,7 +31,7 @@ FEATURE = {
     "instruments/resolve.py": "research", "research/index_move.py": "research",
     "datalayer/news.py": "news", "datalayer/market.py": "news",
     "plan/builder.py": "plan", "plan/revise.py": "plan",
-    "portfolio/review.py": "portfolio", "chat/agent.py": "chat",
+    "portfolio/review.py": "portfolio", "portfolio/ai_rebalance.py": "portfolio", "chat/agent.py": "chat",
     "learning/report.py": "learning", "learning/hypotheses.py": "learning",
     "builder/draft.py": "learning",
     "summaries/day.py": "portfolio", "summaries/holding.py": "news", "summaries/activity.py": "plan",
