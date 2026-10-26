@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/ml/**, backend/rl/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 11c3ee7
+verified_at: 7c79234
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -123,7 +123,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 **3. Decide a suggestion** (`routers/suggestions.py`)
 1. Reject: `store.decide(status="REJECTED")`. This is allowed even past `expires_at`.
 2. Approve-live: status must be PENDING → `_require_strategy` (409 if no strategy) → `for_mine` (409 unproven) → `KillSwitchStore.is_tripped` (409).
-3. Equity (`_approve_equity_live`): `in_session` → refuses SELL → `mine` broker adapter → `mark_price × qty ≤ per_trade_cap` → claim `decide(status="SENDING")` (atomic, PENDING + not expired) → `service.py::execute_live_order` (place, record `live_orders`, poll 5×1 s, `orders.claim`, `_book` venue live, charged `costs.py::fill_costs`) → `store.settle` to `EXECUTED`/`SENT`/`PENDING`.
+3. Equity (`_approve_equity_live`): `in_session` → refuses SELL → `mine` broker adapter → `mark_price × qty ≤ per_trade_cap` → results guardrail (`mine/events.py::buy_blocked`, 409 if a results date is near per prefs) → claim `decide(status="SENDING")` (atomic, PENDING + not expired) → `service.py::execute_live_order` (place, record `live_orders`, poll 5×1 s, `orders.claim`, `_book` venue live, charged `costs.py::fill_costs`) → `store.settle` to `EXECUTED`/`SENT`/`PENDING`.
 4. Option: same rails. Exposure is `margin_estimate` or `premium × qty`. It looks up the NFO contract, uses `_options_broker` (needs `supports_options`), then `execute_option_suggestion_live`.
 5. There is no paper approve endpoint. The AI account paper-trades proposals itself (`engine/autorun.py::_autopilot_proposals`, commit dff272a).
 
