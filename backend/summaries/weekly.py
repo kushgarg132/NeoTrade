@@ -24,6 +24,16 @@ def report_facts(r: dict) -> dict:
             "journal": r["journal"]}
 
 
+def news_facts(r: dict) -> dict:
+    """The week's news attribution (portfolio/news_moves.py::week), titles and figures only."""
+    news = r.get("news") or {}
+    return {"big_movers": [{"symbol": m["symbol"], "move_pct": m["move_pct"], "vs_nifty_pct": m["vs_nifty"],
+                            "news": [{"title": i["title"], "scope": i["scope"], "direction": i["direction"]} for i in m["items"]]}
+                           for m in news.get("movers") or []],
+            "themes": news.get("themes") or [],
+            "accuracy_5d_hit_pct": news.get("accuracy")}
+
+
 async def generate(db, redis, user_id: str, report: dict):
     """The narrative for this report's week, or None (already written, or no usable model)."""
     async def build():
@@ -34,9 +44,10 @@ async def generate(db, redis, user_id: str, report: dict):
                     "baseline_win_rate_pct": core.pct(p.get("baseline_win_rate"))} for p in found[:PATTERNS]]
         for p in patterns:  # shown only in percent: one unit per figure
             p.pop("win_rate"), p.pop("baseline_win_rate")
-        facts = {"report": report_facts(report), "patterns": patterns}
+        facts = {"report": report_facts(report), "patterns": patterns, "news": news_facts(report)}
         system, prompt = render("summary_weekly", week=report["week"], report=core.as_facts(facts["report"]),
-                                patterns=core.as_facts(patterns) if patterns else "none")
+                                patterns=core.as_facts(patterns) if patterns else "none",
+                                news=core.as_facts(facts["news"]))
         return system, prompt, facts
 
     try:

@@ -59,6 +59,13 @@ export const showWeekly = (now = new Date()) => {
   return day === 0 || day === 1;
 };
 
+/** One "what news moved your money" row's reason: the headline, else whether it just followed NIFTY
+ * (within 2% of it, as backend/portfolio/news_moves.py::BIG_PCT). */
+export const newsWhy = (m) => {
+  if (m?.cause) return m.cause.title || '';
+  return m?.vs_nifty != null && Math.abs(m.vs_nifty) < 2 ? 'Moved with the market' : 'No news found';
+};
+
 const BROKERS = { kite: 'Kite', upstox: 'Upstox', angel_one: 'Angel One' };
 
 /** What on Home needs attention right now: a broker login that expired, the kill switch, live money armed. */

@@ -32,7 +32,7 @@ async def db(monkeypatch):
     })
     await db["news_items"].insert_one({
         "title": "DOWN <misses> & cuts guidance", "url": "https://x", "published_at": NOW - timedelta(hours=2),
-        "impacts": [{"target": "DOWN", "direction": -0.8, "impact": 8.0}]})
+        "status": "SCORED", "material": True, "impacts": [{"type": "symbol", "target": "DOWN", "direction": -0.8, "impact": 8.0}]})
     monkeypatch.setattr(service, "mark_prices", AsyncMock(return_value={"UP": 105.0, "DOWN": 90.0, "FLAT": 100.0, "AIONLY": 200.0}))
     monkeypatch.setattr(service.bars, "prev_closes", AsyncMock(return_value={"UP": 100.0, "DOWN": 100.0, "FLAT": 100.0}))
     return db

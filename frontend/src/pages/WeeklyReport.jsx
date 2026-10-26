@@ -20,6 +20,51 @@ import { shiftWeek, weekRange } from '../utils/weekly';
 const act = 'inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold';
 const navCls = 'inline-flex items-center justify-center min-h-11 min-w-11 text-[var(--text-muted)] disabled:opacity-40';
 
+const muted = 'text-[13px] text-[var(--text-muted)]';
+const openUrl = (url) => () => window.open(url, '_blank', 'noopener,noreferrer');
+
+/** The week's news on the user's holdings (backend/portfolio/news_moves.py::week): big moves against NIFTY with
+ * the items published before them, the themes that touched the book, and the measured 5-day hit rate. */
+const NewsWeek = ({ news }) => {
+  const acc = news.accuracy;
+  return (
+    <Card title="News on your holdings" action={<span className={muted}>context, not advice</span>}>
+      {news.movers.length === 0
+        ? <p className={muted}>No holding moved more than 4% against NIFTY this week.</p>
+        : (
+          <ul>
+            {news.movers.map((m) => (
+              <ListRow key={m.symbol} dense privateValue={false} title={bareSymbol(m.symbol)}
+                sub={m.items[0]?.title || 'No news found before the move'}
+                right={`${pct(m.vs_nifty == null ? m.move_pct / 100 : m.vs_nifty / 100, { sign: true, dp: 1 })}${m.vs_nifty == null ? '' : ' vs NIFTY'}`}
+                rightTone={tone(m.vs_nifty ?? m.move_pct)} onClick={m.items[0]?.url ? openUrl(m.items[0].url) : undefined} />
+            ))}
+          </ul>
+        )}
+      {news.themes.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-[var(--border)]">
+          <div className="text-[13px] font-semibold text-[var(--text-muted)] mb-1">Themes that hit your book</div>
+          <div className="flex flex-wrap gap-2">
+            {news.themes.map((t) => (
+              <Badge key={t.theme} kind="neutral">
+                {t.theme} · {t.n} {t.direction > 0.2 ? 'good' : t.direction < -0.2 ? 'bad' : 'mixed'}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      {acc && (
+        <p className={`mt-3 ${muted}`}>
+          How often news called the 5-day move against NIFTY:
+          {acc.company && ` company news ${acc.company.hit_pct}%${acc.company.n ? ` of ${acc.company.n}` : ''}`}
+          {acc.company && acc.sector && ','}
+          {acc.sector && ` sector news ${acc.sector.hit_pct}%${acc.sector.n ? ` of ${acc.sector.n}` : ''}`}.
+        </p>
+      )}
+    </Card>
+  );
+};
+
 /** Last week for the user's own account; the same numbers Telegram sends on Sunday 18:00. */
 const WeeklyReport = () => {
   const [params, setParams] = useSearchParams();
@@ -91,6 +136,7 @@ const WeeklyReport = () => {
                 ))}
               </div>
             </Card>
+            {r.news && <NewsWeek news={r.news} />}
             <Card title="Journal" action={<span className="text-[13px] text-[var(--text-muted)]">your account</span>}>
               <div className="grid grid-cols-3 gap-3">
                 <Stat label="Trades" value={String(r.journal.trades)} />
