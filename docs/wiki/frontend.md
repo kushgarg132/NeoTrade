@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 69ff132
+verified_at: 5aaed33
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -41,7 +41,7 @@ The whole UI: a plain-JSX (no TypeScript) React 19 / React Router 7 / Tailwind v
 | `src/components/trading/OrderTicket.jsx` | real-money order dialog: propose -> confirm (second tap) | `OrderTicket` |
 | `src/components/ChatWidget.jsx` | docked assistant; streams via `stream.request('chat')`; renders action cards | `ChatWidget`, `ActionCard` |
 | `src/components/home/*` | Home: `HeroRow` (account value, today in rupees and %, gap vs NIFTY in points; links `/money`; Empty with a Connect-broker link), cards `BriefCard` (AI "Your day" lines, else digest lines), `GoalTile` (progress to the saved goal), `WeeklyLink` (Sun/Mon only), `SetupChecklist` | `HeroRow`, `BriefCard`, `GoalTile`, `WeeklyLink`, `SetupChecklist` |
-| `src/components/money/*` | Money tabs: `OverviewTab` (`WhyMoved`, movers), `HoldingsTab` (4-column trader table `COLS`/`Head`/`Row`, + `ImportFiles`, `portfolio/Rebalance`), `TaxTab`, `JournalTab` (round trips, habits, guardrails), `ValueChart` (recharts on `chartTheme` `AXIS`/`GRID`); `useHoldings` returns `{snapshot, loading, error, reload}` (`error` only while nothing is on screen) | `useHoldings` |
+| `src/components/money/*` | Money tabs: `OverviewTab` (`WhyMoved`, movers), `HoldingsTab` (4-column trader table `COLS`/`Head`/`Row` with colour+icon verdict pills and verdict filter chips, + `ImportFiles`, `portfolio/Rebalance` with plan tax/charges totals and an armed two-tap "Execute all" via `utils/ticket.js::executeAll`), `TaxTab`, `JournalTab` (round trips, habits, guardrails), `ValueChart` (recharts on `chartTheme` `AXIS`/`GRID`); `useHoldings` returns `{snapshot, loading, error, reload}` (`error` only while nothing is on screen) | `useHoldings` |
 | `src/components/ideas/*` | Ideas rows and actions: `IdeaRow`, `IdeaBadge`, `RangeBar`, `BuyBar`, `HoldingActions`; `useLoad(fetcher)` = `{data,error,loading,reload}` | `useLoad` |
 | `src/components/ai/*` | AI tabs `Scoreboard`, `Positions`, `Activity` (+ `plan/PlanCard`), `StopAi`; stored-text cards in `AiSummary.jsx` | `AiCard`, `AiText`, `AiState`, `AiLabel`, `AmountText`, default `AiSummary` |
 | `src/components/market/*` | Market tabs `Pulse`, `Watchlist`, `News` | `Pulse`, `Watchlist`, `News` |

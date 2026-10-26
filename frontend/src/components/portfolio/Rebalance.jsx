@@ -6,7 +6,7 @@ import { Badge } from '../common/Badge';
 import { TicketButton } from '../trading/OrderTicket';
 import api, { endpoints, getPreferences } from '../../utils/api';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
-import { ticketFrom } from '../../utils/ticket';
+import { ticketFrom, executeAll } from '../../utils/ticket';
 import { cn } from '../../utils/cn';
 
 /**
@@ -55,6 +55,8 @@ const Rebalance = ({ snapshot, onTrade }) => {
   const [candidates, setCandidates] = useState([]);
   const [ticked, setTicked] = useState([]);
   const [result, setResult] = useState(null);
+  const [armed, setArmed] = useState(false); // first tap on Execute all; the second places the orders
+  const [run, setRun] = useState(null); // per-order results while / after executing all
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -94,6 +96,8 @@ const Rebalance = ({ snapshot, onTrade }) => {
       await api.put(endpoints.settings.preferences, { rebalance_targets: clean });
       const res = await api.post(endpoints.portfolio.rebalance, { new_money: Number(newMoney) || 0, candidates: ticked });
       setResult(res.data);
+      setArmed(false);
+      setRun(null);
     } catch (err) {
       const detail = err?.response?.data?.detail;
       setError(typeof detail === 'string' ? detail : 'Those targets could not be used: caps must be above 0 and at most 100, and overrides add up to 100% or less.');
@@ -107,6 +111,20 @@ const Rebalance = ({ snapshot, onTrade }) => {
   // Tax is the whole plan's, netted on the server: a sell at a loss lowers the total.
   const tax = result?.tax || { est_tax: 0, short_gain: 0, long_gain: 0, undated: 0 };
   const chargesTotal = trades.reduce((sum, t) => sum + (t.charges || 0), 0);
+  const running = run?.some((r) => r.status === 'running');
+  const execute = async () => {
+    setArmed(false);
+    const ordered = [...trades].sort((a, b) => (a.side === 'SELL' ? 0 : 1) - (b.side === 'SELL' ? 0 : 1));
+    setRun(ordered.map((t, i) => ({ symbol: t.symbol, side: t.side, quantity: t.quantity, status: i === 0 ? 'running' : 'skipped', note: null })));
+    const step = (out) => {
+      const next = out.findIndex((r) => r.status === 'skipped');
+      const stopped = out.some((r) => r.status === 'failed' || r.status === 'unknown');
+      setRun(out.map((r, i) => (i === next && !stopped ? { ...r, status: 'running' } : r)));
+    };
+    setRun(await executeAll(trades, api.post, endpoints, step));
+  };
+  const RUN_TONE = { done: 'text-up', failed: 'text-down', unknown: 'text-down', running: 'text-[var(--accent)]', skipped: 'doc-meta' };
+  const RUN_LABEL = { done: 'Placed', failed: 'Not placed', unknown: 'Unknown', running: 'Placing…', skipped: 'Not tried' };
   const gain = (x) => <span className={x < 0 ? 'text-down' : undefined}>{x < 0 ? `${formatCurrency(-x)} loss` : formatCurrency(x)}</span>;
 
   return (
@@ -226,6 +244,41 @@ const Rebalance = ({ snapshot, onTrade }) => {
                   {tax.undated > 0 && ` ${tax.undated} sell${tax.undated > 1 ? 's' : ''} not fully dated in your journal: real tax may differ.`}
                 </p>
               </div>
+              {onTrade && !run && (armed ? (
+                <div role="alert" className="mb-3 border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2 space-y-2">
+                  <p className="text-sm">
+                    Places {trades.length} real order{trades.length > 1 ? 's' : ''} on your broker: sells first, then buys, each a
+                    limit order at the plan price. Stops at the first order that fails.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="secondary" onClick={() => setArmed(false)}>Cancel</Button>
+                    <Button variant="danger" onClick={execute}>Real money. Execute all</Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="primary" className="mb-3 w-full" onClick={() => setArmed(true)}>Execute all {trades.length} trades</Button>
+              ))}
+              {run && (
+                <div className="mb-3 border border-[var(--border)] px-3 py-2" role="status" aria-live="polite">
+                  <ul className="divide-y divide-[var(--border)]">
+                    {run.map((r) => (
+                      <li key={`${r.symbol}-${r.side}`} className="py-1.5 flex items-baseline justify-between gap-3 text-sm">
+                        <span className="figure-md">{r.side} {r.quantity} {r.symbol}</span>
+                        <span className={cn('text-right', RUN_TONE[r.status])}>
+                          {r.status === 'running' && <Loader2 className="inline w-3.5 h-3.5 mr-1 animate-spin" />}
+                          {RUN_LABEL[r.status]}
+                          {r.note && r.status !== 'done' && <span className="block doc-meta normal-case">{r.note}</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {!running && (
+                    <p className="mt-2 doc-meta normal-case">
+                      {run.every((r) => r.status === 'done') ? 'All orders placed. Check Journal for fills.' : 'Stopped. Orders marked Placed went through; recalculate before trying the rest.'}
+                    </p>
+                  )}
+                </div>
+              )}
               <ul className="sm:hidden divide-y divide-[var(--border)]">
                 {trades.map((t) => (
                   <li key={`${t.symbol}-${t.side}`} className="py-3">

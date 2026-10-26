@@ -230,7 +230,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 - **Rules decide; AI explains.** `portfolio/rules.py::stock_verdict` scores via `scoring/composite.py::score_intent`, so
   AI_CAP and RULE_FLOOR apply and below the floor the verdict is HOLD. `review.py::write_review` never changes a
   verdict, and it degrades to no prose rather than failing.
-- **Nothing here places an order except guardrail square-off.** Actions, rebalance and `suggest` return tickets. The
+- **Nothing here places an order except guardrail square-off.** Actions, rebalance and `suggest` return tickets. The rebalance sheet's "Execute all" (`frontend/src/utils/ticket.js::executeAll`) is still user-driven: one batch-level double tap, then each order goes through the normal `/orders/propose` and two-call `/chat/actions/{id}/confirm`, sells first, stopping at the first failure. The
   one exception is `guardrails/monitor.py::square_off`. It runs only on `auto_square_off == "live"`, only for NSE MIS
   (`guardrails/square_off.py::exit_orders`), and only on brokers that are not the AI broker. It runs at most once per day
   because the `daily_loss` breach is recorded (`GuardrailStore.record`) before any order goes out.
