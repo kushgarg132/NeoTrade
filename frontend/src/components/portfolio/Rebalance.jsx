@@ -104,6 +104,10 @@ const Rebalance = ({ snapshot, onTrade }) => {
 
   const trade = (t) => onTrade && onTrade(ticketFrom({ symbol: t.symbol, suggested: t }));
   const trades = result?.trades || [];
+  // Tax is the whole plan's, netted on the server: a sell at a loss lowers the total.
+  const tax = result?.tax || { est_tax: 0, short_gain: 0, long_gain: 0, undated: 0 };
+  const chargesTotal = trades.reduce((sum, t) => sum + (t.charges || 0), 0);
+  const gain = (x) => <span className={x < 0 ? 'text-down' : undefined}>{x < 0 ? `${formatCurrency(-x)} loss` : formatCurrency(x)}</span>;
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -213,6 +217,15 @@ const Rebalance = ({ snapshot, onTrade }) => {
             <Empty title="Nothing to do" detail="Your holdings are already close to their targets." />
           ) : (
             <>
+              <div className="mb-3 grid grid-cols-3 gap-3 rounded-[12px] bg-[var(--surface-2)] px-3 py-2" aria-label="Total cost of these trades">
+                <Field label="Total tax est." value={formatCurrency(tax.est_tax)} tone={tax.est_tax > 0 ? 'down' : undefined} />
+                <Field label="Charges" value={formatCurrency(chargesTotal)} />
+                <Field label="Total cost" value={formatCurrency(tax.est_tax + chargesTotal)} />
+                <p className="col-span-3 doc-meta normal-case">
+                  Net short-term: {gain(tax.short_gain)} · long-term: {gain(tax.long_gain)}. Losses on sells are set off against gains first.
+                  {tax.undated > 0 && ` ${tax.undated} sell${tax.undated > 1 ? 's' : ''} not fully dated in your journal: real tax may differ.`}
+                </p>
+              </div>
               <ul className="sm:hidden divide-y divide-[var(--border)]">
                 {trades.map((t) => (
                   <li key={`${t.symbol}-${t.side}`} className="py-3">
