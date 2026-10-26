@@ -109,10 +109,13 @@ def build_scorecard(
     rows.sort(key=lambda r: r["value"] or 0.0, reverse=True)
 
     weights = [r["value"] / total_value for r in priced] if total_value else []
+    # A sector is a stock's: ETFs and funds hold many, so they are a type, never a sector.
     by_sector: dict[str, float] = defaultdict(float)
+    by_kind: dict[str, float] = defaultdict(float)
     for row in priced:
-        label = row["sector"] or ("Funds & ETFs" if row["kind"] != "STOCK" else "Unclassified")
-        by_sector[label] += row["value"]
+        by_kind[row["kind"]] += row["value"]
+        if row["kind"] == "STOCK":
+            by_sector[row["sector"] or "Unclassified"] += row["value"]
 
     return {
         "holdings": rows,
@@ -141,6 +144,10 @@ def build_scorecard(
             "sectors": sorted(
                 ({"sector": s, "pct": v / total_value * 100} for s, v in by_sector.items()),
                 key=lambda s: s["pct"], reverse=True,
+            ),
+            "types": sorted(
+                ({"kind": k, "pct": v / total_value * 100} for k, v in by_kind.items()),
+                key=lambda t: t["pct"], reverse=True,
             ),
             "correlated": correlated_pairs(daily_returns),
         },

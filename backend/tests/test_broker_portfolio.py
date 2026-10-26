@@ -99,7 +99,9 @@ def test_scorecard_totals_weights_and_nifty_comparison():
     assert bench["covered_pct"] == pytest.approx(25.0)  # 1000 of 4000 invested
     assert (bench["portfolio_pct"], bench["nifty_pct"]) == (pytest.approx(50.0), pytest.approx(10.0))
     sectors = {s["sector"]: round(s["pct"], 1) for s in card["concentration"]["sectors"]}
-    assert sectors == {"Energy": 33.3, "Unclassified": 11.1, "Funds & ETFs": 55.6}
+    assert sectors == {"Energy": 33.3, "Unclassified": 11.1}  # stocks only: funds and ETFs are a type
+    types = {t["kind"]: round(t["pct"], 1) for t in card["concentration"]["types"]}
+    assert sum(types.values()) == pytest.approx(100, abs=0.2) and types["STOCK"] == 44.4
     assert card["concentration"]["top_symbol"] == "NIFTYBEES"
     assert 2.0 < card["concentration"]["effective_holdings"] < 3.0
 

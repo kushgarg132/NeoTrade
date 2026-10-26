@@ -180,10 +180,11 @@ def test_plan_after_shows_every_name_and_the_sector_mix():
     book = [h("A", 80_000), h("B", 20_000, sector="Banks"), h("N", 50_000, kind="ETF", sector=None)]
     out = plan_rebalance(book, [], EQUAL, 0, {}, TODAY)["after"]
     by = {r["symbol"]: r for r in out["rows"]}
-    assert set(by) == {"A", "B", "N"} and by["N"]["sector"] == "ETF" and by["N"]["kind"] == "ETF"
+    assert set(by) == {"A", "B", "N"} and by["N"]["sector"] is None and by["N"]["kind"] == "ETF"
     assert by["A"]["weight_now"] == pytest.approx(80_000 / 150_000 * 100, abs=0.01)
     assert by["A"]["weight_after"] < by["A"]["weight_now"] and by["B"]["weight_after"] > by["B"]["weight_now"]
     mix = {m["sector"]: m for m in out["sectors"]}
-    assert set(mix) == {"IT", "Banks", "ETF"}
-    total_after = sum(m["weight_after"] for m in out["sectors"]) + out["cash_pct"]
+    assert set(mix) == {"IT", "Banks"}  # an ETF is a type, never a sector
+    assert {t["kind"] for t in out["types"]} == {"STOCK", "ETF"}
+    total_after = sum(t["weight_after"] for t in out["types"]) + out["cash_pct"]
     assert total_after == pytest.approx(100, abs=0.5)  # charges are the rest

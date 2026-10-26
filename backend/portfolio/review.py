@@ -64,6 +64,7 @@ async def write_review(card: dict, candidates: list[dict] | None = None) -> dict
             f"Largest {conc['top_symbol']} at {_fmt(conc['top_pct'], '%')}; top five {_fmt(conc['top5_pct'], '%')}; "
             f"weighted like {_fmt(conc['effective_holdings'])} equal holdings. Sectors: "
             + ", ".join(f"{s['sector']} {s['pct']:.1f}%" for s in conc["sectors"])
+            + " (stocks only). By type: " + ", ".join(f"{t['kind']} {t['pct']:.1f}%" for t in conc.get("types", []))
             + ". Moving together: " + (", ".join(f"{p['a']}/{p['b']} {p['correlation']}" for p in conc["correlated"]) or "none")
         ),
         holdings="\n".join(_holding_line(r) for r in rows),

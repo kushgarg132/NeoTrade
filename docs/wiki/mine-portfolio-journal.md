@@ -27,7 +27,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/mine/tax.py | Indian FY capital-gains estimate (pure) | `tax.py::report`, `::est_tax`, `::long_from`, `::is_long`, `::current_fy`, `STCG_RATE`, `LTCG_RATE`, `LTCG_EXEMPTION` |
 | backend/mine/thesis.py | User's why/target/stop/review_by per holding | `thesis.py::ThesisIn`, `::ThesisStore`, `SYMBOL` |
 | backend/portfolio/service.py | Fetches holdings, builds the scorecard, runs the review, stores snapshots, reprices from live quotes | `portfolio/service.py::refresh_portfolio`, `::fetch_holdings`, `::_review`, `::daily_reviews`, `::with_live_prices`, `::quoted`, `::scorecard_for`, `::mine_holdings`, `::mine_avg_prices`, `::latest_snapshot`, `::add_candidates`, `::_nifty`, `::_sectors`, `::_closes` |
-| backend/portfolio/scorecard.py | Merges holdings by ISIN; totals, NIFTY benchmark, concentration (pure) | `scorecard.py::merge`, `::build_scorecard`, `::correlated_pairs` |
+| backend/portfolio/scorecard.py | Merges holdings by ISIN; totals, NIFTY benchmark, concentration (pure): `sectors` are stocks only (an ETF or fund is a type, never a sector), `types[{kind,pct}]` splits the book by STOCK/ETF/MF | `scorecard.py::merge`, `::build_scorecard`, `::correlated_pairs` |
 | backend/portfolio/rules.py | SELL/HOLD/ADD and REVIEW/KEEP rules, scored through composite (pure) | `portfolio/rules.py::stock_verdict`, `::fund_verdict`, `::sell_codes`, `::add_codes`, `::worsened`, `SEVERITY` |
 | backend/portfolio/health.py | Per-stock fundamentals, trend and headlines, cached daily | `health.py::stock_health`, `::price_trend`, `::profit_trend` |
 | backend/portfolio/review.py | LLM write-up (summary, notes, plan); explains only | `review.py::write_review`, `MAX_HOLDINGS` |
@@ -278,7 +278,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | GET /portfolio?account=all\|ai\|mine&live= | `routers/portfolio.py::get_portfolio` | user | snapshot minus `raw_holdings`, plus `verdicts_visible`; rows add `suggested`, `thesis_target`; 404 before the first refresh |
 | POST /portfolio/refresh | `::refresh` | user | as above; 409 if no holdings and no errors |
 | GET /portfolio/rebalance/candidates | `::rebalance_candidates` | user | `[{symbol,price,source,score,preselect}]` |
-| POST /portfolio/rebalance | `::rebalance` | user (conviction needs the gate) | `total,cash_left,trades,tax{short_gain,long_gain,est_tax,undated},after{rows[{symbol,kind,sector,value_now,value_after,weight_now,weight_after}],sectors[{sector,weight_now,weight_after}],cash_pct},skipped,excluded,uninvested_pct,stale_since`; 429/409/403 |
+| POST /portfolio/rebalance | `::rebalance` | user (conviction needs the gate) | `total,cash_left,trades,tax{short_gain,long_gain,est_tax,undated},after{rows[{symbol,kind,sector,value_now,value_after,weight_now,weight_after}],sectors[{sector,weight_now,weight_after}] (stocks only),types[{kind,weight_now,weight_after}],cash_pct},skipped,excluded,uninvested_pct,stale_since`; 429/409/403 |
 | POST /portfolio/rebalance/ai | `::rebalance_ai` | verdicts audience (`verdicts_visible_to`), 3/min | `plan` (same shape as /rebalance), `targets{symbol:pct}` (clamped), `reasons{symbol:text}`, `summary`; 403/429/409/502 (model gave nothing usable) |
 | GET /journal?account= | `routers/journal.py::get_journal` | user | `account,round_trips,calendar,insights,brokers_connected,summary{trips,pnl,wins,by_kind},mirror{costs,benchmark}` |
 | GET /journal/ai-vs-me | `::ai_vs_me` | user | monthly rows; no caller in `frontend/src/utils/api.js` |

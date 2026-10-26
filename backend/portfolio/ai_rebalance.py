@@ -62,8 +62,10 @@ def _formula_lines(plan: dict, rule: str) -> str:
     tax = plan.get("tax") or {}
     lines.append(f"Estimated tax {_fmt(tax.get('est_tax'))}, charges {_fmt(sum(t['charges'] for t in trades))}.")
     after = plan.get("after") or {}
-    lines.append("Sectors after: " + (", ".join(f"{s['sector']} {s['weight_now']:.1f}% -> {s['weight_after']:.1f}%"
+    lines.append("Sectors after (stocks only): " + (", ".join(f"{s['sector']} {s['weight_now']:.1f}% -> {s['weight_after']:.1f}%"
                                                 for s in after.get("sectors", [])) or "n/a"))
+    lines.append("By type after: " + (", ".join(f"{t['kind']} {t['weight_now']:.1f}% -> {t['weight_after']:.1f}%"
+                                                for t in after.get("types", [])) or "n/a"))
     return "\n".join(lines)
 
 
