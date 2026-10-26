@@ -169,7 +169,8 @@ async def test_news_proposals_go_to_the_autopilot_only_when_asked(monkeypatch):
     assert handed == [("u1", "news")] and len(told) == 3  # taken by the AI, still the user's idea
 
 
-def test_ai_targets_only_through_proven_themes():
+def test_ai_targets_only_through_proven_themes(monkeypatch):
+    monkeypatch.setattr(reactor, "COMPANY_SCAN_PAUSED", False)  # the proven-theme rule itself, company scope included
     weights = {"COMPANY|earnings|1": 1.4, "COMPANY|deal|1": 0.9, "SECTOR|growth|1": 1.2}
     universe = {"INFY", "TCS", "SBIN"}
 
@@ -210,3 +211,12 @@ def test_exit_hit_needs_a_big_negative_move():
     assert reactor.exit_hit(_item(("symbol", "INFY", -0.4, 9)), "INFY", SECTORS) is None
     assert reactor.exit_hit(_item(("symbol", "INFY", -0.9, 7)), "INFY", SECTORS) is None
     assert reactor.exit_hit(_item(("sector", "Information Technology", -0.6, 8)), "TCS", SECTORS)
+
+
+def test_company_news_proposes_nothing_while_paused():
+    item = {"scope": "COMPANY", "impacts": [{"type": "symbol", "target": "TCS", "impact": 9, "direction": 1.0},
+                                            {"type": "sector", "target": "Information Technology", "impact": 9, "direction": 1.0}]}
+    assert reactor.scan_targets(item, SECTORS, {"TCS", "INFY"}) == []
+    assert reactor.ai_targets(item, SECTORS, {"TCS", "INFY"}, {"COMPANY|earnings|1": 1.5}) == set()
+    sector_item = {**item, "scope": "SECTOR"}
+    assert reactor.scan_targets(sector_item, SECTORS, {"TCS", "INFY"}) == ["TCS", "INFY"]

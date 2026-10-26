@@ -83,9 +83,19 @@ def hits_for(item: dict, sector_of: dict[str, str], pref: str, held: set[str], w
     return [{"target": t, "direction": i["direction"], "impact": i["impact"]} for t, i in hits.items()]
 
 
+# Company-scope news makes no buy proposal (owner decision 2026-10-26): on prod outcomes its
+# direction called the move vs NIFTY right only 42-43% of the time (n~750, 1d and 5d), while
+# sector and market scope did 56-73%. Lift once datalayer/accuracy.py shows >= 52% on
+# outcomes measured from the pre-publication price (docs/superpowers/plans/2026-10-26-news-backbone.md, N0.1).
+COMPANY_SCAN_PAUSED = True
+
+
 def scan_targets(item: dict, sector_of: dict[str, str], universe: set[str]) -> list[str]:
     """Universe names `item` materially moves: direct hits first, then the
-    names in a sector it moves."""
+    names in a sector it moves. A company-scope item moves none while
+    COMPANY_SCAN_PAUSED (alerts and shadow exits still see it)."""
+    if COMPANY_SCAN_PAUSED and item.get("scope") == "COMPANY":
+        return []
     material = [i for i in item.get("impacts", []) if i["impact"] >= MATERIALITY_THRESHOLD]
     direct = [i["target"] for i in material if i["type"] == "symbol" and i["target"] in universe]
     sectors = {i["target"] for i in material if i["type"] == "sector"}
