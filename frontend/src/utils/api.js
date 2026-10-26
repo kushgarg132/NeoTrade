@@ -182,6 +182,7 @@ export const endpoints = {
   forward: { scorecard: '/forward/scorecard', records: '/forward/records' },
   newsFeed: '/news/feed',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
+  newsResults: (symbols) => `/news/results?symbols=${encodeURIComponent(symbols)}`,
   planToday: '/plan/today',
   picks: {
     today: '/picks',

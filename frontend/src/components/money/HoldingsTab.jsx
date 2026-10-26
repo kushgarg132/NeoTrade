@@ -19,6 +19,15 @@ import { sortHoldings, whyLine, dayFraction, MARKET_WHY } from '../../utils/mone
 import { stockPath } from '../../utils/stocks';
 import { formatDateTime, formatQuantity } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import Badge from '../ui/Badge';
+import { hasNews, newsToday, tone as newsTone } from '../../utils/news';
+
+// Sentiment dot beside the symbol: colour plus a screen-reader word (the "News" badge and why-line carry the text).
+const DOT = { pos: ['bg-[var(--gain)]', 'news positive'], neg: ['bg-[var(--loss)]', 'news negative'] };
+const NewsDot = ({ entry }) => {
+  const d = DOT[newsTone(entry)];
+  return d ? <span role="img" aria-label={d[1]} title={d[1]} className={`inline-block w-2 h-2 shrink-0 rounded-full ${d[0]}`} /> : null;
+};
 
 const SORTS = [['day', 'Today'], ['value', 'Value'], ['weight', 'Weight'], ['pnl', 'P&L']];
 // Each verdict gets its own colour + icon, so Sell / Add / Hold read at a glance (icon covers colour-blind).
@@ -78,7 +87,11 @@ const Row = ({ h, news }) => {
   const body = (
     <>
       <div className="min-w-0">
-        <div className="text-[15px] font-semibold text-[var(--text)] break-words">{mf ? h.name || h.symbol : h.symbol}</div>
+        <div className="flex flex-wrap items-center gap-x-1.5 text-[15px] font-semibold text-[var(--text)] break-words">
+          <span className="min-w-0">{mf ? h.name || h.symbol : h.symbol}</span>
+          {!mf && <NewsDot entry={news} />}
+          {!mf && newsToday(news) && <Badge kind={newsTone(news) === 'neg' ? 'alert' : 'neutral'}>News</Badge>}
+        </div>
         <div className="text-[12px] text-[var(--text-muted)] tabular-nums truncate"><span className="private">{formatQuantity(h.quantity)}</span></div>
         {h.verdict && <VerdictPill v={h.verdict} />}
       </div>
@@ -110,6 +123,7 @@ const HoldingsTab = () => {
   const [importing, setImporting] = useState(false);
   const [reading, setReading] = useState(null);
   const [needsOnly, setNeedsOnly] = useState(false);
+  const [newsOnly, setNewsOnly] = useState(false);
   const [verdict, setVerdict] = useState(null);
   const [needs, setNeeds] = useState(() => new Set());
   const plan = params.get('plan') === '1';
@@ -122,8 +136,8 @@ const HoldingsTab = () => {
   const { news } = useSymbolNews(all.filter((r) => r.kind === 'STOCK').map((r) => r.symbol));
   const counts = useMemo(() => all.reduce((m, r) => (r.verdict ? { ...m, [r.verdict]: (m[r.verdict] || 0) + 1 } : m), {}), [all]);
   const rows = useMemo(
-    () => sortHoldings(all.filter((r) => (!needsOnly || needs.has(r.symbol)) && (!verdict || r.verdict === verdict)).map((r) => ({ ...r, day_pct: dayFraction(r) })), sort),
-    [all, needs, needsOnly, sort, verdict]
+    () => sortHoldings(all.filter((r) => (!needsOnly || needs.has(r.symbol)) && (!newsOnly || hasNews(news[r.symbol])) && (!verdict || r.verdict === verdict)).map((r) => ({ ...r, day_pct: dayFraction(r) })), sort),
+    [all, needs, needsOnly, news, newsOnly, sort, verdict]
   );
 
   // Before the first daily review there is no snapshot (GET /portfolio is 404): read it now.
@@ -167,6 +181,7 @@ const HoldingsTab = () => {
             <div className="flex gap-2 mb-2 overflow-x-auto" role="group" aria-label="Sort by">
               {SORTS.map(([id, label]) => <Chip key={id} on={sort === id} onClick={() => setSort(id)}>{label}</Chip>)}
               <Chip on={needsOnly} onClick={() => setNeedsOnly((v) => !v)}>Needs you</Chip>
+              <Chip on={newsOnly} onClick={() => setNewsOnly((v) => !v)}>Has news</Chip>
             </div>
             {Object.keys(counts).length > 0 && (
               <div className="flex gap-2 mb-2 overflow-x-auto" role="group" aria-label="Show verdict">

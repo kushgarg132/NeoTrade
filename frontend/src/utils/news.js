@@ -30,3 +30,36 @@ export const sortByNewsRisk = (rows, newsBySymbol = {}) => {
   const hit = rows.filter((r) => badNews(newsBySymbol[r.symbol]));
   return [...hit, ...rows.filter((r) => !badNews(newsBySymbol[r.symbol]))];
 };
+
+/** The IST calendar day ("2026-10-26") of a timestamp, or null. */
+export const istDay = (at) => {
+  const t = at == null ? null : new Date(at);
+  return t && !Number.isNaN(t.getTime()) ? t.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : null;
+};
+
+/** A material headline published today (IST). */
+export const newsToday = (entry, now = Date.now()) =>
+  !!entry?.material && !!entry.published_at && istDay(entry.published_at) === istDay(now);
+
+/** Any scored headline in the window /news/symbols covers (72h). */
+export const hasNews = (entry) => !!entry?.headline;
+
+/** A pick's "bad news since signal": a strong negative item (direction <= -0.5, impact >= 7) dated after the
+ * IST day it fired. Reads only the stock's latest material item, so a later good one can hide an older bad one. */
+export const badNewsSince = (entry, firedOn) => !!firedOn && finite(entry?.direction) && entry.direction <= -0.5
+  && finite(entry.impact) && entry.impact >= 7 && (istDay(entry.published_at) || '') > firedOn;
+
+/** "Results in 6 days" when the next results date (YYYY-MM-DD) falls inside the idea's horizon
+ * (trading days, read as horizon × 7/5 calendar days), else null. */
+export const resultsFlag = (date, horizon, now = Date.now()) => {
+  const today = istDay(now);
+  if (!date || !today || !finite(horizon)) return null;
+  const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+  if (!(days >= 0) || days > Math.ceil((horizon * 7) / 5)) return null;
+  return days === 0 ? 'Results today' : `Results in ${days} day${days === 1 ? '' : 's'}`;
+};
+
+/** Why a loss-harvest candidate is down: fresh (72h) material negative news, or not. */
+export const lossCause = (entry) => (badNews(entry)
+  ? { news: true, text: `Drop after news: ${entry.headline || 'material bad news'}` }
+  : { news: false, text: 'Slow decline' });
