@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { X } from 'lucide-react';
+import { X, ArrowDown, Plus, Pause, AlertTriangle } from 'lucide-react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Empty from '../ui/Empty';
@@ -21,17 +21,34 @@ import { formatDateTime, formatQuantity } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 
 const SORTS = [['day', 'Today'], ['value', 'Value'], ['weight', 'Weight'], ['pnl', 'P&L']];
-const VERDICT_LABEL = { REVIEW: 'Review first' };
+// Each verdict gets its own colour + icon, so Sell / Add / Hold read at a glance (icon covers colour-blind).
+const VERDICT = {
+  SELL: { label: 'Sell', Icon: ArrowDown, pill: 'bg-[var(--loss-wash)] text-[var(--loss)]', stripe: 'border-l-[var(--loss)]', on: 'bg-[var(--loss)]' },
+  ADD: { label: 'Add', Icon: Plus, pill: 'bg-[var(--gain-wash)] text-[var(--gain)]', stripe: 'border-l-[var(--gain)]', on: 'bg-[var(--gain)]' },
+  REVIEW: { label: 'Review first', Icon: AlertTriangle, pill: 'bg-[color-mix(in_oklab,var(--warn)_14%,var(--surface))] text-[var(--warn)]', stripe: 'border-l-[var(--warn)]', on: 'bg-[var(--warn)]' },
+  HOLD: { label: 'Hold', Icon: Pause, pill: 'bg-[var(--surface-2)] text-[var(--text-muted)]', stripe: 'border-l-transparent', on: 'bg-[var(--text-muted)]' },
+};
+const VERDICT_ORDER = ['SELL', 'REVIEW', 'ADD', 'HOLD'];
+
+const VerdictPill = ({ v }) => {
+  const s = VERDICT[v];
+  if (!s) return <div className="text-[12px] font-semibold text-[var(--text)]">{v}</div>;
+  return (
+    <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-2 min-h-6 text-[12px] font-semibold ${s.pill}`}>
+      <s.Icon className="w-3 h-3" aria-hidden="true" />{s.label}
+    </span>
+  );
+};
 const tone = (x) => (x > 0 ? 'gain' : x < 0 ? 'loss' : 'neutral');
 
-const Chip = ({ on, onClick, children }) => (
+const Chip = ({ on, onClick, children, onCls = 'bg-[var(--accent)]', offCls = 'text-[var(--text-muted)]' }) => (
   <button
     type="button"
     aria-pressed={on}
     onClick={onClick}
     className={cn(
       'min-h-11 px-3 shrink-0 rounded-full text-[14px] font-medium border',
-      on ? 'bg-[var(--accent)] text-[var(--surface)] border-transparent' : 'bg-[var(--surface)] text-[var(--text-muted)] border-[var(--border)]'
+      on ? `${onCls} text-[var(--surface)] border-transparent` : `bg-[var(--surface)] ${offCls} border-[var(--border)]`
     )}
   >
     {children}
@@ -63,7 +80,7 @@ const Row = ({ h, news }) => {
       <div className="min-w-0">
         <div className="text-[15px] font-semibold text-[var(--text)] break-words">{mf ? h.name || h.symbol : h.symbol}</div>
         <div className="text-[12px] text-[var(--text-muted)] tabular-nums truncate"><span className="private">{formatQuantity(h.quantity)}</span></div>
-        {h.verdict && <div className="text-[12px] font-semibold text-[var(--text)]">{VERDICT_LABEL[h.verdict] || h.verdict}</div>}
+        {h.verdict && <VerdictPill v={h.verdict} />}
       </div>
       <Cell top={h.last_price != null ? inr(h.last_price) : '—'} sub={day != null ? pct(day, { sign: true }) : '—'} subCls={toneText(tone(day))} />
       <div className="private">
@@ -80,8 +97,9 @@ const Row = ({ h, news }) => {
       {why !== MARKET_WHY && <div className="col-span-4 text-[12px] text-[var(--text-muted)] truncate -mt-1">{why}</div>}
     </>
   );
-  const cls = `${COLS} gap-y-1 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0`;
-  return mf ? <div className={cls}>{body}</div> : <Link to={stockPath(h.symbol)} className={`${cls} active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{body}</Link>;
+  const stripe = VERDICT[h.verdict]?.stripe || 'border-l-transparent';
+  const cls = `${COLS} gap-y-1 min-h-14 py-2 pl-2 border-l-[3px] ${stripe} border-b border-b-[var(--border)] last:border-b-0`;
+  return mf ? <div className={cls}>{body}</div> : <Link to={stockPath(h.symbol)} className={`${cls} transition-colors hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{body}</Link>;
 };
 
 const HoldingsTab = () => {
@@ -92,6 +110,7 @@ const HoldingsTab = () => {
   const [importing, setImporting] = useState(false);
   const [reading, setReading] = useState(null);
   const [needsOnly, setNeedsOnly] = useState(false);
+  const [verdict, setVerdict] = useState(null);
   const [needs, setNeeds] = useState(() => new Set());
   const plan = params.get('plan') === '1';
 
@@ -101,9 +120,10 @@ const HoldingsTab = () => {
 
   const all = useMemo(() => snapshot?.holdings || [], [snapshot]);
   const { news } = useSymbolNews(all.filter((r) => r.kind === 'STOCK').map((r) => r.symbol));
+  const counts = useMemo(() => all.reduce((m, r) => (r.verdict ? { ...m, [r.verdict]: (m[r.verdict] || 0) + 1 } : m), {}), [all]);
   const rows = useMemo(
-    () => sortHoldings(all.filter((r) => !needsOnly || needs.has(r.symbol)).map((r) => ({ ...r, day_pct: dayFraction(r) })), sort),
-    [all, needs, needsOnly, sort]
+    () => sortHoldings(all.filter((r) => (!needsOnly || needs.has(r.symbol)) && (!verdict || r.verdict === verdict)).map((r) => ({ ...r, day_pct: dayFraction(r) })), sort),
+    [all, needs, needsOnly, sort, verdict]
   );
 
   // Before the first daily review there is no snapshot (GET /portfolio is 404): read it now.
@@ -148,6 +168,18 @@ const HoldingsTab = () => {
               {SORTS.map(([id, label]) => <Chip key={id} on={sort === id} onClick={() => setSort(id)}>{label}</Chip>)}
               <Chip on={needsOnly} onClick={() => setNeedsOnly((v) => !v)}>Needs you</Chip>
             </div>
+            {Object.keys(counts).length > 0 && (
+              <div className="flex gap-2 mb-2 overflow-x-auto" role="group" aria-label="Show verdict">
+                {VERDICT_ORDER.filter((v) => counts[v]).map((v) => {
+                  const { label, Icon, on, pill } = VERDICT[v];
+                  return (
+                    <Chip key={v} on={verdict === v} onCls={on} offCls={pill.split(' ')[1]} onClick={() => setVerdict((cur) => (cur === v ? null : v))}>
+                      <span className="inline-flex items-center gap-1"><Icon className="w-3.5 h-3.5" aria-hidden="true" />{label} · {counts[v]}</span>
+                    </Chip>
+                  );
+                })}
+              </div>
+            )}
             {rows.length === 0 ? (
               <Empty title="Nothing matches" body="Clear the filter to see the rest." />
             ) : (

@@ -64,5 +64,6 @@ test('a failed holdings load shows ErrorLine + Retry, not the empty state', () =
 test('holdings rows never truncate the ticker or the verdict', () => {
   assert.doesNotMatch(holdings, /font-semibold text-\[var\(--text\)\] truncate/);
   assert.match(holdings, /minmax\(0,1\.5fr\)/);
-  assert.match(holdings, /\{h\.verdict && <div[^>]*>\{VERDICT_LABEL/);
+  assert.match(holdings, /\{h\.verdict && <VerdictPill v=\{h\.verdict\} \/>\}/);
+  assert.doesNotMatch(holdings, /VerdictPill[^\n]*truncate/);
 });
