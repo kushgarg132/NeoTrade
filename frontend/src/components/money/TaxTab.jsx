@@ -10,6 +10,8 @@ import { inr, tone } from '../ui/format';
 import api, { endpoints } from '../../utils/api';
 import { formatQuantity } from '../../utils/formatters';
 import { taxYears } from '../../utils/mine';
+import useSymbolNews from '../../hooks/useSymbolNews';
+import { lossCause } from '../../utils/news';
 
 const EXEMPTION = 125000;
 const fyLabel = (fy) => `FY ${fy}-${String((fy + 1) % 100).padStart(2, '0')}`;
@@ -21,12 +23,24 @@ const day = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', mon
 const Note = ({ children }) => <p className="text-[13px] text-[var(--text-muted)] mt-2">{children}</p>;
 const None = ({ text }) => <p className="text-[14px] text-[var(--text-muted)]">{text}</p>;
 
+/** A loss-harvest line: size of the loss, then whether fresh bad news is behind it (lossCause). */
+const LossSub = ({ h, entry }) => {
+  const cause = lossCause(entry);
+  return (
+    <>
+      <span className="block truncate">{`${formatQuantity(h.qty)} · loss ${inr(h.loss)}`}</span>
+      <span className={`block truncate ${cause.news ? 'text-[var(--loss)]' : ''}`} title={cause.text}>{cause.text}</span>
+    </>
+  );
+};
+
 /** Tax estimate for a financial year: GET /mine/tax. */
 const TaxTab = ({ onImport }) => {
   const [fy, setFy] = useState(() => taxYears(currentFy())[0]);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const { news } = useSymbolNews((data?.harvest?.loss || []).map((h) => h.symbol));
 
   const load = useCallback(() => {
     api
@@ -122,8 +136,12 @@ const TaxTab = ({ onImport }) => {
         <Card title="Before 31 March">
           <p className="text-[13px] font-semibold text-[var(--text-muted)] mb-1">Loss harvest</p>
           {harvest.loss.length === 0 ? <None text="No holdings at a loss." /> : harvest.loss.map((h) => (
-            <ListRow key={h.symbol} chevron={false} title={h.symbol} sub={`${formatQuantity(h.qty)} · loss ${inr(h.loss)}`} right={`saves ${inr(h.saving)}`} rightTone="gain" />
+            <ListRow
+              key={h.symbol} chevron={false} title={h.symbol} right={`saves ${inr(h.saving)}`} rightTone="gain"
+              sub={<LossSub h={h} entry={news[h.symbol.toUpperCase()]} />}
+            />
           ))}
+          {harvest.loss.length > 0 && <Note>Whether material bad news in the last 72 hours is behind the loss. Context only.</Note>}
           <p className="text-[13px] font-semibold text-[var(--text-muted)] mt-4 mb-1">Gain harvest</p>
           {harvest.gain.length === 0 ? <None text="No long-term gains fit the unused exemption." /> : harvest.gain.map((h) => (
             <ListRow key={h.symbol} chevron={false} title={h.symbol} sub={`sell ${formatQuantity(h.qty)} to book ${inr(h.gain)} tax-free, then rebuy`} />

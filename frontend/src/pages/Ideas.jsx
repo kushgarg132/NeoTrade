@@ -14,6 +14,7 @@ import { useLoad } from '../components/ideas/useLoad';
 import { useAuth } from '../context/AuthContext';
 import api, { endpoints } from '../utils/api';
 import { fetchIdeas } from '../hooks/useNeedCount';
+import useSymbolNews, { useSymbolResults } from '../hooks/useSymbolNews';
 import { noPickText, splitByEvidence } from '../utils/ideas';
 
 /** Ideas: what needs you on your holdings first, then new ideas (your suggestions, plus Picks for admins). */
@@ -23,6 +24,11 @@ const Ideas = () => {
   const fresh = useLoad(useCallback(() => fetchIdeas(isAdmin), [isAdmin]));
   const [showUnproven, setShowUnproven] = useState(false);
   const { proven, unproven } = splitByEvidence(fresh.data?.items || []);
+  // One news and one results request for every idea on the page, never per row.
+  const symbols = (fresh.data?.items || []).map((i) => i.symbol);
+  const { news } = useSymbolNews(symbols);
+  const results = useSymbolResults(symbols);
+  const row = (i) => <IdeaRow key={i.id} idea={i} onDone={fresh.reload} news={news} results={results} />;
 
   return (
     <Layout>
@@ -42,14 +48,14 @@ const Ideas = () => {
             ) : (
               <>
                 {proven.length === 0 && <p className="py-3 text-[14px] text-[var(--text-muted)]">No proven setup has fired right now. The ones below have no edge over the average stock so far.</p>}
-                {proven.map((i) => <IdeaRow key={i.id} idea={i} onDone={fresh.reload} />)}
+                {proven.map(row)}
                 {unproven.length > 0 && (
                   <>
                     <button type="button" aria-expanded={showUnproven} onClick={() => setShowUnproven((v) => !v)}
                       className="mt-2 min-h-11 w-full text-left text-[14px] font-semibold text-[var(--text-muted)]">
                       {showUnproven ? 'Hide' : 'Show'} {unproven.length} unproven idea{unproven.length > 1 ? 's' : ''} (grade C: no edge yet)
                     </button>
-                    {showUnproven && <div className="opacity-80">{unproven.map((i) => <IdeaRow key={i.id} idea={i} onDone={fresh.reload} />)}</div>}
+                    {showUnproven && <div className="opacity-80">{unproven.map(row)}</div>}
                   </>
                 )}
               </>

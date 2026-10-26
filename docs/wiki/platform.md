@@ -155,6 +155,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/news/feed` | `backend/routers/news.py::news_feed` | user |
 | GET | `/api/v1/news/symbols` | `backend/routers/news.py::symbol_news` | user |
 | GET | `/api/v1/news/symbol/{symbol}?days<=365` | `backend/routers/news.py::symbol_history` | user |
+| GET | `/api/v1/news/results` | `backend/routers/news.py::symbol_results` | user |
 | POST | `/api/v1/agents/quick-analyze/{symbol}` | `backend/routers/agents.py::quick_analyze_stock` | user |
 | GET | `/api/v1/agents/intraday/{symbol}` | `backend/routers/agents.py::intraday_candles` | user |
 | POST | `/api/v1/agents/analyze/{symbol}` | `backend/routers/agents.py::analyze_stock` | user |

@@ -183,6 +183,7 @@ export const endpoints = {
   newsFeed: '/news/feed',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
   newsHistory: (symbol, days = 365) => `/news/symbol/${encodeURIComponent(symbol)}?days=${days}`,
+  newsResults: (symbols) => `/news/results?symbols=${encodeURIComponent(symbols)}`,
   planToday: '/plan/today',
   picks: {
     today: '/picks',

@@ -187,3 +187,25 @@ def test_symbol_history_returns_scored_items_with_this_symbols_impact(monkeypatc
     assert big["direction"] == -0.7 and big["impact"] == 8 and big["material"] is True
     assert tagged["direction"] is None and tagged["material"] is False
     assert client.get("/news/symbol/TCS", params={"days": 400}).status_code == 422
+
+
+def test_symbol_results_gives_the_next_results_date(monkeypatch):
+    import asyncio
+
+    from backend.database import db as database
+    from backend.datalayer.bars import today_ist
+
+    client = _symbols_client(monkeypatch, [], {})
+    today = today_ist()
+
+    def day(n):
+        return (today + timedelta(days=n)).isoformat()
+    asyncio.run(database.db["corporate_events"].insert_many([
+        {"symbol": "TCS", "kind": "results", "date": day(30), "amount": None},
+        {"symbol": "TCS", "kind": "results", "date": day(10), "amount": None},
+        {"symbol": "TCS", "kind": "results", "date": day(-5), "amount": None},
+        {"symbol": "INFY", "kind": "ex_dividend", "date": day(3), "amount": 5.0},
+        {"symbol": "WIPRO", "kind": "results", "date": day(400), "amount": None},
+    ]))
+    assert client.get("/news/results", params={"symbols": "tcs.NS,INFY,WIPRO"}).json() == {"results": {"TCS": day(10)}}
+    assert client.get("/news/results").json() == {"results": {}}
