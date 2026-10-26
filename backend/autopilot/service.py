@@ -142,9 +142,13 @@ async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime, redis
         {"user_id": user_id, "status": {"$in": ["FILLED", "SENT"]}, "side": "BUY", "source": "news",
          "at": {"$gte": day_start}})
     regime = await regime_now(redis)
+    from backend.learning.adapt import load_rules
+
+    paused = frozenset((await load_rules(db, user_id)).paused)
     return fence.FenceState(deployed=deployed, entries_today=entries, held=held, others=others,
                             kill_tripped=tripped, session_ok=in_session(now),
-                            regime=regime.get("label"), event_soon=bool(regime.get("event_soon")), news_today=news)
+                            regime=regime.get("label"), event_soon=bool(regime.get("event_soon")), news_today=news,
+                            paused=paused)
 
 
 def _product(trade: dict) -> str:

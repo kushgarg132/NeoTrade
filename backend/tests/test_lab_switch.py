@@ -90,15 +90,16 @@ async def test_lab_off_skips_the_builder_retune_and_learning(lab_off, monkeypatc
     from backend.learning import adapt, retune
 
     db = AsyncMongoMockClient()["t"]
-    spawn, learn = AsyncMock(), AsyncMock(return_value=["x"])
+    spawn, learn = AsyncMock(), AsyncMock(return_value=[])
     monkeypatch.setattr(draft, "spawn", spawn)
     monkeypatch.setattr(retune, "spawn", spawn)
     monkeypatch.setattr(adapt, "learn", learn)
+    monkeypatch.setattr("backend.portfolio.service._nifty", AsyncMock(return_value=[]))
     await db["paper_trades"].insert_one({"user_id": "alice"})
     assert await draft.start_if_due(db, FRIDAY) is False
     assert await retune.start_if_due(db, FRIDAY) is False
     assert await scheduler._learn(db, FRIDAY) == 0
     spawn.assert_not_called()
-    learn.assert_not_called()
+    assert learn.call_args.kwargs == {"lab": False}  # auto-retire still runs: pause and resume only
     assert await db["retune_runs"].count_documents({}) == 0
     assert lab_off == ["the weekly strategy builder", "the monthly re-tune", "nightly learning"]

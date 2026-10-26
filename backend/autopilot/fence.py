@@ -36,6 +36,7 @@ class FenceState:
     regime: Optional[str] = None   # market:regime label: risk_on / neutral / risk_off
     event_soon: bool = False       # a high-impact economic event within 30 minutes
     news_today: int = 0            # news-triggered entries today
+    paused: frozenset = frozenset()  # strategies auto-retired on paper (learning/adapt.py)
 
 
 def trade_cap(prefs: dict, regime: Optional[str]) -> float:
@@ -79,6 +80,8 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
     strategy = getattr(order, "strategy", None) or ""
     if strategy in PARKED or strategy.startswith("built:"):
         return "strategy parked: no edge (audit 2026-10-24)"
+    if strategy in state.paused:
+        return "strategy paused: losing on paper over 30+ trades"
     notional = price * order.quantity
     if state.kill_tripped:
         return "The daily loss limit was hit: no new entries today."

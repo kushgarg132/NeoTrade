@@ -139,12 +139,12 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 3. It excludes the user profile's `avoid` and `too_dear` (share price > slot, not held). `model.target_book` → `marks` → whole-share orders, sells first. It skips buys of symbols another strategy holds in the ledger. `service.py::fill_on_paper` (CNC sell beyond held → ValueError, logged and skipped).
 4. Saves book + `last_summary`. `summary_text` goes to Telegram.
 
-**6. Nightly learning** (`scheduler.py::_learn`, Lab-gated)
-1. For each `paper_trades.user_id`: `adapt.py::learn(db, user, nifty, now)`.
+**6. Nightly learning** (`scheduler.py::_learn`; Lab off: pause/resume only = auto-retire, P2.6)
+1. For each `paper_trades.user_id`: `adapt.py::learn(db, user, nifty, now, lab=lab_on(...))`. Each `pause` change → Telegram `report.py::pause_text`.
 2. Resume: a paused strategy whose latest `strategy_backtests` row (by `strategy_name`, `run_at`) passed after the pause date → `resume`, `reset_at` = now.
 3. `attribution.py::attribute(_closed_trades(...))` → `adapt.py::decide`: pause (≥30 trades, shrunk < 0 and PF < 1), regime skip, floor step. Saves `learning_state` (+ today's `regime`) and inserts `learning_changes`.
-4. Fridays IST: `report.py::weekly_text` → Telegram (LLM `learning_review` prompt, falls back to plain facts).
-5. The runner reads it with `adapt.py::load_rules` → `LearnedRules.blocks(strategy, strength)` (paused / below floor / regime).
+4. Fridays IST, Lab on: `report.py::weekly_text` → Telegram (LLM `learning_review` prompt, falls back to plain facts).
+5. The runner reads it with `adapt.py::load_rules` → `LearnedRules.blocks(strategy, strength)` (paused / below floor / regime). The autopilot reads `paused` into `FenceState.paused` (`autopilot/service.py::_state`): no new entries, exits untouched. AI paper trades (incl. `picks:<setup>`) fill in the Practice book, so they are judged here too. A paused `picks:*` has no `strategy_backtests` row, so it never auto-resumes.
 
 **7. Monthly re-tune + hypotheses**
 1. Daily pass → `retune.py::start_if_due` (once per month, Lab) → `spawn()` `nice -n 15 python -m backend.learning.retune`.

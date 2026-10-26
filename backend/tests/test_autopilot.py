@@ -3,6 +3,7 @@ refused (logged, never retried), paper first, a one-tap stop on Telegram,
 and it never touches the user's own account."""
 
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
 
@@ -368,8 +369,7 @@ async def test_max_hold_exit_paper_and_autopilot(world):
 async def test_an_autopilot_trade_counts_for_the_strategy_whose_idea_it_was(world):
     # Tagged "autopilot:engine", the paper gate never credited the strategy,
     # so nothing could ever earn real money (Phase 19.C).
-    from dataclasses import replace
-
+    
     from backend.risk.paper_gate import paper_records
 
     db, _ = world
@@ -459,6 +459,14 @@ def test_parked_strategy_entries_are_refused_but_exits_are_not(strategy):
     assert "parked" in fence.check(buy, 100.0, _state(), PREFS)
     sell = AutopilotOrder(symbol="INFY", side=Side.SELL, quantity=1, product="CNC", source="engine", reason="t", strategy=strategy)
     assert fence.check(sell, 100.0, _state(held={"INFY": (1, "CNC")}), PREFS) is None
+
+
+def test_a_paused_strategy_cannot_enter_but_can_exit():
+    paused = _state(paused=frozenset({"picks:pullback"}), held={"INFY": (1, "CNC")})
+    buy = AutopilotOrder(symbol="INFY", side=Side.BUY, quantity=1, product="CNC", source="picks", reason="t",
+                         strategy="picks:pullback")
+    assert "paused" in fence.check(buy, 100.0, paused, PREFS)
+    assert fence.check(replace(buy, side=Side.SELL), 100.0, paused, PREFS) is None
 
 
 async def test_the_autopilot_refuses_a_dip_and_a_re_entry_after_a_stop(world, monkeypatch):

@@ -357,23 +357,27 @@ async def close_expired_option_positions(
 
 async def _learn(db, now: datetime) -> int:
     """Each user with paper trades: judge them by setup and update the rules
-    their next runs follow (backend/learning/adapt.py). Fridays, also send
-    what it learned (backend/learning/report.py)."""
+    their next runs follow (backend/learning/adapt.py), each pause sent to
+    Telegram. With the Lab off only pause and resume run (auto-retire). Fridays,
+    with the Lab on, also send what it learned (backend/learning/report.py)."""
     from backend.learning.adapt import learn
-    from backend.learning.report import weekly_text
+    from backend.learning.report import pause_text, weekly_text
     from backend.portfolio.service import _nifty
     from backend.suggestions.notify import notify
     from backend import app_settings
 
-    if not await app_settings.lab_on("nightly learning", db):
-        return 0
+    lab = await app_settings.lab_on("nightly learning", db)
     users = await db["paper_trades"].distinct("user_id")
     nifty = await _nifty() if users else []
     total = 0
     for user_id in users:
         try:
-            total += len(await learn(db, user_id, nifty, now))
-            if is_last_trading_day_of_week(now.astimezone(IST).date()) and (text := await weekly_text(db, user_id, nifty, now)):
+            changes = await learn(db, user_id, nifty, now, lab=lab)
+            total += len(changes)
+            for change in changes:
+                if change["rule"] == "pause":
+                    await notify(db, user_id, pause_text(change))
+            if lab and is_last_trading_day_of_week(now.astimezone(IST).date()) and (text := await weekly_text(db, user_id, nifty, now)):
                 await notify(db, user_id, text)
         except Exception as exc:
             logger.warning("learning pass failed for %s: %s", user_id, exc)

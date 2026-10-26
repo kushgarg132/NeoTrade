@@ -132,9 +132,10 @@ async def _closed_trades(db, user_id: str, reset_at: dict) -> list[dict]:
     return trades
 
 
-async def learn(db, user_id: str, nifty: list, now: datetime) -> list[dict]:
+async def learn(db, user_id: str, nifty: list, now: datetime, lab: bool = True) -> list[dict]:
     """One nightly pass for one user: resume what earned it, judge the rest,
-    save and log every change. Returns the changes."""
+    save and log every change. Returns the changes. With the Lab off only
+    pause and resume apply (auto-retire, P2.6): floors and regime skips are Lab's."""
     state = await _state(db, user_id)
     changes = []
     for name, since in list(state["paused"].items()):
@@ -147,6 +148,8 @@ async def learn(db, user_id: str, nifty: list, now: datetime) -> list[dict]:
 
     rows = attribute(await _closed_trades(db, user_id, state["reset_at"]), nifty)
     for change in decide(state, rows):
+        if not lab and change["rule"] != "pause":
+            continue
         _apply(state, change, now)
         changes.append(change)
 

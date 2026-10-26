@@ -141,6 +141,17 @@ async def test_learn_pauses_logs_and_is_read_back_as_rules(db):
 
 
 @pytest.mark.asyncio
+async def test_with_the_lab_off_only_the_pause_applies(db):
+    """Auto-retire (P2.6): a losing floor bucket is Lab's, a 30-trade loser is paused anyway."""
+    await _insert(db, [_trade(-100.0, strength=0.5)] * 12 + [_trade(150.0, strength=0.9)] * 12)
+    assert await learn(db, "alice", _nifty(), NOW, lab=False) == []
+    await _insert(db, [_trade(-100.0, strategy="picks:pullback")] * 30)
+    changes = await learn(db, "alice", _nifty(), NOW, lab=False)
+    assert [(c["strategy"], c["rule"]) for c in changes] == [("picks:pullback", "pause")]
+    assert (await load_rules(db, "alice")).floors == {}
+
+
+@pytest.mark.asyncio
 async def test_old_trades_without_context_borrow_it_from_their_suggestion(db):
     trade = {**_trade(-100.0, strength=0.5), "context": None, "suggestion_id": "s1"}
     await _insert(db, [trade] * 12 + [_trade(150.0, strength=0.9)] * 12)
@@ -187,7 +198,15 @@ async def test_the_daily_pass_learns_for_every_user_with_paper_trades(db, monkey
     monkeypatch.setattr(service, "_nifty", nifty)
     await _insert(db, [_trade(-100.0)] * 30)
     await _insert(db, [_trade(-100.0)] * 30, user_id="bob")
+    sent = []
+
+    async def notify(db, user_id, text):
+        sent.append((user_id, text))
+
+    monkeypatch.setattr("backend.suggestions.notify.notify", notify)
     assert await scheduler._learn(db, NOW) == 2
+    assert sorted(u for u, _ in sent) == ["alice", "bob"]
+    assert sent[0][1].startswith("⏸ Paused vwap on paper: 30 trades, net ₹-3,000")
 
 
 @pytest.mark.asyncio
