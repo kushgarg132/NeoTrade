@@ -3,7 +3,7 @@ today's survivors only (plan Phase 3). Each day's universe is the latest
 NSE constituent list published on or before it: Nifty 200 where an archived
 list exists, the CNX/Nifty 100 before 2014 (no 200 list survives from then).
 Lists come from Wayback Machine copies of NSE's own CSVs, symbols moved to
-today's via NSE's symbolchange.csv; see `data/nifty_members.csv`.
+today's via NSE's symbolchange.csv; see `nifty_members.csv`.
 
 Rebuild: python -m backend.forecast.members DIR SYMBOLCHANGE_CSV
 (DIR holds <index>_<wayback timestamp>.csv files)."""
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
-MEMBERS_FILE = Path(__file__).with_name("data") / "nifty_members.csv"
+MEMBERS_FILE = Path(__file__).with_name("nifty_members.csv")
 # Before the first archived Nifty 200 list only Nifty 100 lists exist.
 PREFER = ("n200", "cnx200")
 FALLBACK = ("cnx100",)
@@ -98,7 +98,6 @@ def build(folder: Path, changes: Path) -> list[tuple[date, str]]:
 
 if __name__ == "__main__":
     out = build(Path(sys.argv[1]), Path(sys.argv[2]))
-    MEMBERS_FILE.parent.mkdir(exist_ok=True)
     with MEMBERS_FILE.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["as_of", "symbol"])
