@@ -55,6 +55,7 @@ def test_status_shape(env):
     assert body["jobs"]["daily_pass"]["ok"] is True
     assert body["ai"]["news_calls_today"] == 3
     assert body["news"]["last_24h"]["SCORED"] == 1
+    assert body["news"]["lag"]["new_backlog"] == 0 and body["news"]["lag"]["stalls"] == {}
 
 
 def test_status_block_failure_is_isolated(env, monkeypatch):

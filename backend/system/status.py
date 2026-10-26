@@ -62,10 +62,11 @@ async def _jobs(db, redis) -> dict:
 
 
 async def _news(db, redis) -> dict:
-    from backend.datalayer.news import COLLECTION, NEW, TRIAGED
+    from backend.datalayer.news import COLLECTION, NEW, TRIAGED, lag
 
     items = db[COLLECTION]
-    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(hours=24)
     counts = await items.aggregate([
         {"$match": {"published_at": {"$gte": since}}},
         {"$group": {"_id": "$status", "n": {"$sum": 1}}},
@@ -77,6 +78,8 @@ async def _news(db, redis) -> dict:
         "newest_at": _iso((newest or {}).get("published_at")),
         "unscored": await items.count_documents({"status": {"$in": [NEW, TRIAGED]}}),
         "last_material": material and {"title": material["title"], "at": _iso(material.get("published_at"))},
+        # Pipeline lag and the stall conditions the in-session Telegram alert fires on.
+        "lag": await lag(db, now),
     }
 
 
