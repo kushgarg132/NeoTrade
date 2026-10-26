@@ -364,8 +364,9 @@ reaches Telegram, digests or chat.
   forward track record, for admins only: `picks.py::enter` buys the last session's picks at the
   first long-term pass after the open (09:20), best first, each sized to the per-trade cap in force,
   through `autopilot/service.py::submit` (fence, kill switch, max invested, trades a day), CNC, long
-  only; `picks.py::exit_due` sells from 15:15 on the pick's `due_date` (the close of its horizon),
-  exits never blocked. Each trade carries `strategy="picks:<setup>"`, `via="autopilot:picks"` and
+  only; `picks.py::exit_due` sells at the pick's stop or target (its `forecast/picks.py::levels`,
+  moved to the fill by `suggestions/exits.py::anchored`), checked every 15 minutes, else from 15:15
+  on its `due_date` (the close of its horizon); exits never blocked. Each trade carries `strategy="picks:<setup>"`, `via="autopilot:picks"` and
   the pick's id in `context`. Nothing goes to Telegram. Paper only until the forward record passes
   `forecast/picks.py::live_refusal` (≥100 scored, calibration within 5 points, positive mean excess
   over NIFTY) and the owner turns on both `picks_live` and the autopilot's Live mode; AI → Autopilot

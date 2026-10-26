@@ -196,3 +196,37 @@ async def test_a_same_day_buy_missing_from_holdings_is_not_closed_as_sold():
         {"user_id": "alice", "at": NOW + timedelta(hours=6), "raw_holdings": []})
     await check_exits(db, "alice", now=NOW + timedelta(hours=7), marks_fn=_marks({"TODAY": 100.0}))
     assert [t["status"] for t in await LedgerStore(db, user_id="alice:mine").get_trades()] == ["OPEN"]
+
+
+def test_levels_keep_their_distance_but_move_to_the_fill():
+    from backend.suggestions.exits import anchored
+
+    # Priced off a ₹100 close with a ₹10 stop distance; filled at ₹106 after a gap up.
+    assert anchored(90.0, 100.0, 106.0) == pytest.approx(96.0)
+    assert anchored(120.0, 100.0, 106.0) == pytest.approx(126.0)
+    # No reference close or no fill (older proposals): the stored level stands.
+    assert anchored(90.0, None, 106.0) == 90.0
+    assert anchored(90.0, 100.0, None) == 90.0
+    assert anchored(None, 100.0, 106.0) is None
+
+
+@pytest.mark.asyncio
+async def test_stop_is_measured_from_the_fill_not_the_proposal_close():
+    db = AsyncMongoMockClient()["test_db"]
+    suggestion = {"id": "s-GAP", "user_id": "alice", "symbol": "GAP", "side": "BUY", "mode": "LONGTERM",
+                  "quantity": 10.0, "entry_ref": 100.0, "stop": 90.0, "target": 120.0, "strategy": "breakout",
+                  "option_contract": None}
+    await db["suggestions"].insert_one(dict(suggestion))
+    # Gapped up: filled near ₹110, so the stop is ~₹100, not ₹90.
+    await execute_suggestion(suggestion, LedgerStore(db, user_id="alice:mine"), price=110.0, now=NOW)
+    await db["portfolio_snapshots"].update_one({"user_id": "alice"}, {"$set": {"at": NOW}, "$push": {
+        "raw_holdings": {"symbol": "GAP", "quantity": 10.0, "broker": "upstox"}}}, upsert=True)
+    [alert] = await check_exits(db, "alice", now=NOW, marks_fn=_marks({"GAP": 99.0}))
+    assert alert["reason"] == "stop"
+    # The target moved up too: ₹125 no longer reaches it.
+    db2 = AsyncMongoMockClient()["test_db2"]
+    await db2["suggestions"].insert_one(dict(suggestion))
+    await execute_suggestion(suggestion, LedgerStore(db2, user_id="alice:mine"), price=110.0, now=NOW)
+    await db2["portfolio_snapshots"].update_one({"user_id": "alice"}, {"$set": {"at": NOW}, "$push": {
+        "raw_holdings": {"symbol": "GAP", "quantity": 10.0, "broker": "upstox"}}}, upsert=True)
+    assert await check_exits(db2, "alice", now=NOW, marks_fn=_marks({"GAP": 125.0})) == []

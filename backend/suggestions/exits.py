@@ -6,7 +6,10 @@ k x the 14-day ATR, from daily_bars, and never falls; kept on the trade as
 `trail_stop`). exit_reasons() applies all of it for this book and the
 autopilot's.
 
-A long-term proposal comes with its stop and target. The autopilot sells
+A long-term proposal comes with its stop and target, priced off its
+reference close (`entry_ref`); they are applied at the same distance from
+the trade's actual fill (`anchored`), so a gap at the open does not leave a
+stop k x ATR from a price nobody paid. The autopilot sells
 its own positions at them (autopilot/service.py::check_exits); on the
 user's own account check_exits() only alerts -- the user places the sell.
 """
@@ -35,6 +38,14 @@ def breach(mark: float, stop: Optional[float], target: Optional[float]) -> Optio
     if target is not None and mark >= target:
         return "target"
     return None
+
+
+def anchored(level: Optional[float], entry_ref: Optional[float], fill: Optional[float]) -> Optional[float]:
+    """A level priced off the proposal's reference close, moved to the fill at the same distance
+    (fill - k x ATR for a stop). Without a reference or a fill the stored level stands."""
+    if level is None or not entry_ref or not fill:
+        return level
+    return level + (fill - entry_ref)
 
 
 def _ist_date(at: datetime) -> date:
@@ -88,7 +99,8 @@ async def exit_reasons(db, trades: list[dict], suggestions: dict, marks: dict, n
         suggestion, mark = suggestions.get(trade["suggestion_id"]), marks.get(trade["symbol"])
         if suggestion is None or mark is None:
             continue
-        stop, trail = suggestion.get("stop"), trade.get("trail_stop")
+        ref, fill = suggestion.get("entry_ref"), trade.get("entry_price")
+        stop, trail = anchored(suggestion.get("stop"), ref, fill), trade.get("trail_stop")
         df = frames.get(trade["symbol"])
         if suggestion.get("trail_atr") and df is not None:
             try:  # one bad trade's trail must not cancel the others' exits
@@ -100,7 +112,7 @@ async def exit_reasons(db, trades: list[dict], suggestions: dict, marks: dict, n
                 logger.exception("exit check: trail for %s failed, keeping %s", trade["symbol"], trail or stop)
         if trail is not None and (stop is None or trail > stop) and mark <= trail:
             reasons[trade["id"]] = "trailing stop"
-        elif why := breach(mark, stop, suggestion.get("target")):
+        elif why := breach(mark, stop, anchored(suggestion.get("target"), ref, fill)):
             reasons[trade["id"]] = why
         elif suggestion.get("max_hold_days") and max_hold_due(trade["entry_at"], now, suggestion["max_hold_days"]):
             reasons[trade["id"]] = "max hold"

@@ -338,7 +338,7 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         from backend.autopilot.service import check_exits as autopilot_exits
         await autopilot_exits(db, redis, user_id, now=now)
         from backend.autopilot import picks as picks_trading
-        try:  # Picks held to the close of their horizon (backend/autopilot/picks.py)
+        try:  # Picks: out at their stop or target, else the close of their horizon (backend/autopilot/picks.py)
             await picks_trading.exit_due(db, redis, user_id, now)
         except Exception as exc:
             logger.exception("picks exits failed for %s: %s", user_id, exc)

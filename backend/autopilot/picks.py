@@ -1,7 +1,9 @@
 """The AI account trades Picks (backend/forecast/picks.py) as their forward
 record (owner decision 2026-10-17): each stored pick is bought at the next
-session's morning pass and sold from 15:15 on its due date (the close of its
-horizon), CNC, long only.
+session's morning pass and sold at its stop or target (its `forecast.picks.levels`,
+moved to the fill by `suggestions.exits.anchored`), else from 15:15 on its due
+date (the close of its horizon), CNC, long only. A trade bought before levels
+were stored keeps the time exit alone.
 
 Every order goes through `service.submit`, so the fence (per-trade cap, max
 invested, trades a day, the switch, Nifty 200) and the kill switch apply and
@@ -20,7 +22,7 @@ from typing import Optional
 from backend.autopilot import fence, service
 from backend.core.models import Side
 from backend.engine.session import IST, is_past_square_off_time
-from backend.forecast.picks import PICKS, STUDY, live_refusal, setup_grades
+from backend.forecast.picks import PICKS, STUDY, levels, live_refusal, setup_grades
 from backend.marks import ORDER_MAX_AGE_SECONDS, mark_prices
 from backend.prefs import PrefsStore
 
@@ -83,10 +85,17 @@ async def enter(db, redis, user_id: str, now: datetime) -> list[dict]:
             reason=f"Pick: {p['label']} (P(up) {p['p_up']:.0%}, {p['horizon']}-day horizon).",
             strategy=f"{PREFIX}{p['setup']}", live=live,
             context={"pick_id": p["_id"], "due_date": p["due_date"], "strength": p["strength"],
-                     "reason_codes": [p["setup"]], "expected_return": (p.get("expected") or {}).get("median")}),
+                     "reason_codes": [p["setup"]], "expected_return": (p.get("expected") or {}).get("median"),
+                     **_levels(p)}),
             now=now, quiet=True)
         results.append({"pick": p["_id"], **result})
     return results
+
+
+def _levels(p: dict) -> dict:
+    """The pick's stop and target, priced off its signal close (`entry_ref`), for exit_due."""
+    lv = levels(p) or {}
+    return {"entry_ref": p.get("entry_ref"), "stop": lv.get("stop"), "target": lv.get("target")} if lv else {}
 
 
 def _due(trade: dict, now: datetime) -> bool:
@@ -95,16 +104,28 @@ def _due(trade: dict, now: datetime) -> bool:
 
 
 async def exit_due(db, redis, user_id: str, now: datetime) -> list[dict]:
-    """Sells each open pick trade at the close of its horizon (from 15:15 on
-    its due date, or at once if that passed). Exits are never admin-gated."""
+    """Sells each open pick trade whose mark crossed its fill-anchored stop or
+    target, or at the close of its horizon (from 15:15 on its due date, or at
+    once if that passed). Exits are never admin-gated."""
+    from backend.suggestions.exits import anchored, breach
+
     trades = [t for t in await service.open_trades(db, user_id)
               if (t.get("strategy") or "").startswith(PREFIX) and (t.get("context") or {}).get("pick_id")
-              and t["side"] == "BUY" and _due(t, now)]
+              and t["side"] == "BUY"]
+    leveled = [t for t in trades if t["context"].get("stop") or t["context"].get("target")]
+    marks = await mark_prices(db, {t["symbol"] for t in leveled}) if leveled else {}
     results = []
     for t in trades:
+        c, mark = t["context"], marks.get(t["symbol"])
+        why = "horizon" if _due(t, now) else mark and breach(
+            mark, anchored(c.get("stop"), c.get("entry_ref"), t.get("entry_price")),
+            anchored(c.get("target"), c.get("entry_ref"), t.get("entry_price")))
+        if not why:
+            continue
+        text = "Pick's horizon is over: sold at the close." if why == "horizon" else f"Pick hit its {why}."
         result = await service.submit(db, redis, user_id, service.AutopilotOrder(
             symbol=t["symbol"], side=Side.SELL, quantity=int(t["quantity"]), product="CNC", source="picks",
-            reason="Pick's horizon is over: sold at the close.", strategy=t["strategy"],
-            live=t["user_id"] == service.ledger_user(user_id)), now=now, quiet=True)
-        results.append({"pick": t["context"]["pick_id"], **result})
+            reason=text, strategy=t["strategy"], live=t["user_id"] == service.ledger_user(user_id)),
+            now=now, quiet=True)
+        results.append({"pick": c["pick_id"], "why": why, **result})
     return results
