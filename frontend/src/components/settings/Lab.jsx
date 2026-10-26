@@ -8,6 +8,7 @@ const LINKS = [
   ['options', 'Options', 'the option chain'],
   ['runs', 'Runs', 'backtest runs'],
   ['forward', 'Forward', 'forward tests'],
+  ['news', 'News accuracy', 'how often scored news pointed the right way'],
   ['handbook', 'Handbook', 'how every part works, with live status'],
   ['backlog', 'Backlog', 'what comes next'],
 ];

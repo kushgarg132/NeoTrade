@@ -181,6 +181,7 @@ export const endpoints = {
   labRuns: { list: '/lab/runs', one: (id) => `/lab/runs/${id}` },
   forward: { scorecard: '/forward/scorecard', records: '/forward/records' },
   newsFeed: '/news/feed',
+  newsAccuracy: '/news/accuracy',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
   planToday: '/plan/today',
   picks: {

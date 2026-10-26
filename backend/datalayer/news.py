@@ -29,6 +29,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ValidationError
 
 from backend.ai.sentiment import weighted_sentiment
+from backend.app_settings import current_llm_model
 from backend.ai.analyst import _extract_json
 from backend.routers.news import _title_key
 from backend.configs.settings import settings
@@ -368,12 +369,14 @@ async def _score_batch(db, docs, names, sector_of, sectors, now) -> None:
         await _failed(db, [d["_id"] for d in docs])
         return
     scored = {s.index: s for s in result.items}
+    # The deep tier's model, so the accuracy report can compare scorers.
+    model = await current_llm_model(tier="deep")
     for i, doc in enumerate(docs):
         s = scored.get(i)
         impacts = valid_impacts(s.impacts, set(names), set(sectors)) if s else []
         await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": {
             "status": SCORED, "impacts": impacts, "event": (s.event if s else "")[:120], "scored_at": now,
-            "material": any(i["impact"] >= MATERIALITY_THRESHOLD for i in impacts)}})
+            "model": model, "material": any(i["impact"] >= MATERIALITY_THRESHOLD for i in impacts)}})
 
 
 async def score(db, names, sector_of, priority: set[str], calls: int, now: Optional[datetime] = None) -> int:

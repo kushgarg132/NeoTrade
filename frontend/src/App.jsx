@@ -6,6 +6,7 @@ const Handbook = lazy(() => import('./pages/Handbook'));
 const Backlog = lazy(() => import('./pages/Backlog'));
 const LabRuns = lazy(() => import('./pages/LabRuns'));
 const LabForward = lazy(() => import('./pages/LabForward'));
+const NewsAccuracy = lazy(() => import('./pages/NewsAccuracy'));
 const Profile = lazy(() => import('./pages/Profile'));
 const SettingsHome = lazy(() => import('./pages/SettingsHome'));
 // The five tabs: their chunks are fetched once the first screen is idle, so a tab switch never waits on one.
@@ -58,7 +59,7 @@ const StockMoved = () => {
 
 const LAB = {
   strategies: <Strategies />, options: <OptionChain />, runs: <LabRuns />,
-  forward: <LabForward />, handbook: <Handbook />, backlog: <Backlog />,
+  forward: <LabForward />, news: <NewsAccuracy />, handbook: <Handbook />, backlog: <Backlog />,
 };
 
 const App = () => {

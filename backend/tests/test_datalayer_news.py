@@ -222,6 +222,7 @@ async def test_scoring_validates_targets_and_flags_material(mongo, monkeypatch):
     assert "IOC (Indian Oil Corporation, Oil Gas & Consumable Fuels)" in calls[0]
     doc = await mongo[news.COLLECTION].find_one()
     assert doc["status"] == news.SCORED and doc["material"] is True and doc["event"] == "Brent spikes"
+    assert doc["model"]  # the scoring model, for the accuracy report
     assert [(i["type"], i["target"]) for i in doc["impacts"]] == [
         ("market", "INDIA"), ("sector", "Oil Gas & Consumable Fuels"), ("symbol", "IOC")]
     assert doc["impacts"][2]["direction"] == -1.0 and doc["impacts"][2]["impact"] == 10.0
