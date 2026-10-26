@@ -199,7 +199,10 @@ const IdeaDetail = () => {
                 <Stat label="Past events" value={idea.pastN} />
                 <Stat label="Out-of-sample vs NIFTY" value={pct(idea.oosExcess, { sign: true })} delta={idea.oosN != null ? `n ${idea.oosN}` : null} />
                 <Stat label="vs the average stock" value={pct(idea.adjExcess, { sign: true })} delta={idea.adjT != null ? `t ${idea.adjT.toFixed(1)}` : null} />
+                {idea.basket && <Stat label="Basket months beating NIFTY" value={pct(idea.basket.beat_nifty, { dp: 0 })} delta={`${idea.basket.months} months`} />}
+                {idea.basket?.years_positive != null && <Stat label="Years ahead of the average stock" value={pct(idea.basket.years_positive, { dp: 0 })} />}
               </div>
+              {idea.basket && <p className="mt-3 text-[13px] text-[var(--text)]">One stock over a few weeks is mostly noise, so its odds stay near a coin flip even when the setup works. Bought together each month, this setup's picks beat NIFTY in {pct(idea.basket.beat_nifty, { dp: 0 })} of months (median {pct(idea.basket.median_vs_nifty, { sign: true, dp: 1 })}). Spread money across its picks rather than betting on one.</p>}
               <p className="mt-3 text-[12px] text-[var(--text-muted)]">Out-of-sample = tested on past data held back from tuning the setup. n = events counted. t-score: above about 2 means the edge is unlikely to be luck.</p>
             </div>
           )}

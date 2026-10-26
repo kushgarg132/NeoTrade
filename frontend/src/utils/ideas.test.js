@@ -39,7 +39,7 @@ test('confidence splits the composite into rule and AI parts', () => {
   assert.equal(ideaFromSuggestion({ ...sug, score: { rule: 0.6, ai: 0.5, final: 0.68 } }).score.rule, 0.6);
 });
 
-import { needCount, groupHoldingActions, olderPickLabel, noPickText } from './ideas.js';
+import { needCount, groupHoldingActions, olderPickLabel, noPickText, splitByEvidence } from './ideas.js';
 
 test('older pick label: weekday, move, days left; nothing for today', () => {
   const old = ideaFromPick({ ...pick, fired_on: '2026-10-19', days_since: 2, days_left: 14, move_since_entry: 0.008, due_date: '2026-11-09' });
@@ -145,4 +145,13 @@ test('holding rows get buttons named for what they are about', () => {
     { label: 'Read news', href: 'https://n' });
   assert.deepEqual(holdingButtons({ kind: 'review_due', symbol: 'X', action: { type: 'stock' } }).primary, { label: 'Review thesis', link: true });
   assert.deepEqual(holdingButtons({ kind: 'something_new', symbol: 'X', action: {} }), { primary: null, later: 'Later', dismiss: 'Dismiss' });
+});
+
+test('splitByEvidence keeps engine ideas and A/B picks up front, grade C picks apart', () => {
+  const { proven, unproven } = splitByEvidence([
+    { id: 's1', kind: 's' }, { id: 'a', kind: 'p', grade: 'A' }, { id: 'b', kind: 'p', grade: 'B' },
+    { id: 'c', kind: 'p', grade: 'C' }, { id: 'n', kind: 'p', grade: null },
+  ]);
+  assert.deepEqual(proven.map((i) => i.id), ['s1', 'a', 'b']);
+  assert.deepEqual(unproven.map((i) => i.id), ['c', 'n']);
 });

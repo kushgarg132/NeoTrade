@@ -69,6 +69,12 @@ export const GRADES = {
   C: { label: 'C · Unproven', kind: 'unproven' },
 };
 
+/** Proven ideas first: engine suggestions and grade A/B picks; grade C picks (no edge so far) are kept apart. */
+export const splitByEvidence = (items) => ({
+  proven: items.filter((i) => i.kind !== 'p' || i.grade === 'A' || i.grade === 'B'),
+  unproven: items.filter((i) => i.kind === 'p' && i.grade !== 'A' && i.grade !== 'B'),
+});
+
 /** Copy for the New ideas card when nothing is served. */
 export const noPickText = (hiddenReason) => ({
   title: 'No picks right now',
@@ -100,6 +106,8 @@ export const ideaFromPick = (p, setup, gradeText = null) => {
     pUp: p.p_up, pBeat: p.p_beat_nifty, pastN: p.n,
     oosExcess: setup?.walk_forward?.oos_excess ?? null, oosN: setup?.walk_forward?.oos_n ?? null,
     adjExcess: setup?.adjusted?.excess ?? null, adjT: setup?.adjusted?.t ?? null,
+    // The setup held as a monthly basket, out of sample (backend/forecast/study.py::basket).
+    basket: setup?.basket?.months ? setup.basket : null,
     grade: p.grade ?? null, gradeText: gradeText?.[p.grade] ?? null,
     missedEntry: p.missed_entry === true, beatsOdds: p.beats_nifty_odds ?? null,
     backfilled: p.backfilled === true, // recomputed after the fact (picks.py::backfill), never in the forward record

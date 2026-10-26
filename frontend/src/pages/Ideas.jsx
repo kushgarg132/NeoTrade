@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
@@ -14,13 +14,15 @@ import { useLoad } from '../components/ideas/useLoad';
 import { useAuth } from '../context/AuthContext';
 import api, { endpoints } from '../utils/api';
 import { fetchIdeas } from '../hooks/useNeedCount';
-import { noPickText } from '../utils/ideas';
+import { noPickText, splitByEvidence } from '../utils/ideas';
 
 /** Ideas: what needs you on your holdings first, then new ideas (your suggestions, plus Picks for admins). */
 const Ideas = () => {
   const isAdmin = useAuth().user?.role === 'admin';
   const acts = useLoad(useCallback(() => api.get(endpoints.mine.actions).then((r) => r.data), []));
   const fresh = useLoad(useCallback(() => fetchIdeas(isAdmin), [isAdmin]));
+  const [showUnproven, setShowUnproven] = useState(false);
+  const { proven, unproven } = splitByEvidence(fresh.data?.items || []);
 
   return (
     <Layout>
@@ -37,7 +39,21 @@ const Ideas = () => {
             : fresh.data.items.length === 0 ? (
               <Empty title={noPickText(fresh.data.hiddenReason).title} body={noPickText(fresh.data.hiddenReason).body}
                 action={<Link to="/ideas/history"><Button variant="secondary">Open history</Button></Link>} />
-            ) : fresh.data.items.map((i) => <IdeaRow key={i.id} idea={i} onDone={fresh.reload} />)}
+            ) : (
+              <>
+                {proven.length === 0 && <p className="py-3 text-[14px] text-[var(--text-muted)]">No proven setup has fired right now. The ones below have no edge over the average stock so far.</p>}
+                {proven.map((i) => <IdeaRow key={i.id} idea={i} onDone={fresh.reload} />)}
+                {unproven.length > 0 && (
+                  <>
+                    <button type="button" aria-expanded={showUnproven} onClick={() => setShowUnproven((v) => !v)}
+                      className="mt-2 min-h-11 w-full text-left text-[14px] font-semibold text-[var(--text-muted)]">
+                      {showUnproven ? 'Hide' : 'Show'} {unproven.length} unproven idea{unproven.length > 1 ? 's' : ''} (grade C: no edge yet)
+                    </button>
+                    {showUnproven && <div className="opacity-80">{unproven.map((i) => <IdeaRow key={i.id} idea={i} onDone={fresh.reload} />)}</div>}
+                  </>
+                )}
+              </>
+            )}
         </Card>
       </div>
     </Layout>

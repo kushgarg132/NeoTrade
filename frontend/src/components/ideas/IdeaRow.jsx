@@ -67,6 +67,14 @@ const IdeaRow = ({ idea, onDone }) => (
           </div>
         )}
         {olderPickLabel(idea) && <div className="text-[12px] text-[var(--text-muted)] tabular-nums">{olderPickLabel(idea)}</div>}
+        {idea.basket && (
+          <div className="text-[12px] tabular-nums">
+            <span className={toneText(idea.basket.beat_nifty >= 0.6 ? 'gain' : 'neutral')}>
+              As a monthly basket: beat NIFTY in {pct(idea.basket.beat_nifty, { dp: 0 })} of months
+            </span>
+            <span className="text-[var(--text-muted)]"> · median {pct(idea.basket.median_vs_nifty, { sign: true, dp: 1 })} vs NIFTY</span>
+          </div>
+        )}
         {idea.kind === 'p' && idea.spread && (
           <div className="text-[12px] text-[var(--text-muted)] tabular-nums">
             Range {pct(idea.spread.p10, { sign: true, dp: 1 })} to {pct(idea.spread.p90, { sign: true, dp: 1 })}{idea.pUp != null ? ` · chance up ${pct(idea.pUp, { dp: 0 })}` : ''}
