@@ -40,3 +40,7 @@ export const whyLine = (h) => {
   const code = (h?.reason_codes || []).find((c) => REASONS[c]);
   return code ? REASONS[code] : MARKET_WHY;
 };
+
+/** A holding type in words. ETFs and funds are a type, never a sector. */
+export const KIND_LABEL = { STOCK: 'Stocks', ETF: 'ETFs', MF: 'Mutual funds' };
+export const kindLabel = (kind) => KIND_LABEL[kind] || kind;

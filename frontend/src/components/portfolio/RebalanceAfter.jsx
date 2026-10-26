@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatPercent } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import { kindLabel } from '../../utils/money';
 
 /** Weight change as "12.0% → 18.0%", the after figure green when it grew, red when it shrank. */
 const Change = ({ now, after }) => {
@@ -30,7 +31,17 @@ const RebalanceAfter = ({ after }) => {
   return (
     <div className="space-y-4">
       <div>
-        <p className="field-label mb-2">Sector mix <span className="doc-meta normal-case">· grey today, colour after</span></p>
+        {after.types?.length > 1 && (
+          <ul className="mb-3 space-y-1">
+            <li className="field-label">By type</li>
+            {after.types.map((t) => (
+              <li key={t.kind} className="flex items-baseline justify-between gap-3 text-sm">
+                <span>{kindLabel(t.kind)}</span><Change now={t.weight_now} after={t.weight_after} />
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="field-label mb-2">Sector mix <span className="doc-meta normal-case">· stocks only · grey today, colour after</span></p>
         <ul className="space-y-2">
           {after.sectors.map((s) => (
             <li key={s.sector}>
@@ -61,7 +72,7 @@ const RebalanceAfter = ({ after }) => {
                     <span className="rounded-full px-1.5 text-[11px] font-semibold bg-[var(--surface-2)] text-[var(--text-muted)]">{r.kind === 'STOCK' ? 'Stock' : r.kind}</span>
                     {t && <span className={cn('text-[11px] font-semibold', t[1])}>{t[0]}</span>}
                   </div>
-                  <div className="doc-meta normal-case truncate">{r.sector}</div>
+                  {r.sector && <div className="doc-meta normal-case truncate">{r.sector}</div>}
                 </div>
                 <Change now={r.weight_now} after={r.weight_after} />
               </li>

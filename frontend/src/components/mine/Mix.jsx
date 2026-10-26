@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sheet } from '../doc/Doc';
 import { formatPercent } from '../../utils/formatters';
+import { kindLabel } from '../../utils/money';
 
 const Line = ({ label, children }) => (
   <div className="flex items-baseline justify-between gap-4 py-1.5">
@@ -21,7 +22,13 @@ const Mix = ({ concentration, count }) => (
         Your {count} holdings are weighted like {concentration.effective_holdings.toFixed(1)} equal ones.
       </p>
     )}
-    <p className="field-label mt-3 mb-2">By sector</p>
+    {concentration.types?.length > 1 && (
+      <>
+        <p className="field-label mt-3 mb-1">By type</p>
+        {concentration.types.map((t) => <Line key={t.kind} label={kindLabel(t.kind)}>{formatPercent(t.pct)}</Line>)}
+      </>
+    )}
+    <p className="field-label mt-3 mb-2">By sector <span className="doc-meta normal-case">· stocks only</span></p>
     <ul className="space-y-1.5">
       {concentration.sectors.map((sector) => (
         <li key={sector.sector}>
