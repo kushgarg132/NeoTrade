@@ -213,7 +213,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
     - `_mine_actions` top 3, plus the total
     - `scoreboard` (admin only)
     - `proposals_total`
-    - `_autopilot` (`capital` = `account_size`, `exposure_cap` = `max_exposure`, `deployed` at entry prices)
+    - `_autopilot` (`capital` = `account_size`, `exposure_cap` = `max_exposure`, `deployed` at entry prices, `lab` = `AppSettingsStore.get_lab_enabled`, `paused` = `learning_state.paused` via `adapt.load_rules`)
     - `_setup` (6 steps)
     - `_backdrop`
 

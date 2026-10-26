@@ -154,15 +154,20 @@ async def _setup(user_id: str, prefs: dict) -> dict:
 async def _autopilot(user_id: str, prefs: dict) -> dict:
     """The AI account's autopilot at a glance: switch, mode, its capital
     (`account_size`, the base its returns and AI-vs-you use), the exposure cap,
-    and capital in use (open positions at entry price -- no market call)."""
+    and capital in use (open positions at entry price -- no market call). `lab`:
+    with it off there is no intraday auto-run, news entry or game plan;
+    `paused`: strategies auto-retired on paper (learning/adapt.py)."""
+    from backend.app_settings import AppSettingsStore
     from backend.autopilot.service import open_trades
+    from backend.learning.adapt import load_rules
 
     deployed = 0.0
     for t in await open_trades(db.db, user_id):
         deployed += (t.get("quantity") or 0) * (t.get("entry_price") or 0)
     return {"enabled": bool(prefs.get("autopilot_enabled")), "live": bool(prefs.get("autopilot_live")),
             "capital": prefs.get("account_size"), "exposure_cap": prefs.get("max_exposure"),
-            "deployed": round(deployed, 2)}
+            "deployed": round(deployed, 2), "lab": await AppSettingsStore(db.db).get_lab_enabled(),
+            "paused": sorted((await load_rules(db.db, user_id)).paused)}
 
 
 async def _backdrop(now: datetime) -> dict:

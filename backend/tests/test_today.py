@@ -124,7 +124,8 @@ def test_autopilot_summary_counts_open_positions_against_capital(monkeypatch):
                          "entry_price": 3000.0, "venue": "paper", "strategy": "macd_crossover"}])
     summary = client.get("/api/v1/today").json()["autopilot"]
     # capital is the book (account_size), not the exposure cap: the AI tile read ₹10 lakh off max_exposure
-    assert summary == {"enabled": True, "live": False, "capital": 25000.0, "exposure_cap": 15000.0, "deployed": 4500.0}
+    assert summary == {"enabled": True, "live": False, "capital": 25000.0, "exposure_cap": 15000.0, "deployed": 4500.0,
+                       "lab": False, "paused": []}
 
 
 def test_you_vs_picks_is_admin_only(monkeypatch):

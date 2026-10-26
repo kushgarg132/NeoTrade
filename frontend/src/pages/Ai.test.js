@@ -42,3 +42,8 @@ test('Paper or Live comes from the data: per Activity row, and the book badge de
   assert.match(ai, /kind=\{ap\?\.live \? 'live' : 'paper'\}/);
   assert.match(ai, /<ErrorLine message="Couldn't load the autopilot status\." onRetry=\{today\.retry\}/);
 });
+
+test('book header says when the Lab is off and which strategies are paused', () => {
+  assert.match(page, /ap\.lab === false[\s\S]*Lab off/);
+  assert.match(page, /ap\?\.paused[\s\S]*Paused on paper/);
+});
