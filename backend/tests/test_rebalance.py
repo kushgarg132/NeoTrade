@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from backend.portfolio.rebalance import (
-    DEFAULT_TARGETS, plan_rebalance, sell_tax, target_gaps, target_weights, universe,
+    DEFAULT_TARGETS, plan_rebalance, plan_tax, sell_tax, target_gaps, target_weights, universe,
 )
 
 
@@ -163,3 +163,14 @@ def test_conviction_caps_and_overrides_still_apply():
                       v("C", 300, "HOLD", sector="Z")])[0]
     w = target_weights(names, {**CONVICTION, "max_stock_pct": 45, "overrides": {"C": 10}}, 1000)
     assert w["C"] == pytest.approx(0.10) and w["A"] == pytest.approx(0.45) and w["B"] == pytest.approx(0.45)
+
+
+def test_plan_tax_nets_a_loss_against_gains():
+    tax = lambda sg, lg, u=0: {"tax": {"short_gain": sg, "long_gain": lg, "unknown_qty": u}}
+    # A 4k short loss eats 4k of the 10k short gain: 20% of 6k.
+    assert plan_tax([tax(10_000, 0), tax(-4_000, 0)])["est_tax"] == 1200
+    # A short loss beyond short gains offsets long gains too: 12.5% of 5k.
+    assert plan_tax([tax(-3_000, 8_000)])["est_tax"] == 625
+    # A long loss never offsets a short gain.
+    t = plan_tax([tax(2_000, 0), tax(0, -9_000, u=3), {"tax": None}])
+    assert t["est_tax"] == 400 and t["long_gain"] == -9_000 and t["undated"] == 1

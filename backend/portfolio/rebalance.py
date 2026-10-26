@@ -113,7 +113,7 @@ def target_gaps(holdings: list[dict], targets: dict) -> tuple[dict[str, float], 
 
 
 MAX_CHARGE_PCT = 1.0  # a trade whose charges exceed this share of its value is not worth making
-from backend.mine.tax import LTCG_RATE, STCG_RATE, is_long  # noqa: E402
+from backend.mine.tax import LTCG_RATE, STCG_RATE, _set_off, is_long  # noqa: E402
 
 
 def charges(side: str, quantity: float, price: float) -> float:
@@ -141,6 +141,18 @@ def sell_tax(quantity: float, price: float, lots: list[tuple], today) -> dict:
     est = None if unknown >= quantity - EPS else STCG_RATE * max(short_gain, 0) + LTCG_RATE * max(long_gain, 0)
     return {"short_gain": round(short_gain, 2), "long_gain": round(long_gain, 2),
             "unknown_qty": unknown, "est_tax": round(est, 2) if est is not None else None}
+
+
+def plan_tax(trades: list[dict]) -> dict:
+    """The whole plan's tax: gains and losses across every sell netted first
+    (a sell at a loss lowers the others' tax), before the FY LTCG exemption."""
+    taxed = [t["tax"] for t in trades if t.get("tax")]
+    short = sum(t["short_gain"] for t in taxed)
+    long = sum(t["long_gain"] for t in taxed)
+    s, lg = _set_off(short, long)
+    return {"short_gain": round(short, 2), "long_gain": round(long, 2),
+            "est_tax": round(STCG_RATE * max(s, 0) + LTCG_RATE * max(lg, 0), 2),
+            "undated": sum(1 for t in taxed if t["unknown_qty"] > 0)}
 
 
 def plan_rebalance(holdings: list[dict], candidates: list[dict], targets: dict, new_money: float,
@@ -213,7 +225,7 @@ def plan_rebalance(holdings: list[dict], candidates: list[dict], targets: dict, 
     # Caps that cannot all be filled (few names, one sector) leave the rest in
     # cash: said out loud, so a rebalance never quietly sells a book to cash.
     uninvested = max(0.0, 1 - sum(weights.values())) * 100 if weights else 0.0
-    return {"total": round(total, 2), "cash_left": round(cash - spent, 2), "trades": trades,
+    return {"total": round(total, 2), "cash_left": round(cash - spent, 2), "trades": trades, "tax": plan_tax(sells),
             "skipped": skipped, "excluded": excluded, "uninvested_pct": round(uninvested, 2)}
 
 
