@@ -42,12 +42,20 @@ logger = logging.getLogger(__name__)
 
 COLLECTION = "news_items"
 NEW, TRIAGED, SCORED, IRRELEVANT, FAILED, STALE = "NEW", "TRIAGED", "SCORED", "IRRELEVANT", "FAILED", "STALE"
+DEAD = "DEAD"  # FAILED after every retry: never tried again
 SCOPES = ("COMPANY", "SECTOR", "MARKET", "MACRO", "GLOBAL")
 MARKET_TARGET = "INDIA"
 
 IRRELEVANT_TTL = timedelta(days=7)
 RELEVANT_TTL = timedelta(days=730)  # kept as learning data (news -> price outcomes)
 MAX_ATTEMPTS = 3
+# A FAILED item goes back to its queue once per wait (since its last
+# failure), behind fresh items; after the last one it is DEAD. A capped
+# number per pass, so a pile of failures never eats a day's budget at once.
+RETRY_AFTER = (timedelta(hours=1), timedelta(hours=6), timedelta(hours=24))
+RETRIES_PER_PASS = 20
+# Stall alert (admin Telegram), in near_session only, once per condition per STALL_ALERT_TTL.
+STALL_AFTER, STALL_BACKLOG, STALL_ALERT_TTL = timedelta(minutes=30), 500, 2 * 3600
 # LLM calls are the cost, so each pass makes at most one call per stage
 # over everything that piled up since the last pass: news reaches the
 # scores within ~PROCESS_SECONDS instead of seconds, for ~2 calls a pass.
@@ -263,10 +271,30 @@ async def _ask(prompt: str, complete, model, **values):
     return None
 
 
-async def _failed(db, ids: list[str]) -> None:
+async def _failed(db, ids: list[str], now: datetime) -> None:
     await db[COLLECTION].update_many({"_id": {"$in": ids}}, {"$inc": {"attempts": 1}})
     await db[COLLECTION].update_many({"_id": {"$in": ids}, "attempts": {"$gte": MAX_ATTEMPTS}},
-                                     {"$set": {"status": FAILED}})
+                                     {"$set": {"status": FAILED, "failed_at": now}})
+
+
+async def retry_failed(db, now: datetime) -> int:
+    """Requeues FAILED items whose next retry is due (one more attempt each,
+    back to the stage that failed); too old to score is STALE, out of
+    retries is DEAD. Returns how many were requeued."""
+    coll = db[COLLECTION]
+    await coll.update_many({"status": FAILED, "published_at": {"$lt": now - SCORE_MAX_AGE}},
+                           {"$set": {"status": STALE}})
+    await coll.update_many({"status": FAILED, "retries": {"$gte": len(RETRY_AFTER)}}, {"$set": {"status": DEAD}})
+    # Rows failed before failed_at existed start the schedule now.
+    await coll.update_many({"status": FAILED, "failed_at": {"$exists": False}}, {"$set": {"failed_at": now}})
+    due = [{"retries": n or None, "failed_at": {"$lte": now - wait}} for n, wait in enumerate(RETRY_AFTER)]
+    docs = await coll.find({"status": FAILED, "$or": due}, {"triaged_at": 1}).sort("failed_at", 1).limit(
+        RETRIES_PER_PASS).to_list(length=None)
+    for doc in docs:
+        await coll.update_one({"_id": doc["_id"]}, {
+            "$set": {"status": TRIAGED if doc.get("triaged_at") else NEW, "attempts": MAX_ATTEMPTS - 1},
+            "$inc": {"retries": 1}})
+    return len(docs)
 
 
 async def _triage_batch(db, docs: list[dict], now: datetime) -> None:
@@ -275,7 +303,7 @@ async def _triage_batch(db, docs: list[dict], now: datetime) -> None:
     if result is _OUTAGE:
         return
     if result is None:
-        await _failed(db, [d["_id"] for d in docs])
+        await _failed(db, [d["_id"] for d in docs], now)
         return
     kept = {t.index: t for t in result.items}
     for i, doc in enumerate(docs):
@@ -291,7 +319,9 @@ async def _triage_batch(db, docs: list[dict], now: datetime) -> None:
 
 async def triage(db, now: Optional[datetime] = None, calls: int = TRIAGE_CALLS_PER_PASS) -> int:
     now = now or datetime.now(timezone.utc)
-    docs = await db[COLLECTION].find({"status": NEW}).sort("fetched_at", 1).limit(
+    await retry_failed(db, now)
+    # Retried items (retries set) after fresh ones; a missing field sorts first.
+    docs = await db[COLLECTION].find({"status": NEW}).sort([("retries", 1), ("fetched_at", 1)]).limit(
         TRIAGE_BATCH * calls).to_list(length=None)
     batches = [docs[i:i + TRIAGE_BATCH] for i in range(0, len(docs), TRIAGE_BATCH)]
     await asyncio.gather(*(_triage_batch(db, b, now) for b in batches))
@@ -365,7 +395,7 @@ async def _score_batch(db, docs, names, sector_of, sectors, now) -> None:
     if result is _OUTAGE:
         return
     if result is None:
-        await _failed(db, [d["_id"] for d in docs])
+        await _failed(db, [d["_id"] for d in docs], now)
         return
     scored = {s.index: s for s in result.items}
     for i, doc in enumerate(docs):
@@ -378,12 +408,13 @@ async def _score_batch(db, docs, names, sector_of, sectors, now) -> None:
 
 async def score(db, names, sector_of, priority: set[str], calls: int, now: Optional[datetime] = None) -> int:
     """Scores up to `calls` batches, held/watched names first, then market,
-    macro and global news, then the rest; newest first within each."""
+    macro and global news, then the rest; newest first within each; retried
+    items after every fresh one."""
     now = now or datetime.now(timezone.utc)
     await db[COLLECTION].update_many({"status": TRIAGED, "published_at": {"$lt": now - SCORE_MAX_AGE}},
                                      {"$set": {"status": STALE}})
     docs = await db[COLLECTION].find({"status": TRIAGED}).sort("published_at", -1).limit(500).to_list(length=None)
-    docs.sort(key=lambda d: (0 if priority & set(d.get("symbols", [])) else
+    docs.sort(key=lambda d: (bool(d.get("retries")), 0 if priority & set(d.get("symbols", [])) else
                              1 if d.get("scope") in ("MARKET", "MACRO", "GLOBAL") else 2))
     docs = docs[:SCORE_BATCH * calls]
     sectors = news_sources.sectors()
@@ -489,6 +520,58 @@ async def _score_due(db, priority: set[str], now: datetime) -> bool:
         or await db[COLLECTION].count_documents({**pending, "triaged_at": {"$lte": now - SCORE_HOLD}}, limit=1))
 
 
+def _minutes(now: datetime, at: Optional[datetime]) -> Optional[int]:
+    if at is None:
+        return None
+    return int((now - (at if at.tzinfo else at.replace(tzinfo=timezone.utc))) / timedelta(minutes=1))
+
+
+async def lag(db, now: datetime) -> dict:
+    """How far the pipeline is behind, and which stall conditions hold
+    (`stalls`: {condition: text}). Retried items are excluded: they wait on purpose."""
+    coll = db[COLLECTION]
+    fresh_new, fresh_triaged = {"status": NEW, "retries": None}, {"status": TRIAGED, "retries": None}
+    oldest_new = await coll.find_one(fresh_new, {"fetched_at": 1}, sort=[("fetched_at", 1)])
+    oldest_triaged = await coll.find_one(fresh_triaged, {"triaged_at": 1}, sort=[("triaged_at", 1)])
+    # Anything scored was published (so fetched) within SCORE_MAX_AGE: keeps the sort to a few days of rows.
+    last = await coll.find_one({"status": SCORED, "fetched_at": {"$gte": now - SCORE_MAX_AGE - STALL_AFTER}},
+                               {"scored_at": 1}, sort=[("scored_at", -1)])
+    out = {
+        "new_backlog": await coll.count_documents(fresh_new),
+        "oldest_new_minutes": _minutes(now, (oldest_new or {}).get("fetched_at")),
+        "triaged_waiting": await coll.count_documents(fresh_triaged),
+        "oldest_triaged_minutes": _minutes(now, (oldest_triaged or {}).get("triaged_at")),
+        "last_scored_minutes": _minutes(now, (last or {}).get("scored_at")),
+        "failed": await coll.count_documents({"status": FAILED}),
+        "dead": await coll.count_documents({"status": DEAD}),
+    }
+    limit = STALL_AFTER // timedelta(minutes=1)
+    waited = max(out["oldest_new_minutes"] or 0, out["oldest_triaged_minutes"] or 0)
+    stalls = {}
+    if (out["oldest_new_minutes"] or 0) > limit:
+        stalls["triage"] = f"News triage behind: oldest NEW item waited {out['oldest_new_minutes']} min"
+    if out["new_backlog"] > STALL_BACKLOG:
+        stalls["backlog"] = f"News backlog: {out['new_backlog']} NEW items waiting for triage"
+    # An item has waited past the limit, so a quiet half hour with nothing to score is not a stall.
+    if waited > limit and (out["last_scored_minutes"] is None or out["last_scored_minutes"] > limit):
+        last_text = "none in the last 3 days" if out["last_scored_minutes"] is None else f"{out['last_scored_minutes']} min ago"
+        stalls["score"] = f"News scoring stalled: last item scored {last_text}, items waiting {waited} min"
+    return {**out, "stalls": stalls}
+
+
+async def stall_alert(db, redis, now: datetime) -> list[str]:
+    """Sends the admins one Telegram per stall condition per STALL_ALERT_TTL
+    (the 2026-10-20..23 triage stall went unnoticed). Returns what was sent."""
+    from backend.system.data_quality import _send_admins
+
+    stalls = (await lag(db, now))["stalls"]
+    sent = [text for key, text in stalls.items()
+            if await redis.set(f"news:stall_alert:{key}", "1", nx=True, ex=STALL_ALERT_TTL)]
+    if sent:
+        await _send_admins(db, "⚠️ NeoTrade news pipeline\n" + "\n".join(f"• {t}" for t in sent))
+    return sent
+
+
 async def process_loop(db, redis) -> None:
     global _last_aggregate, _last_llm_pass
     from backend.engine.autorun import near_session
@@ -500,7 +583,8 @@ async def process_loop(db, redis) -> None:
     from backend.app_settings import feature_enabled
 
     # Switched off (Phase 17.4.2): no triage or scoring; items wait, then go STALE.
-    if (active or time.time() - _last_llm_pass >= OFF_PROCESS_SECONDS) and await feature_enabled("news", db):
+    enabled = await feature_enabled("news", db)
+    if (active or time.time() - _last_llm_pass >= OFF_PROCESS_SECONDS) and enabled:
         _last_llm_pass = time.time()
         triaged = await triage(db, calls=TRIAGE_CALLS_PER_PASS if active else OFF_TRIAGE_CALLS)
         priority = await priority_symbols(db)
@@ -513,3 +597,9 @@ async def process_loop(db, redis) -> None:
         _last_aggregate = time.time()
     if triaged or scored:
         logger.info("ingest news: triaged %d, scored %d", triaged, scored)
+    # Off session the pass is hourly by design; switched off, waiting is intended.
+    if active and enabled and redis is not None:
+        try:
+            await stall_alert(db, redis, datetime.now(timezone.utc))
+        except Exception as exc:
+            logger.exception("news stall check failed: %s", exc)

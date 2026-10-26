@@ -413,3 +413,114 @@ def test_rss_dates_without_a_zone_are_ist_and_never_in_the_future():
     first, second = news_sources.parse_rss(xml, "rbi", "MACRO")
     assert first["published_at"] == hour_ago_ist.astimezone(timezone.utc)
     assert second["published_at"] <= datetime.now(timezone.utc)
+
+
+async def _garbage(system, user):
+    return "not json"
+
+
+async def test_failed_items_retry_on_schedule_then_die(mongo, monkeypatch):
+    monkeypatch.setattr(news, "_fast", _garbage)
+    await news.store(mongo, [_item("Fed signals hike")], [], now=NOW)
+    coll = mongo[news.COLLECTION]
+    for _ in range(news.MAX_ATTEMPTS):
+        await news.triage(mongo, now=NOW)
+    assert (await coll.find_one())["failed_at"] == NOW
+
+    at = NOW
+    for n, wait in enumerate(news.RETRY_AFTER, 1):
+        assert await news.retry_failed(mongo, at + wait - timedelta(minutes=1)) == 0   # not due yet
+        at += wait
+        await news.triage(mongo, now=at)                  # requeued for one attempt, fails again
+        doc = await coll.find_one()
+        assert (doc["status"], doc["retries"], doc["failed_at"]) == (news.FAILED, n, at)
+    assert await news.retry_failed(mongo, at + timedelta(days=1)) == 0
+    assert (await coll.find_one())["status"] == news.DEAD
+    assert await news.retry_failed(mongo, at + timedelta(days=1)) == 0
+
+
+async def test_a_score_failure_retries_into_scoring_behind_fresh_items(mongo, monkeypatch):
+    coll = mongo[news.COLLECTION]
+    await coll.insert_many([
+        {"_id": "old", "title": "Retried story", "status": news.FAILED, "triaged_at": NOW, "symbols": ["TCS"],
+         "scope": "COMPANY", "scope_hint": "COMPANY", "published_at": NOW, "failed_at": NOW},
+        {"_id": "new", "title": "Fresh story", "status": news.TRIAGED, "triaged_at": NOW, "symbols": [],
+         "scope": "OTHER", "scope_hint": "MARKET", "published_at": NOW - timedelta(hours=1)},
+    ])
+    later = NOW + news.RETRY_AFTER[0]
+    assert await news.retry_failed(mongo, later) == 1
+    doc = await coll.find_one({"_id": "old"})
+    assert (doc["status"], doc["attempts"], doc["retries"]) == (news.TRIAGED, news.MAX_ATTEMPTS - 1, 1)
+    calls = _llm(monkeypatch, {"items": []})
+    await news.score(mongo, NAMES, SECTOR_OF, {"TCS"}, calls=1, now=later)
+    assert calls[0].index("Fresh story") < calls[0].index("Retried story")  # behind fresh, even a held name
+
+
+async def test_legacy_failed_rows_retry_from_now_capped_per_pass(mongo):
+    coll = mongo[news.COLLECTION]
+    await coll.insert_many([{"_id": str(i), "status": news.FAILED, "published_at": NOW}
+                            for i in range(news.RETRIES_PER_PASS + 5)]
+                           + [{"_id": "old", "status": news.FAILED, "published_at": NOW - timedelta(days=5)}])
+    assert await news.retry_failed(mongo, NOW) == 0                     # the schedule starts now
+    assert (await coll.find_one({"_id": "old"}))["status"] == news.STALE
+    later = NOW + news.RETRY_AFTER[0]
+    assert await news.retry_failed(mongo, later) == news.RETRIES_PER_PASS
+    assert await coll.count_documents({"status": news.NEW}) == news.RETRIES_PER_PASS
+    assert await news.retry_failed(mongo, later) == 5                   # the rest on the next pass
+
+
+async def test_stall_alert_fires_once_per_condition_per_two_hours(mongo, monkeypatch):
+    sent = []
+
+    async def send(db, text):
+        sent.append(text)
+
+    monkeypatch.setattr("backend.system.data_quality._send_admins", send)
+    redis = FakeRedis()
+    coll = mongo[news.COLLECTION]
+    await coll.insert_one({"_id": "a", "status": news.NEW, "fetched_at": NOW - timedelta(minutes=10)})
+    await coll.insert_one({"_id": "s", "status": news.SCORED, "fetched_at": NOW, "scored_at": NOW - timedelta(minutes=5)})
+    assert await news.stall_alert(mongo, redis, NOW) == [] and sent == []       # healthy
+
+    await coll.update_one({"_id": "a"}, {"$set": {"fetched_at": NOW - timedelta(minutes=45)}})
+    await coll.insert_one({"_id": "r", "status": news.NEW, "retries": 1, "fetched_at": NOW - timedelta(days=2)})
+    lag = await news.lag(mongo, NOW)
+    assert (lag["oldest_new_minutes"], lag["new_backlog"]) == (45, 1)            # retried items wait on purpose
+    assert set(lag["stalls"]) == {"triage"}
+    await coll.update_one({"_id": "s"}, {"$set": {"scored_at": NOW - timedelta(minutes=40)}})
+    assert len(await news.stall_alert(mongo, redis, NOW)) == 2 and len(sent) == 1
+    assert "triage" in sent[0] and "scoring stalled" in sent[0]
+    assert await news.stall_alert(mongo, redis, NOW) == [] and len(sent) == 1   # within 2h: quiet
+    redis.data.pop("news:stall_alert:triage")                                   # its TTL ran out
+    assert len(await news.stall_alert(mongo, redis, NOW)) == 1
+
+
+async def test_stall_alert_runs_in_session_only(monkeypatch):
+    checked = []
+
+    async def followed(db):
+        return {}, {}
+
+    async def stall(db, redis, now):
+        checked.append(now)
+
+    async def enabled(feature, db=None):
+        return True
+
+    async def nothing(*a, **kw):
+        return 0
+
+    monkeypatch.setattr(news, "followed", followed)
+    monkeypatch.setattr(news, "stall_alert", stall)
+    monkeypatch.setattr(news, "triage", nothing)
+    monkeypatch.setattr(news, "priority_symbols", lambda db: _async(set()))
+    monkeypatch.setattr(news, "_score_due", nothing)
+    monkeypatch.setattr(news, "_last_aggregate", float("inf"))
+    monkeypatch.setattr(news, "_last_llm_pass", float("inf"))
+    monkeypatch.setattr("backend.app_settings.feature_enabled", enabled)
+    monkeypatch.setattr("backend.engine.autorun.near_session", lambda now: False)
+    await news.process_loop({}, FakeRedis())
+    assert checked == []                                                        # off session: no alert
+    monkeypatch.setattr("backend.engine.autorun.near_session", lambda now: True)
+    await news.process_loop({}, FakeRedis())
+    assert len(checked) == 1
