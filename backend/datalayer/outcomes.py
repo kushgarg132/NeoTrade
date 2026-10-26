@@ -17,6 +17,15 @@ from the quote and macro caches the ingest worker already fills: no fetches.
 The snapshot is taken when the item is scored, minutes after it is published,
 so a fast reaction may already be in the base price; the +1h horizon is the
 noisiest for it.
+
+Rows recorded since N0.2 also carry the price the news met before anyone
+reacted: `pre_base` / `pre_bench`, the last daily close at or before
+publication; `moved_before`, the excess move from there to the scoring-time
+snapshot ("already reacted"); `pre_move_{h}`, the excess move measured from
+the pre-publication close; for symbol targets `sector_pre_base` (its sector's
+other members) and `sector_move_{h}`, the target's return minus that peer
+basket's, both from the pre-publication close; and a `20d` horizon read from
+daily closes. `weights` still reads `move_1d` only.
 """
 
 import json
@@ -35,6 +44,8 @@ logger = logging.getLogger(__name__)
 
 COLLECTION = "news_outcomes"
 HORIZONS = {"1h": timedelta(hours=1), "1d": timedelta(days=1), "5d": timedelta(days=5)}
+LONG_H, LONG = "20d", timedelta(days=20)  # read from daily closes, so it can catch up
+SETTLE = timedelta(days=1)  # the horizon day's bar is stored after 15:45 IST
 GRACE = timedelta(hours=12)  # a horizon missed by more than this (worker down) stays unmeasured
 BENCH = "^NSEI"
 MIN_SAMPLES = 20
@@ -90,6 +101,39 @@ def proven(weights: dict[str, float], scope: Optional[str], themes: list[str], d
 def basket_return(base: dict[str, float], now: dict[str, float]) -> Optional[float]:
     returns = [now[s] / p - 1 for s, p in base.items() if p and now.get(s)]
     return sum(returns) / len(returns) if returns else None
+
+
+def _excess(kind: str, base: Optional[dict], now: dict, bench_base: Optional[float],
+            bench_now: Optional[float]) -> Optional[float]:
+    """The target's return over Nifty's (Nifty's own for the market)."""
+    if not bench_base or bench_now is None:
+        return None
+    bench_ret = bench_now / bench_base - 1
+    if kind == "market":
+        return bench_ret
+    ret = basket_return(base or {}, now)
+    return None if ret is None else ret - bench_ret
+
+
+def horizon_fields(doc: dict, h: str, prices: dict[str, float], bench: float) -> dict:
+    """The fields `measure` sets at horizon `h`, given the prices then."""
+    bench_ret = bench / doc["bench"] - 1
+    if doc["type"] == "market":
+        ret, move = bench_ret, bench_ret
+    else:
+        ret = basket_return(doc["base"], prices)
+        move = None if ret is None else ret - bench_ret
+    out = {f"ret_{h}": ret, f"bench_{h}": bench_ret, f"move_{h}": move}
+    if "pre_bench" in doc:  # recorded since N0.2
+        out[f"pre_move_{h}"] = _excess(doc["type"], doc.get("pre_base"), prices, doc["pre_bench"], bench)
+        if doc.get("sector_pre_base"):
+            own, peers = basket_return(doc.get("pre_base") or {}, prices), basket_return(doc["sector_pre_base"], prices)
+            out[f"sector_move_{h}"] = None if own is None or peers is None else own - peers
+    return out
+
+
+def _symbols(doc: dict) -> list[str]:
+    return sorted({*(doc.get("base") or {}), *(doc.get("pre_base") or {}), *(doc.get("sector_pre_base") or {})})
 
 
 async def _closes_at(db, symbols: list[str], published_at: datetime) -> dict[str, float]:
@@ -148,13 +192,22 @@ async def record(db, redis, now: Optional[datetime] = None) -> int:
         if scored_at is not None and scored_at.tzinfo is None:
             scored_at = scored_at.replace(tzinfo=timezone.utc)
         late = scored_at is not None and scored_at < now - LATE_AFTER
+        impacts = item.get("impacts", [])
+        peers = {i["target"]: [s for s in _members("sector", sector_of[i["target"]], sector_of) if s != i["target"]]
+                 for i in impacts if i["type"] == "symbol" and i["target"] in sector_of}
+        wanted = {BENCH, *(s for p in peers.values() for s in p),
+                  *(s for i in impacts for s in _members(i["type"], i["target"], sector_of))}
+        # The last close before publication: the price the news met.
+        closes = await _closes_at(db, sorted(wanted), item["published_at"])
+        pre_bench = closes.get(BENCH)
         # An outage backlog is priced at the news's publication, from stored bars.
-        bench_bar = (await _closes_at(db, [BENCH], item["published_at"])).get(BENCH) if late else None
-        for i in item.get("impacts", []):
+        bench_bar = pre_bench if late else None
+        for i in impacts:
             members = _members(i["type"], i["target"], sector_of)
+            pre_base = {s: closes[s] for s in members if s in closes}
             base, bench_base, flag = None, bench, {}
             if late:
-                base = await _closes_at(db, members, item["published_at"])
+                base = pre_base
                 if bench_bar is not None and (base or i["type"] == "market"):
                     bench_base = bench_bar
                 else:  # no bars: the live snapshot is biased, so keep it out of the weights
@@ -163,11 +216,15 @@ async def record(db, redis, now: Optional[datetime] = None) -> int:
                 base = await _prices(redis, members)
             if i["type"] != "market" and not base:
                 continue
+            pre = {"pre_base": pre_base, "pre_bench": pre_bench,
+                   "moved_before": _excess(i["type"], pre_base, base, pre_bench, bench_base)}
+            if i["type"] == "symbol" and i["target"] in peers:
+                pre["sector_pre_base"] = {s: closes[s] for s in peers[i["target"]] if s in closes}
             await db[COLLECTION].update_one({"_id": f"{item['_id']}:{i['type']}:{i['target']}"}, {"$setOnInsert": {
                 "item_id": item["_id"], "type": i["type"], "target": i["target"], "scope": item.get("scope"),
                 "themes": item.get("themes") or [], "direction": i["direction"], "impact": i["impact"],
                 "published_at": item["published_at"], "base_at": now, "in_session": in_session(now) and not late,
-                "base": base, "bench": bench_base, **flag}}, upsert=True)
+                "base": base, "bench": bench_base, **pre, **flag}}, upsert=True)
             stored += 1
     return stored
 
@@ -183,15 +240,21 @@ async def measure(db, redis, now: Optional[datetime] = None) -> int:
         if h == "1h":
             query["in_session"] = True
         async for doc in db[COLLECTION].find(query):
-            bench_ret = bench / doc["bench"] - 1
-            if doc["type"] == "market":
-                ret, move = bench_ret, bench_ret
-            else:
-                ret = basket_return(doc["base"], await _prices(redis, list(doc["base"])))
-                move = None if ret is None else ret - bench_ret
-            await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": {
-                f"ret_{h}": ret, f"bench_{h}": bench_ret, f"move_{h}": move}})
+            fields = horizon_fields(doc, h, await _prices(redis, _symbols(doc)), bench)
+            await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": fields})
             done += 1
+    # 20d from the closes on the horizon day, so a worker outage cannot lose it.
+    # Only rows recorded since N0.2 (old rows are never rewritten).
+    query = {f"move_{LONG_H}": {"$exists": False}, "pre_bench": {"$exists": True},
+             "base_at": {"$lte": now - LONG - SETTLE}}
+    async for doc in db[COLLECTION].find(query):
+        closes = await _closes_at(db, [*_symbols(doc), BENCH], doc["base_at"] + LONG)
+        if BENCH in closes:
+            fields = horizon_fields(doc, LONG_H, closes, closes[BENCH])
+        else:  # ponytail: no Nifty bar a day after the horizon = left unmeasured; unset move_20d to retry
+            fields = {f"move_{LONG_H}": None}
+        await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": fields})
+        done += 1
     return done
 
 
