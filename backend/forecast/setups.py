@@ -182,5 +182,8 @@ SETUPS = (
     Setup("low_vol", "Low-volatility leader", 60, low_vol, _explain_low_vol),
     Setup("momentum_vol_60", "Momentum over volatility", 60, momentum_vol, _explain_momentum_vol),
     Setup("rs_leaders_regime", "Relative-strength leader", 60, rs_leaders_regime, _explain_rs_leaders, experimental=True),
+    # Same monthly ranking held ~one month (re-ranked at the next month start). 2026-10-26 check on prod bars:
+    # adjusted OOS excess +1.42%, t 3.21 over 6 variants tried that day (new_setups_tool had flagged it 2026-10-22).
+    Setup("rs_leaders_20", "Relative-strength leader (1 month)", 20, rs_leaders_regime, _explain_rs_leaders, experimental=True),
 )
 BY_NAME = {s.name: s for s in SETUPS}

@@ -400,3 +400,26 @@ def test_dismissed_pick_leaves_the_users_shown_list(mongo):
     row = asyncio.run(mongo.picks_dismissed.find_one({}))
     assert row["user_id"] == "u1" and row["pick_id"] == pid
     assert _client("user").post(f"/api/v1/picks/{pid}/dismiss").status_code == 403
+
+
+def test_a_stock_two_setups_fired_on_shows_once_with_the_better_grade():
+    out = picks.serve([_p("2026-10-21", "R", setup="rs_leaders_20"), _p("2026-10-21", "R", setup="rs_leaders_regime")], [], {},
+                      TODAY, {"rs_leaders_20": "A", "rs_leaders_regime": "B"})
+    assert [(p["symbol"], p["setup"]) for p in out["shown"]] == [("R", "rs_leaders_20")]
+
+
+def test_basket_counts_months_with_enough_picks_out_of_sample():
+    import pandas as pd
+
+    from backend.forecast import study
+
+    rows = []
+    for m, (net, nifty) in enumerate([(0.05, 0.01), (0.02, 0.03), (0.04, 0.0)], start=1):
+        rows += [{"signal": pd.Timestamp(2024, m, 2), "net": net, "nifty": nifty}] * 3
+    rows.append({"signal": pd.Timestamp(2024, 4, 2), "net": -0.5, "nifty": 0.0})  # one pick: not a basket
+    ev = pd.DataFrame(rows)
+    baseline = pd.Series({pd.Period("2024-01", "M"): 0.0, pd.Period("2024-02", "M"): 0.0, pd.Period("2024-03", "M"): 0.05})
+    b = study.basket(ev, baseline, {"years": [{"year": 2024}]})
+    assert b["months"] == 3 and b["beat_nifty"] == 2 / 3 and abs(b["median_vs_nifty"] - 0.04) < 1e-9
+    assert b["beat_average"] == 1 / 3 and b["years_positive"] == 0.0  # the lone -50% month drags 2024 under
+    assert study.basket(ev, baseline, {"years": []})["months"] == 0

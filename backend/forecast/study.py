@@ -139,6 +139,33 @@ def baseline_by_month(t: dict, horizon: int) -> pd.Series:
     return (ev["net"] - ev["nifty"]).groupby(ev["signal"].dt.to_period("M")).mean()
 
 
+def basket(ev: pd.DataFrame, baseline: pd.Series, wf: dict) -> dict:
+    """The setup held as a basket: every pick of a signal month bought together (equal weight), out of sample
+    (the years `walk_forward` tested). A single stock over a few weeks is mostly noise; the edge shows across
+    a basket. `beat_nifty` / `beat_average` = share of months the basket beat NIFTY / the average stock;
+    `years_positive` = share of test years whose mean excess over the average stock was above zero."""
+    none = {"months": 0, "beat_nifty": None, "median_vs_nifty": None, "beat_average": None, "years_positive": None}
+    years = [y["year"] for y in wf["years"]]
+    o = ev[ev["signal"].dt.year.isin(years)] if not ev.empty else ev
+    if len(o) < 5:
+        return none
+    month = o["signal"].dt.to_period("M")
+    ex = o["net"] - o["nifty"]
+    frame = pd.DataFrame({"m": month, "ex": ex, "adj": ex - month.map(baseline).fillna(baseline.mean()),
+                          "y": o["signal"].dt.year})
+    by_month = frame.groupby("m").agg(n=("ex", "size"), ex=("ex", "mean"), adj=("adj", "mean"))
+    by_month = by_month[by_month["n"] >= BASKET_MIN]
+    by_year = frame.groupby("y")["adj"].mean()
+    if by_month.empty:
+        return none
+    return {"months": int(len(by_month)), "beat_nifty": float((by_month["ex"] > 0).mean()),
+            "median_vs_nifty": float(by_month["ex"].median()), "beat_average": float((by_month["adj"] > 0).mean()),
+            "years_positive": float((by_year > 0).mean())}
+
+
+BASKET_MIN = 3  # a month counts as a basket from this many picks
+
+
 def adjusted_edge(ev: pd.DataFrame, baseline: pd.Series, wf: dict) -> dict:
     """Out-of-sample (the years `walk_forward` tested) mean of excess over NIFTY minus the baseline of the signal
     month, with a month-block bootstrap t. `edge` = mean > 0 and t >= ADJ_MIN_T."""
@@ -169,6 +196,7 @@ def run(t: dict, setups) -> tuple[dict, dict]:
             base[s.horizon] = baseline_by_month(t, s.horizon)
         wf = walk_forward(ev)
         results[s.name] = {"setup": s.name, "label": s.label, "horizon": s.horizon, "experimental": getattr(s, "experimental", False),
-                           **stats(ev), "walk_forward": wf, "adjusted": adjusted_edge(ev, base[s.horizon], wf)}
+                           **stats(ev), "walk_forward": wf, "adjusted": adjusted_edge(ev, base[s.horizon], wf),
+                           "basket": basket(ev, base[s.horizon], wf)}
         all_fires[s.name] = fires
     return results, all_fires

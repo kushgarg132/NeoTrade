@@ -209,6 +209,9 @@ def serve(today_picks: list[dict], older: list[dict], prices: dict[str, float], 
                   "beats_nifty_odds": r["p_beat_nifty"] >= MIN_P_BEAT,
                   "days_left": _trading_days_after(today, date.fromisoformat(r["due_date"]))})
     rows.sort(key=lambda r: (r["grade"], r["missed_entry"], -r["median_excess"], -r["p_beat_nifty"]))
+    # One row per stock: two setups on the same name (rs_leaders at 20 and 60 days) show once, the better-graded.
+    once = set()
+    rows = [r for r in rows if not (r["symbol"] in once or once.add(r["symbol"]))]
     shown, reasons, count = [], [], 0
     for g in GRADES:
         of_grade = [r for r in rows if r["grade"] == g]

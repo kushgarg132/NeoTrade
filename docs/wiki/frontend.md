@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 5aaed33
+verified_at: 1943de4
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -42,7 +42,7 @@ The whole UI: a plain-JSX (no TypeScript) React 19 / React Router 7 / Tailwind v
 | `src/components/ChatWidget.jsx` | docked assistant; streams via `stream.request('chat')`; renders action cards | `ChatWidget`, `ActionCard` |
 | `src/components/home/*` | Home: `HeroRow` (account value, today in rupees and %, gap vs NIFTY in points; links `/money`; Empty with a Connect-broker link), cards `BriefCard` (AI "Your day" lines, else digest lines), `GoalTile` (progress to the saved goal), `WeeklyLink` (Sun/Mon only), `SetupChecklist` | `HeroRow`, `BriefCard`, `GoalTile`, `WeeklyLink`, `SetupChecklist` |
 | `src/components/money/*` | Money tabs: `OverviewTab` (`WhyMoved`, movers), `HoldingsTab` (4-column trader table `COLS`/`Head`/`Row` with colour+icon verdict pills and verdict filter chips, + `ImportFiles`, `portfolio/Rebalance` with plan tax/charges totals, `portfolio/RebalanceAfter` (sector mix and holdings after the plan, shown before the real-money tap), an "Ask AI for a final list" button (verdicts audience) with a Formula / AI final list toggle that swaps the whole Trades sheet and an armed two-tap "Execute all" via `utils/ticket.js::executeAll`), `TaxTab`, `JournalTab` (round trips, habits, guardrails), `ValueChart` (recharts on `chartTheme` `AXIS`/`GRID`); `useHoldings` returns `{snapshot, loading, error, reload}` (`error` only while nothing is on screen) | `useHoldings` |
-| `src/components/ideas/*` | Ideas rows and actions: `IdeaRow`, `IdeaBadge`, `RangeBar`, `BuyBar`, `HoldingActions`; `useLoad(fetcher)` = `{data,error,loading,reload}` | `useLoad` |
+| `src/components/ideas/*` | Ideas rows and actions: `IdeaRow` (a pick shows its setup's monthly-basket line from `picks_study` `basket`), `IdeaBadge`, `RangeBar`, `BuyBar`, `HoldingActions`; `pages/Ideas.jsx` lists engine ideas and grade A/B picks first and folds grade C behind "Show N unproven" (`utils/ideas.js::splitByEvidence`); `useLoad(fetcher)` = `{data,error,loading,reload}` | `useLoad` |
 | `src/components/ai/*` | AI tabs `Scoreboard`, `Positions`, `Activity` (+ `plan/PlanCard`), `StopAi`; stored-text cards in `AiSummary.jsx` | `AiCard`, `AiText`, `AiState`, `AiLabel`, `AmountText`, default `AiSummary` |
 | `src/components/market/*` | Market tabs `Pulse`, `Watchlist`, `News` | `Pulse`, `Watchlist`, `News` |
 | `src/components/stock/*` | Stock page tabs `AnalysisTab`, `NewsTab`, `EventsTab`, `TradingChart` (chartTheme `AXIS`/`GRID`/`TOOLTIP_STYLE`), `TechGauge`; `useStockAnalysis` (socket + HTTP fallback), `common.js` | `useStockAnalysis` |
