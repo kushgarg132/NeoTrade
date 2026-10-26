@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 1943de4
+verified_at: 7c79234
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -18,7 +18,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | path | role | key symbols |
 |---|---|---|
 | backend/mine/actions.py | Builds the ranked "Needs you" list, handles dismiss and snooze, and sends stop/target alerts | `mine/actions.py::RANK`, `::build`, `::ideas` (admin-only: empty for other roles), `::_levels`, `::dismiss`, `::snooze`, `::level_alerts`, `::levels_text` |
-| backend/mine/events.py | Results and ex-dividend dates from yfinance, plus dividends received | `events.py::refresh`, `::loop`, `::upcoming`, `::dividends_received`, `::_fetch_sync` |
+| backend/mine/events.py | Results and ex-dividend dates from yfinance, plus dividends received | `events.py::refresh`, `::loop`, `::upcoming`, `::dividends_received`, `::_fetch_sync`, `::next_results` (one symbol's date within N days, fetched on demand since a buy is rarely of a held stock), `::buy_blocked` (the results rule for a buy about to be sent) |
 | backend/mine/history.py | Daily value curve `mine_daily`, replayed from journal trades; XIRR | `history.py::xirr`, `::_inputs`, `::_compute`, `::_store`, `::backfill`, `::write_all`, `::series`, `::returns` |
 | backend/mine/lots.py | FIFO lots, realised matches, broker reconciliation, split detection | `lots.py::_fifo`, `::open_lots`, `::realised`, `::unmatched`, `::split_ratio`, `::reconcile`, `::mine_trades` |
 | backend/routers/mine.py (`GET /mine/review/latest`) | The latest non-empty AI portfolio `summary` on the user's `portfolio_snapshots` as `{text, date}` (IST day); no LLM; 404 until one exists | `mine.py::latest_review` |
@@ -33,7 +33,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/portfolio/review.py | LLM write-up (summary, notes, plan); explains only | `review.py::write_review`, `MAX_HOLDINGS` |
 | backend/portfolio/ai_rebalance.py | AI final rebalance list: model answers target % per stock (prompt `prompts/rebalance_ai.md`), clamped to caps, sized by `plan_rebalance`; per-symbol news sentiment and next results date for the prompt | `ai_rebalance.py::ai_targets`, `::clamp_targets`, `::news_context`, `::_news_part`, `MAX_HOLDINGS`, `RESULTS_DAYS` |
 | backend/portfolio/rebalance.py | Target weights, rebalance plan, one-tap suggestion, charges, sell tax | `rebalance.py::target_weights`, `::target_gaps`, `::plan_rebalance`, `::suggest`, `::charges`, `::sell_tax`, `::plan_tax`, `::plan_after`, `::multiplier`, `DEFAULT_TARGETS` |
-| backend/portfolio/digest.py | Pulse (account right now), scoreboard, 08:45 and post-close Telegram digests | `digest.py::pulse`, `::verdicts_visible`, `::headlines_for`, `::pnl_since`, `::scoreboard`, `::send_premarket`, `::send_postclose`, `::premarket_for`, `::postclose_for` (per-user bodies, shared with `/today`), `::premarket_text` (no ideas line for non-admins), `::postclose_text`, `::last_session_move`, `::_day_summary` (after each digest: Home "Your day", `summaries/day.py::generate`; `send_postclose(db, now, redis)`) |
+| backend/portfolio/digest.py | Pulse (account right now), scoreboard, 08:45 and post-close Telegram digests | `digest.py::pulse`, `::verdicts_visible`, `::headlines_for`, `::pnl_since`, `::scoreboard`, `::send_premarket`, `::send_postclose`, `::premarket_for`, `::postclose_for` (per-user bodies, shared with `/today`), `::news_why` (reason line for a news move), `::premarket_text` (no ideas line for non-admins), `::postclose_text`, `::last_session_move`, `::_day_summary` (after each digest: Home "Your day", `summaries/day.py::generate`; `send_postclose(db, now, redis)`) |
 | backend/portfolio/news_moves.py | What news moved your money (news plan N1.5/N1.6, display only, no LLM): Today's big moves (beyond ±2% vs NIFTY, NIFTY from the ingest macro feed, or the top 3 rupee movers) matched to the strongest SCORED material item (matching impact >= `MATERIALITY_THRESHOLD`) on the stock or its Nifty 200 sector since the previous session's 15:30 close; the weekly part (movers beyond ±4% vs NIFTY from stored closes, up to 2 items each, top 5 themes over held names/sectors, the latest `news_accuracy` 5d COMPANY/SECTOR hit rates, excess measure preferred, or None) | `news_moves.py::big_moves`, `::causes`, `::attribute`, `::themes`, `::accuracy_line`, `::today`, `::week`, `::BIG_PCT`, `::WEEK_BIG_PCT` |
 | backend/journal/store.py | `journal_trades` / `journal_notes` persistence | `journal/store.py::JournalStore.add_trades`, `.list_trades`, `.notes_for`, `.set_note` |
 | backend/journal/roundtrips.py | Groups fills into round trips; instrument kind (pure) | `roundtrips.py::build_round_trips`, `::daily_pnl`, `::instrument_kind`, `::underlying_of` |
@@ -44,14 +44,14 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/journal/news.py | Attaches the strongest news impact (with headline, url) in the 24h before each trip's entry (`news`) and exit (`exit_news`); an exit item carries `after_5d_pct` from stored daily bars (None without them) | `news.py::attach_news`, `::_after_pct`, `AFTER_BARS` |
 | backend/journal/accounts.py | Splits by account; monthly AI-vs-me | `accounts.py::filter_trades`, `::brokers_of`, `::ai_vs_me` |
 | backend/journal/beta.py | `journal_opens` tracking; Phase 12 metrics | `beta.py::record_open`, `::beta_metrics` |
-| backend/guardrails/rules.py | Breach evaluation (pure) | `guardrails/rules.py::evaluate`, `::_option_breaches`, `::_is_hedged` |
+| backend/guardrails/rules.py | Breach evaluation (pure); the buy-before-results rule | `guardrails/rules.py::evaluate` (`results` and `today` args feed the `results_buy` breach), `::results_days` (0 when off or guardrails off), `::results_block`, `::_option_breaches`, `::_is_hedged` |
 | backend/guardrails/monitor.py | 60s in-session loop; kill-switch trip; square-off | `guardrails/monitor.py::run_tick`, `::check_user`, `::square_off`, `::monitor_loop`, `::start`, `LOCK_KEY` |
 | backend/guardrails/square_off.py | Position book to MIS exit orders (pure) | `guardrails/square_off.py::exit_orders`, `::describe` |
 | backend/guardrails/store.py | Breach dedupe; alert channel and encrypted user bot token | `guardrails/store.py::GuardrailStore.record`, `.events_for`, `.telegram_channel`, `.telegram_routes`, `.set_telegram_bot` |
 | backend/guardrails/telegram.py | Bot API client over aiogram 3.31 (one `Bot` per token per event loop; dicts in and out): send, HTML, drafts, `alert` | `telegram.py::alert`, `::_bot`, `::_call`, `::send`, `::send_html`, `::to_html`, `::find_chat`, `::updates` |
 | backend/guardrails/telegram_bot.py | Inbound long-poll bridge to the chat agent and action cards | `telegram_bot.py::poll_loop`, `::poll_once`, `::_poll_bot`, `::_reply`, `::_callback`, `::_ask`, `::Tap`, `SHORTCUTS` |
 | backend/routers/mine.py | `/mine/*` | `mine.py::overview`, `::mine_history`, `::tax`, `::stock_detail`, `::get_thesis`, `::put_thesis`, `::mine_actions`, `::dismiss_action`, `::snooze_action`, `::_month_contributions`, `TAX_FIRST_FY` |
-| backend/routers/portfolio.py | `/portfolio*`; verdict masking | `portfolio.py::get_portfolio`, `::refresh`, `::rebalance`, `::rebalance_candidates`, `::present`, `::mask_row`, `::verdicts_visible_to`, `::with_suggestions`, `::_candidate_symbols` |
+| backend/routers/portfolio.py | `/portfolio*`; verdict masking | `portfolio.py::get_portfolio`, `::refresh`, `::rebalance`, `::rebalance_candidates`, `::present`, `::mask_row`, `::_results_dates`, `::_with_results`, `::verdicts_visible_to`, `::with_suggestions`, `::_candidate_symbols` |
 | backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::ai_vs_me`, `::get_learning`, `::get_beta_metrics` |
 | backend/routers/today.py | `/today`, `/today/attention`, `/today/reconciliation` | `today.py::today`, `::attention`, `::reconciliation`, `::_accounts`, `::_needs_you`, `::_mine_actions`, `::_setup`, `::_autopilot`, `::_backdrop`, `_STATE_CACHE` |
 
