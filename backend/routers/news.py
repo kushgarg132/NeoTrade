@@ -238,3 +238,26 @@ async def symbol_news(symbols: str = "", user: User = Depends(get_current_user))
             continue
         out[symbol] = {"sentiment": sentiment, **empty, **latest.get(symbol, {})}
     return {"symbols": out}
+
+
+RESULTS_DAYS = 120
+
+
+@router.get("/news/results")
+async def symbol_results(symbols: str = "", user: User = Depends(get_current_user)):
+    """Each listed stock's next results date within RESULTS_DAYS, read from the
+    stored corporate-events calendar (mine/events.py fills it for held symbols
+    only; nothing is fetched here). Names without a known date are left out."""
+    from backend.database import db
+    from backend.datalayer.bars import today_ist
+    from backend.datalayer.prices import _bare
+    from backend.mine import events
+
+    wanted = list(dict.fromkeys(_bare(s.strip()).upper() for s in symbols.split(",") if s.strip()))[:SYMBOLS_LIMIT]
+    if not wanted:
+        return {"results": {}}
+    out: dict[str, str] = {}
+    for e in await events.upcoming(db.db, wanted, today_ist(), RESULTS_DAYS):
+        if e["kind"] == "results":
+            out.setdefault(e["symbol"], e["date"])  # sorted by date: the first is the next
+    return {"results": out}

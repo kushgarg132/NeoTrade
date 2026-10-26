@@ -165,3 +165,25 @@ def test_symbol_news_reads_sentiment_in_one_round_trip(monkeypatch):
     database.redis.get = counting_get
     body = client.get("/news/symbols", params={"symbols": "TCS,INFY"}).json()["symbols"]
     assert body["TCS"]["sentiment"] == 0.3 and body["INFY"]["sentiment"] == -0.2 and gets == []
+
+
+def test_symbol_results_gives_the_next_results_date(monkeypatch):
+    import asyncio
+
+    from backend.database import db as database
+    from backend.datalayer.bars import today_ist
+
+    client = _symbols_client(monkeypatch, [], {})
+    today = today_ist()
+
+    def day(n):
+        return (today + timedelta(days=n)).isoformat()
+    asyncio.run(database.db["corporate_events"].insert_many([
+        {"symbol": "TCS", "kind": "results", "date": day(30), "amount": None},
+        {"symbol": "TCS", "kind": "results", "date": day(10), "amount": None},
+        {"symbol": "TCS", "kind": "results", "date": day(-5), "amount": None},
+        {"symbol": "INFY", "kind": "ex_dividend", "date": day(3), "amount": 5.0},
+        {"symbol": "WIPRO", "kind": "results", "date": day(400), "amount": None},
+    ]))
+    assert client.get("/news/results", params={"symbols": "tcs.NS,INFY,WIPRO"}).json() == {"results": {"TCS": day(10)}}
+    assert client.get("/news/results").json() == {"results": {}}
