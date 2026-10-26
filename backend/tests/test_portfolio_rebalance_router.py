@@ -68,6 +68,22 @@ async def test_rebalance_returns_trades_and_uses_saved_targets(mdb):
     assert body["stale_since"] is None
 
 
+async def test_rebalance_trades_carry_the_next_results_date(mdb):
+    from datetime import timedelta
+
+    from backend.datalayer.bars import today_ist
+
+    await _snapshot(mdb)
+    today = today_ist()
+    for symbol, days in (("A", 5), ("A", 9), ("B", 45)):  # B's is past the 30-day window
+        await mdb["corporate_events"].insert_one({"symbol": symbol, "kind": "results",
+                                                  "date": (today + timedelta(days=days)).isoformat()})
+    body = _client(_user()).post("/api/v1/portfolio/rebalance", json={
+        "new_money": 0, "targets": {"rule": "equal", "max_stock_pct": 100, "max_sector_pct": 100}}).json()
+    got = {t["symbol"]: t["next_results"] for t in body["trades"]}
+    assert got["A"] == (today + timedelta(days=5)).isoformat() and got.get("B") is None
+
+
 def test_overrides_over_100_rejected(mdb):
     response = _client(_user()).post("/api/v1/portfolio/rebalance", json={
         "new_money": 0, "targets": {"rule": "cap", "overrides": {"A": 60, "B": 50}}})

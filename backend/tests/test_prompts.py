@@ -34,7 +34,7 @@ PROMPTS = {
                          "candidates": "- TCS: score 0.62, reasons quality_momentum"},
     "rebalance_ai": {"max_stock_pct": 15, "max_sector_pct": 30, "new_money": "0.00", "rule": "cap",
                      "holdings": "- HDFCBANK (STOCK): Verdict ADD, score 0.71", "candidates": "- TCS (ai): score 0.62",
-                     "review_plan": "none", "formula": "- HDFCBANK: BUY 5"},
+                     "review_plan": "none", "formula": "- HDFCBANK: BUY 5", "results_days": 30},
     "chat_followups": {"question": "Is the engine running?", "answer": "Yes, 166 bars scanned."},
     "learning_review": {"rules": "Paused: vwap", "changes": "vwap: pause False → True",
                         "groups": "vwap / overall: n 30, net ₹-3,000"},

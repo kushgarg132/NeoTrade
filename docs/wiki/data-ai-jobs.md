@@ -29,7 +29,7 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | path | role | key symbols |
 |---|---|---|
 | `backend/ai/facts/__init__.py` | fact registry; `as_tools` binds facts to (db, redis, user_id) | `fact`, `FACTS`, `as_tools`, `Fact` |
-| `backend/ai/facts/market.py` | market facts (user_id ignored) | `quote`, `price_summary`, `fundamentals`, `news`, `sentiment`, `market_backdrop`, `calendar` |
+| `backend/ai/facts/market.py` | market facts (user_id ignored) | `quote`, `price_summary`, `fundamentals`, `news`, `sentiment`, `next_results`, `market_backdrop`, `calendar` |
 | `backend/ai/facts/user.py` | user facts (filtered by user_id) + global facts | `portfolio`, `positions`, `journal`, `learning`, `strategy_library`, `game_plan`, `built_strategies`; global: `recent_plans`, `plan_scorecards`, `worst_setups` |
 | `backend/ai/runner.py` | capped tool loop, budget hook, repair, single-call fallback | `runner.py::run_with_tools` |
 | `backend/ai/grounding.py` | every figure in AI prose must be in the facts | `grounding.py::grounded`, `::unsupported`, `::strip_unsupported`, `::figures`, `::numbers_in` |
