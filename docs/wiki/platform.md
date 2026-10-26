@@ -154,6 +154,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/auth/me` | `backend/routers/auth.py::get_me` | user |
 | GET | `/api/v1/news/feed` | `backend/routers/news.py::news_feed` | user |
 | GET | `/api/v1/news/symbols` | `backend/routers/news.py::symbol_news` | user |
+| GET | `/api/v1/news/symbol/{symbol}?days<=365` | `backend/routers/news.py::symbol_history` | user |
 | POST | `/api/v1/agents/quick-analyze/{symbol}` | `backend/routers/agents.py::quick_analyze_stock` | user |
 | GET | `/api/v1/agents/intraday/{symbol}` | `backend/routers/agents.py::intraday_candles` | user |
 | POST | `/api/v1/agents/analyze/{symbol}` | `backend/routers/agents.py::analyze_stock` | user |
@@ -234,7 +235,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/market/index/{ticker}/analysis` | `backend/routers/market_data.py::get_index_analysis` | user |
 | GET | `/api/v1/market/brief` | `backend/routers/market_data.py::get_market_brief` (stored, no model call; 404 if none) | user |
 | GET | `/api/v1/research/{symbol}/note` | `backend/routers/market_data.py::get_cached_note` (cached analyst note, no model call; 404 if none) | user |
-| GET | `/api/v1/market/scan` | `backend/routers/market_data.py::get_market_scan` (`market_scan` over `news_sources.universe_rows` + `_cached_quotes` + a 365-day `daily_bars` high/low aggregate; `{gainers,losers,near_high,near_low (2%),sectors[{sector,change_pct,up,n}],breadth{up,down,n},at}`; market_cache `scan` 5 min) | user |
+| GET | `/api/v1/market/scan` | `backend/routers/market_data.py::get_market_scan` (`market_scan` over `news_sources.universe_rows` + `_cached_quotes` + a 365-day `daily_bars` high/low aggregate; `{gainers,losers,near_high,near_low (2%),sectors[{sector,change_pct,up,n,sentiment}],breadth{up,down,n},at}`; market_cache `scan` 5 min; `sentiment` = `sector_sentiment:{sector}` score (NSE industry names on both sides) read fresh per request by one MGET (`::with_sentiment`), null when absent) | user |
 | GET | `/api/v1/market/quotes` | `backend/routers/market_data.py::get_quotes` (<= 8 symbols; ingest `quote:` cache first via `_cached_quotes`, Yahoo for misses; rows `{symbol,price,change_pct,at}`) | user |
 | GET | `/api/v1/options/expiries` | `backend/routers/options.py::get_expiries` | user |
 | GET | `/api/v1/options/chain` | `backend/routers/options.py::get_chain` | user |

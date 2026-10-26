@@ -1,6 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sectorRows, breadth } from './market.js';
+import { sectorRows, breadth, divergence } from './market.js';
+
+test('divergence flags news and price disagreeing, only for strong news', () => {
+  assert.equal(divergence({ sentiment: 0.4, change_pct: -1.2 }), 'good news, falling');
+  assert.equal(divergence({ sentiment: -0.3, change_pct: 0.5 }), 'bad news, rising');
+  assert.equal(divergence({ sentiment: 0.29, change_pct: -1 }), null); // weak news
+  assert.equal(divergence({ sentiment: 0.6, change_pct: 1 }), null); // agree
+  assert.equal(divergence({ sentiment: -0.6, change_pct: 0 }), null); // flat
+  assert.equal(divergence({ sentiment: null, change_pct: -2 }), null); // no news
+  assert.equal(divergence(), null);
+});
 
 const item = (...impacts) => ({ impacts });
 test('sectorRows nets signed impact per sector, strongest first', () => {

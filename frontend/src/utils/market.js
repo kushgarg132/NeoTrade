@@ -23,6 +23,19 @@ export const sectorRows = (items = [], limit = 6) => {
     .slice(0, limit);
 };
 
+export const DIVERGENCE_MIN = 0.3;
+
+/**
+ * A sector whose news and price disagree (`/market/scan` `sectors[]` row: `sentiment` -1..1 or null,
+ * `change_pct`): 'good news, falling' / 'bad news, rising' when the signs differ and |sentiment| is at
+ * least DIVERGENCE_MIN; else null (no sentiment, flat price, or weak news).
+ */
+export const divergence = ({ sentiment, change_pct: change } = {}) => {
+  if (sentiment == null || change == null || Math.abs(sentiment) < DIVERGENCE_MIN || !change) return null;
+  if (Math.sign(sentiment) === Math.sign(change)) return null;
+  return sentiment > 0 ? 'good news, falling' : 'bad news, rising';
+};
+
 /** Advancing vs declining among quote rows (`percent`): breadth of whatever list it is given. */
 export const breadth = (rows = []) => ({
   up: rows.filter((r) => r.percent > 0).length,

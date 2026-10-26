@@ -155,3 +155,37 @@ def test_market_scan_ranks_movers_finds_52_week_extremes_and_averages_sectors():
     assert out["sectors"] == [{"sector": "IT", "change_pct": 1.0, "up": 1, "n": 2},
                               {"sector": "Banks", "change_pct": -1.5, "up": 1, "n": 2}]
     assert out["breadth"] == {"up": 2, "down": 2, "n": 4} and out["at"] == 5.0
+
+
+def test_scan_sectors_carry_news_sentiment_absent_is_none():
+    import json
+    sectors = [{"sector": "IT", "change_pct": 1.0, "up": 1, "n": 2},
+               {"sector": "Banks", "change_pct": -1.5, "up": 1, "n": 2},
+               {"sector": "Auto", "change_pct": 0.2, "up": 1, "n": 1}]
+    raws = [json.dumps({"score": -0.456, "n": 3, "at": 1.0}), None, json.dumps({"score": None, "n": 0, "at": 1.0})]
+    out = market_data.with_sentiment(sectors, raws)
+    assert [s["sentiment"] for s in out] == [-0.46, None, None]
+    assert out[0]["change_pct"] == 1.0 and "sentiment" not in sectors[0]
+    assert [s["sentiment"] for s in market_data.with_sentiment(sectors, [])] == [None, None, None]
+
+
+def test_market_scan_endpoint_joins_sentiment_in_one_mget(monkeypatch):
+    import asyncio
+    import json
+    from backend.database import db as database
+
+    calls = []
+
+    class Redis:
+        async def mget(self, keys):
+            calls.append(keys)
+            return [json.dumps({"score": 0.5, "n": 2, "at": 1.0}) if k.endswith(":IT") else None for k in keys]
+
+    async def fake_cached(key, ttl, fetch):
+        return {"sectors": [{"sector": "IT", "change_pct": -1.0, "up": 0, "n": 2},
+                            {"sector": "Banks", "change_pct": 1.0, "up": 2, "n": 2}], "gainers": []}
+    monkeypatch.setattr(market_data, "cached", fake_cached)
+    monkeypatch.setattr(database, "redis", Redis())
+    out = asyncio.run(market_data.get_market_scan())
+    assert [s["sentiment"] for s in out["sectors"]] == [0.5, None] and out["gainers"] == []
+    assert calls == [["sector_sentiment:IT", "sector_sentiment:Banks"]]
