@@ -18,7 +18,7 @@ carry a time: the base is the last close at or before it (outcomes._closes_at).
 Caveat: the scoring model was trained after these dates and may know what
 followed; a high hit rate here is an upper bound, not an edge.
 
-    python -m backend.datalayer.backfill_news fetch 2024-10 2026-10
+    python -m backend.datalayer.backfill_news fetch 2024-10 2026-10 [--shard 1/2]
     python -m backend.datalayer.backfill_news estimate
     python -m backend.datalayer.backfill_news score --max-calls 200
     python -m backend.datalayer.backfill_news outcomes
@@ -99,7 +99,9 @@ def _get(session: requests.Session, url: str, **kw) -> requests.Response:
         time.sleep(60)
 
 
-async def fetch(db, first: str, last: str) -> int:
+async def fetch(db, first: str, last: str, shard: int = 0, shards: int = 1) -> int:
+    """`shard` of `shards`: this run takes every shards-th search and symbol
+    (stable order), so runs side by side split the work without overlap."""
     names, _ = _universe()
     aliases = news.build_aliases(names)
     span = months(first, last)
@@ -111,7 +113,7 @@ async def fetch(db, first: str, last: str) -> int:
         new += await news.store(db, items, aliases, names=names, coll=ITEMS)
         await db[DONE].insert_one({"_id": key, "n": len(items)})
 
-    todo = [s for s in searches(span, names) if s[0] not in done]
+    todo = [s for n, s in enumerate(searches(span, names)) if n % shards == shard and s[0] not in done]
     logger.info("news history: %d Google search(es) to run", len(todo))
     for n, (key, url, feed, scope, symbols) in enumerate(todo, 1):
         try:
@@ -127,9 +129,9 @@ async def fetch(db, first: str, last: str) -> int:
     await asyncio.to_thread(session.get, "https://www.nseindia.com/", headers=news_sources.UA, timeout=30)
     for year in sorted({a.year for a, _ in span}):
         lo, hi = max(span[0][0], date(year, 1, 1)), min(span[-1][1] - timedelta(days=1), date(year, 12, 31))
-        for symbol in names:
+        for n, symbol in enumerate(names):
             key = f"nse:{symbol}:{year}"
-            if key in done:
+            if n % shards != shard or key in done:
                 continue
             url = (f"{news_sources.NSE_ANNOUNCEMENTS}&symbol={quote_plus(symbol)}"
                    f"&from_date={lo:%d-%m-%Y}&to_date={hi:%d-%m-%Y}")
@@ -328,6 +330,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="python -m backend.datalayer.backfill_news")
     parser.add_argument("command", choices=["fetch", "estimate", "score", "outcomes", "report"])
     parser.add_argument("span", nargs="*", help="fetch: FIRST LAST months, e.g. 2024-10 2026-10")
+    parser.add_argument("--shard", default="1/1", help="fetch: K/N, run N of these side by side (K = 1..N)")
     parser.add_argument("--max-calls", type=int, default=0, help="score: LLM calls this run (required)")
     args = parser.parse_args()
 
@@ -337,7 +340,10 @@ if __name__ == "__main__":
         if args.command == "fetch":
             if len(args.span) != 2:
                 parser.error("fetch needs FIRST LAST months")
-            print(f"fetched {await fetch(db, *args.span)} new item(s)")
+            k, n = map(int, args.shard.split("/"))
+            if not 1 <= k <= n:
+                parser.error("--shard K/N with 1 <= K <= N")
+            print(f"fetched {await fetch(db, *args.span, k - 1, n)} new item(s)")
         elif args.command == "estimate":
             print(await estimate(db))
         elif args.command == "score":
