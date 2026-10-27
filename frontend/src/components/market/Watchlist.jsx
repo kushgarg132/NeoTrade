@@ -14,14 +14,12 @@ import { inr, pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
 import { stockPath } from '../../utils/stocks';
 import { bareSymbol } from '../../utils/formatters';
-import NewsChip from '../common/NewsChip';
-import useSymbolNews from '../../hooks/useSymbolNews';
+import SmartSearch from '../dashboard/SmartSearch';
 
 const Watchlist = () => {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(false);
   const [ticket, setTicket] = useState(null);
-  const { news } = useSymbolNews((rows || []).map((r) => r.symbol));
   const navigate = useNavigate();
 
   const [tick, setTick] = useState(0);
@@ -63,13 +61,12 @@ const Watchlist = () => {
     <Card title="Watchlist">
       {error ? <ErrorLine message="Could not load the watchlist." onRetry={load} />
         : !rows ? <Skeleton rows={4} />
-        : rows.length === 0 ? <Empty title="Nothing watched" body="Open a stock and tap Watch next to its price. Start from today's movers." action={<Button variant="secondary" onClick={() => navigate('/market?tab=pulse')}>See top movers</Button>} />
+        : rows.length === 0 ? <Empty title="Track a stock" body="Search a name; its page has the Watch toggle." action={<div className="w-full max-w-sm text-left"><SmartSearch compact onSearch={(symbol) => navigate(stockPath(symbol))} /></div>} />
         : rows.map((s) => (
           <div key={s.symbol} className="flex items-center gap-3 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0">
-            <button type="button" onClick={() => navigate(stockPath(s.symbol))} className="min-w-0 flex-1 text-left active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+            <button type="button" onClick={() => navigate(stockPath(s.symbol))} className="min-w-0 flex-1 min-h-11 text-left active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
               <div className="text-[15px] font-medium text-[var(--text)] truncate">{bareSymbol(s.symbol)}</div>
               <div className="text-[13px] text-[var(--text-muted)] truncate">{s.error ? 'Quote unavailable' : s.name}</div>
-              <NewsChip entry={news[s.symbol?.toUpperCase().replace(/\.NS$/, '')]} link={false} />
             </button>
             <div className="text-right shrink-0">
               <div className="text-[15px] tabular-nums text-[var(--text)]">{inr(s.current_price)}</div>
