@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Database
     MONGODB_URL: str = "mongodb://localhost:27017"
     DATABASE_NAME: str = "stock_investor_db"
+    # The VM's own Mongo (compose service `mongo`) for the big, refetchable market-data collections
+    # (database.py::LOCAL_COLLECTIONS): Atlas M0 caps at 512 MB. Unset: everything stays on MONGODB_URL.
+    LOCAL_MONGODB_URL: Optional[str] = None
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379"

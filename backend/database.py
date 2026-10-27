@@ -14,8 +14,28 @@ def mongo_client(url: str) -> AsyncIOMotorClient:
     return AsyncIOMotorClient(url, tz_aware=True, tzinfo=timezone.utc)
 
 
+# On LOCAL_MONGODB_URL when set (2026-10-27: Atlas M0 hit its 512 MB cap). Nothing joins these with Atlas
+# collections ($lookup/$merge), which would not work across two servers.
+LOCAL_COLLECTIONS = frozenset({"daily_bars", "news_history", "news_history_outcomes", "news_history_fetch"})
+
+
+class RoutedDatabase:
+    """The Atlas database, except LOCAL_COLLECTIONS, which live on the VM's Mongo under the same names.
+    `db[name]` and `db.name` route; anything else (command, list_collection_names...) is Atlas's."""
+
+    def __init__(self, main, local):
+        self._main, self._local = main, local
+
+    def __getitem__(self, name):
+        return (self._local if name in LOCAL_COLLECTIONS else self._main)[name]
+
+    def __getattr__(self, name):
+        return self[name] if name in LOCAL_COLLECTIONS else getattr(self._main, name)
+
+
 class DatabaseManager:
     client: AsyncIOMotorClient = None
+    local_client: AsyncIOMotorClient = None
     db = None
     redis: aioredis.Redis = None
 
@@ -23,6 +43,9 @@ class DatabaseManager:
         logger.info("Connecting to MongoDB...")
         self.client = mongo_client(settings.MONGODB_URL)
         self.db = self.client[settings.DATABASE_NAME]
+        if settings.LOCAL_MONGODB_URL:
+            self.local_client = mongo_client(settings.LOCAL_MONGODB_URL)
+            self.db = RoutedDatabase(self.db, self.local_client[settings.DATABASE_NAME])
         logger.info("Connected to MongoDB.")
 
         logger.info("Connecting to Redis...")
@@ -33,6 +56,8 @@ class DatabaseManager:
         logger.info("Closing database connections...")
         if self.client:
             self.client.close()
+        if self.local_client:
+            self.local_client.close()
         if self.redis:
             await self.redis.close()
         logger.info("Database connections closed.")

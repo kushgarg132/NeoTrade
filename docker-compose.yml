@@ -4,8 +4,10 @@ name: neotrade
 # VM's self-hosted runner.
 #
 # Mongo and Redis are managed cloud services (Atlas + Upstash, same ones the
-# Render deployment used) -- not containers here. See MONGODB_URL/REDIS_URL
-# in .env.
+# Render deployment used). See MONGODB_URL/REDIS_URL in .env. Exception: the
+# big market-data collections (daily_bars, news_history*) live in the `mongo`
+# service below (backend/database.py::LOCAL_COLLECTIONS), since Atlas M0 caps
+# at 512 MB. No host port: only these containers reach it.
 
 services:
   backend:
@@ -21,8 +23,10 @@ services:
     depends_on:
       - ingest
       - jobs
+      - mongo
     environment: &backend-env
       MONGODB_URL: ${MONGODB_URL}
+      LOCAL_MONGODB_URL: ${LOCAL_MONGODB_URL:-mongodb://mongo:27017}
       DATABASE_NAME: ${DATABASE_NAME:-stock_investor_db}
       REDIS_URL: ${REDIS_URL}
       OMNIROUTE_API_KEY: ${OMNIROUTE_API_KEY:-}
@@ -57,6 +61,8 @@ services:
     container_name: neotrade-ingest
     restart: unless-stopped
     command: ["python", "-m", "backend.datalayer.worker"]
+    depends_on:
+      - mongo
     environment: *backend-env
     networks:
       - default
@@ -77,6 +83,8 @@ services:
     container_name: neotrade-jobs
     restart: unless-stopped
     command: ["python", "-m", "backend.jobs"]
+    depends_on:
+      - mongo
     environment: *backend-env
     networks:
       - default
@@ -86,6 +94,26 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # daily_bars + news_history* (see the header). Not backed up: bars refetch from Yahoo
+  # (`bars` full pass), news_history from backfill_news (its LLM scores would cost quota again).
+  mongo:
+    image: mongo:8.0
+    container_name: neotrade-mongo
+    restart: unless-stopped
+    command: ["--wiredTigerCacheSizeGB", "1"]
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - default
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  mongo-data:
 
 networks:
   default:
