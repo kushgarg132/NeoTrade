@@ -9,6 +9,17 @@ const LabForward = lazy(() => import('./pages/LabForward'));
 const NewsAccuracy = lazy(() => import('./pages/NewsAccuracy'));
 const Profile = lazy(() => import('./pages/Profile'));
 const SettingsHome = lazy(() => import('./pages/SettingsHome'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const SProfile = lazy(() => import('./components/settings/Profile'));
+const SAccounts = lazy(() => import('./components/settings/Accounts'));
+const SGuardrails = lazy(() => import('./components/journal/GuardrailsSheet'));
+const SPortfolio = lazy(() => import('./components/settings/PortfolioReview'));
+const SNotifications = lazy(() => import('./components/settings/Notifications'));
+const SGoal = lazy(() => import('./components/settings/Goal'));
+const SModels = lazy(() => import('./components/settings/AiModel'));
+const SAutopilot = lazy(() => import('./components/settings/AutopilotSheet'));
+const SEngine = lazy(() => import('./components/paper/EngineSettings'));
+const SLab = lazy(() => import('./components/settings/Lab'));
 // The five tabs: their chunks are fetched once the first screen is idle, so a tab switch never waits on one.
 const TAB_PAGES = [() => import('./pages/Home'), () => import('./pages/Money'), () => import('./pages/Ideas'),
   () => import('./pages/Ai'), () => import('./pages/Market')];
@@ -137,6 +148,15 @@ const App = () => {
       <Route path="/news/:id" element={gated(<NewsItem />)} />
       <Route path="/reports/weekly" element={gated(<WeeklyReport />)} />
       <Route path="/settings" element={gated(<SettingsHome />)} />
+      <Route path="/settings/profile" element={gated(<SettingsPage title="Profile"><SProfile /></SettingsPage>)} />
+      <Route path="/settings/brokers" element={gated(<SettingsPage title="Brokers"><SAccounts /></SettingsPage>)} />
+      <Route path="/settings/guardrails" element={gated(<SettingsPage title="Guardrails"><SGuardrails /></SettingsPage>)} />
+      <Route path="/settings/portfolio" element={gated(<SettingsPage title="Portfolio review"><SPortfolio isAdmin={user?.role === 'admin'} /></SettingsPage>)} />
+      <Route path="/settings/notifications" element={gated(<SettingsPage title="Notifications"><SNotifications /></SettingsPage>)} />
+      <Route path="/settings/goal" element={gated(<SettingsPage title="Goal"><SGoal /></SettingsPage>)} />
+      <Route path="/settings/ai" element={gated(<SettingsPage title="AI model"><SModels isAdmin={user?.role === 'admin'} /></SettingsPage>)} />
+      <Route path="/settings/autopilot" element={gated(<RequireAdmin><SettingsPage title="Autopilot"><SAutopilot /><SEngine /></SettingsPage></RequireAdmin>)} />
+      <Route path="/settings/lab" element={gated(<RequireAdmin><SettingsPage title="Lab"><SLab /></SettingsPage></RequireAdmin>)} />
       <Route path="/profile" element={gated(<Profile />)} />
       {/* Lab: frozen and experimental features, admin only, inside Settings */}
       {LAB_PAGES.map((page) => (

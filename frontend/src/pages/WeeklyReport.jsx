@@ -98,7 +98,7 @@ const WeeklyReport = () => {
           <div className="space-y-4">
             <Card title="Your account against NIFTY">
               {r.you.ret == null ? <Empty title="No curve for this week" body="Your account's weekly return needs a connected broker or imported trades."
-                action={<Link to="/settings?tab=accounts" className={act}>Connect your broker</Link>} /> : (
+                action={<Link to="/settings/brokers" className={act}>Connect your broker</Link>} /> : (
                 <div className="grid grid-cols-3 gap-3">
                   <Stat label="Your account" value={pct(r.you.ret, { sign: true })} tone={tone(r.you.ret)} />
                   <Stat label="NIFTY" value={pct(r.you.nifty, { sign: true })} tone={tone(r.you.nifty)} />

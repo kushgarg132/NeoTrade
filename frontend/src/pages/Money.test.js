@@ -13,7 +13,7 @@ test('empty account offers both Connect your broker and Import files in one Empt
   const empty = page.split('<Empty')[1].split('/>')[0];
   assert.match(empty, /Connect your broker/);
   assert.match(empty, /Import files/);
-  assert.match(empty, /\/settings\?tab=accounts/);
+  assert.match(empty, /\/settings\/brokers/);
 });
 
 test('holdings with no rows also offers both actions', () => {

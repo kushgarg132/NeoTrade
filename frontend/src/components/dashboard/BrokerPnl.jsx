@@ -37,7 +37,7 @@ const BrokerPnl = ({ journal, loading, error }) => {
         <Empty
           title={error ? 'Could not load your trades' : 'No broker trades yet'}
           body={error || 'Connect your broker in Settings and your real trades import into the journal on their own. The figures here come from there.'}
-          action={!error && <Link to="/settings?tab=accounts" className={linkCls}>Connect a broker</Link>}
+          action={!error && <Link to="/settings/brokers" className={linkCls}>Connect a broker</Link>}
         />
       </Card>
     );

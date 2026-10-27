@@ -167,7 +167,7 @@ const HoldingsTab = () => {
             body={reading && reading !== 'busy' ? reading : 'Connect your broker and read your holdings, or import your trades and funds from files.'}
             action={
               <span className="flex flex-wrap justify-center gap-2">
-                <Link to="/settings?tab=accounts" className="inline-flex items-center justify-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Connect your broker</Link>
+                <Link to="/settings/brokers" className="inline-flex items-center justify-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Connect your broker</Link>
                 <Button variant="secondary" onClick={readNow} disabled={reading === 'busy'}>{reading === 'busy' ? 'Reading…' : 'Read holdings now'}</Button>
                 <Button variant="secondary" onClick={() => setImporting(true)}>Import files</Button>
               </span>

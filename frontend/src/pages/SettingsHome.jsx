@@ -1,56 +1,86 @@
-import React from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
-import Tabs, { useTabParam } from '../components/ui/Tabs';
+import ListRow from '../components/ui/ListRow';
 import { useAuth } from '../context/AuthContext';
-import Accounts from '../components/settings/Accounts';
-import Alerts from '../components/settings/Alerts';
-import Limits from '../components/settings/Limits';
-import Profile from '../components/settings/Profile';
-import Theme from '../components/settings/Theme';
-import Goal from '../components/settings/Goal';
-import Lab from '../components/settings/Lab';
+import { useTheme } from '../context/useTheme';
+import api, { endpoints, getPreferences } from '../utils/api';
+import {
+  settingsRedirect, brokersState, guardrailsState, portfolioState, telegramState, goalState, modelState, autopilotState,
+} from '../utils/settings';
 
-// Old ?tab= values from before the regroup.
-const LEGACY = { broker: 'accounts', portfolio: 'limits', safety: 'limits', guardrails: 'limits', ai: 'profile', about: 'lab', beta: 'lab' };
+const THEMES = [['light', 'Light'], ['dark', 'Dark']];
 
-// One plain line per tab: what it is for, before any control.
-const TAB_HELP = {
-  accounts: 'Connect your broker so NeoTrade can import your trades. Orders go out only when you confirm one.',
-  alerts: 'Where NeoTrade reaches you when you are away from the app.',
-  limits: 'Your own rules (daily loss, position size) and portfolio limits. Breaches are flagged.',
-  profile: 'Who you are, and what the AI assistant knows about you.',
-  theme: 'Light or dark.',
-  goal: 'One target and a date. Home shows how far along you are.',
-  lab: 'Admin only: experimental features and beta usage.',
+const Group = ({ title, children }) => (
+  <section aria-label={title}>
+    <h2 className="px-1 pb-1.5 text-[13px] font-medium text-[var(--text-muted)]">{title}</h2>
+    <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-4">{children}</div>
+  </section>
+);
+
+const Row = ({ title, state, to }) => <ListRow title={title} right={state} to={to} privateValue={false} />;
+
+const Appearance = () => {
+  const { theme, setTheme } = useTheme();
+  return (
+    <div className="flex items-center gap-3 min-h-14 py-2">
+      <span className="flex-1 text-[15px] font-medium text-[var(--text)]">Appearance</span>
+      <div role="radiogroup" aria-label="Theme" className="flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
+        {THEMES.map(([id, label]) => (
+          <button key={id} type="button" role="radio" aria-checked={theme === id} onClick={() => setTheme(id)}
+                  className={`min-h-11 px-4 rounded-[8px] text-[14px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${theme === id ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 const SettingsHome = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [params] = useSearchParams();
-  const tabs = [
-    { id: 'accounts', label: 'Accounts' }, { id: 'alerts', label: 'Alerts' }, { id: 'limits', label: 'Limits' },
-    { id: 'profile', label: 'Profile' }, { id: 'theme', label: 'Theme' }, { id: 'goal', label: 'Goal' },
-    ...(isAdmin ? [{ id: 'lab', label: 'Lab' }] : []),
-  ];
-  const [tab, setTab] = useTabParam(tabs.map((t) => t.id));
-  const legacy = LEGACY[params.get('tab')];
-  if (legacy) return <Navigate to={`/settings?tab=${legacy}`} replace />;
+  const { search } = useLocation();
+  // A failed read leaves its state undefined, which every state helper shows as "–".
+  const [prefs, setPrefs] = useState(undefined);
+  const [telegram, setTelegram] = useState(undefined);
+  useEffect(() => {
+    let live = true;
+    getPreferences().then((res) => live && setPrefs(res.data)).catch(() => {});
+    api.get(endpoints.guardrails.telegram).then((res) => live && setTelegram(res.data)).catch(() => {});
+    return () => { live = false; };
+  }, []);
+
+  const old = settingsRedirect(search);
+  if (old) return <Navigate replace to={old} />;
+
   return (
     <Layout>
       <PageHeader title="Settings" />
-      <Tabs tabs={tabs} value={tab} onChange={setTab} label="Settings sections" wrap />
-      <p className="pt-3 text-[14px] text-[var(--text-muted)]">{TAB_HELP[tab]}</p>
-      <div className="pt-3">
-        {tab === 'accounts' && <Accounts />}
-        {tab === 'alerts' && <Alerts />}
-        {tab === 'limits' && <Limits isAdmin={isAdmin} />}
-        {tab === 'profile' && <Profile isAdmin={isAdmin} />}
-        {tab === 'theme' && <Theme />}
-        {tab === 'goal' && <Goal />}
-        {tab === 'lab' && <Lab />}
+      <div className="space-y-4">
+        <Group title="Account">
+          <Row title="Profile" state={user?.name || '–'} to="/settings/profile" />
+          <Row title="Brokers" state={brokersState(prefs)} to="/settings/brokers" />
+        </Group>
+        <Group title="Safety">
+          <Row title="Guardrails & daily loss" state={guardrailsState(prefs)} to="/settings/guardrails" />
+          <Row title="Portfolio review" state={portfolioState(prefs)} to="/settings/portfolio" />
+        </Group>
+        <Group title="Notifications">
+          <Row title="Telegram & alerts" state={telegramState(telegram)} to="/settings/notifications" />
+        </Group>
+        <Group title="You">
+          <Row title="Goal" state={goalState(prefs)} to="/settings/goal" />
+          <Row title="AI model" state={modelState(prefs)} to="/settings/ai" />
+          <Appearance />
+        </Group>
+        {isAdmin && (
+          <Group title="Admin">
+            <Row title="Autopilot" state={autopilotState(prefs)} to="/settings/autopilot" />
+            <Row title="Lab" to="/settings/lab" />
+          </Group>
+        )}
       </div>
     </Layout>
   );

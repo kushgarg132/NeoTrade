@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
-import Card from '../ui/Card';
 import { Avatar } from '../common/Avatar';
 import api, { endpoints } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import { ModelSheet, UsageSheet } from './Models';
 
-/** Who you are (the /profile page holds the details), which models write the theses, and admin usage. */
-const Profile = ({ isAdmin }) => {
+/** Who you are (the /profile page holds the details). */
+const Profile = () => {
   const { user } = useAuth();
   const [displayName, setDisplayName] = useState(null);
   useEffect(() => {
@@ -24,8 +22,6 @@ const Profile = ({ isAdmin }) => {
         </span>
         <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
       </Link>
-      <ModelSheet isAdmin={isAdmin} />
-      {isAdmin && <UsageSheet />}
     </div>
   );
 };

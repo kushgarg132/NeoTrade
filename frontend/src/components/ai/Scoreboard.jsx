@@ -15,7 +15,7 @@ import { scoreboard } from '../../utils/ai';
 import { strategyPath } from '../../utils/routes';
 
 const Paper = () => <Badge kind="paper">Paper</Badge>;
-const settingsLink = (label) => <Link to="/settings?tab=limits" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">{label}</Link>;
+const settingsLink = (label) => <Link to="/settings/autopilot" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">{label}</Link>;
 const Section = ({ state, children, what, ...p }) => {
   if (state.error) return <ErrorLine message={`Couldn't load the AI's ${what}.`} onRetry={state.retry} />;
   if (!state.loaded) return <Skeleton rows={p.rows || 3} />;
@@ -46,7 +46,7 @@ const Scoreboard = ({ board, card, forward, capital, mineValue }) => {
       <Card title="Track record" action={<Paper />}>
         <Section state={card} rows={2} what="track record">
           {card.data?.totals?.trades === 0 ? (
-            <Empty title="No closed trades yet" body="Each closed AI trade lands here, after charges. It starts once the autopilot places a trade." action={settingsLink('Check autopilot in Limits')} />
+            <Empty title="No closed trades yet" body="Each closed AI trade lands here, after charges. It starts once the autopilot places a trade." action={settingsLink('Check autopilot settings')} />
           ) : (
             <div className="grid grid-cols-2 gap-x-3 gap-y-3">
               {s.stats.map((v) => <Stat key={v.label} label={v.label} value={<span className={toneText(v.tone)}>{v.value}</span>} />)}
@@ -57,7 +57,7 @@ const Scoreboard = ({ board, card, forward, capital, mineValue }) => {
       <Card title="Strategies" action={<Paper />}>
         <Section state={card} rows={3} what="strategies">
           {strategies.length === 0 ? (
-            <Empty title="No strategies yet" body="Each strategy the AI trades gets a line here with its proven status." action={settingsLink('Check autopilot in Limits')} />
+            <Empty title="No strategies yet" body="Each strategy the AI trades gets a line here with its proven status." action={settingsLink('Check autopilot settings')} />
           ) : strategies.map((st) => {
             const b = badgeFor(forward, 'engine', st.strategy);
             return (

@@ -237,7 +237,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
             />
             {hasMine === false && (
               <p className="doc-meta normal-case">
-                <Link to="/settings?tab=accounts" className="underline" onClick={close}>
+                <Link to="/settings/brokers" className="underline" onClick={close}>
                   Connect your broker and set it as My account in Settings
                 </Link>{' '}
                 to trade it from here.

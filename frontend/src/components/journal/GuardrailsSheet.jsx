@@ -166,18 +166,6 @@ const GuardrailsSheet = () => {
           }}
         />
       </Row>
-
-      <Row
-        label="News alerts"
-        hint="Material news on the names you follow, as a toast here and on Telegram when linked. A market-wide shock reaches anyone holding something."
-      >
-        <Segmented
-          label="News alerts"
-          options={[['held', 'Holdings'], ['held+watched', '+ Watchlist'], ['all', 'All'], ['off', 'Off']]}
-          value={prefs.news_alerts || 'held'}
-          onChange={(value) => value !== prefs.news_alerts && save({ news_alerts: value })}
-        />
-      </Row>
       {note && <p className="text-[13px] text-[var(--text-muted)] pt-2">{note}</p>}
     </Sheet>
   );

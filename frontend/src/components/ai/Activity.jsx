@@ -19,7 +19,7 @@ const Activity = ({ state, plan }) => {
   if (!state.loaded) return <Skeleton rows={4} />;
   const rows = state.data?.rows || [];
   if (rows.length === 0) return <div className="space-y-3">{top}<PlanCard data={plan} /><Empty title="Nothing from the AI yet" body="Every order and refusal shows here with its reason, once the autopilot is on."
-    action={<Link to="/settings?tab=limits" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Check autopilot in Limits</Link>} /></div>;
+    action={<Link to="/settings/autopilot" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Check autopilot in Settings</Link>} /></div>;
   return (
     <div className="space-y-3">
     {top}

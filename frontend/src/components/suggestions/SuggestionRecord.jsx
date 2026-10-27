@@ -320,7 +320,7 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
               </Button>
             ) : canGoLive && hasMine === false ? (
               <Link
-                to="/settings?tab=accounts"
+                to="/settings/brokers"
                 className="mt-2 block doc-meta normal-case underline text-center"
                 aria-label="Connect your broker and set it as My account in Settings to approve with real money"
               >

@@ -4,14 +4,14 @@ export const LAB_PAGES = ['strategies', 'options', 'runs', 'forward', 'news', 'h
 export const ROUTES = [
   '/', '/money', '/ideas', '/ideas/history', '/ideas/:id', '/ai', '/market', '/stock/:symbol',
   '/ai/strategy/:name', '/ai/trade/:id', '/money/trade/:id', '/market/index/:ticker', '/market/sector/:name', '/news/:id',
-  '/settings', ...LAB_PAGES.map((p) => `/settings/lab/${p}`), '/reports/weekly', '/login', '/profile',
+  '/settings', '/settings/profile', '/settings/brokers', '/settings/guardrails', '/settings/portfolio', '/settings/notifications', '/settings/goal', '/settings/ai', '/settings/autopilot', '/settings/lab', ...LAB_PAGES.map((p) => `/settings/lab/${p}`), '/reports/weekly', '/login', '/profile',
 ];
 
 /** The Lab is admin only (RequireAdmin in App.jsx). */
-export const ADMIN_ROUTES = LAB_PAGES.map((p) => `/settings/lab/${p}`);
+export const ADMIN_ROUTES = ['/settings/autopilot', '/settings/lab', ...LAB_PAGES.map((p) => `/settings/lab/${p}`)];
 
 const LAB = '/settings/lab/strategies';
-const LIMITS = '/settings?tab=limits';
+const LIMITS = '/settings/autopilot';
 
 /** [from, to]: the query string is kept by `Moved`. A `to` is always a real route. */
 export const MOVED = [

@@ -16,7 +16,7 @@ test('hero row: value, today in rupees and percent, versus NIFTY, all private mo
 
 test('hero empty state names the action and links to accounts', () => {
   assert.match(hero, /<Empty[\s\S]*Connect your broker/);
-  assert.match(hero, /settings\?tab=accounts/);
+  assert.match(hero, /settings\/brokers/);
 });
 
 test('Needs you is a 44px tappable control, not a body-text link', () => {

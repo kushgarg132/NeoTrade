@@ -59,7 +59,7 @@ const Money = () => {
               body="Connect your broker and your holdings and trades come in on their own, or import your trades and mutual funds from files."
               action={
                 <span className="flex flex-wrap justify-center gap-2">
-                  <Link to="/settings?tab=accounts" className="inline-flex items-center justify-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Connect your broker</Link>
+                  <Link to="/settings/brokers" className="inline-flex items-center justify-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Connect your broker</Link>
                   <Button variant="secondary" onClick={() => setTab('holdings')}>Import files</Button>
                 </span>
               }

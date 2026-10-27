@@ -17,5 +17,5 @@ test('Telegram link/verify/bot endpoints moved out of the guardrails sheet', () 
 test('Notifications renders TelegramLink and writes news_alerts', () => {
   assert.match(notif, /<TelegramLink \/>/);
   assert.match(notif, /endpoints\.settings\.preferences, \{ news_alerts/);
-  for (const l of ['Held', 'Held + watched', 'All', 'Off']) assert.ok(notif.includes(`'${l}'`));
+  assert.match(notif, /import \{ NEWS_ALERTS \} from '\.\.\/\.\.\/utils\/settings'/);
 });

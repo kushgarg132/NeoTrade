@@ -273,7 +273,7 @@ const JournalTab = ({ onImport }) => {
   return (
     <div className="space-y-4">
       {roles && !hasRole && (
-        <Link to="/settings?tab=accounts" className="block rounded-[16px] border border-dashed border-[var(--border)] px-4 py-3 text-[14px] text-[var(--text-muted)]">
+        <Link to="/settings/brokers" className="block rounded-[16px] border border-dashed border-[var(--border)] px-4 py-3 text-[14px] text-[var(--text-muted)]">
           Showing every account. Set which broker is yours in Settings, Accounts.
         </Link>
       )}

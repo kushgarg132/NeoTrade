@@ -1,14 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Sheet, Ruling } from './Panel';
 import TelegramLink from './TelegramLink';
+import { NEWS_ALERTS } from '../../utils/settings';
 import api, { endpoints, getPreferences } from '../../utils/api';
-
-const NEWS_ALERTS = [
-  { id: 'held', label: 'Held' },
-  { id: 'held+watched', label: 'Held + watched' },
-  { id: 'all', label: 'All' },
-  { id: 'off', label: 'Off' },
-];
 
 const Notifications = () => {
   const [value, setValue] = useState(null);
@@ -41,11 +35,11 @@ const Notifications = () => {
         </p>
         {value === null ? <Ruling rows={1} /> : (
           <div className="flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
-            {NEWS_ALERTS.map((o) => (
-              <button key={o.id} type="button" aria-pressed={o.id === value} onClick={() => pick(o.id)}
+            {NEWS_ALERTS.map(([id, label]) => (
+              <button key={id} type="button" aria-pressed={id === value} onClick={() => pick(id)}
                 className={`flex-1 min-h-11 rounded-[8px] px-3 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
-                  o.id === value ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
-                {o.label}
+                  id === value ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
+                {label}
               </button>
             ))}
           </div>

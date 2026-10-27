@@ -4,34 +4,49 @@ import { readFileSync } from 'node:fs';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const home = read('./SettingsHome.jsx');
+const app = read('../App.jsx');
 
-test('every tab has a plain-words line saying what it is for', () => {
-  assert.match(home, /TAB_HELP/);
-  for (const id of ['accounts', 'alerts', 'limits', 'profile', 'theme', 'goal', 'lab']) assert.match(home, new RegExp(`${id}:`));
+test('old ?tab= links redirect once, replacing history', () => {
+  assert.match(home, /settingsRedirect\(search\)/);
+  assert.match(home, /<Navigate replace to=\{old\}/);
 });
 
-test('accounts lead with what connecting does, as short lines', () => {
+test('admin rows sit behind isAdmin', () => {
+  const i = home.indexOf('{isAdmin && (');
+  assert.ok(i > 0);
+  const admin = home.slice(i);
+  assert.match(admin, /Autopilot/);
+  assert.match(admin, /title="Lab"/);
+  assert.ok(!home.slice(0, i).includes('title="Autopilot"'));
+});
+
+test('App has the nine settings routes, RequireAdmin on autopilot and lab', () => {
+  for (const p of ['profile', 'brokers', 'guardrails', 'portfolio', 'notifications', 'goal', 'ai', 'autopilot', 'lab']) {
+    assert.match(app, new RegExp(`path="/settings/${p}"`), p);
+  }
+  for (const p of ['autopilot', 'lab']) assert.match(app, new RegExp(`path="/settings/${p}" element=\\{gated\\(<RequireAdmin>`));
+  assert.ok(!/path="\/settings\/(profile|brokers|ai)" element=\{gated\(<RequireAdmin>/.test(app));
+});
+
+test('deleted settings components are not imported anywhere', () => {
+  for (const f of ['./SettingsHome.jsx', '../App.jsx']) assert.doesNotMatch(read(f), /settings\/(Alerts|Theme|Limits)/);
+});
+
+test('accounts lead with what connecting does; goal explains its states', () => {
   assert.match(read('../components/settings/Accounts.jsx'), /What connecting does/);
-});
-
-test('errors say what is affected and Retry stays', () => {
-  const alerts = read('../components/settings/Alerts.jsx');
-  assert.match(alerts, /Couldn.t load Telegram/);
-  assert.match(alerts, /onRetry/);
-  assert.match(read('../components/settings/Goal.jsx'), /Couldn.t load your goal\. Home/);
-});
-
-test('goal explains both goal types and the empty state', () => {
   const goal = read('../components/settings/Goal.jsx');
+  assert.match(goal, /Couldn.t load your goal\. Home/);
   assert.match(goal, /No goal set yet/);
   assert.match(goal, /KIND_HELP/);
 });
 
-test('theme says what it changes', () => {
-  assert.match(read('../components/settings/Theme.jsx'), /every screen/);
+test('Accounts submits a broker return code from its own query, whatever the path', () => {
+  const acc = read('../components/settings/Accounts.jsx');
+  assert.match(acc, /searchParams\.get\('code'\)/);
+  assert.match(acc, /searchParams\.get\('request_token'\)/);
+  assert.doesNotMatch(acc, /get\('tab'\)/);
 });
 
-test('admin gate and legacy redirects are kept', () => {
-  assert.match(home, /isAdmin \? \[\{ id: 'lab'/);
-  assert.match(home, /LEGACY/);
+test('news alerts live only in Notifications', () => {
+  assert.doesNotMatch(read('../components/journal/GuardrailsSheet.jsx'), /news_alerts/);
 });

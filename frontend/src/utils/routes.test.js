@@ -19,7 +19,7 @@ test('old paths map where the spec says', () => {
     '/portfolio/import': '/money?tab=holdings', '/portfolio/news': '/market?tab=news',
     '/portfolio/watchlist': '/market?tab=watchlist', '/journal': '/money?tab=journal', '/picks': '/ideas',
     '/ai/book': '/ai?tab=positions', '/ai/activity': '/ai?tab=activity', '/lab': '/settings/lab/strategies',
-    '/lab/limits': '/settings?tab=limits', '/lab/options': '/settings/lab/options', '/lab/runs': '/settings/lab/runs',
+    '/lab/limits': '/settings/autopilot', '/lab/options': '/settings/lab/options', '/lab/runs': '/settings/lab/runs',
     '/lab/forward': '/settings/lab/forward', '/lab/handbook': '/settings/lab/handbook', '/lab/backlog': '/settings/lab/backlog',
     '/mine': '/money', '/system': '/settings/lab/handbook', '/research': '/',
   };

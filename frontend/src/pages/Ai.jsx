@@ -83,7 +83,7 @@ const Ai = () => {
             {ap && ap.lab === false && <div className="mt-1 text-[13px] text-[var(--text-muted)]">Lab off: no intraday auto-run, news-triggered entries or game plan.</div>}
             {ap?.paused?.length > 0 && <div className="mt-1 text-[13px] text-[var(--text-muted)]">Paused on paper (losing over 30+ trades): {ap.paused.join(', ')}</div>}
             {on && <div className="mt-3"><StopAi onStopped={() => { setStopped(true); today.reload(); }} /></div>}
-            {ap && !on && <Link to="/settings?tab=limits" className="mt-2 inline-flex items-center min-h-11 text-[15px] font-semibold text-[var(--accent)]">Turn the autopilot on in Limits</Link>}
+            {ap && !on && <Link to="/settings/autopilot" className="mt-2 inline-flex items-center min-h-11 text-[15px] font-semibold text-[var(--accent)]">Turn the autopilot on in Settings</Link>}
           </>
         )}
       </div>
