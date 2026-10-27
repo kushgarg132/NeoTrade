@@ -32,8 +32,8 @@ MIN_FORWARD = 100  # scored forward picks before the forward record counts
 # the study measured 1.3s over 6 years, 3.9s since 2009).
 HISTORY_START = date.fromisoformat(bars.DEEP_START)
 CAVEATS = [
-    "Survivorship: the universe is today's stock list, so names that were delisted or dropped out are missing "
-    "from history, which flatters past returns.",
+    "Survivorship: each day uses that day's index members (NSE lists since 2006) and stocks that left are "
+    "included, but about 50 delisted ones have no price history left, which still flatters past returns a little.",
     "Every number is a base rate measured over past events (net of delivery charges): this setup's overall, "
     "or, where testing showed it helps, the stock's most similar past setups.",
     "Past base rates can change; the walk-forward table shows how well they held out of sample.",

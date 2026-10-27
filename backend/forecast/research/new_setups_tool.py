@@ -19,7 +19,7 @@ Multiple testing: Bonferroni over every variant x horizon tried (TRIALS printed)
 Strict bar adds: excess over the same-month all-stocks baseline (survivorship + timing removed) > +1%, t >= 2.5.
 Bar (all must hold): OOS excess > +2%/trade, positive in >= 70% of test years (years with >= 10 events),
 bootstrap t >= 2.5, same at 20 bps, and mean excess > +1% in both the pre-2016 and the post-2016 half.
-Universe: point-in-time index members (members.mask); ex-members have no bars yet, so survivors still dominate.
+Universe: point-in-time index members (members.mask); ~50 delisted ex-members have no Yahoo bars.
 Caveats: no results/fundamental data, charges approximate at 20 bps.
 """
 
