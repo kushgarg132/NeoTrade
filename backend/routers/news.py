@@ -175,11 +175,39 @@ async def news_feed(
         names = sorted({_bare(s) for s in [*held, *watched, *broker] if s})
         query["$or"] = [{"symbols": {"$in": names}}, {"impacts.target": {"$in": names}}]
     items = await db.db[COLLECTION].find(query, FEED_FIELDS).sort("published_at", -1).limit(limit).to_list(length=limit)
-    for item in items:
-        item["id"] = item.pop("_id")
-        if item["published_at"].tzinfo is None:  # Mongo hands back naive UTC
-            item["published_at"] = item["published_at"].replace(tzinfo=timezone.utc)
-    return {"items": items}
+    return {"items": [as_feed_item(i) for i in items]}
+
+
+def as_feed_item(item: dict) -> dict:
+    """A news_items doc as the API shows it: `_id` -> `id`, aware UTC `published_at`."""
+    item["id"] = item.pop("_id")
+    if item["published_at"].tzinfo is None:  # Mongo hands back naive UTC
+        item["published_at"] = item["published_at"].replace(tzinfo=timezone.utc)
+    return item
+
+
+OUTCOME_FIELDS = {"type": 1, "target": 1, "direction": 1, "impact": 1,
+                  **{f"{p}_{h}": 1 for p in ("ret", "bench", "move") for h in ("1h", "1d", "5d")}}
+
+
+@router.get("/news/item/{item_id}")
+async def news_item(item_id: str, user: User = Depends(get_current_user)):
+    """One news item with what the scorer predicted and what the market then did (news_outcomes rows; none
+    while unscored). News is shared across users."""
+    import re
+
+    from backend.database import db
+    from backend.datalayer.news import COLLECTION
+    from backend.datalayer.outcomes import COLLECTION as OUTCOMES
+
+    item = await db.db[COLLECTION].find_one({"_id": item_id}, FEED_FIELDS)
+    if not item:
+        raise HTTPException(status_code=404, detail="News item not found")
+    rows = await db.db[OUTCOMES].find({"_id": {"$regex": f"^{re.escape(item_id)}:"}},
+                                      OUTCOME_FIELDS).to_list(length=100)
+    for r in rows:
+        r.pop("_id")
+    return {**as_feed_item(item), "outcomes": rows}
 
 
 @router.get("/news/accuracy")

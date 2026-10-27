@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict, Any
 import json
 import yfinance as yf
@@ -6,6 +6,8 @@ import logging
 import asyncio
 import time
 
+from backend.auth.dependency import get_current_user
+from backend.auth.models import User
 from backend.market_cache import cached
 
 router = APIRouter()
@@ -351,6 +353,7 @@ def market_scan(rows: List[Dict[str, str]], quotes: Dict[str, Dict[str, Any]], r
     sectors = sorted(({"sector": k, "change_pct": round(sum(v) / len(v), 2), "up": sum(x > 0 for x in v), "n": len(v)}
                       for k, v in groups.items()), key=lambda x: x["change_pct"], reverse=True)
     return {
+        "movers": by_change,
         "gainers": [m for m in by_change if m["change_pct"] > 0][:SCAN_TOP],
         "losers": [m for m in reversed(by_change) if m["change_pct"] < 0][:SCAN_TOP],
         "near_high": near_high[:SCAN_TOP], "near_low": near_low[:SCAN_TOP], "sectors": sectors,
@@ -395,6 +398,38 @@ async def get_market_scan():
         except Exception as exc:
             logger.warning("sector sentiment unavailable for the scan: %s", exc)
     return {**scan, "sectors": with_sentiment(scan["sectors"], raws)}
+
+
+def sector_members(scan: Dict[str, Any], name: str) -> List[Dict[str, Any]]:
+    """The scan's movers in one sector, best day first. Pure."""
+    return [m for m in scan.get("movers", []) if m["sector"] == name]
+
+
+@router.get("/market/sector/{name}")
+async def get_sector(name: str, user: User = Depends(get_current_user)):
+    """One sector: its day move and sentiment, its Nifty 200 members, and the 20 newest news items that move
+    it. 404 for a sector not in the scan."""
+    from backend.database import db
+    from backend.datalayer.news import COLLECTION
+    from backend.routers.news import FEED_FIELDS, as_feed_item
+
+    scan = await cached("scan", SCAN_TTL, _scan) or {}
+    row = next((s for s in scan.get("sectors", []) if s["sector"] == name), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Unknown sector")
+    raws = []
+    if db.redis is not None:
+        try:
+            raws = await db.redis.mget([f"sector_sentiment:{name}"])
+        except Exception as exc:
+            logger.warning("sector sentiment unavailable for %s: %s", name, exc)
+    (row,) = with_sentiment([row], raws)
+    items = await db.db[COLLECTION].find(
+        {"impacts": {"$elemMatch": {"type": "sector", "target": name}}}, FEED_FIELDS
+    ).sort("published_at", -1).limit(20).to_list(length=20)
+    return {"sector": name, "change_pct": row["change_pct"], "up": row["up"], "n": row["n"],
+            "sentiment": row["sentiment"], "members": sector_members(scan, name),
+            "news": [as_feed_item(i) for i in items], "at": scan.get("at")}
 
 
 def with_sentiment(sectors: List[Dict[str, Any]], raws: list) -> List[Dict[str, Any]]:
