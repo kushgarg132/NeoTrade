@@ -126,6 +126,12 @@ async def _note(key: str, value: str) -> None:
         logger.warning("could not record LLM health: %s", exc)
 
 
+def _text(content: Any) -> str:
+    if isinstance(content, list):  # some providers answer in content blocks
+        return "".join(b if isinstance(b, str) else b.get("text", "") for b in content)
+    return content
+
+
 class LLMService:
 
 
@@ -162,15 +168,48 @@ class LLMService:
             ]
             
             response = await llm.ainvoke(messages)
-            content = response.content
-            if isinstance(content, list):  # some providers answer in content blocks
-                content = "".join(b if isinstance(b, str) else b.get("text", "") for b in content)
+            content = _text(response.content)
             await _note(LLM_OK_KEY, str(int(time.time())))
             return content
         except Exception as e:
             logger.error(f"LLM Error: {e}")
             await _note(LLM_ERROR_KEY, json.dumps({"at": int(time.time()), "error": str(e)[:300]}))
             return f"Error generating response: {str(e)}"
+
+    async def stream_completion(self, prompt: str, system_prompt: str, tier: Optional[str] = None,
+                                feature: Optional[str] = None) -> AsyncIterator[str]:
+        """get_completion, but yields the text as the model writes it. One charge.
+        A failure before the first chunk falls back to one plain call; after a
+        chunk it raises, since the caller already holds part of the answer."""
+        llm = await self.get_llm(tier=tier, feature=feature)
+        if not llm:
+            yield "LLM_DISABLED"
+            return
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        messages = [SystemMessage(content=system_prompt), HumanMessage(content=prompt)]
+        started = False
+        try:
+            async for event in llm.astream_events(messages, version="v1"):
+                if event["event"] != "on_chat_model_stream":
+                    continue
+                text = _text(event["data"]["chunk"].content)
+                if text:
+                    started = True
+                    yield text
+            await _note(LLM_OK_KEY, str(int(time.time())))
+        except Exception as e:
+            logger.error(f"LLM stream error: {e}")
+            if started:
+                await _note(LLM_ERROR_KEY, json.dumps({"at": int(time.time()), "error": str(e)[:300]}))
+                raise
+            try:
+                text = _text((await llm.ainvoke(messages)).content)
+            except Exception as e2:
+                await _note(LLM_ERROR_KEY, json.dumps({"at": int(time.time()), "error": str(e2)[:300]}))
+                raise
+            await _note(LLM_OK_KEY, str(int(time.time())))
+            yield text
 
     async def _charge(self, feature: Optional[str]) -> None:
         """Counts a call made inside a user's request (use_model(user_id=...))
