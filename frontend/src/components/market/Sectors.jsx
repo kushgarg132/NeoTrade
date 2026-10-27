@@ -50,17 +50,17 @@ const SortControl = ({ value, onChange }) => (
 const Cell = ({ s, maxAbs }) => {
   const flag = divergence(s);
   return (
-    <Link to={sectorPath(s.sector)} className="block min-h-11 rounded-[10px] p-2 text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" style={{ background: heatColor(s.change_pct, maxAbs) }}>
+    <Link to={sectorPath(s.sector)} className="block min-h-11 rounded-[10px] p-2.5 active:opacity-70 text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" style={{ background: heatColor(s.change_pct, maxAbs) }}>
       <div className="text-[13px] truncate" title={s.sector}>{s.sector}</div>
       <div className="text-[15px] font-semibold tabular-nums">{pct(s.change_pct / 100, { sign: true })}</div>
-      <div className="text-[12px] tabular-nums">{s.up} of {s.n} up</div>
+      <div className="text-[13px] tabular-nums">{s.up} of {s.n} up</div>
       {s.sentiment != null && (
-        <div className="mt-1 flex items-center gap-1 text-[12px] tabular-nums">
+        <div className="mt-1 flex items-center gap-1 text-[13px] tabular-nums">
           <span aria-hidden="true" className="inline-block size-2 shrink-0 rounded-full" style={{ background: s.sentiment > 0 ? 'var(--gain)' : s.sentiment < 0 ? 'var(--loss)' : 'var(--text-muted)' }} />
           News {s.sentiment > 0 ? '+' : ''}{s.sentiment.toFixed(2)}
         </div>
       )}
-      {flag && <div className="mt-1 inline-block rounded-full border border-[var(--text)] px-1.5 text-[12px] font-semibold">{flag}</div>}
+      {flag && <div className="mt-1 inline-block rounded-full border border-[var(--text)] px-1.5 text-[13px] font-semibold">{flag}</div>}
     </Link>
   );
 };
@@ -81,7 +81,7 @@ const Sectors = () => {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {sortSectors(data.sectors, by).map((s) => <Cell key={s.sector} s={s} maxAbs={maxAbs} />)}
         </div>
-        <p className="mt-2 text-[12px] text-[var(--text-muted)]">Average move of the Nifty 200 stocks in each sector. Deeper colour, bigger move. News: the sector's headline mood (-1 to +1); flagged when it disagrees with the price.</p>
+        <p className="mt-2 text-[13px] text-[var(--text-muted)]">Average move of the Nifty 200 stocks in each sector. Deeper colour, bigger move. News: the sector's headline mood (-1 to +1); flagged when it disagrees with the price.</p>
         <AsOf at={data.at} />
       </Card>
       <Card title="Near 52-week highs and lows">

@@ -39,7 +39,7 @@ const Story = () => {
   const [open, setOpen] = useState(false);
   const shown = REGIME[data?.regime];
   return (
-    <Card title={closed() ? 'Market · last session' : 'Market today'} action={<span className="text-[12px] text-[var(--text-muted)]">AI summary</span>}>
+    <Card title={closed() ? 'Market · last session' : 'Market today'} action={<span className="text-[13px] text-[var(--text-muted)]">AI summary</span>}>
       {status === 'loading' ? <Skeleton rows={3} />
         : status === 'error' ? <ErrorLine message="Could not load the market brief." onRetry={retry} />
         : status === 'empty' ? <Empty title="No brief yet" body="The market brief appears once the news desk has written one." action={refresh(retry)} />
@@ -82,7 +82,7 @@ const Spark = ({ ticker, up }) => {
 };
 
 const IndexTile = ({ i }) => (
-  <Link to={indexPath(i.symbol)} className="block min-h-[88px] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-3 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+  <Link to={indexPath(i.symbol)} className="block min-h-[88px] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-3 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
     <div className="truncate text-[13px] font-medium text-[var(--text-muted)]">{i.name}</div>
     <div className="mt-1 text-[17px] font-bold tabular-nums text-[var(--text)]">{num(i.value)}</div>
     <div className={`text-[13px] font-semibold tabular-nums ${toneText(tone(i.percent))}`}>{pct(i.percent / 100, { sign: true })}</div>

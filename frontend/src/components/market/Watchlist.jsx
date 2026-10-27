@@ -67,7 +67,7 @@ const Watchlist = () => {
         : rows.length === 0 ? <Empty title="Track a stock" body="Search a name; its page has the Watch toggle." action={<div className="w-full max-w-sm text-left"><SmartSearch compact onSearch={(symbol) => navigate(stockPath(symbol))} /></div>} />
         : rows.map((s) => (
           <div key={s.symbol} className="flex items-center gap-3 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0">
-            <button type="button" onClick={() => navigate(stockPath(s.symbol))} className="min-w-0 flex-1 min-h-11 text-left active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+            <button type="button" onClick={() => navigate(stockPath(s.symbol))} className="min-w-0 flex-1 min-h-11 rounded-[8px] text-left active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
               <div className="text-[15px] font-medium text-[var(--text)] truncate">{bareSymbol(s.symbol)}</div>
               <div className="text-[13px] text-[var(--text-muted)] truncate">{s.error ? 'Quote unavailable' : s.name}</div>
               <NewsChip entry={news[s.symbol?.toUpperCase().replace(/\.NS$/, '')]} link={false} />
@@ -80,7 +80,7 @@ const Watchlist = () => {
             </div>
             <Button variant="secondary" className="px-3" onClick={() => setTicket({ symbol: s.symbol, lastPrice: s.current_price })}>Buy</Button>
             <button type="button" onClick={(e) => remove(e, s.symbol)} aria-label={`Remove ${s.symbol} from the watchlist`}
-                    className="min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--text-muted)]">
+                    className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-[8px] text-[var(--text-muted)] hover:text-[var(--loss)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
