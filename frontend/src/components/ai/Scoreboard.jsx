@@ -21,10 +21,11 @@ const Section = ({ state, children, what, ...p }) => {
   return children;
 };
 
-/** "4 closed (net +₹120) · 2 open (−₹300)": the total on the right adds open positions at market. */
+/** "4 closed (net +₹120) · 2 open (−₹300) · vs NIFTY −₹80": the total on the right adds open positions at market. */
 const strategyLine = (st) => [
   `${st.trades} closed${st.trades ? ` (${inr(st.net, { sign: true })})` : ''}`,
   st.open ? `${st.open} open (${inr(st.unrealized, { sign: true })})` : null,
+  st.vs_nifty != null ? `vs NIFTY ${inr(st.vs_nifty, { sign: true })}` : null,
 ].filter(Boolean).join(' · ');
 
 /** AI -> Scoreboard: this month, AI vs you vs NIFTY, the book's stats, and each strategy's proven status. */

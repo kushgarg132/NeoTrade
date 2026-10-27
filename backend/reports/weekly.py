@@ -93,18 +93,27 @@ def _extremes(closed: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 async def _ai(db, user_id: str, capital: float, start, end) -> dict:
-    """The AI book's week, whole and per strategy (trades closed this week, net of costs; worst first)."""
+    """The AI book's week, whole and per strategy (trades closed this week, net of costs; worst first), and
+    `vs_nifty`: that net minus what the same rupees made in NIFTY over each trade's own days."""
+    from backend.analytics import nifty_same_money
     from backend.autopilot.service import ai_book_query
+    from backend.datalayer import bars
 
-    pnl, by = 0.0, {}
+    pnl, by, closed = 0.0, {}, []
     async for t in db["paper_trades"].find(ai_book_query(user_id)):
         if t.get("status") == "CLOSED" and _in(t.get("exit_at"), start, end):
             net = (t.get("realized_pnl") or 0.0) - (t.get("costs") or 0.0)
             pnl += net
+            closed.append(t)
             by.setdefault(t.get("strategy") or "unattributed", []).append(net)
     strategies = sorted(({"strategy": k, "n": len(v), "net": round(sum(v), 2), "wins": sum(x > 0 for x in v)}
                          for k, v in by.items()), key=lambda r: r["net"])
-    return {"ret": pnl / capital if capital else None, "strategies": strategies}
+    vs = None
+    if closed:
+        since = min((_aware(t["entry_at"]).astimezone(IST).date() for t in closed if t.get("entry_at")), default=start.date()) - timedelta(days=7)
+        points = [{"date": d.isoformat(), "close": c} for d, c in await bars.nifty_closes(db, since)]
+        vs = round(pnl - sum(nifty_same_money(closed, points).values()), 2) if points else None
+    return {"ret": pnl / capital if capital else None, "strategies": strategies, "vs_nifty": vs}
 
 
 async def _grades(db, start, end) -> list[dict]:
@@ -175,7 +184,7 @@ def text(r: dict, narrative: Optional[str] = None) -> str:
     you, ai, ideas, j = r["you"], r["ai"], r["ideas"], r["journal"]
     lines = [f"<b>Your week {escape(r['week'])}</b>",
              f"You {_p(you['ret'])} · NIFTY {_p(you['nifty'])} · excess {_p(you['excess'])}",
-             f"AI book {_p(ai['ret'])}"]
+             f"AI book {_p(ai['ret'])}" + (f" · vs the same money in NIFTY {_r(ai['vs_nifty'])}" if ai.get("vs_nifty") is not None else "")]
     if ai.get("strategies"):
         lines.append("AI by strategy: " + ", ".join(
             f"{escape(x['strategy'])} {_r(x['net'])} ({x['wins']}/{x['n']} won)" for x in ai["strategies"]))

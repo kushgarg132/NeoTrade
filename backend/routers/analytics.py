@@ -79,14 +79,13 @@ async def get_scorecard(
 
     prefs = await PrefsStore(db.db).get(user.id)
     held = {t["symbol"] for t in await ledger.get_trades(status="OPEN", limit=5000, venue=venue, mode=mode)}
+    try:
+        points = await _nifty_points() or []
+    except Exception as e:
+        logger.warning("scorecard: NIFTY benchmark unavailable: %s", e)
+        points = []
     card = await compute_scorecard(ledger, venue, prefs["account_size"], mode=mode,
-                                   marks=await mark_prices(db.db, held) if held else {})
-    card["nifty_return_pct"] = None
+                                   marks=await mark_prices(db.db, held) if held else {}, nifty_points=points)
     first_day = card["totals"]["first_day"]
-    if first_day:
-        try:
-            points = await _nifty_points()
-            card["nifty_return_pct"] = nifty_return(points or [], first_day)
-        except Exception as e:
-            logger.warning("scorecard: NIFTY benchmark unavailable: %s", e)
+    card["nifty_return_pct"] = nifty_return(points, first_day) if first_day and points else None
     return card

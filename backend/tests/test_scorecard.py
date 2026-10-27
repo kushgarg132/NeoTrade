@@ -118,3 +118,19 @@ async def test_open_positions_count_at_market_per_strategy(ledger):
     assert card["totals"]["open"] == 2 and card["totals"]["unrealized"] == -10.0
     plain = await compute_scorecard(ledger, "paper", account_size=100_000)
     assert "picks:momentum" not in {s["strategy"] for s in plain["strategies"]}  # no marks: closed-only as before
+
+
+def test_nifty_same_money_holds_each_trades_rupees_in_the_index_over_its_own_days():
+    from datetime import datetime, timezone
+
+    from backend.analytics import nifty_same_money
+
+    points = [{"date": d, "close": c} for d, c in
+              [("2026-10-01", 100.0), ("2026-10-02", 102.0), ("2026-10-05", 104.0), ("2026-10-06", 110.0)]]
+    at = lambda day: datetime.fromisoformat(f"{day}T04:00:00").replace(tzinfo=timezone.utc)  # 09:30 IST
+    closed = {"strategy": "picks:pullback", "entry_at": at("2026-10-02"), "exit_at": at("2026-10-05"),
+              "entry_price": 50.0, "quantity": 20}           # ₹1,000 from the 10-01 close (100) to 10-05 (104)
+    still_open = {"strategy": "picks:pullback", "entry_at": at("2026-10-05"), "entry_price": 100.0, "quantity": 10}
+    before = {"strategy": "x", "entry_at": at("2026-09-01"), "exit_at": at("2026-10-02"), "entry_price": 1.0, "quantity": 1}
+    out = nifty_same_money([closed, still_open, before], points)
+    assert out == {"picks:pullback": pytest.approx(40.0 + 1000 * (110 / 102 - 1))}  # no close before 09-01: left out

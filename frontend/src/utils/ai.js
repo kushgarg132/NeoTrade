@@ -22,6 +22,8 @@ export const scoreboard = ({ month, card, capital, mineValue } = {}) => {
       { label: 'Trades', value: t ? String(t.trades) : '—' },
       { label: 'Charges', value: t ? inr(t.costs) : '—' },
       { label: 'Max drawdown (peak to trough)', value: t ? p(t.max_drawdown_pct) : '—', tone: t?.max_drawdown > 0 ? 'loss' : 'neutral' },
+      // The bar to clear: the AI's result minus the same rupees held in NIFTY over each trade's own days.
+      { label: 'vs same money in NIFTY', value: t?.vs_nifty == null ? '—' : inr(t.vs_nifty, { sign: true }), tone: tone(t?.vs_nifty) },
     ],
   };
 };

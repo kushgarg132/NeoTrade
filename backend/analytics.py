@@ -179,13 +179,37 @@ def open_by_strategy(open_trades: list[dict], marks: dict[str, float]) -> dict[s
     return {k: {**v, "unrealized": round(v["unrealized"], 2)} for k, v in out.items()}
 
 
+def nifty_same_money(trades: list[dict], points: list[dict]) -> dict[str, float]:
+    """strategy -> what each trade's rupees would have made in NIFTY over that trade's own days (the close
+    before its entry day to the close of its exit day, or the latest close while open): the bar a stock
+    picker has to clear, since buying the index costs next to nothing. `points` are NIFTY closes
+    ({date, close}, oldest first). A trade outside the points' range is left out. Pure."""
+    from bisect import bisect_left, bisect_right
+
+    dates, closes = [p["date"] for p in points], [p["close"] for p in points]
+    out: dict[str, float] = {}
+    for t in trades:
+        if not t.get("entry_at") or not t.get("entry_price"):
+            continue
+        a = bisect_left(dates, _ist(t["entry_at"]).date().isoformat()) - 1
+        b = bisect_right(dates, _ist(t["exit_at"]).date().isoformat()) - 1 if t.get("exit_at") else len(dates) - 1
+        if a < 0 or b <= a:
+            continue
+        side = 1 if t.get("side", "BUY") == "BUY" else -1
+        move = side * t["entry_price"] * (t.get("quantity") or 0.0) * (closes[b] / closes[a] - 1)
+        name = t.get("strategy") or "unattributed"
+        out[name] = out.get(name, 0.0) + move
+    return out
+
+
 async def compute_scorecard(
     ledger: LedgerStore, venue: Optional[Venue], account_size: float, mode: Optional[str] = None,
-    marks: Optional[dict[str, float]] = None,
+    marks: Optional[dict[str, float]] = None, nifty_points: Optional[list[dict]] = None,
 ) -> dict:
     """Closed trades net of charges, per day and per strategy; with `marks` (symbol -> price) each strategy
     also carries its open positions at market (`open`, `unrealized`, `total` = net + unrealized), so a
-    strategy holding losers no longer reads as flat until it sells."""
+    strategy holding losers no longer reads as flat until it sells. With `nifty_points` each strategy and
+    the totals carry `nifty` (the same rupees in NIFTY over the same days) and `vs_nifty` = total - nifty."""
     closed = sorted(
         (t for t in await ledger.get_trades(status="CLOSED", limit=5000, venue=venue, mode=mode) if t.get("exit_at")),
         key=lambda t: t["exit_at"],
@@ -208,20 +232,26 @@ async def compute_scorecard(
     daily = list(days.values())
     totals = _summary([day["pnl"] for day in daily])
     trade_level = _summary([n for nets in by_strategy.values() for n in nets])
-    opens = (open_by_strategy(await ledger.get_trades(status="OPEN", limit=5000, venue=venue, mode=mode), marks)
-             if marks is not None else {})
+    open_trades = await ledger.get_trades(status="OPEN", limit=5000, venue=venue, mode=mode) if marks is not None else []
+    opens = open_by_strategy(open_trades, marks) if marks is not None else {}
+    index = nifty_same_money(closed + open_trades, nifty_points) if nifty_points else None
     for name in opens:
         by_strategy.setdefault(name, [])
     zero = {"open": 0, "unrealized": 0.0}
+
+    def vs(total: float, name: Optional[str] = None) -> dict:
+        if index is None:
+            return {}
+        n = sum(index.values()) if name is None else index.get(name, 0.0)
+        return {"nifty": round(n, 2), "vs_nifty": round(total - n, 2)}
+
+    rows = [{"strategy": name, **_summary(nets), **opens.get(name, zero),
+             "total": sum(nets) + opens.get(name, zero)["unrealized"]} for name, nets in by_strategy.items()]
     return {
         "venue": venue,
         "account_size": account_size,
         "days": daily,
-        "strategies": sorted(
-            ({"strategy": name, **_summary(nets), **opens.get(name, zero),
-              "total": sum(nets) + opens.get(name, zero)["unrealized"]} for name, nets in by_strategy.items()),
-            key=lambda s: s["total"], reverse=True,
-        ),
+        "strategies": sorted(({**r, **vs(r["total"], r["strategy"])} for r in rows), key=lambda s: s["total"], reverse=True),
         "totals": {
             **trade_level,
             # Drawdown is measured on the day-by-day running total, the way
@@ -238,5 +268,6 @@ async def compute_scorecard(
             "worst_day": min(daily, key=lambda d: d["pnl"]) if daily else None,
             "first_day": daily[0]["day"] if daily else None,
             "last_day": daily[-1]["day"] if daily else None,
+            **vs(trade_level["net"] + sum(o["unrealized"] for o in opens.values())),
         },
     }
