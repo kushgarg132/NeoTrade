@@ -200,7 +200,12 @@ async def _stream_analysis(connection, symbol: str, req_id: str) -> None:
         prefs = await PrefsStore(db.db).get(connection.user_id)
         with use_model(prefs.get("omniroute_model"), user_id=connection.user_id):
             report = await ResearchAgent().run(symbol)
-        connection.offer(_frame(topic, "report", report.model_dump()))
+        if report.analyst_summary == "Unable to generate summary.":
+            # A failed note must not replace the good read.
+            connection.offer(_frame(topic, "error", {"detail": "The analysis failed; try again in a minute."}))
+            return
+        done = await analyst.latest(symbol)
+        connection.offer(_frame(topic, "report", {**report.model_dump(), "at": done["at"] if done else datetime.now(timezone.utc).isoformat()}))
     except DailyLimitReached:
         connection.offer(_frame(topic, "error", {"detail": LIMIT_MESSAGE}))
     except Exception as exc:

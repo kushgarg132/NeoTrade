@@ -131,7 +131,7 @@ Opening `/stock/:symbol` always starts the AI read (`components/stock/AiRead.jsx
 (`backend/ai/analyst.py::FRESH_IN_SESSION`), and outside the session for as long as the 4 h cache
 holds; fresh, nothing more happens and nothing is spent. Stale, the page keeps the old read, shows
 "Updating…", and streams the new note as the model writes it (`llm.py::LLMService.stream_completion`,
-forwarded through `analyst.py::report_sink` by `ws/routes.py::_stream_analysis`). Only a run counts
+forwarded through `analyst.py::report_sink` by `ws/routes.py::_stream_analysis`). A refresh skips the 4 h cache, and one that returns the same note re-stamps the last read so the next open is fresh. A failed note is an error, never a replacement. Only a run counts
 against the 10 a minute limit. If the update fails, the last read stays with a "Couldn't refresh" line.
 
 ## Stored AI text on the pages

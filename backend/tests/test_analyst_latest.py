@@ -73,3 +73,55 @@ async def test_two_cold_runs_for_an_unfollowed_symbol_call_the_model_once(wired,
     monkeypatch.setattr(analyst.asyncio, "sleep", lambda _s: real_sleep(0))
     await asyncio.gather(AnalystAgent().analyze({"symbol": "SBIN"}), AnalystAgent().analyze({"symbol": "SBIN"}))
     assert llm.await_count == 2  # score + report, once
+
+
+def _freeze(monkeypatch):
+    import backend.core.market_calendar as mc
+    monkeypatch.setattr(mc, "market_phase", lambda now: "session")
+
+
+def _old_reads(redis):
+    old = (datetime.now(timezone.utc) - timedelta(minutes=90)).isoformat()
+    redis.store["analyst:last:SBIN"] = json.dumps({"summary": "s", "at": old})
+    redis.store["analyst:SBIN"] = json.dumps({"summary": "s", "at": old})
+    return old
+
+
+async def test_stale_refresh_skips_the_4h_cache_and_runs(wired, monkeypatch):
+    llm, redis = wired
+    _freeze(monkeypatch)
+    _old_reads(redis)
+
+    async def stream(*a, **k):
+        yield REPORT
+
+    monkeypatch.setattr(analyst.llm_service, "stream_completion", stream)
+    token = analyst.report_sink.set(lambda e: None)
+    try:
+        await AnalystAgent().analyze({"symbol": "SBIN"})
+    finally:
+        analyst.report_sink.reset(token)
+    assert llm.await_count == 1  # the score call; the note streams
+
+
+async def test_no_sink_still_takes_the_cache_hit(wired, monkeypatch):
+    llm, redis = wired
+    _freeze(monkeypatch)
+    _old_reads(redis)
+    await AnalystAgent().analyze({"symbol": "SBIN"})
+    assert llm.await_count == 0
+
+
+async def test_followed_same_basis_refresh_restamps_the_last_read(wired, monkeypatch):
+    _, redis = wired
+    _freeze(monkeypatch)
+    old = _old_reads(redis)
+    same = {"summary": "s", "at": old, "basis": "b"}
+    monkeypatch.setattr("backend.datalayer.analysis.from_layer", AsyncMock(return_value=same))
+    token = analyst.report_sink.set(lambda e: None)
+    try:
+        await AnalystAgent().analyze({"symbol": "SBIN"})
+    finally:
+        analyst.report_sink.reset(token)
+    assert json.loads(redis.store["analyst:last:SBIN"])["at"] > old
+    assert redis.ttls["analyst:last:SBIN"] == analyst.LAST_TTL_SECONDS

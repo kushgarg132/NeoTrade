@@ -148,6 +148,8 @@ def test_an_unknown_action_is_reported_not_fatal(client):
 
 def test_analysis_streams_back_on_its_own_topic(client, monkeypatch):
     class _Report:
+        analyst_summary = "ok"
+
         def model_dump(self):
             return {"symbol": "RELIANCE", "thesis": "Fine business."}
 
@@ -388,6 +390,8 @@ def test_a_stale_read_streams_stage_delta_then_report(client, monkeypatch):
     _latest(monkeypatch, True)
 
     class _Report:
+        analyst_summary = "ok"
+
         def model_dump(self):
             return {"symbol": "SBIN"}
 
@@ -401,6 +405,25 @@ def test_a_stale_read_streams_stage_delta_then_report(client, monkeypatch):
     frames = _analyze(client)
     assert [f["event"] for f in frames] == ["cached", "stage", "delta", "report"]
     assert frames[1]["data"] == {"step": "writing"} and frames[2]["data"] == {"text": "Hi"}
+    assert frames[3]["data"]["symbol"] == "SBIN" and frames[3]["data"]["at"]
+
+
+def test_a_failed_note_is_an_error_not_a_report(client, monkeypatch):
+    _latest(monkeypatch, True)
+
+    class _Report:
+        analyst_summary = "Unable to generate summary."
+
+        def model_dump(self):
+            return {}
+
+    class _Agent:
+        async def run(self, symbol):
+            return _Report()
+
+    monkeypatch.setattr("backend.research.graph.ResearchAgent", lambda: _Agent())
+    frames = _analyze(client)
+    assert [f["event"] for f in frames] == ["cached", "error"]
 
 
 def test_a_fresh_open_does_not_touch_the_budget(client, monkeypatch):

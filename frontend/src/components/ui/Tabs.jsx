@@ -31,9 +31,9 @@ const Tabs = ({ tabs, value, onChange, label = 'Tabs', wrap = false }) => (
 
 /** URL-backed tab state: `?tab=<id>`, the default id leaves the URL clean. Unknown ids fall back to the default. */
 // eslint-disable-next-line react-refresh/only-export-components
-export const useTabParam = (ids, defaultId = ids[0], key = 'tab') => {
+export const useTabParam = (ids, defaultId = ids[0], key = 'tab', alias = (x) => x) => {
   const [params, setParams] = useSearchParams();
-  const raw = params.get(key);
+  const raw = alias(params.get(key));
   const tab = ids.includes(raw) ? raw : defaultId;
   const setTab = useCallback(
     (id) =>

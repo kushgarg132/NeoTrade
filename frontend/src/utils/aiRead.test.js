@@ -19,6 +19,13 @@ test('stale cached read then deltas then report swaps the read', () => {
   assert.deepEqual(s.read, { a: 2 });
   assert.equal(s.stale, false);
   assert.equal(s.text, '');
+  assert.equal(s.loading, false);
+});
+
+test('report takes its at from the frame', () => {
+  const s = run([['reset'], ['report', { a: 2, at: 'T1' }]]);
+  assert.equal(s.at, 'T1');
+  assert.equal(run([['reset'], ['report', { a: 2 }]]).at.length > 10, true);
 });
 
 test('stale with no read keeps loading', () => {

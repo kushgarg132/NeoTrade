@@ -45,7 +45,7 @@ const Stat = ({ label, value, valueClass = '' }) => (
 /** /stock/:symbol: price and verdict on top, your position if you hold it, then Chart / News / Details / Events. */
 const Stock = () => {
   const symbol = bareSymbol(useParams().symbol)?.toUpperCase();
-  const [tab, setTab] = useTabParam(TABS.map((t) => t.id));
+  const [tab, setTab] = useTabParam(TABS.map((t) => t.id), 'chart', 'tab', (t) => (t === 'analysis' ? stockTab(t) : t));
   const [params] = useSearchParams();
   const { quick, ai, aiRead, retryAi, reloadQuick } = useStockAnalysis(symbol);
   // Old ?tab=analysis links land on Details.

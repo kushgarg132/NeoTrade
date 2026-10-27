@@ -37,7 +37,7 @@ const AiRead = ({ aiRead, retryAi }) => {
       )}
       {summary && (
         <>
-          {read && score != null && (
+          {read && !live && score != null && (
             <p className="mb-2 flex items-baseline justify-between gap-3">
               <span className={`text-[17px] font-bold ${tone}`}>{word}</span>
               <span className="tabular-nums text-[15px] font-semibold">{Number(score).toFixed(2)}</span>

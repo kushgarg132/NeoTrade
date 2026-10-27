@@ -17,7 +17,7 @@ export function aiReducer(state, { symbol, event, data }) {
     case 'delta':
       return { ...state, text: state.text + data.text, streaming: true };
     case 'report':
-      return { ...state, read: data, at: new Date().toISOString(), stale: false, stage: null, text: '', streaming: false, error: null };
+      return { ...state, read: data, at: data?.at ?? new Date().toISOString(), stale: false, loading: false, stage: null, text: '', streaming: false, error: null };
     case 'error':
       return { ...state, error: data.detail, text: '', stage: null, streaming: false };
     case 'done':

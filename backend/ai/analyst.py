@@ -143,7 +143,8 @@ async def _report(**values) -> tuple[str, str]:
         parts = []
         async for delta in llm_service.stream_completion(prompt, system_prompt=system, tier="standard", feature="research"):
             parts.append(delta)
-            emit({"type": "delta", "text": delta})
+            if delta != "LLM_DISABLED" and not delta.startswith("Error generating response"):
+                emit({"type": "delta", "text": delta})
         return _split_report("".join(parts))
     except Exception as e:
         logger.error(f"AnalystAgent LLM Error: {e}")
@@ -192,12 +193,27 @@ async def latest(symbol: str, now: Optional[datetime] = None) -> Optional[Dict[s
 class AnalystAgent:
     async def analyze(self, state: Dict[str, Any]) -> Dict[str, Any]:
         symbol = state["symbol"]
+        # A socket refresh of a stale last read must not be answered by an older cached note.
+        last = await latest(symbol) if report_sink.get() is not None else None
+        last = last if last and last["stale"] else None
+        out = await self._analyze_cached(symbol, last)
+        if last and out.get("at") and datetime.fromisoformat(out["at"]) <= datetime.fromisoformat(last["at"]):
+            # Same note handed back: stamp the last read so the next open sees it fresh.
+            redis = _redis()
+            try:
+                await redis.set(f"analyst:last:{symbol}", json.dumps({**out, "at": datetime.now(timezone.utc).isoformat()}),
+                                ex=LAST_TTL_SECONDS)
+            except Exception as exc:
+                logger.warning("analyst last restamp failed for %s: %s", symbol, exc)
+        return out
+
+    async def _analyze_cached(self, symbol: str, stale_last: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         from backend.datalayer.analysis import from_layer
 
         layered = await from_layer(symbol, self._cached, self._store_note)
         if layered is not None:
             return layered
-        cached = await self._cached(symbol)
+        cached = None if stale_last else await self._cached(symbol)
         if cached is not None:
             logger.info("AnalystAgent: cache hit for %s", symbol)
             return cached
@@ -213,7 +229,7 @@ class AnalystAgent:
                     for _ in range(WAIT_SECONDS // 2):
                         await asyncio.sleep(2)
                         cached = await self._cached(symbol)
-                        if cached is not None:
+                        if cached is not None and (not stale_last or cached.get("at", "") > stale_last["at"]):
                             return cached
             except Exception as exc:
                 logger.warning("analyst lock failed for %s: %s", symbol, exc)

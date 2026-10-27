@@ -64,3 +64,14 @@ async def test_layer_build_sends_the_writing_stage(monkeypatch):
     finally:
         analyst.report_sink.reset(token)
     assert events == [{"type": "stage", "step": "writing"}]
+
+
+async def test_a_disabled_llm_marker_is_not_streamed(wired, monkeypatch):
+    _stream(monkeypatch, ["LLM_DISABLED", "Error generating response: x"])
+    events = []
+    token = analyst.report_sink.set(events.append)
+    try:
+        await analyst._report(symbol="SBIN", sentiment_score="0", relevant_count=0, news="", events="[]")
+    finally:
+        analyst.report_sink.reset(token)
+    assert [e for e in events if e["type"] == "delta"] == []
