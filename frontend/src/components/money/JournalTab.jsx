@@ -22,6 +22,7 @@ import { useReconnect, useTopic } from '../../hooks/useStream';
 import { useAccount } from '../../hooks/useAccount';
 import { monthKey, shiftMonth, monthLabel, todayIst } from '../../utils/months';
 import api, { endpoints } from '../../utils/api';
+import { roundTripPath } from '../../utils/routes';
 import { formatQuantity, formatPercent, formatSigned, formatDateTime } from '../../utils/formatters';
 
 /**
@@ -39,7 +40,7 @@ const newsWord = (n) => (n.direction > 0 ? 'good news' : n.direction < 0 ? 'bad 
 const hoursBefore = (m) => (m < 60 ? `${m} min` : `${Math.round(m / 60)} h`);
 
 /** Small chips inside the trip row (a button, so no links here); the headlines show when it is tapped. */
-const NewsChips = ({ trip }) => {
+export const NewsChips = ({ trip }) => {
   const items = tripNews(trip);
   if (items.length === 0) return null;
   return (
@@ -53,7 +54,7 @@ const NewsChips = ({ trip }) => {
   );
 };
 
-const TripHeadlines = ({ trip }) => {
+export const TripHeadlines = ({ trip }) => {
   const items = tripNews(trip);
   if (items.length === 0) return null;
   return (
@@ -83,7 +84,7 @@ const Finding = ({ finding }) => (
   </li>
 );
 
-const NoteEditor = ({ trip, onSaved }) => {
+export const NoteEditor = ({ trip, onSaved }) => {
   const [note, setNote] = useState(trip.note || '');
   const [tags, setTags] = useState((trip.tags || []).join(', '));
   const [busy, setBusy] = useState(false);
@@ -154,7 +155,6 @@ const JournalTab = ({ onImport }) => {
   const [error, setError] = useState(null);
   const [month, setMonth] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
-  const [openTrip, setOpenTrip] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const fileInput = useRef(null);
@@ -242,9 +242,6 @@ const JournalTab = ({ onImport }) => {
       )
     );
   };
-  const onNoteSaved = (id, saved) =>
-    setData((cur) => ({ ...cur, round_trips: cur.round_trips.map((t) => (t.id === id ? { ...t, ...saved } : t)) }));
-
   const byDay = useMemo(() => Object.fromEntries((data?.calendar || []).map((r) => [r.day, r])), [data]);
   const monthTotal = useMemo(
     () =>
@@ -333,34 +330,24 @@ const JournalTab = ({ onImport }) => {
               title={selectedDay ? `Closed ${selectedDay}` : 'Recent round trips'}
               action={selectedDay && <button type="button" className={small} onClick={() => setSelectedDay(null)}>All</button>}
             >
-              <p className="text-[13px] text-[var(--text-muted)] -mt-2 mb-1">Gross of charges. Tap a trade to add a note.</p>
+              <p className="text-[13px] text-[var(--text-muted)] -mt-2 mb-1">Gross of charges. Tap a trade for its fills and a note.</p>
               <div className="private">
                 {trips.map((t) => (
-                  <div key={t.id} className="border-b border-[var(--border)] last:border-b-0">
-                    <button
-                      type="button" aria-expanded={openTrip === t.id}
-                      onClick={() => setOpenTrip(openTrip === t.id ? null : t.id)}
-                      className="flex w-full items-center gap-3 min-h-14 py-2 text-left"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[15px] font-medium text-[var(--text)] truncate">
-                          {t.symbol} <span className="text-[13px] font-normal text-[var(--text-muted)]">{t.direction === 'SHORT' ? 'Short' : 'Long'}{t.kind && t.kind !== 'STOCK' ? ` · ${t.kind === 'FUTURE' ? 'FUT' : t.kind}` : ''}</span>
-                        </span>
-                        <span className="block text-[13px] text-[var(--text-muted)] truncate tabular-nums">
-                          {formatQuantity(t.quantity)} · {inr(t.entry_price)} to {t.exit_price === null ? 'open' : inr(t.exit_price)}
-                          {t.tags?.length > 0 && ` · ${t.tags.join(' · ')}`}
-                        </span>
-                        <NewsChips trip={t} />
+                  <Link key={t.id} to={roundTripPath(t.id)} className="flex w-full items-center gap-3 min-h-14 py-2 text-left border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-medium text-[var(--text)] truncate">
+                        {t.symbol} <span className="text-[13px] font-normal text-[var(--text-muted)]">{t.direction === 'SHORT' ? 'Short' : 'Long'}{t.kind && t.kind !== 'STOCK' ? ` · ${t.kind === 'FUTURE' ? 'FUT' : t.kind}` : ''}</span>
                       </span>
-                      <span className={`figure-md shrink-0 text-[15px] tabular-nums ${toneText(tone(t.pnl))}`}>{inr(t.pnl, { sign: true })}</span>
-                    </button>
-                    {openTrip === t.id && (
-                      <>
-                        <TripHeadlines trip={t} />
-                        <NoteEditor trip={t} onSaved={onNoteSaved} />
-                      </>
-                    )}
-                  </div>
+                      <span className="block text-[13px] text-[var(--text-muted)] truncate tabular-nums">
+                        {formatQuantity(t.quantity)} · {inr(t.entry_price)} to {t.exit_price === null ? 'open' : inr(t.exit_price)}
+                        {t.tags?.length > 0 && ` · ${t.tags.join(' · ')}`}
+                      </span>
+                      {t.note && <span className="block text-[13px] text-[var(--text-muted)] truncate">{t.note}</span>}
+                      <NewsChips trip={t} />
+                    </span>
+                    <span className={`figure-md shrink-0 text-[15px] tabular-nums ${toneText(tone(t.pnl))}`}>{inr(t.pnl, { sign: true })}</span>
+                    <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+                  </Link>
                 ))}
               </div>
             </Card>

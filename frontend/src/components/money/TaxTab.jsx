@@ -10,6 +10,7 @@ import { inr, tone } from '../ui/format';
 import api, { endpoints } from '../../utils/api';
 import { formatQuantity } from '../../utils/formatters';
 import { taxYears } from '../../utils/mine';
+import { stockPath } from '../../utils/stocks';
 import useSymbolNews from '../../hooks/useSymbolNews';
 import { lossCause } from '../../utils/news';
 
@@ -137,14 +138,14 @@ const TaxTab = ({ onImport }) => {
           <p className="text-[13px] font-semibold text-[var(--text-muted)] mb-1">Loss harvest</p>
           {harvest.loss.length === 0 ? <None text="No holdings at a loss." /> : harvest.loss.map((h) => (
             <ListRow
-              key={h.symbol} chevron={false} title={h.symbol} right={`saves ${inr(h.saving)}`} rightTone="gain"
+              key={h.symbol} to={stockPath(h.symbol)} title={h.symbol} right={`saves ${inr(h.saving)}`} rightTone="gain"
               sub={<LossSub h={h} entry={news[h.symbol.toUpperCase()]} />}
             />
           ))}
           {harvest.loss.length > 0 && <Note>Whether material bad news in the last 72 hours is behind the loss. Context only.</Note>}
           <p className="text-[13px] font-semibold text-[var(--text-muted)] mt-4 mb-1">Gain harvest</p>
           {harvest.gain.length === 0 ? <None text="No long-term gains fit the unused exemption." /> : harvest.gain.map((h) => (
-            <ListRow key={h.symbol} chevron={false} title={h.symbol} sub={`sell ${formatQuantity(h.qty)} to book ${inr(h.gain)} tax-free, then rebuy`} />
+            <ListRow key={h.symbol} to={stockPath(h.symbol)} title={h.symbol} sub={`sell ${formatQuantity(h.qty)} to book ${inr(h.gain)} tax-free, then rebuy`} />
           ))}
         </Card>
       </>
