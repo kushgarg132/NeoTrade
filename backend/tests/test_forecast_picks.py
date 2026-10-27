@@ -129,9 +129,10 @@ def test_delivery_charges_on_a_flat_round_trip():
     flat = Execution(slippage_bps=0.0)
     assert round_trip_return(100.0, 100.0, flat) == pytest.approx(-(142.22 + 143.15) / 100_000)
     assert round_trip_return(100.0, 110.0, flat) == pytest.approx(0.10 - (142.22 + 153.51) / 100_000)  # sell side on Rs 1.1L
-    # study returns now include 10 bps adverse slippage per side
-    assert study.net_return(100.0, 100.0) == pytest.approx(-0.004849702)
-    assert study.net_return(100.0, 110.0) == pytest.approx(0.094847098)
+    # study returns include 10 bps adverse slippage per side, at the AI account's Rs 5k cap: a flat round trip
+    # costs 81 bps there (the DP charge alone is 32), against 48 bps at Rs 1L
+    assert study.net_return(100.0, 100.0) == pytest.approx(-0.008112002)
+    assert study.net_return(100.0, 110.0) == pytest.approx(0.091550198)
 
 
 def test_signals_inside_an_open_event_window_are_dropped():
@@ -361,6 +362,38 @@ def test_adjusted_edge_subtracts_the_same_month_universe_baseline():
     beats = study.adjusted_edge(ev, pd.Series(0.0, index=months), wf)
     assert beats["excess"] > 0.05 and beats["t"] >= study.ADJ_MIN_T and beats["edge"] is True
     assert study.adjusted_edge(ev, pd.Series(0.0, index=months), {"years": []})["edge"] is False
+
+
+def test_grade_a_needs_the_corrected_t_and_both_halves():
+    assert round(study.min_t(1), 2) == 1.96 and round(study.min_t(8), 2) == 2.73
+    months = pd.period_range("2022-01", periods=24, freq="M")
+    wf = {"years": [{"year": 2022}, {"year": 2023}]}
+    rng = np.random.default_rng(3)
+    late = study.adjusted_edge(_events(np.r_[np.full(12, -0.01), np.full(12, 0.08)] + rng.normal(0, 0.005, 24)),
+                               pd.Series(0.0, index=months), wf)
+    assert late["excess"] > 0 and late["halves"][0] < 0 < late["halves"][1] and late["edge"] is False
+    steady = study.adjusted_edge(_events(0.05 + rng.normal(0, 0.01, 24)), pd.Series(0.0, index=months), wf, need_t=1e9)
+    assert steady["edge"] is False  # every half positive, t short of the bar
+
+
+def _bars(lows, highs, closes):
+    days = pd.bdate_range("2024-01-01", periods=len(closes))
+    frame = lambda v: pd.DataFrame({"X": v}, index=days)
+    return {"open": frame([100.0] * len(closes)), "high": frame(highs), "low": frame(lows), "close": frame(closes)}, days
+
+
+def test_levels_exit_takes_the_first_touch_else_the_horizon_close():
+    # entry day 15 (open 100); flat ATR 1 -> 2-ATR stop 98 is tighter than p10 -5% (95); target +4% = 104
+    n = 20
+    lows, highs, closes = [99.5] * n, [100.5] * n, [100.0] * n
+    t, days = _bars(lows, highs, closes)
+    ev = pd.DataFrame({"symbol": ["X"], "entry": [days[15]], "exit": [days[18]]})
+    held = study.levels_exit(t, ev, -0.05, 0.04)["net"].iat[0]
+    assert held == study.net_return(100.0, 100.0)
+    lows[17] = 97.0
+    assert study.levels_exit(_bars(lows, highs, closes)[0], ev, -0.05, 0.04)["net"].iat[0] == study.net_return(100.0, 98.0)
+    lows[17], highs[16] = 99.5, 105.0
+    assert study.levels_exit(_bars(lows, highs, closes)[0], ev, -0.05, 0.04)["net"].iat[0] == study.net_return(100.0, 104.0)
 
 
 # --- price levels ------------------------------------------------------------------

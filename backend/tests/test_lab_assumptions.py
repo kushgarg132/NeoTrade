@@ -21,7 +21,7 @@ def test_round_trip_matches_hand_math():
 
 
 def test_study_net_return_uses_it():
-    assert study.net_return(100.0, 110.0) == pytest.approx(round_trip_return(100.0, 110.0))
+    assert study.net_return(100.0, 110.0) == pytest.approx(round_trip_return(100.0, 110.0, notional=study.NOTIONAL))
 
 
 def test_factor_trade_slips_like_the_shared_fill():

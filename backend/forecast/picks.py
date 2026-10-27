@@ -40,8 +40,7 @@ CAVEATS = [
 ]
 
 
-ATR_DAYS = 14
-STOP_ATR = 2.0  # a stop no further than this many ATRs below entry
+ATR_DAYS, STOP_ATR = study.ATR_DAYS, study.STOP_ATR  # one definition: study.levels_exit tests these exits
 
 
 def _atr(t: dict, symbol: str, last: int) -> Optional[float]:
@@ -161,7 +160,7 @@ GRADES = ("A", "B", "C")
 # What each grade means, from the setup's adjusted out-of-sample excess over the average stock
 # (`study.adjusted_edge`, stored in picks_study). Every number there is already net of charges.
 GRADE_TEXT = {
-    "A": "Proven: beat the average stock out of sample (t >= 2)",
+    "A": "Proven: beat the average stock out of sample, corrected for the setups tested at once, in both halves",
     "B": "Promising: ahead of the average stock out of sample, not yet proven",
     "C": "Unproven: no edge over the average stock so far",
 }

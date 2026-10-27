@@ -10,13 +10,17 @@ previous event's window is skipped, so overlapping copies of one move are
 not counted as independent evidence.
 """
 
+from statistics import NormalDist
+
 import numpy as np
 import pandas as pd
 
 from backend.lab.assumptions import DEFAULT, Execution, round_trip_return
 from backend.lab.splits import yearly_folds
 
-NOTIONAL = 100_000.0  # rupees per position: sets the flat parts (brokerage cap, DP charge)
+# Rupees per position: sets the flat parts (brokerage cap, DP charge). The AI account's per-trade cap
+# (admin pref, 2026-10-23), not 100k: at 100k the DP charge is 2 bps, at 5k it is 32 (audit T6, 2026-10-24).
+NOTIONAL = 5_000.0
 MIN_PRIOR = 30        # walk-forward: a year is only tested once this many past events have matured
 MIN_N = 100           # picks come only from setups with at least this many events
 
@@ -113,8 +117,14 @@ def walk_forward(ev: pd.DataFrame) -> dict:
     }
 
 
-ADJ_MIN_T = 2.0   # a setup has an edge when its adjusted out-of-sample excess is > 0 with at least this month-block t
+ADJ_MIN_T = 2.0   # one setup tested alone: a setup has an edge when its adjusted excess is > 0 with this month-block t
 BOOT = 2000
+
+
+def min_t(tests: int) -> float:
+    """ADJ_MIN_T's two-sided 5% raised for `tests` setups graded at once (Bonferroni): 8 setups -> 2.73. With 8
+    graded at t >= 2 one lucky A is likely; the 2026-10-27 survivorship rerun flipped 3 of 8 grades (audit follow-up)."""
+    return NormalDist().inv_cdf(1 - 0.025 / max(tests, 1))
 
 
 def members_only(t: dict, fires: pd.DataFrame) -> pd.DataFrame:
@@ -172,10 +182,11 @@ def basket(ev: pd.DataFrame, baseline: pd.Series, wf: dict) -> dict:
 BASKET_MIN = 3  # a month counts as a basket from this many picks
 
 
-def adjusted_edge(ev: pd.DataFrame, baseline: pd.Series, wf: dict) -> dict:
+def adjusted_edge(ev: pd.DataFrame, baseline: pd.Series, wf: dict, need_t: float = ADJ_MIN_T) -> dict:
     """Out-of-sample (the years `walk_forward` tested) mean of excess over NIFTY minus the baseline of the signal
-    month, with a month-block bootstrap t. `edge` = mean > 0 and t >= ADJ_MIN_T."""
-    none = {"oos_n": 0, "excess": None, "t": None, "edge": False}
+    month, with a month-block bootstrap t. `edge` = mean > 0, t >= need_t, and the mean is above zero in both
+    the earlier and the later half of the tested months (`halves`): an edge that lives in one stretch is luck."""
+    none = {"oos_n": 0, "excess": None, "t": None, "halves": None, "edge": False}
     years = [y["year"] for y in wf["years"]]
     o = ev[ev["signal"].dt.year.isin(years)] if not ev.empty else ev
     if len(o) < 5:
@@ -188,21 +199,75 @@ def adjusted_edge(ev: pd.DataFrame, baseline: pd.Series, wf: dict) -> dict:
     idx = np.random.default_rng(0).integers(0, len(s), (BOOT, len(s)))
     sd = (s[idx].sum(1) / n[idx].sum(1)).std(ddof=1)
     t_ = mean / sd if sd > 0 else None
-    return {"oos_n": int(len(o)), "excess": mean, "t": None if t_ is None else float(t_),
-            "edge": bool(mean > 0 and t_ is not None and t_ >= ADJ_MIN_T)}
+    half = len(s) // 2  # groupby sorts the "YYYY-MM" keys, so this splits earlier from later months
+    halves = [float(s[:half].sum() / n[:half].sum()) if half else None, float(s[half:].sum() / n[half:].sum())]
+    return {"oos_n": int(len(o)), "excess": mean, "t": None if t_ is None else float(t_), "need_t": need_t,
+            "halves": halves,
+            "edge": bool(mean > 0 and t_ is not None and t_ >= need_t and all(h is not None and h > 0 for h in halves))}
+
+
+ATR_DAYS = 14
+STOP_ATR = 2.0  # a stop no further than this many ATRs below entry (forecast/picks.py::levels)
+
+
+def levels_exit(t: dict, ev: pd.DataFrame, p10: float, median: float) -> pd.DataFrame:
+    """`ev` with `net` re-priced under the exits the autopilot trades (forecast/picks.py::levels): stop at the
+    tighter of entry x (1 + p10) and STOP_ATR x ATR below entry, target at entry x (1 + median); the first touch
+    inside the horizon exits (a stop before a target on the same bar, a gap through either fills at the open),
+    else the horizon close as before. p10/median are the setup's own in-sample figures, so this compares two
+    exit rules on the same events; it is not a tradeable forecast."""
+    if ev.empty:
+        return ev
+    days = t["close"].index
+    o, h, l, c = (t[k] for k in ("open", "high", "low", "close"))
+    prev = c.shift()
+    atr = np.fmax(np.fmax(h - l, (h - prev).abs()), (l - prev).abs()).rolling(ATR_DAYS).mean()
+    col = {sym: i for i, sym in enumerate(c.columns)}
+    O, H, L, C, A = (x.to_numpy() for x in (o, h, l, c, atr))
+    nets = []
+    for sym, entry_day, exit_day in zip(ev["symbol"], ev["entry"], ev["exit"]):
+        j, i, k = col[sym], days.get_loc(entry_day), days.get_loc(exit_day)
+        e = O[i, j]
+        stops = [e * (1 + p10)] if p10 < 0 else []
+        if np.isfinite(A[i - 1, j]):
+            stops.append(e - STOP_ATR * A[i - 1, j])
+        stop = max(stops) if stops else -np.inf
+        target = e * (1 + median) if median > 0 else np.inf
+        out = C[k, j]
+        for d in range(i, k + 1):
+            if L[d, j] <= stop:
+                out = min(O[d, j], stop) if d > i else stop
+                break
+            if H[d, j] >= target:
+                out = max(O[d, j], target) if d > i else target
+                break
+        nets.append(net_return(float(e), float(out)))
+    return ev.assign(net=nets)
 
 
 def run(t: dict, setups) -> tuple[dict, dict]:
     """-> ({setup: stats + walk_forward}, {setup: fires frame})."""
     results, all_fires, base = {}, {}, {}
+    need = min_t(len(setups))
     for s in setups:
         fires = members_only(t, s.signals(t))
         ev = events(t, s, fires)
         if s.horizon not in base:
             base[s.horizon] = baseline_by_month(t, s.horizon)
         wf = walk_forward(ev)
+        st, adj = stats(ev), adjusted_edge(ev, base[s.horizon], wf, need)
         results[s.name] = {"setup": s.name, "label": s.label, "horizon": s.horizon, "experimental": getattr(s, "experimental", False),
-                           **stats(ev), "walk_forward": wf, "adjusted": adjusted_edge(ev, base[s.horizon], wf),
-                           "basket": basket(ev, base[s.horizon], wf)}
+                           **st, "walk_forward": wf, "adjusted": adj, "basket": basket(ev, base[s.horizon], wf),
+                           "levels_exit": _levels_exit(t, ev, st, base[s.horizon], wf, adj)}
         all_fires[s.name] = fires
     return results, all_fires
+
+
+def _levels_exit(t, ev, st, baseline, wf, adj) -> dict:
+    """The stop/target exit's adjusted excess and t beside the horizon exit's; `better` = it earned more over
+    the same out-of-sample events, so the autopilot trades the levels only then (autopilot/picks.py)."""
+    if not st.get("n"):
+        return {"excess": None, "t": None, "better": False}
+    lv = adjusted_edge(levels_exit(t, ev, st["p10"], st["median"]), baseline, wf)
+    better = lv["excess"] is not None and adj["excess"] is not None and lv["excess"] > adj["excess"]
+    return {"excess": lv["excess"], "t": lv["t"], "better": bool(better)}
