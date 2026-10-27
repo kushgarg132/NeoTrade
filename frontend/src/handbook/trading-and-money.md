@@ -367,9 +367,13 @@ reaches Telegram, digests or chat.
   forward track record, for admins only: `picks.py::enter` buys the last session's picks at the
   first long-term pass after the open (09:20), best first, each sized to the per-trade cap in force,
   through `autopilot/service.py::submit` (fence, kill switch, max invested, trades a day), CNC, long
-  only; `picks.py::exit_due` sells at the pick's stop or target (its `forecast/picks.py::levels`,
-  moved to the fill by `suggestions/exits.py::anchored`), checked every 15 minutes, else from 15:15
-  on its `due_date` (the close of its horizon); exits never blocked. Each trade carries `strategy="picks:<setup>"`, `via="autopilot:picks"` and
+  only, grade-A setups only (`forecast/study.py::adjusted_edge`: t at least `::min_t` for the number of
+  setups graded at once, 2.73 for 8, and positive in both halves of the tested months);
+  `picks.py::exit_due` sells from 15:15 on its `due_date` (the close of its horizon, the exit the study
+  grades). Its stop or target (`forecast/picks.py::levels`, moved to the fill by
+  `suggestions/exits.py::anchored`, checked every 15 minutes) is traded only while the study's
+  `levels_exit` says it beat the horizon close for that setup (`picks.py::_levels_tested`; on
+  2026-10-27 it lost in every setup); exits never blocked. Each trade carries `strategy="picks:<setup>"`, `via="autopilot:picks"` and
   the pick's id in `context`. Nothing goes to Telegram. Paper only until the forward record passes
   `forecast/picks.py::live_refusal` (≥100 scored, calibration within 5 points, positive mean excess
   over NIFTY) and the owner turns on both `picks_live` and the autopilot's Live mode; AI → Autopilot

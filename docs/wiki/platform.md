@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 7c79234
+verified_at: c8e4399
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -46,7 +46,7 @@ The FastAPI process that everything else plugs into: `backend/server.py` builds 
 | `backend/rate_limit.py` | fixed-window per-key limiter, fails open | `allow` |
 | `backend/log_redaction.py` | strips `token=` and Telegram bot tokens from logs | `RedactTokens`, `install`, `_PATTERNS` |
 | `backend/marks.py` | best-effort current prices (Redis `quote:` then yfinance) | `mark_prices`, `cached_quotes`, `store_quotes` |
-| `backend/analytics.py` | P&L cards and the scorecard maths (`compute_scorecard(..., marks)`: with marks each strategy adds `open`, `unrealized`, `total` from `open_by_strategy`, totals add `open`, `unrealized`; `GET /analytics/scorecard` passes `mark_prices` of open symbols) | `compute_pnl`, `compute_scorecard`, `open_by_strategy` |
+| `backend/analytics.py` | P&L cards and the scorecard maths (`compute_scorecard(..., marks)`: with marks each strategy adds `open`, `unrealized`, `total` from `open_by_strategy`, totals add `open`, `unrealized`; with `nifty_points` each strategy and the totals add `nifty` (`nifty_same_money`: each trade's rupees in NIFTY from the close before its entry day to its exit day's close, or the latest) and `vs_nifty` = total - nifty; `GET /analytics/scorecard` passes `mark_prices` of open symbols and `_nifty_points`) | `compute_pnl`, `compute_scorecard`, `open_by_strategy`, `nifty_same_money` |
 | `backend/routers/*.py` | HTTP handlers (map below) | one module per area |
 | `docker-compose.yml`, `backend/Dockerfile`, `backend/requirements.txt` | runtime image and stack; pinned SDKs `upstox-python-sdk==2.30.0`, `empyrical-reloaded==0.7.0` (backend/lab/metrics.py), `lightgbm==4.6.0` (backend/ml/, native API; no scikit-learn), `aiogram==3.31.0` (caps pydantic below 2.14) | services `backend`, `ingest` (no frontend service; Vercel serves it) |
 | `.github/workflows/ci.yml`, `deploy-backend.yml` | CI and push-to-deploy caller | see Deploy |

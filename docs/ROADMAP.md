@@ -1044,6 +1044,19 @@ engine, the news pipeline and the game plan have each stopped without any alert.
   and every LLM call writes an `llm_calls` row.
 - 23.3: every gate in the audit's P3 table is met, and one live round trip has been reconciled.
 
+**23.1 progress, 2026-10-27 (autopilot profitability review):**
+- Grade A now needs t >= `study.min_t(setups)` (Bonferroni, 2.73 for 8) and a positive mean in both halves
+  of the tested months. The survivorship rerun had flipped 3 of 8 grades at t >= 2. Result on prod data:
+  no setup is A (pullback t 2.729), so the AI account buys no Picks until one clears it.
+- `study.levels_exit` prices the autopilot's stop/target exits on the study's own events. They lost to
+  the horizon close in all 8 setups (breakout +1.0% vs -3.8%, t -5.2). The autopilot now trades
+  levels only where `levels_exit.better`, open trades included.
+- The study nets costs at ₹5k (`study.NOTIONAL`, audit T6), not ₹1L.
+- The scorecard, the AI scoreboard and the weekly report show `vs_nifty`: the result minus the same
+  rupees held in NIFTY over each trade's own days.
+- Still open from Q2: fewer, larger positions (₹8k: 69 bps a round trip vs 81 at ₹5k). Audit T5 is
+  smaller than stated: delivery brokerage at ₹5k models ~₹3.5, not ₹15.
+
 **Not in this phase:** see the audit's "Do not build" list. In short: no new strategies, no
 RL/ML paths, no new AI call sites, no beta while W1 is open, and no F&O work.
 
