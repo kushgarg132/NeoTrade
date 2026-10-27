@@ -69,6 +69,10 @@ Each page is `Layout` + `PageHeader` (back to `/settings`, `backLabel="Settings"
 `alerts -> /settings/notifications`, `profile -> /settings/profile`, `ai -> /settings/ai`, `goal -> /settings/goal`,
 `theme -> /settings`, `lab|about|beta -> /settings/lab`; unknown -> `/settings`. Query params other than `tab`
 (e.g. a broker's `code`) are kept on the redirect. In-app links to `/settings?tab=...` are updated to the new paths.
+The broker apps' registered redirect URLs (Kite / Upstox developer consoles, outside this repo) are not changed: a
+return to `/settings?tab=accounts&code=...` (or any other page, via `utils/routes.js::brokerReturnTarget`, which now
+targets `/settings/brokers?...`) lands on `/settings/brokers` with `code` / `request_token` intact and is
+auto-submitted there as today. Test: `brokerReturnTarget` and the redirect both keep the params.
 
 ## Visual direction
 
