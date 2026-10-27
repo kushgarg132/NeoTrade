@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import Badge from '../ui/Badge';
 import { inr, pct } from '../ui/format';
 import { stockPath } from '../../utils/stocks';
+import { aiTradePath } from '../../utils/routes';
 
 /** AI -> Positions: what the AI holds now, each row opens the stock. */
 const Positions = ({ state }) => {
@@ -22,7 +23,7 @@ const Positions = ({ state }) => {
       {rows.map((p) => (
         <ListRow
           key={p.symbol}
-          to={stockPath(p.symbol)}
+          to={p.trade_id ? aiTradePath(p.trade_id) : stockPath(p.symbol)}
           title={p.symbol}
           dense
           sub={`${p.quantity} @ ${inr(p.avg_price)}`}

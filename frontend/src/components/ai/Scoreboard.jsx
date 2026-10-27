@@ -12,6 +12,7 @@ import { strategyName } from '../../utils/library';
 import { inr } from '../ui/format';
 import { toneText } from '../ui/tone';
 import { scoreboard } from '../../utils/ai';
+import { strategyPath } from '../../utils/routes';
 
 const Paper = () => <Badge kind="paper">Paper</Badge>;
 const settingsLink = (label) => <Link to="/settings?tab=limits" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">{label}</Link>;
@@ -66,7 +67,7 @@ const Scoreboard = ({ board, card, forward, capital, mineValue }) => {
                 sub={strategyLine(st)}
                 right={<span className="inline-flex items-center gap-2">{b && <Badge kind={b.tone === 'success' ? 'proven' : 'unproven'}>{b.text}</Badge>}{inr(st.total ?? st.net, { sign: true })}</span>}
                 rightTone={(st.total ?? st.net) > 0 ? 'gain' : (st.total ?? st.net) < 0 ? 'loss' : 'neutral'}
-                chevron={false}
+                to={st.strategy === 'unattributed' ? undefined : strategyPath(st.strategy)}
                 dense
               />
             );
