@@ -219,7 +219,7 @@ const ChatWidget = () => {
       {open && (
         <div
           className={cn(
-            'mb-3 sheet flex flex-col overflow-hidden pointer-events-auto',
+            'mb-3 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] flex flex-col overflow-hidden pointer-events-auto',
             expanded ? 'w-[min(34rem,calc(100vw-2rem))] h-[70vh]' : 'w-[min(22rem,calc(100vw-2rem))] h-[26rem]'
           )}
         >
@@ -288,7 +288,7 @@ const ChatWidget = () => {
             {busy && (
               <div className="flex items-center gap-2 text-[var(--text-muted)]">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)] shrink-0" />
-                <span className="doc-meta normal-case truncate">{thinking || 'Thinking…'}</span>
+                <span className="text-[13px] text-[var(--text-muted)] truncate">{thinking || 'Thinking…'}</span>
               </div>
             )}
             <div ref={endRef} />
@@ -319,7 +319,7 @@ const ChatWidget = () => {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="pointer-events-auto hidden lg:flex w-11 h-11 border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] items-center justify-center shadow-[var(--sheet-shadow)] hover:bg-[var(--accent-soft)] transition-colors"
+        className="pointer-events-auto hidden lg:flex w-11 h-11 border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] items-center justify-center hover:bg-[var(--accent-soft)] transition-colors"
         aria-label={open ? 'Close the margin note' : 'Open the margin note'}
       >
         {open ? <X className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />}

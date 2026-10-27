@@ -9,7 +9,7 @@ const TONE = { pos: 'text-up', neg: 'text-down', flat: 'text-[var(--text-muted)]
 const NewsChip = ({ entry, className, link = true }) => {
   if (!entry) return null;
   return (
-    <span className={cn('block doc-meta normal-case truncate max-w-[18rem]', className)}
+    <span className={cn('block text-[13px] text-[var(--text-muted)] truncate max-w-[18rem]', className)}
           title={entry.headline || undefined}>
       <span className={cn('field-label mr-1', TONE[tone(entry)] || TONE.flat)}>{chipLabel(entry)}</span>
       {entry.headline && (link && entry.url ? (

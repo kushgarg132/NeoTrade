@@ -26,7 +26,7 @@ const StopAutopilot = ({ on, label = 'Stop', onStopped }) => {
     }
   };
 
-  if (stoppedAt && !on) return <span className="doc-meta normal-case">Stopped at {stoppedAt}</span>;
+  if (stoppedAt && !on) return <span className="text-[13px] text-[var(--text-muted)]">Stopped at {stoppedAt}</span>;
   if (!on) return null;
   return (
     <span className="inline-flex flex-col items-end gap-1">
