@@ -64,9 +64,9 @@ export const movedTarget = (from, to, search) => {
 export const brokerReturnTarget = (pathname, search) => {
   const params = new URLSearchParams(search);
   if (!params.get('code') && !params.get('request_token')) return null;
-  if (pathname === '/settings' && params.get('tab') === 'accounts') return null;
+  if (pathname === '/settings/brokers') return null;
   params.delete('tab');
-  return `/settings?tab=accounts&${params.toString()}`;
+  return `/settings/brokers?${params.toString()}`;
 };
 
 /** Detail-page paths. Every dynamic segment goes through encodeURIComponent here, never in a component. */

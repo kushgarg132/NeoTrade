@@ -50,13 +50,14 @@ test('withSearch merges queries instead of doubling the ?', () => {
   assert.equal(withSearch('/journal?tab=habits', '?tab=rules'), '/journal?tab=rules');
 });
 
-import { brokerReturnTarget } from './routes.js';
 
-test('a broker login redirect anywhere in the app is sent to Accounts with its code', () => {
-  assert.equal(brokerReturnTarget('/', '?code=abc&state=x'), '/settings?tab=accounts&code=abc&state=x');
+import { brokerReturnTarget } from './routes.js';
+test('a broker login redirect anywhere in the app is sent to Settings > Brokers with its code', () => {
+  assert.equal(brokerReturnTarget('/', '?code=abc&state=x'), '/settings/brokers?code=abc&state=x');
   assert.equal(brokerReturnTarget('/money', '?request_token=t&action=login&status=success'),
-    '/settings?tab=accounts&request_token=t&action=login&status=success');
-  assert.equal(brokerReturnTarget('/settings', '?tab=accounts&code=abc'), null); // already there
+    '/settings/brokers?request_token=t&action=login&status=success');
+  assert.equal(brokerReturnTarget('/', '?request_token=y'), '/settings/brokers?request_token=y');
+  assert.equal(brokerReturnTarget('/settings/brokers', '?code=x'), null); // already there
   assert.equal(brokerReturnTarget('/money', '?tab=holdings'), null);
 });
 
