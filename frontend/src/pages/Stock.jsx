@@ -130,7 +130,7 @@ const Stock = () => {
         <TradingChart closes={closes} trades={m?.trades} thesis={m?.thesis} symbol={symbol} currency={currency} />
       </Card>
     ) : <Card><Skeleton rows={5} /></Card>,
-    news: <NewsTab mine={m} ai={ai} onAnalysis={() => setTab('analysis')} />,
+    news: <NewsTab symbol={symbol} mine={m} ai={ai} onAnalysis={() => setTab('analysis')} />,
     analysis: <AnalysisTab symbol={symbol} mine={m} quick={quick} ai={ai} requestAi={requestAi} reloadQuick={reloadQuick} onThesis={(t) => setMine((s) => ({ ...s, data: { ...s.data, thesis: t } }))} />,
     events: <EventsTab mine={m} ai={ai} />,
   }[tab];
