@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import ListRow from '../components/ui/ListRow';
+import Group from '../components/settings/Group';
 import { Avatar } from '../components/common/Avatar';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/useTheme';
@@ -13,13 +14,6 @@ import {
 } from '../utils/settings';
 
 const THEMES = [['light', 'Light'], ['dark', 'Dark']];
-
-const Group = ({ title, children }) => (
-  <section aria-label={title}>
-    <h2 className="px-1 pb-1.5 text-[13px] font-medium text-[var(--text-muted)]">{title}</h2>
-    <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-4">{children}</div>
-  </section>
-);
 
 const Row = ({ title, state, to }) => <ListRow title={title} right={state} to={to} privateValue={false} />;
 
