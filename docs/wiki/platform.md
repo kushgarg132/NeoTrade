@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: b7ecbc1
+verified_at: b8084ba
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -80,7 +80,7 @@ Redis keys owned or written by files on this page:
 
 | key | TTL | owner |
 |---|---|---|
-| `rate:<name>` (names: `analyze:<uid>` 10/60 s, `quick_analyze:<uid>` 60/60 s, `chat:<uid>` 20/60 s on the socket; `scan:<uid>` 5/600 s; `rebalance:<uid>` 10/60 s; `strategies:submit:<uid>:<IST day>` 3/2 days) | window | `rate_limit.py::allow` |
+| `rate:<name>` (names: `analyze:<uid>` 10/60 s (checked in `_stream_analysis` only when a run is needed, not in `_BUDGETS`), `quick_analyze:<uid>` 60/60 s, `chat:<uid>` 20/60 s on the socket; `scan:<uid>` 5/600 s; `rebalance:<uid>` 10/60 s; `strategies:submit:<uid>:<IST day>` 3/2 days) | window | `rate_limit.py::allow` |
 | `worker:alive:<BOOT_ID>` | 90 s, refreshed every 30 s | `runs.py::keep_alive`, `runs.py::ALIVE_KEY` |
 | `launch:<uid>:<mode>` | 30 s | `trading.py::launch_run` (one run per mode) |
 | `broker:<uid>:kite:access_token` | until next 06:00 IST | `kite_session.py::KiteSessionManager` (other brokers: brokers/ pages) |
@@ -238,7 +238,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/market/sector/{name}` | `backend/routers/market_data.py::get_sector` | user |
 | GET | `/api/v1/market/index/{ticker}/analysis` | `backend/routers/market_data.py::get_index_analysis` | user |
 | GET | `/api/v1/market/brief` | `backend/routers/market_data.py::get_market_brief` (stored, no model call; 404 if none) | user |
-| GET | `/api/v1/research/{symbol}/note` | `backend/routers/market_data.py::get_cached_note` (cached analyst note, no model call; 404 if none) | user |
+| GET | `/api/v1/research/{symbol}/note` | `backend/routers/market_data.py::get_cached_note` (last analyst read from `analyst:last:*` with `stale`, no model call; 404 if none) | user |
 | GET | `/api/v1/market/scan` | `backend/routers/market_data.py::get_market_scan` (`market_scan` over `news_sources.universe_rows` + `_cached_quotes` + a 365-day `daily_bars` high/low aggregate; `{gainers,losers,near_high,near_low (2%),sectors[{sector,change_pct,up,n,sentiment}],breadth{up,down,n},at}`; market_cache `scan` 5 min; `sentiment` = `sector_sentiment:{sector}` score (NSE industry names on both sides) read fresh per request by one MGET (`::with_sentiment`), null when absent) | user |
 | GET | `/api/v1/market/quotes` | `backend/routers/market_data.py::get_quotes` (<= 8 symbols; ingest `quote:` cache first via `_cached_quotes`, Yahoo for misses; rows `{symbol,price,change_pct,at}`) | user |
 | GET | `/api/v1/options/expiries` | `backend/routers/options.py::get_expiries` | user |

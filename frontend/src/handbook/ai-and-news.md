@@ -31,7 +31,7 @@ Every prompt is a file in `backend/prompts/*.md` (system prompt in front matter,
 `{{placeholders}}`, rendered by `backend.prompts.render`); none are inlined in Python.
 
 Repeats are cached: a stock's research note per symbol for 4 h, for every user
-(`analyst:<SYM>`); index explanations as in the table; and OmniRoute answers any request
+(`analyst:<SYM>`), and its last read for 7 days (`analyst:last:<SYM>`, `backend/ai/analyst.py::latest`); index explanations as in the table; and OmniRoute answers any request
 byte-identical to one in the last 30 min from its own cache (`temperature=0`, on for every
 NeoTrade key).
 
@@ -123,6 +123,16 @@ the last stored text; a figure the facts do not contain drops its sentence (`ai/
   repair, budget, and a single-call fallback when tools fail.
 - **Grounding** — `backend/ai/grounding.py`: figures in AI prose are checked against the facts
   the call received; dates, times and unrelated numbers are not treated as facts.
+
+## The AI read on a stock page
+
+Opening `/stock/:symbol` always starts the AI read (`components/stock/AiRead.jsx::AiRead`,
+`useStockAnalysis`). The last read shows at once. It counts as fresh for an hour in session
+(`backend/ai/analyst.py::FRESH_IN_SESSION`), and outside the session for as long as the 4 h cache
+holds; fresh, nothing more happens and nothing is spent. Stale, the page keeps the old read, shows
+"Updating…", and streams the new note as the model writes it (`llm.py::LLMService.stream_completion`,
+forwarded through `analyst.py::report_sink` by `ws/routes.py::_stream_analysis`). Only a run counts
+against the 10 a minute limit. If the update fails, the last read stays with a "Couldn't refresh" line.
 
 ## Stored AI text on the pages
 
