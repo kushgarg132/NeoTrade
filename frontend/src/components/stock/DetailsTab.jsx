@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import Card from '../ui/Card';
 import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
@@ -8,17 +8,11 @@ import StockFlags from '../analysis/StockFlags';
 import TradingLevels from '../analysis/TradingLevels';
 import TechGauge from './TechGauge';
 import Fundamentals from '../analysis/Fundamentals';
-import SentimentPanel from '../analysis/SentimentPanel';
 import { REASONS } from '../../utils/mine';
-import { stockPath } from '../../utils/stocks';
 import { day, verdictLabel, verdictKind } from './common';
 
-/** Verdict (when held), your thesis, the instant snapshot, then the AI read (requested on first open). */
-const AnalysisTab = ({ symbol, mine, quick, ai, requestAi, reloadQuick, onThesis }) => {
-  useEffect(() => {
-    if (!ai.requested) requestAi();
-  }, [ai.requested, requestAi]);
-
+/** Verdict (when held), your thesis, then the instant snapshot. The AI read lives in the card above the tabs. */
+const DetailsTab = ({ symbol, mine, quick, reloadQuick, onThesis }) => {
   const v = mine?.verdict;
   const company = quick.data?.company_info;
   const currency = company?.currency || 'INR';
@@ -62,20 +56,8 @@ const AnalysisTab = ({ symbol, mine, quick, ai, requestAi, reloadQuick, onThesis
           <Fundamentals company={company} currency={currency} />
         </>
       )}
-
-      {ai.loading && <Card title="AI analysis"><Skeleton rows={4} /><p className="mt-3 text-[13px] text-[var(--text-muted)]">Reading news and sentiment, this takes a moment.</p></Card>}
-      {ai.error && !ai.loading && <Card title="AI analysis"><ErrorLine message={`Could not load the AI analysis: ${ai.error}`} onRetry={requestAi} /></Card>}
-      {ai.data && !ai.loading && (
-        <SentimentPanel
-          score={ai.data.sentiment?.score ?? ai.data.sentiment_score}
-          summary={ai.data.analyst_summary}
-          sentiment={ai.data.sentiment}
-          thesis={ai.data.thesis}
-          more={{ to: `${stockPath(symbol)}?tab=news`, label: 'News' }}
-        />
-      )}
     </div>
   );
 };
 
-export default AnalysisTab;
+export default DetailsTab;

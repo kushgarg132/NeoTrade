@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
@@ -16,20 +16,20 @@ import { toneText } from '../components/ui/tone';
 import OrderTicket from '../components/trading/OrderTicket';
 import TradingChart from '../components/stock/TradingChart';
 import NewsTab from '../components/stock/NewsTab';
-import AnalysisTab from '../components/stock/AnalysisTab';
+import DetailsTab from '../components/stock/DetailsTab';
+import AiRead from '../components/stock/AiRead';
 import EventsTab from '../components/stock/EventsTab';
 import useStockAnalysis from '../components/stock/useStockAnalysis';
 import { verdictKind, verdictLabel } from '../components/stock/common';
 import api, { endpoints } from '../utils/api';
-import { bareSymbol, formatQuantity, formatDateTime, marketPhase } from '../utils/formatters';
-import useStored from '../hooks/useStored';
-import { oneLine } from '../utils/aiText';
+import { bareSymbol, formatQuantity, marketPhase } from '../utils/formatters';
+import { stockTab } from '../utils/stocks';
 import { positionSummary } from '../utils/stock';
 
 const TABS = [
   { id: 'chart', label: 'Chart' },
   { id: 'news', label: 'News' },
-  { id: 'analysis', label: 'Analysis' },
+  { id: 'details', label: 'Details' },
   { id: 'events', label: 'Events' },
 ];
 
@@ -42,11 +42,15 @@ const Stat = ({ label, value, valueClass = '' }) => (
   </div>
 );
 
-/** /stock/:symbol: price and verdict on top, your position if you hold it, then Chart / News / Analysis / Events. */
+/** /stock/:symbol: price and verdict on top, your position if you hold it, then Chart / News / Details / Events. */
 const Stock = () => {
   const symbol = bareSymbol(useParams().symbol)?.toUpperCase();
   const [tab, setTab] = useTabParam(TABS.map((t) => t.id));
-  const { quick, ai, requestAi, reloadQuick } = useStockAnalysis(symbol);
+  const [params] = useSearchParams();
+  const { quick, ai, aiRead, retryAi, reloadQuick } = useStockAnalysis(symbol);
+  // Old ?tab=analysis links land on Details.
+  const legacy = params.get('tab') === 'analysis';
+  useEffect(() => { if (legacy) setTab(stockTab('analysis')); }, [legacy, setTab]);
 
   // Your side of the stock: 404 means you have never held it, which is not an error.
   const [mineRaw, setMine] = useState({ data: null, status: 'loading', symbol }); // loading | ok | missing | error
@@ -95,10 +99,6 @@ const Stock = () => {
     api.get(endpoints.mine.overview).then((res) => setPortfolio(res.data?.headline?.value ?? null)).catch(() => setPortfolio(null));
   }, []);
 
-  // One line from the analyst note already cached (never triggers a model call). The fresh Analysis tab read wins.
-  const note = useStored(symbol ? endpoints.stockNote(symbol) : null);
-  const noteText = oneLine(ai.data?.analyst_summary || (note.status === 'ok' ? note.data.summary : ''));
-
   const m = mine.data;
   const company = quick.data?.company_info;
   const currency = company?.currency || 'INR';
@@ -130,8 +130,8 @@ const Stock = () => {
         <TradingChart closes={closes} trades={m?.trades} thesis={m?.thesis} symbol={symbol} currency={currency} />
       </Card>
     ) : <Card><Skeleton rows={5} /></Card>,
-    news: <NewsTab symbol={symbol} mine={m} ai={ai} onAnalysis={() => setTab('analysis')} />,
-    analysis: <AnalysisTab symbol={symbol} mine={m} quick={quick} ai={ai} requestAi={requestAi} reloadQuick={reloadQuick} onThesis={(t) => setMine((s) => ({ ...s, data: { ...s.data, thesis: t } }))} />,
+    news: <NewsTab symbol={symbol} mine={m} ai={ai} onAnalysis={() => document.getElementById('ai-read')?.scrollIntoView({ behavior: 'smooth' })} />,
+    details: <DetailsTab symbol={symbol} mine={m} quick={quick} reloadQuick={reloadQuick} onThesis={(t) => setMine((s) => ({ ...s, data: { ...s.data, thesis: t } }))} />,
     events: <EventsTab mine={m} ai={ai} />,
   }[tab];
 
@@ -193,7 +193,7 @@ const Stock = () => {
               ) : (
                 <p className="text-[var(--text-muted)]">
                   No stop set.{' '}
-                  <button type="button" onClick={() => setTab('analysis')} className="min-h-11 font-semibold text-[var(--accent)]">Set one in Analysis</button>
+                  <button type="button" onClick={() => setTab('details')} className="min-h-11 font-semibold text-[var(--accent)]">Set one in Details</button>
                 </p>
               )}
             </div>
@@ -203,12 +203,7 @@ const Stock = () => {
         {mine.status === 'error' && <ErrorLine message="Could not load your position from your broker account. Prices and charts still work." onRetry={loadMine} />}
       </Card>
 
-      {noteText && (
-        <p className="mb-3 text-[14px] text-[var(--text)]">
-          <span className="block text-[12px] text-[var(--text-muted)]">AI summary{note.data?.as_of ? ` · ${formatDateTime(note.data.as_of)}` : ''}</span>
-          {noteText}
-        </p>
-      )}
+      <AiRead aiRead={aiRead} retryAi={retryAi} />
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} label="Stock sections" />
       <div className="mt-3">

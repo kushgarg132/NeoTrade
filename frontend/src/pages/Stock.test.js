@@ -5,9 +5,9 @@ import { readFileSync } from 'node:fs';
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const page = read('./Stock.jsx');
 const gauge = read('../components/stock/TechGauge.jsx');
-const analysis = read('../components/stock/AnalysisTab.jsx');
+const analysis = read('../components/stock/DetailsTab.jsx');
 
-test('technical gauge uses chartTheme and the Analysis tab renders it', () => {
+test('technical gauge uses chartTheme and the Details tab renders it', () => {
   assert.match(gauge, /from '..\/ui\/chartTheme'/);
   assert.match(gauge, /heatColor\(/);
   assert.match(analysis, /<TechGauge/);
