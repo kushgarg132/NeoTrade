@@ -46,3 +46,7 @@ test('backlog', () => {
 test('beta', () => {
   assert.equal(betaState({ returned_from_last_week: 3, active_last_week: 5 }), '3 of 5 came back');
 });
+
+test('runsState reads a naive created_at as UTC', () => {
+  assert.equal(runsState({ runs: [{ created_at: '2026-10-26T20:00:00' }] }, Date.parse('2026-10-27T19:00:00Z')), 'Last run today');
+});

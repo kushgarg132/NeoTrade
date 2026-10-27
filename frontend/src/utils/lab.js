@@ -11,7 +11,9 @@ export const runsState = (b, now = Date.now()) => {
   if (!b) return DASH;
   const r = (b.runs || [])[0];
   if (!r) return 'No runs yet';
-  const days = Math.floor((now - Date.parse(r.created_at)) / 86400000);
+  // Mongo hands back naive UTC (no offset); read it as UTC, not the browser's local time.
+  const at = /Z|[+-]\d\d:?\d\d$/.test(r.created_at) ? r.created_at : `${r.created_at}Z`;
+  const days = Math.floor((now - Date.parse(at)) / 86400000);
   return days < 1 ? 'Last run today' : `Last run ${days}d ago`;
 };
 
