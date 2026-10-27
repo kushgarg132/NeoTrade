@@ -7,11 +7,13 @@ import Card from '../components/ui/Card';
 import Empty from '../components/ui/Empty';
 import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
+import Hero from '../components/ui/Hero';
+import DeltaChip from '../components/ui/DeltaChip';
 import Stat from '../components/ui/Stat';
 import { AiCard, AiText } from '../components/ai/AiSummary';
 import useStored from '../hooks/useStored';
 import { endpoints } from '../utils/api';
-import { pct, tone } from '../components/ui/format';
+import { points } from '../components/ui/format';
 import { AXIS, GRID, SERIES, TOOLTIP_STYLE } from '../components/ui/chartTheme';
 
 const num = (n) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
@@ -66,9 +68,10 @@ const IndexPage = () => {
       {status === 'error' && <ErrorLine message="Could not load this index." onRetry={retry} />}
       {status === 'ok' && (
         <div className="space-y-3">
+          <Hero label={data.name} value={data.value} format={points} privateValue={false}
+            change={<DeltaChip value={data.change} pct={data.percent} format={points} privateValue={false} />} />
           <Card>
             <div className="grid grid-cols-2 gap-3">
-              <Stat label="Level" value={num(data.value)} delta={`${data.change > 0 ? '+' : ''}${num(data.change)} (${pct(data.percent / 100, { sign: true })})`} tone={tone(data.percent)} />
               <Stat label="52-week range" value={`${num(data.low_52w)} - ${num(data.high_52w)}`} />
               <Stat label="50-day average" value={data.sma_50 == null ? 'n/a' : num(data.sma_50)} />
               <Stat label="200-day average" value={data.sma_200 == null ? 'n/a' : num(data.sma_200)} />

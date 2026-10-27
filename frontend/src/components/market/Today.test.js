@@ -5,11 +5,11 @@ import { readFileSync } from 'node:fs';
 const src = readFileSync(new URL('./Today.jsx', import.meta.url), 'utf8');
 
 test('story comes before indices', () => {
-  assert.ok(src.indexOf('<Story />') < src.indexOf('<Indices />'));
+  assert.ok(src.indexOf('<Story />') < src.indexOf('<Indices '));
 });
 
 test('tile renders without points', () => {
-  assert.match(src, /points\.length < 2\) return null/);
+  assert.match(src, /line\.length < 2\) return null/);
 });
 
 test('each section has Skeleton, ErrorLine and Empty', () => {
@@ -24,4 +24,25 @@ test('each section has Skeleton, ErrorLine and Empty', () => {
 
 test('breadth word is shown', () => {
   assert.match(src, /breadthWord\(data\.breadth\)/);
+});
+
+test('NIFTY hero on Today, only when ^NSEI row exists', () => {
+  assert.match(src, /<Hero to=\{indexPath\('\^NSEI'\)\}/);
+  assert.match(src, /label="NIFTY 50"/);
+  assert.match(src, /format=\{points\}/);
+  assert.match(src, /privateValue=\{false\}/);
+  assert.match(src, /nifty && <Hero/);
+  assert.match(src, /find\(\(i\) => i\.symbol === '\^NSEI'\)/);
+});
+
+test('indices load once, in Today; Indices takes props', () => {
+  assert.equal(src.match(/useSection\(loadIndices\)/g).length, 1);
+  assert.match(src.slice(src.indexOf('const Today = ')), /useSection\(loadIndices\)/);
+  assert.match(src, /const Indices = \(\{ data, error, retry \}\)/);
+});
+
+test('TILES drops ^NSEI; tile is 20px and tap', () => {
+  assert.match(src, /const TILES = \['\^NSEBANK', '\^BSESN'\]/);
+  assert.doesNotMatch(src, /rounded-\[16px\]/);
+  assert.match(src, /rounded-\[20px\][^"]*\btap\b|\btap\b[^"]*rounded-\[20px\]/);
 });

@@ -10,7 +10,9 @@ import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import ListRow from '../ui/ListRow';
 import AsOf from '../ui/AsOf';
-import { pct, tone } from '../ui/format';
+import Hero from '../ui/Hero';
+import DeltaChip from '../ui/DeltaChip';
+import { pct, points, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
 import { AiMarkdown } from '../ai/AiSummary';
 import useStored from '../../hooks/useStored';
@@ -25,7 +27,7 @@ const REGIME = {
   risk_on: { label: 'Risk on', kind: 'proven' },
   neutral: { label: 'Neutral', kind: 'neutral' },
 };
-const TILES = ['^NSEI', '^NSEBANK', '^BSESN'];
+const TILES = ['^NSEBANK', '^BSESN'];
 
 const loadIndices = () => api.get(endpoints.marketIndices).then((r) => r.data);
 const loadToday = () => api.get(endpoints.today).then((r) => r.data.backdrop || {});
@@ -62,17 +64,17 @@ const Story = () => {
 
 /** Intraday sparkline; renders nothing without 2+ points so the tile stays fine without it. */
 const Spark = ({ ticker, up }) => {
-  const [points, setPoints] = useState([]);
+  const [line, setLine] = useState([]);
   useEffect(() => {
     let live = true;
-    api.get(endpoints.marketIndexIntraday(ticker)).then((r) => live && setPoints(r.data || [])).catch(() => live && setPoints([]));
+    api.get(endpoints.marketIndexIntraday(ticker)).then((r) => live && setLine(r.data || [])).catch(() => live && setLine([]));
     return () => { live = false; };
   }, [ticker]);
-  if (points.length < 2) return null;
+  if (line.length < 2) return null;
   return (
     <div className="mt-1 h-8" aria-hidden="true">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points}>
+        <LineChart data={line}>
           <YAxis hide domain={['dataMin', 'dataMax']} />
           <Line type="monotone" dataKey="close" dot={false} isAnimationActive={false} strokeWidth={1.5} stroke={up ? 'var(--gain)' : 'var(--loss)'} />
         </LineChart>
@@ -82,7 +84,7 @@ const Spark = ({ ticker, up }) => {
 };
 
 const IndexTile = ({ i }) => (
-  <Link to={indexPath(i.symbol)} className="block min-h-[88px] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-3 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+  <Link to={indexPath(i.symbol)} className="tap block min-h-[88px] rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-3 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
     <div className="truncate text-[13px] font-medium text-[var(--text-muted)]">{i.name}</div>
     <div className="mt-1 text-[17px] font-bold tabular-nums text-[var(--text)]">{num(i.value)}</div>
     <div className={`text-[13px] font-semibold tabular-nums ${toneText(tone(i.percent))}`}>{pct(i.percent / 100, { sign: true })}</div>
@@ -90,8 +92,7 @@ const IndexTile = ({ i }) => (
   </Link>
 );
 
-const Indices = () => {
-  const [{ data, error }, retry] = useSection(loadIndices);
+const Indices = ({ data, error, retry }) => {
   const tiles = (data || []).filter((i) => TILES.includes(i.symbol));
   const more = (data || []).filter((i) => !TILES.includes(i.symbol));
   return (
@@ -205,13 +206,19 @@ const Events = () => {
   );
 };
 
-const Today = () => (
-  <div className="space-y-3">
-    <Story />
-    <Indices />
-    <Scan />
-    <Events />
-  </div>
-);
+const Today = () => {
+  const [{ data, error }, retry] = useSection(loadIndices);
+  const nifty = (data || []).find((i) => i.symbol === '^NSEI'); // no row (feed gap): no Hero
+  return (
+    <div className="space-y-3">
+      {nifty && <Hero to={indexPath('^NSEI')} label="NIFTY 50" value={nifty.value} format={points} privateValue={false}
+        change={<DeltaChip value={nifty.change} pct={nifty.percent} format={points} privateValue={false} />} />}
+      <Story />
+      <Indices data={data} error={error} retry={retry} />
+      <Scan />
+      <Events />
+    </div>
+  );
+};
 
 export default Today;
