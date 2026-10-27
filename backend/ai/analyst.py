@@ -24,6 +24,7 @@ score for, are left out rather than counted as 0 -- counting them dragged
 every stock's sentiment toward neutral.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -41,6 +42,8 @@ logger = logging.getLogger(__name__)
 
 NEWS_LIMIT = 5
 CACHE_TTL_SECONDS = 4 * 60 * 60
+LAST_TTL_SECONDS = 7 * 24 * 3600  # outlives the 4h cache so the page can show the last read, marked stale
+FRESH_IN_SESSION = 3600
 THESIS_MARKER = "===THESIS==="
 
 
@@ -137,6 +140,39 @@ def _redis():
     return db.redis
 
 
+async def _write_note(redis, symbol: str, output: Dict[str, Any]) -> None:
+    output["at"] = datetime.now(timezone.utc).isoformat()
+    body = json.dumps(output)
+    await redis.set(f"analyst:{symbol}", body, ex=CACHE_TTL_SECONDS)
+    await redis.set(f"analyst:last:{symbol}", body, ex=LAST_TTL_SECONDS)
+
+
+async def latest(symbol: str, now: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
+    """The last stored read: {"read", "at", "stale"}. In session it is stale after
+    FRESH_IN_SESSION; outside, once the 4h cache has expired. None when there is
+    none or Redis is down."""
+    from backend.core.market_calendar import market_phase
+
+    redis = _redis()
+    if redis is None:
+        return None
+    now = now or datetime.now(timezone.utc)
+    try:
+        raw = await redis.get(f"analyst:last:{symbol}")
+        if not raw:
+            return None
+        read = json.loads(raw)
+        at = read["at"]
+        if market_phase(now) == "session":
+            stale = (now - datetime.fromisoformat(at)).total_seconds() > FRESH_IN_SESSION
+        else:
+            stale = await redis.get(f"analyst:{symbol}") is None
+        return {"read": read, "at": at, "stale": stale}
+    except Exception as exc:
+        logger.warning("analyst last read failed for %s: %s", symbol, exc)
+        return None
+
+
 class AnalystAgent:
     async def analyze(self, state: Dict[str, Any]) -> Dict[str, Any]:
         symbol = state["symbol"]
@@ -150,6 +186,31 @@ class AnalystAgent:
             logger.info("AnalystAgent: cache hit for %s", symbol)
             return cached
 
+        from backend.datalayer.analysis import LOCK_SECONDS, WAIT_SECONDS
+
+        # One run per stock: a loser waits for the winner's note rather than paying too.
+        redis, owner = _redis(), False
+        if redis is not None:
+            try:
+                owner = bool(await redis.set(f"analyst:lock:{symbol}", "1", nx=True, ex=LOCK_SECONDS))
+                if not owner:
+                    for _ in range(WAIT_SECONDS // 2):
+                        await asyncio.sleep(2)
+                        cached = await self._cached(symbol)
+                        if cached is not None:
+                            return cached
+            except Exception as exc:
+                logger.warning("analyst lock failed for %s: %s", symbol, exc)
+        try:
+            return await self._run(symbol)
+        finally:
+            if owner:
+                try:
+                    await redis.delete(f"analyst:lock:{symbol}")
+                except Exception as exc:
+                    logger.warning("analyst lock release failed for %s: %s", symbol, exc)
+
+    async def _run(self, symbol: str) -> Dict[str, Any]:
         output = await self._analyze(symbol)
         # No news (or a failed fetch) cost no LLM calls; caching it would
         # only hide news that arrives later.
@@ -239,7 +300,7 @@ class AnalystAgent:
         if redis is None:
             return
         try:
-            await redis.set(f"analyst:{symbol}", json.dumps(output), ex=CACHE_TTL_SECONDS)
+            await _write_note(redis, symbol, output)
             # The engine and scan read this for the AI half of conviction. The ingest
             # worker's blend lives 24h: never overwrite it with this 4h copy.
             if await redis.ttl(f"sentiment:{symbol}") <= CACHE_TTL_SECONDS:
@@ -254,7 +315,7 @@ class AnalystAgent:
         if redis is None:
             return
         try:
-            await redis.set(f"analyst:{symbol}", json.dumps(output), ex=CACHE_TTL_SECONDS)
+            await _write_note(redis, symbol, output)
         except Exception as exc:
             logger.warning("analyst cache write failed for %s: %s", symbol, exc)
 

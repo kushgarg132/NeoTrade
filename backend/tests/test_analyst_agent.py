@@ -39,9 +39,16 @@ class _Redis:
     async def get(self, key):
         return self.store.get(key)
 
-    async def set(self, key, value, ex=None):
+    async def set(self, key, value, ex=None, nx=False):
+        if nx and key in self.store:
+            return False
         self.store[key] = value
         self.ttls[key] = ex
+        return True
+
+    async def delete(self, key):
+        self.store.pop(key, None)
+        self.ttls.pop(key, None)
 
     async def ttl(self, key):
         return self.ttls.get(key) or -2
