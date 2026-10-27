@@ -1,15 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Layout from '../components/Layout';
-import SectionTabs from '../components/layout/SectionTabs';
-import { LAB_TABS } from '../components/layout/sections';
+import SettingsPage from './SettingsPage';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Empty from '../components/ui/Empty';
 import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
-import PageHeader from '../components/ui/PageHeader';
 import { pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import api, { endpoints } from '../utils/api';
@@ -57,10 +54,7 @@ const LabRuns = () => {
   const rowsCmp = comparing && a && b ? compareRows(a, b) : [];
 
   return (
-    <Layout>
-      <div className="space-y-3 sm:space-y-4 max-w-4xl">
-        <SectionTabs tabs={LAB_TABS} label="Lab" />
-        <PageHeader title="Runs" right={<Badge kind="paper">Paper · backtests</Badge>} />
+    <SettingsPage title="Runs" back="/settings/lab" backLabel="Lab" right={<Badge kind="paper">Paper · backtests</Badge>}>
         <Card
           title={runs ? `${runs.length} latest` : 'Latest runs'}
           action={<Button variant="secondary" disabled={picked.length !== 2} onClick={() => setComparing(true)}>Compare</Button>}
@@ -136,8 +130,7 @@ const LabRuns = () => {
             )}
           </Card>
         )}
-      </div>
-    </Layout>
+    </SettingsPage>
   );
 };
 

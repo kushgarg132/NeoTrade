@@ -1,14 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import Layout from '../components/Layout';
-import SectionTabs from '../components/layout/SectionTabs';
-import { LAB_TABS } from '../components/layout/sections';
+import SettingsPage from './SettingsPage';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Empty from '../components/ui/Empty';
 import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
-import PageHeader from '../components/ui/PageHeader';
 import { pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import api, { endpoints } from '../utils/api';
@@ -41,14 +38,11 @@ const NewsAccuracy = () => {
   const rows = report ? rowsFor(report.cells, scope, horizon) : [];
 
   return (
-    <Layout>
-      <div className="space-y-3 sm:space-y-4 max-w-4xl">
-        <SectionTabs tabs={LAB_TABS} label="Lab" />
-        <PageHeader title="News accuracy" right={report && (
-          <Badge kind={report.company_scan_ok ? 'proven' : 'unproven'}>
-            {report.company_scan_ok ? 'Company news passes' : 'Company news paused'}
-          </Badge>
-        )} />
+    <SettingsPage title="News accuracy" back="/settings/lab" backLabel="Lab" right={report && (
+      <Badge kind={report.company_scan_ok ? 'proven' : 'unproven'}>
+        {report.company_scan_ok ? 'Company news passes' : 'Company news paused'}
+      </Badge>
+    )}>
         <Card title="Did the news point the right way?" action={
           <Button variant="secondary" onClick={() => load(true)} disabled={busy}>{busy ? 'Building…' : 'Rebuild now'}</Button>
         }>
@@ -99,8 +93,7 @@ const NewsAccuracy = () => {
           )}
           {report && <p className="mt-2 text-[12px] text-[var(--text-muted)]">Built {new Date(report.as_of).toLocaleString()} from {report.rows} outcomes.</p>}
         </Card>
-      </div>
-    </Layout>
+    </SettingsPage>
   );
 };
 

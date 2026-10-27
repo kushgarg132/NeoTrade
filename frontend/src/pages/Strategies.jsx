@@ -1,9 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
-import Layout from '../components/Layout';
-import PaperShell from '../components/paper/PaperShell';
-import { LAB_TABS } from '../components/layout/sections';
+import SettingsPage from './SettingsPage';
 import Scorecard from '../components/paper/Scorecard';
 import TradeLedger from '../components/dashboard/TradeLedger';
 import LearningSheet from '../components/journal/LearningSheet';
@@ -165,8 +163,8 @@ const Strategies = () => {
   const counts = cards ? SUMMARY.map(([s, label]) => [cards.filter((c) => statusOf(c) === s).length, label]).filter(([n]) => n) : [];
 
   return (
-    <Layout>
-      <PaperShell tabs={LAB_TABS} label="Lab">
+    <SettingsPage title="Strategies" back="/settings/lab" backLabel="Lab" right={<Badge kind="paper">Paper</Badge>}>
+      <div className="private space-y-3">
         <Card
           title="Strategies"
           action={<Link to="/lab/limits" className="text-[14px] font-semibold text-[var(--accent)] min-h-11 inline-flex items-center">Live switches ›</Link>}
@@ -225,8 +223,8 @@ const Strategies = () => {
           <summary className={SUMMARY_CLS}>What the engine learned</summary>
           {learningOpen && <div className="mt-3"><LearningSheet /></div>}
         </details>
-      </PaperShell>
-    </Layout>
+      </div>
+    </SettingsPage>
   );
 };
 

@@ -1,14 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Layout from '../components/Layout';
-import SectionTabs from '../components/layout/SectionTabs';
-import { LAB_TABS } from '../components/layout/sections';
+import SettingsPage from './SettingsPage';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Empty from '../components/ui/Empty';
 import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
-import PageHeader from '../components/ui/PageHeader';
 import { pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import api, { endpoints } from '../utils/api';
@@ -72,10 +69,7 @@ const LabForward = () => {
   };
 
   return (
-    <Layout>
-      <div className="space-y-3 sm:space-y-4 max-w-4xl">
-        <SectionTabs tabs={LAB_TABS} label="Lab" />
-        <PageHeader title="Forward" right={<Badge kind="paper">Paper</Badge>} />
+    <SettingsPage title="Forward" back="/settings/lab" backLabel="Lab" right={<Badge kind="paper">Paper</Badge>}>
         <Card title="Scored decisions">
           <p className="mb-2 text-[13px] text-[var(--text-muted)]">
             Net of charges, excess over NIFTY. Proven needs 100 scored, t of 2 or more, and calibration.
@@ -117,8 +111,7 @@ const LabForward = () => {
             );
           })}
         </Card>
-      </div>
-    </Layout>
+    </SettingsPage>
   );
 };
 
