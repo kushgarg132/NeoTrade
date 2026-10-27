@@ -89,7 +89,7 @@ async def from_layer(symbol: str, read_cached: Callable[[str], Awaitable[Optiona
 
 
 async def _build(symbol, docs, sentiment, sector, redis) -> Dict[str, Any]:
-    from backend.ai.analyst import AnalystOutput, _report
+    from backend.ai.analyst import AnalystOutput, _report, emit
     from backend.core.models import FinancialEvent, NewsArticle
 
     articles, events, lines = [], [], []
@@ -113,6 +113,7 @@ async def _build(symbol, docs, sentiment, sector, redis) -> Dict[str, Any]:
     news = "\n".join(lines) or "No company-specific news in the last 30 days."
     news += "\n\nBackdrop:\n" + ("\n".join(c for c in context if c) or "- none scored yet")
 
+    emit({"type": "stage", "step": "writing"})
     summary, thesis = await _report(
         symbol=symbol, sentiment_score=f"{sentiment:.2f}", relevant_count=len(docs), news=news,
         events=json.dumps([{"event_type": e.event_type, "description": e.description,

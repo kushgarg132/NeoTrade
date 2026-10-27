@@ -27,8 +27,9 @@ every stock's sentiment toward neutral.
 import asyncio
 import json
 import logging
+from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -45,6 +46,15 @@ CACHE_TTL_SECONDS = 4 * 60 * 60
 LAST_TTL_SECONDS = 7 * 24 * 3600  # outlives the 4h cache so the page can show the last read, marked stale
 FRESH_IN_SESSION = 3600
 THESIS_MARKER = "===THESIS==="
+
+# Whoever sets this (the analysis websocket) receives {"type": "stage"|"delta", ...} as the note is made.
+report_sink: ContextVar[Optional[Callable[[dict], None]]] = ContextVar("report_sink", default=None)
+
+
+def emit(event: dict) -> None:
+    sink = report_sink.get()
+    if sink is not None:
+        sink(event)
 
 
 class AnalystOutput(BaseModel):
@@ -128,7 +138,13 @@ async def _report(**values) -> tuple[str, str]:
     ])) or "Not available."
     system, prompt = render("research_report", **values)
     try:
-        return _split_report(await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="research"))
+        if report_sink.get() is None:
+            return _split_report(await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="research"))
+        parts = []
+        async for delta in llm_service.stream_completion(prompt, system_prompt=system, tier="standard", feature="research"):
+            parts.append(delta)
+            emit({"type": "delta", "text": delta})
+        return _split_report("".join(parts))
     except Exception as e:
         logger.error(f"AnalystAgent LLM Error: {e}")
         return "Unable to generate summary.", ""
@@ -230,6 +246,7 @@ class AnalystAgent:
         if not articles:
             return self._empty_output(symbol).model_dump(mode="json")
 
+        emit({"type": "stage", "step": "news", "count": len(articles)})
         scores = await _score_news(symbol, articles)
         by_index = {s.index: s for s in (scores.articles if scores else [])}
         relevant = []
@@ -257,6 +274,7 @@ class AnalystAgent:
             f"- {a.title} ({s.sentiment.lower()}, impact {s.impact}): {(a.content or '')[:300]}"
             for a, s in relevant
         ) or "No relevant news found."
+        emit({"type": "stage", "step": "writing"})
         summary, thesis = await _report(
             symbol=symbol, sentiment_score=f"{sentiment:.2f}", relevant_count=len(relevant), news=news,
             events=json.dumps([e.model_dump() for e in raw_events]),
