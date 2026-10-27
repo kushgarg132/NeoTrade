@@ -21,6 +21,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from backend.core.market_calendar import HOLIDAYS
 from backend.strategies.indicators import Indicators
 from backend.datalayer import bars
 from backend.engine.persistence import LedgerStore, mine_book
@@ -53,10 +54,10 @@ def _ist_date(at: datetime) -> date:
 
 
 def held_too_long(entry_at: datetime, now: datetime, max_hold_days: int) -> bool:
-    """Weekdays strictly after the entry's IST date, up to and including
-    today's, reached `max_hold_days` (NSE holidays count as trading days)."""
+    """NSE trading days strictly after the entry's IST date, up to and including
+    today's, reached `max_hold_days`."""
     start = _ist_date(entry_at) + timedelta(days=1)
-    return int(np.busday_count(start, _ist_date(now) + timedelta(days=1))) >= max_hold_days
+    return int(np.busday_count(start, _ist_date(now) + timedelta(days=1), holidays=list(HOLIDAYS))) >= max_hold_days
 
 
 def max_hold_due(entry_at: datetime, now: datetime, max_hold_days: int) -> bool:

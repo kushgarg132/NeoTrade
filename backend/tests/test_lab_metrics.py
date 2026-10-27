@@ -25,3 +25,8 @@ def test_daily_returns_puts_pnl_on_the_trade_day():
     trades = [{"timestamp": "2024-01-03T10:00:00", "net_pnl": 5000.0}]  # a Wednesday
     r = daily_returns(trades, datetime(2024, 1, 1), datetime(2024, 1, 6), 1_000_000.0)
     assert len(r) == 5 and r[pd.Timestamp("2024-01-03")] == pytest.approx(0.005) and r.sum() == pytest.approx(0.005)
+
+
+def test_daily_returns_skips_nse_holidays():
+    r = daily_returns([], datetime(2026, 10, 19), datetime(2026, 10, 24), 1_000_000.0)  # Tue 10-20 closed
+    assert pd.Timestamp("2026-10-20") not in r.index and len(r) == 4

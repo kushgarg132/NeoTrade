@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import empyrical
 import pandas as pd
 
+from backend.core.market_calendar import HOLIDAYS
+
 KEYS = ("cagr", "sharpe", "sortino", "max_drawdown", "volatility", "alpha", "beta")
 
 
@@ -26,9 +28,9 @@ def summary(daily_returns: pd.Series, benchmark: pd.Series | None = None) -> dic
 
 
 def daily_returns(trades: list[dict], start: datetime, end: datetime, account: float) -> pd.Series:
-    """Net P&L per weekday as a fraction of the account, zero on days
+    """Net P&L per NSE trading day as a fraction of the account, zero on days
     without a trade, over [start, end)."""
-    days = pd.bdate_range(start.date(), end.date() - timedelta(days=1))
+    days = pd.bdate_range(start.date(), end.date() - timedelta(days=1), freq="C", holidays=list(HOLIDAYS))
     pnl = pd.Series(0.0, index=days)
     for t in trades:
         day = pd.Timestamp(datetime.fromisoformat(t["timestamp"]).date())

@@ -72,6 +72,10 @@ def test_max_hold_counts_trading_days():
     late = datetime(2026, 10, 2, 20, 0, tzinfo=timezone.utc)
     assert not held_too_long(late, datetime(2026, 10, 6, 6, 0, tzinfo=timezone.utc), 3)
     assert held_too_long(fri.replace(tzinfo=None), datetime(2026, 10, 5, 4, 0, tzinfo=timezone.utc), 1)  # naive = UTC
+    # Tue 2026-10-20 is an NSE holiday: from Monday's entry, Wednesday is day 1, not day 2.
+    mon = datetime(2026, 10, 19, 5, 0, tzinfo=timezone.utc)
+    assert not held_too_long(mon, datetime(2026, 10, 21, 6, 0, tzinfo=timezone.utc), 2)
+    assert held_too_long(mon, datetime(2026, 10, 22, 6, 0, tzinfo=timezone.utc), 2)
 
 
 async def _bars(db, symbol, rows):
