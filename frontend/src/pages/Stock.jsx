@@ -4,6 +4,8 @@ import { Star } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
+import Hero from '../components/ui/Hero';
+import DeltaChip from '../components/ui/DeltaChip';
 import Tabs, { useTabParam } from '../components/ui/Tabs';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -11,7 +13,7 @@ import Skeleton from '../components/ui/Skeleton';
 import ErrorLine from '../components/ui/ErrorLine';
 import Empty from '../components/ui/Empty';
 import AsOf from '../components/ui/AsOf';
-import { inr, pct, tone } from '../components/ui/format';
+import { inr, pct, points, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import OrderTicket from '../components/trading/OrderTicket';
 import TradingChart from '../components/stock/TradingChart';
@@ -139,36 +141,43 @@ const Stock = () => {
     <Layout>
       <PageHeader title={symbol} back right={verdict && !sold ? <Badge kind={verdictKind(verdict)}>{verdictLabel(verdict)}</Badge> : null} />
 
-      <Card className="mb-3">
-        {quick.loading && price == null ? (
-          <Skeleton rows={2} />
-        ) : quick.error && price == null ? (
+      {quick.loading && price == null ? (
+        <Card className="mb-3"><Skeleton rows={2} /></Card>
+      ) : quick.error && price == null ? (
+        <Card className="mb-3">
           <ErrorLine message={`Could not load the price for ${symbol}${cause(quick.error)}. Check your connection and retry.`} onRetry={reloadQuick} />
-        ) : (
-          <>
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[14px] text-[var(--text-muted)] truncate">{company?.name}</p>
-              {watching !== null && (
-                <button type="button" onClick={toggleWatch} aria-pressed={watching}
-                        className={`shrink-0 min-h-11 px-3 inline-flex items-center gap-1.5 rounded-[10px] text-[13px] font-semibold ${watching ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
-                  <Star className="w-4 h-4" fill={watching ? 'currentColor' : 'none'} aria-hidden="true" />
-                  {watching ? 'Watching' : 'Watch'}
-                </button>
-              )}
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[28px] leading-9 font-bold tabular-nums text-[var(--text)]">{currency === 'INR' ? inr(price) : price}</span>
-              {dayPct != null && (
-                <span className={`text-[15px] font-semibold tabular-nums ${toneText(tone(dayPct))}`}>
-                  {dayAbs != null && currency === 'INR' && `${inr(dayAbs, { sign: true })} `}({pct(dayPct, { sign: true })}) {marketPhase() === 'open' ? 'today' : 'last session'}
-                </span>
-              )}
-            </div>
+        </Card>
+      ) : (
+        <div className="mb-3">
+          <Hero
+            label={company?.name || symbol}
+            value={price}
+            format={currency === 'INR' ? inr : points}
+            privateValue={false}
+            change={dayPct != null && (
+              <DeltaChip
+                value={currency === 'INR' ? dayAbs : null}
+                pct={dayPct * 100}
+                suffix={marketPhase() === 'open' ? 'today' : 'last session'}
+                privateValue={false}
+              />
+            )}
+          >
+            {watching !== null && (
+              <button type="button" onClick={toggleWatch} aria-pressed={watching}
+                      className={`mt-2 min-h-11 px-3 -ml-3 inline-flex items-center gap-1.5 rounded-[10px] text-[13px] font-semibold ${watching ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+                <Star className="w-4 h-4" fill={watching ? 'currentColor' : 'none'} aria-hidden="true" />
+                {watching ? 'Watching' : 'Watch'}
+              </button>
+            )}
             <AsOf at={live?.at} />
-          </>
-        )}
+          </Hero>
+        </div>
+      )}
+      {(pos || sold || mine.status === 'error') && (
+        <Card className="mb-3">
         {pos && (
-          <div className="mt-3 pt-3 border-t border-[var(--border)]">
+          <div>
             <p className="text-[13px] text-[var(--text-muted)] mb-2">Your position · your broker account</p>
             <div className="grid grid-cols-2 gap-3">
               <Stat label="Quantity · avg" value={`${formatQuantity(pos.qty)} · ${inr(pos.avg)}`} />
@@ -199,9 +208,10 @@ const Stock = () => {
             </div>
           </div>
         )}
-        {sold && <p className="mt-3 text-[14px] text-[var(--text-muted)]">You no longer hold this. Past trades are on the chart.</p>}
+        {sold && <p className="text-[14px] text-[var(--text-muted)]">You no longer hold this. Past trades are on the chart.</p>}
         {mine.status === 'error' && <ErrorLine message="Could not load your position from your broker account. Prices and charts still work." onRetry={loadMine} />}
-      </Card>
+        </Card>
+      )}
 
       <AiRead aiRead={aiRead} retryAi={retryAi} />
 
