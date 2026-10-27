@@ -84,14 +84,14 @@ const StrategyItem = ({ card, gate, short, open, onToggle, yours }) => {
 };
 
 /** The weekly builder's (not the user's own, those are in Mine) drafts that failed a check, so a rejected idea is never re-proposed unseen. */
-const SUMMARY_CLS = 'cursor-pointer rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-4 min-h-11 flex items-center text-[15px] font-semibold text-[var(--text)]';
+const SUMMARY_CLS = 'cursor-pointer rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 min-h-11 flex items-center text-[15px] font-semibold text-[var(--text)]';
 
 const Rejected = ({ rows }) => {
   if (!rows?.length) return null;
   return (
     <details>
       <summary className={SUMMARY_CLS}>Tried and rejected</summary>
-      <ul className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)] px-4 mt-3">
+      <ul className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)] px-4 mt-3">
         <li className="py-2.5 text-[13px] text-[var(--text-muted)]">Ideas the weekly builder dropped after a failed check.</li>
         {rows.map((r) => (
           <li key={r.slug} className="py-2.5">

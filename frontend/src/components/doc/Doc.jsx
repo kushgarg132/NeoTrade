@@ -230,14 +230,14 @@ export const NetLine = ({ label, children, className }) => (
  * the way a stamp lands. Used only where something has actually been decided.
  */
 export const Stamp = ({ label, tone = 'stamp', className }) => {
-  const kind = tone === 'gain' ? 'bg-[var(--gain-wash)] text-[var(--gain)]' : tone === 'loss' ? 'bg-[var(--loss-wash)] text-[var(--loss)]' : 'bg-[var(--accent-soft)] text-[var(--accent)]';
+  const kind = tone === 'gain' ? 'bg-[var(--gain-soft)] text-[var(--gain)]' : tone === 'loss' ? 'bg-[var(--loss-soft)] text-[var(--loss)]' : 'bg-[var(--accent-soft)] text-[var(--accent)]';
   return <span className={cn('inline-flex items-center rounded-full px-2.5 min-h-6 text-[12px] font-semibold', kind, className)}>{label}</span>;
 };
 
 export const Empty = ({ title, detail, action, className }) => (
   <div
     className={cn(
-      'py-8 px-4 text-center rounded-[16px] border border-dashed border-[var(--border)]',
+      'py-8 px-4 text-center rounded-[20px] border border-[var(--border)]',
       className
     )}
   >
@@ -274,11 +274,11 @@ export const Tabs = ({ tabs, active, onSelect, label, className }) => (
           onClick={() => onSelect(tab.id)}
           className={cn(
             'flex-1 shrink-0 min-h-11 px-3 rounded-[8px] inline-flex items-center justify-center gap-1.5 whitespace-nowrap text-[14px] font-medium transition-colors',
-            selected ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'
+            selected ? 'bg-[var(--surface)] text-[var(--text)]' : 'text-[var(--text-muted)]'
           )}
         >
           <span>{tab.label}</span>
-          {tab.count > 0 && <span className="min-w-5 px-1 rounded-full bg-[var(--accent)] text-[var(--surface)] text-[12px] leading-5 text-center tabular-nums">{tab.count}</span>}
+          {tab.count > 0 && <span className="min-w-5 px-1 rounded-full bg-[var(--accent)] text-[var(--accent-ink)] text-[12px] leading-5 text-center tabular-nums">{tab.count}</span>}
         </button>
       );
     })}
