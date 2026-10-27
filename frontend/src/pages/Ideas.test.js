@@ -59,3 +59,9 @@ test('holding rows render the row-specific buttons from holdingButtons', () => {
   assert.match(hold, /\{b\.dismiss\}/);
   assert.match(hold, /rel="noopener noreferrer"/);
 });
+
+test('Ideas splits into Picks (default) and Holdings sub-tabs', () => {
+  assert.match(page, /const IDS = \['picks', 'holdings'\]/);
+  assert.match(page, /tab === 'picks' && <Card title="New ideas"/);
+  assert.match(page, /tab === 'holdings' && \(acts\.loading/);
+});
