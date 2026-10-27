@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 6140c02
+verified_at: 4fc2e57
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -174,7 +174,7 @@ Source: `src/App.jsx::App`, paths in `src/utils/routes.js::ROUTES`. `gated(x)` =
 
 | path | page | admin-only | notes |
 |---|---|---|---|
-| `/login` | `Login` | no | not gated; honours `?next=` |
+| `/login` | `Login` | no | not gated; honours `?next=`; one glow card (`--glow` gradient, 28 px radius, 44 px extrabold wordmark), error line in `--loss-soft` |
 | `/` | `Home` | no | flow 4 |
 | `/money` | `Money` | no | `?tab=overview\|holdings\|tax\|journal`, journal `?jtab=trades\|habits\|guardrails`; flow 5 |
 | `/ideas`, `/ideas/history`, `/ideas/:id` | `Ideas`, `IdeasHistory`, `IdeaDetail` | no | flow 6; id `s-<suggestionId>` or `p-<pickId>` |
