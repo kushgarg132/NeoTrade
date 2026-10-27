@@ -30,3 +30,11 @@ export const compactInr = (n) => {
   if (a >= 1e5) return `${sgn(v, false)}₹${a / 1e5 >= 100 ? trim(a / 1e5, 1) : (a / 1e5).toFixed(2)}L`;
   return inr(v);
 };
+
+/** Index/price level, no currency: points(24812.5, {sign:true}) = "+24,812.5". Up to 2 dp. */
+export const points = (n, { sign = false } = {}) => {
+  const v = num(n);
+  if (v === null) return '—';
+  const r = Number(v.toFixed(2));
+  return `${sgn(r, sign)}${Math.abs(r).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+};

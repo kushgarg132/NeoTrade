@@ -27,6 +27,19 @@ test('DeltaChip: up, down and neutral, private', () => {
   assert.match(chip, /private/);
 });
 
+test('Hero: private only when privateValue (default true)', () => {
+  assert.match(hero, /privateValue = true/);
+  assert.match(hero, /\$\{privateValue \? 'private ' : ''\}/);
+});
+
+test('DeltaChip: pluggable format, direction from pct when value is not a number', () => {
+  assert.match(chip, /format = inr/);
+  assert.match(chip, /privateValue = true/);
+  assert.match(chip, /format\(value, \{ sign: true \}\)/);
+  assert.match(chip, /typeof value !== 'number'/);
+  assert.match(chip, /\$\{privateValue \? 'private ' : ''\}/);
+});
+
 test('GradeTile: A accent, B surface-2, C border, labelled', () => {
   assert.match(tile, /--accent-ink/);
   assert.match(tile, /--surface-2/);

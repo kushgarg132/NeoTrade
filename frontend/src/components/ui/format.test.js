@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { inr, pct, tone, compactInr } from './format.js';
+import { inr, pct, tone, compactInr, points } from './format.js';
 
 test('inr groups the Indian way', () => {
   assert.equal(inr(409205), '₹4,09,205');
@@ -22,4 +22,11 @@ test('pct and tone', () => {
   assert.equal(tone(-1), 'loss');
   assert.equal(tone(2), 'gain');
   assert.equal(tone(0), 'neutral');
+});
+
+test('points: en-IN, up to 2 dp, optional sign', () => {
+  assert.equal(points(24812.5, { sign: true }), '+24,812.5');
+  assert.equal(points(-12.345), '-12.35');
+  assert.equal(points(null), '—');
+  assert.equal(points(0, { sign: true }), '0');
 });
