@@ -32,6 +32,24 @@ test('confidence is one line; the second-tap BuyBar and gates are untouched', ()
   assert.match(src, /Empty title="Idea not found"/);
 });
 
+test('grade tile and forecast chip replace the badge and the big span', () => {
+  assert.match(src, /import GradeTile from/);
+  assert.match(src, /import DeltaChip from/);
+  assert.match(src, /GRADES\[idea\.grade\] && <GradeTile grade=\{idea\.grade\}/);
+  assert.doesNotMatch(src, /<Badge kind=\{GRADES\[/);
+  assert.match(src, /<DeltaChip pct=\{idea\.expectedMedian \* 100\}[^>]*privateValue=\{false\}/);
+  assert.doesNotMatch(src, /text-\[24px\]/);
+  assert.match(src, /idea\.when/);
+  assert.match(src, /idea\.rupees/);
+  assert.match(src, /Range /);
+});
+
+test('Fold uses the 20px radius', () => {
+  const fold = src.slice(at(/const Fold =/), at(/const StrategyRecord/));
+  assert.match(fold, /rounded-\[20px\]/);
+  assert.doesNotMatch(fold, /rounded-\[16px\]/);
+});
+
 test('IdeaRow imports everything it uses', () => {
   const row = readFileSync(new URL('../components/ideas/IdeaRow.jsx', import.meta.url), 'utf8');
   assert.match(row, /import \{ toneText \}/);

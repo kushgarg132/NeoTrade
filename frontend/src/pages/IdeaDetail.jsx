@@ -13,6 +13,8 @@ import RangeBar from '../components/ideas/RangeBar';
 import BuyBar from '../components/ideas/BuyBar';
 import { useLoad } from '../components/ideas/useLoad';
 import Badge from '../components/ui/Badge';
+import GradeTile from '../components/ui/GradeTile';
+import DeltaChip from '../components/ui/DeltaChip';
 import { useForward } from '../components/ForwardBadge';
 import api, { endpoints } from '../utils/api';
 import { recordLine, statusOf } from '../utils/library';
@@ -41,7 +43,7 @@ const Confidence = ({ score }) => (
 
 /** A folded section: a native details, so no JS and keyboard-friendly. */
 const Fold = ({ title, children }) => (
-  <details className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)]">
+  <details className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)]">
     <summary className="flex items-center min-h-11 px-4 text-[15px] font-semibold text-[var(--text)] cursor-pointer">{title}</summary>
     <div className="px-4 pb-4 space-y-3">{children}</div>
   </details>
@@ -149,7 +151,7 @@ const IdeaDetail = () => {
         <span className="text-[13px] text-[var(--text-muted)]">{idea.setup}{idea.horizon ? ` · ${idea.horizon}d` : ''}</span>
         <IdeaBadge badge={idea.badge} />
         {idea.noEdge && <span className="text-[12px] font-semibold text-[var(--warn)]">No edge</span>}
-        {GRADES[idea.grade] && <Badge kind={GRADES[idea.grade].kind}>{GRADES[idea.grade].label}</Badge>}
+        {GRADES[idea.grade] && <GradeTile grade={idea.grade} />}
         {idea.decided && <Badge kind="neutral">{STATUS[idea.status] || idea.status}</Badge>}
       </div>
 
@@ -212,7 +214,7 @@ const IdeaDetail = () => {
       {idea.kind === 'p' && idea.expectedMedian != null && (
         <Card title="Expected return" action={<Badge kind="paper">Paper</Badge>}>
           <div className="flex items-baseline gap-2 flex-wrap">
-            <span className={`text-[24px] font-semibold tabular-nums ${toneText(idea.expectedMedian > 0 ? 'gain' : idea.expectedMedian < 0 ? 'loss' : 'neutral')}`}>{pct(idea.expectedMedian, { sign: true, dp: 1 })}</span>
+            <DeltaChip pct={idea.expectedMedian * 100} privateValue={false} />
             {idea.when && <span className="text-[14px] text-[var(--text-muted)]">{idea.when}</span>}
           </div>
           {idea.rupees && <p className="mt-1 text-[14px] text-[var(--text)] tabular-nums">{idea.rupees}</p>}
