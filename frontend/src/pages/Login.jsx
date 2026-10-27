@@ -3,7 +3,6 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/useTheme';
-import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 
 /** Sign-in: one line on what NeoTrade is, then Google sign-in. */
@@ -34,8 +33,11 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-4">
-      <Card className="w-full max-w-sm !p-6">
-        <h1 className="text-2xl font-bold text-[var(--text)]">NeoTrade</h1>
+      <div
+        className="w-full max-w-sm rounded-[28px] border border-[var(--border)] p-6"
+        style={{ background: 'var(--glow)' }}
+      >
+        <h1 className="text-[44px] font-extrabold tracking-[-0.04em] leading-none text-[var(--text)]">NeoTrade</h1>
         <p className="text-[15px] text-[var(--text)] mt-3">
           Your broker account, reviewed daily. Plus an AI account that trades on paper until a
           strategy proves itself.
@@ -67,7 +69,7 @@ const Login = () => {
           {error && (
             <p
               role="alert"
-              className="mt-4 text-sm text-center text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2"
+              className="mt-4 text-sm text-center text-[var(--loss)] rounded-[12px] bg-[var(--loss-soft)] px-3 py-2"
             >
               {error}
             </p>
@@ -76,7 +78,7 @@ const Login = () => {
         <p className="mt-6 pt-4 border-t border-[var(--border)] text-xs text-[var(--text-muted)] text-center">
           Free while in beta. Not investment advice. NeoTrade never holds your money.
         </p>
-      </Card>
+      </div>
     </div>
   );
 };
