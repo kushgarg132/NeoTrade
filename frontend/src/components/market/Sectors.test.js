@@ -25,3 +25,7 @@ test('52-week extremes are kept', () => {
   assert.match(src, /near_high/);
   assert.match(src, /near_low/);
 });
+
+test('Sectors heading says last session via isClosed()', () => {
+  assert.match(src, /isClosed\(\) \? 'Sectors · last session'/);
+});

@@ -21,9 +21,9 @@ const SectorPage = () => {
   const members = data ? [...data.members].sort((a, b) => b.change_pct - a.change_pct) : [];
   return (
     <Layout>
-      <PageHeader title={name} back="/market?tab=pulse" backLabel="Market" />
+      <PageHeader title={name} back="/market" backLabel="Market" />
       {status === 'loading' && <Skeleton rows={6} />}
-      {status === 'empty' && <Empty title="Unknown sector" body="No Nifty 200 stock is filed under this sector." action={<Link to="/market?tab=pulse" className="text-[var(--accent)]">Back to Market</Link>} />}
+      {status === 'empty' && <Empty title="Unknown sector" body="No Nifty 200 stock is filed under this sector." action={<Link to="/market" className="text-[var(--accent)]">Back to Market</Link>} />}
       {status === 'error' && <ErrorLine message="Could not load this sector." onRetry={retry} />}
       {status === 'ok' && (
         <div className="space-y-3">

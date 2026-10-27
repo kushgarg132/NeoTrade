@@ -224,6 +224,7 @@ def _fetch_index_intraday_sync(ticker: str) -> List[Dict[str, Any]]:
 
 
 _INTRADAY_TTL = 60
+_INTRADAY_EMPTY_TTL = 15  # negative cache: a yfinance outage must not be re-hit on every mount
 _intraday_cache: Dict[str, tuple] = {}
 
 
@@ -233,16 +234,18 @@ async def get_index_intraday(ticker: str):
     if ticker not in _known_index_names():
         raise HTTPException(status_code=404, detail=f"{ticker} is not a tracked index")
     hit = _intraday_cache.get(ticker)
-    if hit and time.monotonic() - hit[0] < _INTRADAY_TTL:
+    if hit and time.monotonic() - hit[0] < (_INTRADAY_TTL if hit[1] else _INTRADAY_EMPTY_TTL):
+        if not hit[1]:
+            raise HTTPException(status_code=502, detail="No intraday data right now")
         return hit[1]
     try:
         points = await asyncio.to_thread(_fetch_index_intraday_sync, ticker)
     except Exception as e:
         logger.error(f"Error fetching intraday for {ticker}: {e}")
         points = []
+    _intraday_cache[ticker] = (time.monotonic(), points)
     if not points:
         raise HTTPException(status_code=502, detail="No intraday data right now")
-    _intraday_cache[ticker] = (time.monotonic(), points)
     return points
 
 

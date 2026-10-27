@@ -236,7 +236,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/market/global` | `backend/routers/market_data.py::get_global_indices` | user |
 | GET | `/api/v1/market/index/{ticker}` | `backend/routers/market_data.py::get_index_detail` | user |
 | GET | `/api/v1/market/sector/{name}` | `backend/routers/market_data.py::get_sector` | user |
-| GET | `/api/v1/market/index/{ticker}/intraday` | `backend/routers/market_data.py::get_index_intraday` (today's 5-min closes `[{t,close}]`, `_intraday_cache` 60 s per ticker in-process; 404 untracked ticker, 502 no points) | user |
+| GET | `/api/v1/market/index/{ticker}/intraday` | `backend/routers/market_data.py::get_index_intraday` (today's 5-min closes `[{t,close}]`, `_intraday_cache` 60 s per ticker in-process, an empty result cached 15 s; 404 untracked ticker, 502 no points) | user |
 | GET | `/api/v1/market/index/{ticker}/analysis` | `backend/routers/market_data.py::get_index_analysis` | user |
 | GET | `/api/v1/market/brief` | `backend/routers/market_data.py::get_market_brief` (stored, no model call; 404 if none) | user |
 | GET | `/api/v1/research/{symbol}/note` | `backend/routers/market_data.py::get_cached_note` (last analyst read from `analyst:last:*` with `stale`, no model call; 404 if none) | user |

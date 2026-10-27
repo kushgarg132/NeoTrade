@@ -58,11 +58,11 @@ const IndexPage = () => {
   const { data, status, retry } = useStored(endpoints.marketIndex(ticker));
   return (
     <Layout>
-      <PageHeader title={data?.name || 'Index'} back="/market?tab=pulse" backLabel="Market" />
+      <PageHeader title={data?.name || 'Index'} back="/market" backLabel="Market" />
       {/* The AI explanation first, on its own read: it shows even while the price data loads or fails. */}
       {status !== 'empty' && <div className="mb-3"><Why ticker={ticker} /></div>}
       {status === 'loading' && <Skeleton rows={6} />}
-      {status === 'empty' && <Empty title="Not found" body="This index is not tracked." action={<Link to="/market?tab=pulse" className="text-[var(--accent)]">Back to Market</Link>} />}
+      {status === 'empty' && <Empty title="Not found" body="This index is not tracked." action={<Link to="/market" className="text-[var(--accent)]">Back to Market</Link>} />}
       {status === 'error' && <ErrorLine message="Could not load this index." onRetry={retry} />}
       {status === 'ok' && (
         <div className="space-y-3">

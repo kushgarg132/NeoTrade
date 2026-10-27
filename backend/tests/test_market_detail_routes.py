@@ -132,6 +132,16 @@ def test_index_intraday_502_when_no_points(http):
     assert client.get("/market/index/^NSEI/intraday").status_code == 502
 
 
+def test_index_intraday_empty_is_negative_cached(http):
+    client, _, mp = http
+    market_data._intraday_cache.clear()
+    calls = []
+    mp.setattr(market_data, "_fetch_index_intraday_sync", lambda t: calls.append(t) or [])
+    assert client.get("/market/index/^NSEI/intraday").status_code == 502
+    assert client.get("/market/index/^NSEI/intraday").status_code == 502
+    assert len(calls) == 1
+
+
 def _scan_http(http):
     client, mongo, mp = http
     rows = [{"symbol": "TCS", "name": "TCS", "sector": "IT"}, {"symbol": "INFY", "name": "Infosys", "sector": "IT"}]
@@ -161,7 +171,9 @@ def test_scan_movers_news_false_when_the_news_query_fails(http):
         def __getitem__(self, k):
             raise RuntimeError("down")
 
-    mp.setattr(database, "db", Boom())
+    import types
+    import backend.database as dbmod
+    mp.setattr(dbmod, "db", types.SimpleNamespace(db=Boom(), redis=None))
     body = client.get("/market/scan").json()
     assert body["gainers"][0]["news"] is False and body["losers"][0]["news"] is False
 

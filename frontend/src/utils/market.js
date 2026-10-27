@@ -1,4 +1,9 @@
+import { marketPhase } from './formatters.js';
+
 // Pulse helpers. Pure.
+
+/** True when NSE is closed: headings then say "last session" instead of "today". */
+export const isClosed = (now = new Date()) => marketPhase(now) === 'closed';
 
 /**
  * Sector moves read off the scored news wire: each item's sector impacts

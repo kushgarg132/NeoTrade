@@ -10,7 +10,7 @@ import ListRow from '../ui/ListRow';
 import AsOf from '../ui/AsOf';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
-import { divergence, sortSectors } from '../../utils/market';
+import { divergence, isClosed, sortSectors } from '../../utils/market';
 import { stockPath } from '../../utils/stocks';
 import { sectorPath } from '../../utils/routes';
 import { heatColor } from '../ui/chartTheme';
@@ -76,7 +76,7 @@ const Sectors = () => {
   const low = data.near_low || [];
   return (
     <div className="space-y-3">
-      <Card title="Sectors today">
+      <Card title={isClosed() ? 'Sectors · last session' : 'Sectors today'}>
         <SortControl value={by} onChange={setBy} />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {sortSectors(data.sectors, by).map((s) => <Cell key={s.sector} s={s} maxAbs={maxAbs} />)}

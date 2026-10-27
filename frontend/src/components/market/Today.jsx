@@ -15,8 +15,8 @@ import { toneText } from '../ui/tone';
 import { AiMarkdown } from '../ai/AiSummary';
 import useStored from '../../hooks/useStored';
 import useSection from '../../hooks/useSection';
-import { breadthWord } from '../../utils/market';
-import { formatDateTime, marketPhase } from '../../utils/formatters';
+import { breadthWord, isClosed } from '../../utils/market';
+import { formatDateTime } from '../../utils/formatters';
 import { stockPath } from '../../utils/stocks';
 import { indexPath } from '../../utils/routes';
 
@@ -32,7 +32,7 @@ const loadToday = () => api.get(endpoints.today).then((r) => r.data.backdrop || 
 const loadScan = () => api.get(endpoints.marketScan).then((r) => r.data);
 const num = (v) => Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const refresh = (retry) => <Button variant="secondary" onClick={retry}>Refresh</Button>;
-const closed = () => marketPhase() === 'closed';
+const closed = isClosed;
 
 const Story = () => {
   const { data, status, retry } = useStored(endpoints.marketBrief);
@@ -166,20 +166,20 @@ const Scan = () => {
         <AsOf at={data.at} />
       </Card>
       <Card title={mTitle}>
-        <div role="tablist" aria-label="Movers" className="mb-2 flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1 sm:hidden">
+        <div role="group" aria-label="Movers" className="mb-2 flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1 sm:hidden">
           {[['gainers', 'Gainers'], ['losers', 'Losers']].map(([id, label]) => (
-            <button key={id} type="button" role="tab" aria-selected={side === id} onClick={() => setSide(id)}
+            <button key={id} type="button" aria-pressed={side === id} onClick={() => setSide(id)}
               className={`min-h-11 flex-1 rounded-[8px] text-[14px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${side === id ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}>{label}</button>
           ))}
         </div>
         <div className="sm:grid sm:grid-cols-2 sm:gap-4">
           <div className={side === 'gainers' ? '' : 'hidden sm:block'}>
             <h3 className="hidden text-[13px] font-semibold text-[var(--gain)] sm:block">Gainers</h3>
-            <MoverList rows={data.gainers || []} none="No stock is up today." />
+            <MoverList rows={data.gainers || []} none={`No stock is up ${closed() ? 'in the last session' : 'today'}.`} />
           </div>
           <div className={side === 'losers' ? '' : 'hidden sm:block'}>
             <h3 className="hidden text-[13px] font-semibold text-[var(--loss)] sm:block">Losers</h3>
-            <MoverList rows={data.losers || []} none="No stock is down today." />
+            <MoverList rows={data.losers || []} none={`No stock is down ${closed() ? 'in the last session' : 'today'}.`} />
           </div>
         </div>
       </Card>
@@ -192,7 +192,7 @@ const Events = () => {
   const events = (data?.events || []).slice(0, 5);
   if (data && !events.length) return null; // hidden when empty
   return (
-    <Card title="Events today">
+    <Card title={closed() ? 'Events · last session' : 'Events today'}>
       {error ? <ErrorLine message="Could not load today's events." onRetry={retry} />
         : !data ? <Skeleton rows={3} />
         : events.map((e) => (

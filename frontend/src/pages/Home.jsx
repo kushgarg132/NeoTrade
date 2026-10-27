@@ -106,7 +106,7 @@ const Home = () => {
         </div>
         <NewsMoves moves={(overview?.headline || today.pulse)?.news_moves} />
         {kind && <BriefCard title={kind === 'premarket' ? 'Before the open' : 'After the close'} text={today[kind]} summary={day}
-          more={kind === 'premarket' ? { to: '/market?tab=pulse', label: 'Market' } : { to: '/money', label: 'Your money' }} />}
+          more={kind === 'premarket' ? { to: '/market', label: 'Market' } : { to: '/money', label: 'Your money' }} />}
         <GoalTile />
         <WeeklyLink />
       </div>

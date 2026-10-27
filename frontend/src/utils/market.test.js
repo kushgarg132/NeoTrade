@@ -69,3 +69,9 @@ test('materialToday uses the IST midnight boundary', () => {
   assert.deepEqual(pinned.map((i) => i.id), [2]);
   assert.deepEqual(rest.map((i) => i.id), [1, 3]);
 });
+
+test('isClosed is true off-hours and false in session', async () => {
+  const { isClosed } = await import('./market.js');
+  assert.equal(isClosed(new Date('2026-10-07T10:05:00Z')), true);
+  assert.equal(isClosed(new Date('2026-10-07T04:00:00Z')), false);
+});
