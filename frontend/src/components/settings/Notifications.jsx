@@ -26,7 +26,7 @@ const Notifications = () => {
   };
 
   return (
-    <Sheet title="Notifications">
+    <Sheet title="Telegram and news">
       <TelegramLink />
       <div role="group" aria-label="News alerts" className="py-2">
         <p className="text-[13px] font-medium text-[var(--text-muted)]">News alerts</p>
@@ -34,17 +34,17 @@ const Notifications = () => {
           Material news, as a toast here and on Telegram when linked. A market-wide shock reaches anyone holding something.
         </p>
         {value === null ? <Ruling rows={1} /> : (
-          <div className="flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
             {NEWS_ALERTS.map(([id, label]) => (
               <button key={id} type="button" aria-pressed={id === value} onClick={() => pick(id)}
-                className={`flex-1 min-h-11 rounded-[8px] px-3 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+                className={`min-h-11 rounded-[8px] px-3 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
                   id === value ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
                 {label}
               </button>
             ))}
           </div>
         )}
-        {note && <p className="text-[13px] text-[var(--text-muted)] pt-2">{note}</p>}
+        {note && <p role="alert" className="text-[13px] text-[var(--text-muted)] pt-2">{note}</p>}
       </div>
     </Sheet>
   );

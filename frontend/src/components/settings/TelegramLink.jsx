@@ -136,7 +136,7 @@ const TelegramLink = () => {
             </Button>
           ))}
       </Row>
-      {note && <p className="text-[13px] text-[var(--text-muted)] pt-2">{note}</p>}
+      {note && <p role="alert" className="text-[13px] text-[var(--text-muted)] pt-2">{note}</p>}
     </>
   );
 };

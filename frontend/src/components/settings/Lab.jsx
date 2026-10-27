@@ -16,7 +16,7 @@ const LINKS = [
 /** Admin only: frozen and experimental features, and beta metrics. */
 const Lab = () => (
   <div className="space-y-3">
-    <Card title="Lab">
+    <Card>
       {LINKS.map(([page, title, sub]) => <ListRow key={page} to={`/settings/lab/${page}`} title={title} sub={sub} />)}
     </Card>
     <BetaSheet />
