@@ -10,6 +10,7 @@ import TechGauge from './TechGauge';
 import Fundamentals from '../analysis/Fundamentals';
 import SentimentPanel from '../analysis/SentimentPanel';
 import { REASONS } from '../../utils/mine';
+import { stockPath } from '../../utils/stocks';
 import { day, verdictLabel, verdictKind } from './common';
 
 /** Verdict (when held), your thesis, the instant snapshot, then the AI read (requested on first open). */
@@ -70,6 +71,7 @@ const AnalysisTab = ({ symbol, mine, quick, ai, requestAi, reloadQuick, onThesis
           summary={ai.data.analyst_summary}
           sentiment={ai.data.sentiment}
           thesis={ai.data.thesis}
+          more={{ to: `${stockPath(symbol)}?tab=news`, label: 'News' }}
         />
       )}
     </div>

@@ -25,3 +25,6 @@ export const tradeSummary = (t) => {
   const gross = open ? null : t?.realized_pnl ?? 0;
   return { open, gross, costs, net: open ? null : gross - costs, held: heldFor(t?.entry_at, t?.exit_at) };
 };
+
+/** symbol -> id of its open trade, from GET /trading/trades?status=OPEN. A symbol with none is absent (callers fall back to the stock). */
+export const openTradeIds = (trades) => Object.fromEntries((trades || []).filter((t) => t.status === 'OPEN' && t.id != null).map((t) => [t.symbol, t.id]));

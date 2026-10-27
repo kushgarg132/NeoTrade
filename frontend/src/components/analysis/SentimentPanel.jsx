@@ -13,13 +13,13 @@ const read = (score) => {
   return { label: 'Neutral', tone: 'text-[var(--text-muted)]' };
 };
 
-const SentimentPanel = ({ score, summary, sentiment, thesis }) => {
+const SentimentPanel = ({ score, summary, sentiment, thesis, more }) => {
   const value = Number(score) || 0;
   const reading = read(value);
   const position = ((value + 1) / 2) * 100;
 
   return (
-    <Card title="News sentiment">
+    <Card title="News sentiment" more={more}>
       <div className="flex items-baseline justify-between gap-3">
         <span className={`text-[20px] font-bold ${reading.tone}`}>
           {reading.label}

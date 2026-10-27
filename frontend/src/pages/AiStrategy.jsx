@@ -67,6 +67,8 @@ const AiStrategy = () => {
                 {bt.win_rate != null && <Stat label="Win rate" value={pct(bt.win_rate, { dp: 0 })} />}
                 {bt.profit_factor != null && <Stat label="Profit factor" value={Number(bt.profit_factor).toFixed(2)} />}
                 {bt.total_pnl != null && <Stat label="Total P&L" value={inr(bt.total_pnl, { sign: true })} />}
+                {bt.max_drawdown != null && <Stat label="Max drawdown" value={pct(bt.max_drawdown, { dp: 1 })} />}
+                {bt.sharpe_ratio != null && <Stat label="Sharpe ratio" value={Number(bt.sharpe_ratio).toFixed(2)} />}
               </div>
             </>
           )}

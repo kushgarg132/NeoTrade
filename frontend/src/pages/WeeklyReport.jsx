@@ -15,6 +15,7 @@ import AiSummary from '../components/ai/AiSummary';
 import api, { endpoints } from '../utils/api';
 import { bareSymbol } from '../utils/formatters';
 import { inr, pct, tone } from '../components/ui/format';
+import { stockPath } from '../utils/stocks';
 import { shiftWeek, weekRange } from '../utils/weekly';
 
 const act = 'inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold';
@@ -104,10 +105,10 @@ const WeeklyReport = () => {
                   <Stat label="Excess" value={pct(r.you.excess, { sign: true })} tone={tone(r.you.excess)} />
                 </div>
               )}
-              <div className="mt-3 pt-3 border-t border-[var(--border)]">
-                <Stat label={<span className="inline-flex items-center gap-2">AI book <Badge kind="paper">Paper</Badge></span>} value={pct(r.ai.ret, { sign: true })} tone={tone(r.ai.ret)} />
-                <p className="mt-1 text-[13px] text-[var(--text-muted)]">Closed AI trades this week, after charges, as % of its capital.</p>
-              </div>
+            </Card>
+            <Card title="AI book" to="/ai">
+              <Stat label={<span className="inline-flex items-center gap-2">Paper return <Badge kind="paper">Paper</Badge></span>} value={pct(r.ai.ret, { sign: true })} tone={tone(r.ai.ret)} />
+              <p className="mt-1 text-[13px] text-[var(--text-muted)]">Closed AI trades this week, after charges, as % of its capital.</p>
             </Card>
             <Card title="Best and worst" action={<span className="text-[13px] text-[var(--text-muted)]">your account, by stock</span>}>
               {r.best.length + r.worst.length === 0 ? <Empty title="No closed trades" body="Stocks you closed this week show here, best and worst first."
@@ -118,7 +119,7 @@ const WeeklyReport = () => {
                       <div className="text-[13px] font-semibold text-[var(--text-muted)] mt-1">{label}</div>
                       <ul>
                         {list.map((x) => (
-                          <ListRow key={x.symbol} dense chevron={false} title={bareSymbol(x.symbol)} right={inr(x.pnl, { sign: true })} rightTone={tone(x.pnl)} />
+                          <ListRow key={x.symbol} dense to={stockPath(x.symbol)} title={bareSymbol(x.symbol)} right={inr(x.pnl, { sign: true })} rightTone={tone(x.pnl)} />
                         ))}
                       </ul>
                     </div>
@@ -137,7 +138,7 @@ const WeeklyReport = () => {
               </div>
             </Card>
             {r.news && <NewsWeek news={r.news} />}
-            <Card title="Journal" action={<span className="text-[13px] text-[var(--text-muted)]">your account</span>}>
+            <Card title="Journal" to="/money?tab=journal">
               <div className="grid grid-cols-3 gap-3">
                 <Stat label="Trades" value={String(r.journal.trades)} />
                 <Stat label="Net, after charges" value={inr(r.journal.net, { sign: true })} tone={tone(r.journal.net)} />

@@ -113,7 +113,7 @@ const TaxTab = ({ onImport }) => {
         <Card title="Unrealised by lot">
           {unrealised.length === 0 ? <None text="No open lots." /> : unrealised.map((u, i) => (
             <ListRow
-              key={i} chevron={false} title={u.symbol}
+              key={i} to={stockPath(u.symbol)} title={u.symbol}
               sub={`${formatQuantity(u.qty)} @ ${inr(u.price)} · bought ${day(u.buy_date)} · ${u.term}-term`}
               right={inr(u.gain, { sign: true })} rightTone={tone(u.gain)}
             />
@@ -127,7 +127,7 @@ const TaxTab = ({ onImport }) => {
         <Card title="Turning long-term soon">
           {turning.length === 0 ? <None text="Nothing crosses 365 days in the next 60 days." /> : turning.map((t, i) => (
             <ListRow
-              key={i} chevron={false} title={t.symbol}
+              key={i} to={stockPath(t.symbol)} title={t.symbol}
               sub={`${formatQuantity(t.qty)} · gain ${inr(t.gain)}`}
               right={`Wait ${t.days} ${t.days === 1 ? 'day' : 'days'}, save ${inr(t.saving)}`}
             />

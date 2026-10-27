@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { strategyRow, strategyStatus, tradeSummary } from './aiDetail.js';
+import { openTradeIds, strategyRow, strategyStatus, tradeSummary } from './aiDetail.js';
 
 test('strategyRow finds by name, null when absent', () => {
   const card = { strategies: [{ strategy: 'a', net: 1 }] };
@@ -25,4 +25,11 @@ test('tradeSummary: open has no net, closed nets costs', () => {
   assert.equal(c.net, 88);
   assert.equal(c.gross, 100);
   assert.equal(c.held, '2d');
+});
+
+test('openTradeIds maps each open trade symbol to its id; no trade -> undefined', () => {
+  const ids = openTradeIds([{ id: 'a', symbol: 'TCS', status: 'OPEN' }, { id: 'b', symbol: 'INFY', status: 'OPEN' }, { id: 'c', symbol: 'SBIN', status: 'CLOSED' }]);
+  assert.deepEqual(ids, { TCS: 'a', INFY: 'b' });
+  assert.equal(ids.SBIN, undefined);
+  assert.deepEqual(openTradeIds(null), {});
 });

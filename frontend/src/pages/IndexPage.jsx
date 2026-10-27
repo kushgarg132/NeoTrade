@@ -1,5 +1,6 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
@@ -11,21 +12,24 @@ import { AiCard, AiText } from '../components/ai/AiSummary';
 import useStored from '../hooks/useStored';
 import { endpoints } from '../utils/api';
 import { pct, tone } from '../components/ui/format';
+import { AXIS, GRID, SERIES, TOOLTIP_STYLE } from '../components/ui/chartTheme';
 
 const num = (n) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
 /** A year of closes as one line. */
-const Line = ({ points }) => {
-  const ys = points.map((p) => p.close);
-  const lo = Math.min(...ys);
-  const span = Math.max(...ys) - lo || 1;
-  const d = points.map((p, i) => `${(i / Math.max(1, points.length - 1)) * 300},${58 - ((p.close - lo) / span) * 56}`).join(' ');
-  return (
-    <svg viewBox="0 0 300 60" preserveAspectRatio="none" role="img" aria-label="Closing level over the past year" className="w-full h-32">
-      <polyline points={d} fill="none" stroke="var(--accent)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-};
+const CloseLine = ({ points }) => (
+  <div role="img" aria-label="Closing level over the past year" className="h-40">
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+        <CartesianGrid {...GRID} />
+        <XAxis dataKey="date" {...AXIS} minTickGap={48} tickFormatter={(d) => new Date(d).toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' })} />
+        <YAxis {...AXIS} width={48} domain={['auto', 'auto']} tickFormatter={(v) => num(v)} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [num(v), 'Close']} />
+        <Line type="monotone" dataKey="close" stroke={SERIES[0]} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  </div>
+);
 
 const Why = ({ ticker }) => {
   const { data, status, code, retry } = useStored(endpoints.marketIndexAnalysis(ticker));
@@ -67,7 +71,7 @@ const IndexPage = () => {
               <Stat label="50-day average" value={data.sma_50 == null ? 'n/a' : num(data.sma_50)} />
               <Stat label="200-day average" value={data.sma_200 == null ? 'n/a' : num(data.sma_200)} />
             </div>
-            {data.points?.length > 1 && <div className="mt-3"><Line points={data.points} /></div>}
+            {data.points?.length > 1 && <div className="mt-3"><CloseLine points={data.points} /></div>}
           </Card>
           <Why ticker={ticker} />
         </div>

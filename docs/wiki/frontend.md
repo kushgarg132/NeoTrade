@@ -121,7 +121,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 
 ### 7. AI (`/ai`)
 1. `pages/Ai.jsx` runs seven independent loads (`useLoad` local copy): `GET /today` (`autopilot`, `scoreboard`), `GET /analytics/pnl?venue=paper` (also topic `pnl`, `data.paper`), `GET /analytics/scorecard?venue=paper`, `GET /trading/positions?venue=paper`, `GET /settings/autopilot/log`, `GET /mine/overview`, `GET /plan/today`; `useRefetchOn(['positions','trades'])`, `(['autopilot'])`. Header = AI book value and today (`utils/ai.js::aiBook`), `Badge` Paper/Live (from `autopilot.live`, shown beside "AI book" even if the autopilot call failed, which gets an `ErrorLine` + retry), "Autopilot on/off" `Badge`, a "Turn the autopilot on in Limits" link when off, "N of M cap deployed" or "No exposure cap set", "Lab off: …" when `autopilot.lab` is false, "Paused on paper …" from `autopilot.paused` (auto-retire, P2.6), `ai/StopAi` (confirm, then `PUT /settings/preferences {autopilot_enabled:false}`). Tabs `scoreboard | positions | activity`.
-2. `ai/Scoreboard`: `utils/ai.js::scoreboard({month,card,capital,mineValue})` = AI vs You vs NIFTY as % of each book, win rate, trades, charges, max drawdown, "vs same money in NIFTY" (`totals.vs_nifty`); strategy proven status via `useForward`; each strategy row reads "N closed (net) · M open (unrealized) · vs NIFTY" with `total` on the right. `ai/Positions`: the positions rows, each opens the stock. `ai/Activity`: rows carry a Paper/Live `Badge` per `mode`; empty state links to Limits; autopilot log rows `{at,status(FILLED|SENT|REFUSED),side,quantity,symbol,source,mode,reason}`, `plan/PlanCard`, and the AI card `GET /summaries/activity` (`AiSummary`).
+2. `ai/Scoreboard`: `utils/ai.js::scoreboard({month,card,capital,mineValue})` = AI vs You vs NIFTY as % of each book, win rate, trades, charges, max drawdown, "vs same money in NIFTY" (`totals.vs_nifty`); strategy proven status via `useForward`; each strategy row reads "N closed (net) · M open (unrealized) · vs NIFTY" with `total` on the right. `ai/Positions`: the positions rows; one `GET /trading/trades?status=OPEN&venue=paper` (`utils/aiDetail.js::openTradeIds`, symbol -> open trade id, re-read when positions change) makes a row open `/ai/trade/:id`, else the stock. `ai/Activity`: rows carry a Paper/Live `Badge` per `mode`; empty state links to Limits; autopilot log rows `{at,status(FILLED|SENT|REFUSED),side,quantity,symbol,source,mode,reason}`, `plan/PlanCard`, and the AI card `GET /summaries/activity` (`AiSummary`).
 
 ### 8. Market (`/market`)
 1. `pages/Market.jsx` tabs `pulse | watchlist | news` (`useTabParam`).
@@ -143,6 +143,26 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 ### 11. Weekly report (`/reports/weekly`)
 `pages/WeeklyReport.jsx`: `?week=YYYY-Www` (missing = server's last completed week; `utils/weekly.js::shiftWeek`, `::weekRange`). `GET /reports/weekly?week=` -> `week`, `you{ret,nifty,excess}`, `ai{ret,strategies[],vs_nifty}` (strategies, vs_nifty and `grades[]` are Telegram-only, not rendered), `best[]`, `worst[]`, `ideas{taken,skipped}{n,mean_excess}`, `journal{trades,net,charges}`, `news{movers[{symbol,move_pct,vs_nifty,items[]}],themes[{theme,n,impact,direction}],accuracy{company,sector}{hit_pct,n}|null}` (card "News on your holdings", `WeeklyReport.jsx::NewsWeek`, hidden for reports without `news`) (the same dict Telegram sends Sunday 18:00, `backend/reports/weekly.py`); the AI paragraph is `AiSummary` over `GET /summaries/weekly?week=` ("Written on Sunday evening" when empty).
 
+### 13. AI strategy (`/ai/strategy/:name`)
+`pages/AiStrategy.jsx`: from a Scoreboard strategy row. Four independent `useStored` reads: `GET /analytics/scorecard?venue=paper` (`utils/aiDetail.js::strategyRow`), `GET /today` (`autopilot.paused`), `GET /trading/trades?strategy=&venue=paper&limit=200`, `GET /trading/backtests/{name}` (404 = "No backtest recorded"); status badge Proven/Unproven/Parked/Paused from `aiDetail::strategyStatus` + `useForward`. Backtest card shows `passed`, `run_at`, `total_trades`, `win_rate`, `profit_factor`, `total_pnl`, `max_drawdown` (fraction of account, shown as %), `sharpe_ratio`. Each trade row opens `/ai/trade/:id`.
+
+### 14. AI trade (`/ai/trade/:id`)
+`pages/AiTrade.jsx`: `GET /trading/trades/{id}` (404 incl. another user's id = "Not found"); cards Result (`aiDetail::tradeSummary`), Chart (`TradingChart` via `useStockAnalysis`), Why it traded (reason codes); links to the strategy and the stock.
+
+### 15. Round trip (`/money/trade/:id`)
+`pages/RoundTrip.jsx`: `GET /journal/round-trips/{id}` (404 = "Not found", link back to the Journal); header card with the stock link, Fills, Note (`NoteEditor`, `PUT /journal/round-trips/{id}/note`), news chips/headlines and "Patterns this trade is part of" from `money/JournalTab` exports; hold time `utils/roundTrip.js::holdTime`. Journal and Tax rows open it.
+
+### 16. Index (`/market/index/:ticker`)
+`pages/IndexPage.jsx`: `GET /market/index/{ticker}` -> level, 52-week range, 50/200-day averages, `points[{date,close}]` drawn with recharts and `ui/chartTheme` (404 = "Not found"); "Why it moved" = `GET /market/index/{ticker}/analysis` (503 = unavailable). Opened from Pulse index rows.
+
+### 17. Sector (`/market/sector/:name`)
+`pages/SectorPage.jsx`: `GET /market/sector/{name}` -> `change_pct`, `up`, `n`, `sentiment`, `members[]` (each opens the stock) and the sector's news (each opens `/news/:id`); 404 = "Unknown sector". Opened from the Pulse sector grid.
+
+### 18. News item (`/news/:id`)
+`pages/NewsItem.jsx`: `GET /news/item/{id}` (404 = "Not found", link to Market news); cards "What it moves" (impacts link to the stock or sector, `utils/newsItem.js`) and "What the market did" (`outcomeRows`).
+
+Other dead-end cards (task 8): `Card` takes `to` (no inner links) or `more` (has inner links), never both (guard in `ui/Card.test.js`). Home `BriefCard` `more` -> `/market?tab=pulse` (pre-market) or `/money` (post-close); Weekly report AI book `to=/ai`, Ideas `to=/ideas/history`, Journal `to=/money?tab=journal`, best/worst rows and Tax lot rows open the stock; Analysis "News sentiment" `more` -> `?tab=news`.
+
 ### 12. Order ticket / chat actions (the only path to real orders from the UI)
 1. `OrderTicket` (Buy/Sell, CNC, market/limit) does `POST /orders/propose {symbol,side,quantity,product,order_type,limit_price,venue:'live'}` -> card `{id,summary,...}`; Confirm = `POST /chat/actions/{id}/confirm {confirm_token}`. Response `status:'NEEDS_SECOND_TAP'` stores its `confirm_token` and arms a second tap (button disabled 600 ms) that sends it; otherwise `result` is shown. Any edit or close cancels the card (`POST /chat/actions/{id}/cancel`); unmount also cancels. No response at all is reported as "may have gone through", never as failure.
 2. `ChatWidget`: `stream.request('chat',{message,history,context:{page,symbol}})` events `content`, `thinking`, `suggestions`, `action` (renders `ActionCard` using the same confirm/cancel endpoints), `done`, `error`.
@@ -161,7 +181,7 @@ Source: `src/App.jsx::App`, paths in `src/utils/routes.js::ROUTES`. `gated(x)` =
 | `/ai` | `Ai` | no | `?tab=scoreboard\|positions\|activity`; flow 7 |
 | `/market` | `Market` | no | `?tab=pulse\|watchlist\|news`; flow 8 |
 | `/stock/:symbol` | `Stock` | no | `?tab=chart\|news\|analysis\|events`; flow 9; search target `utils/stocks.js::stockPath` |
-| `/ai/strategy/:name`, `/ai/trade/:id`, `/money/trade/:id`, `/market/index/:ticker`, `/market/sector/:name`, `/news/:id` | `AiStrategy`, `AiTrade`, `RoundTrip`, `IndexPage`, `SectorPage`, `NewsItem` | no | drill-down detail pages (stubs until wave 2); build paths with `utils/routes.js` builders (`strategyPath`, `aiTradePath`, `roundTripPath`, `indexPath`, `sectorPath`, `newsPath`), never by concatenation; Market tab stays lit on `/news/*` |
+| `/ai/strategy/:name`, `/ai/trade/:id`, `/money/trade/:id`, `/market/index/:ticker`, `/market/sector/:name`, `/news/:id` | `AiStrategy`, `AiTrade`, `RoundTrip`, `IndexPage`, `SectorPage`, `NewsItem` | no | drill-down detail pages, flows 13-18; build paths with `utils/routes.js` builders (`strategyPath`, `aiTradePath`, `roundTripPath`, `indexPath`, `sectorPath`, `newsPath`), never by concatenation; Market tab stays lit on `/news/*` |
 | `/reports/weekly` | `WeeklyReport` | no | `?week=`; flow 11 |
 | `/settings` | `SettingsHome` | no | `?tab=accounts\|alerts\|limits\|profile\|theme\|goal` (+ `lab` for admins); flow 10 |
 | `/settings/lab/{strategies,options,runs,forward,news,handbook,backlog}` | `Strategies`, `OptionChain`, `LabRuns`, `LabForward`, `NewsAccuracy`, `Handbook`, `Backlog` | **yes** | `RequireAdmin` (non-admins go to `/settings`); `LAB_PAGES` |

@@ -153,6 +153,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | POST | `/api/v1/auth/logout` | `backend/routers/auth.py::logout` | none |
 | GET | `/api/v1/auth/me` | `backend/routers/auth.py::get_me` | user |
 | GET | `/api/v1/news/feed` | `backend/routers/news.py::news_feed` | user |
+| GET | `/api/v1/news/item/{item_id}` | `backend/routers/news.py::news_item` | user |
 | GET | `/api/v1/news/accuracy` | `backend/routers/news.py::news_accuracy` | admin |
 | GET | `/api/v1/news/symbols` | `backend/routers/news.py::symbol_news` | user |
 | GET | `/api/v1/news/symbol/{symbol}?days<=365` | `backend/routers/news.py::symbol_history` | user |
@@ -234,6 +235,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/market/trending` | `backend/routers/market_data.py::get_trending_stocks` | user |
 | GET | `/api/v1/market/global` | `backend/routers/market_data.py::get_global_indices` | user |
 | GET | `/api/v1/market/index/{ticker}` | `backend/routers/market_data.py::get_index_detail` | user |
+| GET | `/api/v1/market/sector/{name}` | `backend/routers/market_data.py::get_sector` | user |
 | GET | `/api/v1/market/index/{ticker}/analysis` | `backend/routers/market_data.py::get_index_analysis` | user |
 | GET | `/api/v1/market/brief` | `backend/routers/market_data.py::get_market_brief` (stored, no model call; 404 if none) | user |
 | GET | `/api/v1/research/{symbol}/note` | `backend/routers/market_data.py::get_cached_note` (cached analyst note, no model call; 404 if none) | user |
@@ -276,6 +278,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | DELETE | `/api/v1/imports` | `backend/routers/imports.py::delete_imported` | user |
 | POST | `/api/v1/journal/import/zerodha-console` | `backend/routers/journal.py::import_console_csv` | user |
 | POST | `/api/v1/journal/import/upstox-history` | `backend/routers/journal.py::import_upstox` | user |
+| GET | `/api/v1/journal/round-trips/{trip_id}` | `backend/routers/journal.py::get_round_trip` | user (404 incl. another user's id) |
 | PUT | `/api/v1/journal/round-trips/{round_trip_id}/note` | `backend/routers/journal.py::set_round_trip_note` | user |
 | GET | `/api/v1/journal/learning` | `backend/routers/journal.py::get_learning` | user |
 | GET | `/api/v1/journal/beta-metrics` | `backend/routers/journal.py::get_beta_metrics` | admin |

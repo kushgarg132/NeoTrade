@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Card from '../ui/Card';
 import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
@@ -9,9 +9,18 @@ import Badge from '../ui/Badge';
 import { inr, pct } from '../ui/format';
 import { stockPath } from '../../utils/stocks';
 import { aiTradePath } from '../../utils/routes';
+import api, { endpoints } from '../../utils/api';
+import { openTradeIds } from '../../utils/aiDetail';
 
 /** AI -> Positions: what the AI holds now, each row opens the stock. */
 const Positions = ({ state }) => {
+  const [ids, setIds] = useState({});
+  // Positions carry no trade id: map symbol -> open trade once. A failed fetch just leaves rows linking to the stock.
+  useEffect(() => {
+    let live = true;
+    api.get(endpoints.trades({ status: 'OPEN', venue: 'paper' })).then((r) => live && setIds(openTradeIds(r.data))).catch(() => {});
+    return () => { live = false; };
+  }, [state.data]);
   if (state.error) return <ErrorLine message="Couldn't load the AI's positions." onRetry={state.retry} />;
   if (!state.loaded) return <Skeleton rows={4} />;
   const rows = Object.values(state.data || {}).filter((p) => p.quantity);
@@ -23,7 +32,7 @@ const Positions = ({ state }) => {
       {rows.map((p) => (
         <ListRow
           key={p.symbol}
-          to={p.trade_id ? aiTradePath(p.trade_id) : stockPath(p.symbol)}
+          to={ids[p.symbol] != null ? aiTradePath(ids[p.symbol]) : stockPath(p.symbol)}
           title={p.symbol}
           dense
           sub={`${p.quantity} @ ${inr(p.avg_price)}`}
