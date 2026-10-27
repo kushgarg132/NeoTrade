@@ -7,6 +7,7 @@ import Button from '../ui/Button';
 import OrderTicket from '../trading/OrderTicket';
 import api, { endpoints } from '../../utils/api';
 import Badge from '../ui/Badge';
+import GradeTile from '../ui/GradeTile';
 import { px, rewardRisk as rr } from './levels';
 import { olderPickLabel, GRADES, parseIdeaId } from '../../utils/ideas';
 import { bareSymbol } from '../../utils/formatters';
@@ -15,8 +16,8 @@ import { toneText } from '../ui/tone';
 import { badNewsSince, resultsFlag, tone as newsTone } from '../../utils/news';
 
 const DIRECTION = {
-  pos: { Icon: ArrowUp, label: 'Good', cls: 'bg-[var(--gain-wash)] text-[var(--gain)]' },
-  neg: { Icon: ArrowDown, label: 'Bad', cls: 'bg-[var(--loss-wash)] text-[var(--loss)]' },
+  pos: { Icon: ArrowUp, label: 'Good', cls: 'bg-[var(--gain-soft)] text-[var(--gain)]' },
+  neg: { Icon: ArrowDown, label: 'Bad', cls: 'bg-[var(--loss-soft)] text-[var(--loss)]' },
   flat: { Icon: Minus, label: 'Mixed', cls: 'bg-[var(--surface-2)] text-[var(--text-muted)]' },
 };
 
@@ -77,6 +78,7 @@ const IdeaRow = ({ idea, onDone, news, results }) => {
   return (
     <div className="py-1.5 border-b border-[var(--border)] last:border-b-0">
       <Link to={`/ideas/${encodeURIComponent(idea.id)}`} className="flex items-center gap-3 min-h-11 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+        {GRADES[idea.grade] && <span className="shrink-0"><GradeTile grade={idea.grade} /></span>}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-[12px] font-semibold text-[var(--text-muted)]">{idea.side}</span>
@@ -85,7 +87,6 @@ const IdeaRow = ({ idea, onDone, news, results }) => {
           <div className="flex flex-wrap items-center gap-x-2 text-[13px] text-[var(--text-muted)]">
             <span>{idea.setup}{idea.horizon && !olderPickLabel(idea) ? ` · ${idea.horizon}d` : ''}</span>
             <span className="shrink-0"><IdeaBadge badge={idea.badge} /></span>
-            {GRADES[idea.grade] && <span className="shrink-0"><Badge kind={GRADES[idea.grade].kind}>{GRADES[idea.grade].label}</Badge></span>}
             {idea.experimental && <span className="shrink-0"><Badge>Experimental</Badge></span>}
             {resultsSoon && <span className="shrink-0"><Badge kind="unproven">{resultsSoon}</Badge></span>}
             {badSince && <span className="shrink-0"><Badge kind="alert">Bad news since signal</Badge></span>}

@@ -250,7 +250,7 @@ const SuggestionRecord = ({ suggestion, onApproveLive, onReject, hasMine = true,
       )}
 
       {failure && (
-        <p className="mt-3 text-sm text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2">
+        <p className="mt-3 text-sm text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-soft)] px-3 py-2">
           {failure}
         </p>
       )}
