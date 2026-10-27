@@ -47,9 +47,11 @@ def world(monkeypatch):
     return db, sent, regime
 
 
-def _study(**grades):
-    """picks_study doc: setup -> (adjusted excess, t); t >= 2 is grade A, t 0 is C."""
-    return {"_id": "latest", "setups": [{"setup": k, "adjusted": {"excess": e, "t": t, "edge": t >= 2}} for k, (e, t) in grades.items()]}
+def _study(levels_better=True, **grades):
+    """picks_study doc: setup -> (adjusted excess, t); t >= 2 is grade A, t 0 is C. `levels_better`: the study
+    found the stop/target exit beat the horizon close, so entries store the levels."""
+    return {"_id": "latest", "setups": [{"setup": k, "adjusted": {"excess": e, "t": t, "edge": t >= 2},
+                                         "levels_exit": {"better": levels_better}} for k, (e, t) in grades.items()]}
 
 
 async def _setup(db, role="admin", study=None, **prefs):
@@ -250,4 +252,25 @@ async def test_a_pick_without_levels_keeps_the_time_exit_only(world, monkeypatch
     await db["picks"].insert_one(_pick())
     await trading.enter(db, None, "alice", MORNING)
     _mark(monkeypatch, 1.0)
+    assert await trading.exit_due(db, None, "alice", datetime(2026, 10, 7, 11, 0, tzinfo=IST)) == []
+
+
+async def test_levels_are_traded_only_where_the_study_found_they_beat_the_horizon_exit(world, monkeypatch):
+    db, _, _ = world
+    await _setup(db, study=_study(levels_better=False, momentum=(0.02, 3.0)))
+    await db["picks"].insert_one(_leveled())
+    await trading.enter(db, None, "alice", MORNING)
+    [trade] = await _trades(db)
+    assert "stop" not in trade["context"] and "target" not in trade["context"]
+    _mark(monkeypatch, 900.0)  # far under the untraded stop: held to the horizon, as the study graded it
+    assert await trading.exit_due(db, None, "alice", datetime(2026, 10, 7, 11, 0, tzinfo=IST)) == []
+
+
+async def test_an_open_trade_drops_its_stored_levels_once_the_study_finds_they_lose(world, monkeypatch):
+    db, _, _ = world
+    await _setup(db)                                      # levels better: stored on entry
+    await db["picks"].insert_one(_leveled())
+    await trading.enter(db, None, "alice", MORNING)
+    await db["picks_study"].replace_one({"_id": "latest"}, _study(levels_better=False, momentum=(0.02, 3.0)))
+    _mark(monkeypatch, 900.0)
     assert await trading.exit_due(db, None, "alice", datetime(2026, 10, 7, 11, 0, tzinfo=IST)) == []

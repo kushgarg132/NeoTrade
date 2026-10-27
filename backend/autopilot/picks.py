@@ -1,9 +1,10 @@
 """The AI account trades Picks (backend/forecast/picks.py) as their forward
 record (owner decision 2026-10-17): each stored pick is bought at the next
-session's morning pass and sold at its stop or target (its `forecast.picks.levels`,
-moved to the fill by `suggestions.exits.anchored`), else from 15:15 on its due
-date (the close of its horizon), CNC, long only. A trade bought before levels
-were stored keeps the time exit alone.
+session's morning pass and sold from 15:15 on its due date (the close of its
+horizon, the exit the study grades), CNC, long only. Its stop and target
+(`forecast.picks.levels`, moved to the fill by `suggestions.exits.anchored`)
+are stored and traded only while the study's `levels_exit` says they beat the
+horizon exit for that setup; a trade without stored levels keeps the time exit.
 
 Every order goes through `service.submit`, so the fence (per-trade cap, max
 invested, trades a day, the switch, Nifty 200) and the kill switch apply and
@@ -63,6 +64,7 @@ async def enter(db, redis, user_id: str, now: datetime) -> list[dict]:
     study = await db[STUDY].find_one({"_id": "latest"}) or {}
     grades = setup_grades(study)
     adj = {s["setup"]: (s.get("adjusted") or {}).get("excess") or 0.0 for s in study.get("setups", [])}
+    use_levels = _levels_tested(study)
     picks = [p for p in picks if p["_id"] not in traded and grades.get(p["setup"]) == "A"]
     if not picks:
         return []
@@ -86,10 +88,16 @@ async def enter(db, redis, user_id: str, now: datetime) -> list[dict]:
             strategy=f"{PREFIX}{p['setup']}", live=live,
             context={"pick_id": p["_id"], "due_date": p["due_date"], "strength": p["strength"],
                      "reason_codes": [p["setup"]], "expected_return": (p.get("expected") or {}).get("median"),
-                     **_levels(p)}),
+                     **(_levels(p) if p["setup"] in use_levels else {})}),
             now=now, quiet=True)
         results.append({"pick": p["_id"], **result})
     return results
+
+
+def _levels_tested(study: dict) -> set:
+    """Setups whose stop/target beat the horizon close in the study (`study.levels_exit`): trade the exit
+    that was tested. The 2026-10-27 run found the levels worse in every setup (breakout t -5.2)."""
+    return {s["setup"] for s in (study or {}).get("setups", []) if (s.get("levels_exit") or {}).get("better")}
 
 
 def _levels(p: dict) -> dict:
@@ -112,12 +120,14 @@ async def exit_due(db, redis, user_id: str, now: datetime) -> list[dict]:
     trades = [t for t in await service.open_trades(db, user_id)
               if (t.get("strategy") or "").startswith(PREFIX) and (t.get("context") or {}).get("pick_id")
               and t["side"] == "BUY"]
-    leveled = [t for t in trades if t["context"].get("stop") or t["context"].get("target")]
+    tested = _levels_tested(await db[STUDY].find_one({"_id": "latest"}))  # trades opened before the test too
+    leveled = [t for t in trades if (t["context"].get("stop") or t["context"].get("target"))
+               and t["strategy"][len(PREFIX):] in tested]
     marks = await mark_prices(db, {t["symbol"] for t in leveled}) if leveled else {}
     results = []
     for t in trades:
         c, mark = t["context"], marks.get(t["symbol"])
-        why = "horizon" if _due(t, now) else mark and breach(
+        why = "horizon" if _due(t, now) else t in leveled and mark and breach(
             mark, anchored(c.get("stop"), c.get("entry_ref"), t.get("entry_price")),
             anchored(c.get("target"), c.get("entry_ref"), t.get("entry_price")))
         if not why:
