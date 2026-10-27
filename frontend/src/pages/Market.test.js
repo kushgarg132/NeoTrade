@@ -3,8 +3,18 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 // Source-contract checks for the Market page (no DOM runner here).
-const pulse = readFileSync(new URL('../components/market/Pulse.jsx', import.meta.url), 'utf8');
+const today = readFileSync(new URL('../components/market/Today.jsx', import.meta.url), 'utf8');
+const sectors = readFileSync(new URL('../components/market/Sectors.jsx', import.meta.url), 'utf8');
+const page = readFileSync(new URL('./Market.jsx', import.meta.url), 'utf8');
+const pulse = today + sectors; // the retired Pulse tab is now these two
 const watch = readFileSync(new URL('../components/market/Watchlist.jsx', import.meta.url), 'utf8');
+
+test('tabs are Today, Sectors, News, Watchlist and ?tab=pulse aliases to today', () => {
+  const ids = [...page.matchAll(/\{ id: '(\w+)'/g)].map((m) => m[1]);
+  assert.deepEqual(ids, ['today', 'sectors', 'news', 'watchlist']);
+  assert.match(page, /'today', 'tab', \(v\) => \(v === 'pulse' \? 'today' : v\)/);
+  assert.doesNotMatch(page, /market\/Pulse/);
+});
 
 test('sector heatmap uses chartTheme heatColor and prints the signed %', () => {
   assert.match(pulse, /import \{[^}]*heatColor[^}]*\} from '..\/ui\/chartTheme'/);
@@ -31,7 +41,7 @@ test('the index card no longer shows a 4-index "breadth"', () => {
 });
 
 test('every empty section names an action', () => {
-  for (const src of [pulse, watch]) {
+  for (const src of [today, sectors, watch]) {
     const empties = src.match(/<Empty\b[\s\S]*?\/>/g) || [];
     assert.ok(empties.length > 0);
     for (const e of empties) assert.match(e, /action=/);

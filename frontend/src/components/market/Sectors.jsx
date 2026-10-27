@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api, { endpoints } from '../../utils/api';
 import Card from '../ui/Card';
@@ -14,25 +14,13 @@ import { divergence, sortSectors } from '../../utils/market';
 import { stockPath } from '../../utils/stocks';
 import { sectorPath } from '../../utils/routes';
 import { heatColor } from '../ui/chartTheme';
+import useSection from '../../hooks/useSection';
 
 const SORTS = [
   { id: 'move', label: 'Move' },
   { id: 'news', label: 'News' },
   { id: 'breadth', label: 'Breadth' },
 ];
-
-/** A section that loads itself: `[{ data, error }, retry]`. */
-const useSection = (load) => {
-  const [state, setState] = useState({ data: null, error: null });
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    let live = true;
-    load().then((data) => live && setState({ data, error: null })).catch(() => live && setState({ data: null, error: true }));
-    return () => { live = false; };
-  }, [load, tick]);
-  const retry = useCallback(() => { setState({ data: null, error: null }); setTick((t) => t + 1); }, []);
-  return [state, retry];
-};
 
 const loadScan = () => api.get(endpoints.marketScan).then((r) => r.data);
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Line, LineChart, ResponsiveContainer, YAxis } from 'recharts';
 import api, { endpoints } from '../../utils/api';
@@ -14,6 +14,7 @@ import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
 import { AiMarkdown } from '../ai/AiSummary';
 import useStored from '../../hooks/useStored';
+import useSection from '../../hooks/useSection';
 import { breadthWord } from '../../utils/market';
 import { formatDateTime, marketPhase } from '../../utils/formatters';
 import { stockPath } from '../../utils/stocks';
@@ -25,19 +26,6 @@ const REGIME = {
   neutral: { label: 'Neutral', kind: 'neutral' },
 };
 const TILES = ['^NSEI', '^NSEBANK', '^BSESN'];
-
-/** A section that loads itself: Skeleton, ErrorLine + Retry, then the data. */
-const useSection = (load) => {
-  const [state, setState] = useState({ data: null, error: null });
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    let live = true;
-    load().then((data) => live && setState({ data, error: null })).catch(() => live && setState({ data: null, error: true }));
-    return () => { live = false; };
-  }, [load, tick]);
-  const retry = useCallback(() => { setState({ data: null, error: null }); setTick((t) => t + 1); }, []);
-  return [state, retry];
-};
 
 const loadIndices = () => api.get(endpoints.marketIndices).then((r) => r.data);
 const loadToday = () => api.get(endpoints.today).then((r) => r.data.backdrop || {});

@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: dbbceb5
+verified_at: d4f5c01
 ---
 # Data layer, AI and background jobs
 
@@ -250,7 +250,7 @@ All behind `get_current_user` (router-level dependency in `backend/server.py`, p
 |---|---|---|
 | GET `/news/feed?scope&mine&material&before&limit<=100` | `routers/news.py::news_feed` | `items[]`: `id,title,url,source,published_at,scope,themes,event,impacts,symbols,material,status` (`frontend/src/utils/api.js::newsFeed`) |
 | GET `/news/item/{item_id}` | `routers/news.py::news_item` | feed fields plus `outcomes[]` (`type,target,direction,impact`, `ret_/bench_/move_` x `1h,1d,5d`) from `news_outcomes` rows `_id` prefix `{id}:`; `[]` while unscored; 404 `News item not found`; shared news, auth only |
-| GET `/market/sector/{name}` | `routers/market_data.py::get_sector`, `::sector_members` | `sector,change_pct,up,n,sentiment,members[]` (scan `movers` rows), `news[]` (20 newest feed items with a sector impact on `name`), `at`; 404 `Unknown sector`; `/market/scan` also returns every row as `movers` |
+| GET `/market/sector/{name}` | `routers/market_data.py::get_sector`, `::sector_members` | `sector,change_pct,up,n,sentiment,members[]` (scan `movers` rows), `news[]` (20 newest feed items with a sector impact on `name`), `at`; 404 `Unknown sector`; the `scan` cache entry keeps every row as `movers`; `GET /market/scan` no longer returns it, and its gainers/losers rows carry `news`. `GET /market/index/{ticker}/intraday` is a separate in-process 60 s cache (not market_cache) |
 | GET `/news/accuracy?refresh` (admin, `require_admin`) | `news.py::news_accuracy` | `as_of,rows,cells[]` + `company_scan_ok`; 404 before the first build; `refresh=true` rebuilds now (`frontend/src/utils/api.js::newsAccuracy`) |
 | GET `/news/symbols?symbols=A,B` (<=100) | `news.py::symbol_news` | `symbols{SYM:{sentiment,headline,url,direction,impact,material,published_at}}` (72h window) |
 | GET `/news/symbol/{symbol}?days=180` (1-365) | `news.py::symbol_history` | `{symbol, items[{id,title,url,published_at,direction,impact,material}]}`: SCORED items whose `impacts.target` or `symbols` name it, newest first, max 500; direction/impact are that symbol's own impact, `material` = own impact >= 6 (uses the `(impacts.target,published_at)` and `(symbols,published_at)` indexes) |

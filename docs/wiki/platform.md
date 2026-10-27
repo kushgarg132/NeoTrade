@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: dbbceb5
+verified_at: d4f5c01
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -236,10 +236,11 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/market/global` | `backend/routers/market_data.py::get_global_indices` | user |
 | GET | `/api/v1/market/index/{ticker}` | `backend/routers/market_data.py::get_index_detail` | user |
 | GET | `/api/v1/market/sector/{name}` | `backend/routers/market_data.py::get_sector` | user |
+| GET | `/api/v1/market/index/{ticker}/intraday` | `backend/routers/market_data.py::get_index_intraday` (today's 5-min closes `[{t,close}]`, `_intraday_cache` 60 s per ticker in-process; 404 untracked ticker, 502 no points) | user |
 | GET | `/api/v1/market/index/{ticker}/analysis` | `backend/routers/market_data.py::get_index_analysis` | user |
 | GET | `/api/v1/market/brief` | `backend/routers/market_data.py::get_market_brief` (stored, no model call; 404 if none) | user |
 | GET | `/api/v1/research/{symbol}/note` | `backend/routers/market_data.py::get_cached_note` (last analyst read from `analyst:last:*` with `stale`, no model call; 404 if none) | user |
-| GET | `/api/v1/market/scan` | `backend/routers/market_data.py::get_market_scan` (`market_scan` over `news_sources.universe_rows` + `_cached_quotes` + a 365-day `daily_bars` high/low aggregate; `{gainers,losers,near_high,near_low (2%),sectors[{sector,change_pct,up,n,sentiment}],breadth{up,down,n},at}`; market_cache `scan` 5 min; `sentiment` = `sector_sentiment:{sector}` score (NSE industry names on both sides) read fresh per request by one MGET (`::with_sentiment`), null when absent) | user |
+| GET | `/api/v1/market/scan` | `backend/routers/market_data.py::get_market_scan` (`market_scan` over `news_sources.universe_rows` + `_cached_quotes` + a 365-day `daily_bars` high/low aggregate; `{gainers,losers (rows carry `news`: a scored `news_items` symbol impact in the last 24 h; false if that query fails),near_high,near_low (2%),sectors[{sector,change_pct,up,n,sentiment}],breadth{up,down,n},at}`; no `movers` key in the response (the cache entry keeps it for the sector page); market_cache `scan` 5 min; `sentiment` = `sector_sentiment:{sector}` score (NSE industry names on both sides) read fresh per request by one MGET (`::with_sentiment`), null when absent) | user |
 | GET | `/api/v1/market/quotes` | `backend/routers/market_data.py::get_quotes` (<= 8 symbols; ingest `quote:` cache first via `_cached_quotes`, Yahoo for misses; rows `{symbol,price,change_pct,at}`) | user |
 | GET | `/api/v1/options/expiries` | `backend/routers/options.py::get_expiries` | user |
 | GET | `/api/v1/options/chain` | `backend/routers/options.py::get_chain` | user |
