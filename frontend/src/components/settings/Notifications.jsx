@@ -1,0 +1,59 @@
+import React, { useEffect, useState } from 'react';
+import { Sheet, Ruling } from './Panel';
+import TelegramLink from './TelegramLink';
+import api, { endpoints, getPreferences } from '../../utils/api';
+
+const NEWS_ALERTS = [
+  { id: 'held', label: 'Held' },
+  { id: 'held+watched', label: 'Held + watched' },
+  { id: 'all', label: 'All' },
+  { id: 'off', label: 'Off' },
+];
+
+const Notifications = () => {
+  const [value, setValue] = useState(null);
+  const [note, setNote] = useState(null);
+
+  useEffect(() => {
+    getPreferences()
+      .then((res) => setValue(res.data?.news_alerts || 'held'))
+      .catch(() => setValue('held'));
+  }, []);
+
+  const pick = (id) => {
+    if (id === value) return;
+    const prev = value;
+    setValue(id);
+    setNote(null);
+    api.put(endpoints.settings.preferences, { news_alerts: id }).catch((err) => {
+      setValue(prev);
+      setNote(err?.response?.data?.detail || 'That value was not saved.');
+    });
+  };
+
+  return (
+    <Sheet title="Notifications">
+      <TelegramLink />
+      <div role="group" aria-label="News alerts" className="py-2">
+        <p className="text-[13px] font-medium text-[var(--text-muted)]">News alerts</p>
+        <p className="text-[13px] text-[var(--text-muted)] mb-2">
+          Material news, as a toast here and on Telegram when linked. A market-wide shock reaches anyone holding something.
+        </p>
+        {value === null ? <Ruling rows={1} /> : (
+          <div className="flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
+            {NEWS_ALERTS.map((o) => (
+              <button key={o.id} type="button" aria-pressed={o.id === value} onClick={() => pick(o.id)}
+                className={`flex-1 min-h-11 rounded-[8px] px-3 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+                  o.id === value ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {note && <p className="text-[13px] text-[var(--text-muted)] pt-2">{note}</p>}
+      </div>
+    </Sheet>
+  );
+};
+
+export default Notifications;
