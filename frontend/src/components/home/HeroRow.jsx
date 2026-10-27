@@ -17,7 +17,7 @@ const HeroRow = ({ headline, nifty, phase, meta, failed, onRetry }) => {
   if (!headline || typeof headline.value !== 'number') {
     return (
       <Empty title="No account value yet" body="Your value and today's change show here once a broker is connected."
-             action={<Link to="/settings/brokers" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Connect your broker</Link>} />
+             action={<Link to="/settings/brokers" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold">Connect your broker</Link>} />
     );
   }
   const day = phase === 'session' ? 'Today' : 'Last session';
