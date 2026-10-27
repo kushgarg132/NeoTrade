@@ -155,7 +155,7 @@ const OptionChain = () => {
         ) : !chain ? (
           <Card><Skeleton rows={8} /></Card>
         ) : (
-          <section className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] py-4 overflow-hidden">
+          <section className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] py-4 overflow-hidden">
             <div className="flex items-center justify-between gap-3 px-4 mb-3">
               <h2 className="text-[15px] font-semibold">{chain.name}</h2>
               <span className="text-[13px] text-[var(--text-muted)]">{formatNoteDate(new Date(`${chain.expiry}T00:00:00+05:30`))}</span>

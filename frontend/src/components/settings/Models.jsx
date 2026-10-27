@@ -250,8 +250,8 @@ const ModelRow = ({ label, hint, value, fallback, models, catalog, onSave, clear
           className={cn(
             'mt-2 text-sm px-3 py-2 border break-words',
             test.ok
-              ? 'text-[var(--gain)] border-[var(--gain)] bg-[var(--gain-wash)]'
-              : 'text-[var(--loss)] border-[var(--loss)] bg-[var(--loss-wash)]'
+              ? 'text-[var(--gain)] border-[var(--gain)] bg-[var(--gain-soft)]'
+              : 'text-[var(--loss)] border-[var(--loss)] bg-[var(--loss-soft)]'
           )}
         >
           {test.ok ? `${test.model} works · ${(test.latency_ms / 1000).toFixed(1)}s · replied: ${test.reply}` : `Failed: ${test.error}`}

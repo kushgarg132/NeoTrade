@@ -69,7 +69,7 @@ const LabRuns = () => {
             <Empty
               title="No runs recorded yet"
               body="A run is saved each time a backtest, retune or factor study finishes in the Lab."
-              action={<Link to="/settings/lab/strategies" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Open Strategies</Link>}
+              action={<Link to="/settings/lab/strategies" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold">Open Strategies</Link>}
             />
           )}
           {runs && runs.length > 0 && (

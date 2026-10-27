@@ -38,7 +38,7 @@ const Notifications = () => {
             {NEWS_ALERTS.map(([id, label]) => (
               <button key={id} type="button" aria-pressed={id === value} onClick={() => pick(id)}
                 className={`min-h-11 rounded-[8px] px-3 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
-                  id === value ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
+                  id === value ? 'bg-[var(--surface)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
                 {label}
               </button>
             ))}

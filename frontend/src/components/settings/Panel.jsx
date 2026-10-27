@@ -17,7 +17,7 @@ export const Empty = ({ title, detail, action }) => <UiEmpty title={title} body=
 export const Ruling = ({ rows }) => <Skeleton rows={rows} />;
 
 export const Stamp = ({ label, tone = 'gain' }) => (
-  <span className={`inline-flex items-center min-h-6 rounded-full px-2.5 text-[12px] font-semibold ${tone === 'gain' ? 'bg-[var(--gain-wash)] text-[var(--gain)]' : 'bg-[var(--loss-wash)] text-[var(--loss)]'}`}>
+  <span className={`inline-flex items-center min-h-6 rounded-full px-2.5 text-[12px] font-semibold ${tone === 'gain' ? 'bg-[var(--gain-soft)] text-[var(--gain)]' : 'bg-[var(--loss-soft)] text-[var(--loss)]'}`}>
     {label}
   </span>
 );

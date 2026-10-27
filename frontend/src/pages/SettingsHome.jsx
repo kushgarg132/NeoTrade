@@ -25,7 +25,7 @@ const Appearance = () => {
       <div role="radiogroup" aria-label="Theme" className="flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
         {THEMES.map(([id, label]) => (
           <button key={id} type="button" role="radio" aria-checked={theme === id} onClick={() => setTheme(id)}
-                  className={`min-h-11 px-4 rounded-[8px] text-[14px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${theme === id ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
+                  className={`min-h-11 px-4 rounded-[8px] text-[14px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${theme === id ? 'bg-[var(--surface)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
             {label}
           </button>
         ))}
@@ -61,7 +61,7 @@ const SettingsHome = () => {
       <PageHeader title="Settings" />
       <div className="space-y-4">
         {/* Straight to /profile: one tap, with your photo. */}
-        <Link to="/profile" className="flex items-center gap-3 min-h-14 rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-3 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+        <Link to="/profile" className="flex items-center gap-3 min-h-14 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-3 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
           <Avatar src={user?.picture} name={displayName || user?.name} size={48} />
           <span className="flex-1 min-w-0">
             <span className="block text-[15px] font-semibold text-[var(--text)] truncate">{displayName || user?.name || 'Your profile'}</span>

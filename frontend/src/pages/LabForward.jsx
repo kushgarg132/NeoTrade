@@ -79,7 +79,7 @@ const LabForward = () => {
           {!error && rows === null && <Skeleton rows={4} />}
           {rows && rows.length === 0 && (
             <Empty title="Nothing scored yet" body="Decisions are recorded as they happen and scored after their horizon, in the 16:00 IST pass. Run a strategy on paper to start the record."
-                   action={<Link to="/settings/lab/strategies" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Open Strategies</Link>} />
+                   action={<Link to="/settings/lab/strategies" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold">Open Strategies</Link>} />
           )}
           {rows && rows.length > 0 && rows.map((r) => {
             const key = `${r.source}:${r.name}`;

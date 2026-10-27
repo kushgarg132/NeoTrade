@@ -70,7 +70,7 @@ const Handbook = () => {
             </ul>
           </details>
         )}
-        <article ref={article} className="min-w-0 rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4 sm:px-5 text-[15px] leading-relaxed">
+        <article ref={article} className="min-w-0 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4 sm:px-5 text-[15px] leading-relaxed">
           {splitLive(DOCS[tab], PANELS).map((part, index) =>
             part.live ? <LivePanel key={part.live} name={part.live} status={status} onRetry={reload} /> : <Markdown key={index} className={WIDE}>{part.md}</Markdown>
           )}
