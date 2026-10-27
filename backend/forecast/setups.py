@@ -171,6 +171,44 @@ def _explain_rs_leaders(t: dict, symbol: str, day) -> str:
             f"above a rising 50- and 200-day average, with NIFTY above its 200-day average")
 
 
+def _vol_ratio(t: dict) -> pd.DataFrame:
+    """Each day's volume over the previous 20 days' average."""
+    v = t["volume"]
+    return v / v.shift(1).rolling(20, min_periods=20).mean()
+
+
+def results_drift(t: dict, move_min=0.04, vol_min=2.0, gap=False, days=0) -> pd.DataFrame:
+    """Post-results drift. The reaction day is the first session on or after the announcement (IST), or the next one
+    when it came after 15:00. It qualifies when the close (or, with `gap`, the open) is >= move_min above the prior
+    close on >= vol_min x its 20-day volume. Fires on that close, or `days` later if every close since held the prior
+    close. `t["results"]` = {symbol: [announcement datetimes, IST]} (`datalayer/results.py`; patchy for small caps)."""
+    close, idx = t["close"], t["close"].index
+    px = t["open"] if gap else close
+    cond = ((px / close.shift(1) - 1) >= move_min) & (_vol_ratio(t) >= vol_min)
+    out = pd.DataFrame(np.nan, index=idx, columns=close.columns)
+    for sym, stamps in t.get("results", {}).items():
+        if sym not in close.columns:
+            continue
+        col = close.columns.get_loc(sym)
+        for ts in stamps:
+            i = idx.searchsorted(pd.Timestamp(ts.date()) + pd.Timedelta(days=int(ts.hour >= 15)))
+            j = i + days
+            if i < 1 or j >= len(idx) or not cond.iat[i, col]:
+                continue
+            c = close[sym]
+            if days and (c.iloc[i + 1:j + 1] < c.iat[i - 1]).any():
+                continue
+            out.iat[j, col] = px[sym].iat[i] / c.iat[i - 1] - 1
+    return out
+
+
+def _explain_results(t: dict, symbol: str, day) -> str:
+    c = t["close"][symbol]
+    i = c.index.get_loc(day)
+    return (f"Results day: closed {c.iat[i] / c.iat[i - 1] - 1:+.1%} on {_vol_ratio(t)[symbol].iat[i]:.1f}x its 20-day "
+            f"volume (a move of 4%+ on 2x volume after results)")
+
+
 @dataclass(frozen=True)
 class Setup:
     name: str
@@ -192,5 +230,8 @@ SETUPS = (
     # Same monthly ranking held ~one month (re-ranked at the next month start). 2026-10-26 check on prod bars:
     # adjusted OOS excess +1.42%, t 3.21 over 6 variants tried that day (new_setups_tool had flagged it 2026-10-22).
     Setup("rs_leaders_20", "Relative-strength leader (1 month)", 20, rs_leaders_regime, _explain_rs_leaders, experimental=True),
+    # new_setups_tool 2026-10-27 (results_up4_vol2, prod bars + yfinance dates, members only): h=40 OOS excess +2.3%,
+    # 16/17 years, Bonferroni over 69 trials; over the same-month baseline +1.5% t 2.0 (below the strict bar).
+    Setup("results_drift", "Post-results drift", 40, results_drift, _explain_results, experimental=True),
 )
 BY_NAME = {s.name: s for s in SETUPS}

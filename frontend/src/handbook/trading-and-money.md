@@ -347,7 +347,10 @@ reaches Telegram, digests or chat.
   (top decile of `factor/model.py::scores`, re-ranked on the first trading day of each month),
   momentum over volatility (`setups.py::momentum_vol`: 12-1 month return over 60-day volatility,
   top decile on each month's first trading day, held 60 days), 52-week-high close on ≥1.5x
-  20-day average volume, and close above the 200-day SMA with RSI(14) < 35. Each has a fixed
+  20-day average volume, and close above the 200-day SMA with RSI(14) < 35. Experimental: relative-strength
+  leaders (`setups.py::rs_leaders_regime`, held 60 and 20 days) and post-results drift
+  (`setups.py::results_drift`: the session reacting to a results announcement closes ≥ 4% up on ≥ 2x
+  20-day volume, held 40 days; announcement times from `datalayer/results.py`). Each has a fixed
   horizon. A signal on day t reads rows up to t only. The study reads every stored bar (from 2009,
   `picks.py::HISTORY_START`).
 - **Events** (`backend/forecast/study.py::events`): entry t+1 open, exit close of t+1+H; net of

@@ -1,6 +1,6 @@
 """Research only (not wired anywhere): are there NEW rule-based daily setups that beat the live ones?
 
-    python -m backend.forecast.research.new_setups_tool DUMP.pkl
+    python -m backend.forecast.research.new_setups_tool DUMP.pkl [RESULTS.pkl]
 
 DUMP.pkl = pickle of (daily_bars DataFrame [symbol, date, ohlcv], {}) copied read-only from production
 (same file format as perstock_experiment_tool). Conventions are the Picks ones: `setups.table`,
@@ -19,7 +19,8 @@ Multiple testing: Bonferroni over every variant x horizon tried (TRIALS printed)
 Strict bar adds: excess over the same-month all-stocks baseline (survivorship + timing removed) > +1%, t >= 2.5.
 Bar (all must hold): OOS excess > +2%/trade, positive in >= 70% of test years (years with >= 10 events),
 bootstrap t >= 2.5, same at 20 bps, and mean excess > +1% in both the pre-2016 and the post-2016 half.
-Caveats: survivorship (today's universe), no results/fundamental data, charges approximate at 20 bps.
+Universe: point-in-time index members (members.mask); ex-members have no bars yet, so survivors still dominate.
+Caveats: no results/fundamental data, charges approximate at 20 bps.
 """
 
 import math
@@ -48,9 +49,8 @@ def regime(t: dict) -> pd.Series:
     return c > c.rolling(200, min_periods=200).mean()
 
 
-def _vol_ratio(t: dict) -> pd.DataFrame:
-    v = t["volume"]
-    return v / v.shift(1).rolling(20, min_periods=20).mean()
+_vol_ratio = setups._vol_ratio
+results_drift = setups.results_drift
 
 
 def _gate(fires: pd.DataFrame, t: dict) -> pd.DataFrame:
@@ -84,6 +84,33 @@ def rs_leaders(t: dict) -> pd.DataFrame:
             continue
         top = r[r >= r.quantile(0.9)]
         top = top[trend.loc[day, top.index]]
+        out.loc[day, top.index] = top.values
+    return out
+
+
+def sector_rs(t: dict, trend=False, hot=False) -> pd.DataFrame:
+    """Month's first trading day: top decile (among index members) of 126-day return minus the equal-weight 126-day
+    return of the stock's sector peers (sectors with >= 3 stocks that day). `trend`: close above a rising 50- and
+    200-day average as in rs_leaders. `hot`: the sector itself beat NIFTY over the 126 days."""
+    close = t["close"]
+    ret = close.pct_change(126, fill_method=None)
+    sector = pd.Series(t["sector"]).reindex(close.columns)
+    s50, s200 = close.rolling(50, min_periods=50).mean(), close.rolling(200, min_periods=200).mean()
+    up = (close > s50) & (close > s200) & (s50 > s50.shift(20)) & (s200 > s200.shift(20))
+    nifty = t["nifty_close"].pct_change(126)
+    out = pd.DataFrame(np.nan, index=close.index, columns=close.columns)
+    for day in setups._month_starts(close.index):
+        r = setups._in_index(t, day, ret.loc[day].dropna())
+        g = r.groupby(sector.reindex(r.index))
+        peers = g.transform("mean").where(g.transform("count") >= 3)
+        rs = (r - peers).dropna()
+        if hot:
+            rs = rs[peers.reindex(rs.index) > nifty.loc[day]]
+        if len(rs) < 10:
+            continue
+        top = rs[rs >= rs.quantile(0.9)]
+        if trend:
+            top = top[up.loc[day, top.index]]
         out.loc[day, top.index] = top.values
     return out
 
@@ -140,6 +167,11 @@ def variants(t: dict) -> dict:
         "gap4_vol2_hold3_regime": lambda: _gate(gap_hold(t), t),
         "vcp": lambda: vcp(t), "vcp_vol15": lambda: vcp(t, vol_min=1.5),
         "vcp_regime": lambda: _gate(vcp(t), t), "vcp_above200": lambda: vcp(t, sma200=True),
+        "sector_rs": lambda: sector_rs(t), "sector_rs_trend": lambda: sector_rs(t, trend=True),
+        "sector_rs_hot": lambda: sector_rs(t, hot=True),
+        "results_up4_vol2": lambda: results_drift(t),
+        "results_up4_vol2_regime": lambda: _gate(results_drift(t), t),
+        "results_gap3_vol2_hold3": lambda: results_drift(t, move_min=0.03, gap=True, days=3),
     }
 
 
@@ -232,17 +264,25 @@ def evaluate(name: str, h: int, ev: pd.DataFrame, live: dict, base: float, bmont
 TRIALS = 0
 
 
-def load(path: str):
+def load(path: str, results: str = None):
+    from backend.forecast import members
+
     with open(path, "rb") as f:
-        df, _ = pickle.load(f)
+        df, sectors = pickle.load(f)
     df["date"] = pd.to_datetime(df["date"])
-    return setups.table({s: g.set_index("date").sort_index() for s, g in df.groupby("symbol")})
+    t = setups.table({s: g.set_index("date").sort_index() for s, g in df.groupby("symbol")})
+    t["member"] = members.mask(t["close"].index, t["close"].columns)  # as picks.load: each day's own index
+    t["sector"] = sectors
+    if results:
+        with open(results, "rb") as f:
+            t["results"] = pickle.load(f)
+    return t
 
 
-def run(path: str) -> list:
+def run(path: str, results: str = None) -> list:
     global TRIALS
     t0 = time.perf_counter()
-    t = load(path)
+    t = load(path, results)
     rng = np.random.default_rng(0)
     V = variants(t)
     TRIALS = len(V) * len(HORIZONS)
@@ -304,9 +344,10 @@ def _check() -> None:
     px = pd.DataFrame(100 * np.exp(np.cumsum(rng.normal(0.0005, 0.02, (900, 6)), 0)), index=idx, columns=list("ABCDEF"))
     tb = {"open": px * (1 + rng.normal(0, 0.01, px.shape)), "close": px, "high": px * 1.01, "low": px * 0.99,
           "volume": pd.DataFrame(rng.lognormal(10, 0.5, px.shape), index=idx, columns=px.columns),
-          "nifty_close": px.mean(axis=1), "nifty_open": px.mean(axis=1)}
+          "nifty_close": px.mean(axis=1), "nifty_open": px.mean(axis=1), "sector": dict(zip(px.columns, "xxxyyy")),
+          "results": {c: list(idx[30::63] + pd.Timedelta(hours=16)) for c in px.columns}}
     cut = 700
-    tc = {k: v.iloc[:cut] for k, v in tb.items()}
+    tc = {k: v if k in ("sector", "results") else v.iloc[:cut] for k, v in tb.items()}
     for name, fn in variants(tb).items():
         full, part = fn(), variants(tc)[name]()
         pd.testing.assert_frame_equal(full.iloc[:cut - 4], part.iloc[:cut - 4], obj=name)  # gap_hold looks back only
@@ -318,4 +359,4 @@ def _check() -> None:
 
 if __name__ == "__main__":
     _check()
-    run(sys.argv[1])
+    run(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)

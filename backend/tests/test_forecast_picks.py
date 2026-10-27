@@ -36,15 +36,68 @@ def _frames(days=420, n=25, seed=1):
     return frames
 
 
+def _with_results(frames):
+    """Results days with a +10% jump on 5x volume for S0..S4, plus their announcement times (one after 15:00)."""
+    stamps = {}
+    for i in range(5):
+        f = frames[f"S{i}"]
+        days = [f.index[d] for d in (100, 200, 330, 400)]
+        for d in days:
+            f.loc[d:, ["open", "high", "low", "close"]] *= 1.10
+            f.loc[d, "volume"] *= 5
+        stamps[f"S{i}"] = [days[0] - pd.Timedelta(hours=8)] + [d + pd.Timedelta(hours=11) for d in days[1:]]
+    return frames, stamps
+
+
+def _table(frames, stamps):
+    t = setups.table(frames)
+    t["results"] = stamps
+    return t
+
+
 @pytest.mark.parametrize("setup", setups.SETUPS, ids=lambda s: s.name)
 def test_a_signal_on_day_t_cannot_see_day_t_plus_one(setup):
-    frames = _frames()
-    full = setup.signals(setups.table(frames))
+    frames, stamps = _with_results(_frames())
+    full = setup.signals(_table(frames, stamps))
     assert full.notna().any().any(), "fixture must make the setup fire"
     for cut in (300, 350, 419):
         day = full.index[cut]
-        truncated = setup.signals(setups.table({s: f.loc[:day] for s, f in frames.items()}))
+        truncated = setup.signals(_table({s: f.loc[:day] for s, f in frames.items()}, stamps))
         pd.testing.assert_frame_equal(truncated, full.loc[:day])
+
+
+def test_results_drift_fires_on_the_reaction_day_only_with_the_move_and_the_volume():
+    frames, stamps = _with_results(_frames())
+    stamps["S5"] = [frames["S5"].index[200] + pd.Timedelta(hours=11)]  # results, but no jump or volume
+    fires = setups.results_drift(_table(frames, stamps))
+    days = frames["S0"].index
+    # day 100's results came out at 16:00 the evening before: that reaction is the next session, day 100
+    assert set(fires.index[fires["S0"].notna()]) == {days[100], days[200], days[330], days[400]}
+    assert fires["S0"].loc[days[200]] == pytest.approx(0.10, abs=0.06)
+    assert fires["S5"].isna().all() and fires["S6"].isna().all()  # no move / no results
+
+
+def test_results_dates_merge_replaces_the_fetched_window_and_keeps_older_rows():
+    from backend.datalayer import results
+    d = lambda s: datetime.fromisoformat(s)
+    old = [d("2020-01-10 12:00"), d("2026-07-20 14:00"), d("2026-11-05 13:00")]
+    got = [d("2026-07-20 14:00"), d("2026-11-07 13:00")]  # the November date moved
+    assert results.merge(old, got) == [d("2020-01-10 12:00"), *got]
+    assert results.merge(old, []) == old  # a failed / empty fetch keeps what is known
+
+
+async def test_results_refresh_fetches_new_and_stale_symbols_only(monkeypatch):
+    from backend.datalayer import results
+    db = AsyncMongoMockClient()["t"]
+    asked = []
+    monkeypatch.setattr(results, "_fetch_sync", lambda tkr, limit: asked.append((tkr, limit)) or [datetime(2026, 7, 20, 14)])
+    monkeypatch.setattr(results, "PAUSE", 0)
+    now = datetime(2026, 10, 27, 10, tzinfo=timezone.utc)
+    await db[results.COLL].insert_many([{"_id": "FRESH", "at": [], "checked": "2026-10-26"},
+                                        {"_id": "OLD", "at": [datetime(2019, 1, 1)], "checked": "2026-10-20"}])
+    assert await results.refresh(db, {"NEW", "FRESH", "OLD"}, now) == 2
+    assert sorted(asked) == [("NEW.NS", results.FULL), ("OLD.NS", results.RECENT)]
+    assert (await results.load(db))["OLD"] == [datetime(2019, 1, 1), datetime(2026, 7, 20, 14)]
 
 
 def test_momentum_vol_takes_the_top_decile_of_12_1_momentum_over_60_day_vol_on_month_starts():

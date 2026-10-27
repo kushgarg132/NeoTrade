@@ -79,7 +79,7 @@ def test_compute_personalises_only_validated_setups(monkeypatch):
     monkeypatch.setattr(similar, "K", 5)
     monkeypatch.setattr(similar, "forecast", lambda pool, x, k=5: None if len(pool) < 5 else _real(pool, x, k))
     results, ps = picks.compute(t)  # smoke: runs end to end, keys present
-    assert all("similar" in r for r in results.values())
+    assert all("similar" in r for r in results.values() if r["n"] >= study.MIN_N)  # results_drift: no dates here
     for p in ps:
         assert p["forecast"] in ("similar", "setup") and {"median", "p10", "p90", "excess"} <= set(p["expected"])
 
@@ -97,7 +97,7 @@ def test_full_size_runtime_under_five_minutes():
     t["nifty_open"] = t["nifty_close"]
     t0 = time.time()
     results, _ = picks.compute(t)
-    print({k: (v['n'], v['similar']) for k, v in results.items()})
+    print({k: (v['n'], v.get('similar')) for k, v in results.items()})
     took = time.time() - t0
     print(f"compute on {n}x{days}: {took:.1f}s")
     assert took < 300

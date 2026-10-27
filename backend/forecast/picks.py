@@ -271,10 +271,12 @@ async def load(db, now: datetime) -> Optional[dict]:
     frames = await bars.read(db, universe, HISTORY_START, today)
     if bars.NIFTY not in frames or len(frames) < 2:
         return None
+    from backend.datalayer import results
     from backend.forecast import members
 
     t = setups.table(frames)
     t["member"] = members.mask(t["close"].index, t["close"].columns)  # no survivorship: each day's own index
+    t["results"] = await results.load(db)  # for setups.results_drift
     return t
 
 
@@ -332,7 +334,7 @@ async def _forward(db, new: list[dict], now: datetime) -> None:
 def _until(t: dict, day: date) -> dict:
     """The wide table as it stood at the close of `day`."""
     end = pd.Timestamp(day)
-    return {k: v.loc[:end] for k, v in t.items()}
+    return {k: v if isinstance(v, dict) else v.loc[:end] for k, v in t.items()}  # "results" is not by day
 
 
 async def backfill(db, days: list[date], now: Optional[datetime] = None) -> int:
@@ -363,6 +365,11 @@ async def backfill(db, days: list[date], now: Optional[datetime] = None) -> int:
 
 async def run(db, now: Optional[datetime] = None) -> dict:
     now = now or datetime.now(timezone.utc)
+    try:  # results dates for setups.results_drift; stale ones only, capped (datalayer/results.py)
+        from backend.datalayer import results
+        await results.refresh(db, set(await db[bars.BARS].distinct("symbol")) - {bars.NIFTY}, now)
+    except Exception as exc:
+        logger.warning("results dates not refreshed: %s", exc)
     t = await load(db, now)
     if t is None:
         return {"picks": 0, "scored": 0}
