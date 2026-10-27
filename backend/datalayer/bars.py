@@ -70,11 +70,11 @@ async def symbols(db) -> set[str]:
     from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
     from backend.datalayer.prices import _bare, priority_symbols
     from backend.factor.data import universe
+    from backend.forecast.members import ever
 
     saved = await db["user_prefs"].distinct("universe")
-    # ponytail: ex-index members (forecast/members.py::ever) are NOT fetched: ~+130 MB of bars does not fit
-    # Atlas M0's 512 MB (it filled the cluster 2026-10-26). Add them once bars live somewhere bigger.
-    return {_bare(s) for s in [*universe(), *ALL_SCAN_STOCKS, *saved] if s} | await priority_symbols(db)
+    # Past index members too (forecast/members.py), so the Picks study sees the stocks that left; delisted ones fetch nothing.
+    return {_bare(s) for s in [*universe(), *ALL_SCAN_STOCKS, *saved, *ever()] if s} | await priority_symbols(db)
 
 
 # --- store ---------------------------------------------------------------
