@@ -90,7 +90,7 @@ and waits 6 hours); `GET /summaries/*` (`routers/summaries.py`) only reads, so o
 - **Your day** (Home): three lines, where you stand, what needs you, the market. Written with the
   pre-market digest and the post-close digest (`portfolio/digest.py::_day_summary`,
   `summaries/day.py::generate`), feature `portfolio`, fast tier. Home shows it in place of the digest's
-  templated lines when it exists (`components/home/BriefCard.jsx`).
+  templated lines when it exists (`components/home/TodayCard.jsx`).
 - **What this means for you** (Ideas, Your holdings): one sentence under each bad-news and results-soon row
   (position size, the risk, what to watch). Actions are derived on demand, so `engine/autorun.py::tick` calls
   `summaries/holding.py::run_all`: each user at most every 30 minutes, 08:45 to 22:00, writes a note for each

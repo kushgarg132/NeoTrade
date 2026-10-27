@@ -1,6 +1,8 @@
 import { inr, pct, tone } from '../components/ui/format.js';
 import { holdingActions } from './ideas.js';
 import { asOf } from './formatters.js';
+import { digestLines } from './todayLayout.js';
+import { summaryLines } from './summaries.js';
 
 const REGIME = { risk_off: 'Risk off', risk_on: 'Risk on', neutral: 'Neutral' };
 const PHASE = { pre: 'Before the open', session: 'Market open', post: 'After the close', closed: 'Market closed' };
@@ -83,4 +85,13 @@ export const alerts = (today) => {
     out.push({ id: 'live', text: `Live money armed${armed.autopilot ? ': autopilot' : ''}${armed.strategies?.length ? ` · ${armed.strategies.length} strateg${armed.strategies.length === 1 ? 'y' : 'ies'}` : ''}`, to: '/ai', action: 'Stop', danger: true });
   }
   return out;
+};
+
+export const todayTitle = (kind) => (kind === 'premarket' ? 'Before the open' : kind === 'postclose' ? 'After the close' : 'Today');
+
+/** The brief under the Today card: the AI's lines when a job wrote them, else the digest's after its own title line. */
+export const briefLines = (text, summary) => {
+  if (!text) return { ai: false, lines: [] };
+  const ai = summaryLines(summary?.text);
+  return ai.length ? { ai: true, lines: ai } : { ai: false, lines: digestLines(text).slice(1) };
 };

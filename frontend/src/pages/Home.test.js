@@ -57,3 +57,19 @@ test('every unfinished setup step can be skipped, saved to the account, and undo
   assert.match(setup, /'Undo' : 'Skip'/);
   assert.match(setup, /min-h-11 min-w-11/);
 });
+
+test('Home order: hero, alerts, setup, today card, tiles, goal, weekly', () => {
+  const at = ['<HeroRow', 'alerts(today)', '<SetupChecklist', '<TodayCard', 'grid grid-cols-2', '<GoalTile', '<WeeklyLink'].map((s) => page.indexOf(s));
+  assert.ok(at.every((i) => i >= 0), at.join());
+  assert.deepEqual([...at].sort((a, b) => a - b), at);
+  assert.doesNotMatch(page, /NewsMoves|BriefCard/);
+});
+
+test('needs pill and alerts: tap, accent ink, soft loss fill, role and login kept', () => {
+  assert.match(page, /to=\{isAdmin \? .\/ideas. : .\/money.\}[^>]*text-\[var\(--accent-ink\)\][^>]*tap/);
+  assert.match(page, /role="alert"/);
+  assert.match(page, /openBrokerLogin/);
+  assert.match(page, /var\(--loss-soft\)/);
+  assert.doesNotMatch(page, /border-\[var\(--loss\)\]/);
+  assert.match(page, /text-\[var\(--loss\)\] tap/);
+});

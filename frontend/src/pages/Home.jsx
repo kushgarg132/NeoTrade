@@ -8,10 +8,9 @@ import Skeleton from '../components/ui/Skeleton';
 import ErrorLine from '../components/ui/ErrorLine';
 import Badge from '../components/ui/Badge';
 import HeroRow from '../components/home/HeroRow';
-import BriefCard from '../components/home/BriefCard';
+import TodayCard from '../components/home/TodayCard';
 import GoalTile from '../components/home/GoalTile';
 import WeeklyLink from '../components/home/WeeklyLink';
-import NewsMoves from '../components/home/NewsMoves';
 import SetupChecklist from '../components/home/SetupChecklist';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useRefetchOn } from '../hooks/useStream';
@@ -85,7 +84,7 @@ const Home = () => {
           <span className="inline-flex items-center min-h-11 text-[14px] font-medium text-[var(--text-muted)]">{phaseLabel(today.phase)}</span>
           {needs > 0 && (
             <Link to={isAdmin ? '/ideas' : '/money'} title={h.ideas.sub}
-                  className="ml-auto inline-flex items-center gap-1 min-h-11 px-4 rounded-full bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+                  className="ml-auto inline-flex items-center gap-1 min-h-11 px-4 rounded-full bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold tap active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
               {needs} need{needs === 1 ? 's' : ''} you
               <ChevronRight className="w-4 h-4" aria-hidden="true" />
             </Link>
@@ -94,19 +93,18 @@ const Home = () => {
         <HeroRow headline={overview?.headline || today.pulse} nifty={nifty} phase={today.phase} failed={failed.money} onRetry={load} meta={meta('money', h.money.meta)} />
         {alerts(today).map((a) => (
           <Link key={a.id} to={a.to} role="alert" onClick={a.login ? (e) => openBrokerLogin(e, a) : undefined}
-                className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2 text-[14px] font-medium text-[var(--loss)]">
+                style={{ background: 'var(--loss-soft)' }}
+                className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] px-3 py-2 text-[14px] font-medium text-[var(--loss)] tap">
             <span>{a.text}</span>
             <span className="shrink-0 font-semibold underline">{a.action}</span>
           </Link>
         ))}
         <SetupChecklist setup={today.setup} />
+        <TodayCard moves={(overview?.headline || today.pulse)?.news_moves} kind={kind} text={kind ? today[kind] : undefined} summary={day} />
         <div className="grid grid-cols-2 gap-3">
           <Tile title={<>AI <Badge kind={today.autopilot?.live ? 'live' : 'paper'}>{today.autopilot?.live ? 'Live' : 'Paper'}</Badge></>} icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.value === '—' ? 'Start the AI account' : h.ai.sub} tone={h.ai.tone} subTone={h.ai.subTone} meta={meta('ai', null)} />
           <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} meta={meta('market', h.market.meta)} />
         </div>
-        <NewsMoves moves={(overview?.headline || today.pulse)?.news_moves} />
-        {kind && <BriefCard title={kind === 'premarket' ? 'Before the open' : 'After the close'} text={today[kind]} summary={day}
-          more={kind === 'premarket' ? { to: '/market', label: 'Market' } : { to: '/money', label: 'Your money' }} />}
         <GoalTile />
         <WeeklyLink />
       </div>
