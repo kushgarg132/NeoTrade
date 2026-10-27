@@ -53,7 +53,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/routers/mine.py | `/mine/*` | `mine.py::overview`, `::mine_history`, `::tax`, `::stock_detail`, `::get_thesis`, `::put_thesis`, `::mine_actions`, `::dismiss_action`, `::snooze_action`, `::_month_contributions`, `TAX_FIRST_FY` |
 | backend/routers/portfolio.py | `/portfolio*`; verdict masking | `portfolio.py::get_portfolio`, `::refresh`, `::rebalance`, `::rebalance_candidates`, `::present`, `::mask_row`, `::_results_dates`, `::_with_results`, `::verdicts_visible_to`, `::with_suggestions`, `::_candidate_symbols` |
 | backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::ai_vs_me`, `::get_learning`, `::get_beta_metrics` |
-| backend/routers/today.py | `/today`, `/today/attention`, `/today/reconciliation` | `today.py::today`, `::attention`, `::reconciliation`, `::_accounts`, `::_needs_you`, `::_mine_actions`, `::_setup`, `::_autopilot`, `::_backdrop`, `_STATE_CACHE` |
+| backend/routers/today.py | `/today`, `/today/attention`, `/today/reconciliation` | `today.py::today`, `::attention`, `::reconciliation`, `::_accounts`, `::_needs_you`, `::_mine_actions`, `::_setup` (steps `prefs.py::SETUP_STEP_IDS`; prefs `setup_skipped` count as done, row `skipped`), `::_autopilot`, `::_backdrop`, `_STATE_CACHE` |
 
 ## Data
 

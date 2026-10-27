@@ -73,9 +73,13 @@ DEFAULTS = {
     # The owner's goal (routers/settings.py validates it; start/start_value are
     # stamped server-side): {kind: "value"|"beat_nifty", target, by, start, start_value}.
     "goal": None,
+    "setup_skipped": [],  # Home setup checklist steps the user chose to skip (routers/today.py::_setup)
 }
 
 EDITABLE = tuple(DEFAULTS)
+
+# The Home setup checklist's step ids (routers/today.py::_setup builds them in this order).
+SETUP_STEP_IDS = ("import_trades", "import_funds", "connect_mine", "connect_ai", "roles", "daily_loss", "telegram", "profile")
 
 
 class PrefsStore:

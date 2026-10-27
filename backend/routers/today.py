@@ -147,8 +147,11 @@ async def _setup(user_id: str, prefs: dict) -> dict:
         ("telegram", "Link Telegram for alerts", bool(channel.get("telegram_chat_id")), "/journal?tab=guardrails"),
         ("profile", "Tell the AI about yourself", sum(1 for k, v in profile.items() if k != "memories" and v) >= 3, "/profile"),
     ]
-    rows = [{"id": i, "label": label, "done": bool(done), "link": link} for i, label, done, link in steps]
-    return {"done": sum(r["done"] for r in rows), "total": len(rows), "steps": rows}
+    skipped = set(prefs.get("setup_skipped") or [])
+    rows = [{"id": i, "label": label, "done": bool(done), "skipped": i in skipped and not done, "link": link}
+            for i, label, done, link in steps]
+    # A skipped step counts towards done: the card goes once every step is done or skipped.
+    return {"done": sum(r["done"] or r["skipped"] for r in rows), "total": len(rows), "steps": rows}
 
 
 async def _autopilot(user_id: str, prefs: dict) -> dict:

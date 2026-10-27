@@ -316,3 +316,24 @@ def test_unjournaled_counts_todays_closed_trips_without_a_note(monkeypatch):
     _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"upstox": "mine"}}], journal_trades=trades,
           journal_notes=[{"_id": "alice:AAA-BUY", "user_id": "alice", "round_trip_id": "AAA-BUY", "note": "ok", "tags": []}])
     assert client.get("/api/v1/today").json()["unjournaled"] == 2
+
+
+def test_a_skipped_setup_step_counts_as_done(monkeypatch):
+    client, db = _client(monkeypatch)
+    _seed(db, user_prefs=[{"user_id": "alice", "setup_skipped": ["telegram", "profile"]}])
+    setup = client.get("/api/v1/today").json()["setup"]
+    assert setup["done"] == 2 and setup["total"] == 8
+    rows = {s["id"]: s for s in setup["steps"]}
+    assert rows["telegram"] == {**rows["telegram"], "skipped": True, "done": False}
+    assert rows["roles"]["skipped"] is False
+
+
+def test_preferences_accept_only_known_setup_step_ids():
+    import pytest
+    from pydantic import ValidationError
+
+    from backend.routers.settings import PreferencesPatch
+
+    assert PreferencesPatch(setup_skipped=["telegram"]).setup_skipped == ["telegram"]
+    with pytest.raises(ValidationError):
+        PreferencesPatch(setup_skipped=["nope"])

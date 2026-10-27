@@ -30,7 +30,7 @@ from backend.auth.dependency import get_current_user, require_admin
 from backend.auth.models import User
 from backend.configs.settings import settings
 from backend.database import db
-from backend.prefs import PrefsStore
+from backend.prefs import SETUP_STEP_IDS, PrefsStore
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -108,6 +108,7 @@ class PreferencesPatch(BaseModel):
     rebalance_targets: Optional[RebalanceTargets] = None
     news_alerts: Optional[Literal["held", "held+watched", "all", "off"]] = None
     goal: Optional[GoalIn] = None
+    setup_skipped: Optional[list[Literal[SETUP_STEP_IDS]]] = None
 
     @field_validator("broker_roles")
     @classmethod

@@ -48,3 +48,12 @@ test('a login alert opens the broker login in this tab (an iOS pop-up after awai
   assert.match(acc, /window\.location\.assign\(res\.data\.url\)/);
   assert.doesNotMatch(acc, /window\.open\(res\.data\.url/);
 });
+
+test('every unfinished setup step can be skipped, saved to the account, and undone', () => {
+  const setup = readFileSync(new URL('../components/home/SetupChecklist.jsx', import.meta.url), 'utf8');
+  assert.match(setup, /setup_skipped: next/);
+  assert.match(setup, /endpoints\.settings\.preferences/);
+  assert.match(setup, /\{!s\.done && \(/);
+  assert.match(setup, /'Undo' : 'Skip'/);
+  assert.match(setup, /min-h-11 min-w-11/);
+});
