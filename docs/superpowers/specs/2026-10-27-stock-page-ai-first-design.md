@@ -35,7 +35,7 @@ sentiment the engine reads.
   `at` (ISO UTC), TTL `LAST_TTL_SECONDS` = 7 days. `analyst:{symbol}` (4 h) and its readers are unchanged.
 - `async def latest(symbol) -> dict | None`: `{read, at, stale}` from `analyst:last:{symbol}`; `None` when there
   is no last read. `stale` is true when:
-  - in session (`core/market_calendar.py::market_phase(now)` is the open phase), `at` is older than
+  - in session (`core/market_calendar.py::market_phase(now) == "session"`), `at` is older than
     `FRESH_IN_SESSION` = 1 h;
   - outside a session, `analyst:{symbol}` has expired (older than 4 h).
   For followed symbols, a run started because the read is stale still goes through `datalayer/analysis.py::
