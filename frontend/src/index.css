@@ -1,6 +1,6 @@
 /* NeoTrade design tokens and base styles. See DESIGN.md. */
 
-@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -39,7 +39,7 @@
   --color-input: var(--rule-strong);
   --color-ring: var(--stamp);
 
-  --font-sans: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-narrow: var(--font-sans);
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 
@@ -53,16 +53,16 @@
     color-scheme: light;
 
     /* The design system. Components use only these. */
-    --bg: #f6f7f9;
+    --bg: #f6f8f6;
     --surface: #ffffff;
-    --surface-2: #eef0f4;
-    --border: #dde1e8;
-    --text: #14171f;
-    --text-muted: #566070;
-    --accent: #4338ca;
-    --accent-soft: #e9e8fb;
-    --gain: #0d7a4e;
-    --loss: #b42318;
+    --surface-2: #edf2ee;
+    --border: #dce5df;
+    --text: #0f1a14;
+    --text-muted: #4f6157;
+    --accent: #047857;
+    --accent-soft: #d9f0e6;
+    --gain: #0f7b4f;
+    --loss: #c2281d;
     --warn: #9a5b00;
     --gain-wash: #e1f1ea;
     --loss-wash: #f9e4e1;
@@ -71,6 +71,11 @@
     --sheet-shadow: 0 1px 2px rgba(20, 23, 31, 0.06), 0 8px 24px -12px rgba(20, 23, 31, 0.18);
     --masthead-h: 3.5rem;
     --status-bar: var(--text);
+    --accent-ink: #ffffff;
+    --gain-soft: color-mix(in oklab, var(--gain) 10%, var(--surface));
+    --loss-soft: color-mix(in oklab, var(--loss) 10%, var(--surface));
+    --glow: radial-gradient(120% 90% at 0% 0%, #c9f0dd 0%, #e8f6ef 55%, var(--surface) 100%);
+    --fs-12: 12px; --fs-13: 13px; --fs-15: 15px; --fs-17: 17px; --fs-22: 22px; --fs-28: 28px; --fs-44: 44px;
 
     /* Charts (dataviz-validated categorical order; heat ramp = gain/loss mixed into the surface). */
     --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #1baf7a;
@@ -98,22 +103,26 @@
   .dark {
     color-scheme: dark;
 
-    --bg: #0e1117;
-    --surface: #161b24;
-    --surface-2: #1f2531;
-    --border: #2b3242;
-    --text: #e8ebf1;
-    --text-muted: #9ba5b5;
-    --accent: #8f97ff;
-    --accent-soft: #23264d;
-    --gain: #4cc38a;
-    --loss: #f07167;
-    --warn: #e2a63b;
+    --bg: #07100c;
+    --surface: #0d1914;
+    --surface-2: #12211a;
+    --border: #17271f;
+    --text: #e9f3ee;
+    --text-muted: #9dbcad;
+    --accent: #10b981;
+    --accent-soft: #12332a;
+    --gain: #3ddc97;
+    --loss: #ff6b6b;
+    --warn: #f2b24a;
     --gain-wash: #14281f;
     --loss-wash: #2d1b1a;
     --ai: #5fc9c0;
     --sheet-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px -16px rgba(0, 0, 0, 0.8);
     --status-bar: var(--bg);
+    --accent-ink: #04140d;
+    --gain-soft: color-mix(in oklab, var(--gain) 14%, var(--surface));
+    --loss-soft: color-mix(in oklab, var(--loss) 14%, var(--surface));
+    --glow: radial-gradient(120% 90% at 0% 0%, #0f5c3f 0%, #0b2a1f 55%, var(--bg) 100%);
 
     /* Charts (dataviz-validated categorical order; heat ramp = gain/loss mixed into the surface). */
     --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70;
@@ -426,3 +435,22 @@ html[data-private="on"] :is(.private .figure-md, .private .figure-lg, .private.f
 .badge-mine { color: var(--ink); }
 .badge-ai { color: var(--ai); }
 .badge-paper { color: var(--stamp); border-style: dashed; }
+
+/* Motion: CSS only. */
+.tap { transition: transform 120ms ease-out; }
+.tap:active { transform: scale(.98); }
+@keyframes nt-fade { from { opacity: 0; } to { opacity: 1; } }
+.fade-in { animation: nt-fade 150ms ease-out; }
+.hero-num {
+  font-size: var(--fs-44);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
