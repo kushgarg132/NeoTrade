@@ -90,15 +90,23 @@ export const formatTimeAgo = (dateString) => {
   return 'just now';
 };
 
-/**
- * The NSE session in IST: pre-open 09:00–09:15, open 09:15–15:30, weekdays. Holidays are not modelled —
- * on one the app says "closed" a few hours late, which is a smaller lie than
- * showing a frozen tick as live.
- */
+/** NSE weekday holidays, the same list as backend/core/market_calendar.py::HOLIDAYS (a backend test keeps them equal). */
+export const NSE_HOLIDAYS = new Set([
+  // 2026, official
+  '2026-01-15', '2026-01-26', '2026-03-03', '2026-03-26', '2026-03-31', '2026-04-03',
+  '2026-04-14', '2026-05-01', '2026-05-28', '2026-06-26', '2026-09-14', '2026-10-02',
+  '2026-10-20', '2026-11-10', '2026-11-24', '2026-12-25',
+  // 2027, provisional
+  '2027-01-26', '2027-03-10', '2027-03-22', '2027-03-26', '2027-04-14', '2027-04-15',
+  '2027-05-17', '2027-06-16', '2027-10-29',
+]);
+
+/** The NSE session in IST: pre-open 09:00–09:15, open 09:15–15:30, weekdays except NSE_HOLIDAYS. */
 export const marketPhase = (now = new Date()) => {
   const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
   const day = ist.getDay();
   if (day === 0 || day === 6) return 'closed';
+  if (NSE_HOLIDAYS.has(now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }))) return 'closed';
   const minutes = ist.getHours() * 60 + ist.getMinutes();
   if (minutes < 540) return 'closed'; // overnight, before the 09:00 pre-open
   if (minutes < 555) return 'pre';
