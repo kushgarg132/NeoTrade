@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
+import Hero from '../components/ui/Hero';
 import Stat from '../components/ui/Stat';
 import Badge from '../components/ui/Badge';
 import Skeleton from '../components/ui/Skeleton';
@@ -46,18 +47,21 @@ const AiStrategy = () => {
       <PageHeader title={strategyName(name)} back="/ai?tab=scoreboard" backLabel="AI"
         right={card.status === 'ok' ? <Badge kind={BADGE[status.label]}>{status.label}</Badge> : null} />
       <div className="space-y-3">
-        <Card title="Paper record">
-          {card.status === 'loading' ? <Skeleton rows={2} /> : card.status === 'error' || card.status === 'empty' ? (
-            <ErrorLine message="Couldn't load this strategy's record." onRetry={card.retry} />
-          ) : !row ? <Empty title="No trades yet" body="This strategy's net, open positions and result against NIFTY appear after its first paper trade." /> : (
-            <div className="grid grid-cols-2 gap-3">
-              <Stat label="Net" value={<span className={toneText(tone(row.net))}>{inr(row.net, { sign: true })}</span>} />
+        {!row || card.status !== 'ok' ? (
+          <Card title="Paper record">
+            {card.status === 'loading' ? <Skeleton rows={2} /> : card.status === 'error' || card.status === 'empty' ? (
+              <ErrorLine message="Couldn't load this strategy's record." onRetry={card.retry} />
+            ) : <Empty title="No trades yet" body="This strategy's net, open positions and result against NIFTY appear after its first paper trade." />}
+          </Card>
+        ) : (
+          <Hero label="Net · paper" value={row.net} format={(v) => inr(v, { sign: true })}>
+            <div className="grid grid-cols-3 gap-3 mt-3">
               <Stat label="Open" value={row.open ? `${row.open} (${inr(row.unrealized, { sign: true })})` : '0'} />
               <Stat label="vs NIFTY" value={row.vs_nifty != null ? <span className={toneText(tone(row.vs_nifty))}>{inr(row.vs_nifty, { sign: true })}</span> : '–'} />
               <Stat label="Win rate" value={row.win_rate != null ? pct(row.win_rate, { dp: 0 }) : '–'} />
             </div>
-          )}
-        </Card>
+          </Hero>
+        )}
 
         {setup && picks.status === 'ok' && (
           <Card title="Setup study">

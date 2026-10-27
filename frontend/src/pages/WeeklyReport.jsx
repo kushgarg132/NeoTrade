@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
+import Hero from '../components/ui/Hero';
 import Stat from '../components/ui/Stat';
 import ListRow from '../components/ui/ListRow';
 import Empty from '../components/ui/Empty';
@@ -18,7 +19,7 @@ import { inr, pct, tone } from '../components/ui/format';
 import { stockPath } from '../utils/stocks';
 import { shiftWeek, weekRange } from '../utils/weekly';
 
-const act = 'inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold';
+const act = 'inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold';
 const navCls = 'inline-flex items-center justify-center min-h-11 min-w-11 text-[var(--text-muted)] disabled:opacity-40';
 
 const muted = 'text-[13px] text-[var(--text-muted)]';
@@ -96,16 +97,19 @@ const WeeklyReport = () => {
         : error ? <ErrorLine message="Couldn't load this week's report." onRetry={reload} />
         : (
           <div className="space-y-4">
-            <Card title="Your account against NIFTY">
-              {r.you.ret == null ? <Empty title="No curve for this week" body="Your account's weekly return needs a connected broker or imported trades."
-                action={<Link to="/settings/brokers" className={act}>Connect your broker</Link>} /> : (
-                <div className="grid grid-cols-3 gap-3">
-                  <Stat label="Your account" value={pct(r.you.ret, { sign: true })} tone={tone(r.you.ret)} />
+            {r.you.ret == null ? (
+              <Card title="Your account against NIFTY">
+                <Empty title="No curve for this week" body="Your account's weekly return needs a connected broker or imported trades."
+                  action={<Link to="/settings/brokers" className={act}>Connect your broker</Link>} />
+              </Card>
+            ) : (
+              <Hero label="Your account this week" value={r.you.ret} format={(v) => pct(v, { sign: true })} privateValue={false}>
+                <div className="grid grid-cols-2 gap-3 mt-3">
                   <Stat label="NIFTY" value={pct(r.you.nifty, { sign: true })} tone={tone(r.you.nifty)} />
                   <Stat label="Excess" value={pct(r.you.excess, { sign: true })} tone={tone(r.you.excess)} />
                 </div>
-              )}
-            </Card>
+              </Hero>
+            )}
             <Card title="AI book" to="/ai">
               <Stat label={<span className="inline-flex items-center gap-2">Paper return <Badge kind="paper">Paper</Badge></span>} value={pct(r.ai.ret, { sign: true })} tone={tone(r.ai.ret)} />
               <p className="mt-1 text-[13px] text-[var(--text-muted)]">Closed AI trades this week, after charges, as % of its capital.</p>
