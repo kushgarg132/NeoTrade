@@ -33,3 +33,6 @@ export const clearRecentStocks = () => {
     // storage unavailable
   }
 };
+
+const STOCK_TABS = ["chart", "news", "details", "events"];
+export const stockTab = (id) => (id === "analysis" ? "details" : STOCK_TABS.includes(id) ? id : "chart");
