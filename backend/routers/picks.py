@@ -43,6 +43,7 @@ async def picks_today(user: User = Depends(require_admin)):
         "picks": picks,  # every candidate of the latest pass (backward compatible); the UI reads `shown`
         **served,
         "setups": study.get("setups", []),
+        "grades": setup_grades(study),
         "as_of": study.get("as_of"),
         "forward": forward(scored),
         "caveats": CAVEATS,

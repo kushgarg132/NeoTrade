@@ -10,6 +10,7 @@ import ErrorLine from '../components/ui/ErrorLine';
 import Empty from '../components/ui/Empty';
 import ListRow from '../components/ui/ListRow';
 import { useForward } from '../components/ForwardBadge';
+import { useAuth } from '../context/AuthContext';
 import useStored from '../hooks/useStored';
 import { endpoints } from '../utils/api';
 import { badgeFor } from '../utils/forward';
@@ -30,6 +31,11 @@ const AiStrategy = () => {
   const trades = useStored(endpoints.trades({ strategy: name, venue: 'paper', limit: 200 }));
   const backtest = useStored(endpoints.backtest(name));
   const forward = useForward();
+  // Picks are admin-only (routers/picks.py): only an admin's picks:* page asks for the setup's grade.
+  const isAdmin = useAuth().user?.role === 'admin';
+  const setup = isAdmin && name.startsWith('picks:') ? name.slice(6) : null;
+  const picks = useStored(setup ? endpoints.picks.today : null);
+  const study = (picks.data?.setups || []).find((s) => s.setup === setup);
 
   const row = strategyRow(card.data, name);
   const status = strategyStatus({ row, badge: badgeFor(forward, 'engine', name), paused: today.data?.autopilot?.paused, name });
@@ -52,6 +58,15 @@ const AiStrategy = () => {
             </div>
           )}
         </Card>
+
+        {setup && picks.status === 'ok' && (
+          <Card title="Setup study">
+            <div className="grid grid-cols-2 gap-3">
+              <Stat label="Grade" value={picks.data.grades?.[setup] || '–'} />
+              <Stat label="t" value={study?.adjusted?.t != null ? Number(study.adjusted.t).toFixed(2) : '–'} />
+            </div>
+          </Card>
+        )}
 
         <Card title="Backtest">
           {backtest.status === 'loading' ? <Skeleton rows={2} /> : backtest.status === 'error' ? (

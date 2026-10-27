@@ -33,3 +33,9 @@ test('openTradeIds maps each open trade symbol to its id; no trade -> undefined'
   assert.equal(ids.SBIN, undefined);
   assert.deepEqual(openTradeIds(null), {});
 });
+
+test('openTradeIds drops a symbol with two open trades so the row links to the stock', () => {
+  const ids = openTradeIds([{ id: 'a', symbol: 'TCS', status: 'OPEN' }, { id: 'b', symbol: 'TCS', status: 'OPEN' }, { id: 'c', symbol: 'INFY', status: 'OPEN' }]);
+  assert.equal(ids.TCS, null);
+  assert.equal(ids.INFY, 'c');
+});

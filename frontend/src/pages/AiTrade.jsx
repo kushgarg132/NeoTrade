@@ -73,7 +73,7 @@ const AiTrade = () => {
         title={`${t.symbol} · ${t.side}`}
         back={t.strategy ? strategyPath(t.strategy) : '/ai'}
         backLabel={t.strategy ? strategyName(t.strategy) : 'AI'}
-        right={<Badge kind="paper">Paper</Badge>}
+        right={t.venue === 'live' ? <Badge kind="live">Live</Badge> : <Badge kind="paper">Paper</Badge>}
       />
       <div className="space-y-3">
         <Card title="Result" action={s.open ? <Badge kind="neutral">Open</Badge> : null}>

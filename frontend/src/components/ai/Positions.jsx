@@ -15,12 +15,13 @@ import { openTradeIds } from '../../utils/aiDetail';
 /** AI -> Positions: what the AI holds now, each row opens the stock. */
 const Positions = ({ state }) => {
   const [ids, setIds] = useState({});
+  const symbols = Object.keys(state.data || {}).sort().join(',');
   // Positions carry no trade id: map symbol -> open trade once. A failed fetch just leaves rows linking to the stock.
   useEffect(() => {
     let live = true;
     api.get(endpoints.trades({ status: 'OPEN', venue: 'paper' })).then((r) => live && setIds(openTradeIds(r.data))).catch(() => {});
     return () => { live = false; };
-  }, [state.data]);
+  }, [symbols]);
   if (state.error) return <ErrorLine message="Couldn't load the AI's positions." onRetry={state.retry} />;
   if (!state.loaded) return <Skeleton rows={4} />;
   const rows = Object.values(state.data || {}).filter((p) => p.quantity);

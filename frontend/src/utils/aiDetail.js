@@ -27,4 +27,9 @@ export const tradeSummary = (t) => {
 };
 
 /** symbol -> id of its open trade, from GET /trading/trades?status=OPEN. A symbol with none is absent (callers fall back to the stock). */
-export const openTradeIds = (trades) => Object.fromEntries((trades || []).filter((t) => t.status === 'OPEN' && t.id != null).map((t) => [t.symbol, t.id]));
+// A symbol with two open trades (two strategies or modes) maps to none: the row links to the stock instead.
+export const openTradeIds = (trades) => {
+  const by = {};
+  (trades || []).filter((t) => t.status === 'OPEN' && t.id != null).forEach((t) => { by[t.symbol] = t.symbol in by ? null : t.id; });
+  return by;
+};
