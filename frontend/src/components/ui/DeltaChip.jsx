@@ -13,7 +13,7 @@ const DeltaChip = ({ value, pct: p, suffix, format = inr, privateValue = true })
       {up && <span aria-hidden="true">▲</span>}
       {down && <span aria-hidden="true">▼</span>}
       {typeof value === 'number' && format(value, { sign: true })}
-      {typeof p === 'number' && ` (${pct(p / 100, { sign: true })})`}
+      {typeof p === 'number' && (typeof value === 'number' ? ` (${pct(p / 100, { sign: true })})` : pct(p / 100, { sign: true }))}
       {suffix && <span className="font-medium text-[var(--text-muted)]"> {suffix}</span>}
     </span>
   );
