@@ -32,8 +32,8 @@ const NewsDot = ({ entry }) => {
 const SORTS = [['day', 'Today'], ['value', 'Value'], ['weight', 'Weight'], ['pnl', 'P&L']];
 // Each verdict gets its own colour + icon, so Sell / Add / Hold read at a glance (icon covers colour-blind).
 const VERDICT = {
-  SELL: { label: 'Sell', Icon: ArrowDown, pill: 'bg-[var(--loss-wash)] text-[var(--loss)]', stripe: 'border-l-[var(--loss)]', on: 'bg-[var(--loss)]' },
-  ADD: { label: 'Add', Icon: Plus, pill: 'bg-[var(--gain-wash)] text-[var(--gain)]', stripe: 'border-l-[var(--gain)]', on: 'bg-[var(--gain)]' },
+  SELL: { label: 'Sell', Icon: ArrowDown, pill: 'bg-[var(--loss-soft)] text-[var(--loss)]', stripe: 'border-l-[var(--loss)]', on: 'bg-[var(--loss)]' },
+  ADD: { label: 'Add', Icon: Plus, pill: 'bg-[var(--gain-soft)] text-[var(--gain)]', stripe: 'border-l-[var(--gain)]', on: 'bg-[var(--gain)]' },
   REVIEW: { label: 'Review first', Icon: AlertTriangle, pill: 'bg-[color-mix(in_oklab,var(--warn)_14%,var(--surface))] text-[var(--warn)]', stripe: 'border-l-[var(--warn)]', on: 'bg-[var(--warn)]' },
   HOLD: { label: 'Hold', Icon: Pause, pill: 'bg-[var(--surface-2)] text-[var(--text-muted)]', stripe: 'border-l-transparent', on: 'bg-[var(--text-muted)]' },
 };
@@ -57,7 +57,7 @@ const Chip = ({ on, onClick, children, onCls = 'bg-[var(--accent)]', offCls = 't
     onClick={onClick}
     className={cn(
       'min-h-11 px-3 shrink-0 rounded-full text-[14px] font-medium border',
-      on ? `${onCls} text-[var(--surface)] border-transparent` : `bg-[var(--surface)] ${offCls} border-[var(--border)]`
+      on ? `${onCls} text-[var(--accent-ink)] border-transparent` : `bg-[var(--surface)] ${offCls} border-[var(--border)]`
     )}
   >
     {children}
@@ -167,7 +167,7 @@ const HoldingsTab = () => {
             body={reading && reading !== 'busy' ? reading : 'Connect your broker and read your holdings, or import your trades and funds from files.'}
             action={
               <span className="flex flex-wrap justify-center gap-2">
-                <Link to="/settings/brokers" className="inline-flex items-center justify-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Connect your broker</Link>
+                <Link to="/settings/brokers" className="inline-flex items-center justify-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold">Connect your broker</Link>
                 <Button variant="secondary" onClick={readNow} disabled={reading === 'busy'}>{reading === 'busy' ? 'Reading…' : 'Read holdings now'}</Button>
                 <Button variant="secondary" onClick={() => setImporting(true)}>Import files</Button>
               </span>
@@ -209,7 +209,7 @@ const HoldingsTab = () => {
       </Card>
       {importing && (
         <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setImporting(false)}>
-          <div role="dialog" aria-label="Import trades or funds" className="bg-[var(--bg)] w-full sm:max-w-xl max-h-[90vh] overflow-y-auto p-3 sm:p-4 rounded-t-[16px] sm:rounded-[16px]" onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-label="Import trades or funds" className="bg-[var(--bg)] w-full sm:max-w-xl max-h-[90vh] overflow-y-auto p-3 sm:p-4 rounded-t-[20px] sm:rounded-[20px]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-end">
               <button type="button" onClick={() => setImporting(false)} aria-label="Close" className="min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--text-muted)]">
                 <X className="w-5 h-5" />
@@ -225,7 +225,7 @@ const HoldingsTab = () => {
           <div
             role="dialog"
             aria-label="Plan new money"
-            className="bg-[var(--bg)] w-full sm:max-w-3xl max-h-[90vh] overflow-y-auto p-3 sm:p-4 rounded-t-[16px] sm:rounded-[16px]"
+            className="bg-[var(--bg)] w-full sm:max-w-3xl max-h-[90vh] overflow-y-auto p-3 sm:p-4 rounded-t-[20px] sm:rounded-[20px]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-end">

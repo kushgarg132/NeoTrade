@@ -205,7 +205,7 @@
 @utility sheet {
   background-color: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 20px;
 }
 
 /* The label voice: condensed, tracked, upper — an official form's field name. */
@@ -216,8 +216,7 @@
   color: var(--text-muted);
 }
 
-/* Document furniture: note numbers, timestamps, seals. The typewriter carrier,
-   used only where a real note is machine-stamped. */
+/* Small muted meta text (timestamps, notes). */
 @utility doc-meta {
   font-size: 12px;
   color: var(--text-muted);

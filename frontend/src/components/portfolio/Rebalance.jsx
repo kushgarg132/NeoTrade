@@ -257,7 +257,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
           )}
 
           {error && (
-            <p role="alert" className="text-sm text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2">
+            <p role="alert" className="text-sm text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-soft)] px-3 py-2">
               {error}
             </p>
           )}
@@ -268,7 +268,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
       {shown && (
         <Sheet title="Trades" meta={`${trades.length} · cash left ${formatCurrency(shown.cash_left)}`}>
           {shown.uninvested_pct > 0.5 && (
-            <p role="status" className="mb-2 text-sm border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2">
+            <p role="status" className="mb-2 text-sm border border-[var(--loss)] bg-[var(--loss-soft)] px-3 py-2">
               Your caps leave {formatPercent(shown.uninvested_pct)} of the book uninvested: there are not enough
               stocks or sectors to fill them. Raise the caps or use Equal weight to stay invested.
             </p>
@@ -281,7 +281,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
                   {[['formula', 'Formula'], ['ai', 'AI final list']].map(([id, label]) => (
                     <button key={id} type="button" role="radio" aria-checked={view === id} disabled={running}
                       onClick={() => { setView(id); setArmed(false); setRun(null); }}
-                      className={cn('min-h-11 text-sm font-semibold', view === id ? 'bg-[var(--accent)] text-[var(--surface)]' : 'text-[var(--text-muted)]')}>
+                      className={cn('min-h-11 text-sm font-semibold', view === id ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'text-[var(--text-muted)]')}>
                       {label}
                     </button>
                   ))}
@@ -326,7 +326,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
                 </details>
               )}
               {onTrade && !run && (armed ? (
-                <div role="alert" className="mb-3 border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2 space-y-2">
+                <div role="alert" className="mb-3 border border-[var(--loss)] bg-[var(--loss-soft)] px-3 py-2 space-y-2">
                   <p className="text-sm">
                     Check the portfolio above. Places {trades.length} real order{trades.length > 1 ? 's' : ''} on your broker: sells first, then buys, each a
                     limit order at the plan price. Stops at the first order that fails.
