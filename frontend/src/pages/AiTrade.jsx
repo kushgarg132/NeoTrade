@@ -92,7 +92,7 @@ const AiTrade = () => {
 
         <Card title="Chart">
           {closes.length >= 2 ? (
-            <TradingChart closes={closes} trades={markers} thesis={{ stop: c.stop, target: c.target }} symbol={t.symbol} />
+            <TradingChart closes={closes} trades={markers} thesis={{ stop: c.stop, target: c.target }} symbol={t.symbol} initialRange="1Y" />
           ) : quick.loading ? <Skeleton rows={5} /> : <Empty title="No price data" body={`Price history for ${t.symbol} appears here.`} />}
         </Card>
 

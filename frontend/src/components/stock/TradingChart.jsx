@@ -41,10 +41,11 @@ const NewsMark = ({ cx, cy, m, onPick }) => {
 
 /**
  * Price chart with range chips. `closes`: [{date:'YYYY-MM-DD', close}] daily series; `trades` your fills;
- * `thesis` draws target / stop lines. 1D swaps in the latest session's 5-minute candles.
+ * `thesis` draws target / stop lines. 1D swaps in the latest session's 5-minute candles. `initialRange`
+ * defaults to today (1D); a trade page passes a longer one so its fills are on screen.
  */
-const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR' }) => {
-  const [range, setRange] = useState('1Y');
+const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initialRange = '1D' }) => {
+  const [range, setRange] = useState(initialRange);
   const [loaded, setLoaded] = useState(null); // keyed by symbol so another stock's candles never show
   const isDay = range === '1D';
   const intraday = loaded?.symbol === symbol ? loaded.rows : null;
