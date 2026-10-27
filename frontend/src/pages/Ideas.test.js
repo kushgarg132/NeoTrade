@@ -65,3 +65,21 @@ test('Ideas splits into Picks (default) and Holdings sub-tabs', () => {
   assert.match(page, /tab === 'picks' && <Card title="New ideas"/);
   assert.match(page, /tab === 'holdings' && \(acts\.loading/);
 });
+
+test('picks are grouped Engine, A, B, then C behind the toggle', () => {
+  const group = page.slice(page.indexOf('const group ='), page.indexOf('return ('));
+  assert.match(page, /groupByGrade/);
+  assert.doesNotMatch(page, /splitByEvidence/);
+  assert.match(page, /Engine ideas/);
+  assert.match(page, /GRADES\.A\.label/);
+  assert.match(page, /GRADES\.B\.label/);
+  assert.match(page, /aria-expanded=\{showUnproven\}/);
+  assert.match(page, /grade C: no edge yet/);
+  // groups render only when non-empty; the toggle and the "No proven setup" line need picks
+  assert.match(page, /rows\.length > 0 &&/);
+  assert.match(page, /C\.length > 0 &&/);
+  assert.match(page, /engine\.length === 0 && A\.length === 0 && B\.length === 0 && C\.length > 0/);
+  // toggle state lives in Ideas, not in a group, so it survives fresh.reload
+  assert.ok(page.indexOf('useState(false)') < page.indexOf('const group ='));
+  assert.doesNotMatch(group, /useState/);
+});

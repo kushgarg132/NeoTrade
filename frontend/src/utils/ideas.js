@@ -69,10 +69,12 @@ export const GRADES = {
   C: { label: 'C · Unproven', kind: 'unproven' },
 };
 
-/** Proven ideas first: engine suggestions and grade A/B picks; grade C picks (no edge so far) are kept apart. */
-export const splitByEvidence = (items) => ({
-  proven: items.filter((i) => i.kind !== 'p' || i.grade === 'A' || i.grade === 'B'),
-  unproven: items.filter((i) => i.kind === 'p' && i.grade !== 'A' && i.grade !== 'B'),
+/** Engine ideas, then picks by grade; a pick with no or an unknown grade counts as C (no edge so far). */
+export const groupByGrade = (items) => ({
+  engine: items.filter((i) => i.kind !== 'p'),
+  A: items.filter((i) => i.kind === 'p' && i.grade === 'A'),
+  B: items.filter((i) => i.kind === 'p' && i.grade === 'B'),
+  C: items.filter((i) => i.kind === 'p' && i.grade !== 'A' && i.grade !== 'B'),
 });
 
 /** Copy for the New ideas card when nothing is served. */
