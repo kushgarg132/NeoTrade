@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: a088448
+verified_at: b7ecbc1
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -144,7 +144,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 `pages/WeeklyReport.jsx`: `?week=YYYY-Www` (missing = server's last completed week; `utils/weekly.js::shiftWeek`, `::weekRange`). `GET /reports/weekly?week=` -> `week`, `you{ret,nifty,excess}`, `ai{ret,strategies[],vs_nifty}` (strategies, vs_nifty and `grades[]` are Telegram-only, not rendered), `best[]`, `worst[]`, `ideas{taken,skipped}{n,mean_excess}`, `journal{trades,net,charges}`, `news{movers[{symbol,move_pct,vs_nifty,items[]}],themes[{theme,n,impact,direction}],accuracy{company,sector}{hit_pct,n}|null}` (card "News on your holdings", `WeeklyReport.jsx::NewsWeek`, hidden for reports without `news`) (the same dict Telegram sends Sunday 18:00, `backend/reports/weekly.py`); the AI paragraph is `AiSummary` over `GET /summaries/weekly?week=` ("Written on Sunday evening" when empty).
 
 ### 13. AI strategy (`/ai/strategy/:name`)
-`pages/AiStrategy.jsx`: from a Scoreboard strategy row. Four independent `useStored` reads: `GET /analytics/scorecard?venue=paper` (`utils/aiDetail.js::strategyRow`), `GET /today` (`autopilot.paused`), `GET /trading/trades?strategy=&venue=paper&limit=200`, `GET /trading/backtests/{name}` (404 = "No backtest recorded"); status badge Proven/Unproven/Parked/Paused from `aiDetail::strategyStatus` + `useForward`. Backtest card shows `passed`, `run_at`, `total_trades`, `win_rate`, `profit_factor`, `total_pnl`, `max_drawdown` (fraction of account, shown as %), `sharpe_ratio`. Each trade row opens `/ai/trade/:id`.
+`pages/AiStrategy.jsx`: from a Scoreboard strategy row. Four independent `useStored` reads: `GET /analytics/scorecard?venue=paper` (`utils/aiDetail.js::strategyRow`), `GET /today` (`autopilot.paused`), `GET /trading/trades?strategy=&venue=paper&limit=200`, `GET /trading/backtests/{name}` (404 = "No backtest recorded"); status badge Proven/Unproven/Parked/Paused from `aiDetail::strategyStatus` + `useForward`. Backtest card shows `passed`, `run_at`, `total_trades`, `win_rate`, `profit_factor`, `total_pnl`, `max_drawdown` (fraction of account, shown as %), `sharpe_ratio`. Each trade row opens `/ai/trade/:id`. Admins on a `picks:*` page also get a Setup study card (fifth read, `GET /picks`: `grades[setup]` and `setups[].adjusted.t`); non-admins never call it.
 
 ### 14. AI trade (`/ai/trade/:id`)
 `pages/AiTrade.jsx`: `GET /trading/trades/{id}` (404 incl. another user's id = "Not found"); cards Result (`aiDetail::tradeSummary`), Chart (`TradingChart` via `useStockAnalysis`), Why it traded (reason codes); links to the strategy and the stock.
