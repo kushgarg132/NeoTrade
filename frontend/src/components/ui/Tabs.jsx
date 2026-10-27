@@ -14,12 +14,12 @@ const Tabs = ({ tabs, value, onChange, label = 'Tabs', wrap = false }) => (
           aria-selected={on}
           onClick={() => onChange(t.id)}
           className={`${wrap ? 'basis-[22%]' : 'shrink-0'} flex-1 min-h-11 px-3 rounded-[8px] text-[14px] font-medium whitespace-nowrap inline-flex items-center justify-center gap-1.5 transition-colors ${
-            on ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'
+            on ? 'bg-[var(--surface)] text-[var(--text)] fade-in' : 'text-[var(--text-muted)]'
           }`}
         >
           {t.label}
           {t.badge > 0 && (
-            <span className="min-w-5 px-1 rounded-full bg-[var(--accent)] text-[var(--surface)] text-[12px] leading-5 text-center tabular-nums">
+            <span className="min-w-5 px-1 rounded-full bg-[var(--accent)] text-[var(--accent-ink)] text-[12px] leading-5 text-center tabular-nums">
               {t.badge}
             </span>
           )}

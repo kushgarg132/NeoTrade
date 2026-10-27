@@ -7,7 +7,7 @@ import { ChevronRight } from 'lucide-react';
  * `to` makes the whole card one link; a card that holds links takes `more` ({ to, label }) instead, never both.
  */
 const Card = ({ title, action, to, more, children, className = '' }) => {
-  const cls = `rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-4 ${className}`;
+  const cls = `rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 ${className}`;
   const right = to ? <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" /> : action;
   const head = (title || right || more) && (
     <div className="flex items-center justify-between gap-3 mb-3 min-h-6">
@@ -22,7 +22,7 @@ const Card = ({ title, action, to, more, children, className = '' }) => {
   );
   if (to) {
     return (
-      <Link to={to} className={`block ${cls} transition-transform hover:bg-[var(--surface-2)] active:scale-[0.98] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>
+      <Link to={to} className={`block ${cls} tap hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>
         {head}
         {children}
       </Link>

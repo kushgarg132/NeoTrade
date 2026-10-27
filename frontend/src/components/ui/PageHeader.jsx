@@ -15,7 +15,7 @@ const PageHeader = ({ title, back, backLabel, right }) => {
       ) : (
         <button type="button" onClick={() => navigate(-1)} aria-label={aria} className={backCls}>{inner}</button>
       ))}
-      <h1 className="flex-1 min-w-0 truncate text-[22px] leading-7 font-bold text-[var(--text)]">{title}</h1>
+      <h1 className="flex-1 min-w-0 truncate text-[22px] leading-7 font-bold tracking-[-0.02em] text-[var(--text)]">{title}</h1>
       {right}
     </div>
   );

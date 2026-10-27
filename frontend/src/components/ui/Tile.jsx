@@ -20,8 +20,8 @@ const Tile = ({ title, value, sub, tone = 'neutral', subTone = 'neutral', meta, 
       {meta && <div className={`mt-0.5 text-[12px] truncate ${meta.stale ? 'text-[var(--warn)]' : 'text-[var(--text-muted)]'}`}>{meta.text}</div>}
     </>
   );
-  const cls = 'block min-h-[88px] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-3.5';
-  return to ? <Link to={to} className={`${cls} transition-transform hover:bg-[var(--surface-2)] active:scale-[0.98] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{body}</Link> : <div className={cls}>{body}</div>;
+  const cls = 'block min-h-[88px] rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-3.5';
+  return to ? <Link to={to} className={`${cls} tap hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{body}</Link> : <div className={cls}>{body}</div>;
 };
 
 export default Tile;

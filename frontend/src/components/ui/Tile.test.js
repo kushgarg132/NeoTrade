@@ -8,7 +8,7 @@ const src = readFileSync(new URL('./Tile.jsx', import.meta.url), 'utf8');
 
 test('a Tile with `to` has a chevron, pressed and focus states', () => {
   assert.match(src, /\{to && <ChevronRight/);
-  assert.match(src, /active:scale-/);
+  assert.match(src, /tap/);
   assert.match(src, /focus-visible:ring/);
 });
 
