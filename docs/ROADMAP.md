@@ -1056,6 +1056,9 @@ engine, the news pipeline and the game plan have each stopped without any alert.
   rupees held in NIFTY over each trade's own days.
 - Still open from Q2: fewer, larger positions (₹8k: 69 bps a round trip vs 81 at ₹5k). Audit T5 is
   smaller than stated: delivery brokerage at ₹5k models ~₹3.5, not ₹15.
+- Engine and news proposals need no `levels_exit`-style test: the backtest the gate reads already exits
+  each intent at its own stop/target/max hold (`engine/runner.py::_level_hit`), the same levels the
+  autopilot sells at live. News proposals are those strategies' intents (`scan_universe(source="news")`).
 
 **Not in this phase:** see the audit's "Do not build" list. In short: no new strategies, no
 RL/ML paths, no new AI call sites, no beta while W1 is open, and no F&O work.
