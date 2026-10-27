@@ -22,7 +22,7 @@ test('holdings with no rows also offers both actions', () => {
 
 test('stale holdings show a warning badge above the figure', () => {
   const stale = page.indexOf('holdingsStale(');
-  assert.ok(stale > 0 && stale < page.indexOf('figure-lg'));
+  assert.ok(stale > 0 && stale < page.indexOf('Total P&L'));
   assert.match(page, /Badge kind="unproven"/);
 });
 
@@ -66,4 +66,20 @@ test('holdings rows never truncate the ticker or the verdict', () => {
   assert.match(holdings, /minmax\(0,1\.5fr\)/);
   assert.match(holdings, /\{h\.verdict && <VerdictPill v=\{h\.verdict\} \/>\}/);
   assert.doesNotMatch(holdings, /VerdictPill[^\n]*truncate/);
+});
+
+test('headline is a Hero with a today chip, no Today Stat', () => {
+  assert.match(page, /import Hero from/);
+  assert.match(page, /import DeltaChip from/);
+  assert.match(page, /<Hero[^>]*label="Your broker account"/);
+  assert.match(page, /suffix="today"/);
+  assert.doesNotMatch(page, /label="Today"/);
+  assert.match(page, /Yearly \(XIRR\)/);
+  assert.match(page, /grid grid-cols-2 gap-3 mt-3/);
+  assert.match(page, /<span className="private">\{inr\(h\.value - h\.pnl\)\}/);
+});
+
+test('Connect link text sits on the accent fill via --accent-ink', () => {
+  assert.match(page, /text-\[var\(--accent-ink\)\]/);
+  assert.doesNotMatch(page, /text-\[var\(--surface\)\]/);
 });

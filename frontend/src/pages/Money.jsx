@@ -3,6 +3,8 @@ import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import Tabs, { useTabParam } from '../components/ui/Tabs';
+import Hero from '../components/ui/Hero';
+import DeltaChip from '../components/ui/DeltaChip';
 import Stat from '../components/ui/Stat';
 import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
@@ -48,47 +50,41 @@ const Money = () => {
     <Layout>
       <PageHeader title="Money" />
       <div className="space-y-4">
-        <Card>
-          {error ? (
-            <ErrorLine message={error} onRetry={load} />
-          ) : !overview ? (
-            <Skeleton rows={3} />
-          ) : !h ? (
-            <Empty
-              title="Nothing here yet"
-              body="Connect your broker and your holdings and trades come in on their own, or import your trades and mutual funds from files."
-              action={
-                <span className="flex flex-wrap justify-center gap-2">
-                  <Link to="/settings/brokers" className="inline-flex items-center justify-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Connect your broker</Link>
-                  <Button variant="secondary" onClick={() => setTab('holdings')}>Import files</Button>
-                </span>
-              }
-            />
-          ) : (
-            <>
-              <div className="flex items-center justify-between gap-2 text-[13px] text-[var(--text-muted)]">
-                <span>Your broker account</span>
-                {holdingsStale(h.holdings_as_of) && <Badge kind="unproven">Stale · {formatDateTime(h.holdings_as_of)}</Badge>}
-              </div>
-              <div className="private figure-lg text-[32px] leading-10 font-bold tabular-nums text-[var(--text)]">{inr(h.value)}</div>
-              <div className="grid grid-cols-3 gap-3 mt-3">
-                <Stat
-                  label="Today"
-                  value={inr(h.day_change, { sign: true })}
-                  delta={pct(h.day_change_pct / 100, { sign: true })}
-                  tone={tone(h.day_change)}
-                />
-                <Stat label="Total P&L" value={inr(h.pnl, { sign: true })} delta={pct(h.pnl_pct / 100, { sign: true })} tone={tone(h.pnl)} />
-                <Stat label="Yearly (XIRR)" value={formatXirr(h.xirr)} delta={`NIFTY ${formatXirr(h.nifty_xirr)}`} />
-              </div>
-              <p className="text-[13px] text-[var(--text-muted)] mt-3">
-                {holdingsStale(h.holdings_as_of)
-                  ? 'Broker logged out: these figures are not live.'
-                  : <>Put in <span className="private">{inr(h.value - h.pnl)}</span>. NIFTY: the same rupees put in on the same days.</>}
-              </p>
-            </>
-          )}
-        </Card>
+        {h ? (
+          <Hero label="Your broker account" value={h.value} change={<DeltaChip value={h.day_change} pct={h.day_change_pct} suffix="today" />}>
+            {holdingsStale(h.holdings_as_of) && (
+              <div className="mt-3"><Badge kind="unproven">Stale · {formatDateTime(h.holdings_as_of)}</Badge></div>
+            )}
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <Stat label="Total P&L" value={inr(h.pnl, { sign: true })} delta={pct(h.pnl_pct / 100, { sign: true })} tone={tone(h.pnl)} />
+              <Stat label="Yearly (XIRR)" value={formatXirr(h.xirr)} delta={`NIFTY ${formatXirr(h.nifty_xirr)}`} />
+            </div>
+            <p className="text-[13px] text-[var(--text-muted)] mt-3">
+              {holdingsStale(h.holdings_as_of)
+                ? 'Broker logged out: these figures are not live.'
+                : <>Put in <span className="private">{inr(h.value - h.pnl)}</span>. NIFTY: the same rupees put in on the same days.</>}
+            </p>
+          </Hero>
+        ) : (
+          <Card>
+            {error ? (
+              <ErrorLine message={error} onRetry={load} />
+            ) : !overview ? (
+              <Skeleton rows={3} />
+            ) : (
+              <Empty
+                title="Nothing here yet"
+                body="Connect your broker and your holdings and trades come in on their own, or import your trades and mutual funds from files."
+                action={
+                  <span className="flex flex-wrap justify-center gap-2">
+                    <Link to="/settings/brokers" className="inline-flex items-center justify-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold">Connect your broker</Link>
+                    <Button variant="secondary" onClick={() => setTab('holdings')}>Import files</Button>
+                  </span>
+                }
+              />
+            )}
+          </Card>
+        )}
 
         <Tabs tabs={TABS} value={tab} onChange={setTab} label="Money sections" />
 
