@@ -93,13 +93,32 @@ def _extremes(closed: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 async def _ai(db, user_id: str, capital: float, start, end) -> dict:
+    """The AI book's week, whole and per strategy (trades closed this week, net of costs; worst first)."""
     from backend.autopilot.service import ai_book_query
 
-    pnl = 0.0
+    pnl, by = 0.0, {}
     async for t in db["paper_trades"].find(ai_book_query(user_id)):
         if t.get("status") == "CLOSED" and _in(t.get("exit_at"), start, end):
-            pnl += (t.get("realized_pnl") or 0.0) - (t.get("costs") or 0.0)
-    return {"ret": pnl / capital if capital else None}
+            net = (t.get("realized_pnl") or 0.0) - (t.get("costs") or 0.0)
+            pnl += net
+            by.setdefault(t.get("strategy") or "unattributed", []).append(net)
+    strategies = sorted(({"strategy": k, "n": len(v), "net": round(sum(v), 2), "wins": sum(x > 0 for x in v)}
+                         for k, v in by.items()), key=lambda r: r["net"])
+    return {"ret": pnl / capital if capital else None, "strategies": strategies}
+
+
+async def _grades(db, start, end) -> list[dict]:
+    """Forward picks that matured this week, per grade (the setup's grade now, `picks.setup_grades`):
+    count, mean excess over NIFTY, share that beat it. Backfilled picks are not forward picks."""
+    from backend.forecast import picks
+
+    grades = picks.setup_grades(await db[picks.STUDY].find_one({"_id": "latest"}))
+    by: dict[str, list[dict]] = {}
+    async for p in db[picks.PICKS].find({"scored_at": {"$gte": start, "$lt": end}, "backfilled": {"$ne": True}}):
+        if p.get("outcome"):
+            by.setdefault(grades.get(p["setup"], "C"), []).append(p["outcome"])
+    return [{"grade": g, "n": len(os), "mean_excess": sum(o["net"] - o["nifty"] for o in os) / len(os),
+             "beat": sum(o["beat_nifty"] for o in os) / len(os)} for g, os in sorted(by.items())]
 
 
 async def _ideas(db, user_id: str, start, end) -> dict:
@@ -122,6 +141,7 @@ async def _ideas(db, user_id: str, start, end) -> dict:
 
 async def build(db, user_id: str, week: str) -> dict:
     from backend.prefs import PrefsStore
+    from backend.suggestions.notify import is_admin
 
     start, end = _bounds(parse_week(week))
     prefs = await PrefsStore(db).get(user_id)
@@ -137,7 +157,7 @@ async def build(db, user_id: str, week: str) -> dict:
     return {"week": week, "you": await _returns(db, user_id, start.date()),
             "ai": await _ai(db, user_id, prefs.get("account_size") or 0, start, end),
             "best": best, "worst": worst, "ideas": await _ideas(db, user_id, start, end), "journal": journal,
-            "news": news}
+            "news": news, "grades": await _grades(db, start, end) if await is_admin(db, user_id) else []}
 
 
 # ------------------------------------------------------------------ Telegram
@@ -156,6 +176,12 @@ def text(r: dict, narrative: Optional[str] = None) -> str:
     lines = [f"<b>Your week {escape(r['week'])}</b>",
              f"You {_p(you['ret'])} · NIFTY {_p(you['nifty'])} · excess {_p(you['excess'])}",
              f"AI book {_p(ai['ret'])}"]
+    if ai.get("strategies"):
+        lines.append("AI by strategy: " + ", ".join(
+            f"{escape(x['strategy'])} {_r(x['net'])} ({x['wins']}/{x['n']} won)" for x in ai["strategies"]))
+    if r.get("grades"):  # admins only: Picks are not shown to anyone else
+        lines.append("Picks matured: " + ", ".join(
+            f"{g['grade']} {g['n']} ({_p(g['mean_excess'])} vs NIFTY, {g['beat']:.0%} beat)" for g in r["grades"]))
     for label, rows in (("Best", r["best"]), ("Worst", r["worst"])):
         if rows:
             lines.append(f"{label}: " + ", ".join(f"{escape(x['symbol'])} {_r(x['pnl'])}" for x in rows))

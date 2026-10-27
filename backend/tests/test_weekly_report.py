@@ -76,6 +76,33 @@ async def test_every_number(db):
     assert j["trades"] == 2 and j["charges"] > 0 and j["net"] == pytest.approx(100 - j["charges"], abs=0.01)
 
 
+async def test_scorecard_per_strategy_and_grade(db):
+    await db["paper_trades"].insert_many([
+        {"user_id": "u", "venue": "paper", "status": "CLOSED", "exit_at": at(15), "realized_pnl": -300.0, "costs": 20.0,
+         "strategy": "breakout"},
+        {"user_id": "u", "venue": "paper", "status": "CLOSED", "exit_at": at(16), "realized_pnl": 50.0, "costs": 10.0,
+         "strategy": "breakout"},
+    ])
+    await db["picks_study"].insert_one({"_id": "latest", "setups": [
+        {"setup": "momentum", "adjusted": {"edge": True, "excess": 0.02, "t": 3.0}}]})
+    out = {"net": 0.05, "nifty": 0.01, "beat_nifty": True}
+    await db["picks"].insert_many([
+        {"_id": "p1", "setup": "momentum", "scored_at": at(14), "outcome": out},
+        {"_id": "p2", "setup": "pullback", "scored_at": at(15), "outcome": {**out, "net": -0.02, "beat_nifty": False}},
+        {"_id": "p3", "setup": "momentum", "scored_at": at(15), "outcome": out, "backfilled": True},  # not forward
+        {"_id": "p4", "setup": "momentum", "scored_at": at(5), "outcome": out},                       # other week
+    ])
+    r = await weekly.build(db, "u", WEEK)
+    assert r["grades"] == []                                   # Picks are admin-only
+    assert r["ai"]["strategies"][0] == {"strategy": "breakout", "n": 2, "net": -280.0, "wins": 1}
+    await db["users"].insert_one({"id": "u", "role": "admin"})
+    r = await weekly.build(db, "u", WEEK)
+    assert [(g["grade"], g["n"]) for g in r["grades"]] == [("A", 1), ("C", 1)]
+    assert r["grades"][0]["mean_excess"] == pytest.approx(0.04) and r["grades"][1]["beat"] == 0
+    t = weekly.text(r)
+    assert "breakout -₹280 (1/2 won)" in t and "A 1 (+4.00% vs NIFTY, 100% beat)" in t
+
+
 async def test_empty_week_has_none_not_zero(db):
     r = await weekly.build(db, "u", "2026-W30")
     assert r["you"]["ret"] is None and r["ai"]["ret"] == 0 and r["journal"]["trades"] == 0
