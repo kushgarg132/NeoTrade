@@ -27,7 +27,7 @@ const Positions = ({ state }) => {
   const rows = Object.values(state.data || {}).filter((p) => p.quantity);
   const total = rows.reduce((sum, p) => sum + (p.unrealized_pnl || 0), 0);
   if (rows.length === 0) return <Empty title="Nothing open" body="Positions the AI holds appear here once it places a trade."
-    action={<Link to="/settings/autopilot" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">Check autopilot in Settings</Link>} />;
+    action={<Link to="/settings/autopilot" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold">Check autopilot in Settings</Link>} />;
   return (
     <Card title={<span className="inline-flex items-center gap-2">{rows.length} open <Badge kind="paper">Paper</Badge></span>} action={<span className={`private text-[15px] font-semibold tabular-nums ${total < 0 ? 'text-[var(--loss)]' : 'text-[var(--gain)]'}`}>{inr(total, { sign: true })}</span>}>
       {rows.map((p) => (

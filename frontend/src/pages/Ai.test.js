@@ -47,3 +47,21 @@ test('book header says when the Lab is off and which strategies are paused', () 
   assert.match(page, /ap\.lab === false[\s\S]*Lab off/);
   assert.match(page, /ap\?\.paused[\s\S]*Paused on paper/);
 });
+
+test('book header is the Hero with a today chip; null-safe percent', () => {
+  assert.match(page, /import Hero from/);
+  assert.match(page, /import DeltaChip from/);
+  assert.match(page, /<Hero label="AI book"/);
+  assert.match(page, /typeof dayPct === 'number' \? dayPct \* 100 : undefined/);
+  assert.match(page, /suffix="today"/);
+  assert.doesNotMatch(page, /rounded-\[16px\]/);
+  assert.match(page, /<Card><Skeleton rows=\{2\} \/><\/Card>/);
+  for (const s of ['Autopilot on', 'cap deployed', 'Lab off', 'Paused on paper', '<StopAi', '/settings/autopilot']) assert.ok(page.includes(s), s);
+});
+
+test('accent buttons use accent-ink, not surface', () => {
+  for (const src of [board, pos, act]) {
+    assert.doesNotMatch(src, /bg-\[var\(--accent\)\][^"]*text-\[var\(--surface\)\]/);
+    assert.match(src, /text-\[var\(--accent-ink\)\]/);
+  }
+});

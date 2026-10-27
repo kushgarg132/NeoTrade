@@ -15,7 +15,7 @@ import { scoreboard } from '../../utils/ai';
 import { strategyPath } from '../../utils/routes';
 
 const Paper = () => <Badge kind="paper">Paper</Badge>;
-const settingsLink = (label) => <Link to="/settings/autopilot" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--surface)] text-[15px] font-semibold">{label}</Link>;
+const settingsLink = (label) => <Link to="/settings/autopilot" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold">{label}</Link>;
 const Section = ({ state, children, what, ...p }) => {
   if (state.error) return <ErrorLine message={`Couldn't load the AI's ${what}.`} onRetry={state.retry} />;
   if (!state.loaded) return <Skeleton rows={p.rows || 3} />;

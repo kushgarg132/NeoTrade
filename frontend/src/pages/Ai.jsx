@@ -5,6 +5,9 @@ import PageHeader from '../components/ui/PageHeader';
 import Tabs, { useTabParam } from '../components/ui/Tabs';
 import Badge from '../components/ui/Badge';
 import ErrorLine from '../components/ui/ErrorLine';
+import Card from '../components/ui/Card';
+import Hero from '../components/ui/Hero';
+import DeltaChip from '../components/ui/DeltaChip';
 import Skeleton from '../components/ui/Skeleton';
 import Scoreboard from '../components/ai/Scoreboard';
 import Positions from '../components/ai/Positions';
@@ -13,9 +16,8 @@ import StopAi from '../components/ai/StopAi';
 import { useForward } from '../components/ForwardBadge';
 import api, { endpoints } from '../utils/api';
 import { useRefetchOn, useReconnect, useTopic } from '../hooks/useStream';
-import { inr, pct, tone } from '../components/ui/format';
+import { inr } from '../components/ui/format';
 import { aiBook } from '../utils/ai';
-import { toneText } from '../components/ui/tone';
 
 const IDS = ['scoreboard', 'positions', 'activity'];
 const TABS = [{ id: 'scoreboard', label: 'Scoreboard' }, { id: 'positions', label: 'Positions' }, { id: 'activity', label: 'Activity' }];
@@ -65,26 +67,21 @@ const Ai = () => {
   return (
     <Layout>
       <PageHeader title="AI" />
-      <div className="mb-3 rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-4">
-        {!today.loaded || !pnl.loaded ? <Skeleton rows={2} /> : (
-          <>
-            <div className="flex items-center gap-2 text-[13px] text-[var(--text-muted)]">
-              <span>AI book</span>
+      <div className="mb-3">
+        {!today.loaded || !pnl.loaded ? <Card><Skeleton rows={2} /></Card> : (
+          <Hero label="AI book" value={value} change={<DeltaChip value={day} pct={typeof dayPct === 'number' ? dayPct * 100 : undefined} suffix="today" />}>
+            <div className="mt-3 flex items-center gap-2">
               <Badge kind={ap?.live ? 'live' : 'paper'}>{ap?.live ? 'Live' : 'Paper'}</Badge>
               {ap && <Badge kind={on ? 'proven' : 'neutral'}>{on ? 'Autopilot on' : 'Autopilot off'}</Badge>}
             </div>
-            <div className="private figure-md text-[28px] leading-8 font-bold tabular-nums text-[var(--text)]">{inr(value)}</div>
-            <div className={`private tabular-nums text-[17px] font-semibold ${toneText(tone(day))}`}>
-              Today {inr(day, { sign: true })} ({pct(dayPct, { sign: true })})
-            </div>
-            <div className="mt-1 text-[13px] text-[var(--text-muted)]">
+            <div className="mt-2 text-[13px] text-[var(--text-muted)]">
               {ap ? (ap.exposure_cap ? <span className="private">{inr(ap.deployed)} of {inr(ap.exposure_cap)} cap deployed</span> : 'No exposure cap set') : <ErrorLine message="Couldn't load the autopilot status." onRetry={today.retry} />}
             </div>
             {ap && ap.lab === false && <div className="mt-1 text-[13px] text-[var(--text-muted)]">Lab off: no intraday auto-run, news-triggered entries or game plan.</div>}
             {ap?.paused?.length > 0 && <div className="mt-1 text-[13px] text-[var(--text-muted)]">Paused on paper (losing over 30+ trades): {ap.paused.join(', ')}</div>}
             {on && <div className="mt-3"><StopAi onStopped={() => { setStopped(true); today.reload(); }} /></div>}
             {ap && !on && <Link to="/settings/autopilot" className="mt-2 inline-flex items-center min-h-11 text-[15px] font-semibold text-[var(--accent)]">Turn the autopilot on in Settings</Link>}
-          </>
+          </Hero>
         )}
       </div>
       <div className="mb-3"><Tabs tabs={TABS} value={tab} onChange={setTab} label="AI sections" /></div>
