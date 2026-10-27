@@ -39,7 +39,7 @@ const SortControl = ({ value, onChange }) => (
       {SORTS.map((s) => (
         <button key={s.id} type="button" aria-pressed={s.id === value} onClick={() => onChange(s.id)}
           className={`flex-1 min-h-11 rounded-[8px] px-3 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
-            s.id === value ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
+            s.id === value ? 'bg-[var(--surface)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
           {s.label}
         </button>
       ))}

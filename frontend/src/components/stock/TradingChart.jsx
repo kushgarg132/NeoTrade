@@ -115,7 +115,7 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
             onClick={() => setRange(k)}
             aria-pressed={range === k}
             className={`min-h-11 flex-1 rounded-[12px] text-[14px] font-medium ${
-              range === k ? 'bg-[var(--accent)] text-[var(--surface)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'
+              range === k ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'
             }`}
           >
             {k}
@@ -171,7 +171,7 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
       {!isDay && allNews.length > 0 && (
         <button type="button" aria-pressed={showNews} onClick={() => setShowNews((v) => !v)}
           className={`mt-2 min-h-11 rounded-[12px] px-3 text-[14px] font-medium inline-flex items-center gap-2 ${
-            showNews ? 'bg-[var(--accent)] text-[var(--surface)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'
+            showNews ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'
           }`}>
           News
           <span className="tabular-nums text-[12px]">{allNews.length} {allNews.length === 1 ? 'day' : 'days'}</span>

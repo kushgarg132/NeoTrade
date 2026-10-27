@@ -232,7 +232,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
               locked={busy}
               options={[
                 { id: 'BUY', label: 'Buy', selectedClass: 'bg-[var(--gain)] text-white' },
-                { id: 'SELL', label: 'Sell', selectedClass: 'bg-[var(--loss)] text-[var(--surface)]' },
+                { id: 'SELL', label: 'Sell', selectedClass: 'bg-[var(--loss)] text-[var(--accent-ink)]' },
               ]}
             />
             {hasMine === false && (
@@ -304,7 +304,7 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
               </p>
             )}
             {error && (
-              <p role="alert" className="text-sm text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2">
+              <p role="alert" className="text-sm text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-soft)] px-3 py-2">
                 {error}
               </p>
             )}
@@ -342,8 +342,8 @@ export const TicketButton = ({ label, tone = 'gain', onClick }) => (
     className={cn(
       'min-h-11 sm:min-h-0 px-2 py-1 text-xs font-semibold border transition-colors',
       tone === 'gain'
-        ? 'border-[var(--gain)] text-[var(--gain)] hover:bg-[var(--gain-wash)]'
-        : 'border-[var(--loss)] text-[var(--loss)] hover:bg-[var(--loss-wash)]'
+        ? 'border-[var(--gain)] text-[var(--gain)] hover:bg-[var(--gain-soft)]'
+        : 'border-[var(--loss)] text-[var(--loss)] hover:bg-[var(--loss-soft)]'
     )}
   >
     {label}

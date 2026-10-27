@@ -93,7 +93,7 @@ const News = () => {
       <div role="group" aria-label="News scope" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-3 pt-1">
         {SCOPES.map((s) => (
           <button key={s.id} type="button" aria-pressed={scope === s.id} onClick={() => pickScope(s.id)}
-                  className={`shrink-0 min-h-11 px-3.5 rounded-full text-[14px] font-medium border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] active:opacity-70 ${scope === s.id ? 'bg-[var(--accent)] text-[var(--surface)] border-[var(--accent)]' : 'bg-[var(--surface)] text-[var(--text)] border-[var(--border)]'}`}>
+                  className={`shrink-0 min-h-11 px-3.5 rounded-full text-[14px] font-medium border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] active:opacity-70 ${scope === s.id ? 'bg-[var(--accent)] text-[var(--accent-ink)] border-[var(--accent)]' : 'bg-[var(--surface)] text-[var(--text)] border-[var(--border)]'}`}>
             {s.label}
           </button>
         ))}

@@ -108,7 +108,7 @@ const TradingControlBar = ({
       {startError && (
         <p
           role="alert"
-          className="text-sm text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-wash)] px-3 py-2"
+          className="text-sm text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-soft)] px-3 py-2"
         >
           {startError}
         </p>
