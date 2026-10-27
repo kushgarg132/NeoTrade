@@ -15,11 +15,14 @@ import { toneText } from '../ui/tone';
 import { stockPath } from '../../utils/stocks';
 import { bareSymbol } from '../../utils/formatters';
 import SmartSearch from '../dashboard/SmartSearch';
+import NewsChip from '../common/NewsChip';
+import useSymbolNews from '../../hooks/useSymbolNews';
 
 const Watchlist = () => {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(false);
   const [ticket, setTicket] = useState(null);
+  const { news } = useSymbolNews((rows || []).map((r) => r.symbol));
   const navigate = useNavigate();
 
   const [tick, setTick] = useState(0);
@@ -67,6 +70,7 @@ const Watchlist = () => {
             <button type="button" onClick={() => navigate(stockPath(s.symbol))} className="min-w-0 flex-1 min-h-11 text-left active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
               <div className="text-[15px] font-medium text-[var(--text)] truncate">{bareSymbol(s.symbol)}</div>
               <div className="text-[13px] text-[var(--text-muted)] truncate">{s.error ? 'Quote unavailable' : s.name}</div>
+              <NewsChip entry={news[s.symbol?.toUpperCase().replace(/\.NS$/, '')]} link={false} />
             </button>
             <div className="text-right shrink-0">
               <div className="text-[15px] tabular-nums text-[var(--text)]">{inr(s.current_price)}</div>

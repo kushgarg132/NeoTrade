@@ -14,5 +14,6 @@ test('News uses impact words and the material-today group, not n/10', () => {
 
 test('Watchlist Empty renders the SmartSearch', () => {
   assert.match(watch, /<Empty[^\n]*<SmartSearch/);
-  assert.doesNotMatch(watch, /NewsChip/);
+  assert.match(watch, /useSymbolNews/);
+  assert.match(watch, /<NewsChip/);
 });
