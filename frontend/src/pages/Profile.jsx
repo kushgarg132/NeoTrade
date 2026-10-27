@@ -227,7 +227,7 @@ const Profile = () => {
     return (
       <Layout>
         <div className="max-w-3xl">
-          <PageHeader title="Profile" back="/settings/profile" />
+          <PageHeader title="Profile" back="/settings" />
           <Card>{error ? <ErrorLine message={error} onRetry={() => { setError(null); setTick((t) => t + 1); }} /> : <Skeleton rows={4} />}</Card>
         </div>
       </Layout>
@@ -239,7 +239,7 @@ const Profile = () => {
   return (
     <Layout>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
-        <PageHeader title="Profile" back="/settings/profile" />
+        <PageHeader title="Profile" back="/settings" />
         <Sheet title="Account" meta={account.role === 'admin' ? 'Admin' : undefined}>
           <div className="flex items-center gap-4">
             <Avatar src={account.picture} name={name} size={64} />

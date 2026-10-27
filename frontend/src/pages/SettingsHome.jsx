@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import ListRow from '../components/ui/ListRow';
+import { Avatar } from '../components/common/Avatar';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/useTheme';
 import api, { endpoints, getPreferences } from '../utils/api';
@@ -45,10 +47,12 @@ const SettingsHome = () => {
   // A failed read leaves its state undefined, which every state helper shows as "–".
   const [prefs, setPrefs] = useState(undefined);
   const [telegram, setTelegram] = useState(undefined);
+  const [displayName, setDisplayName] = useState(null);
   useEffect(() => {
     let live = true;
     getPreferences().then((res) => live && setPrefs(res.data)).catch(() => {});
     api.get(endpoints.guardrails.status).then((res) => live && setTelegram(res.data.telegram)).catch(() => {});
+    api.get(endpoints.profile.get).then((res) => live && setDisplayName(res.data.profile.display_name || null)).catch(() => {});
     return () => { live = false; };
   }, []);
 
@@ -59,8 +63,16 @@ const SettingsHome = () => {
     <Layout>
       <PageHeader title="Settings" />
       <div className="space-y-4">
+        {/* Straight to /profile: one tap, with your photo. */}
+        <Link to="/profile" className="flex items-center gap-3 min-h-14 rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-3 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+          <Avatar src={user?.picture} name={displayName || user?.name} size={48} />
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-semibold text-[var(--text)] truncate">{displayName || user?.name || 'Your profile'}</span>
+            <span className="block text-[13px] text-[var(--text-muted)] truncate">Profile, AI instructions and memory</span>
+          </span>
+          <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+        </Link>
         <Group title="Account">
-          <Row title="Profile" state={user?.name || '–'} to="/settings/profile" />
           <Row title="Brokers" state={brokersState(prefs)} to="/settings/brokers" />
         </Group>
         <Group title="Safety">

@@ -20,8 +20,8 @@ test('admin rows sit behind isAdmin', () => {
   assert.ok(!home.slice(0, i).includes('title="Autopilot"'));
 });
 
-test('App has the nine settings routes, RequireAdmin on autopilot and lab', () => {
-  for (const p of ['profile', 'brokers', 'guardrails', 'portfolio', 'notifications', 'goal', 'ai', 'autopilot', 'lab']) {
+test('App has the eight settings routes, RequireAdmin on autopilot and lab', () => {
+  for (const p of ['brokers', 'guardrails', 'portfolio', 'notifications', 'goal', 'ai', 'autopilot', 'lab']) {
     assert.match(app, new RegExp(`path="/settings/${p}"`), p);
   }
   for (const p of ['autopilot', 'lab']) assert.match(app, new RegExp(`path="/settings/${p}" element=\\{gated\\(<RequireAdmin>`));
@@ -53,4 +53,10 @@ test('news alerts live only in Notifications', () => {
 
 test('Telegram state comes from GET /guardrails (only DELETE exists on /guardrails/telegram)', () => {
   assert.match(home, /api\.get\(endpoints\.guardrails\.status\)[^\n]*res\.data\.telegram/);
+});
+
+test('profile card: photo, one tap to /profile', () => {
+  assert.match(home, /<Link to="\/profile"/);
+  assert.match(home, /<Avatar src=\{user\?\.picture\}/);
+  assert.doesNotMatch(app, /path="\/settings\/profile"/);
 });

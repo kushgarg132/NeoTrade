@@ -10,7 +10,6 @@ const NewsAccuracy = lazy(() => import('./pages/NewsAccuracy'));
 const Profile = lazy(() => import('./pages/Profile'));
 const SettingsHome = lazy(() => import('./pages/SettingsHome'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-const SProfile = lazy(() => import('./components/settings/Profile'));
 const SAccounts = lazy(() => import('./components/settings/Accounts'));
 const SGuardrails = lazy(() => import('./components/journal/GuardrailsSheet'));
 const SPortfolio = lazy(() => import('./components/settings/PortfolioReview'));
@@ -148,7 +147,6 @@ const App = () => {
       <Route path="/news/:id" element={gated(<NewsItem />)} />
       <Route path="/reports/weekly" element={gated(<WeeklyReport />)} />
       <Route path="/settings" element={gated(<SettingsHome />)} />
-      <Route path="/settings/profile" element={gated(<SettingsPage title="Profile"><SProfile /></SettingsPage>)} />
       <Route path="/settings/brokers" element={gated(<SettingsPage title="Brokers"><SAccounts /></SettingsPage>)} />
       <Route path="/settings/guardrails" element={gated(<SettingsPage title="Guardrails"><SGuardrails /></SettingsPage>)} />
       <Route path="/settings/portfolio" element={gated(<SettingsPage title="Portfolio review"><SPortfolio isAdmin={user?.role === 'admin'} /></SettingsPage>)} />

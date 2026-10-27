@@ -4,7 +4,7 @@ export const LAB_PAGES = ['strategies', 'options', 'runs', 'forward', 'news', 'h
 export const ROUTES = [
   '/', '/money', '/ideas', '/ideas/history', '/ideas/:id', '/ai', '/market', '/stock/:symbol',
   '/ai/strategy/:name', '/ai/trade/:id', '/money/trade/:id', '/market/index/:ticker', '/market/sector/:name', '/news/:id',
-  '/settings', '/settings/profile', '/settings/brokers', '/settings/guardrails', '/settings/portfolio', '/settings/notifications', '/settings/goal', '/settings/ai', '/settings/autopilot', '/settings/lab', ...LAB_PAGES.map((p) => `/settings/lab/${p}`), '/reports/weekly', '/login', '/profile',
+  '/settings', '/settings/brokers', '/settings/guardrails', '/settings/portfolio', '/settings/notifications', '/settings/goal', '/settings/ai', '/settings/autopilot', '/settings/lab', ...LAB_PAGES.map((p) => `/settings/lab/${p}`), '/reports/weekly', '/login', '/profile',
 ];
 
 /** The Lab is admin only (RequireAdmin in App.jsx). */
@@ -19,7 +19,7 @@ export const MOVED = [
   ['/portfolio/import', '/money?tab=holdings'], ['/portfolio/news', '/market?tab=news'],
   ['/portfolio/watchlist', '/market?tab=watchlist'], ['/journal', '/money?tab=journal'], ['/picks', '/ideas'],
   ['/ai/book', '/ai?tab=positions'], ['/ai/activity', '/ai?tab=activity'],
-  ['/lab', LAB], ['/lab/limits', LIMITS],
+  ['/lab', LAB], ['/lab/limits', LIMITS], ['/settings/profile', '/profile'],
   ...['options', 'runs', 'forward', 'handbook', 'backlog'].map((p) => [`/lab/${p}`, `/settings/lab/${p}`]),
   ['/mine', '/money'], ['/mine/holdings', '/money?tab=holdings'], ['/mine/tax', '/money?tab=tax'],
   ['/mine/journal', '/money?tab=journal'], ['/mine/trades', '/money?tab=journal'],
