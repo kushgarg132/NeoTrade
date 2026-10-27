@@ -32,7 +32,7 @@ const GoalTile = () => {
   const { goal } = state;
   if (!goal) {
     return (
-      <Link to="/settings/goal" className="flex items-center gap-3 min-h-11 rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-4 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+      <Link to="/settings/goal" className="flex items-center gap-3 min-h-11 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 tap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
         <Target className="w-5 h-5 text-[var(--accent)]" aria-hidden="true" />
         <span className="text-[15px] font-semibold text-[var(--text)]">Set a goal</span>
         <span className="flex-1 text-[13px] text-[var(--text-muted)]">Home will track it</span>
