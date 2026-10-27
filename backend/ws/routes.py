@@ -116,8 +116,8 @@ async def _pump(websocket: WebSocket, connection) -> None:
 
 
 # Per-user budgets on what costs money (LLM calls) or compute: (limit, window
-# seconds, reply topic prefix).
-_BUDGETS = {"analyze": (10, 60, "analysis"), "quick_analyze": (60, 60, "quick_analysis"), "chat": (20, 60, "chat")}
+# seconds, reply topic prefix). "analyze" is checked inside _stream_analysis, only when a run is needed.
+_BUDGETS = {"quick_analyze": (60, 60, "quick_analysis"), "chat": (20, 60, "chat")}
 
 
 async def _handle(websocket: WebSocket, connection, message: dict) -> None:
@@ -179,7 +179,23 @@ async def _stream_analysis(connection, symbol: str, req_id: str) -> None:
     from backend.prefs import PrefsStore
     from backend.research.graph import ResearchAgent
 
-    connection.offer(_frame(topic, "started", {"symbol": symbol}))
+    from backend.ai import analyst
+
+    symbol = symbol.strip().upper()
+    last = await analyst.latest(symbol)
+    connection.offer(_frame(topic, "cached", last or {"read": None, "at": None, "stale": True}))
+    if last and not last["stale"]:
+        connection.offer(_frame(topic, "done", {}))
+        return
+    if not await allow(db.redis, f"analyze:{connection.user_id}", 10, 60):
+        connection.offer(_frame(topic, "error", {"detail": "Too many requests in a minute; wait a moment and try again."}))
+        return
+
+    def sink(event: dict) -> None:
+        connection.offer(_frame(topic, event["type"], {k: v for k, v in event.items() if k != "type"}))
+
+    # Set here, not in _handle: a ContextVar is copied when the task is created.
+    token = analyst.report_sink.set(sink)
     try:
         prefs = await PrefsStore(db.db).get(connection.user_id)
         with use_model(prefs.get("omniroute_model"), user_id=connection.user_id):
@@ -191,6 +207,8 @@ async def _stream_analysis(connection, symbol: str, req_id: str) -> None:
         logger.warning("analysis of %s failed: %s", symbol, exc)
         # Internals stay in the log; the reader gets a sentence.
         connection.offer(_frame(topic, "error", {"detail": "The analysis failed; try again in a minute."}))
+    finally:
+        analyst.report_sink.reset(token)
 
 
 async def _stream_quick_analysis(connection, symbol: str, req_id: str) -> None:

@@ -76,11 +76,17 @@ def test_review_is_latest_with_text_and_scoped_to_user(client, app):
     assert client.get("/api/v1/mine/review/latest").status_code == 404
 
 
-def test_note_returns_cache_only(client, monkeypatch):
-    assert client.get("/api/v1/research/TCS/note").status_code == 404
-    note = {"summary": "TCS steady.", "thesis": "Margins hold.", "news_articles": []}
-    monkeypatch.setattr(database.db, "redis", Redis({"analyst:TCS": json.dumps(note)}, ttl=3600))
+def test_note_returns_read_at_stale_and_the_old_fields(client, monkeypatch):
+    read = {"summary": "TCS steady.", "thesis": "Margins hold.", "at": NOW.isoformat()}
+    monkeypatch.setattr(database.db, "redis", Redis({"analyst:last:TCS": json.dumps(read), "analyst:TCS": "x"}))
     body = client.get("/api/v1/research/tcs/note").json()
-    assert body["summary"] == "TCS steady." and body["thesis"] == "Margins hold." and body["as_of"]
-    monkeypatch.setattr(database.db, "redis", Redis({"analyst:TCS": json.dumps({"summary": "Unable to generate summary."})}))
+    assert body["summary"] == "TCS steady." and body["thesis"] == "Margins hold."
+    assert body["as_of"] == body["at"] == NOW.isoformat()
+    assert body["read"]["summary"] == "TCS steady." and body["stale"] is False
+
+
+def test_note_is_404_without_a_last_read(client, monkeypatch):
+    assert client.get("/api/v1/research/TCS/note").status_code == 404
+    unusable = json.dumps({"summary": "Unable to generate summary.", "at": NOW.isoformat()})
+    monkeypatch.setattr(database.db, "redis", Redis({"analyst:last:TCS": unusable}))
     assert client.get("/api/v1/research/TCS/note").status_code == 404

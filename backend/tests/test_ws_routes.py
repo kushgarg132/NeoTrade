@@ -163,8 +163,9 @@ def test_analysis_streams_back_on_its_own_topic(client, monkeypatch):
         socket.receive_json()
         socket.send_json({"action": "analyze", "symbol": "RELIANCE", "req_id": "r1"})
 
-        started = socket.receive_json()
-        assert started == {**started, "topic": "analysis:r1", "event": "started"}
+        cached = socket.receive_json()
+        assert cached == {**cached, "topic": "analysis:r1", "event": "cached"}
+        assert cached["data"] == {"read": None, "at": None, "stale": True}
         report = socket.receive_json()
         assert report["event"] == "report"
         assert report["data"]["thesis"] == "Fine business."
@@ -239,7 +240,7 @@ def test_an_analysis_failure_is_reported_on_the_topic(client, monkeypatch):
     ) as socket:
         socket.receive_json()
         socket.send_json({"action": "analyze", "symbol": "RELIANCE", "req_id": "r2"})
-        socket.receive_json()  # started
+        socket.receive_json()  # cached
 
         failure = socket.receive_json()
         assert failure["event"] == "error"
@@ -270,7 +271,7 @@ def test_analysis_uses_the_users_saved_model_preference(client, monkeypatch):
     ) as socket:
         socket.receive_json()
         socket.send_json({"action": "analyze", "symbol": "RELIANCE", "req_id": "r3"})
-        socket.receive_json()  # started
+        socket.receive_json()  # cached
         socket.receive_json()  # report
 
     assert seen_model["model"] == "user/preferred"
@@ -343,7 +344,90 @@ def test_analysis_past_the_daily_llm_ceiling_says_so(client, monkeypatch):
     ) as socket:
         socket.receive_json()
         socket.send_json({"action": "analyze", "symbol": "RELIANCE", "req_id": "r9"})
-        socket.receive_json()  # started
+        socket.receive_json()  # cached
         failure = socket.receive_json()
         assert failure["event"] == "error" and failure["data"]["detail"] == llm.LIMIT_MESSAGE
     assert seen["user"]
+
+
+def _analyze(client, req_id="r1"):
+    with client.websocket_connect("/api/v1/ws?token=good-token", headers={"origin": ALLOWED_ORIGIN}) as socket:
+        socket.receive_json()
+        socket.send_json({"action": "analyze", "symbol": "sbin", "req_id": req_id})
+        frames = [socket.receive_json()]
+        while frames[-1]["event"] not in ("done", "report", "error"):
+            frames.append(socket.receive_json())
+    return frames
+
+
+def _latest(monkeypatch, stale):
+    async def fake(symbol, now=None):
+        assert symbol == "SBIN"
+        return {"read": {"summary": "s"}, "at": "2026-10-27T05:00:00+00:00", "stale": stale}
+
+    monkeypatch.setattr("backend.ai.analyst.latest", fake)
+
+
+def test_a_fresh_read_sends_cached_then_done_and_no_run(client, monkeypatch):
+    _latest(monkeypatch, False)
+    ran = []
+
+    class _Agent:
+        async def run(self, symbol):
+            ran.append(symbol)
+
+    monkeypatch.setattr("backend.research.graph.ResearchAgent", lambda: _Agent())
+    frames = _analyze(client)
+    assert [f["event"] for f in frames] == ["cached", "done"]
+    assert frames[0]["data"]["stale"] is False and ran == []
+
+
+def test_a_stale_read_streams_stage_delta_then_report(client, monkeypatch):
+    from backend.ai import analyst
+
+    _latest(monkeypatch, True)
+
+    class _Report:
+        def model_dump(self):
+            return {"symbol": "SBIN"}
+
+    class _Agent:
+        async def run(self, symbol):
+            analyst.report_sink.get()({"type": "stage", "step": "writing"})
+            analyst.report_sink.get()({"type": "delta", "text": "Hi"})
+            return _Report()
+
+    monkeypatch.setattr("backend.research.graph.ResearchAgent", lambda: _Agent())
+    frames = _analyze(client)
+    assert [f["event"] for f in frames] == ["cached", "stage", "delta", "report"]
+    assert frames[1]["data"] == {"step": "writing"} and frames[2]["data"] == {"text": "Hi"}
+
+
+def test_a_fresh_open_does_not_touch_the_budget(client, monkeypatch):
+    _latest(monkeypatch, False)
+    calls = []
+
+    async def spy(*a, **k):
+        calls.append(a)
+        return True
+
+    monkeypatch.setattr(ws_routes, "allow", spy)
+    _analyze(client)
+    assert calls == []
+
+
+def test_over_budget_after_cached_sends_error_and_keeps_no_run(client, monkeypatch):
+    _latest(monkeypatch, True)
+    ran = []
+
+    class _Agent:
+        async def run(self, symbol):
+            ran.append(symbol)
+
+    async def no(*a, **k):
+        return False
+
+    monkeypatch.setattr("backend.research.graph.ResearchAgent", lambda: _Agent())
+    monkeypatch.setattr(ws_routes, "allow", no)
+    frames = _analyze(client)
+    assert [f["event"] for f in frames] == ["cached", "error"] and ran == []

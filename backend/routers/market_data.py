@@ -230,26 +230,17 @@ async def get_market_brief():
 
 @router.get("/research/{symbol}/note")
 async def get_cached_note(symbol: str):
-    """The analyst note already cached for this stock (4h), as {summary, thesis, as_of}. Never calls the
+    """The last analyst read for this stock, as {summary, thesis, as_of, read, at, stale}. Never calls the
     model: 404 when nothing is cached."""
-    from datetime import datetime, timedelta, timezone
+    from backend.ai.analyst import latest
 
-    from backend.ai.analyst import CACHE_TTL_SECONDS, AnalystAgent
-    from backend.database import db
-
-    symbol = symbol.strip().upper()
-    note = await AnalystAgent()._cached(symbol)
-    summary = ((note or {}).get("summary") or "").strip()
+    last = await latest(symbol.strip().upper())
+    read = (last or {}).get("read") or {}
+    summary = (read.get("summary") or "").strip()
     if not summary or summary == "Unable to generate summary.":
         raise HTTPException(status_code=404, detail="No cached note")
-    as_of = None
-    try:  # the note carries no timestamp: its age is the 4h cache minus what is left
-        left = await db.redis.ttl(f"analyst:{symbol}")
-        if left and left > 0:
-            as_of = (datetime.now(timezone.utc) - timedelta(seconds=CACHE_TTL_SECONDS - left)).isoformat()
-    except Exception:
-        pass
-    return {"summary": summary, "thesis": note.get("thesis") or "", "as_of": as_of}
+    return {"summary": summary, "thesis": read.get("thesis") or "", "as_of": last["at"],
+            "read": read, "at": last["at"], "stale": last["stale"]}
 
 
 @router.get("/market/index/{ticker}/analysis")
