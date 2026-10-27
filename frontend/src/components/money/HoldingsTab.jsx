@@ -72,7 +72,7 @@ const Cell = ({ top, sub, topCls = 'text-[var(--text)]', subCls = 'text-[var(--t
 );
 
 // symbol+qty | LTP, today % | P&L rupees, % | weight, value
-const COLS = 'grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.8fr)] gap-x-2 items-center';
+const COLS = 'grid grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)] gap-x-2 items-center';
 
 const Head = () => (
   <div className={`${COLS} text-[12px] text-[var(--text-muted)] pb-1 border-b border-[var(--border)]`} aria-hidden="true">
