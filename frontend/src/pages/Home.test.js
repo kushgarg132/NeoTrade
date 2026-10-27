@@ -10,7 +10,7 @@ test('hero row: value, today in rupees and percent, versus NIFTY, all private mo
   assert.match(page, /<HeroRow/);
   assert.match(hero, /day_change/);
   assert.match(hero, /NIFTY/);
-  assert.match(hero, /private[^\n]*figure-md|figure-md[^\n]*private/);
+  assert.match(readFileSync(new URL('../components/ui/Hero.jsx', import.meta.url), 'utf8'), /private[^\n]*figure-md|figure-md[^\n]*private/);
   assert.match(hero, /your account/i);
 });
 

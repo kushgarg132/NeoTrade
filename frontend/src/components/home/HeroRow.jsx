@@ -1,9 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
 import Empty from '../ui/Empty';
 import ErrorLine from '../ui/ErrorLine';
-import { inr, pct, tone } from '../ui/format';
+import Hero from '../ui/Hero';
+import DeltaChip from '../ui/DeltaChip';
+import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
 
 /**
@@ -25,24 +26,16 @@ const HeroRow = ({ headline, nifty, phase, meta, failed, onRetry }) => {
   const gap = typeof mine === 'number' && idx !== null ? mine - idx : null;
   const sgnPts = (g) => `${g < 0 ? '-' : '+'}${Math.abs(g).toFixed(2)} pts`;
   return (
-    <Link to="/money" className="block rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-4 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-      <div className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--text-muted)]">
-        <span className="flex-1">Your account</span>
-        <ChevronRight className="w-4 h-4 shrink-0" aria-hidden="true" />
-      </div>
-      <div className="private figure-md mt-1 text-[32px] leading-9 font-bold tabular-nums text-[var(--text)]">{inr(headline.value)}</div>
-      <div className={`private mt-1 text-[17px] font-semibold tabular-nums ${toneText(tone(headline.day_change))}`}>
-        {day} {inr(headline.day_change, { sign: true })}
-        {typeof mine === 'number' && ` (${pct(mine / 100, { sign: true })})`}
-      </div>
+    <Hero to="/money" label="Your account" value={headline.value}
+          change={<DeltaChip value={headline.day_change} pct={mine} suffix={day.toLowerCase()} />}>
       {idx !== null && (
-        <div className="mt-0.5 text-[14px] tabular-nums text-[var(--text-muted)]">
+        <div className="mt-3 text-[14px] tabular-nums text-[var(--text-muted)]">
           NIFTY {pct(idx / 100, { sign: true })}
           {gap !== null && <> · you <span className={`font-semibold ${toneText(tone(gap))}`}>{sgnPts(gap)}</span></>}
         </div>
       )}
       {meta && <div className={`mt-0.5 text-[12px] ${meta.stale ? 'text-[var(--warn)]' : 'text-[var(--text-muted)]'}`}>{meta.text}</div>}
-    </Link>
+    </Hero>
   );
 };
 
