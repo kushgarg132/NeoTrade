@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: c8e4399
+verified_at: a088448
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -298,6 +298,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | DELETE /imports | `::delete_imported` | user | `{transactions,trades}`: erases the CAS funds, their transactions and this user's `source=console_csv` fills, then re-reads holdings (DPDP) |
 | POST /journal/import/zerodha-console | `::import_console_csv` | user | `{imported,duplicates,skipped}` |
 | POST /journal/import/upstox-history | `::import_upstox` | user | `{imported,fetched,skipped_synced_days}`; 409 if not logged in, 502 if Upstox fails |
+| GET /journal/round-trips/{id} | `::get_round_trip` | user (404 if not the caller's) | the `round_trips[]` row plus `fills[{side,quantity,price,traded_at}]`, `insights[]` (findings whose `trip_ids` include it; `insights.py::_finding` now emits `trip_ids`) |
 | PUT /journal/round-trips/{id}/note | `::set_round_trip_note` | user (owner prefix) | `{note,tags}` |
 | GET /journal/learning | `::get_learning` | user | `backend/learning/report.py::snapshot` |
 | GET /journal/beta-metrics | `routers/journal.py::get_beta_metrics` | admin | `beta.py::beta_metrics` keys |

@@ -167,6 +167,27 @@ async def import_upstox(
         raise HTTPException(status_code=502, detail=f"Upstox did not return the trade history: {exc}")
 
 
+@router.get("/round-trips/{trip_id}")
+async def get_round_trip(
+    trip_id: str,
+    user: User = Depends(get_current_user), store: JournalStore = Depends(get_journal_store),
+):
+    # Built only from this user's trades, so another user's id is simply absent.
+    trades = await store.list_trades(user.id)
+    trips = build_round_trips(trades)
+    notes = await store.notes_for(user.id)
+    for trip in trips:
+        trip.update(notes.get(trip["id"], {"note": "", "tags": []}))
+    trips = await attach_news(db.db, trips)
+    trip = next((t for t in trips if t["id"] == trip_id), None)
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Round trip not found")
+    ids = set(trip["trade_ids"])
+    fills = [{k: t[k] for k in ("side", "quantity", "price", "traded_at")} for t in trades if t["_id"] in ids]
+    insights = [i for i in build_insights(trips) if trip_id in i["trip_ids"]]
+    return {**trip, "fills": fills, "insights": insights}
+
+
 @router.put("/round-trips/{round_trip_id}/note")
 async def set_round_trip_note(
     round_trip_id: str, body: NoteRequest,

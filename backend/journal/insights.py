@@ -59,7 +59,7 @@ def _finding(kind: str, title: str, group: list[dict], closed: list[dict], note:
     rest = [t for t in closed if t["id"] not in ids]
     baseline = _stats(rest)
     return {
-        "kind": kind, "title": title, "note": note, **_stats(group),
+        "kind": kind, "title": title, "note": note, **_stats(group), "trip_ids": sorted(ids),
         "baseline_win_rate": baseline["win_rate"], "baseline_avg_pnl": baseline["avg_pnl"],
     }
 
