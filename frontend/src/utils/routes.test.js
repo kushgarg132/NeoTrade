@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ROUTES, ADMIN_ROUTES, MOVED, withSearch, movedTarget } from './routes.js';
+import { ROUTES, ADMIN_ROUTES, MOVED, withSearch, movedTarget, strategyPath, aiTradePath, roundTripPath, indexPath, sectorPath, newsPath } from './routes.js';
+import { MAIN_TABS, tabActive } from '../components/layout/tabs.js';
 import { stockPath } from './stocks.js';
 
 test('every redirect lands on a real route in one hop', () => {
@@ -57,4 +58,21 @@ test('a broker login redirect anywhere in the app is sent to Accounts with its c
     '/settings?tab=accounts&request_token=t&action=login&status=success');
   assert.equal(brokerReturnTarget('/settings', '?tab=accounts&code=abc'), null); // already there
   assert.equal(brokerReturnTarget('/money', '?tab=holdings'), null);
+});
+
+test('detail builders encode every segment and match a real route', () => {
+  assert.equal(strategyPath('picks:pullback'), '/ai/strategy/picks%3Apullback');
+  assert.equal(aiTradePath('a/b'), '/ai/trade/a%2Fb');
+  assert.equal(newsPath('n 1'), '/news/n%201');
+  assert.equal(indexPath('^NSEI'), '/market/index/%5ENSEI');
+  assert.equal(sectorPath('Oil & Gas'), '/market/sector/Oil%20%26%20Gas');
+  assert.equal(roundTripPath('u1:kite:123'), '/money/trade/u1%3Akite%3A123');
+  for (const p of ['/ai/strategy/:name', '/ai/trade/:id', '/money/trade/:id', '/market/index/:ticker', '/market/sector/:name', '/news/:id'])
+    assert.ok(ROUTES.includes(p), p);
+});
+
+test('the Market tab stays lit on a news item', () => {
+  const market = MAIN_TABS.find((t) => t.path === '/market');
+  assert.ok(tabActive(market, '/news/abc'));
+  assert.ok(!tabActive(MAIN_TABS[0], '/news/abc'));
 });

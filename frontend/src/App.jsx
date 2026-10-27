@@ -21,6 +21,12 @@ const Ai = lazy(TAB_PAGES[3]);
 const Market = lazy(TAB_PAGES[4]);
 const Stock = lazy(() => import('./pages/Stock'));
 const WeeklyReport = lazy(() => import('./pages/WeeklyReport'));
+const AiStrategy = lazy(() => import('./pages/AiStrategy'));
+const AiTrade = lazy(() => import('./pages/AiTrade'));
+const RoundTrip = lazy(() => import('./pages/RoundTrip'));
+const IndexPage = lazy(() => import('./pages/IndexPage'));
+const SectorPage = lazy(() => import('./pages/SectorPage'));
+const NewsItem = lazy(() => import('./pages/NewsItem'));
 import Login from './pages/Login';
 import RequireAuth from './components/RequireAuth';
 import Layout from './components/Layout';
@@ -123,6 +129,12 @@ const App = () => {
       <Route path="/ai" element={gated(<Ai />)} />
       <Route path="/market" element={gated(<Market />)} />
       <Route path="/stock/:symbol" element={gated(<Stock />)} />
+      <Route path="/ai/strategy/:name" element={gated(<AiStrategy />)} />
+      <Route path="/ai/trade/:id" element={gated(<AiTrade />)} />
+      <Route path="/money/trade/:id" element={gated(<RoundTrip />)} />
+      <Route path="/market/index/:ticker" element={gated(<IndexPage />)} />
+      <Route path="/market/sector/:name" element={gated(<SectorPage />)} />
+      <Route path="/news/:id" element={gated(<NewsItem />)} />
       <Route path="/reports/weekly" element={gated(<WeeklyReport />)} />
       <Route path="/settings" element={gated(<SettingsHome />)} />
       <Route path="/profile" element={gated(<Profile />)} />

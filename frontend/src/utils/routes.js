@@ -3,6 +3,7 @@ export const LAB_PAGES = ['strategies', 'options', 'runs', 'forward', 'news', 'h
 
 export const ROUTES = [
   '/', '/money', '/ideas', '/ideas/history', '/ideas/:id', '/ai', '/market', '/stock/:symbol',
+  '/ai/strategy/:name', '/ai/trade/:id', '/money/trade/:id', '/market/index/:ticker', '/market/sector/:name', '/news/:id',
   '/settings', ...LAB_PAGES.map((p) => `/settings/lab/${p}`), '/reports/weekly', '/login', '/profile',
 ];
 
@@ -67,3 +68,12 @@ export const brokerReturnTarget = (pathname, search) => {
   params.delete('tab');
   return `/settings?tab=accounts&${params.toString()}`;
 };
+
+/** Detail-page paths. Every dynamic segment goes through encodeURIComponent here, never in a component. */
+const seg = encodeURIComponent;
+export const strategyPath = (name) => `/ai/strategy/${seg(name)}`;
+export const aiTradePath = (id) => `/ai/trade/${seg(id)}`;
+export const roundTripPath = (id) => `/money/trade/${seg(id)}`;
+export const indexPath = (ticker) => `/market/index/${seg(ticker)}`;
+export const sectorPath = (name) => `/market/sector/${seg(name)}`;
+export const newsPath = (id) => `/news/${seg(id)}`;

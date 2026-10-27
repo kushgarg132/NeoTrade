@@ -39,3 +39,15 @@ test('every endpoints.* reference resolves', () => {
   }
   assert.deepEqual(missing, []);
 });
+
+test('detail endpoints encode ids and trades() omits undefined filters', () => {
+  const e = loadEndpoints();
+  assert.equal(e.trades({ strategy: 'picks:pullback', venue: 'paper' }), '/trading/trades?strategy=picks%3Apullback&venue=paper');
+  assert.equal(e.trades({}), '/trading/trades');
+  assert.equal(e.trades({ limit: 5, status: undefined }), '/trading/trades?limit=5');
+  assert.equal(e.trade('a:b'), '/trading/trades/a%3Ab');
+  assert.equal(e.backtest('x y'), '/trading/backtests/x%20y');
+  assert.equal(e.roundTrip('u1:k'), '/journal/round-trips/u1%3Ak');
+  assert.equal(e.marketSector('Oil & Gas'), '/market/sector/Oil%20%26%20Gas');
+  assert.equal(e.newsItem('n/1'), '/news/item/n%2F1');
+});

@@ -167,6 +167,15 @@ export const endpoints = {
   globalIndices: '/market/global',
   marketIndex: (ticker) => `/market/index/${encodeURIComponent(ticker)}`,
   marketIndexAnalysis: (ticker) => `/market/index/${encodeURIComponent(ticker)}/analysis`,
+  trades: (f = {}) => {
+    const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v !== undefined && v !== null)).toString();
+    return q ? `/trading/trades?${q}` : '/trading/trades';
+  },
+  trade: (id) => `/trading/trades/${encodeURIComponent(id)}`,
+  backtest: (name) => `/trading/backtests/${encodeURIComponent(name)}`,
+  roundTrip: (id) => `/journal/round-trips/${encodeURIComponent(id)}`,
+  marketSector: (name) => `/market/sector/${encodeURIComponent(name)}`,
+  newsItem: (id) => `/news/item/${encodeURIComponent(id)}`,
   options: {
     expiries: (underlying) => `/options/expiries?underlying=${underlying}`,
     chain: (underlying, expiry) => `/options/chain?underlying=${underlying}&expiry=${expiry}`,

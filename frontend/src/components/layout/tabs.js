@@ -13,4 +13,4 @@ export const MAIN_TABS = [
 export const tabsFor = (isAdmin) => MAIN_TABS.filter((t) => isAdmin || t.path !== '/ideas');
 
 export const tabActive = (item, pathname) =>
-  item.path === '/' ? pathname === '/' : pathname === item.path || pathname.startsWith(`${item.path}/`);
+  item.path === '/' ? pathname === '/' : pathname === item.path || pathname.startsWith(`${item.path}/`) || (item.path === '/market' && pathname.startsWith('/news/'));
