@@ -9,6 +9,7 @@ means three round trips rather than however many executions they took.
 from datetime import datetime, timezone
 from typing import Optional
 
+from backend.autopilot.fence import PARKED
 from backend.core.models import Venue
 from backend.engine.persistence import LedgerStore, trade_net
 from backend.engine.session import IST
@@ -245,7 +246,7 @@ async def compute_scorecard(
         n = sum(index.values()) if name is None else index.get(name, 0.0)
         return {"nifty": round(n, 2), "vs_nifty": round(total - n, 2)}
 
-    rows = [{"strategy": name, **_summary(nets), **opens.get(name, zero),
+    rows = [{"strategy": name, "parked": name in PARKED, **_summary(nets), **opens.get(name, zero),
              "total": sum(nets) + opens.get(name, zero)["unrealized"]} for name, nets in by_strategy.items()]
     return {
         "venue": venue,

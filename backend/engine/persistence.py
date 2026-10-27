@@ -207,14 +207,22 @@ class LedgerStore:
     async def get_trades(
         self, status: Optional[str] = None, limit: int = 200,
         venue: Optional[Venue] = None, mode: Optional[str] = None,
+        strategy: Optional[str] = None,
     ) -> list[dict]:
         query: dict = {"user_id": self.user_id, **venue_filter(venue)}
+        if strategy is not None:
+            query["strategy"] = strategy
         if status is not None:
             query["status"] = status
         if mode is not None:
             query["mode"] = mode
         cursor = self.trades.find(query).sort("entry_at", -1).limit(limit)
         return [_clean_id(doc) for doc in await cursor.to_list(length=None)]
+
+    async def get_trade(self, trade_id: str) -> Optional[dict]:
+        # ponytail: paper_trades has no index; add (user_id, id) if trades pass ~50k
+        doc = await self.trades.find_one({"user_id": self.user_id, "id": trade_id})
+        return _clean_id(doc) if doc else None
 
     async def get_orders(self, symbol: Optional[str] = None) -> list[Order]:
         query: dict = {"user_id": self.user_id}

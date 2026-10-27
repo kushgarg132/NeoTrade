@@ -145,6 +145,45 @@ def test_get_positions_returns_open_positions(client, ledger):
     assert body["RELIANCE"]["quantity"] == 10.0
 
 
+def _seed_trades(ledger, *rows):
+    base = {"symbol": "SBIN", "status": "CLOSED", "entry_at": datetime(2026, 10, 1, tzinfo=timezone.utc),
+            "quantity": 1, "entry_price": 1, "venue": "paper"}
+    asyncio.run(ledger.trades.insert_many([{**base, **r} for r in rows]))
+
+
+def test_trades_filter_by_strategy(client, ledger):
+    _seed_trades(ledger,
+                 {"user_id": "u1", "id": "t1", "strategy": "picks:pullback"},
+                 {"user_id": "u1", "id": "t2", "strategy": "gap_and_go"})
+    resp = client.get("/api/v1/trading/trades", params={"strategy": "picks:pullback"})
+    assert [t["id"] for t in resp.json()] == ["t1"]
+
+
+def test_trade_by_id_returns_the_users_trade(client, ledger):
+    _seed_trades(ledger, {"user_id": "u1", "id": "t1", "strategy": "gap_and_go"})
+    resp = client.get("/api/v1/trading/trades/t1")
+    assert resp.status_code == 200
+    assert resp.json()["id"] == "t1"
+
+
+def test_trade_by_id_of_another_user_is_404(client, ledger):
+    _seed_trades(ledger, {"user_id": "u2", "id": "t9", "strategy": "gap_and_go"})
+    resp = client.get("/api/v1/trading/trades/t9")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Trade not found"
+
+
+def test_trade_by_unknown_id_is_404(client):
+    assert client.get("/api/v1/trading/trades/nope").status_code == 404
+
+
+def test_open_trade_by_id_has_no_exit(client, ledger):
+    _seed_trades(ledger, {"user_id": "u1", "id": "t3", "status": "OPEN", "strategy": "gap_and_go"})
+    resp = client.get("/api/v1/trading/trades/t3")
+    assert resp.status_code == 200
+    assert resp.json().get("exit_at") is None
+
+
 def test_ledger_routes_split_paper_from_live(client, ledger):
     """The Paper tab asks for venue=paper and the real-money statement for
     venue=live; neither may see the other's positions, fills or trades."""

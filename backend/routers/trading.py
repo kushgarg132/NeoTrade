@@ -584,12 +584,22 @@ async def get_trades(
     limit: int = Query(200, ge=1, le=1000),
     venue: Optional[Venue] = None,
     mode: Optional[Literal["INTRADAY", "LONGTERM"]] = None,
+    strategy: Optional[str] = None,
     ledger: LedgerStore = Depends(get_ledger_store),
 ):
     """Round trips, not executions: `status=OPEN` is what the Active tab
     shows, `CLOSED` the Completed one. `venue` picks the paper or live book;
-    omitted, both. `mode` narrows to the intraday or long-term engine."""
-    return await ledger.get_trades(status=status, limit=limit, venue=venue, mode=mode)
+    omitted, both. `mode` narrows to the intraday or long-term engine;
+    `strategy` to one strategy's trades."""
+    return await ledger.get_trades(status=status, limit=limit, venue=venue, mode=mode, strategy=strategy)
+
+
+@router.get("/trades/{trade_id}")
+async def get_trade(trade_id: str, ledger: LedgerStore = Depends(get_ledger_store)):
+    trade = await ledger.get_trade(trade_id)
+    if trade is None:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    return trade
 
 
 @router.get("/equity")

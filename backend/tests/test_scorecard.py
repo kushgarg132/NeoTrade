@@ -134,3 +134,11 @@ def test_nifty_same_money_holds_each_trades_rupees_in_the_index_over_its_own_day
     before = {"strategy": "x", "entry_at": at("2026-09-01"), "exit_at": at("2026-10-02"), "entry_price": 1.0, "quantity": 1}
     out = nifty_same_money([closed, still_open, before], points)
     assert out == {"picks:pullback": pytest.approx(40.0 + 1000 * (110 / 102 - 1))}  # no close before 09-01: left out
+
+
+@pytest.mark.asyncio
+async def test_parked_strategies_are_flagged(ledger):
+    await ledger.trades.insert_many([_trade(22, 100, 5, strategy="analyst_verdict"), _trade(22, 100, 5, strategy="gap_and_go")])
+    card = await compute_scorecard(ledger, "paper", account_size=100_000)
+    parked = {r["strategy"]: r["parked"] for r in card["strategies"]}
+    assert parked == {"analyst_verdict": True, "gap_and_go": False}
