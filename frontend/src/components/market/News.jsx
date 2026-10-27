@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { newsPath } from '../../utils/routes';
 import Card from '../ui/Card';
 import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
@@ -28,10 +30,10 @@ const Impact = ({ impact }) => {
 
 const Item = ({ item }) => (
   <li className="py-3 border-b border-[var(--border)] last:border-b-0">
-    <a href={item.url} target="_blank" rel="noreferrer" className="block text-[15px] font-medium text-[var(--text)]">
+    <Link to={newsPath(item.id)} className="block text-[15px] font-medium text-[var(--text)]">
       {item.material && <span className="mr-1.5 align-middle"><Badge kind="alert">Material</Badge></span>}
       {item.title}
-    </a>
+    </Link>
     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 items-baseline">
       <span className="text-[13px] text-[var(--text-muted)]">{[item.scope, item.source, formatTimeAgo(item.published_at)].filter(Boolean).join(' · ')}</span>
       {(item.impacts || []).slice().sort((a, b) => b.impact - a.impact).slice(0, 4)

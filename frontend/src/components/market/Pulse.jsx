@@ -14,7 +14,7 @@ import { toneText } from '../ui/tone';
 import { divergence, sectorRows } from '../../utils/market';
 import { formatDateTime } from '../../utils/formatters';
 import { stockPath } from '../../utils/stocks';
-import { X, ChevronRight } from 'lucide-react';
+import { indexPath, sectorPath } from '../../utils/routes';
 import { heatColor } from '../ui/chartTheme';
 import { AiCard, AiText, AiState } from '../ai/AiSummary';
 import useStored from '../../hooks/useStored';
@@ -43,8 +43,6 @@ const loadToday = () => api.get(endpoints.today).then((r) => r.data.backdrop || 
 const loadScan = () => api.get(endpoints.marketScan).then((r) => r.data);
 const loadSectors = () => api.get(endpoints.newsFeed, { params: { limit: 50, scope: 'SECTOR' } }).then((r) => sectorRows(r.data.items));
 
-const EXPLAINABLE = new Set(['^NSEI', '^NSEBANK', '^BSESN']); // the indices the explanation endpoint covers
-
 const Brief = () => {
   const { data, status, retry } = useStored(endpoints.marketBrief);
   const shown = REGIME[data?.regime];
@@ -62,37 +60,7 @@ const Brief = () => {
   );
 };
 
-/** Why an index moved: the existing explanation endpoint, called on tap. 503 means the model is off. */
-const IndexSheet = ({ index, onClose }) => {
-  const { data, status, code, retry } = useStored(endpoints.marketIndexAnalysis(index.symbol));
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={onClose}>
-      <div role="dialog" aria-label={`Why ${index.name} moved`} className="bg-[var(--bg)] w-full sm:max-w-xl max-h-[90vh] overflow-y-auto p-3 sm:p-4 rounded-t-[16px] sm:rounded-[16px]" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-end">
-          <button type="button" onClick={onClose} aria-label="Close" className="min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--text-muted)]"><X className="w-5 h-5" /></button>
-        </div>
-        <AiCard title={`Why ${index.name} moved`} asOf={data?.session?.date}>
-          {status === 'loading' && <Skeleton rows={4} />}
-          {status === 'error' && code === 503 && <ErrorLine message="Explanation unavailable right now" onRetry={retry} />}
-          {status === 'error' && code !== 503 && <ErrorLine message="Could not load the explanation." onRetry={retry} />}
-          {status === 'ok' && (
-            <>
-              <AiText text={data.analysis} />
-              {data.headlines?.length > 0 && (
-                <ul className="mt-3 list-disc pl-5 text-[13px] text-[var(--text-muted)]">
-                  {data.headlines.slice(0, 3).map((h) => <li key={h.title}>{h.title}</li>)}
-                </ul>
-              )}
-            </>
-          )}
-        </AiCard>
-      </div>
-    </div>
-  );
-};
-
 const Indices = () => {
-  const [open, setOpen] = useState(null);
   const [{ data, error }, retry] = useSection(loadIndices);
   return (
     <Card title="Indices">
@@ -104,10 +72,9 @@ const Indices = () => {
                    sub={Number.isFinite(i.change) ? `${i.change > 0 ? '+' : ''}${i.change.toFixed(2)} pts` : null}
                    right={<><span className="text-[var(--text)]">{Number(i.value).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>{'  '}{pct(i.percent / 100, { sign: true })}</>}
                    rightTone={tone(i.percent)}
-                   onClick={EXPLAINABLE.has(i.symbol) ? () => setOpen(i) : undefined} />
+                   to={indexPath(i.symbol)} />
         ))}
       {data?.length > 0 && <AsOf rows={data} />}
-      {open && <IndexSheet index={open} onClose={() => setOpen(null)} />}
     </Card>
   );
 };
@@ -155,7 +122,7 @@ const Sectors = () => {
             <p className="mb-1 text-[13px] text-[var(--text-muted)]">From scored headlines, not prices: + is good news for the sector, - is bad.</p>
             {data.map((s) => (
               <ListRow privateValue={false} key={s.sector} dense title={s.sector} sub={`${s.count} ${s.count === 1 ? 'story' : 'stories'}`}
-                   right={`${s.score > 0 ? '+' : ''}${s.score}`} rightTone={tone(s.score)} />
+                   right={`${s.score > 0 ? '+' : ''}${s.score}`} rightTone={tone(s.score)} to={sectorPath(s.sector)} />
             ))}
           </>
         )}
@@ -211,7 +178,7 @@ const Scan = () => {
       <Card title="Sectors today">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {data.sectors.map((s) => (
-            <div key={s.sector} className="rounded-[10px] p-2 text-[var(--text)]" style={{ background: heatColor(s.change_pct, maxAbs) }}>
+            <Link key={s.sector} to={sectorPath(s.sector)} className="block rounded-[10px] p-2 text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" style={{ background: heatColor(s.change_pct, maxAbs) }}>
               <div className="text-[13px] truncate" title={s.sector}>{s.sector}</div>
               <div className="text-[15px] font-semibold tabular-nums">{pct(s.change_pct / 100, { sign: true })}</div>
               <div className="text-[12px]">{s.up} of {s.n} up</div>
@@ -224,7 +191,7 @@ const Scan = () => {
               {divergence(s) && (
                 <div className="mt-1 inline-block rounded-full border border-[var(--text)] px-1.5 text-[12px] font-semibold">{divergence(s)}</div>
               )}
-            </div>
+            </Link>
           ))}
         </div>
         <p className="mt-2 text-[12px] text-[var(--text-muted)]">Average move of the Nifty 200 stocks in each sector. Deeper colour, bigger move. News: the sector's headline mood (-1 to +1); flagged when it disagrees with the price.</p>
