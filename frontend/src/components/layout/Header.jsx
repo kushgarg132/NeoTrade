@@ -12,7 +12,7 @@ import { cn } from '../../utils/cn';
 const PHASE = { open: 'Market open', pre: 'Pre-open', closed: 'Market closed' };
 // Phones get a word too: the dot's colour never carries the state alone.
 const SHORT = { open: 'Open', pre: 'Pre-open', closed: 'Closed' };
-const BTN = 'inline-flex items-center justify-center min-h-11 min-w-11 rounded-[12px] text-[var(--text-muted)]';
+const BTN = 'tap inline-flex items-center justify-center min-h-11 min-w-11 rounded-[12px] text-[var(--text-muted)]';
 
 /** The dot is the live socket: green while connected, red otherwise. The word is the market phase, or "Offline"/"Stale" on phones when the feed is down. */
 const MarketDot = () => {
@@ -41,7 +41,7 @@ const Header = () => {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--surface)]" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="mx-auto max-w-5xl px-4 h-14 flex items-center justify-between gap-2">
-        <Link to="/" className="lg:hidden text-[17px] font-bold text-[var(--text)]">NeoTrade</Link>
+        <Link to="/" className="lg:hidden text-[18px] font-bold text-[var(--text)]">NeoTrade</Link>
         <SmartSearch compact className="hidden sm:block w-full max-w-xs lg:max-w-sm" onSearch={openStock} />
         <div className="flex items-center gap-0.5 shrink-0 ml-auto">
           <button type="button" onClick={() => setSearching((v) => !v)} className={cn(BTN, 'sm:hidden', searching && 'text-[var(--accent)]')} aria-expanded={searching} aria-label="Find a stock">

@@ -12,7 +12,7 @@ const SideRail = ({ counts = {} }) => {
   const { pathname } = useLocation();
   return (
     <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-56 flex-col border-r border-[var(--border)] bg-[var(--surface)] z-30">
-      <Link to="/" className="px-5 h-14 flex items-center text-[17px] font-bold text-[var(--text)]">NeoTrade</Link>
+      <Link to="/" className="px-5 h-14 flex items-center text-[18px] font-bold text-[var(--text)]">NeoTrade</Link>
       <nav className="flex-1 px-2 py-2 space-y-1" aria-label="Main">
         {tabsFor(user?.role === 'admin').map((item) => {
           const on = tabActive(item, pathname);
@@ -23,7 +23,7 @@ const SideRail = ({ counts = {} }) => {
               to={item.path}
               end={item.path === '/'}
               className={cn(
-                'flex items-center gap-3 px-3 min-h-11 rounded-[12px] text-[15px] font-medium',
+                'tap flex items-center gap-3 px-3 min-h-11 rounded-[12px] text-[15px] font-medium',
                 on ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--surface-2)]',
               )}
             >

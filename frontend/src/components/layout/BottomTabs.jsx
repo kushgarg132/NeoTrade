@@ -25,7 +25,7 @@ const BottomTabs = ({ counts = {} }) => {
                 end={item.path === '/'}
                 aria-current={on ? 'page' : undefined}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 min-h-14 text-[12px] font-medium',
+                  'tap flex flex-col items-center justify-center gap-0.5 min-h-14 text-[12px] font-medium',
                   on ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]',
                 )}
               >
