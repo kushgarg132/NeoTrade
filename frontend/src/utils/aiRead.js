@@ -13,13 +13,13 @@ export function aiReducer(state, { symbol, event, data }) {
       return { ...state, read, at: data?.at ?? null, stale, loading: stale && !read };
     }
     case 'stage':
-      return { ...state, stage: data?.stage ?? data ?? null, streaming: true };
+      return { ...state, stage: data, streaming: true };
     case 'delta':
-      return { ...state, text: state.text + (data?.text ?? data ?? ''), streaming: true };
+      return { ...state, text: state.text + data.text, streaming: true };
     case 'report':
       return { ...state, read: data, at: new Date().toISOString(), stale: false, stage: null, text: '', streaming: false, error: null };
     case 'error':
-      return { ...state, error: data?.message ?? data ?? 'error', text: '', stage: null, streaming: false };
+      return { ...state, error: data.detail, text: '', stage: null, streaming: false };
     case 'done':
       return { ...state, loading: false, streaming: false };
     default:

@@ -12,7 +12,7 @@ test('cached fresh read stops loading', () => {
 });
 
 test('stale cached read then deltas then report swaps the read', () => {
-  let s = run([['reset'], ['cached', { read: { a: 1 }, at: 't', stale: true }], ['stage', 'x'], ['delta', 'hi']]);
+  let s = run([['reset'], ['cached', { read: { a: 1 }, at: 't', stale: true }], ['stage', { step: 'writing' }], ['delta', { text: 'hi' }]]);
   assert.equal(s.loading, false);
   assert.equal(s.text, 'hi');
   s = aiReducer(s, { symbol: 'X', event: 'report', data: { a: 2 } });
@@ -26,7 +26,7 @@ test('stale with no read keeps loading', () => {
 });
 
 test('error after deltas restores the last read and drops the partial text', () => {
-  const s = run([['reset'], ['cached', { read: { a: 1 }, stale: true }], ['delta', 'part'], ['error', 'boom'], ['done']]);
+  const s = run([['reset'], ['cached', { read: { a: 1 }, stale: true }], ['delta', { text: 'part' }], ['error', { detail: 'boom' }], ['done']]);
   assert.deepEqual(s.read, { a: 1 });
   assert.equal(s.text, '');
   assert.equal(s.error, 'boom');
@@ -34,8 +34,14 @@ test('error after deltas restores the last read and drops the partial text', () 
 });
 
 test('a frame for another symbol is ignored', () => {
-  const s = run([['reset'], ['delta', 'a'], ['delta', 'b', 'Y']]);
+  const s = run([['reset'], ['delta', { text: 'a' }], ['delta', { text: 'b' }, 'Y']]);
   assert.equal(s.text, 'a');
+});
+
+test('stage object is stored as-is; error stores the detail string', () => {
+  const s = run([['reset'], ['stage', { step: 'news', count: 12 }]]);
+  assert.deepEqual(s.stage, { step: 'news', count: 12 });
+  assert.equal(run([['reset'], ['error', { detail: 'x' }]]).error, 'x');
 });
 
 test('splitThesis splits on the marker and hides it', () => {
