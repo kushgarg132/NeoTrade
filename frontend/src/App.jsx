@@ -6,6 +6,7 @@ const Handbook = lazy(() => import('./pages/Handbook'));
 const Backlog = lazy(() => import('./pages/Backlog'));
 const LabRuns = lazy(() => import('./pages/LabRuns'));
 const LabForward = lazy(() => import('./pages/LabForward'));
+const LabBeta = lazy(() => import('./pages/LabBeta'));
 const NewsAccuracy = lazy(() => import('./pages/NewsAccuracy'));
 const Profile = lazy(() => import('./pages/Profile'));
 const SettingsHome = lazy(() => import('./pages/SettingsHome'));
@@ -75,7 +76,7 @@ const StockMoved = () => {
 
 const LAB = {
   strategies: <Strategies />, options: <OptionChain />, runs: <LabRuns />,
-  forward: <LabForward />, news: <NewsAccuracy />, handbook: <Handbook />, backlog: <Backlog />,
+  forward: <LabForward />, news: <NewsAccuracy />, handbook: <Handbook />, backlog: <Backlog />, beta: <LabBeta />,
 };
 
 const App = () => {
