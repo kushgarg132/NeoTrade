@@ -59,6 +59,8 @@ const IndexPage = () => {
   return (
     <Layout>
       <PageHeader title={data?.name || 'Index'} back="/market?tab=pulse" backLabel="Market" />
+      {/* The AI explanation first, on its own read: it shows even while the price data loads or fails. */}
+      {status !== 'empty' && <div className="mb-3"><Why ticker={ticker} /></div>}
       {status === 'loading' && <Skeleton rows={6} />}
       {status === 'empty' && <Empty title="Not found" body="This index is not tracked." action={<Link to="/market?tab=pulse" className="text-[var(--accent)]">Back to Market</Link>} />}
       {status === 'error' && <ErrorLine message="Could not load this index." onRetry={retry} />}
@@ -73,7 +75,6 @@ const IndexPage = () => {
             </div>
             {data.points?.length > 1 && <div className="mt-3"><CloseLine points={data.points} /></div>}
           </Card>
-          <Why ticker={ticker} />
         </div>
       )}
     </Layout>

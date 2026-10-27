@@ -153,7 +153,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 `pages/RoundTrip.jsx`: `GET /journal/round-trips/{id}` (404 = "Not found", link back to the Journal); header card with the stock link, Fills, Note (`NoteEditor`, `PUT /journal/round-trips/{id}/note`), news chips/headlines and "Patterns this trade is part of" from `money/JournalTab` exports; hold time `utils/roundTrip.js::holdTime`. Journal and Tax rows open it.
 
 ### 16. Index (`/market/index/:ticker`)
-`pages/IndexPage.jsx`: `GET /market/index/{ticker}` -> level, 52-week range, 50/200-day averages, `points[{date,close}]` drawn with recharts and `ui/chartTheme` (404 = "Not found"); "Why it moved" = `GET /market/index/{ticker}/analysis` (503 = unavailable). Opened from Pulse index rows.
+`pages/IndexPage.jsx`: `GET /market/index/{ticker}` -> level, 52-week range, 50/200-day averages, `points[{date,close}]` drawn with recharts and `ui/chartTheme` (404 = "Not found"); "Why it moved" = `GET /market/index/{ticker}/analysis` (503 = unavailable), shown first and on its own read (not gated on the price data; cached per index in Redis, first call ~10 s). Opened from Pulse index rows.
 
 ### 17. Sector (`/market/sector/:name`)
 `pages/SectorPage.jsx`: `GET /market/sector/{name}` -> `change_pct`, `up`, `n`, `sentiment`, `members[]` (each opens the stock) and the sector's news (each opens `/news/:id`); 404 = "Unknown sector". Opened from the Pulse sector grid.
