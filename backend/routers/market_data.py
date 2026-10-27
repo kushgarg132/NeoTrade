@@ -216,6 +216,36 @@ async def get_index_detail(ticker: str):
     return detail
 
 
+def _fetch_index_intraday_sync(ticker: str) -> List[Dict[str, Any]]:
+    hist = yf.Ticker(ticker).history(period="1d", interval="5m")
+    if hist is None or hist.empty:
+        return []
+    return [{"t": index.isoformat(), "close": float(row["Close"])} for index, row in hist.iterrows()]
+
+
+_INTRADAY_TTL = 60
+_intraday_cache: Dict[str, tuple] = {}
+
+
+@router.get("/market/index/{ticker}/intraday")
+async def get_index_intraday(ticker: str):
+    """Today's 5-minute closes for a tracked index, cached 60 s per ticker in-process."""
+    if ticker not in _known_index_names():
+        raise HTTPException(status_code=404, detail=f"{ticker} is not a tracked index")
+    hit = _intraday_cache.get(ticker)
+    if hit and time.monotonic() - hit[0] < _INTRADAY_TTL:
+        return hit[1]
+    try:
+        points = await asyncio.to_thread(_fetch_index_intraday_sync, ticker)
+    except Exception as e:
+        logger.error(f"Error fetching intraday for {ticker}: {e}")
+        points = []
+    if not points:
+        raise HTTPException(status_code=502, detail="No intraday data right now")
+    _intraday_cache[ticker] = (time.monotonic(), points)
+    return points
+
+
 @router.get("/market/brief")
 async def get_market_brief():
     """The AI market brief the ingest worker last wrote (Redis `market:brief`). Never calls the model."""
@@ -378,10 +408,29 @@ async def get_market_scan():
     """Nifty 200 gainers, losers, 52-week highs and lows, sector moves (cached 5 min), each sector with its
     news sentiment read fresh (one MGET; not cached with the scan)."""
     scan = await cached("scan", SCAN_TTL, _scan) or {}
-    if not scan.get("sectors"):
-        return scan
+    scan = {k: v for k, v in scan.items() if k != "movers"}  # the cache entry keeps it (sector page)
     from backend.database import db
 
+    symbols = [m["symbol"] for m in scan.get("gainers", []) + scan.get("losers", [])]
+    with_news = set()
+    if symbols:
+        try:
+            from datetime import datetime, timedelta, timezone
+            from backend.datalayer.news import COLLECTION, SCORED
+
+            docs = await db.db[COLLECTION].find(
+                {"status": SCORED, "published_at": {"$gte": datetime.now(timezone.utc) - timedelta(hours=24)},
+                 "impacts": {"$elemMatch": {"type": "symbol", "target": {"$in": symbols}}}},
+                {"impacts": 1}).to_list(length=None)
+            with_news = {i["target"] for d in docs for i in d.get("impacts", []) if i.get("type") == "symbol"}
+        except Exception as exc:
+            logger.warning("news flags unavailable for the scan: %s", exc)
+            with_news = set()
+    for k in ("gainers", "losers"):
+        if k in scan:
+            scan[k] = [{**m, "news": m["symbol"] in with_news} for m in scan[k]]
+    if not scan.get("sectors"):
+        return scan
     raws = []
     if db.redis is not None:
         try:

@@ -107,3 +107,65 @@ def test_news_item_unknown_is_404(http):
     client, _, _ = http
     r = client.get("/news/item/zzz")
     assert r.status_code == 404 and r.json()["detail"] == "News item not found"
+
+
+# --- index intraday + scan news flag ---------------------------------------
+
+def test_index_intraday_returns_points_for_a_tracked_index(http):
+    client, _, mp = http
+    market_data._intraday_cache.clear()
+    rows = [{"t": f"2026-10-27T09:{15 + i}:00+05:30", "close": 100.0 + i} for i in range(3)]
+    mp.setattr(market_data, "_fetch_index_intraday_sync", lambda t: rows)
+    r = client.get("/market/index/^NSEI/intraday")
+    assert r.status_code == 200 and len(r.json()) == 3 and set(r.json()[0]) == {"t", "close"}
+
+
+def test_index_intraday_404_for_an_untracked_ticker(http):
+    client, _, _ = http
+    assert client.get("/market/index/NOPE/intraday").status_code == 404
+
+
+def test_index_intraday_502_when_no_points(http):
+    client, _, mp = http
+    market_data._intraday_cache.clear()
+    mp.setattr(market_data, "_fetch_index_intraday_sync", lambda t: [])
+    assert client.get("/market/index/^NSEI/intraday").status_code == 502
+
+
+def _scan_http(http):
+    client, mongo, mp = http
+    rows = [{"symbol": "TCS", "name": "TCS", "sector": "IT"}, {"symbol": "INFY", "name": "Infosys", "sector": "IT"}]
+    q = {"TCS": {"price": 1.0, "change_pct": 3.0, "at": 1.0}, "INFY": {"price": 1.0, "change_pct": -2.0, "at": 1.0}}
+
+    async def fake(key, ttl, fn):
+        return market_data.market_scan(rows, q, {})
+
+    mp.setattr(market_data, "cached", fake)
+    return client, mongo, mp
+
+
+def test_scan_movers_flag_news_in_the_last_24h(http):
+    client, mongo, mp = _scan_http(http)
+    asyncio.run(mongo["news_items"].insert_one(
+        {"_id": "a", "status": "SCORED", "published_at": datetime.now(timezone.utc) - timedelta(hours=2),
+         "impacts": [{"type": "symbol", "target": "TCS"}]}))
+    body = client.get("/market/scan").json()
+    assert body["gainers"][0]["symbol"] == "TCS" and body["gainers"][0]["news"] is True
+    assert body["losers"][0]["symbol"] == "INFY" and body["losers"][0]["news"] is False
+
+
+def test_scan_movers_news_false_when_the_news_query_fails(http):
+    client, mongo, mp = _scan_http(http)
+
+    class Boom:
+        def __getitem__(self, k):
+            raise RuntimeError("down")
+
+    mp.setattr(database, "db", Boom())
+    body = client.get("/market/scan").json()
+    assert body["gainers"][0]["news"] is False and body["losers"][0]["news"] is False
+
+
+def test_scan_response_has_no_movers_key(http):
+    client, _, _ = _scan_http(http)
+    assert "movers" not in client.get("/market/scan").json()
