@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
+import Hero from '../components/ui/Hero';
 import Stat from '../components/ui/Stat';
 import Badge from '../components/ui/Badge';
 import Skeleton from '../components/ui/Skeleton';
@@ -17,8 +18,7 @@ import { stockPath } from '../utils/stocks';
 import { strategyPath } from '../utils/routes';
 import { strategyName } from '../utils/library';
 import { formatDateTime } from '../utils/formatters';
-import { inr, tone } from '../components/ui/format';
-import { toneText } from '../components/ui/tone';
+import { inr } from '../components/ui/format';
 
 const day = (v) => String(v).slice(0, 10);
 
@@ -76,6 +76,7 @@ const AiTrade = () => {
         right={t.venue === 'live' ? <Badge kind="live">Live</Badge> : <Badge kind="paper">Paper</Badge>}
       />
       <div className="space-y-3">
+        {!s.open && <Hero label="Net" value={s.net} format={(v) => inr(v, { sign: true })} />}
         <Card title="Result" action={s.open ? <Badge kind="neutral">Open</Badge> : null}>
           <div className="grid grid-cols-2 gap-3">
             <Stat label="Entry" value={`${inr(t.entry_price)}`} delta={formatDateTime(t.entry_at)} />
@@ -84,7 +85,6 @@ const AiTrade = () => {
             <Stat label="Held" value={s.held} />
             {!s.open && <Stat label="Gross" value={inr(s.gross, { sign: true })} />}
             <Stat label="Costs" value={inr(s.costs)} />
-            {!s.open && <Stat label="Net" value={<span className={toneText(tone(s.net))}>{inr(s.net, { sign: true })}</span>} />}
             {t.exit_reason && <Stat label="Exit reason" value={t.exit_reason} />}
           </div>
           <Link to={stockPath(t.symbol)} className="mt-3 inline-flex items-center min-h-11 text-[15px] font-semibold text-[var(--accent)]">Open {t.symbol}</Link>
