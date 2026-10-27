@@ -48,7 +48,7 @@ const SettingsHome = () => {
   useEffect(() => {
     let live = true;
     getPreferences().then((res) => live && setPrefs(res.data)).catch(() => {});
-    api.get(endpoints.guardrails.telegram).then((res) => live && setTelegram(res.data)).catch(() => {});
+    api.get(endpoints.guardrails.status).then((res) => live && setTelegram(res.data.telegram)).catch(() => {});
     return () => { live = false; };
   }, []);
 

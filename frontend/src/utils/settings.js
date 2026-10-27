@@ -6,7 +6,7 @@ const ROLES = { mine: 'yours', ai: 'AI' };
 
 const TAB_PAGES = {
   accounts: '/settings/brokers', broker: '/settings/brokers',
-  limits: '/settings/guardrails', portfolio: '/settings/guardrails', safety: '/settings/guardrails', guardrails: '/settings/guardrails',
+  limits: '/settings/guardrails', portfolio: '/settings/portfolio', safety: '/settings/guardrails', guardrails: '/settings/guardrails',
   alerts: '/settings/notifications', profile: '/settings/profile', ai: '/settings/ai', goal: '/settings/goal',
   theme: '/settings', lab: '/settings/lab', about: '/settings/lab', beta: '/settings/lab',
 };

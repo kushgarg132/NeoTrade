@@ -50,3 +50,7 @@ test('Accounts submits a broker return code from its own query, whatever the pat
 test('news alerts live only in Notifications', () => {
   assert.doesNotMatch(read('../components/journal/GuardrailsSheet.jsx'), /news_alerts/);
 });
+
+test('Telegram state comes from GET /guardrails (only DELETE exists on /guardrails/telegram)', () => {
+  assert.match(home, /api\.get\(endpoints\.guardrails\.status\)[^\n]*res\.data\.telegram/);
+});

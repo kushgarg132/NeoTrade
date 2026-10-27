@@ -6,7 +6,7 @@ import {
 
 test('settingsRedirect maps every tab, keeps other params', () => {
   const want = {
-    accounts: '/settings/brokers', broker: '/settings/brokers', limits: '/settings/guardrails', portfolio: '/settings/guardrails',
+    accounts: '/settings/brokers', broker: '/settings/brokers', limits: '/settings/guardrails', portfolio: '/settings/portfolio',
     safety: '/settings/guardrails', guardrails: '/settings/guardrails', alerts: '/settings/notifications', profile: '/settings/profile',
     ai: '/settings/ai', goal: '/settings/goal', theme: '/settings', lab: '/settings/lab', about: '/settings/lab', beta: '/settings/lab',
     nope: '/settings',
