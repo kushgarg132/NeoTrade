@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Sheet } from './Panel';
 import api, { endpoints } from '../../utils/api';
 import { Row } from './Fields';
+import ErrorLine from '../ui/ErrorLine';
+import Skeleton from '../ui/Skeleton';
 
 const BETA_ROWS = [
   ['users', 'Signed up'],
@@ -15,15 +17,16 @@ const BETA_ROWS = [
 /** Admin only: Phase 12's question — do beta users come back? */
 const BetaSheet = () => {
   const [metrics, setMetrics] = useState(null);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    api
-      .get(endpoints.journal.betaMetrics)
-      .then((res) => setMetrics(res.data))
-      .catch(() => setMetrics(null));
-  }, []);
+  const load = () => api
+    .get(endpoints.journal.betaMetrics)
+    .then((res) => { setMetrics(res.data); setFailed(false); })
+    .catch(() => setFailed(true));
+  useEffect(() => { load(); }, []);
 
-  if (!metrics) return null;
+  if (failed) return <Sheet title="Beta" meta="All users"><ErrorLine message="Couldn't load beta metrics." onRetry={load} /></Sheet>;
+  if (!metrics) return <Sheet title="Beta" meta="All users"><Skeleton rows={4} /></Sheet>;
 
   return (
     <Sheet title="Beta" meta="All users">

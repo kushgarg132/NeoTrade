@@ -339,8 +339,7 @@ chips, "Plan new money" opens `frontend/src/components/portfolio/Rebalance.jsx`)
 Which stocks fired a setup at the last close, and what that setup has done before — every
 number a measured base rate, never a model's opinion. Admin-only everywhere until the owner's
 SEBI Research Analyst registration exists: the router takes `require_admin`
-(`backend/routers/picks.py::router`), the tab is dropped for non-admins
-(`frontend/src/components/layout/SectionTabs.jsx::SectionTabs`, `admin: true`), and nothing
+(`backend/routers/picks.py::router`), the page is admin-only in the app, and nothing
 reaches Telegram, digests or chat.
 
 - **Setups** (`backend/forecast/setups.py::SETUPS`): momentum leader and low-volatility leader
