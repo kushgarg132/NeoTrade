@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- Owner rule: every feature, control, link and piece of data the UI has today stays; nothing is removed or hidden. Choose the simplest implementation and the simplest-looking result (no extra decoration, no new wrappers or abstractions beyond the three named components).
 - Frontend only; no new npm dependency (Playwright lives only in the scratchpad, never in package.json).
 - Token names unchanged; values exactly as the spec's table. New tokens: `--accent-ink`, `--glow`, `--gain-soft`, `--loss-soft`, `--fs-12/13/15/17/22/28/44`.
 - `--accent` never colours a number; gains/losses carry ▲/▼ or a sign.
