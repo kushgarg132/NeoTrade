@@ -166,6 +166,7 @@ export const endpoints = {
   },
   globalIndices: '/market/global',
   marketIndex: (ticker) => `/market/index/${encodeURIComponent(ticker)}`,
+  marketIndexIntraday: (t) => `/market/index/${encodeURIComponent(t)}/intraday`,
   marketIndexAnalysis: (ticker) => `/market/index/${encodeURIComponent(ticker)}/analysis`,
   trades: (f = {}) => {
     const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v !== undefined && v !== null)).toString();
