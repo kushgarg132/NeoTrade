@@ -48,10 +48,13 @@ const SettingsHome = () => {
   const [prefs, setPrefs] = useState(undefined);
   const [telegram, setTelegram] = useState(undefined);
   const [displayName, setDisplayName] = useState(null);
+  const [models, setModels] = useState(undefined);
   useEffect(() => {
     let live = true;
     getPreferences().then((res) => live && setPrefs(res.data)).catch(() => {});
     api.get(endpoints.guardrails.status).then((res) => live && setTelegram(res.data.telegram)).catch(() => {});
+    Promise.all([api.get(endpoints.settings.omnirouteTiers), api.get(endpoints.settings.omnirouteModel)])
+      .then(([t, m]) => live && setModels({ tiers: t.data.tiers, fallback: m.data.model })).catch(() => {});
     api.get(endpoints.profile.get).then((res) => live && setDisplayName(res.data.profile.display_name || null)).catch(() => {});
     return () => { live = false; };
   }, []);
@@ -84,7 +87,7 @@ const SettingsHome = () => {
         </Group>
         <Group title="You">
           <Row title="Goal" state={goalState(prefs)} to="/settings/goal" />
-          <Row title="AI model" state={modelState(prefs)} to="/settings/ai" />
+          <Row title="AI model" state={modelState(models)} to="/settings/ai" />
           <Appearance />
         </Group>
         {isAdmin && (

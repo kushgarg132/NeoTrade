@@ -38,8 +38,9 @@ test('portfolio, telegram, model, autopilot', () => {
   assert.equal(portfolioState({ portfolio_max_loss_pct: 25, portfolio_max_weight_pct: 20 }), 'Max loss 25% · weight 20%');
   assert.equal(telegramState({ linked: true }), 'Linked');
   assert.equal(telegramState({}), 'Not linked');
-  assert.equal(modelState({ omniroute_model: null }), 'Default');
-  assert.equal(modelState({ omniroute_model: 'x/y' }), 'x/y');
+  assert.equal(modelState({ tiers: { deep: 'agy/claude-opus-4-6' }, fallback: 'cx/gpt' }), 'claude-opus-4-6');
+  assert.equal(modelState({ tiers: {}, fallback: 'cx/gpt-5.6-luna' }), 'gpt-5.6-luna');
+  assert.equal(modelState({ tiers: {} }), '–');
   assert.equal(autopilotState({}), 'Off');
   assert.equal(autopilotState({ autopilot_enabled: true }), 'On · paper');
   assert.equal(autopilotState({ autopilot_enabled: true, autopilot_live: true }), 'On · live');

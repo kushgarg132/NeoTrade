@@ -48,7 +48,11 @@ export const goalState = (prefs) => {
   return g.kind === 'value' ? `${inr(g.target)} by ${month(g.by)}` : `Beat NIFTY by ${month(g.by)}`;
 };
 
-export const modelState = (prefs) => (prefs ? prefs.omniroute_model || 'Default' : DASH);
+/** The deployment-wide Deep model (chat runs on it), else the fallback; provider prefix dropped. */
+export const modelState = (m) => {
+  const id = m?.tiers?.deep || m?.fallback;
+  return id ? id.split('/').pop() : DASH;
+};
 
 export const autopilotState = (prefs) => {
   if (!prefs) return DASH;
