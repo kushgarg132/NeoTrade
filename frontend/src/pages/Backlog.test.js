@@ -7,7 +7,7 @@ const src = readFileSync(new URL('./Backlog.jsx', import.meta.url), 'utf8');
 
 test('uses the ui kit, not the old doc kit', () => {
   assert.doesNotMatch(src, /doc\/Doc/);
-  assert.match(src, /<PageHeader title="Backlog"/);
+  assert.match(src, /<SettingsPage title="Backlog"/);
   assert.match(src, /ui\/Skeleton/);
 });
 

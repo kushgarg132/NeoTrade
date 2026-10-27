@@ -8,7 +8,7 @@ const panels = readFileSync(new URL('../components/system/LivePanels.jsx', impor
 const tabs = readFileSync(new URL('../components/system/SystemTabs.jsx', import.meta.url), 'utf8');
 
 test('page has a title, a plain gloss and an on-this-page outline', () => {
-  assert.match(page, /<PageHeader title="Handbook"/);
+  assert.match(page, /<SettingsPage title="Handbook"/);
   assert.match(page, /On this page/);
 });
 

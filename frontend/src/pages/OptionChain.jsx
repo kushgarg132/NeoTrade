@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { RefreshCw, Loader2 } from 'lucide-react';
-import Layout from '../components/Layout';
-import SectionTabs from '../components/layout/SectionTabs';
-import { LAB_TABS } from '../components/layout/sections';
+import SettingsPage from './SettingsPage';
 import Card from '../components/ui/Card';
 import Tabs from '../components/ui/Tabs';
 import Skeleton from '../components/ui/Skeleton';
@@ -100,18 +98,16 @@ const OptionChain = () => {
   );
 
   return (
-    <Layout>
-      <div className="space-y-4">
-        <SectionTabs tabs={LAB_TABS} label="Lab" />
-        <Card
-          title="Option chain"
-          action={
+    <SettingsPage title="Option chain" back="/settings/lab" backLabel="Lab"
+      right={
             <Button variant="secondary" size="sm" onClick={() => loadChain()} disabled={busy || !expiry} aria-busy={busy} className="min-h-11">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               Refresh
             </Button>
-          }
-        >
+      }
+    >
+      <div className="space-y-4">
+        <Card>
           <p className="text-[13px] text-[var(--text-muted)] mb-3">
             {marketPhase() === 'open' ? 'Live · Upstox' : 'Market closed · last prices · Upstox'}
             {fetchedAt && ` · Fetched ${clock(fetchedAt)} IST`}
@@ -170,7 +166,8 @@ const OptionChain = () => {
               {stat('PCR (put/call OI)', chain.pcr == null ? '—' : chain.pcr.toFixed(2))}
             </div>
 
-            <table className="w-full text-[14px] border-collapse table-fixed">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-[14px] border-collapse table-fixed">
               <thead>
                 <tr className="border-b border-[var(--border)] text-[12px] text-[var(--text-muted)]">
                   <th className="py-2 px-2 text-left font-medium" scope="col" aria-label="Call open interest">OI</th>
@@ -214,6 +211,7 @@ const OptionChain = () => {
                 })}
               </tbody>
             </table>
+            </div>
             <p className="px-4 pt-3 text-[13px] text-[var(--text-muted)]">
               OI: open interest. IV: implied volatility. ATM: strike nearest spot. Shaded: in the money. OI change is since the
               previous session. Prices refresh when you tap Refresh. Market data only, not advice.
@@ -221,7 +219,7 @@ const OptionChain = () => {
           </section>
         )}
       </div>
-    </Layout>
+    </SettingsPage>
   );
 };
 

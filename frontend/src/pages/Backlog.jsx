@@ -1,15 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import Layout from '../components/Layout';
-import SectionTabs from '../components/layout/SectionTabs';
-import { LAB_TABS } from '../components/layout/sections';
+import SettingsPage from './SettingsPage';
 import Card from '../components/ui/Card';
 import Empty from '../components/ui/Empty';
 import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
-import PageHeader from '../components/ui/PageHeader';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import { formatTimeAgo } from '../utils/formatters';
@@ -191,11 +188,9 @@ const Backlog = () => {
   const openCount = (items || []).filter((i) => !['done', 'dropped'].includes(i.status)).length;
 
   return (
-    <Layout>
+    <SettingsPage title="Backlog" back="/settings/lab" backLabel="Lab" right={items && <span className="text-[14px] text-[var(--text-muted)]">{openCount} open</span>}>
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
-        <SectionTabs tabs={LAB_TABS} label="Lab" />
-        <PageHeader title="Backlog" right={items && <span className="text-[14px] text-[var(--text-muted)]">{openCount} open</span>} />
-        <p className="-mt-2 text-[14px] text-[var(--text-muted)]">Your list of future changes to NeoTrade. Idea, then Next, then Doing; Done and Dropped fold away.</p>
+        <p className="text-[14px] text-[var(--text-muted)]">Your list of future changes to NeoTrade. Idea, then Next, then Doing; Done and Dropped fold away.</p>
         <Card>
           <form onSubmit={add} className="flex items-end gap-2">
             <input ref={input} aria-label="New item" placeholder="Add an idea…" maxLength={140} value={title}
@@ -246,7 +241,7 @@ const Backlog = () => {
             </Card>
           )}
       </div>
-    </Layout>
+    </SettingsPage>
   );
 };
 

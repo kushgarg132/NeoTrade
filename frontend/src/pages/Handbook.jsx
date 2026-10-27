@@ -1,9 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import Layout from '../components/Layout';
+import SettingsPage from './SettingsPage';
 import Markdown from '../components/common/Markdown';
-import SectionTabs from '../components/layout/SectionTabs';
-import { LAB_TABS } from '../components/layout/sections';
-import PageHeader from '../components/ui/PageHeader';
 import SystemTabs from '../components/system/SystemTabs';
 import LivePanel from '../components/system/LivePanels';
 import { useTab } from '../hooks/useTab';
@@ -57,11 +54,9 @@ const Handbook = () => {
     [...(article.current?.querySelectorAll('h2') || [])].find((h) => h.textContent.trim() === text)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   return (
-    <Layout>
+    <SettingsPage title="Handbook" back="/settings/lab" backLabel="Lab">
       <div className="space-y-3 sm:space-y-4 max-w-3xl">
-        <SectionTabs tabs={LAB_TABS} label="Lab" />
-        <PageHeader title="Handbook" />
-        <p className="-mt-2 text-[14px] text-[var(--text-muted)]">How NeoTrade works, checked against the code. Live status panels sit beside the topics they describe.</p>
+        <p className="text-[14px] text-[var(--text-muted)]">How NeoTrade works, checked against the code. Live status panels sit beside the topics they describe.</p>
         <SystemTabs active={tab} onSelect={setTab} />
         {headings.length > 1 && (
           <details className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)]">
@@ -81,7 +76,7 @@ const Handbook = () => {
           )}
         </article>
       </div>
-    </Layout>
+    </SettingsPage>
   );
 };
 
