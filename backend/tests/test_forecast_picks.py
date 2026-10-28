@@ -535,3 +535,31 @@ async def test_results_refresh_stamps_a_failing_symbol_so_it_stops_hogging_the_c
     assert (await db[results.COLL].find_one({"_id": "BAD"}))["checked"] == "2026-10-27"
     assert (await results.load(db))["OLD"] == [datetime(2019, 1, 1)]  # kept
     assert await results.refresh(db, {"BAD", "OLD"}, now) == 0 and (await results.load(db))["BAD"] == []
+
+
+def test_load_builds_the_table_off_the_event_loop(mongo, monkeypatch):
+    """setups.table / members.mask are CPU-bound; they must not run on the loop thread."""
+    import threading
+
+    seen = {}
+    real = setups.table
+
+    def table(frames):
+        seen["thread"] = threading.current_thread()
+        return real(frames)
+
+    monkeypatch.setattr(setups, "table", table)
+    frames = _frames()
+
+    async def read(db, universe, start, end):
+        return frames
+
+    monkeypatch.setattr(bars, "read", read)
+
+    async def run():
+        await mongo.bars.insert_one({"symbol": bars.NIFTY})
+        t = await picks.load(mongo, datetime(2026, 10, 21, tzinfo=timezone.utc))
+        return t, threading.current_thread()
+
+    t, main = asyncio.run(run())
+    assert t is not None and seen["thread"] is not main

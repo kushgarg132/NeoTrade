@@ -278,8 +278,12 @@ async def load(db, now: datetime) -> Optional[dict]:
     from backend.datalayer import results
     from backend.forecast import members
 
-    t = setups.table(frames)
-    t["member"] = members.mask(t["close"].index, t["close"].columns)  # no survivorship: each day's own index
+    def build() -> dict:  # CPU-bound: off the event loop
+        t = setups.table(frames)
+        t["member"] = members.mask(t["close"].index, t["close"].columns)  # no survivorship: each day's own index
+        return t
+
+    t = await asyncio.to_thread(build)
     t["results"] = await results.load(db)  # for setups.results_drift
     return t
 
