@@ -42,6 +42,7 @@ import Login from './pages/Login';
 import RequireAuth from './components/RequireAuth';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
+import ChatWidget from './components/ChatWidget';
 import PageHeader from './components/ui/PageHeader';
 import Empty from './components/ui/Empty';
 import Button from './components/ui/Button';
@@ -130,6 +131,7 @@ const App = () => {
   );
 
   return (
+    <>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={gated(<Home />)} />
@@ -167,6 +169,9 @@ const App = () => {
       {MOVED.map(([from, to]) => <Route key={from} path={from} element={<Moved from={from} to={to} />} />)}
       <Route path="*" element={gated(<NotFound />)} />
     </Routes>
+    {/* One assistant for the whole signed-in session, so its conversation survives navigation. */}
+    {user && <ChatWidget />}
+    </>
   );
 };
 

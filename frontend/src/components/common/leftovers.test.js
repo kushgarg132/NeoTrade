@@ -26,3 +26,11 @@ test('chat launcher keeps its border; truncation survives', () => {
   assert.match(chat, /truncate/);
   assert.match(chip, /truncate/);
 });
+
+test('chat lives once in App (signed-in only), not per page, and cancels its stream on unmount', () => {
+  const app = f('../../App.jsx');
+  assert.doesNotMatch(layout, /ChatWidget/);
+  assert.match(app, /\{user && <ChatWidget \/>\}/);
+  assert.equal((app.match(/<ChatWidget/g) || []).length, 1);
+  assert.match(chat, /requestRef\.current\?\.cancel\(\)/);
+});

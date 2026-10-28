@@ -135,6 +135,10 @@ const ChatWidget = () => {
   const [followups, setFollowups] = useState([]);
   const endRef = useRef(null);
   const inputRef = useRef(null);
+  const requestRef = useRef(null);
+
+  // Leaving (sign-out) cancels the reply still streaming.
+  useEffect(() => () => requestRef.current?.cancel(), []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -204,6 +208,7 @@ const ChatWidget = () => {
       }
     });
 
+    requestRef.current = request;
     if (!request.ok) {
       setBusy(false);
       setThinking('');

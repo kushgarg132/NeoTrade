@@ -4,7 +4,6 @@ import { X } from 'lucide-react';
 import SideRail from './layout/SideRail';
 import BottomTabs from './layout/BottomTabs';
 import Header from './layout/Header';
-import ChatWidget from './ChatWidget';
 import ErrorBoundary from './ErrorBoundary';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
@@ -74,7 +73,6 @@ const Layout = ({ children }) => {
       </div>
 
       <BottomTabs counts={counts} />
-      <ChatWidget />
     </div>
     </PendingContext.Provider>
   );
