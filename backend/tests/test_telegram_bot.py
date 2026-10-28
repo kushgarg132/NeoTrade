@@ -26,7 +26,7 @@ async def test_poll_only_answers_a_chat_linked_to_that_bot(monkeypatch):
     reply.assert_awaited_once_with(db, redis, "alice", 42, "secret-token", "How am I doing?")
     # One per-bot worker lock plus one offset for the whole batch, committed
     # before any slow AI reply so another worker cannot re-fetch it.
-    assert redis.set.await_count == 2
+    assert len([c for c in redis.set.await_args_list if not c.args[0].startswith("rate:")]) == 2  # rate-limit windows also use set
     redis.set.assert_any_await(telegram_bot._offset_key("secret-token"), "7")
     assert "secret-token" not in telegram_bot._offset_key("secret-token")
 
