@@ -100,3 +100,10 @@ async def test_mine_trades_leave_out_options_and_futures(db):
         {**buy("RELIANCE24OCTFUT", 250, 3000, D1, "upstox"), "exchange": "NFO", "user_id": "alice", "_id": "5"},
     ])
     assert {t["symbol"] for t in await lots.mine_trades(db, "alice")} == {"A"}
+
+
+def test_a_same_instant_sell_does_not_sort_before_its_buy():
+    """Upstox history / Console CSV stamp every fill 09:15; the sell must still find its lot."""
+    trades = [sell("A", 10, 150, D1), buy("A", 10, 100, D1)]
+    assert [r["gain"] for r in lots.realised(trades, "A")] == [500]
+    assert lots.open_lots(trades, "A") == [] and lots.unmatched(trades, "A") == []

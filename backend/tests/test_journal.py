@@ -246,3 +246,14 @@ async def test_upstox_import_failure_does_not_leak_the_exception_text(monkeypatc
     with pytest.raises(HTTPException) as err:
         await journal_router.import_upstox(journal_router.HistoryRequest(), MagicMock(id="alice"), None)
     assert err.value.status_code == 502 and "SECRET" not in err.value.detail
+
+
+def test_tied_synthesized_stamps_put_the_buy_first_but_real_fills_keep_their_order():
+    """History/CSV fills all carry 09:15: a same-day sell must not open a SHORT; a synced short stays one."""
+    when = _utc(9, 15)
+    hist = [dict(_t(1, "SELL", 5, 110.0, when), source="upstox_history"),
+            dict(_t(2, "BUY", 5, 100.0, when), source="upstox_history")]
+    trips = build_round_trips(hist)
+    assert [(t["direction"], t["pnl"]) for t in trips] == [("LONG", 50.0)]
+    live = [dict(_t(1, "SELL", 5, 200.0, when), source="sync"), dict(_t(2, "BUY", 5, 190.0, when), source="sync")]
+    assert build_round_trips(live)[0]["direction"] == "SHORT"

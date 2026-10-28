@@ -99,7 +99,7 @@ async def _inputs(db, user_id: str) -> dict:
     ratio = {s: split_ratio(open_lots(trades, s), q, c / q if q else None)
              for s, (q, c) in _held(latest, funds, mine).items()}
     raw = []
-    for t in sorted(trades, key=lambda t: t["traded_at"]):
+    for t in sorted(trades, key=lambda t: (t["traded_at"], t["side"] != "BUY")):  # history/CSV fills tie at 09:15
         s, r = t["symbol"], ratio.get(t["symbol"], 1)
         q = float(t["quantity"]) * r * (1 if t["side"] == "BUY" else -1)
         raw.append((t["traded_at"].astimezone(IST).date(), s, q, float(t["price"]) / r))

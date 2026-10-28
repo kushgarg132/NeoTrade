@@ -17,7 +17,7 @@ def _fifo(trades: list[dict], symbol: str):
     the journal) goes to unmatched as (sell_date, qty, price)."""
     lots: list[list] = []
     matches, unmatched_ = [], []
-    for t in sorted((t for t in trades if t["symbol"] == symbol), key=lambda t: t["traded_at"]):
+    for t in sorted((t for t in trades if t["symbol"] == symbol), key=lambda t: (t["traded_at"], t["side"] != "BUY")):
         day = t["traded_at"].astimezone(IST).date()
         if t["side"] == "BUY":
             lots.append([day, float(t["quantity"]), float(t["price"])])

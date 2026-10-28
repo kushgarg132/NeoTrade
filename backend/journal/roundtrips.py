@@ -79,7 +79,8 @@ def build_round_trips(trades: list[dict]) -> list[dict]:
 
     trips = []
     for rows in groups.values():
-        rows.sort(key=lambda t: (t["traded_at"], t["_id"]))
+        # History/CSV fills are all stamped 09:15, so on a tie the buy goes first; live fills keep their order.
+        rows.sort(key=lambda t: (t["traded_at"], t.get("source") in ("upstox_history", "console_csv") and t["side"] != "BUY", t["_id"]))
         position = 0.0
         trip = None
         for t in rows:
