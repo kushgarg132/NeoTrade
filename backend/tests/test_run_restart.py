@@ -199,3 +199,58 @@ async def test_restarted_run_exits_an_adopted_long_at_its_stop(db):
               portfolio=portfolio, clock=SimClock(), symbol_for_token={1: "ITC"}, account_size=25_000.0,
               max_exposure=15_000.0, per_trade_cap=5_000.0, holders=holders, levels=levels)
     assert "ITC" not in portfolio.positions or portfolio.positions["ITC"].quantity == 0
+
+
+async def test_restarted_run_exits_an_adopted_option_when_its_underlying_hits_the_stop(db):
+    """An adopted bought call used to get no option leg: no stop, no target, no
+    15:15 square-off after a restart."""
+    from datetime import timedelta
+    from backend.core.clock import SimClock
+    from backend.core.models import Bar
+    from backend.engine.adopt import option_legs
+    from backend.engine.execution.simulated import SimulatedExecutionClient
+    from backend.engine.portfolio import Portfolio
+    from backend.engine.protocols import StrategySpec
+    from backend.engine.runner import run
+    from backend.instruments.models import Instrument
+
+    call = Instrument(exchange="NFO", tradingsymbol="RELIANCE26OCT2900CE", name="RELIANCE", instrument_token=9,
+                      exchange_token=9, instrument_type="CE", segment="NFO-OPT", lot_size=250, tick_size=0.05,
+                      expiry=datetime(2026, 10, 27), strike=2900.0)
+
+    class _Master:
+        async def get(self, exchange, symbol):
+            return call if (exchange, symbol) == ("NFO", call.tradingsymbol) else None
+
+    class _Idle:
+        spec = StrategySpec(name="orb_options", mode="INTRADAY", timeframe="5m", warmup_bars=0, universe=["RELIANCE"])
+
+        def on_start(self, ctx): ...
+        def on_fill(self, ctx, fill): ...
+        def on_bar(self, ctx, bar): ...
+
+    t = datetime(2026, 10, 5, 6, 20, tzinfo=timezone.utc)
+    await db["paper_trades"].insert_many([
+        {**_trade(call.tradingsymbol, "BUY", 250, 12.0, t, strategy="orb_options"),
+         "context": {"stop": 2850.0, "target": 2950.0}},
+        {**_trade("ITC", "BUY", 10, 100.0, t), "context": {"stop": 95.0}},
+    ])
+    positions, holders, _, levels = await adopt_intraday(db, "alice", NOW)
+    legs = await option_legs(_Master(), positions, holders, levels, NOW)
+    assert set(legs) == {call.tradingsymbol} and set(levels) == {"ITC"}
+    leg = legs[call.tradingsymbol]
+    assert (leg["underlying"], leg["bullish"], leg["stop"], leg["target"]) == ("RELIANCE", True, 2850.0, 2950.0)
+
+    portfolio = Portfolio()
+    portfolio.positions.update(positions)
+
+    class _Feed:
+        async def __aiter__(self):
+            for i, c in enumerate([2880.0, 2840.0, 2830.0]):
+                yield Bar(instrument_token=1, timeframe="5m", timestamp=NOW + timedelta(minutes=5 * i),
+                          open=c, high=c, low=c, close=c, volume=1000.0)
+
+    await run(strategies=[_Idle()], feed=_Feed(), execution=SimulatedExecutionClient(fill_on_next_open=True),
+              portfolio=portfolio, clock=SimClock(), symbol_for_token={1: "RELIANCE"}, account_size=25_000.0,
+              max_exposure=15_000.0, per_trade_cap=5_000.0, holders=holders, levels=levels, option_legs=legs)
+    assert portfolio.positions[call.tradingsymbol].quantity == 0

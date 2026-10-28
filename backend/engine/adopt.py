@@ -69,6 +69,30 @@ async def adopt_intraday(db, user_id: str, now: datetime) -> tuple[dict[str, Pos
     return positions, holders, stale, levels
 
 
+async def option_legs(master, adopted: dict[str, Position], holders: dict[str, str],
+                      levels: dict[str, dict], now: datetime) -> dict[str, dict]:
+    """Adopted bought options as the runner's `option_legs`, so a restart keeps
+    their stop / target (levels on the underlying, from the trade's context)
+    and the 15:15 square-off. The equity `levels` entry for such a symbol is
+    dropped. Without a stored level only the square-off applies."""
+    legs = {}
+    for symbol, position in adopted.items():
+        if position.quantity <= 0 or (contract := await master.get("NFO", symbol)) is None:
+            continue
+        if contract.instrument_type not in ("CE", "PE"):
+            continue
+        bullish = contract.instrument_type == "CE"
+        lv = levels.pop(symbol, None) or {}
+        never = float("-inf") if bullish else float("inf")
+        legs[symbol] = {
+            "underlying": contract.name, "day": now.astimezone(IST).date(), "contract": contract,
+            "bullish": bullish, "stop": lv.get("stop") if lv.get("stop") is not None else never,
+            "target": lv.get("target") if lv.get("target") is not None else -never,
+            "mark": position.avg_price, "strategy_name": holders.get(symbol),
+        }
+    return legs
+
+
 async def booked_today(ledger: LedgerStore, now: datetime, adopted: dict[str, Position]) -> float:
     """What earlier intraday runs booked today (net), so a restart does not
     re-arm the loss limit: today's INTRADAY trades only, not a long-term exit

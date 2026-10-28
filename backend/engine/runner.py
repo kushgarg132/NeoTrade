@@ -518,6 +518,7 @@ async def run(
     shadow_exit: Optional[Callable[[str, str], Awaitable[None]]] = None,
     forward: Optional[Callable[[Order, Intent, float, datetime], Awaitable[None]]] = None,
     levels: Optional[dict[str, dict]] = None,
+    option_legs: Optional[dict[str, dict]] = None,
 ) -> None:
     """`symbol_for_token` is not in the plan's pseudocode signature; it's
     needed because `Bar` identifies instruments by `instrument_token` while
@@ -569,7 +570,7 @@ async def run(
         strategy.on_start(ctx)
 
     kill_switch_tripped = False
-    option_legs: dict[str, dict] = {}
+    option_legs = dict(option_legs or {})  # adopted ones: engine/adopt.py::option_legs
     # Game-plan revisions (backend/plan/): each new version is acted on once.
     acted_version: Optional[int] = None
     known_symbols = set(owner_by_symbol)  # symbols some strategy trades

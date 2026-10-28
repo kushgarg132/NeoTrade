@@ -437,15 +437,17 @@ async def _launch_run(
     # any left over from an earlier day. A restart used to forget them.
     holders: dict[str, str] = {}
     levels: dict[str, dict] = {}
+    legs: dict[str, dict] = {}
     day_realized = 0.0
     if mode == "INTRADAY":
-        from backend.engine.adopt import adopt_intraday, booked_today, close_stale
+        from backend.engine.adopt import adopt_intraday, booked_today, close_stale, option_legs
         from backend.routers.suggestions import _live_mark_price
 
         now = datetime.now(timezone.utc)
         adopted, holders, stale, levels = await adopt_intraday(db.db, user_id, now)
         for symbol, position in adopted.items():
             portfolio.positions.setdefault(symbol, position)
+        legs = await option_legs(master, adopted, holders, levels, now)
         if stale:
             await close_stale(ledger, stale, _live_mark_price, now)
         day_realized = await booked_today(ledger, now, adopted)
@@ -464,7 +466,7 @@ async def _launch_run(
         master=master if premium_source is not None else None, premium_source=premium_source,
         on_progress=progress_reporter(user_id, run_id, runs, cycle=len(instruments)),
         learned=await load_rules(db.db, user_id),
-        holders=holders, levels=levels,
+        holders=holders, levels=levels, option_legs=legs,
         plan=PlanGate(redis_source(db.redis, user_id)) if mode == "INTRADAY" and db.redis is not None else None,
         expand=(make_expand(master, feed, YFinanceProvider(), strategies, symbol_for_token, today)
                 if mode == "INTRADAY" else None),
