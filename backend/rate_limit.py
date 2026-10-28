@@ -12,9 +12,10 @@ async def allow(redis, key: str, limit: int, window_seconds: int) -> bool:
         return True
     try:
         name = f"rate:{key}"
+        # TTL first and in one command: if the process dies between the two
+        # calls the key still expires, instead of counting up forever.
+        await redis.set(name, 0, ex=window_seconds, nx=True)
         count = await redis.incr(name)
-        if count == 1:
-            await redis.expire(name, window_seconds)
         return count <= limit
     except Exception as exc:
         logger.warning("rate limit check failed for %s: %s", key, exc)

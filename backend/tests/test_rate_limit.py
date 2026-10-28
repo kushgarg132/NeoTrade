@@ -12,14 +12,27 @@ class _Redis:
         self.counts[key] = self.counts.get(key, 0) + 1
         return self.counts[key]
 
-    async def expire(self, key, seconds):
-        self.ttls[key] = seconds
+    async def set(self, key, value, ex=None, nx=False):
+        if nx and key in self.ttls:
+            return None
+        self.counts[key], self.ttls[key] = value, ex
+        return True
 
 
 async def test_allows_up_to_the_limit_then_refuses():
     redis = _Redis()
     results = [await allow(redis, "chat:alice", limit=3, window_seconds=60) for _ in range(4)]
     assert results == [True, True, True, False]
+    assert redis.ttls["rate:chat:alice"] == 60
+
+
+async def test_a_lost_incr_still_leaves_the_key_expiring():
+    class _Dies(_Redis):
+        async def incr(self, key):
+            raise ConnectionError("gone between the two calls")
+
+    redis = _Dies()
+    assert await allow(redis, "chat:alice", limit=3, window_seconds=60) is True  # fails open
     assert redis.ttls["rate:chat:alice"] == 60
 
 
