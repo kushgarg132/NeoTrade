@@ -92,12 +92,14 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
             results[trip["symbol"]] = await events.next_results(db, trip["symbol"], day, days)
 
     for breach in evaluate(trips, synced["day_pnl"], prefs, lot_sizes, results, day):
+        if breach["rule"] == "daily_loss":
+            # Before the dedupe record: a failed trip leaves nothing recorded, so the next tick
+            # retries trip, alert and square-off (trip is idempotent within the day).
+            await KillSwitchStore(db).trip(user_id, day, reason="guardrail: daily loss limit",
+                                           equity=synced["day_pnl"])
         if not await store.record(user_id, day, breach):
             continue
         fresh.append(breach)
-        if breach["rule"] == "daily_loss":
-            await KillSwitchStore(db).trip(user_id, day, reason="guardrail: daily loss limit",
-                                           equity=synced["day_pnl"])
         await _alert(user_id, channel, breach)
         if breach["rule"] == "daily_loss" and prefs.get("auto_square_off", "off") in ("preview", "live"):
             for i, alert in enumerate(await square_off(redis, credentials, prefs)):

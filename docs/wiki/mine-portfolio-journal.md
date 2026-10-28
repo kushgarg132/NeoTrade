@@ -191,7 +191,8 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
        Breach `results_buy:<trip>` when a LONG STOCK trip is within `no_buy_before_results_days` of results (`::results_block`).
        The same rule refuses a BUY before it is sent: `mine/events.py::buy_blocked` in `chat/actions.py::_order_checks`
        (chat and the order ticket) and `routers/suggestions.py::_approve_equity_live`. Unknown date (fetch failed) = allowed.
-    3. Each new breach is recorded with `GuardrailStore.record`. `daily_loss` calls `KillSwitchStore.trip`.
+    3. A `daily_loss` breach calls `KillSwitchStore.trip` (idempotent) first, then each breach is deduped with
+       `GuardrailStore.record`. A failed trip raises before the record, so the next tick retries trip, alert and square-off.
     4. `_alert` publishes to the socket and Telegram.
     5. On `daily_loss` with `auto_square_off` set to preview or live, `guardrails/monitor.py::square_off` runs `exit_orders` per non-AI
        ACTIVE broker and places orders only in `live`.

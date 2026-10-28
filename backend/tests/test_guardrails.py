@@ -107,6 +107,36 @@ async def test_check_user_alerts_once_and_trips_the_kill_switch(monkeypatch):
     assert [e["rule"] for e in events] == ["daily_loss"]
 
 
+async def test_a_failed_kill_switch_trip_is_retried_next_tick(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    monkeypatch.setattr(monitor, "sync_user_trades", AsyncMock(return_value={
+        "imported": 0, "brokers": ["kite"], "failed": [], "day_pnl": -11_000.0}))
+    publish = AsyncMock()
+    monkeypatch.setattr(monitor.hub, "publish", publish)
+    real_trip = KillSwitchStore.trip
+    calls = []
+
+    async def flaky_trip(self, *args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("mongo blip")
+        await real_trip(self, *args, **kwargs)
+    monkeypatch.setattr(KillSwitchStore, "trip", flaky_trip)
+
+    prefs = {**PREFS, "user_id": "alice"}
+    now = _ist(10, 31)
+    day = now.astimezone(monitor.IST).date()
+    try:
+        await monitor.check_user(db, None, None, prefs, now)
+    except RuntimeError:
+        pass
+    assert not await KillSwitchStore(db).is_tripped("alice", day)
+
+    assert _rules(await monitor.check_user(db, None, None, prefs, now)) == ["daily_loss"]
+    assert await KillSwitchStore(db).is_tripped("alice", day)
+    publish.assert_awaited_once()
+
+
 async def test_check_user_does_nothing_without_a_connected_broker(monkeypatch):
     db = AsyncMongoMockClient()["test_db"]
     monkeypatch.setattr(monitor, "sync_user_trades", AsyncMock(return_value={
