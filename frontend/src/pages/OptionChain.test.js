@@ -27,3 +27,10 @@ test('the ATM row is marked in text, not colour alone', () => {
 test('nothing smaller than 12px', () => {
   assert.doesNotMatch(src, /text-\[(\d|1[01])px\]/);
 });
+
+test('chain reloads on underlying change and ignores superseded replies', () => {
+  assert.match(src, /\}, \[underlying, expiry\]\)/);
+  assert.match(src, /chainReq\.n\+\+/);
+  assert.match(src, /id !== chainReq\.n/);
+  assert.match(src, /id !== expiriesReq\.n/);
+});

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import SettingsPage from './SettingsPage';
@@ -47,34 +47,50 @@ const OptionChain = () => {
   const [all, setAll] = useState(false);
   const [fetchedAt, setFetchedAt] = useState(null);
 
-  const loadExpiries = () =>
-    api
+  // Request counters: a reply only lands if it is still the newest request (cleanups bump them).
+  const expiriesReq = useRef({ n: 0 }).current;
+  const chainReq = useRef({ n: 0 }).current;
+
+  const loadExpiries = () => {
+    const id = ++expiriesReq.n;
+    return api
       .get(endpoints.options.expiries(underlying))
       .then((res) => {
+        if (id !== expiriesReq.n) return;
         setExpiries(res.data ?? []);
         setExpiry(res.data?.[0] || null);
         setError(null);
       })
-      .catch((err) => setError(err?.response?.data?.detail || 'Could not load expiries'));
+      .catch((err) => {
+        if (id === expiriesReq.n) setError(err?.response?.data?.detail || 'Could not load expiries');
+      });
+  };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadExpiries(); }, [underlying]);
+  useEffect(() => { loadExpiries(); return () => { expiriesReq.n++; }; }, [underlying]);
 
   const loadChain = (which = expiry) => {
     if (!which) return;
+    const id = ++chainReq.n;
     setBusy(true);
     api
       .get(endpoints.options.chain(underlying, which))
       .then((res) => {
+        if (id !== chainReq.n) return;
         setChain(res.data);
         setFetchedAt(new Date());
         setError(null);
       })
-      .catch((err) => setError(err?.response?.data?.detail || 'Could not load the chain'))
-      .finally(() => setBusy(false));
+      .catch((err) => {
+        if (id === chainReq.n) setError(err?.response?.data?.detail || 'Could not load the chain');
+      })
+      .finally(() => { if (id === chainReq.n) setBusy(false); });
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => loadChain(expiry), [expiry]);
+  useEffect(() => {
+    loadChain(expiry);
+    return () => { chainReq.n++; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [underlying, expiry]);
 
   const rows = useMemo(() => {
     if (!chain) return [];
@@ -86,6 +102,8 @@ const OptionChain = () => {
   const pickUnderlying = (id) => {
     setChain(null);
     setExpiries(null);
+    setExpiry(null);
+    setBusy(false);
     setParams({ u: id });
   };
 
