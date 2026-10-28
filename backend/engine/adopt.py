@@ -8,11 +8,11 @@ their mark. Time is passed in: this module must not read the clock itself.
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, time as dt_time, timezone
 from typing import Awaitable, Callable
 
 from backend.core.models import Order, Position, Side
-from backend.engine.persistence import LedgerStore
+from backend.engine.persistence import LedgerStore, trade_net
 from backend.engine.runner import level_for
 from backend.engine.session import IST
 from backend.suggestions.service import fill_on_paper
@@ -53,7 +53,12 @@ async def adopt_intraday(db, user_id: str, now: datetime) -> tuple[dict[str, Pos
             continue
         same_way = [(q, float(t["entry_price"])) for q, t in zip(signed, trades) if (q > 0) == (net > 0)]
         avg = sum(abs(q) * p for q, p in same_way) / sum(abs(q) for q, _ in same_way)
-        positions[symbol] = Position(symbol=symbol, quantity=net, avg_price=avg)
+        # The trade the next fill advances (LedgerStore._advance_trade: the first
+        # open one on the held side) books position.realized_pnl - realized_base:
+        # seed what it had realized on top of its base, or its close loses both.
+        first = next(t for q, t in zip(signed, trades) if (q > 0) == (net > 0))
+        realized = float(first.get("realized_base") or 0.0) + float(first.get("realized_pnl") or 0.0)
+        positions[symbol] = Position(symbol=symbol, quantity=net, avg_price=avg, realized_pnl=realized)
         latest = max(trades, key=lambda t: t["entry_at"])
         if latest.get("strategy"):
             holders[symbol] = latest["strategy"]
@@ -62,6 +67,21 @@ async def adopt_intraday(db, user_id: str, now: datetime) -> tuple[dict[str, Pos
         if seed:
             levels[symbol] = {**seed, "fresh": False}
     return positions, holders, stale, levels
+
+
+async def booked_today(ledger: LedgerStore, now: datetime, adopted: dict[str, Position]) -> float:
+    """What earlier runs booked today (net), so a restart does not re-arm the
+    loss limit. The realized P&L seeded into adopted positions is taken off:
+    the portfolio counts it again (Portfolio.equity), and its base is already
+    in today's closed trades."""
+    day_start = datetime.combine(now.astimezone(IST).date(), dt_time(0, 0), tzinfo=IST)
+    booked = sum(
+        trade_net(t)
+        for t in await ledger.get_trades(status="CLOSED", venue="paper", limit=2000)
+        if t.get("exit_at") and t["exit_at"] >= day_start
+        and not (t.get("via") or "").startswith("autopilot:")
+    )
+    return booked - sum(p.realized_pnl for p in adopted.values())
 
 
 async def close_stale(

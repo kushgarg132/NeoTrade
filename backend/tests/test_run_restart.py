@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import pytest
 from mongomock_motor import AsyncMongoMockClient
 
-from backend.engine.adopt import adopt_intraday, close_stale
+from backend.engine.adopt import adopt_intraday, booked_today, close_stale
 from backend.engine.persistence import LedgerStore
 from backend.engine.session import IST
 from backend.runs import BOOT_ID, RunStore
@@ -103,6 +103,35 @@ async def test_several_open_trades_on_one_stock_are_netted(db):
     assert positions["CONCOR"].quantity == 33
     assert round(positions["CONCOR"].avg_price, 2) == round((22 * 440.0 + 11 * 435.5) / 33, 2)
     assert "ASTRAL" not in positions and "ASTRAL" not in holders  # nets to flat
+
+
+async def test_adopted_trade_keeps_its_pnl_across_a_restart(db):
+    """A second trade on a stock in one run carries `realized_base` (what the
+    symbol had already realized); an adopted position starting at 0 made the
+    trade's close book P&L minus that base."""
+    from backend.core.models import Fill
+    from backend.engine.portfolio import Portfolio
+
+    t = datetime(2026, 10, 5, 6, 20, tzinfo=timezone.utc)
+    await db["paper_trades"].insert_many([
+        {**_trade("ITC", "BUY", 5, 90.0, t, status="CLOSED"), "id": "first", "realized_pnl": 500.0, "costs": 0.0,
+         "exit_at": t},
+        {**_trade("ITC", "BUY", 10, 100.0, t), "id": "second", "realized_base": 500.0, "realized_pnl": 20.0},
+    ])
+    positions, _, _, _ = await adopt_intraday(db, "alice", NOW)
+    assert positions["ITC"].realized_pnl == 520.0
+
+    portfolio = Portfolio()
+    portfolio.positions.update(positions)
+    ledger = LedgerStore(db, user_id="alice")
+    # The kill switch sees 500 once, not the closed trade plus the seeded base.
+    assert await booked_today(ledger, NOW, positions) + portfolio.equity({"ITC": 100.0}) == 500.0
+
+    fill = Fill(order_id="x", symbol="ITC", side="SELL", quantity=10, price=110.0, timestamp=NOW)
+    portfolio.apply(fill)
+    await ledger.on_fill(fill, 10, portfolio.positions["ITC"])
+    trade = await db["paper_trades"].find_one({"id": "second"})
+    assert trade["status"] == "CLOSED" and trade["realized_pnl"] == 120.0  # 20 earlier + 100 now
 
 
 async def test_adopted_position_keeps_its_stop_after_a_restart(db):
