@@ -17,7 +17,7 @@ test('position block is a risk view: avg, qty, P&L, stop distance, private', () 
   assert.match(page, /Your position · your broker account/);
   assert.match(page, /stopDist/);
   assert.match(page, /if hit/);
-  assert.match(page, /No stop set/);
+  assert.doesNotMatch(page, /No stop set/); // the thesis card is gone (2026-10-28): nowhere to set one
   assert.match(page, /className=\{`private /);
 });
 
@@ -62,7 +62,11 @@ test('price sits on the Hero, not a Card, and stays public', () => {
   assert.match(page, /<DeltaChip[\s\S]*?privateValue=\{false\}/);
   assert.match(page, /aria-pressed=\{watching\}/);
   assert.match(page, /<AsOf /);
-  assert.match(page, /Set one in Details/);
   assert.match(page, /data-testid="stop-line"/);
   assert.doesNotMatch(page, /text-\[28px\]/);
+});
+
+test('the Details tab has no thesis card', () => {
+  const details = readFileSync(new URL('../components/stock/DetailsTab.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(details, /ThesisEditor|Your thesis/);
 });

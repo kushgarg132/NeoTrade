@@ -3,7 +3,6 @@ import Card from '../ui/Card';
 import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
 import Badge from '../ui/Badge';
-import ThesisEditor from '../mine/ThesisEditor';
 import StockFlags from '../analysis/StockFlags';
 import TradingLevels from '../analysis/TradingLevels';
 import TechGauge from './TechGauge';
@@ -12,7 +11,7 @@ import { REASONS } from '../../utils/mine';
 import { day, verdictLabel, verdictKind } from './common';
 
 /** Verdict (when held), your thesis, then the instant snapshot. The AI read lives in the card above the tabs. */
-const DetailsTab = ({ symbol, mine, quick, reloadQuick, onThesis }) => {
+const DetailsTab = ({ mine, quick, reloadQuick }) => {
   const v = mine?.verdict;
   const company = quick.data?.company_info;
   const currency = company?.currency || 'INR';
@@ -37,12 +36,6 @@ const DetailsTab = ({ symbol, mine, quick, reloadQuick, onThesis }) => {
               ))}
             </ul>
           )}
-        </Card>
-      )}
-
-      {mine && (
-        <Card title="Your thesis">
-          <ThesisEditor symbol={symbol} thesis={mine.thesis} onSaved={onThesis} />
         </Card>
       )}
 

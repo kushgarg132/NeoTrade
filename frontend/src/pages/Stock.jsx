@@ -134,7 +134,7 @@ const Stock = () => {
       </Card>
     ) : <Card><Skeleton rows={5} /></Card>,
     news: <NewsTab symbol={symbol} mine={m} ai={ai} onAnalysis={() => document.getElementById('ai-read')?.scrollIntoView({ behavior: 'smooth' })} />,
-    details: <DetailsTab symbol={symbol} mine={m} quick={quick} reloadQuick={reloadQuick} onThesis={(t) => setMine((s) => ({ ...s, data: { ...s.data, thesis: t } }))} />,
+    details: <DetailsTab mine={m} quick={quick} reloadQuick={reloadQuick} />,
     events: <EventsTab mine={m} ai={ai} />,
   }[tab];
 
@@ -190,8 +190,8 @@ const Stock = () => {
               {pos.value != null && <Stat label="Value now" value={inr(pos.value)} />}
               {pos.weight != null && <Stat label="Of your portfolio" value={pct(pos.weight, { dp: 1 })} />}
             </div>
+            {risk.stop != null && (
             <div className="mt-2 text-[14px] text-[var(--text)]" data-testid="stop-line">
-              {risk.stop != null ? (
                 <p>
                   Stop <span className="private">{px(risk.stop)}</span>
                   {risk.stopDist != null && (risk.stopDist > 0 ? ` · ${pct(risk.stopDist, { dp: 1 })} below price` : ' · price is at or below your stop')}
@@ -200,13 +200,8 @@ const Stock = () => {
                   <span className="private">({inr(risk.stopPnl, { sign: true })} vs what you paid)</span>
                   {risk.target != null && <> · target <span className="private">{px(risk.target)}</span></>}
                 </p>
-              ) : (
-                <p className="text-[var(--text-muted)]">
-                  No stop set.{' '}
-                  <button type="button" onClick={() => setTab('details')} className="min-h-11 font-semibold text-[var(--accent)]">Set one in Details</button>
-                </p>
-              )}
             </div>
+            )}
           </div>
         )}
         {sold && <p className="text-[14px] text-[var(--text-muted)]">You no longer hold this. Past trades are on the chart.</p>}
