@@ -152,10 +152,13 @@ async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime, redis
     from backend.learning.adapt import load_rules
 
     paused = frozenset((await load_rules(db, user_id)).paused)
+    latest = db["strategy_backtests"].aggregate([
+        {"$sort": {"run_at": -1, "_id": -1}}, {"$group": {"_id": "$strategy_name", "passed": {"$first": "$passed"}}}])
+    backtested = frozenset([row["_id"] async for row in latest if row["passed"]])
     return fence.FenceState(deployed=deployed, entries_today=entries, held=held, others=others,
                             kill_tripped=tripped, session_ok=in_session(now),
                             regime=regime.get("label"), event_soon=bool(regime.get("event_soon")), news_today=news,
-                            paused=paused)
+                            paused=paused, backtested=backtested)
 
 
 def _product(trade: dict) -> str:

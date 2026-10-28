@@ -13,6 +13,8 @@ from backend.engine.session import IST
 from backend.routers import trading
 from backend.runs import RunStore
 
+pytestmark = pytest.mark.usefixtures("lenient_fence")
+
 MONDAY_10AM = datetime(2026, 9, 28, 10, 0, tzinfo=IST)
 MONDAY_EVENING = datetime(2026, 9, 28, 15, 31, tzinfo=IST)
 SUNDAY_10AM = datetime(2026, 9, 27, 10, 0, tzinfo=IST)
@@ -386,7 +388,7 @@ async def test_with_the_autopilot_on_engine_proposals_go_to_it(world, longterm, 
     async def submit(db, redis, user_id, order, now=None, suggestion_id=None, quiet=False):
         submitted.append((order.symbol, order.source))
         assert quiet and suggestion_id == order.symbol  # one summary note; exits can find the proposal
-        assert order.quantity == 10  # resized: min(10, per_trade_cap // entry 55) = 10
+        assert order.quantity == 100_000 // 55  # sized to the full per-trade cap (the default), not the idea's 10 (charges per sell)
         return {"status": "FILLED", "price": 55.0} if order.symbol == "INFY" else {"status": "REFUSED", "reason": "cap"}
 
     monkeypatch.setattr(service, "submit", submit)

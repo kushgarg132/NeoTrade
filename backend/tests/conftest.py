@@ -77,3 +77,13 @@ def _reset_forward_scorecard_cache():
     from backend.forward import scorecard
 
     scorecard._cache = (0.0, None)
+
+
+@pytest.fixture
+def lenient_fence(monkeypatch):
+    """Turns off the autopilot's backtest allowlist and minimum trade size, for
+    tests about other rules that use ₹100 orders and made-up strategies."""
+    from backend.autopilot import fence
+
+    monkeypatch.setattr(fence, "BACKTESTED_SOURCES", frozenset())
+    monkeypatch.setattr(fence, "MAX_COST_SHARE", float("inf"))

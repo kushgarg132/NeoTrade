@@ -23,6 +23,12 @@ NEWS_ENTRIES_PER_DAY = 3
 PARKED = frozenset({"analyst_verdict", "technical_breakout", "macd_crossover", "mean_reversion",
                     "trend_day_pullback", "gap_fill_fade", "relative_strength_sector"})
 COST_MULTIPLE = 1.5  # an entry's expected gain must clear this many times its round-trip cost
+# Automated entries: an engine/news idea needs its strategy's latest backtest gate passed (an
+# allowlist; PARKED was a denylist that let any new strategy through), and no automated buy may
+# pay more than MAX_COST_SHARE of its size in round-trip charges (2026-10-28: ~₹1,500 lots paid 1.56%).
+BACKTESTED_SOURCES = {"engine", "news"}
+AUTO_SOURCES = {"engine", "news", "picks"}
+MAX_COST_SHARE = 0.01
 
 
 @dataclass
@@ -37,6 +43,7 @@ class FenceState:
     event_soon: bool = False       # a high-impact economic event within 30 minutes
     news_today: int = 0            # news-triggered entries today
     paused: frozenset = frozenset()  # strategies auto-retired on paper (learning/adapt.py)
+    backtested: frozenset = frozenset()  # strategies whose latest backtest gate passed (risk/backtest_gate.py)
 
 
 def trade_cap(prefs: dict, regime: Optional[str]) -> float:
@@ -82,6 +89,8 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
         return "strategy parked: no edge (audit 2026-10-24)"
     if strategy in state.paused:
         return "strategy paused: losing on paper over 30+ trades"
+    if order.source in BACKTESTED_SOURCES and strategy not in state.backtested:
+        return "strategy unproven: no passed backtest gate"
     notional = price * order.quantity
     if state.kill_tripped:
         return "The daily loss limit was hit: no new entries today."
@@ -110,6 +119,11 @@ def check(order, price: float, state: FenceState, prefs: dict) -> Optional[str]:
     limit = prefs["max_trades_per_day"]
     if limit and state.entries_today >= limit:  # 0 is off, as on Settings > Safety
         return f"Already {state.entries_today} trades today (limit {limit})."
+    if order.source in AUTO_SOURCES:
+        cost = round_trip_cost(price, order.quantity, order.product)
+        if cost > MAX_COST_SHARE * notional:
+            return (f"Round-trip charges and slippage (₹{cost:,.0f}) are over {MAX_COST_SHARE:.0%} of a "
+                    f"₹{notional:,.0f} buy: too small a trade.")
     # An entry that says what it expects (a pick's median, an engine idea's target) must expect to pay
     # for itself: on a ₹3,000 lot the fixed DP charge alone is ~0.5% of a sell (2026-10-23 scan).
     expected = (getattr(order, "context", None) or {}).get("expected_return")

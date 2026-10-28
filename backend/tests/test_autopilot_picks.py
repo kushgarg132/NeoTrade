@@ -12,6 +12,8 @@ from backend.autopilot import picks as trading, service
 from backend.engine.session import IST
 from backend.forecast.picks import MIN_FORWARD, live_refusal
 
+pytestmark = pytest.mark.usefixtures("lenient_fence")
+
 SIGNAL = "2026-10-05"                                  # Monday's 16:00 pass
 MORNING = datetime(2026, 10, 6, 9, 21, tzinfo=IST)     # Tuesday, first pass after the open
 DUE = "2026-10-09"

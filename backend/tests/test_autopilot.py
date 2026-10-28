@@ -16,6 +16,8 @@ from backend.autopilot.service import AutopilotOrder
 from backend.core.models import Side
 from backend.engine.session import IST
 
+pytestmark = pytest.mark.usefixtures("lenient_fence")
+
 OPEN = datetime(2026, 10, 6, 11, 0, tzinfo=IST)
 # The shared trading limits (paper and live, Practice and the autopilot).
 PREFS = {"autopilot_enabled": True, "autopilot_live": False, "account_size": 25_000.0, "max_exposure": 25_000.0,
@@ -609,3 +611,46 @@ async def test_the_autopilot_quietly_leaves_ideas_outside_its_universe_to_the_us
     assert docs["out"].get("ai_order") is None and docs["out"]["status"] == "PENDING"  # still the user's idea
     assert sent and all("NOTANIFTY" not in t for t in sent)
     assert await db["autopilot_log"].count_documents({"symbol": "NOTANIFTY"}) == 0
+
+
+def test_engine_and_news_entries_need_a_passed_backtest():
+    """2026-10-28: the AI book lost on four strategies with no measured edge; PARKED
+    named them after the fact. Now an automated idea needs its gate passed first."""
+    from backend.autopilot import fence as real
+
+    buy = AutopilotOrder(symbol="INFY", side=Side.BUY, quantity=3, product="CNC", source="engine", reason="t",
+                         strategy="quality_momentum")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(real, "BACKTESTED_SOURCES", {"engine", "news"})
+        assert "unproven" in fence.check(buy, 1500.0, _state(), PREFS)
+        assert fence.check(buy, 1500.0, _state(backtested=frozenset({"quality_momentum"})), PREFS) is None
+        assert "unproven" in fence.check(replace(buy, source="news"), 1500.0, _state(), {**PREFS, "autopilot_news": True})
+        assert fence.check(replace(buy, source="chat", strategy=None), 1500.0, _state(), PREFS) is None  # the user's own ask
+        sell = replace(buy, side=Side.SELL)
+        assert fence.check(sell, 1500.0, _state(held={"INFY": (3, "CNC")}), PREFS) is None  # exits never blocked
+
+
+def test_an_automated_buy_too_small_for_its_charges_is_refused():
+    """The DP charge is per sell: a ₹1,500 lot paid 1.56% a round trip, a ₹4,500 one 0.85%."""
+    from backend.autopilot import fence as real
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(real, "MAX_COST_SHARE", 0.01)
+        small = _order(qty=1, source="picks")
+        assert "too small a trade" in fence.check(small, 1500.0, _state(), PREFS)
+        assert fence.check(_order(qty=3, source="picks"), 1500.0, _state(), PREFS) is None
+        assert fence.check(_order(qty=1, source="chat"), 1500.0, _state(), PREFS) is None  # the user's own ask
+
+
+async def test_the_autopilot_state_knows_which_strategies_passed_their_latest_gate(world):
+    from backend.autopilot import service
+
+    db, _ = world
+    await db["strategy_backtests"].insert_many([
+        {"strategy_name": "a", "passed": False, "run_at": datetime(2026, 10, 1)},
+        {"strategy_name": "a", "passed": True, "run_at": datetime(2026, 10, 5)},
+        {"strategy_name": "b", "passed": True, "run_at": datetime(2026, 10, 1)},
+        {"strategy_name": "b", "passed": False, "run_at": datetime(2026, 10, 5)},  # latest failed
+    ])
+    state = await service._state(db, "alice", PREFS, "paper", OPEN)
+    assert state.backtested == frozenset({"a"})

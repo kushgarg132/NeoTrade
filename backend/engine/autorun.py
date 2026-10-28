@@ -462,7 +462,8 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
                 refused.append(f"{s['symbol']} (stopped out in the last {REENTRY_COOLDOWN_SESSIONS} sessions)")
                 continue
         unit = price or entry
-        quantity = min(int(s["quantity"]), int(cap // unit)) if unit > 0 else 0
+        # The full cap, not the idea's own size: the DP charge is per sell, so small lots pay ~1.5% (fence.MAX_COST_SHARE).
+        quantity = int(cap // unit) if unit > 0 else 0
         if quantity < 1:
             continue
         result = await service.submit(db, redis, user_id, service.AutopilotOrder(
