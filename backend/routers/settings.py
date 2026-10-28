@@ -28,6 +28,7 @@ from backend.auth.broker_credentials import (
 )
 from backend.auth.dependency import get_current_user, require_admin
 from backend.auth.models import User
+from backend.brokers.registry import BROKERS
 from backend.configs.settings import settings
 from backend.database import db
 from backend.prefs import SETUP_STEP_IDS, PrefsStore
@@ -768,9 +769,16 @@ _NO_SECRET_REQUIRED = {"angel_one"}
 
 class BrokerCredentialsUpdate(BaseModel):
     broker: str = "kite"
-    api_key: str
-    api_secret: Optional[str] = None
-    extra: Optional[str] = None  # e.g. Upstox's registered redirect_uri
+    api_key: str = Field(max_length=512)
+    api_secret: Optional[str] = Field(default=None, max_length=512)
+    extra: Optional[str] = Field(default=None, max_length=512)  # e.g. Upstox's registered redirect_uri
+
+    @field_validator("broker")
+    @classmethod
+    def _known_broker(cls, value):
+        if value not in BROKERS:
+            raise ValueError("Unknown broker")
+        return value
 
 
 @router.get("/settings/broker-credentials")

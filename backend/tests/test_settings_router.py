@@ -513,3 +513,13 @@ def test_daily_loss_limit_rejects_infinity_and_nan():
     for bad in (float("inf"), float("nan")):
         with pytest.raises(ValueError):
             settings_router.PreferencesPatch(daily_loss_limit=bad)
+
+
+@pytest.mark.parametrize("body", [
+    {"broker": "../x", "api_key": "k", "api_secret": "s"},
+    {"broker": "kite", "api_key": "k" * 513, "api_secret": "s"},
+    {"broker": "kite", "api_key": "k", "api_secret": "s" * 513},
+    {"broker": "upstox", "api_key": "k", "api_secret": "s", "extra": "e" * 513},
+])
+def test_broker_credentials_reject_unknown_brokers_and_oversized_fields(client, body):
+    assert client.post("/api/v1/settings/broker-credentials", json=body).status_code == 422
