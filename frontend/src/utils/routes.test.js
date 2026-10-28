@@ -77,3 +77,11 @@ test('the Market tab stays lit on a news item', () => {
   assert.ok(tabActive(market, '/news/abc'));
   assert.ok(!tabActive(MAIN_TABS[0], '/news/abc'));
 });
+
+test('back: history when there is an earlier entry, else the parent path, else home', async () => {
+  const { backStep } = await import('./routes.js');
+  assert.equal(backStep(3, '/market'), -1);
+  assert.equal(backStep(0, '/market'), '/market');
+  assert.equal(backStep(0, true), '/');
+  assert.equal(backStep(1, true), -1);
+});

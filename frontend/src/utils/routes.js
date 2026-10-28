@@ -77,3 +77,8 @@ export const roundTripPath = (id) => `/money/trade/${seg(id)}`;
 export const indexPath = (ticker) => `/market/index/${seg(ticker)}`;
 export const sectorPath = (name) => `/market/sector/${seg(name)}`;
 export const newsPath = (id) => `/news/${seg(id)}`;
+
+/** Where a page's Back goes: history back when this tab has an earlier in-app entry (keeps the tab you left and
+ * no loop on swipe back), else the page's parent path, replacing (opened from a link or a refresh). `idx` is
+ * react-router's history.state.idx. */
+export const backStep = (idx, fallback) => (idx > 0 ? -1 : typeof fallback === 'string' ? fallback : '/');
