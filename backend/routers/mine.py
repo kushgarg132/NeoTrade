@@ -108,7 +108,7 @@ async def overview(user: User = Depends(get_current_user)):
 
 def _thesis_symbol(symbol: str) -> str:
     symbol = symbol.upper()
-    if not re.match(SYMBOL, symbol):
+    if not re.fullmatch(SYMBOL, symbol):
         raise HTTPException(status_code=422, detail="Invalid symbol")
     return symbol
 

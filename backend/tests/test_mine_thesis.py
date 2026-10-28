@@ -56,6 +56,7 @@ def test_bad_symbol_422(setup):
     client, _, _ = setup
     assert client.put(URL + "BAD%20SYM", json={}).status_code == 422
     assert client.get(URL + "A" * 21).status_code == 422
+    assert client.get(URL + "TCS%0A").status_code == 422  # a trailing newline is not a symbol
 
 
 def test_user_b_cannot_read_a(setup):
