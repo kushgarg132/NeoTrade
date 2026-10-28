@@ -34,3 +34,10 @@ async def test_a_redis_connection_failure_returns_none_without_raising():
     result = await get_cached_sentiment("RELIANCE", redis)
 
     assert result is None
+
+
+@pytest.mark.parametrize("raw,expected", [("nan", None), ("inf", None), ("junk", None), ("2.5", 1.0), ("-9", -1.0)])
+async def test_bad_cached_values_are_none_or_clamped(raw, expected):
+    redis = AsyncMock()
+    redis.get.return_value = raw
+    assert await get_cached_sentiment("RELIANCE", redis) == expected

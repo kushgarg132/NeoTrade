@@ -11,6 +11,7 @@ None as neutral (0.0).
 """
 
 import logging
+import math
 from datetime import datetime, timezone
 from typing import Iterable, Optional
 
@@ -29,7 +30,12 @@ async def get_cached_sentiment(symbol: str, redis) -> Optional[float]:
     except Exception as exc:
         logger.warning("sentiment cache unavailable for %s: %s", symbol, exc)
         return None
-    return float(val) if val is not None else None
+    try:
+        score = float(val)
+    except (TypeError, ValueError):
+        return None
+    # A bad cached value (NaN, out of range) must not abort size_intents: composite raises outside [-1, 1].
+    return max(-1.0, min(1.0, score)) if math.isfinite(score) else None
 
 
 # 30-day half-life: news on Indian mid-caps arrives weeks apart, and a

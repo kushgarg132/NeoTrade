@@ -93,7 +93,7 @@ Mongo collections (writer → readers):
 Redis keys:
 - `scan:{user_id}` rate limit 5 / 600 s (`routers/suggestions.py::scan_now`).
 - `builder:lock` NX, TTL 6 h (`draft.py::LOCK`); `builder:test:{slug}` NX, TTL 3600 s (`draft.py::test_one`).
-- Sentiment / `analyst_verdict:<SYM>` read during scans (`scan.py::_ArmedOnlyRedis` lets only the armed session read sentiment).
+- Sentiment / `analyst_verdict:<SYM>` read during scans (`ai/sentiment.py::get_cached_sentiment` returns None for a non-finite or unparseable cached value and clamps the rest to [-1, 1]) (`scan.py::_ArmedOnlyRedis` lets only the armed session read sentiment).
 - Job status via `system/jobs.py::mark(redis, jobs.BUILDER, ...)`.
 
 Prefs (`backend/prefs.py`): `universe`, `account_size`, `max_exposure`, `per_trade_cap`, `scan_enabled`, `omniroute_model` (thesis model), `factor_paper_capital` (₹3 L), `live_strategies` (library), `autopilot_enabled/live/news`, `picks_live`.
