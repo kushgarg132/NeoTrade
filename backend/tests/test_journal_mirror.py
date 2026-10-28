@@ -123,3 +123,11 @@ async def test_friday_mirror_is_sent_to_each_trader(monkeypatch):
 
     assert await scheduler._weekly_mirrors(db) == 1
     assert sent[0][0] == "alice" and "after" in sent[0][1] and "Nifty +2.0%" in sent[0][1]
+
+
+def test_realized_ignores_charges_on_still_held_buys():
+    trades = _book() + [_fill(7, "RELIANCE", "BUY", 100, 2500.0, T0)]  # still held
+    trips = build_round_trips(trades)
+    r = mirror.realized(trades, trips, capital=100_000.0)
+    assert r["net_pnl"] == pytest.approx(mirror.costs(_book(), build_round_trips(_book()), 100_000.0)["net_pnl"])
+    assert r["net_pnl"] > mirror.costs(trades, trips, 100_000.0)["net_pnl"]

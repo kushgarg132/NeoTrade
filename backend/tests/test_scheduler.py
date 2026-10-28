@@ -426,3 +426,87 @@ async def test_broker_reconciliation_runs_for_todays_pass_only(mongo, monkeypatc
     assert await scheduler._reconcile_brokers(mongo, AsyncMock(), now, date(2026, 10, 15)) is None
     assert await scheduler._reconcile_brokers(mongo, None, now, date(2026, 10, 16)) is None
     assert days == [date(2026, 10, 16)]
+
+
+@pytest.mark.asyncio
+async def test_a_failing_early_step_does_not_abort_the_pass(mongo, monkeypatch):
+    async def fake_scan(db, user_id, universe, **kwargs):
+        return []
+
+    async def boom(*a, **k):
+        raise RuntimeError("yfinance down")
+
+    monkeypatch.setattr(scheduler, "scan_universe", fake_scan)
+    monkeypatch.setattr(scheduler, "close_expired_option_positions", boom)
+    await _add_user(mongo, "alice")
+    result = await scheduler.run_daily_jobs(mongo, now=datetime(2024, 1, 15, tzinfo=timezone.utc))
+    assert result["users"] == 1 and result["options_closed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_failing_spot_lookup_skips_only_that_position(mongo):
+    await _seed_option_position(mongo, "NIFTY24JAN100PE", datetime(2024, 1, 10), 100.0)
+
+    async def boom(symbol):
+        raise RuntimeError("yfinance down")
+
+    assert await scheduler.close_expired_option_positions(
+        mongo, now=datetime(2024, 1, 15, tzinfo=timezone.utc), spot_lookup=boom) == 0
+
+
+@pytest.mark.asyncio
+async def test_a_catch_up_pass_replays_and_learns_for_its_own_day(mongo, monkeypatch):
+    seen = {}
+
+    async def fake_replay(db, provider, at):
+        seen["replay"] = at.astimezone(IST).date()
+        return 0
+
+    async def fake_learn(db, now, pass_day=None):
+        seen["learn"] = pass_day
+        return 0
+
+    from backend.plan import replay
+    monkeypatch.setattr(replay, "replay_all", fake_replay)
+    monkeypatch.setattr(scheduler, "_learn", fake_learn)
+    monday = datetime(2024, 1, 15, 4, tzinfo=timezone.utc)
+    await scheduler.run_daily_jobs(mongo, now=monday, pass_day=date(2024, 1, 12))
+    assert seen == {"replay": date(2024, 1, 12), "learn": date(2024, 1, 12)}
+
+
+@pytest.mark.asyncio
+async def test_weekly_mirror_benchmarks_closed_trips_only(mongo, monkeypatch):
+    from backend.journal import mirror
+    from backend.journal.roundtrips import build_round_trips
+    from backend.journal.store import JournalStore
+    await _add_user(mongo, "alice")
+    t0 = datetime(2026, 9, 1, 4, tzinfo=timezone.utc)
+
+    def fill(i, side, qty, price, at, symbol="INFY"):
+        return {"_id": f"t{i}", "user_id": "alice", "broker": "upstox", "exchange": "NSE", "symbol": symbol,
+                "side": side, "quantity": qty, "price": price, "traded_at": at}
+    await mongo["journal_trades"].insert_many([
+        fill(1, "BUY", 10, 1500.0, t0), fill(2, "SELL", 10, 1510.0, t0 + timedelta(hours=3)),
+        fill(3, "BUY", 100, 2500.0, t0, "RELIANCE"),  # still held
+    ])
+    nifty = [(date(2026, 9, 1), 25000.0), (date(2026, 9, 2), 25100.0)]
+
+    async def fake_nifty():
+        return nifty
+    import backend.portfolio.service as service
+    monkeypatch.setattr(service, "_nifty", fake_nifty)
+    sent = []
+
+    async def fake_notify(db, user_id, text):
+        sent.append(text)
+        return True
+    import backend.suggestions.notify as notify_mod
+    monkeypatch.setattr(notify_mod, "notify", fake_notify)
+
+    trades = await JournalStore(mongo).list_trades("alice")
+    trips = build_round_trips(trades)
+    capital = (await PrefsStore(mongo).get("alice"))["account_size"]
+    want = mirror.benchmark(mirror.realized(trades, trips, capital)["net_pnl"], capital,
+                            date(2026, 9, 1), date(2026, 9, 2), nifty)
+    await scheduler._weekly_mirrors(mongo)
+    assert f"Return on capital {want['your_return']:+.1%}" in sent[0]

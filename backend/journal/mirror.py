@@ -63,6 +63,13 @@ def costs(trades: list[dict], trips: list[dict], capital: float) -> dict:
     }
 
 
+def realized(trades: list[dict], trips: list[dict], capital: float) -> dict:
+    """Realized trading only: closed round trips net of their own fills' charges.
+    Charging every buy still held against the closed trips read as a false loss."""
+    closed_ids = {i for trip in trips if trip.get("pnl") is not None for i in trip["trade_ids"]}
+    return costs([t for t in trades if t["_id"] in closed_ids], trips, capital)
+
+
 def benchmark(net_pnl: float, capital: float, start: date, end: date, nifty: list) -> Optional[dict]:
     """The trader's net P&L as a return on capital vs the Nifty over the same
     days. `nifty` is [(date, close)] oldest first; None without coverage."""

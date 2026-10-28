@@ -69,9 +69,19 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
     prefs_store = PrefsStore(db)
 
     from backend.builder import store as builder_store
-    await builder_store.refresh(db)  # the day's scans and plan replays build from the active specs
-    expired = await SuggestionStore(db).expire_stale(now=now)
-    options_closed = await close_expired_option_positions(db, redis=redis, now=now)
+    try:
+        await builder_store.refresh(db)  # the day's scans and plan replays build from the active specs
+    except Exception as exc:
+        logger.exception("builder refresh failed: %s", exc)
+    expired = options_closed = 0
+    try:
+        expired = await SuggestionStore(db).expire_stale(now=now)
+    except Exception as exc:
+        logger.exception("expiring stale suggestions failed: %s", exc)
+    try:
+        options_closed = await close_expired_option_positions(db, redis=redis, now=now)
+    except Exception as exc:
+        logger.exception("closing expired option positions failed: %s", exc)
     verdicts_refreshed = await _refresh_analyst_verdicts(redis)
 
     scanned_users = 0
@@ -100,14 +110,14 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
 
     journal_imported = await _sync_journals(db, redis)
     reconcile_mismatches = await _reconcile_brokers(db, redis, now, pass_day)
-    learning_changes = await _learn(db, now)
+    learning_changes = await _learn(db, now, pass_day)
     # The day's game plans against no plan, on the same bars (backend/plan/replay.py).
     plan_replays = 0
     try:
         from backend.data.providers.yfinance_provider import YFinanceProvider
         from backend.plan.replay import replay_all
 
-        plan_replays = await replay_all(db, YFinanceProvider(), now)
+        plan_replays = await replay_all(db, YFinanceProvider(), pass_at)
     except Exception as exc:
         logger.exception("plan replays failed: %s", exc)
     # AI > Activity's "what the AI did today and why", after the close (summaries/activity.py).
@@ -332,7 +342,11 @@ async def close_expired_option_positions(
                 continue
 
             # The broker's NFO dump names each contract's underlying.
-            spot = await spot_lookup(contract.name)
+            try:
+                spot = await spot_lookup(contract.name)
+            except Exception as exc:
+                logger.warning("spot lookup failed for %s: %s", contract.name, exc)
+                continue
             if spot is None:
                 continue
 
@@ -355,7 +369,7 @@ async def close_expired_option_positions(
     return closed
 
 
-async def _learn(db, now: datetime) -> int:
+async def _learn(db, now: datetime, pass_day: Optional[date] = None) -> int:
     """Each user with paper trades: judge them by setup and update the rules
     their next runs follow (backend/learning/adapt.py), each pause sent to
     Telegram. With the Lab off only pause and resume run (auto-retire). Fridays,
@@ -366,6 +380,7 @@ async def _learn(db, now: datetime) -> int:
     from backend.suggestions.notify import notify
     from backend import app_settings
 
+    pass_day = pass_day or now.astimezone(IST).date()
     lab = await app_settings.lab_on("nightly learning", db)
     users = await db["paper_trades"].distinct("user_id")
     nifty = await _nifty() if users else []
@@ -377,7 +392,7 @@ async def _learn(db, now: datetime) -> int:
             for change in changes:
                 if change["rule"] == "pause":
                     await notify(db, user_id, pause_text(change))
-            if lab and is_last_trading_day_of_week(now.astimezone(IST).date()) and (text := await weekly_text(db, user_id, nifty, now)):
+            if lab and is_last_trading_day_of_week(pass_day) and (text := await weekly_text(db, user_id, nifty, now)):
                 await notify(db, user_id, text)
         except Exception as exc:
             logger.warning("learning pass failed for %s: %s", user_id, exc)
@@ -398,9 +413,12 @@ async def _weekly_mirrors(db) -> int:
     for user_id in await db["journal_trades"].distinct("user_id"):
         try:
             trades = await JournalStore(db).list_trades(user_id)
-            costs = mirror.costs(trades, build_round_trips(trades), (await PrefsStore(db).get(user_id))["account_size"])
+            trips = build_round_trips(trades)
+            capital = (await PrefsStore(db).get(user_id))["account_size"]
+            costs = mirror.costs(trades, trips, capital)
             first = min(t["traded_at"] for t in trades)
-            bench = mirror.benchmark(costs["net_pnl"], (await PrefsStore(db).get(user_id))["account_size"],
+            # Same as the journal page: the benchmark uses closed trips only (mirror.realized).
+            bench = mirror.benchmark(mirror.realized(trades, trips, capital)["net_pnl"], capital,
                                      first.date(), max(d for d, _ in nifty), nifty) if nifty else None
             text = mirror.text(costs, bench)
             prefs = await PrefsStore(db).get(user_id)
