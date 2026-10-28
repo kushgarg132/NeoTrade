@@ -101,6 +101,8 @@ async def refresh(
     user: User = Depends(get_current_user),
     credentials: BrokerCredentialStore = Depends(get_credential_store),
 ):
+    if not await allow(db.redis, f"portfolio_refresh:{user.id}", 6, 60):
+        raise HTTPException(status_code=429, detail="Too many refreshes: try again in a minute")
     snapshot = await refresh_portfolio(db.db, user.id, credentials, db.redis)
     if not snapshot["holdings"] and not snapshot["errors"]:
         raise HTTPException(status_code=409, detail="Connect a broker in Settings to read your holdings.")

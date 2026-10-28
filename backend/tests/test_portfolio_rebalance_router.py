@@ -258,3 +258,10 @@ async def test_rows_carry_thesis_target(mdb):
     await mdb["holding_theses"].insert_one({"user_id": "alice", "symbol": "A", "why": "", "target": 150.0})
     rows = {r["symbol"]: r for r in _client(_user()).get("/api/v1/portfolio").json()["holdings"]}
     assert rows["A"]["thesis_target"] == 150.0 and rows["B"]["thesis_target"] is None
+
+
+async def test_refresh_rate_limited(mdb, monkeypatch):
+    async def refuse(*args, **kwargs):
+        return False
+    monkeypatch.setattr(portfolio_router, "allow", refuse)
+    assert _client(_user()).post("/api/v1/portfolio/refresh").status_code == 429
