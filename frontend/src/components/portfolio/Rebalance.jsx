@@ -46,7 +46,7 @@ const Tax = ({ tax }) => {
   if (!tax) return <span className="doc-meta">—</span>;
   if (tax.est_tax == null) return <span className="doc-meta normal-case">unknown</span>;
   return (
-    <span className="figure-md text-sm">
+    <span className="figure-md text-sm private">
       {formatCurrency(tax.est_tax)}
       {tax.unknown_qty > 0 && <span className="block doc-meta normal-case">{tax.unknown_qty} undated</span>}
     </span>
@@ -168,7 +168,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
   };
   const RUN_TONE = { done: 'text-up', failed: 'text-down', unknown: 'text-down', running: 'text-[var(--accent)]', skipped: 'doc-meta' };
   const RUN_LABEL = { done: 'Placed', failed: 'Not placed', unknown: 'Unknown', running: 'Placing…', skipped: 'Not tried' };
-  const gain = (x) => <span className={x < 0 ? 'text-down' : undefined}>{x < 0 ? `${formatCurrency(-x)} loss` : formatCurrency(x)}</span>;
+  const gain = (x) => <span className={cn('private', x < 0 && 'text-down')}>{x < 0 ? `${formatCurrency(-x)} loss` : formatCurrency(x)}</span>;
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -266,7 +266,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
       </Sheet>
 
       {shown && (
-        <Sheet title="Trades" meta={`${trades.length} · cash left ${formatCurrency(shown.cash_left)}`}>
+        <Sheet title="Trades" meta={<>{trades.length} · cash left <span className="private">{formatCurrency(shown.cash_left)}</span></>}>
           {shown.uninvested_pct > 0.5 && (
             <p role="status" className="mb-2 text-sm border border-[var(--loss)] bg-[var(--loss-soft)] px-3 py-2">
               Your caps leave {formatPercent(shown.uninvested_pct)} of the book uninvested: there are not enough
@@ -306,9 +306,9 @@ const Rebalance = ({ snapshot, onTrade }) => {
           ) : (
             <>
               <div className="mb-3 grid grid-cols-3 gap-3 rounded-[12px] bg-[var(--surface-2)] px-3 py-2" aria-label="Total cost of these trades">
-                <Field label="Total tax est." value={formatCurrency(tax.est_tax)} tone={tax.est_tax > 0 ? 'down' : undefined} />
-                <Field label="Charges" value={formatCurrency(chargesTotal)} />
-                <Field label="Total cost" value={formatCurrency(tax.est_tax + chargesTotal)} />
+                <Field className="private" label="Total tax est." value={formatCurrency(tax.est_tax)} tone={tax.est_tax > 0 ? 'down' : undefined} />
+                <Field className="private" label="Charges" value={formatCurrency(chargesTotal)} />
+                <Field className="private" label="Total cost" value={formatCurrency(tax.est_tax + chargesTotal)} />
                 <p className="col-span-3 doc-meta normal-case">
                   Net short-term: {gain(tax.short_gain)} · long-term: {gain(tax.long_gain)}. Losses on sells are set off against gains first.
                   {tax.undated > 0 && ` ${tax.undated} sell${tax.undated > 1 ? 's' : ''} not fully dated in your journal: real tax may differ.`}
@@ -372,9 +372,9 @@ const Rebalance = ({ snapshot, onTrade }) => {
                       {onTrade && <TicketButton label={tradeLabel(t)} tone={t.side === 'SELL' ? 'loss' : 'gain'} onClick={() => trade(t)} />}
                     </div>
                     <div className="mt-2 grid grid-cols-3 gap-3">
-                      <Field label="Value" value={formatCurrency(t.value)} />
+                      <Field className="private" label="Value" value={formatCurrency(t.value)} />
                       <Field label="Weight" value={`${formatPercent(t.weight_now)} → ${formatPercent(t.weight_after)}`} />
-                      <Field label="Tax est." value={t.side === 'SELL' ? (t.tax?.est_tax == null ? 'unknown' : formatCurrency(t.tax.est_tax)) : '—'} />
+                      <Field className="private" label="Tax est." value={t.side === 'SELL' ? (t.tax?.est_tax == null ? 'unknown' : formatCurrency(t.tax.est_tax)) : '—'} />
                     </div>
                   </li>
                 ))}
@@ -398,7 +398,7 @@ const Rebalance = ({ snapshot, onTrade }) => {
                         <TradeContext trade={t} news={news[t.symbol]} />
                       </Cell>
                       <Cell mono className={t.side === 'SELL' ? 'text-down' : 'text-up'}>{tradeLabel(t)}</Cell>
-                      <Cell align="right" mono>{formatCurrency(t.value)}</Cell>
+                      <Cell align="right" mono className="private">{formatCurrency(t.value)}</Cell>
                       <Cell align="right" mono>{formatPercent(t.weight_now)} → {formatPercent(t.weight_after)}</Cell>
                       <Cell align="right"><Tax tax={t.tax} /></Cell>
                       <Cell align="right">

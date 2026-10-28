@@ -56,3 +56,15 @@ test('useLoad keys its result by loader; weekly arrows shift from the URL week',
   assert.match(load, /setS\(\{ fn, data/);
   assert.match(f('../../pages/WeeklyReport.jsx'), /shiftWeek\(week \|\| r\?\.week, by\)/);
 });
+
+test('SmartSearch drops an older query reply', () => {
+  const s = f('../dashboard/SmartSearch.jsx');
+  assert.match(s, /if \(!live\) return;/);
+  assert.match(s, /live = false; clearTimeout\(handle\)/);
+});
+
+test('Rebalance money is hide-amounts private', () => {
+  const s = f('../portfolio/Rebalance.jsx');
+  for (const re of [/className="private" label="Total cost"/, /className="private" label="Value"/, /mono className="private">\{formatCurrency\(t\.value\)/,
+    /cash left <span className="private">/, /figure-md text-sm private/]) assert.match(s, re);
+});
