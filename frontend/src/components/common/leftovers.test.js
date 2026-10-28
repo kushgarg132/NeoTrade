@@ -85,3 +85,11 @@ test('/auth/me clears the token only on a 401 and retries other failures once', 
 test('Money total P&L percent shows a dash when pnl_pct is missing', () => {
   assert.match(f('../../pages/Money.jsx'), /h\.pnl_pct != null \? pct\(h\.pnl_pct \/ 100, \{ sign: true \}\) : '—'/);
 });
+
+test('Scorecard drops stale replies; Watchlist rollback restores only the failed row', () => {
+  const sc = f('../paper/Scorecard.jsx');
+  assert.match(sc, /mine !== latest\.current/);
+  const wl = f('../market/Watchlist.jsx');
+  assert.doesNotMatch(wl, /setRows\(previous\)/);
+  assert.match(wl, /\[\.\.\.list\.slice\(0, at\), gone, \.\.\.list\.slice\(at\)\]/);
+});

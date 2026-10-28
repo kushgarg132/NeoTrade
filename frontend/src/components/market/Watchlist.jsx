@@ -51,12 +51,14 @@ const Watchlist = () => {
 
   const remove = async (event, symbol) => {
     event.stopPropagation();
-    const previous = rows;
+    const at = rows.findIndex((item) => item.symbol === symbol);
+    const gone = rows[at];
     setRows((list) => list.filter((item) => item.symbol !== symbol));
     try {
       await api.delete(endpoints.watchlist.remove(symbol));
     } catch {
-      setRows(previous);
+      // Put back only this row: another removal may have succeeded meanwhile.
+      setRows((list) => (list.some((item) => item.symbol === symbol) ? list : [...list.slice(0, at), gone, ...list.slice(at)]));
     }
   };
 
