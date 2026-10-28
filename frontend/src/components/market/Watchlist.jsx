@@ -10,7 +10,7 @@ import Button from '../ui/Button';
 import AsOf from '../ui/AsOf';
 import api, { endpoints } from '../../utils/api';
 import { stream } from '../../lib/ws';
-import { inr, pct, tone } from '../ui/format';
+import { inr, pct, points, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
 import { stockPath } from '../../utils/stocks';
 import { bareSymbol } from '../../utils/formatters';
@@ -73,7 +73,7 @@ const Watchlist = () => {
               <NewsChip entry={news[s.symbol?.toUpperCase().replace(/\.NS$/, '')]} link={false} />
             </button>
             <div className="text-right shrink-0">
-              <div className="text-[15px] tabular-nums text-[var(--text)]">{inr(s.current_price)}</div>
+              <div className="text-[15px] tabular-nums text-[var(--text)]">{(s.currency && s.currency !== 'INR' ? points : inr)(s.current_price)}</div>
               <div className={`text-[13px] tabular-nums ${toneText(tone(s.day_change_percent))}`}>
                 {s.day_change_percent == null ? '—' : pct(s.day_change_percent / 100, { sign: true })}
               </div>
