@@ -461,13 +461,14 @@ def test_subscribe_rejects_unknown_topics_and_caps_the_count(client, hub):
         "/api/v1/ws?token=good-token", headers={"origin": ALLOWED_ORIGIN}
     ) as socket:
         socket.receive_json()
-        socket.send_json({"action": "subscribe", "topics": ["prices:ok", "prices:TCS", "evil", "pnl"]})
+        socket.send_json({"action": "subscribe", "topics": ["prices:bad!", "prices:TCS", "evil", "pnl", "chat:ab12"]})
         assert socket.receive_json()["event"] == "error"
-        assert socket.receive_json()["data"]["topics"] == ["pnl", "prices:TCS"]
+        assert socket.receive_json()["data"]["topics"] == ["chat:ab12", "pnl", "prices:TCS"]
 
-        socket.send_json({"action": "subscribe", "topics": [f"prices:S{i}" for i in range(80)]})
+        # A full watchlist (routers/watchlist.py MAX_SYMBOLS) fits with room to spare.
+        socket.send_json({"action": "subscribe", "topics": [f"prices:S{i}" for i in range(200)]})
         assert socket.receive_json()["event"] == "error"
-        assert len(socket.receive_json()["data"]["topics"]) == 50
+        assert len(socket.receive_json()["data"]["topics"]) == ws_routes.MAX_TOPICS
 
 
 def test_chat_context_only_passes_slug_shaped_values(client, monkeypatch):
@@ -493,3 +494,9 @@ def test_chat_context_only_passes_slug_shaped_values(client, monkeypatch):
         socket.receive_json()
         socket.receive_json()
         assert seen["context"] == {"page": "/stock/tcs", "symbol": "TCS"}
+
+
+def test_a_full_watchlist_fits_in_one_connection():
+    from backend.routers.watchlist import MAX_SYMBOLS
+
+    assert ws_routes.MAX_TOPICS >= MAX_SYMBOLS + 20

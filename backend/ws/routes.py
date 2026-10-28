@@ -44,8 +44,12 @@ CLOSE_UNAUTHORIZED = 1008
 # price topic per symbol. The price pump polls every subscribed symbol, so an
 # open-ended topic list would be an open-ended quote bill.
 _FIXED_TOPICS = {"trades", "positions", "pnl", "runs", "suggestions", "portfolio", "guardrails", "news", "autopilot"}
-_PRICE_TOPIC = re.compile(r"^prices:[A-Z0-9&-]{1,20}$")
-MAX_TOPICS = 50
+# Same symbol shape the watchlist accepts (routers/watchlist.py).
+_PRICE_TOPIC = re.compile(r"^prices:[A-Za-z0-9&._ -]{1,30}$")
+# A one-shot request's reply topic (frontend lib/ws.js `request`).
+_REQUEST_TOPIC = re.compile(r"^(chat|analysis|quick_analysis|index_move):[a-z0-9]{1,16}$")
+# Watchlist MAX_SYMBOLS (100) price topics plus the fixed and request ones.
+MAX_TOPICS = 130
 # Chat context rides into the system prompt, so only slug-shaped values pass.
 _PAGE = re.compile(r"[a-z0-9/_?=&-]{0,60}")
 _SYMBOL = re.compile(r"[A-Z0-9&.-]{1,20}")
@@ -157,7 +161,7 @@ async def _handle(websocket: WebSocket, connection, message: dict) -> None:
         accepted, rejected = [], []
         room = MAX_TOPICS - len(connection.topics)
         for topic in dict.fromkeys(t for t in topics if isinstance(t, str)):
-            ok = topic in _FIXED_TOPICS or _PRICE_TOPIC.fullmatch(topic)
+            ok = topic in _FIXED_TOPICS or _PRICE_TOPIC.fullmatch(topic) or _REQUEST_TOPIC.fullmatch(topic)
             if ok and topic not in connection.topics:
                 ok = room > 0
                 room -= 1
