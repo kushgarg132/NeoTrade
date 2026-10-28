@@ -8,6 +8,7 @@ this codebase, so it reads the strike off its option chain
 """
 
 import logging
+import time
 from typing import Awaitable, Callable, Optional
 
 from backend.brokers.protocol import BrokerSessionState
@@ -18,6 +19,7 @@ from backend.instruments.models import Instrument
 logger = logging.getLogger(__name__)
 
 PremiumSource = Callable[[Instrument], Awaitable[Optional[float]]]
+CHAIN_TTL_S = 15  # an Upstox chain is re-read after this, so entries and exit marks stay live
 
 
 def _kite_source(adapter) -> PremiumSource:
@@ -31,20 +33,20 @@ def _kite_source(adapter) -> PremiumSource:
 
 
 def _upstox_source(adapter, master: InstrumentMaster) -> PremiumSource:
-    chains: dict[tuple[str, str], list[dict]] = {}  # one chain call per underlying+expiry
+    chains: dict[tuple[str, str], tuple[float, list[dict]]] = {}  # (fetched_at, chain) per underlying+expiry
 
     async def premium(contract: Instrument) -> Optional[float]:
         try:
             expiry = contract.expiry.date().isoformat()
             key = (contract.name, expiry)
-            if key not in chains:
+            if key not in chains or time.monotonic() - chains[key][0] >= CHAIN_TTL_S:
                 underlying = await master.get("NSE", contract.name)
                 if underlying is None:
                     return None
                 underlying_key = (await adapter._resolve(underlying))["instrument_key"]
-                chains[key] = await adapter.option_chain(underlying_key, expiry)
+                chains[key] = (time.monotonic(), await adapter.option_chain(underlying_key, expiry))
             leg = "put" if contract.instrument_type == "PE" else "call"
-            for row in chains[key]:
+            for row in chains[key][1]:
                 if row["strike"] == contract.strike:
                     return (row[leg] or {}).get("ltp") or None
             return None

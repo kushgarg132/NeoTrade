@@ -72,6 +72,24 @@ async def test_upstox_reads_the_strike_off_one_chain_per_expiry(db):
 
 
 @pytest.mark.asyncio
+async def test_upstox_chain_is_refetched_after_the_ttl(db, monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr(premiums.time, "monotonic", lambda: now[0])
+    upstox = _Upstox()
+    source = premiums._upstox_source(upstox, InstrumentMaster(db))
+
+    assert await source(_contract(2760.0)) == 39.9
+    now[0] += premiums.CHAIN_TTL_S - 1
+    await source(_contract(2760.0))
+    assert upstox.option_chain.await_count == 1  # still fresh
+
+    upstox.option_chain.return_value = [{"strike": 2760.0, "call": {"ltp": 1.0}, "put": {"ltp": 55.0}}]
+    now[0] += 2
+    assert await source(_contract(2760.0)) == 55.0  # stale chain re-read, not the morning's premium
+    assert upstox.option_chain.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_a_broker_error_prices_nothing_rather_than_raising():
     kite = _Kite()
     kite.quote = AsyncMock(side_effect=RuntimeError("token expired"))

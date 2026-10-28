@@ -57,7 +57,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/brokers/expiry.py` / `trades.py` / `holdings.py` | Token TTL math; IST trade-time parsing; ETF tag | `expiry.py::ttl_seconds_until`, `trades.py::parse_ist`, `holdings.py::kind_of` |
 | `backend/options/sizing.py` | Lot/collateral sizing of option intents | `sizing.py::size_option_intent`, `::OptionSizingResult` |
 | `backend/options/pricing.py` | Black-Scholes, flat margin | `pricing.py::black_scholes_put`, `::estimate_margin`, `::MARGIN_APPROXIMATION_PCT` |
-| `backend/options/premiums.py` | Live premium source from Kite/Upstox | `premiums.py::live_premium_source` |
+| `backend/options/premiums.py` | Live premium source from Kite/Upstox (Upstox chain cached per underlying+expiry for `CHAIN_TTL_S`=15 s) | `premiums.py::live_premium_source`, `::CHAIN_TTL_S` |
 | `backend/options/backtest.py` | Model-priced options for backtests | `options/backtest.py::ModelOptions` |
 | `backend/options/resolver.py` | F&O whitelist | `resolver.py::FO_UNDERLYINGS`, `::is_fo_eligible` |
 | `backend/data/protocols.py` | `MarketDataProvider` | `data/protocols.py::MarketDataProvider` |
