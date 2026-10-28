@@ -507,3 +507,9 @@ def test_an_admin_switches_an_llm_feature_off_and_on(client, db):
     assert admin.get("/api/v1/settings/omniroute-tiers").json()["features_off"] == ["news"]
     admin.post("/api/v1/settings/llm-feature", json={"feature": "news", "enabled": True})
     assert admin.get("/api/v1/settings/omniroute-tiers").json()["features_off"] == []
+
+
+def test_daily_loss_limit_rejects_infinity_and_nan():
+    for bad in (float("inf"), float("nan")):
+        with pytest.raises(ValueError):
+            settings_router.PreferencesPatch(daily_loss_limit=bad)

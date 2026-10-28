@@ -83,7 +83,7 @@ class PreferencesPatch(BaseModel):
     account_size: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
     max_exposure: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
     per_trade_cap: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
-    daily_loss_limit: Optional[float] = Field(default=None, ge=0)  # 0 is off
+    daily_loss_limit: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)  # 0 is off
     scan_enabled: Optional[bool] = None
     omniroute_model: Optional[str] = None
     live_strategies: Optional[list[str]] = None
