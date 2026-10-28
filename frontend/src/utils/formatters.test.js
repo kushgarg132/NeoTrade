@@ -31,3 +31,11 @@ test('asOf: clock in session, stale past 15 min; closed says last close, dated a
   assert.equal(old.stale, true);
   assert.match(old.text, /^Stale · as of 18 OCT 2026/);
 });
+
+test('formatSigned rounds before choosing the sign', async () => {
+  const { formatSigned } = await import('./formatters.js');
+  assert.equal(formatSigned(-0.001), '₹0.00');
+  assert.equal(formatSigned(0.004), '₹0.00');
+  assert.equal(formatSigned(-12.5), '−₹12.50');
+  assert.equal(formatSigned(3), '+₹3.00');
+});

@@ -14,8 +14,9 @@ export const formatCurrency = (value, currency = 'INR') => {
 /** A net always carries its sign: a statement never leaves the reader guessing. */
 export const formatSigned = (value, currency = 'INR') => {
   if (value === null || value === undefined || isNaN(value)) return '—';
-  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
-  return sign + formatCurrency(Math.abs(value), currency);
+  const abs = Number(Math.abs(value).toFixed(2)); // round first: -0.001 prints as ₹0.00, not −₹0.00
+  const sign = abs === 0 ? '' : value > 0 ? '+' : '−';
+  return sign + formatCurrency(abs, currency);
 };
 
 export const formatQuantity = (value) => {
