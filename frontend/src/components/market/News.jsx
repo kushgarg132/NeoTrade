@@ -11,6 +11,7 @@ import api, { endpoints } from '../../utils/api';
 import { useReconnect, useTopic } from '../../hooks/useStream';
 import { formatTimeAgo } from '../../utils/formatters';
 import { impactWord, materialToday } from '../../utils/market';
+import { mergeFront } from '../../utils/news';
 
 /**
  * News: everything the ingest worker stored and scored, newest first, with what each
@@ -65,23 +66,28 @@ const News = () => {
   const [error, setError] = useState(false);
   const [more, setMore] = useState(false);
 
-  const load = useCallback((before) => {
+  const [gen] = useState({ n: 0 }); // bumped on every scope change; older replies are dropped
+
+  // before = page older items; refresh = background re-fetch of page 1 merged in front (never replaces or wipes the list).
+  const load = useCallback((before, refresh) => {
+    const mark = gen.n;
     const params = { limit: PAGE, ...(scope && { scope }), ...(mine && { mine: true }), ...(before && { before }) };
     return api.get(endpoints.newsFeed, { params })
       .then((res) => {
-        setItems((cur) => (before ? [...(cur || []), ...res.data.items] : res.data.items));
-        setMore(res.data.items.length === PAGE);
+        if (mark !== gen.n) return;
+        setItems((cur) => (before ? [...(cur || []), ...res.data.items] : refresh ? mergeFront(cur, res.data.items) : res.data.items));
+        if (!refresh) setMore(res.data.items.length === PAGE);
         setError(false);
       })
-      .catch(() => setError(true));
-  }, [scope, mine]);
+      .catch(() => { if (mark === gen.n && !refresh) setError(true); });
+  }, [scope, mine, gen]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return () => { gen.n++; }; }, [load, gen]);
   const pickScope = (id) => { setItems(null); setScope(id); };
   const pickMine = (v) => { setItems(null); setMine(v); };
   const { pinned, rest } = materialToday(items || [], new Date());
-  useReconnect(() => load());
-  useTopic('news', () => load());
+  useReconnect(() => load(undefined, true));
+  useTopic('news', () => load(undefined, true));
 
   return (
     <Card title="News" action={

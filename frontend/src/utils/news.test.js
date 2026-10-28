@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { badNewsSince, chipLabel, hasNews, hasRecentNews, lossCause, newsToday, resultsFlag, sortByNewsRisk, tone } from './news.js';
+import { badNewsSince, chipLabel, hasNews, hasRecentNews, lossCause, mergeFront, newsToday, resultsFlag, sortByNewsRisk, tone } from './news.js';
 
 test('newsToday is a material item on the IST day; hasNews needs a headline', () => {
   const now = Date.parse('2026-10-26T10:00:00Z'); // 15:30 IST
@@ -68,4 +68,11 @@ test('material bad news sorts first, otherwise order is kept', () => {
   const news = { C: { material: true, direction: -0.7 }, B: { material: true, direction: 0.8 }, D: { material: true, direction: -0.5 } };
   assert.deepEqual(sortByNewsRisk(rows, news).map((r) => r.symbol), ['C', 'D', 'A', 'B']);
   assert.deepEqual(sortByNewsRisk(rows, {}).map((r) => r.symbol), ['A', 'B', 'C', 'D']);
+});
+
+test('mergeFront puts the fresh page first and keeps older paged items', () => {
+  const cur = [{ id: 'b' }, { id: 'c' }, { id: 'd' }];
+  const fresh = [{ id: 'a' }, { id: 'b' }];
+  assert.deepEqual(mergeFront(cur, fresh).map((n) => n.id), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(mergeFront(null, fresh).map((n) => n.id), ['a', 'b']);
 });

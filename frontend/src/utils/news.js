@@ -63,3 +63,9 @@ export const resultsFlag = (date, horizon, now = Date.now()) => {
 export const lossCause = (entry) => (badNews(entry)
   ? { news: true, text: `Drop after news: ${entry.headline || 'material bad news'}` }
   : { news: false, text: 'Slow decline' });
+
+/** A refreshed first page in front of the already-loaded list, deduped by id (paged items are kept). */
+export const mergeFront = (cur, fresh) => {
+  const ids = new Set(fresh.map((n) => n.id));
+  return [...fresh, ...(cur || []).filter((n) => !ids.has(n.id))];
+};

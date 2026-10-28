@@ -17,3 +17,10 @@ test('Watchlist Empty renders the SmartSearch', () => {
   assert.match(watch, /useSymbolNews/);
   assert.match(watch, /<NewsChip/);
 });
+
+test('News: stale replies are dropped; socket refresh merges page 1 and never wipes the list', () => {
+  assert.match(news, /mark !== gen\.n/);
+  assert.match(news, /mergeFront\(cur, res\.data\.items\)/);
+  assert.match(news, /useTopic\('news', \(\) => load\(undefined, true\)\)/);
+  assert.match(news, /!refresh\) setError\(true\)/);
+});
