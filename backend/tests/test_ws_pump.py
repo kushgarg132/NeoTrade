@@ -134,3 +134,22 @@ async def test_pnl_does_not_leak_between_users(mongo, hub, quotes):
     data = bob.queue.get_nowait()["data"]
     assert data["paper"]["open"]["positions"] == 0
     assert data["live"]["mine"]["open"]["positions"] == 0
+
+
+@pytest.mark.asyncio
+async def test_one_users_failure_does_not_stop_the_others(mongo, hub, quotes, monkeypatch):
+    real = pump_module.compute_pnl
+
+    async def flaky(ledger, marks, **kwargs):
+        if ledger.user_id == "alice":
+            raise RuntimeError("bad row")
+        return await real(ledger, marks, **kwargs)
+
+    monkeypatch.setattr(pump_module, "compute_pnl", flaky)
+    hub.connect("alice").subscribe(["pnl"])
+    bob = hub.connect("bob")
+    bob.subscribe(["pnl"])
+
+    await pump_module.push_once(mongo)
+
+    assert bob.queue.get_nowait()["topic"] == "pnl"

@@ -33,23 +33,26 @@ async def push_once(db) -> dict:
 
     pnl_users = hub.users_on(PNL_TOPIC)
     for user_id in pnl_users:
-        ledger = LedgerStore(db, user_id=user_id)
-        positions = await ledger.get_open_positions()
-        # Reuse whatever the price pass already fetched; only pay for the
-        # symbols this user holds that nobody was watching.
-        missing = [s for s in positions if s not in marks]
-        user_marks = {**marks, **(await mark_prices(db, missing) if missing else {})}
-        # Both books in one message, keyed by venue: the Paper tab reads
-        # `paper`, the real-money statement reads `live.mine` / `live.ai`, and
-        # neither ever shows the other's figures. The combined figures stay at the top
-        # level for a browser still running the build from before venues,
-        # which reads `today`/`month`/`open` there and would crash without.
-        await hub.publish(user_id, PNL_TOPIC, "updated", {
-            **await compute_pnl(ledger, user_marks),
-            "paper": await compute_pnl(ledger, user_marks, venue="paper"),
-            # {mine, ai}: separate real-money books, see compute_live_pnl.
-            "live": await compute_live_pnl(db, user_id, user_marks, marks_fn=mark_prices),
-        })
+        try:
+            ledger = LedgerStore(db, user_id=user_id)
+            positions = await ledger.get_open_positions()
+            # Reuse whatever the price pass already fetched; only pay for the
+            # symbols this user holds that nobody was watching.
+            missing = [s for s in positions if s not in marks]
+            user_marks = {**marks, **(await mark_prices(db, missing) if missing else {})}
+            # Both books in one message, keyed by venue: the Paper tab reads
+            # `paper`, the real-money statement reads `live.mine` / `live.ai`, and
+            # neither ever shows the other's figures. The combined figures stay at the top
+            # level for a browser still running the build from before venues,
+            # which reads `today`/`month`/`open` there and would crash without.
+            await hub.publish(user_id, PNL_TOPIC, "updated", {
+                **await compute_pnl(ledger, user_marks),
+                "paper": await compute_pnl(ledger, user_marks, venue="paper"),
+                # {mine, ai}: separate real-money books, see compute_live_pnl.
+                "live": await compute_live_pnl(db, user_id, user_marks, marks_fn=mark_prices),
+            })
+        except Exception as exc:  # one user's bad data must not stop everyone else's tick
+            logger.warning("pnl push failed for %s: %s", user_id, exc)
 
     return {"symbols": len(marks), "pnl_users": len(pnl_users)}
 
