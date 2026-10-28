@@ -29,7 +29,8 @@ MAX_SETUPS = 15
 def validate(idea: dict, strategies: dict) -> dict | None:
     """The idea with its params merged over what runs now, or None when it
     names an unknown or untestable strategy or key, a value out of bounds,
-    or something the grid already tries."""
+    or something the grid already tries. A key that runs at 0 or below has no
+    4x bound, so it is rejected."""
     from backend.learning.retune import WINDOW_DAYS, variants
 
     strategy = strategies.get(idea.get("strategy")) if isinstance(idea, dict) else None
@@ -40,7 +41,7 @@ def validate(idea: dict, strategies: dict) -> dict | None:
         now = strategy.p.get(key)
         if now is None or isinstance(value, bool) or not isinstance(value, (int, float)):
             return None
-        if now > 0 and not (now / BOUND <= value <= now * BOUND):
+        if now <= 0 or not (now / BOUND <= value <= now * BOUND):
             return None
     merged = {**strategy.p, **{k: float(v) for k, v in params.items()}}
     if merged == strategy.p or merged in variants(strategy.GRID):

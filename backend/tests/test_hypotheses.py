@@ -37,6 +37,14 @@ def test_only_known_strategies_and_their_own_keys_within_bounds_pass():
     assert validate({"strategy": "macd_crossover", "params": {"stop_pct": 0.02}}, s) is None  # already in the grid
 
 
+def test_a_param_that_runs_at_zero_or_below_takes_no_ideas():
+    """4x of zero is no bound at all, so such a key is not tunable by the model."""
+    s = _strategies()
+    mc = s["macd_crossover"]
+    mc.p["stop_pct"] = 0.0
+    assert validate({"strategy": "macd_crossover", "params": {"stop_pct": 5.0}}, s) is None
+
+
 @pytest.mark.asyncio
 async def test_propose_queues_at_most_three_valid_ideas(monkeypatch):
     db = AsyncMongoMockClient()["t"]
