@@ -10,16 +10,14 @@ import { inr, tone } from '../ui/format';
 import api, { endpoints } from '../../utils/api';
 import { formatQuantity } from '../../utils/formatters';
 import { taxYears } from '../../utils/mine';
+import { fyStart } from '../../utils/months';
 import { stockPath } from '../../utils/stocks';
 import useSymbolNews from '../../hooks/useSymbolNews';
 import { lossCause } from '../../utils/news';
 
 const EXEMPTION = 125000;
 const fyLabel = (fy) => `FY ${fy}-${String((fy + 1) % 100).padStart(2, '0')}`;
-const currentFy = () => {
-  const d = new Date();
-  return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
-};
+const currentFy = fyStart;
 const day = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' });
 const Note = ({ children }) => <p className="text-[13px] text-[var(--text-muted)] mt-2">{children}</p>;
 const None = ({ text }) => <p className="text-[14px] text-[var(--text-muted)]">{text}</p>;

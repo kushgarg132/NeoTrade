@@ -15,3 +15,9 @@ export const monthLabel = (key, month = 'long') =>
 
 export const todayIst = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+
+/** The Indian financial year (starts April) a YYYY-MM-DD day falls in: its starting calendar year. Default: today in IST. */
+export const fyStart = (day = todayIst()) => {
+  const [y, m] = day.split('-').map(Number);
+  return m >= 4 ? y : y - 1;
+};
