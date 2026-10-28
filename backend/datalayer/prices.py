@@ -53,7 +53,10 @@ def last_two(tickers: list[str]) -> dict[str, tuple[float, float]]:
     current price. Tickers with no data are left out."""
     if not tickers:
         return {}
-    frame = yf.download(tickers, period="5d", interval="1d", progress=False, threads=True)["Close"]
+    frame = yf.download(tickers, period="5d", interval="1d", progress=False, threads=True)
+    if "Close" not in frame:  # an outage returns an empty frame
+        return {}
+    frame = frame["Close"]
     if isinstance(frame, pd.Series):
         frame = frame.to_frame(tickers[0])
     out = {}
@@ -104,8 +107,8 @@ async def quotes(db, redis) -> None:
 
     if due:
         symbols = priority | {_bare(s) for s in universe()}
+        _last_universe = now  # stamped before the download so an outage waits a cadence, not 15 s
         n = await _quote(redis, symbols, UNIVERSE_TTL_SECONDS if live else OFF_SESSION_TTL_SECONDS)
-        _last_universe = now
         logger.info("ingest quotes: %d/%d symbol(s)", n, len(symbols))
     elif live and priority:
         await _quote(redis, priority, PRIORITY_TTL_SECONDS)

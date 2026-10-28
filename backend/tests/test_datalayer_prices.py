@@ -114,3 +114,25 @@ async def test_mark_prices_uses_fresh_cache_and_writes_through(mongo, monkeypatc
     assert await marks.mark_prices(mongo, ["OLD"], max_age_seconds=marks.ORDER_MAX_AGE_SECONDS) == {"OLD": 7.0}
     assert fetched == ["OLD"]
     assert json.loads(redis.data["quote:OLD"])["ltp"] == 7.0
+
+
+def test_last_two_survives_an_empty_download(monkeypatch):
+    monkeypatch.setattr(prices.yf, "download", lambda *a, **k: pd.DataFrame())
+    assert prices.last_two(["A.NS"]) == {}
+
+
+async def test_a_failed_universe_download_backs_off_until_the_next_cadence(mongo, monkeypatch):
+    calls = []
+
+    def boom(tickers):
+        calls.append(1)
+        raise RuntimeError("yahoo down")
+
+    monkeypatch.setattr(prices, "last_two", boom)
+    monkeypatch.setattr(prices, "in_session", lambda now: True)
+    monkeypatch.setattr("backend.factor.data.universe", lambda: ["RELIANCE"])
+    monkeypatch.setattr(prices, "_last_universe", 0.0)
+    with pytest.raises(RuntimeError):
+        await prices.quotes(mongo, FakeRedis())
+    await prices.quotes(mongo, FakeRedis())  # inside the cadence: no second download
+    assert len(calls) == 1
