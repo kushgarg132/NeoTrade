@@ -15,6 +15,7 @@ and `model` (impact "all"). Measures are the prefixes outcomes.py writes:
 close before publication) and `sector_move` (vs the sector's other members).
 """
 
+import asyncio
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -116,7 +117,7 @@ async def build(db, now: Optional[datetime] = None) -> dict:
     for row in rows:
         item = items.get(row["item_id"], {})
         row["source"], row["model"] = item.get("source"), item.get("model")
-    doc = {"as_of": now, "rows": len(rows), "cells": report(rows)}
+    doc = {"as_of": now, "rows": len(rows), "cells": await asyncio.to_thread(report, rows)}  # the bootstrap is CPU-heavy: keep the loop free
     await db[COLLECTION].replace_one({"_id": "latest"}, doc, upsert=True)
     logger.info("news accuracy: %d cell(s) from %d outcome(s)", len(doc["cells"]), len(rows))
     return doc

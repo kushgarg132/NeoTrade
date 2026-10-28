@@ -100,3 +100,12 @@ def test_endpoint_is_admin_only(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: user("admin")
     body = client.get("/news/accuracy").json()
     assert body["cells"] == [] and body["company_scan_ok"] is False and "_id" not in body
+
+
+async def test_build_computes_the_report_off_the_event_loop(monkeypatch):
+    import threading
+
+    seen = []
+    monkeypatch.setattr(accuracy, "report", lambda rows: seen.append(threading.current_thread()) or [])
+    await accuracy.build(AsyncMongoMockClient()["test_db"])
+    assert seen and seen[0] is not threading.main_thread()
