@@ -59,7 +59,7 @@ def _study_run():
 
 
 def test_factor_walk_forward_unchanged():
-    assert _factor_run() == ({2021: (8, 12), 2022: (8, 12), 2023: (8, 12), 2024: (8, 12)}, 0.9764361297, 977)
+    assert _factor_run() == ({2021: (8, 12), 2022: (8, 12), 2023: (8, 12), 2024: (8, 12)}, 0.9510534446, 977)  # 2026-10-28: full 6/12-month momentum windows
 
 
 def test_study_walk_forward_unchanged():
