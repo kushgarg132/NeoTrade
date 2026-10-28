@@ -74,7 +74,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 ## Flows
 
 ### 1. Boot and auth/session
-1. `src/main.jsx` mounts the provider stack; `AuthProvider` runs `GET /auth/me` (`endpoints.auth.me`) on mount with no early return on a missing token (`context/AuthContext.jsx::AuthProvider`).
+1. `src/main.jsx` mounts the provider stack; `AuthProvider` runs `GET /auth/me` (`endpoints.auth.me`) on mount with no early return on a missing token; only a 401 clears the token, any other failure is retried once and keeps it (`context/AuthContext.jsx::AuthProvider`).
 2. Request interceptor attaches `Authorization: Bearer <neotrade_token>` unless the URL is in `NO_REFRESH_PATHS` (`/auth/google`, `/auth/refresh`) (`utils/api.js::NO_REFRESH_PATHS`).
 3. Response interceptor: a `detail` that is a list (FastAPI 422) is flattened to text first (`utils/errors.js::detailToText`). On **401 only** (`isAuthFailure`) and not already retried, it awaits the single shared `refreshAccessToken()` (POST `/auth/refresh`, cookie), stores the new token, sets `_retriedAfterRefresh`, and replays the request. If refresh rejects, `hardLogout()` removes the token and does `window.location.assign('/login?next=<path+search>')`. A 403 does not sign out (commit 62bac34).
 4. `AuthProvider.login(idToken)` posts `/auth/google` `{id_token}`, stores `res.data.token`, sets `res.data.user`. `logout()` posts `/auth/logout` best-effort, clears token and user.

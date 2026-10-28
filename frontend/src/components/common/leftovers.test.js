@@ -74,3 +74,10 @@ test('AI money in ListRow sub lines is wrapped in private spans', () => {
   assert.doesNotMatch(f('../ai/Scoreboard.jsx'), /`\$\{st\.trades\} closed/);
   assert.match(f('../ai/Positions.jsx'), /<span className="private">\{px\(p\.avg_price\)\}/);
 });
+
+test('/auth/me clears the token only on a 401 and retries other failures once', () => {
+  const s = f('../../context/AuthContext.jsx');
+  assert.match(s, /err\?\.response\?\.status === 401/);
+  assert.match(s, /attempt < 2/);
+  assert.doesNotMatch(s, /\} catch \{\s*if \(!cancelled\) \{\s*localStorage\.removeItem/);
+});

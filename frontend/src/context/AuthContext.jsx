@@ -16,17 +16,26 @@ export const AuthProvider = ({ children }) => {
             // and retries this call on a 401 -- that's the whole
             // mechanism that keeps a returning user from seeing the Google
             // button again.
-            try {
-                const res = await api.get(endpoints.auth.me);
-                if (!cancelled) setUser(res.data);
-            } catch {
-                if (!cancelled) {
-                    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-                    setUser(null);
+            // Only a 401 (the interceptor already tried the refresh cookie) ends the session. A network blip or
+            // a 5xx keeps the token: retry once, and if it still fails the user lands on /login with the token
+            // intact, so a reload signs them back in.
+            for (let attempt = 0; attempt < 2 && !cancelled; attempt += 1) {
+                try {
+                    const res = await api.get(endpoints.auth.me, { cache: false });
+                    if (!cancelled) setUser(res.data);
+                    break;
+                } catch (err) {
+                    if (err?.response?.status === 401) {
+                        if (!cancelled) {
+                            localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+                            setUser(null);
+                        }
+                        break;
+                    }
+                    if (attempt === 0) await new Promise((r) => setTimeout(r, 1500));
                 }
-            } finally {
-                if (!cancelled) setLoading(false);
             }
+            if (!cancelled) setLoading(false);
         })();
         return () => { cancelled = true; };
     }, []);
