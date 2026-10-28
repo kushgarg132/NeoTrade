@@ -77,3 +77,20 @@ async def test_admin_is_revoked_when_the_email_leaves_the_list(monkeypatch):
         google_sub="sub-boss", email="boss@example.com", name="Boss", picture=None,
     )
     assert second.role == "user"
+
+
+async def test_a_concurrent_first_login_returns_the_winners_user():
+    store = UserStore(AsyncMongoMockClient()["test_db"])
+    await store.ensure_indexes()
+    winner = await store.upsert_from_google("sub-race", "r@example.com", "R", None)
+
+    real_find, calls = store.collection.find_one, []
+
+    async def find_one(*args, **kwargs):
+        calls.append(1)
+        return None if len(calls) == 1 else await real_find(*args, **kwargs)  # the loser's first look: not there yet
+
+    store._db = {"users": type("C", (), {"find_one": staticmethod(find_one), "insert_one": store.collection.insert_one,
+                                          "update_one": store.collection.update_one})()}
+    loser = await store.upsert_from_google("sub-race", "r@example.com", "R", None)
+    assert loser.id == winner.id

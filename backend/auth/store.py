@@ -2,6 +2,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from pymongo.errors import DuplicateKeyError
+
 from backend.auth.models import User
 
 
@@ -46,24 +48,26 @@ class UserStore:
         self, google_sub: str, email: str, name: str, picture: Optional[str]
     ) -> User:
         role = _role_for(email)
+        fields = {"email": email, "name": name, "picture": picture, "role": role}
         existing = await self.collection.find_one({"google_sub": google_sub})
-        if existing is not None:
-            fields = {"email": email, "name": name, "picture": picture, "role": role}
-            await self.collection.update_one({"google_sub": google_sub}, {"$set": fields})
-            existing.update(fields)
-            return _to_user(existing)
-
-        user = User(
-            id=str(uuid.uuid4()),
-            google_sub=google_sub,
-            email=email,
-            name=name,
-            picture=picture,
-            created_at=datetime.now(timezone.utc),
-            role=role,
-        )
-        await self.collection.insert_one(user.model_dump())
-        return user
+        if existing is None:
+            user = User(
+                id=str(uuid.uuid4()),
+                google_sub=google_sub,
+                email=email,
+                name=name,
+                picture=picture,
+                created_at=datetime.now(timezone.utc),
+                role=role,
+            )
+            try:
+                await self.collection.insert_one(user.model_dump())
+                return user
+            except DuplicateKeyError:  # a concurrent first login won the unique google_sub index
+                existing = await self.collection.find_one({"google_sub": google_sub})
+        await self.collection.update_one({"google_sub": google_sub}, {"$set": fields})
+        existing.update(fields)
+        return _to_user(existing)
 
     async def get_by_id(self, user_id: str) -> Optional[User]:
         doc = await self.collection.find_one({"id": user_id})
