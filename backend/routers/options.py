@@ -5,6 +5,7 @@ chain needs an ACTIVE Upstox login and says so plainly when there isn't one.
 Read-only market data: nothing here places an order.
 """
 
+import logging
 from typing import Literal
 
 import httpx
@@ -16,6 +17,8 @@ from backend.auth.models import User
 from backend.brokers.protocol import BrokerSessionState
 from backend.brokers.registry import get_broker_adapter
 from backend.database import db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/options", tags=["Options"])
 
@@ -37,7 +40,8 @@ async def upstox_for(user: User = Depends(get_current_user)):
 
 
 def _upstream(e: httpx.HTTPError):
-    return HTTPException(status_code=502, detail=f"Upstox did not return the option data: {e}")
+    logger.warning("upstox option data failed: %s", e)
+    return HTTPException(status_code=502, detail="Upstox did not return the option data. Try again in a minute.")
 
 
 @router.get("/expiries")

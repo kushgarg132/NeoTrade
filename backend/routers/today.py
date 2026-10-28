@@ -229,7 +229,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
             return await coro
         except Exception as exc:
             logger.warning("today: %s failed for %s: %s", name, user.id, exc)
-            errors[name] = str(exc)
+            errors[name] = "Could not load this part right now."
             return None
 
     accounts = await part("accounts", _accounts(roles, user.id, broker_states))

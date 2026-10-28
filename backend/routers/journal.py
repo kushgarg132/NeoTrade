@@ -3,6 +3,7 @@ with a daily P&L calendar and their own notes and tags. Everything here is
 the user's own data about their own trading: nothing is a recommendation.
 """
 
+import logging
 from datetime import datetime, timezone
 
 from typing import Literal
@@ -22,6 +23,8 @@ from backend.journal.news import attach_news
 from backend.journal.roundtrips import build_round_trips, daily_pnl
 from backend.journal.store import JournalStore
 from backend.journal.sync import connected_brokers, import_upstox_history, sync_user_trades
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/journal", tags=["Journal"])
 
@@ -164,7 +167,8 @@ async def import_upstox(
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except Exception as exc:  # Upstox refused or is down: say so, don't 500
-        raise HTTPException(status_code=502, detail=f"Upstox did not return the trade history: {exc}")
+        logger.warning("upstox history import failed for %s: %s", user.id, exc)
+        raise HTTPException(status_code=502, detail="Upstox did not return the trade history. Try again in a minute.")
 
 
 @router.get("/round-trips/{trip_id}")

@@ -337,3 +337,10 @@ def test_preferences_accept_only_known_setup_step_ids():
     assert PreferencesPatch(setup_skipped=["telegram"]).setup_skipped == ["telegram"]
     with pytest.raises(ValidationError):
         PreferencesPatch(setup_skipped=["nope"])
+
+
+def test_a_failing_part_does_not_leak_the_exception_text(monkeypatch):
+    client, db = _client(monkeypatch, broken=True)
+    _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"kite": "ai"}}])
+    errors = client.get("/api/v1/today").json()["errors"]
+    assert "broker API down" not in str(errors) and errors["accounts"]

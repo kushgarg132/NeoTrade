@@ -233,3 +233,16 @@ async def test_upstox_history_import_is_idempotent_and_skips_days_already_synced
     assert (first["imported"], first["skipped_synced_days"]) == (1, 1)
     assert second["imported"] == 0
     assert {t["trade_id"] for t in await store.list_trades("alice")} == {"live1", "h2"}
+
+
+async def test_upstox_import_failure_does_not_leak_the_exception_text(monkeypatch):
+    from fastapi import HTTPException
+    from backend.routers import journal as journal_router
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("https://api.upstox.com/v2?token=SECRET")
+
+    monkeypatch.setattr(journal_router, "import_upstox_history", boom)
+    with pytest.raises(HTTPException) as err:
+        await journal_router.import_upstox(journal_router.HistoryRequest(), MagicMock(id="alice"), None)
+    assert err.value.status_code == 502 and "SECRET" not in err.value.detail

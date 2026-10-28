@@ -531,3 +531,11 @@ async def test_an_unreachable_upstox_is_an_http_error(monkeypatch):
     UpstoxWire(monkeypatch).down()
     with pytest.raises(httpx.HTTPError):
         await (await _connected()).get_positions()
+
+
+def test_option_route_502_does_not_leak_the_upstream_error():
+    import httpx
+    from backend.routers.options import _upstream
+
+    err = _upstream(httpx.HTTPError("https://api.upstox.com/v2?token=SECRET"))
+    assert err.status_code == 502 and "SECRET" not in err.detail
