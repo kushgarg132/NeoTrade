@@ -94,7 +94,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
   `news_items`, `users.role`, `chat_actions`, `autopilot_log`, `broker_credentials`.
 
 **Redis**
-- `mine:alert:{user}:{action_id}` NX, TTL 30 days (`mine/actions.py::ALERT_TTL`): one stop/target Telegram per level.
+- `mine:alert:{user}:{action_id}` NX, TTL 30 days (`mine/actions.py::ALERT_TTL`): one stop/target Telegram per level. `engine/autorun.py::_level_pass` deletes it when the send fails, so the next 15-minute pass retries.
 - `digest:pre:{user}:{IST date}` NX, 24h: one pre-market digest a day (`digest.py::send_premarket`).
 - `guardrails:tick` NX, 55s: one worker per guardrail tick (`guardrails/monitor.py::run_tick`).
 - `levels:{user}:{date}:{bucket}` NX, 30 min (`engine/autorun.py::_level_pass`).

@@ -269,6 +269,26 @@ async def test_a_thesis_level_gets_its_own_alert_step_not_the_long_term_pass(wor
 
 
 @pytest.mark.asyncio
+async def test_an_unsent_level_alert_frees_its_key_for_the_next_pass(world, monkeypatch):
+    """The once-per-level key is set before Telegram; a failed send used to
+    silence that stop or target for 30 days."""
+    import backend.suggestions.notify as notify_mod
+    from backend.mine import actions
+
+    async def level_alerts(db, redis, user_id, now):
+        await redis.set(f"mine:alert:{user_id}:L1", "1", nx=True)
+        return [{"id": "L1", "title": "A hit your stop ₹90.00", "detail": "d"}]
+
+    async def notify(db, user_id, text, html=False):
+        return False
+
+    monkeypatch.setattr(actions, "level_alerts", level_alerts)
+    monkeypatch.setattr(notify_mod, "notify", notify)
+    await autorun._level_pass(world.db, world.redis, "carol", MONDAY_10AM)
+    assert "mine:alert:carol:L1" not in world.redis.data
+
+
+@pytest.mark.asyncio
 async def test_the_autopilot_keeps_the_scan_on():
     from backend.prefs import PrefsStore
 

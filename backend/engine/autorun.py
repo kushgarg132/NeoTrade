@@ -310,8 +310,9 @@ async def _level_pass(db, redis, user_id: str, now: datetime) -> None:
     if await redis.set(f"levels:{user_id}:{local.date().isoformat()}:{bucket}", _TOKEN, nx=True,
                        px=EXIT_CHECK_MINUTES * 60_000 * 2):
         alerts = await actions.level_alerts(db, redis, user_id, now)
-        if alerts:
-            await notify(db, user_id, actions.levels_text(alerts))
+        if alerts and not await notify(db, user_id, actions.levels_text(alerts)):
+            for a in alerts:  # unsent: free the once-per-level key so the next pass retries
+                await redis.delete(f"mine:alert:{user_id}:{a['id']}")
 
 
 async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
