@@ -258,6 +258,51 @@ async def test_a_sent_but_unfilled_live_order_still_counts(world, monkeypatch):
     assert again["status"] == "REFUSED" and "already holding" in again["reason"]
 
 
+async def test_a_sent_order_reconcile_booked_is_deployed_once(world):
+    db, _ = world
+    await _prefs(db)
+    await db["autopilot_log"].insert_one({"user_id": "alice", "at": OPEN.replace(hour=10), "status": "SENT",
+                                          "side": "BUY", "symbol": "INFY", "quantity": 5, "price": 1000.0,
+                                          "product": "CNC", "source": "chat", "reason": "x", "order_id": "o1"})
+    await db["live_orders"].insert_one({"_id": "o1", "status": "FILLED", "filled_quantity": 5.0})
+    await db["paper_trades"].insert_one({"user_id": "alice:autopilot", "symbol": "INFY", "side": "BUY",
+                                         "status": "OPEN", "quantity": 5, "entry_price": 1000.0,
+                                         "via": "autopilot:chat", "venue": "live"})
+    state = await service._state(db, "alice", PREFS, "live", OPEN)
+    assert state.deployed == 5_000.0 and state.held == {"INFY": (5, "CNC")}
+
+
+async def test_a_sent_order_the_broker_later_rejected_is_not_held(world):
+    db, _ = world
+    await _prefs(db)
+    await db["autopilot_log"].insert_one({"user_id": "alice", "at": OPEN.replace(hour=10), "status": "SENT",
+                                          "side": "BUY", "symbol": "INFY", "quantity": 5, "price": 1000.0,
+                                          "product": "MIS", "source": "chat", "reason": "x", "order_id": "o1"})
+    await db["live_orders"].insert_one({"_id": "o1", "status": "REJECTED", "filled_quantity": 0.0})
+    state = await service._state(db, "alice", PREFS, "live", OPEN)
+    assert state.deployed == 0 and state.held == {}
+
+
+async def test_a_live_order_still_pending_logs_its_order_id(world, monkeypatch):
+    db, _ = world
+    await _prefs(db, autopilot_live=True)
+
+    async def ai_only(user_id, role, credentials, redis=None, roles=None, get_adapter=None):
+        return object()
+
+    async def live(order, ledger, adapter, orders, strategy_name="", reason=None, role="mine", owner=None):
+        await db["live_orders"].insert_one({"_id": order.id, "status": "SUBMITTED", "filled_quantity": 0.0})
+        return order, "SUBMITTED", 0.0
+
+    monkeypatch.setattr(service, "adapter_for", ai_only)
+    monkeypatch.setattr("backend.suggestions.service.execute_live_order", live)
+    assert (await service.submit(db, None, "alice", _order(qty=2), now=OPEN))["status"] == "SENT"
+    row = await db["autopilot_log"].find_one({"status": "SENT"})
+    assert await db["live_orders"].find_one({"_id": row["order_id"]}) is not None
+    state = await service._state(db, "alice", {**PREFS, "autopilot_live": True}, "live", OPEN)
+    assert state.deployed == 2_000.0 and state.held == {"INFY": (2, "CNC")}
+
+
 async def test_paper_autopilot_trades_in_the_practice_book_tagged(world):
     db, _ = world
     await _prefs(db)

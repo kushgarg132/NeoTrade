@@ -13,6 +13,7 @@ from backend.autopilot import fence
 from backend.brokers.roles import RoleUnavailable, adapter_for
 from backend.core.models import Order, Side
 from backend.engine.autorun import in_session
+from backend.engine.execution.live_order_store import _PENDING_STATES
 from backend.engine.persistence import LedgerStore, trade_net
 from backend.engine.session import IST
 from backend.marks import ORDER_MAX_AGE_SECONDS, mark_prices
@@ -128,6 +129,12 @@ async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime, redis
     held = {t["symbol"]: (t["quantity"], _product(t)) for t in open_trades}
     async for row in db["autopilot_log"].find({"user_id": user_id, "status": "SENT", "side": "BUY",
                                                "at": {"$gte": day_start}}):
+        if row["symbol"] in held:
+            continue  # reconcile booked its fill: already an open trade
+        if row.get("order_id"):  # rejected, cancelled, or filled and closed since: not held any more
+            live_row = await db["live_orders"].find_one({"_id": row["order_id"]})
+            if live_row is not None and live_row.get("status") not in _PENDING_STATES:
+                continue
         held.setdefault(row["symbol"], (row["quantity"], row.get("product") or "CNC"))
         deployed += row["quantity"] * (row.get("price") or 0)
     state = await db["autopilot_state"].find_one({"_id": user_id}) or {}
@@ -234,7 +241,7 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
                 return await _record(db, user_id, order, "FAILED", now, quiet, reason=f"Broker {status.lower()} the order",
                                      mode="live", price=price, broker_status=status, filled=filled)
             return await _record(db, user_id, order, "FILLED" if filled else "SENT", now, quiet, mode="live",
-                                 price=price, broker_status=status, filled=filled)
+                                 price=price, broker_status=status, filled=filled, order_id=placed.id)
         await fill_on_paper(ledger, placed, price, now)
     except Exception as exc:
         logger.exception("autopilot order failed for %s: %s", user_id, exc)
