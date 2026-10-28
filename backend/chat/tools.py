@@ -210,8 +210,12 @@ def read_tools(db, redis, user_id: str) -> list:
 
     async def explain_index(ticker: str) -> str:
         from backend.research.index_move import explain_index_move
+        from backend.routers.market_data import _known_index_names
 
-        result = await explain_index_move(ticker, ticker)
+        name = _known_index_names().get(ticker)
+        if name is None:  # model-supplied: only the tracked indices reach the model call and its cache
+            return _json({"error": f"{ticker} is not a tracked index"})
+        result = await explain_index_move(ticker, name)
         return _json({k: result.get(k) for k in ("analysis", "session_date", "headlines") if k in result})
 
     own = [

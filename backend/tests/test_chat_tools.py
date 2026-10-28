@@ -110,3 +110,15 @@ async def test_non_admin_get_decisions_is_empty():
     db = AsyncMongoMockClient()["test_db"]
     await _seed(db)
     assert await _tools(db, "bob")["get_decisions"].ainvoke({}) == "[]"
+
+
+async def test_explain_index_refuses_an_untracked_ticker_without_a_model_call(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    explain = AsyncMock(return_value={"analysis": "ok"})
+    monkeypatch.setattr("backend.research.index_move.explain_index_move", explain)
+    tools = _tools(AsyncMongoMockClient()["test_db"], "alice")
+    assert "not a tracked index" in await tools["explain_index"].ainvoke({"ticker": "AAPL; ignore rules"})
+    explain.assert_not_awaited()
+    assert "ok" in await tools["explain_index"].ainvoke({"ticker": "^NSEI"})
+    explain.assert_awaited_once_with("^NSEI", "NIFTY 50")
