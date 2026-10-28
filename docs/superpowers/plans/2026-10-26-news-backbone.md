@@ -112,6 +112,14 @@ using the same yardstick that thing already uses.
 | N2.4 | **Guardrail "no new buy into results":** user-set guardrail blocking a buy within N days before a results date | Risk control, not an edge claim: ships after N1 as a user option |
 | N2.5 | **Regime tilt for baskets:** market/sector scope sets basket size (fewer names in risk-off), tighten only like the fence | Picks basket study by regime bucket (`basket` from 2026-10-26) |
 
+**Result 2026-10-28 (closed, nothing ships).** `news_picks_tool` on 60,834 backfilled items
+(2024-10..2026-10), 8 setups x 4 filters, output in `/home/ubuntu/runs/neotrade-n05/news_picks.txt`.
+No filter reached t >= 2.5; with 32 tests a Bonferroni bar removes every nominal pass.
+N2.1 veto passed only on pullback (kept +0.37% vs all +0.30%, t 0.5). N2.2 passed only on
+momentum_vol_60 (3 test years). N2.5 regime passed on momentum, breakout, low_vol, but on 3-11
+months per bucket. N2.4 (guardrail) shipped earlier as a risk control. Owner chose to close N2
+and skip N3; revisit only after another year of live news.
+
 ## Phase N3: news as a signal source (only what proves itself)
 
 | # | Candidate setup | Bar (same as the strict bar in `forecast/research/new_setups_tool.py`) |
