@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Sheet, Field, Money, NetLine, Statement, Row, Cell, Empty, Ruling } from '../doc/Doc';
@@ -24,14 +24,18 @@ const Scorecard = ({ mode }) => {
   const [error, setError] = useState(null);
   const [month, setMonth] = useState(null);
 
-  const load = () =>
-    api
+  const latest = useRef(0); // a reply for an older mode or an older refresh must not overwrite the newest
+  const load = () => {
+    const mine = ++latest.current;
+    return api
       .get(endpoints.analytics.scorecard('paper', mode))
       .then((res) => {
+        if (mine !== latest.current) return;
         setCard(res.data);
         setError(null);
       })
-      .catch((err) => setError(err?.response?.data?.detail || 'The scorecard did not load'));
+      .catch((err) => mine === latest.current && setError(err?.response?.data?.detail || 'The scorecard did not load'));
+  };
 
   useEffect(() => {
     setCard(null);
