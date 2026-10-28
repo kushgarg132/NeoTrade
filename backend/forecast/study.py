@@ -55,10 +55,12 @@ def outcome(t: dict, symbol: str, p: int, horizon: int):
     return days[p + 1], days[p + 1 + horizon], exit_ / entry - 1, net_return(entry, exit_), float(n_out / n_in - 1)
 
 
-def events(t: dict, setup, fires: pd.DataFrame) -> pd.DataFrame:
+def events(t: dict, setup, fires: pd.DataFrame, dedup: bool = True) -> pd.DataFrame:
+    """dedup=False keeps overlapping signals too (the baseline: one row per stock per month)."""
     rows = []
     for symbol in fires.columns:
-        for p in kept(fires[symbol].to_numpy(), setup.horizon):
+        col = fires[symbol].to_numpy()
+        for p in kept(col, setup.horizon) if dedup else np.flatnonzero(~np.isnan(col)):
             o = outcome(t, symbol, p, setup.horizon)
             if o:
                 rows.append((symbol, fires.index[p], *o))
@@ -151,7 +153,7 @@ class _Horizon:
 def baseline_by_month(t: dict, horizon: int) -> pd.Series:
     """Mean excess over NIFTY of ALL universe stocks over `horizon`, by signal month. Today's universe beats NIFTY
     on average (survivorship; the member mask cuts it, gaps in the archived lists leave some), so a setup must beat THIS, not zero."""
-    ev = events(t, _Horizon(horizon), every_month(t))
+    ev = events(t, _Horizon(horizon), every_month(t), dedup=False)  # every month its own baseline, even when h spans several
     return (ev["net"] - ev["nifty"]).groupby(ev["signal"].dt.to_period("M")).mean()
 
 

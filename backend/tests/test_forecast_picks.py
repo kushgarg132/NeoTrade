@@ -385,6 +385,14 @@ def test_grade_a_needs_the_corrected_t_and_both_halves():
     assert steady["edge"] is False  # every half positive, t short of the bar
 
 
+def test_the_baseline_has_every_matured_month_even_when_the_horizon_spans_several():
+    t = setups.table(_frames(days=840, n=5))
+    days = t["close"].index
+    matured = [d for d in setups._month_starts(days) if days.get_loc(d) + 1 + 60 < len(days)]
+    assert len(matured) == 35
+    assert len(study.baseline_by_month(t, 60)) == 35
+
+
 def _bars(lows, highs, closes):
     days = pd.bdate_range("2024-01-01", periods=len(closes))
     frame = lambda v: pd.DataFrame({"X": v}, index=days)
