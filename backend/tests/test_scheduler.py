@@ -469,6 +469,7 @@ async def test_a_catch_up_pass_replays_and_learns_for_its_own_day(mongo, monkeyp
     from backend.plan import replay
     monkeypatch.setattr(replay, "replay_all", fake_replay)
     monkeypatch.setattr(scheduler, "_learn", fake_learn)
+    monkeypatch.setattr(scheduler, "_weekly_mirrors", AsyncMock(return_value=0))  # the pass day is a Friday
     monday = datetime(2024, 1, 15, 4, tzinfo=timezone.utc)
     await scheduler.run_daily_jobs(mongo, now=monday, pass_day=date(2024, 1, 12))
     assert seen == {"replay": date(2024, 1, 12), "learn": date(2024, 1, 12)}
