@@ -36,6 +36,7 @@ from typing import Optional
 
 import pandas as pd
 
+from backend.core.market_calendar import CLOSE as SESSION_CLOSE, OPEN as SESSION_OPEN, is_trading_day
 from backend.datalayer.prices import MACRO_KEY
 from backend.engine.session import IST
 from backend.marks import QUOTE_KEY
@@ -165,6 +166,17 @@ async def _bench(redis) -> Optional[float]:
     return json.loads(raw)["value"] if raw else None
 
 
+def _session_between(start: datetime, end: datetime) -> bool:
+    """Whether any NSE session overlapped (start, end]; without one the quotes cannot have moved."""
+    day = start.astimezone(IST).date()
+    while day <= end.astimezone(IST).date():
+        if is_trading_day(day) and (datetime.combine(day, SESSION_OPEN, IST) < end
+                                    and datetime.combine(day, SESSION_CLOSE, IST) > start):
+            return True
+        day += timedelta(days=1)
+    return False
+
+
 def _members(kind: str, target: str, sector_of: dict[str, str]) -> list[str]:
     if kind == "symbol":
         return [target]
@@ -241,6 +253,8 @@ async def measure(db, redis, now: Optional[datetime] = None) -> int:
             query["in_session"] = True
         async for doc in db[COLLECTION].find(query):
             fields = horizon_fields(doc, h, await _prices(redis, _symbols(doc)), bench)
+            if not _session_between(doc["base_at"], doc["base_at"] + delta):  # not a 0.0 miss: unmeasured
+                fields = dict.fromkeys(fields)
             await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": fields})
             done += 1
     # 20d from the closes on the horizon day, so a worker outage cannot lose it.

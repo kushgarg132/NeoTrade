@@ -171,3 +171,18 @@ async def test_new_rows_measure_from_the_close_before_publication(monkeypatch):
     assert sym["sector_move_20d"] == pytest.approx(120 / 95 - 200 / 190)
     assert await outcomes.measure(db, redis, NOW + timedelta(days=22)) == 0  # once
     assert "move_20d" not in await db["news_outcomes"].find_one({"_id": "old"})
+
+
+@pytest.mark.asyncio
+async def test_a_horizon_with_no_session_inside_it_is_unmeasured_not_a_miss(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    redis = Redis()
+    friday_evening = datetime(2026, 10, 9, 13, 0, tzinfo=timezone.utc)  # 18:30 IST; +1d is Saturday
+    redis.prices(20000, TCS=100)
+    await db["news_outcomes"].insert_one({
+        "_id": "a1:symbol:TCS", "type": "symbol", "target": "TCS", "base": {"TCS": 100.0}, "bench": 20000.0,
+        "base_at": friday_evening, "in_session": False})
+    assert await outcomes.measure(db, redis, friday_evening + timedelta(days=1)) == 1
+    doc = await db["news_outcomes"].find_one({"_id": "a1:symbol:TCS"})
+    assert doc["move_1d"] is None and doc["ret_1d"] is None
+    assert outcomes.compute_weights([{**doc, "scope": "X", "themes": ["t"], "direction": 0.5}] * 20) == {}
