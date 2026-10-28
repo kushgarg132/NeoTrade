@@ -525,3 +525,12 @@ async def test_stall_alert_runs_in_session_only(monkeypatch):
     monkeypatch.setattr("backend.engine.autorun.near_session", lambda now: True)
     await news.process_loop({}, FakeRedis())
     assert len(checked) == 1
+
+
+async def test_triage_success_resets_attempts_so_scoring_gets_its_own(mongo, monkeypatch):
+    await news.store(mongo, [_item("Fed signals hike")], [], now=NOW)
+    await mongo[news.COLLECTION].update_many({}, {"$set": {"attempts": news.MAX_ATTEMPTS - 1}})
+    _llm(monkeypatch, {"items": [{"index": 0, "scope": "GLOBAL", "themes": ["rates"], "region": "US"}]})
+    await news.triage(mongo, now=NOW)
+    doc = await mongo[news.COLLECTION].find_one()
+    assert doc["status"] == news.TRIAGED and doc["attempts"] == 0

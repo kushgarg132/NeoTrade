@@ -310,7 +310,7 @@ async def _triage_batch(db, docs: list[dict], now: datetime, coll: str = COLLECT
         t = kept.get(i)
         if t is not None:
             await db[coll].update_one({"_id": doc["_id"]}, {"$set": {
-                "status": TRIAGED, "relevant": True, "scope": t.scope if t.scope in SCOPES else doc["scope_hint"],
+                "status": TRIAGED, "attempts": 0, "relevant": True, "scope": t.scope if t.scope in SCOPES else doc["scope_hint"],
                 "themes": t.themes[:3], "region": t.region, "triaged_at": now, "expire_at": now + RELEVANT_TTL}})
         else:
             await db[coll].update_one({"_id": doc["_id"]}, {"$set": {
