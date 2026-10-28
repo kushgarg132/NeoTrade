@@ -24,6 +24,18 @@ def _now() -> datetime:
     return datetime.fromtimestamp(time.time(), tz=timezone.utc)
 
 
+def increment_price(row: dict, average_price: float, filled_quantity: float) -> float:
+    """Price of what newly filled on a `live_orders` row. Brokers report the
+    cumulative average, so a later partial's own price is backed out of it
+    and the row's previous average; without that history, the average."""
+    before, before_avg = float(row.get("filled_quantity") or 0), float(row.get("average_price") or 0)
+    new = filled_quantity - before
+    if before <= 0 or before_avg <= 0 or new <= 0:
+        return average_price
+    price = (average_price * filled_quantity - before_avg * before) / new
+    return price if price > 0 else average_price
+
+
 def fill_row_costs(row: dict, price: float, quantity: float) -> float:
     """Modelled charges for a fill of a `live_orders` row, so live P&L is net
     like paper. Rows from before `product` was recorded book 0.0."""

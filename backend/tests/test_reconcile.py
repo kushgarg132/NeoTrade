@@ -62,6 +62,16 @@ async def test_only_the_new_part_of_a_partial_fill_is_booked(db):
     assert [f.quantity for f in fills] == [6]
 
 
+async def test_the_new_part_of_a_partial_fill_books_at_its_own_price(db):
+    """Brokers report the cumulative average: 4 @ 100 then 6 more @ 110 reads
+    as 10 @ 106, and the 6 must book at 110, not 106."""
+    await _row(db, filled=4.0, status="PARTIALLY_FILLED")
+    await db["live_orders"].update_one({"_id": "o1"}, {"$set": {"average_price": 100.0}})
+    await reconcile(db, _adapters(mine=_Broker("FILLED", 10, price=106.0)), NOW)
+    fills = await LedgerStore(db, user_id="alice").get_fills(venue="live")
+    assert [(f.quantity, round(f.price, 6)) for f in fills] == [(6, 110.0)]
+
+
 async def test_each_order_asks_its_own_broker_and_books_its_own_ledger(db):
     await _row(db, order_id="m1", role="mine", ledger_user="alice")
     await _row(db, order_id="a1", role="ai", ledger_user="alice:autopilot")

@@ -90,6 +90,24 @@ async def test_poll_once_turns_a_new_fill_into_a_pending_fill():
     assert fills[0].venue == "live"
 
 
+async def test_poll_once_books_a_later_partial_at_its_own_price():
+    adapter = _FakeBrokerAdapter()
+    client, store = _client(adapter)
+
+    await client.submit(_order())
+    adapter.set_status("broker-order-1", BrokerOrderStatus(
+        broker_order_id="broker-order-1", status="PARTIALLY_FILLED", filled_quantity=4.0, average_price=2500.0,
+    ))
+    await client.poll_once()
+    adapter.set_status("broker-order-1", BrokerOrderStatus(  # 6 more at 2510: cumulative average 2506
+        broker_order_id="broker-order-1", status="FILLED", filled_quantity=10.0, average_price=2506.0,
+    ))
+    await client.poll_once()
+
+    fills = [f async for f in client.fills()]
+    assert [(f.quantity, round(f.price, 6)) for f in fills] == [(4.0, 2500.0), (6.0, 2510.0)]
+
+
 async def test_poll_once_does_not_refire_the_same_fill_twice():
     adapter = _FakeBrokerAdapter()
     client, store = _client(adapter)

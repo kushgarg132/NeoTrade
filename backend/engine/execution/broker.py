@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from typing import AsyncIterator
 
 from backend.core.models import Fill, Order, Position, Side
-from backend.engine.execution.live_order_store import LiveOrderStore, fill_row_costs
+from backend.engine.execution.live_order_store import LiveOrderStore, fill_row_costs, increment_price
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +81,12 @@ class BrokerExecutionClient:
                     continue
 
                 if newly_filled > 0:
+                    price = increment_price(row, status.average_price, status.filled_quantity)
                     self._pending_fills.append(Fill(
                         order_id=row["_id"], symbol=row["symbol"], side=Side(row["side"]),
-                        quantity=newly_filled, price=status.average_price,
+                        quantity=newly_filled, price=price,
                         timestamp=_now(), venue="live",
-                        costs=fill_row_costs(row, status.average_price, newly_filled),
+                        costs=fill_row_costs(row, price, newly_filled),
                     ))
             except Exception:
                 # One broker hiccup on one order must not stall status
