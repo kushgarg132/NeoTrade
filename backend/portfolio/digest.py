@@ -172,14 +172,16 @@ async def pnl_since(db, user_id: str, roles: dict, since: datetime, picks_only: 
     from backend.autopilot.service import ai_book_query
     from backend.brokers.roles import brokers_for
     from backend.journal import mirror
-    from backend.journal.roundtrips import build_round_trips
+    from backend.journal.roundtrips import build_round_trips, instrument_kind
     from backend.journal.store import JournalStore
 
     mine_brokers = brokers_for(roles, "mine")
     # Round trips over the whole history (a position bought before `since`
-    # and sold after it counts), kept if they closed since.
+    # and sold after it counts), kept if they closed since. Stocks only, as
+    # Mine everywhere (`lots.py::mine_trades`): the AI book is equity.
     trades = [t for t in await JournalStore(db).list_trades(user_id)
-              if not mine_brokers or t.get("broker") in mine_brokers]
+              if (not mine_brokers or t.get("broker") in mine_brokers)
+              and instrument_kind(t["symbol"], t.get("exchange")) == "STOCK"]
     closed = [t for t in build_round_trips(trades)
               if t.get("pnl") is not None and (_aware(t.get("closed_at")) or since) >= since]
     ids = {i for trip in closed for i in trip["trade_ids"]}

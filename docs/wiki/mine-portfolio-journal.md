@@ -273,6 +273,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
   `fy < 2025` (`routers/mine.py::TAX_FIRST_FY`). Long-term means held more than 12 calendar months
   (`tax.py::long_from`).
 - **Options and futures stay out of Mine.** `lots.py::mine_trades` keeps `instrument_kind == "STOCK"` only.
+  So does the "mine" side of You vs the AI and the post-close digest (`digest.py::pnl_since`), against an equity AI book.
 
 ## Endpoints
 

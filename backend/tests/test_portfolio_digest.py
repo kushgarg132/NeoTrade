@@ -100,6 +100,18 @@ async def test_premarket_goes_once_in_its_window(db, monkeypatch):
     assert "Before the open" in sent[0] and "DOWN" in sent[0]
 
 
+async def test_you_vs_ai_counts_only_the_users_stock_trades(db):
+    def fill(i, symbol, exchange, side, price):
+        return {"_id": f"f{i}", "user_id": "alice", "broker": "upstox", "exchange": exchange, "symbol": symbol,
+                "side": side, "quantity": 10, "price": price, "traded_at": NOW + timedelta(minutes=i)}
+    await db["journal_trades"].insert_many([
+        fill(1, "SBIN", "NSE", "BUY", 90.0), fill(2, "SBIN", "NSE", "SELL", 100.0),
+        fill(3, "NIFTY24OCT25000CE", "NFO", "BUY", 100.0), fill(4, "NIFTY24OCT25000CE", "NFO", "SELL", 600.0)])
+    pnl = await digest.pnl_since(db, "alice", {"upstox": "mine", "kite": "ai"}, NOW)
+    # Options and futures stay out of Mine: only the SBIN trip's +100 counts.
+    assert pnl["mine"] == round(100.0 - pnl["mine_charges"], 2) and pnl["mine_charges"] > 0
+
+
 async def test_postclose_skips_a_morning_catch_up(db):
     assert await digest.send_postclose(db, NOW.replace(hour=9, minute=20)) == 0
 
