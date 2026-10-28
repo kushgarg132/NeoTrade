@@ -73,6 +73,8 @@ async def run_user(db, redis, user_id: str, now: datetime) -> int:
         await redis.expire(day, 2 * 86_400)
         if await note_for(db, redis, user_id, a):
             written += 1
+        elif not await redis.get(core.claim_key(user_id, KIND, a["id"])):  # built nothing: no model call was made
+            await redis.incrby(day, -1)
     return written
 
 

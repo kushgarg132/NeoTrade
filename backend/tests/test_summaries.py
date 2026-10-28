@@ -461,3 +461,9 @@ def test_facts_round_floats_so_the_model_never_echoes_raw_ones():
                           "rows": [{"pnl_pct": -13.349999}]})
     assert "2.05" in text and "7880.49" in text and "-13.35" in text and '"qty": 12' in text
     assert "2.049157" not in text and "7880.4899" not in text
+
+
+async def test_a_holding_with_nothing_to_build_is_not_charged_to_the_day(db, redis, llm, held, monkeypatch):
+    monkeypatch.setattr("backend.ai.facts.user.portfolio", AsyncMock(return_value={"error": "none"}))
+    await holding.run_user(db, redis, "alice", NOW)
+    assert llm.calls == [] and int(redis.data["summary:holding:day:alice:2026-10-15"]) == 0
