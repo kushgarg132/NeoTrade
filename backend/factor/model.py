@@ -50,11 +50,11 @@ def volatility(closes: pd.DataFrame, t) -> pd.Series:
 
 
 def scores(closes: pd.DataFrame, t, params: Params, avoid: Optional[set] = None) -> pd.Series:
-    """Blended score per symbol with a full year of history at t, best first."""
+    """Blended score per symbol with a year and a month of history at t, best first."""
     past = closes.loc[:t]
-    if len(past) <= YEAR:
+    if len(past) <= YEAR + MONTH:
         return pd.Series(dtype=float)
-    complete = past.iloc[-(YEAR + 1):].notna().all()
+    complete = past.iloc[-(YEAR + MONTH + 1):].notna().all()
     blocked = {s.upper() for s in (avoid or set()) | set(params.avoid)}
     symbols = [s for s in past.columns if complete[s] and s.upper() not in blocked]
     if not symbols:
@@ -62,8 +62,8 @@ def scores(closes: pd.DataFrame, t, params: Params, avoid: Optional[set] = None)
     p = past[symbols]
     vol = volatility(p, t).replace(0, np.nan)
     skip = p.iloc[-1 - MONTH]
-    r6 = skip / p.iloc[-1 - HALF] - 1
-    r12 = skip / p.iloc[-1 - YEAR] - 1
+    r6 = skip / p.iloc[-1 - MONTH - HALF] - 1
+    r12 = skip / p.iloc[-1 - MONTH - YEAR] - 1
     momentum = (_zscore(r6 / vol) + _zscore(r12 / vol)) / 2
     low_vol = _zscore(-vol)
     blended = params.momentum_weight * momentum + (1 - params.momentum_weight) * low_vol

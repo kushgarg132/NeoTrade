@@ -69,3 +69,15 @@ def test_avoid_list_is_respected():
     closes = _closes()
     scores = model.scores(closes, closes.index[300], Params(momentum_weight=1.0), avoid={"up"})
     assert "UP" not in scores.index
+
+
+def test_momentum_spans_full_6_and_12_months_before_the_skipped_month(monkeypatch):
+    # A jump counts once it is inside the 6 (12) months that end a month ago, wherever in them it falls.
+    idx = pd.bdate_range("2020-01-01", periods=400)
+    t = 350
+    jump = {"B": 60, "A": model.HALF + 5, "F": 200, "D": model.YEAR + 5, "C": None}  # trading days before t
+    closes = pd.DataFrame({s: [100.0 * (1.5 if k is not None and i > t - k else 1.0) for i in range(400)]
+                           for s, k in jump.items()}, index=idx)
+    monkeypatch.setattr(model, "volatility", lambda p, at: pd.Series(0.2, index=p.columns))
+    s = model.scores(closes, idx[t], Params(momentum_weight=1.0))
+    assert s["A"] == pytest.approx(s["B"]) and s["D"] == pytest.approx(s["F"])
