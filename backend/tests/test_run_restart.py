@@ -134,6 +134,24 @@ async def test_adopted_trade_keeps_its_pnl_across_a_restart(db):
     assert trade["status"] == "CLOSED" and trade["realized_pnl"] == 120.0  # 20 earlier + 100 now
 
 
+async def test_only_todays_own_intraday_closes_count_toward_the_loss_limit(db):
+    """A long-term exit, yesterday's position closed by close_stale and the
+    autopilot's trades are not today's intraday losses."""
+    today, yesterday = datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc), datetime(2026, 10, 3, 5, 0, tzinfo=timezone.utc)
+
+    def closed(id_, pnl, entry, **extra):
+        return {**_trade(id_, "BUY", 1, 100.0, entry, status="CLOSED"), "id": id_, "realized_pnl": pnl,
+                "costs": 0.0, "exit_at": today, **extra}
+
+    await db["paper_trades"].insert_many([
+        closed("A", -300.0, today),
+        closed("B", -5_000.0, today, mode="LONGTERM"),
+        closed("C", -4_000.0, yesterday),  # close_stale
+        closed("D", -2_000.0, today, via="autopilot:x"),
+    ])
+    assert await booked_today(LedgerStore(db, user_id="alice"), NOW, {}) == -300.0
+
+
 async def test_adopted_position_keeps_its_stop_after_a_restart(db):
     from backend.engine.runner import run  # noqa: F401  (levels seed shape is run()'s)
 

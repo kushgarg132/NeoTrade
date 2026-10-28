@@ -70,15 +70,17 @@ async def adopt_intraday(db, user_id: str, now: datetime) -> tuple[dict[str, Pos
 
 
 async def booked_today(ledger: LedgerStore, now: datetime, adopted: dict[str, Position]) -> float:
-    """What earlier runs booked today (net), so a restart does not re-arm the
-    loss limit. The realized P&L seeded into adopted positions is taken off:
-    the portfolio counts it again (Portfolio.equity), and its base is already
-    in today's closed trades."""
+    """What earlier intraday runs booked today (net), so a restart does not
+    re-arm the loss limit: today's INTRADAY trades only, not a long-term exit
+    and not an earlier day's position close_stale just closed (opened before
+    today). The realized P&L seeded into adopted positions is taken off: the
+    portfolio counts it again (Portfolio.equity), and its base is already in
+    today's closed trades."""
     day_start = datetime.combine(now.astimezone(IST).date(), dt_time(0, 0), tzinfo=IST)
     booked = sum(
         trade_net(t)
-        for t in await ledger.get_trades(status="CLOSED", venue="paper", limit=2000)
-        if t.get("exit_at") and t["exit_at"] >= day_start
+        for t in await ledger.get_trades(status="CLOSED", venue="paper", mode="INTRADAY", limit=2000)
+        if t.get("exit_at") and t["exit_at"] >= day_start and t["entry_at"] >= day_start
         and not (t.get("via") or "").startswith("autopilot:")
     )
     return booked - sum(p.realized_pnl for p in adopted.values())
