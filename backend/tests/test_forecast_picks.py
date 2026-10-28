@@ -123,6 +123,27 @@ def test_entry_is_next_open_and_exit_is_close_after_horizon():
     assert study.outcome(t, "S0", 400, 20) is None  # not matured yet
 
 
+def test_a_stock_that_stopped_trading_exits_at_its_last_close_and_a_gap_or_late_bar_still_waits():
+    t = setups.table(_frames())
+    c, j = t["close"], t["close"].columns.get_loc("S0")
+    c.iloc[310:, j] = np.nan  # halted / delisted from day 310
+    *_, gross, _, _ = study.outcome(t, "S0", 300, 20)
+    assert gross == pytest.approx(c.iat[309, j] / t["open"]["S0"].iat[301] - 1)
+    fires = pd.DataFrame({"S0": [np.nan] * 300 + [1.0] + [np.nan] * 119}, index=c.index)
+    stopped = study.events(t, study._Horizon(20), fires)
+    assert len(stopped) == 1 and np.isfinite(study.levels_exit(t, stopped, -0.05, 0.04)["net"]).all()
+
+    t = setups.table(_frames())
+    c = t["close"]
+    c.iloc[321, j] = np.nan  # one missing bar, trades again after
+    assert study.outcome(t, "S0", 300, 20) is None
+    c.iloc[-2:, j] = np.nan  # today's bar not in yet: not a delisting
+    assert study.outcome(t, "S0", len(c) - 23, 20) is None
+    c.iloc[305:, j] = np.nan
+    t["open"].iloc[301, j] = np.nan  # no entry: dropped
+    assert study.outcome(t, "S0", 300, 20) is None
+
+
 def test_delivery_charges_on_a_flat_round_trip():
     # Rs 1L at Rs 100: buy 20 + STT 100 + exch 2.97 + SEBI 0.10 + stamp 15 + GST 4.15 = 142.22;
     # sell 20 + 100 + 2.97 + 0.10 + GST 4.15 + DP 15.93 = 143.15.

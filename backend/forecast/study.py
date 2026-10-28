@@ -23,6 +23,7 @@ from backend.lab.splits import yearly_folds
 NOTIONAL = 5_000.0
 MIN_PRIOR = 30        # walk-forward: a year is only tested once this many past events have matured
 MIN_N = 100           # picks come only from setups with at least this many events
+STOPPED = 5           # trading days with no close after an exit day before the stock counts as stopped, not late
 
 
 def net_return(entry: float, exit_: float, ex: Execution = DEFAULT) -> float:
@@ -42,12 +43,19 @@ def kept(fires: np.ndarray, horizon: int) -> list[int]:
 
 def outcome(t: dict, symbol: str, p: int, horizon: int):
     """(entry date, exit date, gross, net, nifty) for a signal at position p,
-    or None while it has not matured / a bar is missing."""
+    or None while it has not matured / a bar is missing. A stock that stopped trading inside the window
+    (no close from the exit day on, STOPPED days later) exits at its last close: dropping it would hide
+    halts and delistings, mostly losers."""
     days = t["close"].index
-    if p + 1 + horizon >= len(days):
+    k = p + 1 + horizon
+    if k >= len(days):
         return None
     entry = t["open"][symbol].iat[p + 1]
-    exit_ = t["close"][symbol].iat[p + 1 + horizon]
+    close = t["close"][symbol]
+    exit_ = close.iat[k]
+    if np.isnan(exit_) and k + STOPPED < len(days) and close.iloc[k:].isna().all():
+        last = close.iloc[p + 1:k].last_valid_index()
+        exit_ = close[last] if last is not None else np.nan
     n_in, n_out = t["nifty_open"].iat[p + 1], t["nifty_close"].iat[p + 1 + horizon]
     if not all(np.isfinite([entry, exit_, n_in, n_out])) or entry <= 0:
         return None
@@ -225,7 +233,7 @@ def levels_exit(t: dict, ev: pd.DataFrame, p10: float, median: float) -> pd.Data
     prev = c.shift()
     atr = np.fmax(np.fmax(h - l, (h - prev).abs()), (l - prev).abs()).rolling(ATR_DAYS).mean()
     col = {sym: i for i, sym in enumerate(c.columns)}
-    O, H, L, C, A = (x.to_numpy() for x in (o, h, l, c, atr))
+    O, H, L, C, A = (x.to_numpy() for x in (o, h, l, c.ffill(), atr))  # ffill: a stopped stock's last close (outcome)
     nets = []
     for sym, entry_day, exit_day in zip(ev["symbol"], ev["entry"], ev["exit"]):
         j, i, k = col[sym], days.get_loc(entry_day), days.get_loc(exit_day)
