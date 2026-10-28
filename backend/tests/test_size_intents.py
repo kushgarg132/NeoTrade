@@ -429,6 +429,27 @@ async def test_an_exit_closes_what_is_held_and_never_flips_it():
 
 
 @pytest.mark.asyncio
+async def test_a_full_book_still_exits_but_takes_no_new_entry():
+    """max_exposure limits risk taken, not risk closed: a book at its cap
+    must still be able to sell a whole position."""
+    book = Portfolio()
+    book.positions["A"] = Position(symbol="A", quantity=600.0, avg_price=100.0)
+    book.positions["B"] = Position(symbol="B", quantity=400.0, avg_price=100.0)
+    owners = {"A": _FakeStrategy("INTRADAY"), "B": _FakeStrategy("INTRADAY"), "C": _FakeStrategy("INTRADAY")}
+    sell = Intent(symbol="A", side=Side.SELL, strength=1.0, reason_codes=["exit"], stop_hint=110.0)
+    orders = await size_intents(
+        [sell], book, _FakeCtx({"A": 100.0}), owners, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=100_000.0,
+    )
+    assert [(o.symbol, o.side, o.quantity) for o in orders] == [("A", Side.SELL, 600)]
+    buy = Intent(symbol="C", side=Side.BUY, strength=1.0, reason_codes=["signal"], stop_hint=90.0)
+    assert await size_intents(
+        [buy], book, _FakeCtx({"C": 100.0}), owners, _no_sentiment_redis(),
+        account_size=1_000_000.0, max_exposure=100_000.0,
+    ) == []
+
+
+@pytest.mark.asyncio
 async def test_no_intraday_entry_after_the_square_off_but_exits_still_go():
     class _Late(_FakeCtx):
         NOW = datetime(2026, 9, 1, 9, 50, tzinfo=timezone.utc)  # 15:20 IST

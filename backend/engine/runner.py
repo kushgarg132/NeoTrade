@@ -322,9 +322,11 @@ async def size_intents(
                 if skipped is not None:  # the run's progress: how often costs alone said no
                     skipped["below_cost"] = skipped.get("below_cost", 0) + 1
                 continue
-        if not RiskRules.check_exposure_limit(current_exposure, max_exposure, notional):
-            continue
-        current_exposure += notional
+        # Exposure caps risk taken, not risk closed: a full book must still exit.
+        if opens:
+            if not RiskRules.check_exposure_limit(current_exposure, max_exposure, notional):
+                continue
+            current_exposure += notional
 
         product = "MIS" if mode == "INTRADAY" else "CNC"
 
