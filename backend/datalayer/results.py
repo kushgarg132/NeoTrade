@@ -50,6 +50,9 @@ async def refresh(db, symbols, now: Optional[datetime] = None, cap: Optional[int
             got = await asyncio.to_thread(_fetch_sync, ticker(s), RECENT if s in docs else FULL)
         except Exception as exc:
             logger.warning("results dates: %s failed: %s", s, exc)
+            # Stamped too, else a failing symbol sorts first every run and eats the cap.
+            await db[COLL].update_one({"_id": s}, {"$set": {"checked": today.isoformat()}, "$setOnInsert": {"at": []}},
+                                      upsert=True)
             continue
         await db[COLL].replace_one({"_id": s}, {"at": merge(old, got), "checked": today.isoformat()}, upsert=True)
         done += 1

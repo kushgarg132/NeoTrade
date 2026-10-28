@@ -509,3 +509,20 @@ def test_basket_counts_months_with_enough_picks_out_of_sample():
     assert b["months"] == 3 and b["beat_nifty"] == 2 / 3 and abs(b["median_vs_nifty"] - 0.04) < 1e-9
     assert b["beat_average"] == 1 / 3 and b["years_positive"] == 0.0  # the lone -50% month drags 2024 under
     assert study.basket(ev, baseline, {"years": []})["months"] == 0
+
+
+async def test_results_refresh_stamps_a_failing_symbol_so_it_stops_hogging_the_cap(monkeypatch):
+    from backend.datalayer import results
+    db = AsyncMongoMockClient()["t"]
+    monkeypatch.setattr(results, "PAUSE", 0)
+
+    def boom(tkr, limit):
+        raise RuntimeError("delisted")
+
+    monkeypatch.setattr(results, "_fetch_sync", boom)
+    now = datetime(2026, 10, 27, 10, tzinfo=timezone.utc)
+    await db[results.COLL].insert_one({"_id": "OLD", "at": [datetime(2019, 1, 1)], "checked": "2026-10-20"})
+    assert await results.refresh(db, {"BAD", "OLD"}, now) == 0
+    assert (await db[results.COLL].find_one({"_id": "BAD"}))["checked"] == "2026-10-27"
+    assert (await results.load(db))["OLD"] == [datetime(2019, 1, 1)]  # kept
+    assert await results.refresh(db, {"BAD", "OLD"}, now) == 0 and (await results.load(db))["BAD"] == []
