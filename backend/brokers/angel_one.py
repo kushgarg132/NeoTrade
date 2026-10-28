@@ -69,7 +69,7 @@ from typing import Optional
 import httpx
 
 from backend.brokers.expiry import next_fixed_time_ist
-from backend.brokers.protocol import BrokerSessionState
+from backend.brokers.protocol import BrokerSessionState, keyed_positions
 from backend.core.models import PriceCandle
 from backend.brokers.trades import parse_ist, today_ist
 from backend.brokers.holdings import kind_of
@@ -315,19 +315,19 @@ class AngelOneAdapter:
             resp = await client.get(_POSITIONS_URL, headers=self._headers(token))
             resp.raise_for_status()
 
-        result = {}
+        result = []
         for row in resp.json().get("data") or []:
             symbol = row["tradingsymbol"]
             plain = symbol[:-3] if symbol.endswith("-EQ") else symbol
-            result[plain] = Position(
+            result.append(Position(
                 symbol=plain,
                 quantity=float(row.get("netqty", 0) or 0),
                 avg_price=float(row.get("avgnetprice", 0) or 0),
                 unrealized_pnl=float(row.get("pnl", 0) or 0),
                 exchange=row.get("exchange"),
                 product=_PRODUCT_FROM_ANGEL.get((row.get("producttype") or "").upper()),
-            )
-        return result
+            ))
+        return keyed_positions(result)
 
     async def get_holdings(self) -> list[Holding]:
         """GET .../portfolio/v1/getHolding (the path in the official Python

@@ -442,6 +442,15 @@ async def test_get_positions_maps_symbol_pnl_exchange_and_product(monkeypatch):
     assert (fut.exchange, fut.quantity) == ("NSE_FO", -50)
 
 
+async def test_get_positions_keeps_intraday_and_delivery_of_one_symbol_apart(monkeypatch):
+    UpstoxWire(monkeypatch).on("GET", "/v2/portfolio/short-term-positions", {"data": [
+        {"trading_symbol": "SBIN", "exchange": "NSE", "product": "I", "quantity": 10, "average_price": 800},
+        {"trading_symbol": "SBIN", "exchange": "NSE", "product": "D", "quantity": 4, "average_price": 790},
+    ]})
+    positions = await (await _connected()).get_positions()
+    assert sorted((p.product, p.quantity) for p in positions.values()) == [("CNC", 4), ("MIS", 10)]
+
+
 async def test_get_positions_null_fields_do_not_raise(monkeypatch):
     UpstoxWire(monkeypatch).on("GET", "/v2/portfolio/short-term-positions", {"data": [{
         "trading_symbol": "RELIANCE", "quantity": None, "average_price": None, "unrealised": None, "realised": None}]})

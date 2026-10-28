@@ -41,6 +41,7 @@ import asyncio
 from typing import Callable
 
 from backend.brokers.holdings import kind_of
+from backend.brokers.protocol import keyed_positions
 from backend.brokers.trades import parse_ist
 from backend.core.models import BrokerOrderStatus, BrokerTrade, Holding, Order, Position, Side
 
@@ -92,8 +93,8 @@ class KiteOrderClient:
     async def get_positions(self) -> dict[str, Position]:
         kite = self._kite_client_factory()
         data = await asyncio.to_thread(kite.positions)
-        return {
-            row["tradingsymbol"]: Position(
+        return keyed_positions([
+            Position(
                 symbol=row["tradingsymbol"],
                 quantity=float(row["quantity"]),
                 avg_price=float(row["average_price"]),
@@ -103,7 +104,7 @@ class KiteOrderClient:
                 product=row.get("product"),
             )
             for row in data["net"]
-        }
+        ])
 
     async def get_trades(self) -> list[BrokerTrade]:
         kite = self._kite_client_factory()

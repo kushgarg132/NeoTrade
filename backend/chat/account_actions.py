@@ -29,8 +29,10 @@ async def mine_adapter(user_id: str, credentials):
 async def _held(adapter, symbol: str) -> tuple[int, str]:
     """(shares held, product) -- today's position in the product it was
     bought in (a CNC buy today is delivery, not intraday), else a holding."""
-    position = (await adapter.get_positions()).get(symbol)
-    if position is not None and position.quantity > 0:
+    # One row per product: the first long one of this symbol.
+    position = next((p for p in (await adapter.get_positions()).values()
+                     if p.symbol == symbol and p.quantity > 0), None)
+    if position is not None:
         return int(position.quantity), position.product if position.product in ("CNC", "MIS") else "CNC"
     held = sum(h.quantity for h in await adapter.get_holdings() if h.symbol == symbol)
     return int(held), "CNC"

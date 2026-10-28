@@ -151,8 +151,8 @@ async def _broker_quantities(adapter) -> dict[str, float]:
     for h in await adapter.get_holdings():
         if h.kind != "MF":
             qty[h.symbol] += h.quantity
-    for symbol, p in (await adapter.get_positions()).items():
-        qty[symbol] += p.quantity
+    for p in (await adapter.get_positions()).values():  # MIS and CNC of a symbol are two rows
+        qty[p.symbol] += p.quantity
     return {s: q for s, q in qty.items() if abs(q) > QTY_EPSILON}
 
 

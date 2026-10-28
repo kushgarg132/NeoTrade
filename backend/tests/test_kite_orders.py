@@ -119,3 +119,22 @@ async def test_get_positions_maps_net_positions():
     assert positions["RELIANCE"].quantity == 10
     assert positions["RELIANCE"].avg_price == 2500.0
     assert positions["RELIANCE"].unrealized_pnl == 150.0
+
+
+async def test_get_positions_keeps_mis_and_cnc_of_one_symbol_apart():
+    """Kite lists one row per product: keyed by symbol alone, the CNC row
+    overwrote the MIS one and the 3:15 square-off never saw it."""
+    mock_kite = MagicMock()
+    mock_kite.positions.return_value = {"net": [
+        {"tradingsymbol": "RELIANCE", "exchange": "NSE", "product": "MIS", "quantity": 10, "average_price": 2500.0},
+        {"tradingsymbol": "RELIANCE", "exchange": "NSE", "product": "CNC", "quantity": 5, "average_price": 2400.0},
+    ], "day": []}
+    client = KiteOrderClient(kite_client_factory=lambda: mock_kite)
+
+    with patch("backend.brokers.kite_orders.asyncio.to_thread", new=AsyncMock(side_effect=lambda fn: fn())):
+        positions = await client.get_positions()
+
+    assert sorted((p.symbol, p.product, p.quantity) for p in positions.values()) == [
+        ("RELIANCE", "CNC", 5), ("RELIANCE", "MIS", 10)]
+    assert positions["RELIANCE"].product == "MIS"  # the first row keeps the plain symbol key
+

@@ -23,7 +23,21 @@ from backend.core.models import BrokerOrderStatus, BrokerTrade, Holding, Order, 
 from backend.engine.protocols import DataFeed
 from backend.instruments.models import Instrument
 
-__all__ = ["BrokerSessionState", "BrokerAdapter"]
+__all__ = ["BrokerSessionState", "BrokerAdapter", "keyed_positions"]
+
+
+def keyed_positions(rows: list[Position]) -> dict[str, Position]:
+    """A broker lists one position row per symbol *and product* (MIS and CNC
+    of one stock are two rows). The first row of a symbol keeps the plain
+    symbol key, a later one is keyed "SYMBOL:PRODUCT", so neither overwrites
+    the other. Callers that need a symbol read `Position.symbol`, not the key."""
+    out: dict[str, Position] = {}
+    for p in rows:
+        key = p.symbol if p.symbol not in out else f"{p.symbol}:{p.product}"
+        while key in out:  # same symbol and product twice (another exchange): never drop a row
+            key += "+"
+        out[key] = p
+    return out
 
 
 class BrokerAdapter(Protocol):
@@ -80,9 +94,9 @@ class BrokerAdapter(Protocol):
         ...
 
     async def get_positions(self) -> dict[str, Position]:
-        """This broker's own current-day position book, keyed by
-        tradingsymbol -- the source of truth reconciliation
-        (backend/routers/trading.py) merges into the local Portfolio."""
+        """This broker's own current-day position book, one entry per
+        broker row (`keyed_positions`: the symbol, "SYMBOL:PRODUCT" for a
+        second product of it); read the symbol off `Position.symbol`."""
         ...
 
     async def get_trades(self) -> list[BrokerTrade]:

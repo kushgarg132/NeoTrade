@@ -94,7 +94,7 @@ import urllib3
 from upstox_client.rest import ApiException
 
 from backend.brokers.expiry import ttl_seconds_until
-from backend.brokers.protocol import BrokerSessionState
+from backend.brokers.protocol import BrokerSessionState, keyed_positions
 from backend.core.models import PriceCandle
 from backend.brokers.trades import parse_ist
 from backend.brokers.holdings import kind_of
@@ -489,8 +489,8 @@ class UpstoxAdapter:
         )
 
     async def get_positions(self) -> dict[str, Position]:
-        return {
-            row["trading_symbol"]: Position(
+        return keyed_positions([
+            Position(
                 symbol=row["trading_symbol"],
                 quantity=float(row.get("quantity", 0) or 0),
                 avg_price=float(row.get("average_price", 0) or 0),
@@ -502,7 +502,7 @@ class UpstoxAdapter:
                 product=_PRODUCT_FROM_UPSTOX.get(row.get("product")),
             )
             for row in (await self._call("PortfolioApi", "get_positions", _API_VERSION))["data"] or []
-        }
+        ])
 
     async def get_holdings(self) -> list[Holding]:
         holdings = []

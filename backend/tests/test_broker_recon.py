@@ -170,3 +170,12 @@ async def test_a_broker_error_is_recorded_as_not_checked(db):
 
     docs = await broker_recon.reconcile_user(db, "alice", {"kite": "ai"}, get_adapter, DAY, NOW)
     assert docs[0]["status"] == "not_checked" and "RuntimeError" in docs[0]["reason"]
+
+
+async def test_broker_quantities_sum_both_products_of_a_symbol():
+    from backend.engine.broker_recon import _broker_quantities
+
+    broker = _Broker(positions={"ITC": Position(symbol="ITC", quantity=10, avg_price=400.0, product="MIS"),
+                                "ITC:CNC": Position(symbol="ITC", quantity=5, avg_price=390.0, product="CNC")})
+    assert await _broker_quantities(broker) == {"ITC": 15}
+
