@@ -46,6 +46,9 @@ CLOSE_UNAUTHORIZED = 1008
 _FIXED_TOPICS = {"trades", "positions", "pnl", "runs", "suggestions", "portfolio", "guardrails", "news", "autopilot"}
 _PRICE_TOPIC = re.compile(r"^prices:[A-Z0-9&-]{1,20}$")
 MAX_TOPICS = 50
+# Chat context rides into the system prompt, so only slug-shaped values pass.
+_PAGE = re.compile(r"[a-z0-9/_?=&-]{0,60}")
+_SYMBOL = re.compile(r"[A-Z0-9&.-]{1,20}")
 PING_SECONDS = 20
 
 
@@ -285,6 +288,7 @@ async def _stream_index_move(connection, ticker: str, req_id: str) -> None:
 
 
 async def _stream_chat(connection, message: str, history: list, req_id: str, context: dict | None = None) -> None:
+    context = context if isinstance(context, dict) else {}
     topic = f"chat:{req_id}"
     if not message:
         connection.offer(_frame(topic, "error", {"detail": "message is required"}))
@@ -294,10 +298,15 @@ async def _stream_chat(connection, message: str, history: list, req_id: str, con
     from backend.llm import LIMIT_MESSAGE, DailyLimitReached, use_model
     from backend.prefs import PrefsStore
 
+    page, symbol = str(context.get("page") or "").lower(), str(context.get("symbol") or "")
+    context = {"page": page if _PAGE.fullmatch(page) else "unknown"}
+    if _SYMBOL.fullmatch(symbol):
+        context["symbol"] = symbol
+
     try:
         prefs = await PrefsStore(db.db).get(connection.user_id)
         with use_model(prefs.get("omniroute_model"), user_id=connection.user_id):
-            async for event in agent.stream_chat(db.db, db.redis, connection.user_id, message, history, context or {}):
+            async for event in agent.stream_chat(db.db, db.redis, connection.user_id, message, history, context):
                 if event["type"] in ("step", "answer_end"):  # Telegram-only signals
                     continue
                 data = event["data"] if event["type"] in ("action", "suggestions") else {"text": event["data"]}

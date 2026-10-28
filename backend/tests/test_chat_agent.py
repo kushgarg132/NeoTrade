@@ -161,3 +161,17 @@ def test_every_chat_tool_has_a_label():
     db = AsyncMongoMockClient()["test_db"]
     names = {t.name for t in read_tools(db, None, "u") + action_tools(db, None, "u", "m")}
     assert names - agent.TOOL_LABELS.keys() == set()
+
+
+async def test_history_is_cut_to_the_last_20_turns_of_4000_chars(monkeypatch):
+    seen = {}
+    history = [{"role": "user", "content": f"q{i}" + "x" * 5000} for i in range(30)]
+    monkeypatch.setattr(agent.llm_service, "get_llm", AsyncMock(return_value=object()))
+    monkeypatch.setattr(agent, "build_snapshot", AsyncMock(return_value={"market": {"session_open": False}}))
+    monkeypatch.setattr(agent, "create_react_agent", lambda llm, tools: _FakeAgent(seen))
+    monkeypatch.setattr(agent.llm_service, "get_completion", AsyncMock(return_value=""))
+    [e async for e in agent.stream_chat(AsyncMongoMockClient()["test_db"], None, "alice", "hi", history, {})]
+
+    turns = seen["messages"][1:-1]
+    assert len(turns) == 20 and turns[0].content.startswith("q10")
+    assert all(len(t.content) == 4000 for t in turns)

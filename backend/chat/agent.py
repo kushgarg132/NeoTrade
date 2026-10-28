@@ -21,6 +21,10 @@ from backend.prompts import render
 
 logger = logging.getLogger(__name__)
 
+# The socket forwards whatever history the browser holds; bound what reaches the model.
+MAX_HISTORY_TURNS = 20
+MAX_TURN_CHARS = 4000
+
 TOOL_LABELS = {
     "get_portfolio": "Reading your portfolio", "get_journal": "Reading your journal",
     "get_paper": "Checking the paper engine", "get_decisions": "Reading your proposals",
@@ -121,11 +125,14 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
     if (context or {}).get("symbol"):
         page_note += f" (looking at {context['symbol']})"
     messages = [SystemMessage(content=f"{system}\n\n{page_note}")]
-    for turn in history or []:
+    for turn in (history or [])[-MAX_HISTORY_TURNS:]:
+        if not isinstance(turn, dict):
+            continue
+        content = str(turn.get("content", ""))[:MAX_TURN_CHARS]
         if turn.get("role") == "user":
-            messages.append(HumanMessage(content=turn.get("content", "")))
+            messages.append(HumanMessage(content=content))
         elif turn.get("role") == "assistant":
-            messages.append(AIMessage(content=turn.get("content", "")))
+            messages.append(AIMessage(content=content))
     messages.append(HumanMessage(content=message))
 
     agent = create_react_agent(llm, read_tools(db, redis, user_id) + action_tools(db, redis, user_id, message))
