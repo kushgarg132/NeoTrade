@@ -385,6 +385,24 @@ def test_grade_a_needs_the_corrected_t_and_both_halves():
     assert steady["edge"] is False  # every half positive, t short of the bar
 
 
+def test_levels_exit_quantiles_come_only_from_events_matured_before_the_test_year(monkeypatch):
+    seen = []
+
+    def spy(t, ev, p10, median):
+        seen.append((sorted(ev["signal"].dt.year.unique()), p10, median))
+        return ev
+
+    monkeypatch.setattr(study, "levels_exit", spy)
+    rows = [_ev("2020-03-01", "2020-04-01", r) for r in np.linspace(-0.10, 0.02, 40)]  # matured in 2020
+    rows += [_ev("2020-12-20", "2021-02-01", 0.50)] * 30  # signalled 2020, matures in 2021: not known on Jan 1
+    rows += [_ev("2021-05-01", "2021-06-01", 0.30)] * 10
+    ev = pd.DataFrame(rows, columns=["signal", "exit", "net", "nifty"]).assign(symbol="X")
+    wf = {"years": [{"year": 2021}]}
+    study._levels_exit({}, ev, study.stats(ev), pd.Series(dtype=float), wf, {"excess": 0.0})
+    prior = ev["net"].iloc[:40]
+    assert seen == [([2021], pytest.approx(prior.quantile(0.1)), pytest.approx(prior.median()))]
+
+
 def test_the_baseline_has_every_matured_month_even_when_the_horizon_spans_several():
     t = setups.table(_frames(days=840, n=5))
     days = t["close"].index

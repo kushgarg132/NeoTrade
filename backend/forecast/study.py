@@ -216,8 +216,8 @@ def levels_exit(t: dict, ev: pd.DataFrame, p10: float, median: float) -> pd.Data
     """`ev` with `net` re-priced under the exits the autopilot trades (forecast/picks.py::levels): stop at the
     tighter of entry x (1 + p10) and STOP_ATR x ATR below entry, target at entry x (1 + median); the first touch
     inside the horizon exits (a stop before a target on the same bar, a gap through either fills at the open),
-    else the horizon close as before. p10/median are the setup's own in-sample figures, so this compares two
-    exit rules on the same events; it is not a tradeable forecast."""
+    else the horizon close as before. `_levels_exit` passes each test year the p10/median of the events that
+    matured before it began, so the comparison stays out of sample."""
     if ev.empty:
         return ev
     days = t["close"].index
@@ -270,6 +270,11 @@ def _levels_exit(t, ev, st, baseline, wf, adj) -> dict:
     the same out-of-sample events, so the autopilot trades the levels only then (autopilot/picks.py)."""
     if not st.get("n"):
         return {"excess": None, "t": None, "better": False}
-    lv = adjusted_edge(levels_exit(t, ev, st["p10"], st["median"]), baseline, wf)
+    parts = []
+    for y in wf["years"]:  # each test year priced with the p10/median known on its Jan 1, as walk_forward
+        prior = ev.loc[ev["exit"] < pd.Timestamp(y["year"], 1, 1), "net"]
+        test = ev[ev["signal"].dt.year == y["year"]]
+        parts.append(levels_exit(t, test, float(prior.quantile(0.1)), float(prior.median())))
+    lv = adjusted_edge(pd.concat(parts) if parts else ev.iloc[:0], baseline, wf)
     better = lv["excess"] is not None and adj["excess"] is not None and lv["excess"] > adj["excess"]
     return {"excess": lv["excess"], "t": lv["t"], "better": bool(better)}

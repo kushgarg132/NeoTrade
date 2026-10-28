@@ -371,7 +371,8 @@ reaches Telegram, digests or chat.
   `picks.py::exit_due` sells from 15:15 on its `due_date` (the close of its horizon, the exit the study
   grades). Its stop or target (`forecast/picks.py::levels`, moved to the fill by
   `suggestions/exits.py::anchored`, checked every 15 minutes) is traded only while the study's
-  `levels_exit` says it beat the horizon close for that setup (`picks.py::_levels_tested`; on
+  `levels_exit` says it beat the horizon close for that setup out of sample (each test year's stop/target
+  quantiles from events that matured before it; `picks.py::_levels_tested`; on
   2026-10-27 it lost in every setup); exits never blocked. Each trade carries `strategy="picks:<setup>"`, `via="autopilot:picks"` and
   the pick's id in `context`. Nothing goes to Telegram. Paper only until the forward record passes
   `forecast/picks.py::live_refusal` (≥100 scored, calibration within 5 points, positive mean excess
