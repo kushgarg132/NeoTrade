@@ -56,7 +56,7 @@ const Money = () => {
               <div className="mt-3"><Badge kind="unproven">Stale · {formatDateTime(h.holdings_as_of)}</Badge></div>
             )}
             <div className="grid grid-cols-2 gap-3 mt-3">
-              <Stat label="Total P&L" value={inr(h.pnl, { sign: true })} delta={pct(h.pnl_pct / 100, { sign: true })} tone={tone(h.pnl)} />
+              <Stat label="Total P&L" value={inr(h.pnl, { sign: true })} delta={h.pnl_pct != null ? pct(h.pnl_pct / 100, { sign: true }) : '—'} tone={tone(h.pnl)} />
               <Stat label="Yearly (XIRR)" value={formatXirr(h.xirr)} delta={`NIFTY ${formatXirr(h.nifty_xirr)}`} />
             </div>
             <p className="text-[13px] text-[var(--text-muted)] mt-3">

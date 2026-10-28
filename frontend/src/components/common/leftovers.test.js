@@ -81,3 +81,7 @@ test('/auth/me clears the token only on a 401 and retries other failures once', 
   assert.match(s, /attempt < 2/);
   assert.doesNotMatch(s, /\} catch \{\s*if \(!cancelled\) \{\s*localStorage\.removeItem/);
 });
+
+test('Money total P&L percent shows a dash when pnl_pct is missing', () => {
+  assert.match(f('../../pages/Money.jsx'), /h\.pnl_pct != null \? pct\(h\.pnl_pct \/ 100, \{ sign: true \}\) : '—'/);
+});
