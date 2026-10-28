@@ -237,7 +237,7 @@ Behaviour that surprises:
 - Live engine orders report no fill back to the run (`AutopilotExecutionClient.fills` yields nothing); the autopilot's own 15:15 `check_exits` is the only square-off for them (`service.py::check_exits`); a trade it squares off (FILLED/SENT) is dropped before that call's stop/target pass, so it is never sold twice.
 - Daily/swing runs (LONGTERM) never trade: they create suggestions; the `scan` (outside this page) reuses `run` over ~400 days with the sink.
 - `HistoricalFeed` filters candles with `historical.py::_within`: aware times compare as instants; if any of `start`/`end`/candle is naive it falls back to wall-clock.
-- `PollingLiveFeed` (daily quote as a bar) is wrong for intraday; `CandlePollingFeed` yields closed yfinance 5m candles ~15 min late and marks all but the newest as `warmup` on the first poll or after `add()` (`candle_poll.py`).
+- `PollingLiveFeed` (daily quote as a bar) is wrong for intraday; `CandlePollingFeed` yields closed yfinance 5m candles ~15 min late and marks all but the newest as `warmup` on each scrip's first non-empty poll (incl. scrips from `add()`; a scrip that polled empty at start still catches up as warmup) (`candle_poll.py`).
 - Mid-run plan adds (`plan/expand.py`) need `feed.add`: Kite and Upstox tick feeds have it (`live_upstox.py::UpstoxMarketFeed.add` resolves keys from the adapter's loaded scrip dump; unresolved symbols are logged, not added); polling feeds skip.
 - `TickBarAggregator` bars are clock-driven: a quiet symbol still emits a flat zero-volume bar; first window's volume is 0 (no baseline).
 - Kite `ticker_feed` probes `ltp` first; a Kite Connect app without market-data permission returns None so `build_feed` falls through to Upstox/polling (`kite.py::ticker_feed`).

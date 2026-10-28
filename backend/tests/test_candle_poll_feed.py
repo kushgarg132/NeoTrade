@@ -77,3 +77,32 @@ async def test_first_poll_marks_catch_up_candles_as_warmup():
     # Poll 1 (09:37) yields candles 0-2; polls 2 and 3 yield one new candle each.
     assert [b.timestamp for b in bars] == [OPEN + timedelta(minutes=5 * i) for i in range(5)]
     assert [b.warmup for b in bars] == [True, True, False, False, False]
+
+
+@pytest.mark.asyncio
+async def test_a_scrip_whose_first_poll_was_empty_still_catches_up_as_warmup():
+    """yfinance returning nothing on the first poll must not turn that scrip's
+    later catch-up (the whole morning) into live bars."""
+    clock = {"now": OPEN + timedelta(minutes=22)}  # candles 0..3 closed, 4 forming
+    provider = _Provider()
+    real, calls = provider.history, {"n": 0}
+
+    async def history(instrument, interval, period):
+        calls["n"] += 1
+        return [] if calls["n"] == 1 else await real(instrument, interval, period)
+
+    provider.history = history
+
+    async def sleep(seconds):
+        clock["now"] += timedelta(minutes=5)
+
+    feed = CandlePollingFeed(provider, [_instrument("RELIANCE", 1)], sleep_fn=sleep, now_fn=lambda: clock["now"])
+    bars = []
+    async for bar in feed:
+        bars.append(bar)
+        if len(bars) == 4:
+            break
+
+    # Poll 1 empty; poll 2 (09:42) yields candles 0-2 at once (all but the newest are
+    # history), poll 3 one live candle.
+    assert [b.warmup for b in bars] == [True, True, False, False]
