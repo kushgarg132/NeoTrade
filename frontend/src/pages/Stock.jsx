@@ -22,6 +22,7 @@ import DetailsTab from '../components/stock/DetailsTab';
 import AiRead from '../components/stock/AiRead';
 import EventsTab from '../components/stock/EventsTab';
 import useStockAnalysis from '../components/stock/useStockAnalysis';
+import Fundamentals from '../components/analysis/Fundamentals';
 import { verdictKind, verdictLabel } from '../components/stock/common';
 import api, { endpoints } from '../utils/api';
 import { bareSymbol, formatQuantity, marketPhase } from '../utils/formatters';
@@ -128,11 +129,16 @@ const Stock = () => {
   const sold = m?.position?.sold;
 
   const panel = {
-    chart: closes.length >= 2 || !quick.loading ? (
-      <Card>
-        <TradingChart closes={closes} trades={m?.trades} thesis={m?.thesis} symbol={symbol} currency={currency} />
-      </Card>
-    ) : <Card><Skeleton rows={5} /></Card>,
+    chart: (
+      <div className="space-y-3">
+        {closes.length >= 2 || !quick.loading ? (
+          <Card>
+            <TradingChart closes={closes} trades={m?.trades} thesis={m?.thesis} symbol={symbol} currency={currency} />
+          </Card>
+        ) : <Card><Skeleton rows={5} /></Card>}
+        {company && <Fundamentals company={company} currency={currency} />}
+      </div>
+    ),
     news: <NewsTab symbol={symbol} mine={m} ai={ai} onAnalysis={() => document.getElementById('ai-read')?.scrollIntoView({ behavior: 'smooth' })} />,
     details: <DetailsTab mine={m} quick={quick} reloadQuick={reloadQuick} />,
     events: <EventsTab mine={m} ai={ai} />,

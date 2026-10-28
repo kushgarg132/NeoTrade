@@ -70,3 +70,9 @@ test('the Details tab has no thesis card', () => {
   const details = readFileSync(new URL('../components/stock/DetailsTab.jsx', import.meta.url), 'utf8');
   assert.doesNotMatch(details, /ThesisEditor|Your thesis/);
 });
+
+test('fundamentals sit under the chart, not in Details', () => {
+  assert.match(page, /<TradingChart[\s\S]*?<Fundamentals company=\{company\}/);
+  const details = readFileSync(new URL('../components/stock/DetailsTab.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(details, /<Fundamentals/);
+});

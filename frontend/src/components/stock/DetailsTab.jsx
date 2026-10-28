@@ -6,11 +6,10 @@ import Badge from '../ui/Badge';
 import StockFlags from '../analysis/StockFlags';
 import TradingLevels from '../analysis/TradingLevels';
 import TechGauge from './TechGauge';
-import Fundamentals from '../analysis/Fundamentals';
 import { REASONS } from '../../utils/mine';
 import { day, verdictLabel, verdictKind } from './common';
 
-/** Verdict (when held), your thesis, then the instant snapshot. The AI read lives in the card above the tabs. */
+/** Verdict (when held), then the instant snapshot. The AI read lives in the card above the tabs; fundamentals sit under the chart. */
 const DetailsTab = ({ mine, quick, reloadQuick }) => {
   const v = mine?.verdict;
   const company = quick.data?.company_info;
@@ -46,7 +45,6 @@ const DetailsTab = ({ mine, quick, reloadQuick }) => {
           <TechGauge t={quick.data.technical_analysis} />
           <StockFlags flags={quick.data.flags} />
           <TradingLevels t={quick.data.technical_analysis} currency={currency} />
-          <Fundamentals company={company} currency={currency} />
         </>
       )}
     </div>
