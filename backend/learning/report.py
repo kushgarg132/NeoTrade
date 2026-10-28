@@ -58,7 +58,8 @@ def pause_text(change: dict) -> str:
     """The Telegram note for one auto-retire (adapt.decide's pause rule)."""
     ev = change["evidence"]
     pf = "—" if ev["profit_factor"] is None else f"{ev['profit_factor']:.2f}"
-    return (f"⏸ Paused {change['strategy']} on paper: {ev['trades']} trades, net ₹{ev['net']:,.0f}, PF {pf}. "
+    vs = f" vs ₹{ev['nifty']:,.0f} for the same money in NIFTY" if ev.get("nifty") is not None else ""
+    return (f"⏸ Paused {change['strategy']} on paper: {ev['trades']} trades, net ₹{ev['net']:,.0f}{vs}, PF {pf}. "
             "No new entries until a newer backtest passes; open positions keep their exits.")
 
 

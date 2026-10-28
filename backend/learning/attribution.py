@@ -12,7 +12,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Optional
 
-from backend.analytics import _summary
+from backend.analytics import _summary, nifty_same_money
 
 MIN_TRADES = 10
 # Pseudo-trades at zero P&L added to every group's mean: with n real trades
@@ -69,5 +69,7 @@ def attribute(trades: list[dict], nifty: list) -> list[dict]:
             groups[(name, "reason", code)].append(n)
         if ctx.get("strength") is not None:
             groups[(name, "strength", strength_bucket(ctx["strength"]))].append(n)
-    return [_row(*key, nets) for key, nets in groups.items()
-            if key[1] == "all" or len(nets) >= MIN_TRADES]
+    # What each strategy's rupees would have made in the NIFTY over the same days: the bar to clear.
+    index = nifty_same_money(trades, [{"date": d.isoformat(), "close": c} for d, c in nifty])
+    return [{**_row(*key, nets), **({"nifty": index.get(key[0], 0.0)} if key[1] == "all" else {})}
+            for key, nets in groups.items() if key[1] == "all" or len(nets) >= MIN_TRADES]

@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 from mongomock_motor import AsyncMongoMockClient
 
-from backend.learning import adapt
+from backend.learning import adapt, report
 from backend.learning.adapt import LearnedRules, decide, learn, load_rules
 from backend.learning.attribution import PRIOR_TRADES, attribute, regime_on, shrunk
 
@@ -290,3 +290,19 @@ def test_the_journal_learning_endpoint_shows_rules_changes_setups_and_retunes(mo
     assert retune["strategy"] == "macd_crossover" and retune["reason"] == "deflated Sharpe 0.40"
     assert retune["running"] == {"stop_pct": 0.05} and "trial_sharpes" not in retune
     assert [h["status"] for h in body["hypotheses"]] == ["queued"]
+
+
+def test_a_strategy_that_trails_the_nifty_over_30_trades_is_paused():
+    """Profitable but under what the same rupees made in the index: paused too (2026-10-28)."""
+    def bought(net):  # ₹10,000 held over a 300-day stretch the rising _nifty gains ~13% in
+        t = _trade(net, day=300)
+        return {**t, "entry_at": t["entry_at"] - timedelta(days=299), "entry_price": 100.0, "quantity": 100.0}
+
+    state = adapt.empty_state()
+    [row] = [r for r in attribute([bought(20.0)] * 30, _nifty()) if r["by"] == "all"]
+    assert row["net"] > 0 and row["nifty"] > row["net"]
+    [change] = [c for c in decide(state, attribute([bought(20.0)] * 30, _nifty())) if c["rule"] == "pause"]
+    assert change["evidence"]["nifty"] == round(row["nifty"], 2)
+    assert "same money in NIFTY" in report.pause_text(change)
+    beats = [bought(2_000.0)] * 30  # ₹2,000 a trade beats the index's ~₹1,300
+    assert not [c for c in decide(state, attribute(beats, _nifty())) if c["rule"] == "pause"]

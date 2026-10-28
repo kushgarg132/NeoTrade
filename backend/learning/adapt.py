@@ -57,7 +57,8 @@ def _losing(row: dict) -> bool:
 
 def _change(strategy, rule, before, after, row) -> dict:
     return {"strategy": strategy, "rule": rule, "before": before, "after": after,
-            "evidence": {k: row[k] for k in ("by", "group", "trades", "net", "win_rate", "profit_factor")}}
+            "evidence": {**{k: row[k] for k in ("by", "group", "trades", "net", "win_rate", "profit_factor")},
+                         **({"nifty": round(row["nifty"], 2)} if "nifty" in row else {})}}
 
 
 def decide(state: dict, rows: list[dict]) -> list[dict]:
@@ -67,7 +68,9 @@ def decide(state: dict, rows: list[dict]) -> list[dict]:
         name = overall["strategy"]
         if name in state["paused"]:
             continue
-        if overall["trades"] >= PAUSE_AFTER and _losing(overall):
+        # Losing, or making less than the same rupees in the NIFTY over the same days (2026-10-28):
+        # a stock picker that trails the index is paying charges for nothing.
+        if overall["trades"] >= PAUSE_AFTER and (_losing(overall) or overall["net"] < overall.get("nifty", 0.0)):
             changes.append(_change(name, "pause", False, True, overall))
             continue
         mine = [r for r in rows if r["strategy"] == name]
