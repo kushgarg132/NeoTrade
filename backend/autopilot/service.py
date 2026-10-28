@@ -230,6 +230,9 @@ async def _submit(db, redis, user_id: str, order: AutopilotOrder, now: datetime,
             _, status, filled = await execute_live_order(placed, ledger, adapter, LiveOrderStore(db),
                                                          placed.strategy_name, order.reason,
                                                          role="ai", owner=user_id)
+            if not filled and status in ("REJECTED", "CANCELLED"):  # the broker said no: nothing bought
+                return await _record(db, user_id, order, "FAILED", now, quiet, reason=f"Broker {status.lower()} the order",
+                                     mode="live", price=price, broker_status=status, filled=filled)
             return await _record(db, user_id, order, "FILLED" if filled else "SENT", now, quiet, mode="live",
                                  price=price, broker_status=status, filled=filled)
         await fill_on_paper(ledger, placed, price, now)

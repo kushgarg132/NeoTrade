@@ -214,6 +214,29 @@ async def test_live_mode_places_on_the_ai_adapter_only(world, monkeypatch):
 
 
 
+@pytest.mark.parametrize("broker_status", ["REJECTED", "CANCELLED"])
+async def test_live_order_the_broker_rejects_is_failed_not_sent(world, monkeypatch, broker_status):
+    """Nothing filled and the broker said no: not held, not deployed, not an entry today."""
+    db, sent = world
+    await _prefs(db, autopilot_live=True)
+
+    async def ai_only(user_id, role, credentials, redis=None, roles=None, get_adapter=None):
+        return object()
+
+    async def live(order, ledger, adapter, orders, strategy_name="", reason=None, role="mine", owner=None):
+        return order, broker_status, 0.0
+
+    monkeypatch.setattr(service, "adapter_for", ai_only)
+    monkeypatch.setattr("backend.suggestions.service.execute_live_order", live)
+    result = await service.submit(db, None, "alice", _order(qty=2), now=OPEN)
+    assert result["status"] == "FAILED" and broker_status.lower() in result["reason"]
+    assert result["broker_status"] == broker_status
+    assert await db["autopilot_log"].count_documents({"status": "SENT"}) == 0
+    state = await service._state(db, "alice", {**PREFS, "autopilot_live": True}, "live", OPEN)
+    assert state.held == {} and state.deployed == 0 and state.entries_today == 0
+    assert not sent[0].startswith("🤖 AI bought")
+
+
 async def test_parallel_orders_cannot_exceed_capital_or_trades(world, monkeypatch):
     import asyncio
 
