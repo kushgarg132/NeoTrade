@@ -37,7 +37,7 @@ const Positions = ({ state }) => {
           to={ids[p.symbol] != null ? aiTradePath(ids[p.symbol]) : stockPath(p.symbol)}
           title={p.symbol}
           dense
-          sub={`${p.quantity} @ ${px(p.avg_price)}`}
+          sub={<>{p.quantity} @ <span className="private">{px(p.avg_price)}</span></>}
           right={`${inr(p.unrealized_pnl, { sign: true })} (${pct(p.unrealized_pnl / (p.quantity * p.avg_price || 1), { sign: true })})`}
           rightTone={p.unrealized_pnl > 0 ? 'gain' : p.unrealized_pnl < 0 ? 'loss' : 'neutral'}
         />

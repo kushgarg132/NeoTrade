@@ -68,3 +68,9 @@ test('Rebalance money is hide-amounts private', () => {
   for (const re of [/className="private" label="Total cost"/, /className="private" label="Value"/, /mono className="private">\{formatCurrency\(t\.value\)/,
     /cash left <span className="private">/, /figure-md text-sm private/]) assert.match(s, re);
 });
+
+test('AI money in ListRow sub lines is wrapped in private spans', () => {
+  assert.match(f('../ai/Scoreboard.jsx'), /const amount = \(n\) => <span className="private">/);
+  assert.doesNotMatch(f('../ai/Scoreboard.jsx'), /`\$\{st\.trades\} closed/);
+  assert.match(f('../ai/Positions.jsx'), /<span className="private">\{px\(p\.avg_price\)\}/);
+});

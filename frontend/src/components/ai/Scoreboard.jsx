@@ -23,11 +23,12 @@ const Section = ({ state, children, what, ...p }) => {
 };
 
 /** "4 closed (net +₹120) · 2 open (−₹300) · vs NIFTY −₹80": the total on the right adds open positions at market. */
+const amount = (n) => <span className="private">{inr(n, { sign: true })}</span>;
 const strategyLine = (st) => [
-  `${st.trades} closed${st.trades ? ` (${inr(st.net, { sign: true })})` : ''}`,
-  st.open ? `${st.open} open (${inr(st.unrealized, { sign: true })})` : null,
-  st.vs_nifty != null ? `vs NIFTY ${inr(st.vs_nifty, { sign: true })}` : null,
-].filter(Boolean).join(' · ');
+  <>{st.trades} closed{st.trades ? <> ({amount(st.net)})</> : ''}</>,
+  st.open ? <>{st.open} open ({amount(st.unrealized)})</> : null,
+  st.vs_nifty != null ? <>vs NIFTY {amount(st.vs_nifty)}</> : null,
+].filter(Boolean).flatMap((x, i) => (i ? [' · ', x] : [x])).map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>);
 
 /** AI -> Scoreboard: this month, AI vs you vs NIFTY, the book's stats, and each strategy's proven status. */
 const Scoreboard = ({ board, card, forward, capital, mineValue }) => {
