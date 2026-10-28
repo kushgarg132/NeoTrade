@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 LEADER_KEY = "ingest:leader"
 LEADER_TTL_MS = 30_000
 RENEW_SECONDS = 10
+PASS_TIMEOUT_MIN_SECONDS = 600  # a pass is cut off after max(5 x interval, this)
 SHUTDOWN_SECONDS = 10  # max wait for loops and the lock release once leadership is lost
 HEARTBEAT_KEY = "ingest:heartbeat:{}"
 HEARTBEAT_TTL_SECONDS = 300
@@ -88,10 +89,13 @@ async def heartbeat_ages(redis) -> dict[str, int]:
 async def _run_loop(db, redis, loop: Loop) -> None:
     while True:
         try:
-            await loop.run(db, redis)
+            await asyncio.wait_for(
+                loop.run(db, redis), max(5 * loop.interval_seconds, PASS_TIMEOUT_MIN_SECONDS))
             await beat(redis, loop.name, loop.interval_seconds)
         except asyncio.CancelledError:
             raise
+        except asyncio.TimeoutError:  # a hung call: skip the beat, try again next interval
+            logger.error("ingest loop %s pass timed out", loop.name)
         except Exception as exc:
             logger.exception("ingest loop %s failed: %s", loop.name, exc)
         await asyncio.sleep(loop.interval_seconds)

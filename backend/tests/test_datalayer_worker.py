@@ -104,3 +104,18 @@ async def test_lost_leadership_returns_even_if_a_loop_ignores_cancel(monkeypatch
         await asyncio.wait_for(task, 1)  # returned, so main() reaches os._exit
     finally:
         done.set()
+
+
+async def test_a_hung_pass_times_out_and_the_loop_carries_on(monkeypatch):
+    monkeypatch.setattr(worker, "PASS_TIMEOUT_MIN_SECONDS", 0.01)
+    redis = FakeRedis()
+    passes = []
+
+    async def hang(db, r):
+        passes.append(1)
+        await asyncio.sleep(60)
+
+    task = asyncio.create_task(worker._run_loop(None, redis, worker.Loop("news", 0.001, hang)))
+    await asyncio.sleep(0.15)
+    task.cancel()
+    assert len(passes) >= 2 and "news" not in await worker.heartbeat_ages(redis)

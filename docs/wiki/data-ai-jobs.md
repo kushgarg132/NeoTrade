@@ -176,7 +176,7 @@ Env (`backend/configs/settings.py`): `NEWS_LLM_CALLS_PER_DAY=200`, `USER_LLM_CAL
 
 ## Jobs and schedules
 
-All times IST. `in_session` = NSE trading day (`core/market_calendar.py::is_trading_day`: Mon-Fri minus the static holiday set) 09:15 to <15:30 (`engine/autorun.py::in_session`). `near_session` = in_session or in_session(now+45 min), i.e. from 08:30 (`autorun.py::near_session`). "Every" for ingest loops is the sleep AFTER a pass (`worker.py::_run_loop`), not a fixed rate. A loop's heartbeat is written only when its pass did not raise.
+All times IST. `in_session` = NSE trading day (`core/market_calendar.py::is_trading_day`: Mon-Fri minus the static holiday set) 09:15 to <15:30 (`engine/autorun.py::in_session`). `near_session` = in_session or in_session(now+45 min), i.e. from 08:30 (`autorun.py::near_session`). "Every" for ingest loops is the sleep AFTER a pass (`worker.py::_run_loop`), not a fixed rate. A loop's heartbeat is written only when its pass did not raise; a pass is cut off after `max(5 x interval, 600 s)` (logged, no heartbeat, the loop carries on).
 
 | Job | Process | When | Entry | Lock / gate |
 |---|---|---|---|---|
