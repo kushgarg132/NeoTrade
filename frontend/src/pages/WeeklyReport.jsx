@@ -74,7 +74,7 @@ const WeeklyReport = () => {
   const { data: r, loading, error, reload } = useLoad(useCallback(
     () => api.get(endpoints.weeklyReport(week)).then((x) => x.data), [week]));
   const words = useLoad(useCallback(() => api.get(endpoints.summaries.weekly(week)).then((x) => x.data), [week]));
-  const go = (by) => setParams({ week: shiftWeek(r?.week || week, by) });
+  const go = (by) => setParams({ week: shiftWeek(week || r?.week, by) });
   const shown = r?.week || week;
 
   return (

@@ -49,3 +49,10 @@ test('per-share prices keep their paise (px); totals stay on inr', () => {
     ['../ai/Positions.jsx', /px\(p\.avg_price\)/],
   ]) assert.match(f(file), re, file);
 });
+
+test('useLoad keys its result by loader; weekly arrows shift from the URL week', () => {
+  const load = f('../ideas/useLoad.js');
+  assert.match(load, /raw\.fn === fn \? raw :/);
+  assert.match(load, /setS\(\{ fn, data/);
+  assert.match(f('../../pages/WeeklyReport.jsx'), /shiftWeek\(week \|\| r\?\.week, by\)/);
+});
