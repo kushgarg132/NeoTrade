@@ -15,6 +15,7 @@ backtest (LIQUIDBEES has no mark in the instrument master).
 
 import asyncio
 import logging
+import math
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -106,13 +107,18 @@ async def rebalance(db, user_id: str, now: Optional[datetime] = None, marks_fn=m
     # whole shares: leave it out so the next-ranked name takes the slot. A
     # current holding is never forced out this way.
     last = closes.loc[t]
-    equity_estimate = book["cash"] + sum(q * float(last.get(s, 0.0) or 0.0) for s, q in book["shares"].items())
+    def known(s) -> float:  # last finite close, so a missing or NaN price never values a holding at 0 or NaN
+        v = closes[s].dropna() if s in closes else ()
+        return float(v.iloc[-1]) if len(v) else 0.0
+
+    equity_estimate = book["cash"] + sum(q * known(s) for s, q in book["shares"].items())
     slot = equity_estimate / params.top_n
     too_dear = {s for s, price in last.items() if price > slot and s not in book["shares"]}
     target, level = model.target_book(closes, market, t, set(book["shares"]), params, avoid=avoid | too_dear)
 
     marks = await marks_fn(db, set(target.index) | set(book["shares"]))
-    held_value = sum(q * marks.get(s, 0.0) for s, q in book["shares"].items())
+    marks = {s: v for s, v in marks.items() if v is not None and math.isfinite(v) and v > 0}  # no NaN marks
+    held_value = sum(q * (marks.get(s) or known(s)) for s, q in book["shares"].items())
     equity = book["cash"] + held_value
     want = {s: int(w * equity // marks[s]) for s, w in target.items() if marks.get(s)}
     orders = {s: want.get(s, 0) - q for s, q in book["shares"].items() if marks.get(s)}
@@ -150,7 +156,7 @@ async def rebalance(db, user_id: str, now: Optional[datetime] = None, marks_fn=m
             del book["shares"][symbol]
         (bought if side == Side.BUY else sold).append({"symbol": symbol, "quantity": quantity, "price": price})
 
-    held_value = sum(q * marks.get(s, 0.0) for s, q in book["shares"].items())
+    held_value = sum(q * (marks.get(s) or known(s)) for s, q in book["shares"].items())
     summary = {"date": now.isoformat(), "exposure": round(level, 3), "decided_on": str(t.date()),
                "bought": bought, "sold": sold, "equity": round(book["cash"] + held_value, 2),
                "invested": round(held_value, 2),

@@ -119,3 +119,17 @@ async def test_a_stock_dearer_than_its_slot_is_skipped():
     # PRICEY ranks first on momentum, but one share (Rs 9,000) is more than a
     # slot: it is skipped and the next-ranked name takes its place.
     assert "PRICEY" not in shares and len(shares) == paper.SMALL_TOP_N
+
+
+async def test_a_nan_or_missing_mark_values_a_holding_at_its_last_close_not_nan_or_zero():
+    db = AsyncMongoMockClient()["test_db"]
+    await paper.rebalance(db, "alice", now=NOW, marks_fn=_marks, load=_load())
+    held = (await paper.FactorBookStore(db).get("alice"))["shares"]
+
+    async def marks(db, symbols):
+        return {s: (float("nan") if i % 2 else 100.0) for i, s in enumerate(sorted(symbols)) if i % 3}
+
+    later = datetime(2026, 11, 2, 3, 50, tzinfo=timezone.utc)
+    summary = await paper.rebalance(db, "alice", now=later, marks_fn=marks, load=_load())
+
+    assert held and np.isfinite(summary["equity"]) and summary["equity"] > 200_000
