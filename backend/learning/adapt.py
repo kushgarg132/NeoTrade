@@ -82,8 +82,8 @@ def decide(state: dict, rows: list[dict]) -> list[dict]:
         by_bucket = {r["group"]: r for r in mine if r["by"] == "strength"}
         seen = [(edge, by_bucket[label]) for edge, label in STRENGTH_BUCKETS if label in by_bucket]
         floor = state["floors"].get(name, RULE_FLOOR)
-        for (edge, row), (_, above) in zip(seen, seen[1:]):
-            if _losing(row) and not _losing(above) and above["net"] >= 0 and floor < edge:
+        for i, (edge, row) in enumerate(seen[:-1]):
+            if _losing(row) and all(not _losing(a) and a["net"] >= 0 for _, a in seen[i + 1:]) and floor < edge:
                 after = round(min(floor + FLOOR_STEP, edge, FLOOR_CAP), 4)
                 changes.append(_change(name, "floor", floor, after, row))
                 break

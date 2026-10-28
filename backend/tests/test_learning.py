@@ -94,6 +94,13 @@ def test_losing_weak_signals_raise_that_strategys_floor_one_bounded_step():
     assert not [c for c in decide(state, attribute(trades, _nifty())) if c["rule"] == "floor"]
 
 
+def test_the_floor_waits_while_a_stronger_bucket_still_loses():
+    # weak and strong signals lose, the middle wins: cutting the weak ones would not stop the losses above
+    trades = ([_trade(-80.0, strength=0.5)] * 12 + [_trade(300.0, strength=0.7)] * 12
+              + [_trade(-50.0, strength=0.85)] * 12)
+    assert not [c for c in decide(adapt.empty_state(), attribute(trades, _nifty())) if c["rule"] == "floor"]
+
+
 def test_the_floor_never_passes_its_cap():
     trades = [_trade(-80.0, strength=0.7)] * 12 + [_trade(150.0, strength=0.9)] * 12
     state = adapt.empty_state()
