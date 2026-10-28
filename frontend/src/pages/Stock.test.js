@@ -46,8 +46,8 @@ test('stop-hit loss shows from-now and vs-cost, both private', () => {
 test('stop and target amounts are their own private spans, with no private wrapper', () => {
   const stock = readFileSync(new URL('./Stock.jsx', import.meta.url), 'utf8');
   assert.doesNotMatch(stock, /<p className="private">\s*Stop/);
-  assert.match(stock, /Stop <span className="private">\{inr\(risk\.stop\)\}/);
-  assert.match(stock, /target <span className="private">\{inr\(risk\.target\)\}/);
+  assert.match(stock, /Stop <span className="private">\{px\(risk\.stop\)\}/);
+  assert.match(stock, /target <span className="private">\{px\(risk\.target\)\}/);
   const chart = readFileSync(new URL('../components/stock/TradingChart.jsx', import.meta.url), 'utf8');
   assert.match(chart, /<span className="private">\{l\.amount\}/);
   assert.match(chart, /\{\.\.\.AXIS\}/);

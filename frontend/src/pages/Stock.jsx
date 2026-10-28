@@ -27,6 +27,7 @@ import api, { endpoints } from '../utils/api';
 import { bareSymbol, formatQuantity, marketPhase } from '../utils/formatters';
 import { stockTab } from '../utils/stocks';
 import { positionSummary } from '../utils/stock';
+import { px } from '../components/ideas/levels';
 
 const TABS = [
   { id: 'chart', label: 'Chart' },
@@ -180,7 +181,7 @@ const Stock = () => {
           <div>
             <p className="text-[13px] text-[var(--text-muted)] mb-2">Your position · your broker account</p>
             <div className="grid grid-cols-2 gap-3">
-              <Stat label="Quantity · avg" value={`${formatQuantity(pos.qty)} · ${inr(pos.avg)}`} />
+              <Stat label="Quantity · avg" value={`${formatQuantity(pos.qty)} · ${px(pos.avg)}`} />
               <Stat
                 label="P&L"
                 value={`${inr(pos.pnl, { sign: true })}${pos.pnlPct != null ? ` (${pct(pos.pnlPct, { sign: true, dp: 1 })})` : ''}`}
@@ -192,12 +193,12 @@ const Stock = () => {
             <div className="mt-2 text-[14px] text-[var(--text)]" data-testid="stop-line">
               {risk.stop != null ? (
                 <p>
-                  Stop <span className="private">{inr(risk.stop)}</span>
+                  Stop <span className="private">{px(risk.stop)}</span>
                   {risk.stopDist != null && (risk.stopDist > 0 ? ` · ${pct(risk.stopDist, { dp: 1 })} below price` : ' · price is at or below your stop')}
                   {' · if hit: '}
                   {risk.stopFromNow != null && <span className="private">{inr(risk.stopFromNow, { sign: true })} from now </span>}
                   <span className="private">({inr(risk.stopPnl, { sign: true })} vs what you paid)</span>
-                  {risk.target != null && <> · target <span className="private">{inr(risk.target)}</span></>}
+                  {risk.target != null && <> · target <span className="private">{px(risk.target)}</span></>}
                 </p>
               ) : (
                 <p className="text-[var(--text-muted)]">

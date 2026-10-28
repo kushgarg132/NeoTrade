@@ -11,6 +11,7 @@ import { stockPath } from '../../utils/stocks';
 import { aiTradePath } from '../../utils/routes';
 import api, { endpoints } from '../../utils/api';
 import { openTradeIds } from '../../utils/aiDetail';
+import { px } from '../ideas/levels';
 
 /** AI -> Positions: what the AI holds now, each row opens the stock. */
 const Positions = ({ state }) => {
@@ -36,7 +37,7 @@ const Positions = ({ state }) => {
           to={ids[p.symbol] != null ? aiTradePath(ids[p.symbol]) : stockPath(p.symbol)}
           title={p.symbol}
           dense
-          sub={`${p.quantity} @ ${inr(p.avg_price)}`}
+          sub={`${p.quantity} @ ${px(p.avg_price)}`}
           right={`${inr(p.unrealized_pnl, { sign: true })} (${pct(p.unrealized_pnl / (p.quantity * p.avg_price || 1), { sign: true })})`}
           rightTone={p.unrealized_pnl > 0 ? 'gain' : p.unrealized_pnl < 0 ? 'loss' : 'neutral'}
         />

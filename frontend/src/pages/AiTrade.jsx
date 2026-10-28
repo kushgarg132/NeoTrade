@@ -19,6 +19,7 @@ import { strategyPath } from '../utils/routes';
 import { strategyName } from '../utils/library';
 import { formatDateTime } from '../utils/formatters';
 import { inr } from '../components/ui/format';
+import { px } from '../components/ideas/levels';
 
 const day = (v) => String(v).slice(0, 10);
 
@@ -61,8 +62,8 @@ const AiTrade = () => {
   const c = t.context || {};
   const score = c.score;
   const levels = [
-    c.stop != null && ['Stop', inr(c.stop)],
-    c.target != null && ['Target', inr(c.target)],
+    c.stop != null && ['Stop', px(c.stop)],
+    c.target != null && ['Target', px(c.target)],
     c.max_hold_days != null && ['Max hold', `${c.max_hold_days}d`],
     c.trail_atr != null && ['Trail', `${c.trail_atr} x ATR`],
   ].filter(Boolean);
@@ -79,8 +80,8 @@ const AiTrade = () => {
         {!s.open && <Hero label="Net" value={s.net} format={(v) => inr(v, { sign: true })} />}
         <Card title="Result" action={s.open ? <Badge kind="neutral">Open</Badge> : null}>
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="Entry" value={`${inr(t.entry_price)}`} delta={formatDateTime(t.entry_at)} />
-            <Stat label="Exit" value={s.open ? 'Open' : inr(t.exit_price)} delta={s.open ? null : formatDateTime(t.exit_at)} />
+            <Stat label="Entry" value={px(t.entry_price)} delta={formatDateTime(t.entry_at)} />
+            <Stat label="Exit" value={s.open ? 'Open' : px(t.exit_price)} delta={s.open ? null : formatDateTime(t.exit_at)} />
             <Stat label="Quantity" value={t.quantity} />
             <Stat label="Held" value={s.held} />
             {!s.open && <Stat label="Gross" value={inr(s.gross, { sign: true })} />}

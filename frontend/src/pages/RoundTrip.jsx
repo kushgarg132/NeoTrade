@@ -16,6 +16,7 @@ import { stockPath } from '../utils/stocks';
 import { holdTime } from '../utils/roundTrip';
 import { inr } from '../components/ui/format';
 import { formatQuantity, formatDateTime } from '../utils/formatters';
+import { px } from '../components/ideas/levels';
 
 const BACK = '/money?tab=journal';
 
@@ -38,8 +39,8 @@ const Body = ({ trip, reload }) => {
         <div className="grid grid-cols-2 gap-4">
           {open && <div className="private"><Stat label="P&L" value="Open" /></div>}
           <Stat label="Held" value={holdTime(trip.opened_at, trip.closed_at)} />
-          <div className="private"><Stat label="Average entry" value={inr(entry)} /></div>
-          <div className="private"><Stat label="Average exit" value={exit == null ? '—' : inr(exit)} /></div>
+          <div className="private"><Stat label="Average entry" value={px(entry)} /></div>
+          <div className="private"><Stat label="Average exit" value={px(exit)} /></div>
         </div>
         <div className="mt-3"><NewsChips trip={trip} /></div>
       </Card>
@@ -47,7 +48,7 @@ const Body = ({ trip, reload }) => {
       <Card title="Fills">
         <div className="private">
           {fills.map((f, i) => (
-            <ListRow key={i} chevron={false} title={`${f.side === 'BUY' ? 'Bought' : 'Sold'} ${formatQuantity(f.quantity)}`} sub={formatDateTime(f.traded_at)} right={inr(f.price)} />
+            <ListRow key={i} chevron={false} title={`${f.side === 'BUY' ? 'Bought' : 'Sold'} ${formatQuantity(f.quantity)}`} sub={formatDateTime(f.traded_at)} right={px(f.price)} />
           ))}
         </div>
       </Card>
