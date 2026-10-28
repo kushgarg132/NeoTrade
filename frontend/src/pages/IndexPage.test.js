@@ -14,3 +14,9 @@ test('level shows on the Hero, not a Stat', () => {
 test('other stats and the close line stay', () => {
   for (const s of ['52-week range', '50-day average', '200-day average', '<CloseLine']) assert.ok(src.includes(s), s);
 });
+
+test('why it moved streams over the socket, HTTP only as fallback', () => {
+  assert.match(src, /stream\.request\('index_why'/);
+  assert.match(src, /m\.event === 'delta'/);
+  assert.match(src, /if \(!request\.ok\)/);
+});

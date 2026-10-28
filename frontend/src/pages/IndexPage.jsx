@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import Layout from '../components/Layout';
@@ -12,7 +12,8 @@ import DeltaChip from '../components/ui/DeltaChip';
 import Stat from '../components/ui/Stat';
 import { AiCard, AiText } from '../components/ai/AiSummary';
 import useStored from '../hooks/useStored';
-import { endpoints } from '../utils/api';
+import api, { endpoints } from '../utils/api';
+import { stream } from '../lib/ws';
 import { points } from '../components/ui/format';
 import { AXIS, GRID, SERIES, TOOLTIP_STYLE } from '../components/ui/chartTheme';
 
@@ -33,12 +34,37 @@ const CloseLine = ({ points }) => (
   </div>
 );
 
+/** The socket streams a fresh story as it is written; HTTP is the fallback when there is no socket. */
+const useIndexWhy = (ticker) => {
+  const [state, setState] = useState({ ticker, status: 'loading', text: '', data: null, code: null });
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let live = true;
+    const base = (s) => (s.ticker === ticker ? s : { ticker, status: 'loading', text: '', data: null, code: null });
+    const set = (next) => live && setState((s) => ({ ...base(s), ...next }));
+    const request = stream.request('index_why', { ticker }, (m) => {
+      if (m.event === 'delta') live && setState((s) => ({ ...base(s), text: base(s).text + m.data.text }));
+      else if (m.event === 'report') set({ status: 'ok', data: m.data, text: '' });
+      else if (m.event === 'error') set({ status: 'error', code: m.data.code ?? null, text: '' });
+    });
+    if (!request.ok) {
+      api.get(endpoints.marketIndexAnalysis(ticker))
+        .then((r) => set({ status: 'ok', data: r.data }))
+        .catch((e) => set({ status: 'error', code: e?.response?.status ?? null }));
+    }
+    return () => { live = false; request.cancel(); };
+  }, [ticker, tick]);
+  const shown = state.ticker === ticker ? state : { status: 'loading', text: '', data: null, code: null };
+  const retry = () => { setState({ ticker, status: 'loading', text: '', data: null, code: null }); setTick((t) => t + 1); };
+  return { ...shown, retry };
+};
+
 const Why = ({ ticker }) => {
-  const { data, status, code, retry } = useStored(endpoints.marketIndexAnalysis(ticker));
+  const { data, status, code, text, retry } = useIndexWhy(ticker);
   return (
     <AiCard title="Why it moved" asOf={data?.session?.date}>
-      {status === 'loading' && <Skeleton rows={4} />}
-      {(status === 'error' || status === 'empty') && (
+      {status === 'loading' && (text ? <AiText text={text} /> : <Skeleton rows={4} />)}
+      {status === 'error' && (
         <ErrorLine message={code === 503 ? 'Explanation unavailable right now' : 'Could not load the explanation.'} onRetry={retry} />
       )}
       {status === 'ok' && (

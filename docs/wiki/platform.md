@@ -80,7 +80,7 @@ Redis keys owned or written by files on this page:
 
 | key | TTL | owner |
 |---|---|---|
-| `rate:<name>` (names: `analyze:<uid>` 10/60 s (checked in `_stream_analysis` only when a run is needed, not in `_BUDGETS`), `quick_analyze:<uid>` 60/60 s, `chat:<uid>` 20/60 s on the socket; `scan:<uid>` 5/600 s; `rebalance:<uid>` 10/60 s; `strategies:submit:<uid>:<IST day>` 3/2 days) | window | `rate_limit.py::allow` |
+| `rate:<name>` (names: `analyze:<uid>` 10/60 s (checked in `_stream_analysis` only when a run is needed, not in `_BUDGETS`), `quick_analyze:<uid>` 60/60 s, `chat:<uid>` 20/60 s, `index_why:<uid>` 20/60 s on the socket; `scan:<uid>` 5/600 s; `rebalance:<uid>` 10/60 s; `strategies:submit:<uid>:<IST day>` 3/2 days) | window | `rate_limit.py::allow` |
 | `worker:alive:<BOOT_ID>` | 90 s, refreshed every 30 s | `runs.py::keep_alive`, `runs.py::ALIVE_KEY` |
 | `launch:<uid>:<mode>` | 30 s | `trading.py::launch_run` (one run per mode) |
 | `broker:<uid>:kite:access_token` | until next 06:00 IST | `kite_session.py::KiteSessionManager` (other brokers: brokers/ pages) |

@@ -117,7 +117,7 @@ async def _pump(websocket: WebSocket, connection) -> None:
 
 # Per-user budgets on what costs money (LLM calls) or compute: (limit, window
 # seconds, reply topic prefix). "analyze" is checked inside _stream_analysis, only when a run is needed.
-_BUDGETS = {"quick_analyze": (60, 60, "quick_analysis"), "chat": (20, 60, "chat")}
+_BUDGETS = {"quick_analyze": (60, 60, "quick_analysis"), "chat": (20, 60, "chat"), "index_why": (20, 60, "index_move")}
 
 
 async def _handle(websocket: WebSocket, connection, message: dict) -> None:
@@ -135,6 +135,8 @@ async def _handle(websocket: WebSocket, connection, message: dict) -> None:
         asyncio.create_task(_stream_analysis(connection, message.get("symbol", ""), message.get("req_id", "")))
     elif action == "quick_analyze":
         asyncio.create_task(_stream_quick_analysis(connection, message.get("symbol", ""), message.get("req_id", "")))
+    elif action == "index_why":
+        asyncio.create_task(_stream_index_move(connection, message.get("ticker", ""), message.get("req_id", "")))
     elif action == "chat":
         asyncio.create_task(_stream_chat(
             connection, message.get("message", ""), message.get("history") or [], message.get("req_id", ""),
@@ -233,6 +235,34 @@ async def _stream_quick_analysis(connection, symbol: str, req_id: str) -> None:
     except Exception as exc:
         logger.warning("quick analysis of %s failed: %s", symbol, exc)
         connection.offer(_frame(topic, "error", {"detail": "The analysis failed; try again in a minute."}))
+
+
+async def _stream_index_move(connection, ticker: str, req_id: str) -> None:
+    """/market/index/{ticker}/analysis, streamed: a cached story comes back as
+    one `report`; a fresh one sends `delta` text first."""
+    topic = f"index_move:{req_id}"
+    from backend.ai import analyst
+    from backend.research.index_move import ExplanationUnavailable, explain_index_move
+    from backend.routers.market_data import _known_index_names
+
+    name = _known_index_names().get(ticker)
+    if name is None:
+        connection.offer(_frame(topic, "error", {"detail": f"{ticker} is not a tracked index", "code": 404}))
+        return
+
+    def sink(event: dict) -> None:
+        connection.offer(_frame(topic, event["type"], {k: v for k, v in event.items() if k != "type"}))
+
+    token = analyst.report_sink.set(sink)
+    try:
+        connection.offer(_frame(topic, "report", await explain_index_move(ticker, name)))
+    except ExplanationUnavailable as exc:
+        connection.offer(_frame(topic, "error", {"detail": str(exc), "code": 503}))
+    except Exception as exc:
+        logger.warning("index move for %s failed: %s", ticker, exc)
+        connection.offer(_frame(topic, "error", {"detail": "The explanation failed; try again in a minute."}))
+    finally:
+        analyst.report_sink.reset(token)
 
 
 async def _stream_chat(connection, message: str, history: list, req_id: str, context: dict | None = None) -> None:

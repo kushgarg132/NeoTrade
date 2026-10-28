@@ -133,3 +133,26 @@ def test_an_open_session_is_cached_briefly_a_finished_one_until_the_next_open():
     assert index_move._ttl("2026-10-06", early) == 2 * 3600
     night = datetime(2026, 10, 7, 0, 30, tzinfo=ist)
     assert index_move._ttl("2026-10-06", night) == index_move.CLOSED_CACHE_SECONDS
+
+
+def test_a_socket_sink_streams_the_text_then_caches_it(world, monkeypatch):
+    import asyncio
+
+    from backend.ai import analyst
+
+    async def stream(prompt, system_prompt, tier=None, feature=None):
+        for part in ("### What", " happened\nIt rose."):
+            yield part
+
+    monkeypatch.setattr(index_move.llm_service, "stream_completion", stream)
+    events = []
+    token = analyst.report_sink.set(events.append)
+    try:
+        out = asyncio.run(index_move.explain_index_move("^NSEI", "NIFTY 50"))
+    finally:
+        analyst.report_sink.reset(token)
+
+    assert [e["text"] for e in events if e["type"] == "delta"] == ["### What", " happened\nIt rose."]
+    assert out["analysis"] == "### What happened\nIt rose."
+    assert not world["llm"]  # no second, non-streamed call
+    assert asyncio.run(index_move.explain_index_move("^NSEI", "NIFTY 50"))["cached"] is True

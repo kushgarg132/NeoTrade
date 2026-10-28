@@ -186,7 +186,21 @@ async def explain_index_move(ticker: str, name: str) -> Dict[str, Any]:
             "No recent headlines were found.",
         ),
     )
-    text = (await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="research") or "").strip()
+    from backend.ai.analyst import emit, report_sink
+
+    if report_sink.get() is None:
+        text = await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="research")
+    else:  # the socket asked: stream the text as it is written
+        parts = []
+        try:
+            async for delta in llm_service.stream_completion(prompt, system_prompt=system, tier="standard", feature="research"):
+                parts.append(delta)
+                if delta != "LLM_DISABLED":
+                    emit({"type": "delta", "text": delta})
+        except Exception as e:
+            raise ExplanationUnavailable("The analysis model is unavailable right now") from e
+        text = "".join(parts)
+    text = (text or "").strip()
     # get_completion reports failure as text rather than raising.
     if not text or text == "LLM_DISABLED" or text.startswith("Error generating response"):
         raise ExplanationUnavailable("The analysis model is unavailable right now")

@@ -216,7 +216,7 @@ class Stream {
    */
   request(action, payload, onEvent) {
     const reqId = Math.random().toString(36).slice(2, 10);
-    const topicPrefix = { chat: 'chat', quick_analyze: 'quick_analysis' }[action] || 'analysis';
+    const topicPrefix = { chat: 'chat', quick_analyze: 'quick_analysis', index_why: 'index_move' }[action] || 'analysis';
     const topic = `${topicPrefix}:${reqId}`;
     const finish = () => {
       this.requests.delete(topic);
