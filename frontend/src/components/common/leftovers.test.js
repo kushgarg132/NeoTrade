@@ -34,3 +34,9 @@ test('chat lives once in App (signed-in only), not per page, and cancels its str
   assert.equal((app.match(/<ChatWidget/g) || []).length, 1);
   assert.match(chat, /requestRef\.current\?\.cancel\(\)/);
 });
+
+test('AiTrade reads only the snapshot: useStockAnalysis can skip the AI read', () => {
+  assert.match(f('../stock/useStockAnalysis.js'), /\{ ai: wantAi = true \}/);
+  assert.match(f('../stock/useStockAnalysis.js'), /!symbol \|\| !wantAi/);
+  assert.match(f('../../pages/AiTrade.jsx'), /useStockAnalysis\(t\?\.symbol, \{ ai: false \}\)/);
+});

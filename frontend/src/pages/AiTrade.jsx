@@ -27,7 +27,7 @@ const AiTrade = () => {
   const id = useParams().id;
   const trade = useStored(endpoints.trade(id));
   const t = trade.data;
-  const { quick } = useStockAnalysis(t?.symbol);
+  const { quick } = useStockAnalysis(t?.symbol, { ai: false });
 
   const closes = useMemo(
     () => (quick.data?.price_data || []).map((c) => ({ date: day(c.timestamp), close: Number(c.close) })),

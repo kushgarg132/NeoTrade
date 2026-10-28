@@ -7,9 +7,9 @@ import { AI_EMPTY, aiReducer } from '../../utils/aiRead';
 /**
  * The instant snapshot (quote, fundamentals, technicals: no LLM call) and the AI read, which starts on every
  * open: the socket sends the last read at once and streams a fresh one when it is stale. The HTTP routes are the
- * fallback when there is no socket.
+ * fallback when there is no socket. `{ ai: false }` skips the AI read (pages that only need the snapshot).
  */
-const useStockAnalysis = (symbol) => {
+const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
   // Each state remembers its symbol: another stock's answer reads as the initial state, no reset effect needed.
   const QUICK0 = { data: null, loading: true, error: null };
   const [quickRaw, setQuick] = useState({ ...QUICK0, symbol });
@@ -43,7 +43,7 @@ const useStockAnalysis = (symbol) => {
   }, [symbol, retry]);
 
   useEffect(() => {
-    if (!symbol) return undefined;
+    if (!symbol || !wantAi) return undefined;
     let current = true;
     const send = (event, data) => current && dispatch({ symbol, event, data });
     send('reset');
@@ -72,7 +72,7 @@ const useStockAnalysis = (symbol) => {
       })();
     }
     return () => { current = false; request.cancel(); };
-  }, [symbol, aiTry]);
+  }, [symbol, aiTry, wantAi]);
 
   return { quick, ai, aiRead, retryAi: () => setAiTry((n) => n + 1), reloadQuick: () => { setQuick({ ...QUICK0, symbol }); setRetry((n) => n + 1); } };
 };
