@@ -41,6 +41,9 @@ class GuardrailStore:
         return doc.get("telegram_chat_id") if doc else None
 
     async def set_telegram_chat(self, user_id: str, chat_id: Optional[int]) -> None:
+        if chat_id is not None:  # one chat, one account: taps must not reach another user
+            await self.channels.update_many(
+                {"telegram_chat_id": chat_id, "_id": {"$ne": user_id}}, {"$set": {"telegram_chat_id": None}})
         await self.channels.update_one(
             {"_id": user_id}, {"$set": {"telegram_chat_id": chat_id}}, upsert=True,
         )

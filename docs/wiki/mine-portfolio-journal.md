@@ -75,7 +75,8 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 - `mine_daily`: one row per user per NIFTY trading day. `nifty_value` = NIFTY units (buys add `flow/nifty`; a sale removes
   the fraction of units equal to proceeds / portfolio value just before it, capped at 1; never below 0). Fields `date` (ISO), `flow, invested, value, nifty_value,
   by_symbol{sym:{qty,value}}, partial`. Unique index `(user_id, date)` (`backend/server.py:134`). Written by
-  `mine/history.py::_store`, which upserts only changed rows and deletes dates the replay no longer has.
+  `mine/history.py::_store`, which upserts only changed rows and deletes dates the replay no longer has (all of them when the replay is empty).
+  Replay and FIFO (`lots._fifo`, `history._inputs`, `roundtrips.build_round_trips`) break `traded_at` ties BUY first: Upstox history and Console CSV stamp every fill 09:15. Round trips do that only for `source` `upstox_history`/`console_csv`, so a live-synced intraday short stays a SHORT.
 - `holding_theses`: one doc per `(user_id, symbol)` (unique, `mine/thesis.py::ThesisStore.ensure_indexes`). Fields
   `why, target, stop, review_by` (ISO string), `updated_at`.
 - `mine_action_state`: `{user_id, action_id, state: dismissed|snoozed, until}` (`mine/actions.py::_set_state`). No
@@ -87,7 +88,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 - `stock_health`: `_id = "{symbol}:{IST day}"`, shared (`portfolio/health.py::stock_health`). `instrument_sectors`:
   `_id = symbol`, 30-day TTL in code (`portfolio/service.py::SECTOR_TTL`).
 - `guardrail_events`: `_id = "{user}:{day}:{breach key}"`, inserted with `$setOnInsert`. Index `(user_id, day)`.
-  `alert_channels`: `_id = user_id`, `telegram_chat_id`, `telegram_bot_token` (Fernet-encrypted),
+  `alert_channels`: `_id = user_id`, `telegram_chat_id` (one chat links to one user: `set_telegram_chat` unlinks it from any other user), `telegram_bot_token` (Fernet-encrypted),
   `telegram_bot_username` (`guardrails/store.py`).
 - Read only from this area: `suggestions` (ideas, candidates), `paper_trades` (idea exits, AI book P&L),
   `news_items`, `users.role`, `chat_actions`, `autopilot_log`, `broker_credentials`.
@@ -295,7 +296,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | POST /journal/sync | `::sync_journal` | user | `{imported,brokers,failed}` |
 | POST /imports/cas (multipart `file`,`password`) | `routers/imports.py::import_cas` | user | `{funds,transactions,period}`; 422 on wrong password / non-PDF / over 10 MB / NSDL-CDSL |
 | GET /imports | `::imported` | user | `{funds,period,imported_at,transactions,trades}` |
-| DELETE /imports | `::delete_imported` | user | `{transactions,trades}`: erases the CAS funds, their transactions and this user's `source=console_csv` fills, then re-reads holdings (DPDP) |
+| DELETE /imports | `::delete_imported` | user | `{transactions,trades}`: erases the CAS funds, their transactions and this user's `source=console_csv` fills, then re-reads holdings and recomputes the user's `mine_daily` curve (`history.backfill`; an empty replay clears it). Old `portfolio_snapshots` are not stripped (DPDP) |
 | POST /journal/import/zerodha-console | `::import_console_csv` | user | `{imported,duplicates,skipped}` |
 | POST /journal/import/upstox-history | `::import_upstox` | user | `{imported,fetched,skipped_synced_days}`; 409 if not logged in, 502 if Upstox fails |
 | GET /journal/round-trips/{id} | `::get_round_trip` | user (404 if not the caller's) | the `round_trips[]` row plus `fills[{side,quantity,price,traded_at}]`, `insights[]` (findings whose `trip_ids` include it; `insights.py::_finding` now emits `trip_ids`) |

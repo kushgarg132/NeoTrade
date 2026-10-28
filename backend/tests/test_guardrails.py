@@ -232,3 +232,10 @@ def test_results_rule_flags_long_stock_buys_inside_the_window_only():
     # Off: 0 days, or guardrails switched off.
     assert evaluate(trips, 0, {**prefs, "no_buy_before_results_days": 0}, results=results, today=today) == []
     assert evaluate(trips, 0, {**prefs, "guardrails_enabled": False}, results=results, today=today) == []
+
+
+async def test_a_chat_links_to_one_user_only():
+    store = GuardrailStore(AsyncMongoMockClient()["test_db"])
+    await store.set_telegram_chat("alice", 42)
+    await store.set_telegram_chat("bob", 42)
+    assert await store.telegram_chat("alice") is None and await store.telegram_chat("bob") == 42
