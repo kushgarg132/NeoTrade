@@ -18,6 +18,7 @@ Two things differ from the HTTP routes and both are deliberate:
 
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -38,6 +39,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 CLOSE_UNAUTHORIZED = 1008
+
+# What `subscribe` accepts: the fixed event topics stores publish to, or one
+# price topic per symbol. The price pump polls every subscribed symbol, so an
+# open-ended topic list would be an open-ended quote bill.
+_FIXED_TOPICS = {"trades", "positions", "pnl", "runs", "suggestions", "portfolio", "guardrails", "news", "autopilot"}
+_PRICE_TOPIC = re.compile(r"^prices:[A-Z0-9&-]{1,20}$")
+MAX_TOPICS = 50
 PING_SECONDS = 20
 
 
@@ -143,7 +151,18 @@ async def _handle(websocket: WebSocket, connection, message: dict) -> None:
             message.get("context") or {},
         ))
     elif action == "subscribe":
-        connection.subscribe(topics)
+        accepted, rejected = [], []
+        room = MAX_TOPICS - len(connection.topics)
+        for topic in dict.fromkeys(t for t in topics if isinstance(t, str)):
+            ok = topic in _FIXED_TOPICS or _PRICE_TOPIC.fullmatch(topic)
+            if ok and topic not in connection.topics:
+                ok = room > 0
+                room -= 1
+            (accepted if ok else rejected).append(topic)
+        connection.subscribe(accepted)
+        if rejected:
+            await websocket.send_json({"topic": "system", "event": "error", "data": {
+                "detail": f"Not subscribed (unknown topic or limit of {MAX_TOPICS} reached): {rejected[:10]}"}})
         await websocket.send_json({"topic": "system", "event": "subscribed", "data": {"topics": sorted(connection.topics)}})
     elif action == "unsubscribe":
         connection.unsubscribe(topics)

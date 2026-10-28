@@ -454,3 +454,17 @@ def test_over_budget_after_cached_sends_error_and_keeps_no_run(client, monkeypat
     monkeypatch.setattr(ws_routes, "allow", no)
     frames = _analyze(client)
     assert [f["event"] for f in frames] == ["cached", "error"] and ran == []
+
+
+def test_subscribe_rejects_unknown_topics_and_caps_the_count(client, hub):
+    with client.websocket_connect(
+        "/api/v1/ws?token=good-token", headers={"origin": ALLOWED_ORIGIN}
+    ) as socket:
+        socket.receive_json()
+        socket.send_json({"action": "subscribe", "topics": ["prices:ok", "prices:TCS", "evil", "pnl"]})
+        assert socket.receive_json()["event"] == "error"
+        assert socket.receive_json()["data"]["topics"] == ["pnl", "prices:TCS"]
+
+        socket.send_json({"action": "subscribe", "topics": [f"prices:S{i}" for i in range(80)]})
+        assert socket.receive_json()["event"] == "error"
+        assert len(socket.receive_json()["data"]["topics"]) == 50
