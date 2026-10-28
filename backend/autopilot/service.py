@@ -260,7 +260,7 @@ async def check_exits(db, redis, user_id: str, now: Optional[datetime] = None) -
 
     now = now or datetime.now(timezone.utc)
     held = await open_trades(db, user_id)
-    closed = []
+    closed, squared = [], set()
     if is_past_square_off_time(now):
         # A live engine order never reports its fill back to the run, so no
         # strategy squares it off: without this the broker's own ~15:20
@@ -272,7 +272,8 @@ async def check_exits(db, redis, user_id: str, now: Optional[datetime] = None) -
                 live=trade["user_id"] == ledger_user(user_id)), now=now)
             if result["status"] in ("FILLED", "SENT"):
                 closed.append({"symbol": trade["symbol"], "reason": "square-off", "price": result.get("price")})
-    trades = [t for t in held if t.get("suggestion_id")]
+                squared.add(trade["id"])
+    trades = [t for t in held if t.get("suggestion_id") and t["id"] not in squared]  # sold above: never twice
     if not trades:
         return closed
     suggestions = {s["id"]: s for s in await db["suggestions"].find(

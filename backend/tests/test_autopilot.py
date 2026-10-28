@@ -468,6 +468,20 @@ async def test_intraday_positions_square_off_from_315_even_with_the_autopilot_of
     assert trade["status"] == "CLOSED" and trade["strategy"] == "orb"
 
 
+async def test_a_squared_off_trade_is_not_sold_again_at_its_stop(world):
+    """15:15 sells it; the stop pass that follows must not send a second SELL."""
+    db, sent = world
+    await _prefs(db)
+    await db["suggestions"].insert_one({"id": "s1", "user_id": "alice", "symbol": "INFY", "stop": 1100.0,
+                                        "target": 1300.0})
+    await service.submit(db, None, "alice", replace(_order(qty=2, product="MIS"), source="engine"), now=OPEN,
+                         suggestion_id="s1")
+    closed = await service.check_exits(db, None, "alice", now=OPEN.replace(hour=15, minute=16))  # also <= stop
+    assert [c["reason"] for c in closed] == ["square-off"]
+    assert await db["autopilot_log"].count_documents({"side": "SELL"}) == 1
+    assert not any("refused" in text for text in sent)
+
+
 async def test_a_paper_fill_reaches_the_live_socket(world, monkeypatch):
     """Open AI pages refresh on these; a ledger without on_change left them stale."""
     db, _ = world

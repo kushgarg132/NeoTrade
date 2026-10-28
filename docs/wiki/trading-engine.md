@@ -234,7 +234,7 @@ Past fixes (from `git log`): `76c312c` reopening keeps a symbol's realized P&L; 
 
 Behaviour that surprises:
 - Live fill charges are modelled, not the broker's contract note: live P&L is net of the paper schedule, so it can differ from the broker's by a few rupees.
-- Live engine orders report no fill back to the run (`AutopilotExecutionClient.fills` yields nothing); the autopilot's own 15:15 `check_exits` is the only square-off for them (`service.py::check_exits`).
+- Live engine orders report no fill back to the run (`AutopilotExecutionClient.fills` yields nothing); the autopilot's own 15:15 `check_exits` is the only square-off for them (`service.py::check_exits`); a trade it squares off (FILLED/SENT) is dropped before that call's stop/target pass, so it is never sold twice.
 - Daily/swing runs (LONGTERM) never trade: they create suggestions; the `scan` (outside this page) reuses `run` over ~400 days with the sink.
 - `HistoricalFeed` filters candles with `historical.py::_within`: aware times compare as instants; if any of `start`/`end`/candle is naive it falls back to wall-clock.
 - `PollingLiveFeed` (daily quote as a bar) is wrong for intraday; `CandlePollingFeed` yields closed yfinance 5m candles ~15 min late and marks all but the newest as `warmup` on the first poll or after `add()` (`candle_poll.py`).
