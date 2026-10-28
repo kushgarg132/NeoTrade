@@ -144,6 +144,9 @@ class LedgerStore:
 
         flipped = quantity_before * position.quantity < 0
         if position.quantity == 0 or flipped:
+            # A flipping fill's costs split by quantity: the closed part's
+            # share to this trade, the rest to the one it opens.
+            costs = fill.costs * abs(quantity_before) / fill.quantity if flipped else fill.costs
             await self.trades.update_one(
                 {"_id": open_trade["_id"]},
                 {"$set": {
@@ -151,13 +154,13 @@ class LedgerStore:
                     "exit_price": fill.price,
                     "exit_at": fill.timestamp,
                     "realized_pnl": position.realized_pnl - open_trade.get("realized_base", 0.0),
-                    "costs": open_trade.get("costs", 0.0) + fill.costs,
+                    "costs": open_trade.get("costs", 0.0) + costs,
                     "net_pnl": position.realized_pnl - open_trade.get("realized_base", 0.0)
-                    - open_trade.get("costs", 0.0) - fill.costs,
+                    - open_trade.get("costs", 0.0) - costs,
                 }},
             )
             if flipped:  # the rest of the fill opens a trade on the other side
-                await self._open_trade(fill, position)
+                await self._open_trade(fill, position, costs=fill.costs - costs)
             return
 
         await self.trades.update_one(
@@ -172,7 +175,7 @@ class LedgerStore:
             }},
         )
 
-    async def _open_trade(self, fill: Fill, position: Position) -> None:
+    async def _open_trade(self, fill: Fill, position: Position, costs: Optional[float] = None) -> None:
         order = await self.orders.find_one({"user_id": self.user_id, "id": fill.order_id})
         product = (order or {}).get("product", "MIS")
 
@@ -191,7 +194,7 @@ class LedgerStore:
             # After a flip the position carries the first leg's realized P&L:
             # this trade's own is what it adds on top (else counted twice).
             "realized_base": position.realized_pnl,
-            "costs": fill.costs,
+            "costs": fill.costs if costs is None else costs,
             "suggestion_id": (order or {}).get("suggestion_id"),
             # Which strategy's signal opened it, for the per-strategy
             # scorecard. None for an approved proposal or a pre-tag row.

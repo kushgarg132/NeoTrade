@@ -148,6 +148,20 @@ async def test_a_flipped_trade_books_only_its_own_realized_pnl(ledger):
                                  "SELL": (px(110.0, Side.SELL) - px(105.0, Side.BUY)) * 10})
 
 
+async def test_a_flipping_fill_splits_its_costs_by_quantity(ledger):
+    """A SELL 30 against a long 10 closes 10 and opens 20: a third of its
+    costs is the closing trade's, two thirds the new one's, not all to both."""
+    t = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    await ledger.on_fill(_fill(order_id="b", costs=5.0), 0.0, Position(symbol="RELIANCE", quantity=10, avg_price=2500.0))
+    await ledger.on_fill(_fill(order_id="s", side=Side.SELL, quantity=30.0, price=2510.0, costs=30.0, timestamp=t),
+                         10.0, Position(symbol="RELIANCE", quantity=-20, avg_price=2510.0, realized_pnl=100.0))
+
+    trades = {t["side"]: t for t in await ledger.get_trades()}
+    assert trades["BUY"]["costs"] == pytest.approx(5.0 + 10.0)
+    assert trades["BUY"]["net_pnl"] == pytest.approx(100.0 - 15.0)
+    assert trades["SELL"]["costs"] == pytest.approx(20.0)
+
+
 async def test_paper_fills_pay_the_studys_slippage_against_the_trader(ledger):
     """Paper filled at the bare mark, flattering it against the backtests (10 bps a side) that judge it."""
     from backend.core.models import Order, Side
