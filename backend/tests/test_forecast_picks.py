@@ -333,6 +333,15 @@ def test_experimental_setup_is_flagged():
     assert {p["symbol"]: p["experimental"] for p in out["shown"]} == {"R": True, "M": False}
 
 
+def test_latest_picks_age_and_expire_like_older_ones_when_no_new_pass_ran():
+    """Days after the last pass, its picks are not 'today's': days_since counts from the real date, due ones go."""
+    latest = [_p("2026-10-16", "OLD", due="2026-10-30"), _p("2026-10-16", "GONE", due="2026-10-20")]
+    out = picks.serve(latest, [], {"OLD": 103.0}, TODAY, GRADES)
+    (row,) = out["shown"]
+    assert row["symbol"] == "OLD" and row["days_since"] == 2 and row["price_now"] == 103.0
+    assert row["move_since_entry"] == pytest.approx(0.03) and row["missed_entry"] is True
+
+
 def test_payload_has_shown_and_keeps_picks(mongo):
     asyncio.run(mongo.picks.insert_one({**_p("2026-10-21", "X", 0.0, 0.5), "strength": 1.0}))
     asyncio.run(mongo.picks_study.insert_one({"_id": "latest", "setups": [{"setup": "momentum", "adjusted": {"edge": False}}]}))

@@ -191,8 +191,13 @@ def serve(today_picks: list[dict], older: list[dict], prices: dict[str, float], 
     exp = lambda p: bool(setups.BY_NAME[p["setup"]].experimental) if p["setup"] in setups.BY_NAME else False
     rows, seen = [], set()
     for p in today_picks:
+        # The latest pass may be days old (no newer pass ran): age and expire it like an older pick.
+        if today >= date.fromisoformat(p["due_date"]):
+            continue
         seen.add((p["setup"], p["symbol"]))
-        rows.append({**p, "days_since": 0, "price_now": None, "move_since_entry": None})
+        now = prices.get(p["symbol"])
+        rows.append({**p, "days_since": _trading_days_after(date.fromisoformat(p["date"]), today), "price_now": now,
+                     "move_since_entry": now / p["entry_ref"] - 1 if now and p.get("entry_ref") else None})
     for p in sorted(older, key=lambda p: p["date"], reverse=True):
         d = date.fromisoformat(p["date"])
         if d >= fired or today >= date.fromisoformat(p["due_date"]) or (p["setup"], p["symbol"]) in seen:

@@ -26,7 +26,7 @@ async def served_today(user_id: str | None = None) -> tuple:
     # Every earlier pick still before its due date (a 60-day setup stays up to ~3 months).
     older = await db.db[PICKS].find({"date": {"$lt": latest["date"]}, "due_date": {"$gt": today.isoformat()}}).to_list(length=None) if latest else []
     study = await db.db[STUDY].find_one({"_id": "latest"}) or {}
-    prices = await mark_prices(db.db, {p["symbol"] for p in older})
+    prices = await mark_prices(db.db, {p["symbol"] for p in older + picks})
     served = serve(picks, older, prices, today, setup_grades(study))
     if user_id:
         skipped = set(await db.db[DISMISSED].distinct("pick_id", {"user_id": user_id}))
