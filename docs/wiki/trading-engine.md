@@ -116,7 +116,7 @@ Registered in `registry.py::build_default_strategies` (order: technical_breakout
 
 | name | mode / tf | fires when (`file::class`) |
 |---|---|---|
-| `orb_breakout` | INTRADAY 5m | close clears opening range (15 min) by 0.3 ATR on vol > 1.5x range avg; stop 1.5 ATR, target 2 ATR; strength 0.65 (`intraday/orb_breakout.py::ORBStrategy`) |
+| `orb_breakout` | INTRADAY 5m | close clears opening range (15 min) by 0.3 ATR on vol > 1.5x range avg; stop 1.5 ATR, target 2 ATR; strength 0.65; no entries on a day whose first bar is after 09:15 IST (a mid-day relaunch without backfill), logged once per symbol (`intraday/orb_breakout.py::ORBStrategy`) |
 | `orb_options` | INTRADAY 5m | same trigger, F&O whitelist only, emits `option_flavor` LONG_CALL / LONG_PUT (`intraday/orb_options.py`) |
 | `vwap_reversion` | INTRADAY 5m | prev bar >= `deviation` (0.6%) off session VWAP and current bar reverts; stop 1 ATR, target VWAP; 0.6 |
 | `volume_surge` | INTRADAY 5m | volume > 3x 20-bar avg; side by candle colour; stop 2%, target 5%; 0.6 (shorts allowed) |

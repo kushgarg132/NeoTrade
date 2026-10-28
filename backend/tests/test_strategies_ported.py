@@ -337,6 +337,20 @@ def test_orb_strategy_emits_sell_intent_on_downside_breakout():
     assert intent.reason_codes == ["orb_breakout"]
 
 
+def test_orb_strategy_skips_a_session_it_did_not_see_open():
+    """A mid-day relaunch with no bars from 09:15 would take the restart's
+    first 15 minutes as the opening range: no entries that day instead."""
+    from backend.engine.session import IST
+
+    late = [b.model_copy(update={"timestamp": datetime(2026, 10, 5, 11, 0, tzinfo=IST) + i * timedelta(minutes=5)})
+            for i, b in enumerate(_orb_bars(bullish=True))]
+    assert _run(ORBStrategy([SYMBOL], {TOKEN: SYMBOL}), late) == []
+
+    at_open = [b.model_copy(update={"timestamp": datetime(2026, 10, 5, 9, 15, tzinfo=IST) + i * timedelta(minutes=5)})
+               for i, b in enumerate(_orb_bars(bullish=True))]
+    assert len(_run(ORBStrategy([SYMBOL], {TOKEN: SYMBOL}), at_open)) == 1
+
+
 def test_orb_strategy_silent_on_flat_bars():
     strategy = ORBStrategy([SYMBOL], {TOKEN: SYMBOL})
     intents = _run(strategy, _flat_bars(25, timeframe="5m"))

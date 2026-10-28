@@ -8,7 +8,8 @@ the range anchor is the session's first bars, not whatever the last
 `warmup_bars` bars happen to be.
 """
 
-from datetime import timedelta
+import logging
+from datetime import time, timedelta
 from typing import Optional
 
 import pandas as pd
@@ -16,10 +17,14 @@ import pandas as pd
 from backend.strategies.indicators import Indicators
 from backend.core.models import Intent, Side
 from backend.engine.protocols import StrategySpec
+from backend.engine.session import IST
 from backend.strategies.base import TokenResolvingStrategy, bars_to_dataframe
 from backend.strategies.card import StrategyCard
 
+logger = logging.getLogger(__name__)
+
 SESSION_LOOKBACK_BARS = 100
+SESSION_OPEN = time(9, 15)  # IST
 OPENING_RANGE_MINUTES = 15
 
 
@@ -39,6 +44,7 @@ class ORBStrategy(TokenResolvingStrategy):
             name="orb_breakout", mode="INTRADAY", timeframe="5m",
             warmup_bars=4, universe=universe,
         )
+        self._missed_open: set = set()  # (symbol, day) already logged
 
     def on_bar(self, ctx, bar) -> None:
         symbol = self.symbol_for(bar)
@@ -52,6 +58,15 @@ class ORBStrategy(TokenResolvingStrategy):
         session_date = history[-1].timestamp.date()
         session_bars = [b for b in history if b.timestamp.date() == session_date]
         if len(session_bars) < self.spec.warmup_bars:
+            return None
+
+        # A mid-day relaunch without the morning's bars (a feed with no
+        # backfill) would take the restart's first minutes as the opening
+        # range: no entries for the rest of that day instead.
+        if session_bars[0].timestamp.astimezone(IST).time() > SESSION_OPEN:
+            if (symbol, session_date) not in self._missed_open:
+                self._missed_open.add((symbol, session_date))
+                logger.info("%s: %s has no bars from the open today, no ORB entries", self.spec.name, symbol)
             return None
 
         range_end = session_bars[0].timestamp + timedelta(minutes=self.p["range_minutes"])
