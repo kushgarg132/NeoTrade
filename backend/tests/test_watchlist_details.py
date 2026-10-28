@@ -3,6 +3,8 @@
 import json
 from datetime import datetime, timezone
 
+import pytest
+from fastapi import HTTPException
 from mongomock_motor import AsyncMongoMockClient
 
 from backend.auth.models import User
@@ -34,3 +36,14 @@ async def test_details_read_the_quote_cache_and_fetch_only_misses(monkeypatch):
                        "day_change": 10.0, "day_change_percent": 10.0, "at": 7.0}
     assert rows[1] == {"symbol": "NOPE", "error": "Failed to fetch data"}
     assert asked == ["NOPE"]
+
+
+async def test_add_refuses_past_the_symbol_cap(monkeypatch):
+    mongo = AsyncMongoMockClient()["test_db"]
+    await mongo["watchlist"].insert_one({"user_id": "u1", "symbols": [f"S{i}" for i in range(watchlist.MAX_SYMBOLS)]})
+    monkeypatch.setattr(db, "db", mongo)
+    user = User(id="u1", google_sub="g", email="a@b.c", name="A", created_at=datetime.now(timezone.utc))
+    assert len((await watchlist.add_to_watchlist("S1", user)).symbols) == watchlist.MAX_SYMBOLS  # already there: fine
+    with pytest.raises(HTTPException) as err:
+        await watchlist.add_to_watchlist("NEW", user)
+    assert err.value.status_code == 400

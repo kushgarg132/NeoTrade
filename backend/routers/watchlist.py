@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
@@ -18,6 +18,8 @@ from backend.core.models import Watchlist
 from backend.database import db
 
 router = APIRouter(prefix="/watchlist", tags=["Watchlist"])
+
+MAX_SYMBOLS = 100
 
 
 async def _load_or_create(user_id: str) -> Watchlist:
@@ -46,6 +48,8 @@ async def add_to_watchlist(symbol: str = Query(max_length=30, pattern=r"^[A-Za-z
     watchlist = await _load_or_create(user.id)
 
     if symbol not in watchlist.symbols:
+        if len(watchlist.symbols) >= MAX_SYMBOLS:
+            raise HTTPException(status_code=400, detail=f"Watchlist is full ({MAX_SYMBOLS} symbols); remove one first.")
         await db.db.watchlist.update_one(
             {"user_id": user.id},
             {"$push": {"symbols": symbol}, "$set": {"updated_at": datetime.now(timezone.utc)}},
