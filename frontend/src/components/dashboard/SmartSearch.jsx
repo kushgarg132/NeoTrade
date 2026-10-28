@@ -34,9 +34,11 @@ const SmartSearch = ({ onSearch, isLoading, className, compact = false, autoFocu
       return undefined;
     }
     setSearching(true);
+    let live = true; // an older query's reply must not overwrite the newer one
     const handle = setTimeout(async () => {
       try {
         const res = await api.get(endpoints.trading.instruments(term));
+        if (!live) return;
         const top = res.data.slice(0, 7);
         setMatches(top);
         setActive(0);
@@ -54,12 +56,12 @@ const SmartSearch = ({ onSearch, isLoading, className, compact = false, autoFocu
             .catch(() => {});
         }
       } catch {
-        setMatches([]);
+        if (live) setMatches([]);
       } finally {
-        setSearching(false);
+        if (live) setSearching(false);
       }
     }, 250);
-    return () => clearTimeout(handle);
+    return () => { live = false; clearTimeout(handle); };
   }, [query]);
 
   useEffect(() => {
