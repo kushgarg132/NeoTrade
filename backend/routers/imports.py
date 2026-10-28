@@ -9,7 +9,8 @@ from backend.auth.broker_credentials import BrokerCredentialStore, get_credentia
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.database import db
-from backend.mine import cas_import
+from backend.datalayer import bars
+from backend.mine import cas_import, history
 from backend.portfolio.service import refresh_portfolio
 
 router = APIRouter(prefix="/imports")
@@ -44,4 +45,5 @@ async def delete_imported(
     """DPDP: erase what this user uploaded. Re-reads the holdings so the funds leave the snapshot."""
     gone = await cas_import.delete_imported(db.db, user.id)
     await refresh_portfolio(db.db, user.id, credentials, db.redis, analyse=False)
+    await history.backfill(db.db, user.id, bars.today_ist())  # the curve was built from those fills
     return gone

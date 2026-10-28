@@ -182,13 +182,11 @@ async def _compute(db, user_id: str, today: date) -> list[dict]:
     return rows
 
 
-async def _store(db, rows: list[dict]) -> None:
+async def _store(db, user_id: str, rows: list[dict]) -> None:
     """Upserts only the rows that changed: one read, then a write per difference
     (not bulk_write: see instruments/master.py on the test fake). Stored days
-    the replay no longer has (a journal trade removed, a later start) go."""
-    if not rows:
-        return
-    user_id = rows[0]["user_id"]
+    the replay no longer has (a journal trade removed, a later start, every
+    trade deleted) go."""
     stored = {d["date"]: d async for d in db[COLLECTION].find({"user_id": user_id}, {"_id": 0})}
     for row in rows:
         if stored.get(row["date"]) != row:
@@ -203,7 +201,7 @@ async def _store(db, rows: list[dict]) -> None:
 
 async def backfill(db, user_id: str, today: date) -> int:
     rows = await _compute(db, user_id, today)
-    await _store(db, rows)
+    await _store(db, user_id, rows)
     return len(rows)
 
 

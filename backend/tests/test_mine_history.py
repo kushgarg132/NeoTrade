@@ -179,3 +179,23 @@ async def test_a_partial_sale_halves_the_nifty_replica(db):
     await history.backfill(db, "alice", D3)
     row = await db["mine_daily"].find_one({"user_id": "alice", "date": D3.isoformat()})
     assert row["nifty_value"] == pytest.approx(550)  # 1 unit at 1100, half sold
+
+
+async def test_a_same_day_sell_listed_before_its_buy_is_replayed_after_it(db):
+    await db["journal_trades"].insert_many([
+        _trade("A", "SELL", 4, 100, D2, user="dan"), _trade("A", "BUY", 4, 100, D2, user="dan")])
+    await db["user_prefs"].insert_one({"user_id": "dan", "broker_roles": {"upstox": "mine"}})
+    for t in await db["journal_trades"].find({"user_id": "dan"}).to_list(length=None):
+        await db["journal_trades"].update_one({"_id": t["_id"]}, {"$set": {"traded_at": datetime(2026, 10, 6, 9, 15, tzinfo=IST)}})
+    await history.backfill(db, "dan", D3)
+    rows = await history.series(db, "dan", None)
+    assert rows and rows[-1]["by_symbol"] == {}  # bought and sold: nothing invented as still held
+
+
+async def test_an_empty_replay_clears_the_stored_curve(db):
+    await history.backfill(db, "alice", D3)
+    assert await db["mine_daily"].count_documents({"user_id": "alice"})
+    await db["journal_trades"].delete_many({"user_id": "alice"})
+    await db["portfolio_snapshots"].delete_many({"user_id": "alice"})
+    await history.backfill(db, "alice", D3)
+    assert await db["mine_daily"].count_documents({"user_id": "alice"}) == 0

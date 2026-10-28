@@ -126,7 +126,7 @@ def test_delete_removes_funds_transactions_and_csv_fills_only_for_the_caller(set
     _post(client)
     asyncio.run(db["journal_trades"].insert_many([
         {"_id": "alice:kite:1", "user_id": "alice", "source": "console_csv", "traded_at": datetime(2025, 1, 1, tzinfo=timezone.utc)},
-        {"_id": "alice:kite:2", "user_id": "alice", "source": "sync", "traded_at": datetime(2025, 1, 1, tzinfo=timezone.utc)},
+        {"_id": "alice:kite:2", "user_id": "alice", "source": "sync", "symbol": "A", "side": "BUY", "quantity": 1, "price": 1, "broker": "kite", "traded_at": datetime(2025, 1, 1, tzinfo=timezone.utc)},
         {"_id": "bob:kite:1", "user_id": "bob", "source": "console_csv", "traded_at": datetime(2025, 1, 1, tzinfo=timezone.utc)},
     ]))
     assert client.delete("/api/v1/imports").json() == {"transactions": 1, "trades": 1}
@@ -134,3 +134,11 @@ def test_delete_removes_funds_transactions_and_csv_fills_only_for_the_caller(set
     assert client.get("/api/v1/imports").json()["funds"] == 0
     snaps = asyncio.run(db["portfolio_snapshots"].find({"user_id": "alice"}).sort("at", -1).to_list(length=1))
     assert snaps[0]["raw_holdings"] == []
+
+
+def test_delete_recomputes_the_stored_value_curve(setup):
+    """The journal fills the delete just erased must not live on in mine_daily."""
+    client, db, _ = setup
+    asyncio.run(db["mine_daily"].insert_one({"user_id": "alice", "date": "2025-01-01", "value": 5.0}))
+    client.delete("/api/v1/imports")
+    assert asyncio.run(db["mine_daily"].count_documents({"user_id": "alice"})) == 0
