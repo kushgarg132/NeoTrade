@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
@@ -29,6 +29,7 @@ import { toneText } from '../components/ui/tone';
 import { AiLabel, AiText } from '../components/ai/AiSummary';
 import { px, rewardRisk } from '../components/ideas/levels';
 import { splitThesis } from '../utils/aiText';
+import { stockPath } from '../utils/stocks';
 
 const STATUS = { APPROVED: 'You bought this', REJECTED: 'You skipped this', EXPIRED: 'Expired', FILLED: 'Filled', CANCELLED: 'Cancelled' };
 const PAPER = { 'live-ready': 'Paper record clears the live gate', paper: 'Paper record still building', untested: 'Not backtested yet', paused: 'Paused by the AI' };
@@ -246,7 +247,8 @@ const IdeaDetail = () => {
 
   return (
     <Layout>
-      <PageHeader title={idea ? bareSymbol(idea.symbol) : 'Idea'} back="/ideas" />
+      <PageHeader title={idea ? bareSymbol(idea.symbol) : 'Idea'} back="/ideas"
+        right={idea && <Link to={stockPath(idea.symbol)} className="inline-flex items-center min-h-11 px-2 text-[14px] font-semibold text-[var(--accent)]">View stock</Link>} />
       {body}
     </Layout>
   );
