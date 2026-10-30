@@ -442,8 +442,11 @@ body::before {
 
 /* Hide amounts (hooks/usePrivacy.js): every figure in the user's own money
    regions is masked with a fixed "••••" (a blur looked smudgy and still hinted
-   at the digits), for when someone can see the screen. The real text goes
-   transparent so the layout keeps its width; the dots sit on top.
+   at the digits), for when someone can see the screen. The masked element
+   shrinks to the dots' width (no blank gap mid-sentence, no stretched chip)
+   and the real text inside it goes transparent and is clipped. The dots stay
+   inside any padding, and are capped in size so a hero number is not four
+   giant discs.
    `.private` is either a region (blur its .figure-* and nested .private) or,
    holding neither, an amount line that blurs whole. It used to match only
    .figure-* nested inside .private, so `private figure-md` on one element
@@ -451,6 +454,13 @@ body::before {
 html[data-private="on"] :is(.private .figure-md, .private .figure-lg, .private.figure-md, .private.figure-lg,
                             .private:not(:has(.figure-md, .figure-lg, .private))) {
   position: relative;
+  display: inline-block;
+  width: 1.5em;
+  &:is(.figure-md, .figure-lg) { width: 1.7em; }
+  box-sizing: content-box;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: bottom;
   color: transparent;
   user-select: none;
   & * { color: transparent; }
@@ -458,10 +468,13 @@ html[data-private="on"] :is(.private .figure-md, .private .figure-lg, .private.f
     content: '••••';
     position: absolute;
     inset: 0;
-    overflow: hidden;
-    white-space: nowrap;
+    padding: inherit;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    font-size: min(1em, 1.5rem);
     color: var(--text-muted);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.04em;
   }
 }
 
