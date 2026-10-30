@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sectorRows, breadth, divergence, breadthWord, impactWord, sortSectors, materialToday } from './market.js';
+import { sectorRows, breadth, divergence, breadthWord, impactWord, sortSectors, materialToday, newsMood } from './market.js';
 
 test('divergence flags news and price disagreeing, only for strong news', () => {
   assert.equal(divergence({ sentiment: 0.4, change_pct: -1.2 }), 'good news, falling');
@@ -52,7 +52,7 @@ test('sortSectors by each key, null sentiment last, no mutation', () => {
     { sector: 'c', change_pct: 1, sentiment: 0.6, up: 9, n: 10 },
   ];
   const names = (by) => sortSectors(rows, by).map((r) => r.sector).join('');
-  assert.equal(names('move'), 'bca');
+  assert.equal(names('move'), 'cab');
   assert.equal(names('news'), 'cba');
   assert.equal(names('breadth'), 'cba');
   assert.equal(rows[0].sector, 'a');
@@ -74,4 +74,11 @@ test('isClosed is true off-hours and false in session', async () => {
   const { isClosed } = await import('./market.js');
   assert.equal(isClosed(new Date('2026-10-07T10:05:00Z')), true);
   assert.equal(isClosed(new Date('2026-10-07T04:00:00Z')), false);
+});
+
+test('newsMood: words at the divergence threshold, null without news', () => {
+  assert.equal(newsMood(0.36).label, 'Good news');
+  assert.equal(newsMood(-0.41).label, 'Bad news');
+  assert.equal(newsMood(0.07).label, 'Mixed news');
+  assert.equal(newsMood(null), null);
 });

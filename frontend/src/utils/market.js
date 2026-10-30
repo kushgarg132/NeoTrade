@@ -56,10 +56,16 @@ export const breadthWord = ({ up, n } = {}) => {
 
 export const impactWord = (n) => (n >= 7 ? 'High' : n >= 4 ? 'Med' : 'Low');
 
-/** New array of `/market/scan` sector rows ordered by 'move' (|change_pct|), 'news' (sentiment, null last) or 'breadth' (up/n). */
+/** A sector's news mood (-1..1) in words for a Badge: good / bad at DIVERGENCE_MIN or more, else mixed; null without news. */
+export const newsMood = (s) => (s == null ? null
+  : s >= DIVERGENCE_MIN ? { label: 'Good news', kind: 'proven' }
+  : s <= -DIVERGENCE_MIN ? { label: 'Bad news', kind: 'alert' }
+  : { label: 'Mixed news', kind: 'neutral' });
+
+/** New array of `/market/scan` sector rows ordered by 'move' (change_pct, best to worst), 'news' (sentiment, null last) or 'breadth' (up/n). */
 export const sortSectors = (rows = [], by = 'move') => {
   const key = {
-    move: (r) => Math.abs(r.change_pct ?? 0),
+    move: (r) => r.change_pct ?? -Infinity,
     news: (r) => r.sentiment ?? -Infinity,
     breadth: (r) => (r.n ? r.up / r.n : 0),
   }[by] || (() => 0);

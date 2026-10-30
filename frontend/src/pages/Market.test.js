@@ -16,9 +16,8 @@ test('tabs are Today, Sectors, News, Watchlist and ?tab=pulse aliases to today',
   assert.doesNotMatch(page, /market\/Pulse/);
 });
 
-test('sector heatmap uses chartTheme heatColor and prints the signed %', () => {
-  assert.match(pulse, /import \{[^}]*heatColor[^}]*\} from '..\/ui\/chartTheme'/);
-  assert.match(pulse, /heatColor\(s\.change_pct/);
+test('sector rows print the signed %', () => {
+  assert.match(sectors, /pct\(s\.change_pct \/ 100, \{ sign: true \}\)/);
 });
 
 test('breadth is a Nifty 200 bar with a plain-words gloss', () => {

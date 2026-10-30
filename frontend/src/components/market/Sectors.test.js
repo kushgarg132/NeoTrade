@@ -16,9 +16,10 @@ test('no newsFeed read: sentiment comes from the scan', () => {
   assert.match(src, /marketScan/);
 });
 
-test('cells link sectorPath and use heatColor', () => {
+test('rows link sectorPath and draw a diverging bar from zero on one scale', () => {
   assert.match(src, /to=\{sectorPath\(s\.sector\)\}/);
-  assert.match(src, /heatColor\(s\.change_pct/);
+  assert.match(src, /<MoveBar value=\{s\.change_pct\} maxAbs=\{maxAbs\} \/>/);
+  assert.match(src, /<Breadth b=\{data\.breadth\} \/>/);
 });
 
 test('52-week extremes are kept', () => {

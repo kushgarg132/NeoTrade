@@ -1,19 +1,17 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api, { endpoints } from '../../utils/api';
-import Card from '../ui/Card';
 import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
 import Empty from '../ui/Empty';
 import Button from '../ui/Button';
-import ListRow from '../ui/ListRow';
 import AsOf from '../ui/AsOf';
+import Badge from '../ui/Badge';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
-import { divergence, isClosed, sortSectors } from '../../utils/market';
+import { breadthWord, divergence, isClosed, newsMood, sortSectors } from '../../utils/market';
 import { stockPath } from '../../utils/stocks';
 import { sectorPath } from '../../utils/routes';
-import { heatColor } from '../ui/chartTheme';
 import useSection from '../../hooks/useSection';
 
 const SORTS = [
@@ -24,79 +22,152 @@ const SORTS = [
 
 const loadScan = () => api.get(endpoints.marketScan).then((r) => r.data);
 
-const Change = ({ value }) => <span className={toneText(tone(value))}>{pct(value / 100, { sign: true })}</span>;
+const Panel = ({ children, className = '' }) => (
+  <section className={`rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 ${className}`}>{children}</section>
+);
 
-const ExtremeRows = ({ rows, ref52 }) => rows.slice(0, 5).map((m) => (
-  <ListRow privateValue={false} key={m.symbol} dense title={m.symbol}
-       sub={`${m.sector} · ${pct(m.price / m[ref52] - 1, { sign: true, dp: 1 })} from it`} to={stockPath(m.symbol)}
-       right={<><span className="text-[var(--text)]">{Number(m.price).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>{'  '}<Change value={m.change_pct} /></>} />
-));
+/** Up vs down among the Nifty 200 as one split bar, with its plain word ("Broad rally"). */
+const Breadth = ({ b }) => {
+  const flat = b.n - b.up - b.down;
+  return (
+    <Panel>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">{breadthWord(b) || 'Breadth'}</h2>
+        <span className="text-[13px] text-[var(--text-muted)]">Nifty 200 · {isClosed() ? 'last session' : 'today'}</span>
+      </div>
+      <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-[var(--surface-2)]" role="img"
+        aria-label={`${b.up} stocks rising, ${b.down} falling, ${flat} flat, of ${b.n}`}>
+        <div className="bg-[var(--gain)]" style={{ width: `${(b.up / b.n) * 100}%` }} />
+        <div className="ml-auto bg-[var(--loss)]" style={{ width: `${(b.down / b.n) * 100}%` }} />
+      </div>
+      <div className="mt-2 flex justify-between text-[13px] tabular-nums">
+        <span className="text-[var(--gain)] font-semibold">▲ {b.up} rising</span>
+        {flat > 0 && <span className="text-[var(--text-muted)]">{flat} flat</span>}
+        <span className="text-[var(--loss)] font-semibold">▼ {b.down} falling</span>
+      </div>
+    </Panel>
+  );
+};
 
 const SortControl = ({ value, onChange }) => (
-  <div role="group" aria-label="Sort sectors by" className="mb-3 flex items-center gap-2">
-    <span className="text-[13px] text-[var(--text-muted)]">Sort</span>
-    <div className="flex flex-1 gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
-      {SORTS.map((s) => (
-        <button key={s.id} type="button" aria-pressed={s.id === value} onClick={() => onChange(s.id)}
-          className={`flex-1 min-h-11 rounded-[8px] px-3 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
-            s.id === value ? 'bg-[var(--surface)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
-          {s.label}
-        </button>
-      ))}
-    </div>
+  <div role="group" aria-label="Sort sectors by" className="flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
+    {SORTS.map((s) => (
+      <button key={s.id} type="button" aria-pressed={s.id === value} onClick={() => onChange(s.id)}
+        className={`tap min-h-9 rounded-[9px] px-3 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+          s.id === value ? 'bg-[var(--surface)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
+        {s.label}
+      </button>
+    ))}
   </div>
 );
 
-const Cell = ({ s, maxAbs }) => {
-  const flag = divergence(s);
+/** A bar growing right (gain) or left (loss) from the zero line in the middle, scaled to the day's biggest move. */
+const MoveBar = ({ value, maxAbs }) => {
+  const w = `${Math.min(50, (Math.abs(value) / maxAbs) * 50)}%`;
   return (
-    <Link to={sectorPath(s.sector)} className="block min-h-11 rounded-[10px] p-2.5 active:opacity-70 text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" style={{ background: heatColor(s.change_pct, maxAbs) }}>
-      <div className="text-[13px] truncate" title={s.sector}>{s.sector}</div>
-      <div className="text-[15px] font-semibold tabular-nums">{pct(s.change_pct / 100, { sign: true })}</div>
-      <div className="text-[13px] tabular-nums">{s.up} of {s.n} up</div>
-      {s.sentiment != null && (
-        <div className="mt-1 flex items-center gap-1 text-[13px] tabular-nums">
-          <span aria-hidden="true" className="inline-block size-2 shrink-0 rounded-full" style={{ background: s.sentiment > 0 ? 'var(--gain)' : s.sentiment < 0 ? 'var(--loss)' : 'var(--text-muted)' }} />
-          News {s.sentiment > 0 ? '+' : ''}{s.sentiment.toFixed(2)}
-        </div>
+    <div className="relative h-1.5 rounded-full bg-[var(--surface-2)]" aria-hidden="true">
+      <div className="absolute inset-y-[-3px] left-1/2 w-px bg-[var(--border)]" />
+      {value !== 0 && (
+        <div className={`absolute inset-y-0 rounded-full ${value > 0 ? 'left-1/2 bg-[var(--gain)]' : 'right-1/2 bg-[var(--loss)]'}`} style={{ width: w }} />
       )}
-      {flag && <div className="mt-1 inline-block rounded-full border border-[var(--text)] px-1.5 text-[13px] font-semibold">{flag}</div>}
-    </Link>
+    </div>
+  );
+};
+
+// The NSE industry names, as traders say them, where the full name does not fit a phone row (full name on sm+).
+const SHORT = {
+  'Fast Moving Consumer Goods': 'FMCG', 'Automobile and Auto Components': 'Auto', 'Oil Gas & Consumable Fuels': 'Oil & Gas',
+  'Information Technology': 'IT', 'Telecommunication': 'Telecom', 'Financial Services': 'Financials',
+  'Construction Materials': 'Building materials', 'Consumer Durables': 'Durables',
+};
+
+/** One sector on one line: name, the bar from zero, the signed move, how many of its stocks rose. */
+const Row = ({ s, maxAbs, by }) => {
+  const flag = divergence(s);
+  const mood = newsMood(s.sentiment);
+  const short = SHORT[s.sector];
+  return (
+    <li>
+      <Link to={sectorPath(s.sector)} title={s.sector}
+        className="tap -mx-2 grid min-h-11 grid-cols-[minmax(0,1fr)_minmax(48px,20%)_52px_36px] sm:grid-cols-[220px_minmax(0,1fr)_64px_56px] items-center gap-x-2.5 sm:gap-x-3 rounded-[12px] px-2 py-1.5 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+        <span className="min-w-0 truncate text-[14px] sm:text-[15px] font-medium text-[var(--text)]">
+          {short ? <><span className="sm:hidden">{short}</span><span className="hidden sm:inline">{s.sector}</span></> : s.sector}
+        </span>
+        <MoveBar value={s.change_pct} maxAbs={maxAbs} />
+        <span className={`text-right text-[15px] font-semibold tabular-nums ${toneText(tone(s.change_pct))}`}>{pct(s.change_pct / 100, { sign: true })}</span>
+        <span className="text-right text-[12px] tabular-nums text-[var(--text-muted)]" aria-label={`${s.up} of ${s.n} stocks up`}>{s.up}/{s.n}</span>
+        {(flag || (by === 'news' && mood)) && (
+          <span className="col-span-4 -mt-0.5 mb-0.5 flex flex-wrap gap-1.5">
+            {by === 'news' && mood && <Badge kind={mood.kind}>{mood.label} {s.sentiment > 0 ? '+' : ''}{s.sentiment.toFixed(2)}</Badge>}
+            {flag && <Badge kind="unproven">{flag}</Badge>}
+          </span>
+        )}
+      </Link>
+    </li>
+  );
+};
+
+/** A stock within 2% of its 52-week high or low: how far from it, its price and day move. */
+const Extreme = ({ m, high }) => {
+  const ref = high ? m.high_52w : m.low_52w;
+  const gap = Math.abs(m.price / ref - 1);
+  return (
+    <li>
+      <Link to={stockPath(m.symbol)}
+        className="tap flex items-center gap-3 rounded-[12px] px-2 py-2.5 -mx-2 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+        <span className={`inline-flex w-8 h-8 shrink-0 items-center justify-center rounded-full text-[13px] ${high ? 'bg-[var(--gain-soft)] text-[var(--gain)]' : 'bg-[var(--loss-soft)] text-[var(--loss)]'}`} aria-hidden="true">{high ? '▲' : '▼'}</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-semibold text-[var(--text)]">{m.symbol}</div>
+          <div className="text-[13px] text-[var(--text-muted)] truncate">
+            {gap < 0.0005 ? `At its 52-week ${high ? 'high' : 'low'}` : `${pct(gap, { dp: 1 })} ${high ? 'under' : 'above'} its 52-week ${high ? 'high' : 'low'}`} · {m.sector}
+          </div>
+        </div>
+        <div className="shrink-0 text-right tabular-nums">
+          <div className="text-[15px] text-[var(--text)]">{Number(m.price).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
+          <div className={`text-[12px] ${toneText(tone(m.change_pct))}`}>{pct(m.change_pct / 100, { sign: true })}</div>
+        </div>
+      </Link>
+    </li>
   );
 };
 
 const Sectors = () => {
   const [{ data, error }, retry] = useSection(loadScan);
   const [by, setBy] = useState('move');
-  if (error) return <Card title="Sectors"><ErrorLine message="Could not load the sectors." onRetry={retry} /></Card>;
-  if (!data) return <Card title="Sectors"><Skeleton rows={4} /></Card>;
-  if (!data.sectors?.length) return <Card title="Sectors"><Empty title="No sector data yet" body="Sectors fill in once the market feed has prices." action={<Button variant="secondary" onClick={retry}>Refresh</Button>} /></Card>;
-  const maxAbs = Math.max(1, ...data.sectors.map((s) => Math.abs(s.change_pct)));
-  const high = data.near_high || [];
-  const low = data.near_low || [];
+  if (error) return <Panel><ErrorLine message="Could not load the sectors." onRetry={retry} /></Panel>;
+  if (!data) return <Panel><Skeleton rows={6} /></Panel>;
+  if (!data.sectors?.length) return <Panel><Empty title="No sector data yet" body="Sectors fill in once the market feed has prices." action={<Button variant="secondary" onClick={retry}>Refresh</Button>} /></Panel>;
+  const maxAbs = Math.max(0.5, ...data.sectors.map((s) => Math.abs(s.change_pct)));
+  const high = (data.near_high || []).slice(0, 5);
+  const low = (data.near_low || []).slice(0, 5);
   return (
-    <div className="space-y-3">
-      <Card title={isClosed() ? 'Sectors · last session' : 'Sectors today'}>
-        <SortControl value={by} onChange={setBy} />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {sortSectors(data.sectors, by).map((s) => <Cell key={s.sector} s={s} maxAbs={maxAbs} />)}
+    <div className="space-y-4">
+      {data.breadth?.n > 0 && <Breadth b={data.breadth} />}
+
+      <Panel>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <h2 className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">{isClosed() ? 'Sectors · last session' : 'Sectors today'}</h2>
+          <SortControl value={by} onChange={setBy} />
         </div>
-        <p className="mt-2 text-[13px] text-[var(--text-muted)]">Average move of the Nifty 200 stocks in each sector. Deeper colour, bigger move. News: the sector's headline mood (-1 to +1); flagged when it disagrees with the price.</p>
+        <div className="mt-3 -mx-0 grid grid-cols-[minmax(0,1fr)_minmax(48px,20%)_52px_36px] sm:grid-cols-[220px_minmax(0,1fr)_64px_56px] gap-x-2.5 sm:gap-x-3 pb-1 text-[12px] text-[var(--text-muted)]" aria-hidden="true">
+          <span>Sector</span><span className="text-center">Day move</span><span className="text-right">Avg</span><span className="text-right">Up</span>
+        </div>
+        <ul>
+          {sortSectors(data.sectors, by).map((s) => <Row key={s.sector} s={s} maxAbs={maxAbs} by={by} />)}
+        </ul>
+        <p className="mt-2 text-[12px] leading-snug text-[var(--text-muted)]">
+          Avg: the average day move of the sector's Nifty 200 stocks; bars share one scale. Up: how many of them rose. A flag means the sector's news mood points the other way.
+        </p>
         <AsOf at={data.at} />
-      </Card>
-      <Card title="Near 52-week highs and lows">
-        <p className="mb-1 text-[13px] text-[var(--text-muted)]">52-week high: the highest price in the past year. Listed here: within 2% of it (or of the low).</p>
+      </Panel>
+
+      <Panel>
+        <h2 className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">Near 52-week highs and lows</h2>
+        <p className="mt-0.5 text-[13px] text-[var(--text-muted)]">Within 2% of the highest price in the past year, or of the lowest.</p>
         {!high.length && !low.length
           ? <Empty title="Nothing at an extreme" body="No Nifty 200 name is within 2% of its 52-week high or low." action={<Button variant="secondary" onClick={retry}>Refresh</Button>} />
-          : (
-            <>
-              {high.length > 0 && <h3 className="text-[13px] font-semibold text-[var(--gain)]">Near the high</h3>}
-              <ExtremeRows rows={high} ref52="high_52w" />
-              {low.length > 0 && <h3 className="mt-3 text-[13px] font-semibold text-[var(--loss)]">Near the low</h3>}
-              <ExtremeRows rows={low} ref52="low_52w" />
-            </>
-          )}
-      </Card>
+          : <ul className="mt-2">{high.map((m) => <Extreme key={m.symbol} m={m} high />)}{low.map((m) => <Extreme key={m.symbol} m={m} />)}</ul>}
+      </Panel>
     </div>
   );
 };
