@@ -4,6 +4,7 @@ const VARIANTS = {
   primary: 'bg-[var(--accent)] text-[var(--accent-ink)]',
   secondary: 'bg-[var(--surface-2)] text-[var(--text)] border border-[var(--border)]',
   danger: 'bg-[var(--loss)] text-[var(--accent-ink)]',
+  gain: 'bg-[var(--gain)] text-[var(--accent-ink)]',
 };
 
 const Button = ({ variant = 'primary', className = '', type = 'button', ...props }) => (

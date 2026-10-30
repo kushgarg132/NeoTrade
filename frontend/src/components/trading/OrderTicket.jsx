@@ -1,9 +1,11 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, X } from 'lucide-react';
-import { Button } from '../common/Button';
+import { Check, Loader2, Minus, Plus, X } from 'lucide-react';
+import Button from '../ui/Button';
+import Badge from '../ui/Badge';
+import { inr, pct } from '../ui/format';
+import { px } from '../ideas/levels';
 import api, { endpoints, getPreferences } from '../../utils/api';
-import { formatCurrency } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 import Countdown from '../common/Countdown';
 import { tokenRefusal, deadlineFrom, EXPIRED_NOTE } from '../../utils/liveConfirm';
@@ -22,8 +24,9 @@ const detailText = (err, fallback) => {
   return typeof detail === 'string' ? detail : fallback;
 };
 
-const Segmented = ({ label, options, value, onChange, disabled = {}, locked = false }) => (
-  <div role="radiogroup" aria-label={label} className="flex border border-[var(--border)]">
+/** A pill switch: track in surface-2, the chosen option filled (`selectedClass`, else text on surface). */
+const Segmented = ({ label, options, value, onChange, disabled = {}, locked = false, size = 'md' }) => (
+  <div role="radiogroup" aria-label={label} className="flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
     {options.map((option) => {
       const selected = option.id === value;
       return (
@@ -35,9 +38,9 @@ const Segmented = ({ label, options, value, onChange, disabled = {}, locked = fa
           disabled={locked || disabled[option.id]}
           onClick={() => onChange(option.id)}
           className={cn(
-            'flex-1 min-h-11 sm:min-h-9 px-2 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
-            '[&:not(:first-child)]:border-l border-[var(--border)]',
-            selected ? option.selectedClass || 'bg-[var(--text)] text-[var(--surface)]' : 'bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)]'
+            'tap flex-1 rounded-[9px] px-2 font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]',
+            size === 'lg' ? 'min-h-11 text-[15px]' : 'min-h-9 text-[13px]',
+            selected ? option.selectedClass || 'bg-[var(--text)] text-[var(--surface)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
           )}
         >
           {option.label}
@@ -46,6 +49,23 @@ const Segmented = ({ label, options, value, onChange, disabled = {}, locked = fa
     })}
   </div>
 );
+
+const Stepper = ({ value, onChange, disabled }) => {
+  const n = parseInt(value, 10) || 0;
+  const step = (d) => onChange(String(Math.max(1, n + d)));
+  const btn = 'tap inline-flex items-center justify-center w-11 h-11 shrink-0 rounded-[12px] bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]';
+  return (
+    <div className="flex items-center gap-2">
+      <button type="button" className={btn} onClick={() => step(-1)} disabled={disabled || n <= 1} aria-label="One share fewer"><Minus className="w-4 h-4" aria-hidden="true" /></button>
+      <input
+        type="number" inputMode="numeric" min="1" step="1" aria-label="Quantity"
+        value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}
+        className="w-full min-w-0 bg-transparent border-0 p-0 text-center text-[28px] font-bold tracking-[-0.02em] tabular-nums text-[var(--text)] focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      <button type="button" className={btn} onClick={() => step(1)} disabled={disabled} aria-label="One share more"><Plus className="w-4 h-4" aria-hidden="true" /></button>
+    </div>
+  );
+};
 
 // Your own account only: the AI account's paper book is the AI's to trade.
 const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: initialQuantity, limitPrice: initialLimit, onClose, onDone }) => {
@@ -192,139 +212,177 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
     }
   };
 
+  const buy = side === 'BUY';
+  const verb = buy ? 'Buy' : 'Sell';
+  const vsLast = orderType === 'LIMIT' && limit > 0 && lastPrice > 0 ? limit / lastPrice - 1 : null;
+
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-[var(--text)]/40" onClick={close} aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/50" onClick={close} aria-hidden="true" />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative w-full sm:max-w-md sheet bg-[var(--surface)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3 max-h-[90vh] overflow-y-auto"
+        className="fade-in relative w-full sm:max-w-md rounded-t-[28px] sm:rounded-[28px] border border-[var(--border)] bg-[var(--surface)] px-5 pt-3 sm:pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] max-h-[92vh] overflow-y-auto"
       >
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 id={titleId} className="figure-md text-lg">
-            {side === 'BUY' ? 'Buy' : 'Sell'} {symbol}
-          </h2>
-          {lastPrice != null && <span className="doc-meta">Last {formatCurrency(lastPrice)}</span>}
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--border)] sm:hidden" aria-hidden="true" />
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 id={titleId} className="text-[22px] font-bold tracking-[-0.02em] text-[var(--text)] truncate">
+              {verb} {symbol}
+            </h2>
+            <p className="text-[13px] text-[var(--text-muted)] tabular-nums">
+              {lastPrice != null ? `Last ${px(lastPrice)} · ` : ''}Your own account
+            </p>
+          </div>
           <button
             type="button"
             onClick={close}
             disabled={busy}
             aria-label="Close the order ticket"
-            className="ml-auto inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 -my-2 -mr-2 text-[var(--text-muted)] hover:text-[var(--text)]"
+            className="tap -mr-2 -mt-1 inline-flex items-center justify-center w-11 h-11 shrink-0 rounded-[12px] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {result ? (
-          <>
-            <p role="status" className="text-sm">{result}</p>
+          <div className="mt-5 space-y-4">
+            <div role="status" className="flex gap-3 rounded-[20px] bg-[var(--surface-2)] p-4">
+              <span className="inline-flex w-8 h-8 shrink-0 items-center justify-center rounded-full bg-[var(--gain-soft)] text-[var(--gain)]"><Check className="w-4 h-4" aria-hidden="true" /></span>
+              <p className="text-[15px] text-[var(--text)]">{result}</p>
+            </div>
             <Button variant="secondary" className="w-full" onClick={onClose}>Done</Button>
-          </>
+          </div>
         ) : (
-          <>
+          <div className="mt-4 space-y-4">
             <Segmented
               label="Side"
+              size="lg"
               value={side}
               onChange={edit(setSide)}
               locked={busy}
               options={[
-                { id: 'BUY', label: 'Buy', selectedClass: 'bg-[var(--gain)] text-white' },
+                { id: 'BUY', label: 'Buy', selectedClass: 'bg-[var(--gain)] text-[var(--accent-ink)]' },
                 { id: 'SELL', label: 'Sell', selectedClass: 'bg-[var(--loss)] text-[var(--accent-ink)]' },
               ]}
             />
             {hasMine === false && (
-              <p className="doc-meta normal-case">
-                <Link to="/settings/brokers" className="underline" onClick={close}>
+              <p className="rounded-[12px] bg-[var(--surface-2)] px-3 py-2 text-[14px] text-[var(--text)]">
+                <Link to="/settings/brokers" className="font-semibold text-[var(--accent)] underline underline-offset-4" onClick={close}>
                   Connect your broker and set it as My account in Settings
                 </Link>{' '}
                 to trade it from here.
               </p>
             )}
-            <Segmented
-              label="Product"
-              value={product}
-              onChange={edit(setProduct)}
-              locked={busy}
-              options={[
-                { id: 'CNC', label: 'Delivery' },
-                { id: 'MIS', label: 'Intraday' },
-              ]}
-            />
-            <Segmented
-              label="Order type"
-              value={orderType}
-              onChange={edit(setOrderType)}
-              locked={busy}
-              options={[
-                { id: 'MARKET', label: 'Market' },
-                { id: 'LIMIT', label: 'Limit' },
-              ]}
-            />
 
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="field-label block mb-1">Quantity</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  step="1"
-                  value={quantity}
-                  onChange={(e) => edit(setQuantity)(e.target.value)}
-                  disabled={busy}
-                  className="w-full bg-transparent border-0 border-b-2 border-[var(--border)] focus:border-[var(--accent)] focus:ring-0 py-2 figure-md"
-                />
-              </label>
-              {orderType === 'LIMIT' && (
-                <label className="block">
-                  <span className="field-label block mb-1">Limit price ₹</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0.05"
-                    step="0.05"
-                    value={limitPrice}
-                    onChange={(e) => edit(setLimitPrice)(e.target.value)}
-                    disabled={busy}
-                    className="w-full bg-transparent border-0 border-b-2 border-[var(--border)] focus:border-[var(--accent)] focus:ring-0 py-2 figure-md"
+            <div className="rounded-[20px] bg-[var(--surface-2)] p-4 space-y-4">
+              <div>
+                <div className="mb-2 text-[13px] font-semibold text-[var(--text-muted)]">Shares</div>
+                <Stepper value={quantity} onChange={edit(setQuantity)} disabled={busy} />
+              </div>
+              <div className="border-t border-[var(--border)] pt-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[13px] font-semibold text-[var(--text-muted)]">Price</span>
+                  <div className="w-44">
+                    <Segmented
+                      label="Order type"
+                      value={orderType}
+                      onChange={edit(setOrderType)}
+                      locked={busy}
+                      options={[
+                        { id: 'MARKET', label: 'Market' },
+                        { id: 'LIMIT', label: 'Limit' },
+                      ]}
+                    />
+                  </div>
+                </div>
+                {orderType === 'LIMIT' ? (
+                  <label className="flex items-center gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 focus-within:ring-2 focus-within:ring-[var(--accent)]">
+                    <span className="text-[17px] font-semibold text-[var(--text-muted)]">₹</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0.05"
+                      step="0.05"
+                      aria-label="Limit price in rupees"
+                      value={limitPrice}
+                      onChange={(e) => edit(setLimitPrice)(e.target.value)}
+                      disabled={busy}
+                      className="min-h-12 w-full min-w-0 bg-transparent border-0 p-0 text-[20px] font-bold tabular-nums text-[var(--text)] focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                    {vsLast != null && Math.abs(vsLast) >= 0.0005 && (
+                      <span className="shrink-0 text-[12px] font-medium tabular-nums text-[var(--text-muted)]">
+                        {pct(Math.abs(vsLast), { dp: 1 })} {vsLast > 0 ? 'above' : 'below'} last
+                      </span>
+                    )}
+                  </label>
+                ) : (
+                  <p className="text-[15px] text-[var(--text)]">At the market price{lastPrice != null ? <span className="text-[var(--text-muted)] tabular-nums">, last {px(lastPrice)}</span> : ''}</p>
+                )}
+              </div>
+              <div className="border-t border-[var(--border)] pt-4 flex items-center justify-between gap-3">
+                <span className="text-[13px] font-semibold text-[var(--text-muted)]">Hold as</span>
+                <div className="w-44">
+                  <Segmented
+                    label="Product"
+                    value={product}
+                    onChange={edit(setProduct)}
+                    locked={busy}
+                    options={[
+                      { id: 'CNC', label: 'Delivery' },
+                      { id: 'MIS', label: 'Intraday' },
+                    ]}
                   />
-                </label>
-              )}
+                </div>
+              </div>
             </div>
-            {estimate != null && <p className="doc-meta normal-case">About {formatCurrency(estimate)}</p>}
 
-            {card && <p className="text-sm border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">{card.summary}</p>}
-            {confirmToken && (
-              <p className="doc-meta normal-case">
-                Real money.{' '}
-                <Countdown until={until} onExpire={() => { setConfirmToken(null); setError(EXPIRED_NOTE); }} />
-              </p>
+            <div className="flex items-end justify-between gap-3 px-1">
+              <span className="text-[13px] font-semibold text-[var(--text-muted)]">Order value</span>
+              <span className="private text-[28px] font-extrabold leading-none tracking-[-0.03em] tabular-nums text-[var(--text)]">
+                {estimate != null ? `≈ ${inr(estimate)}` : '—'}
+              </span>
+            </div>
+
+            {card && (
+              <div className="flex gap-3 rounded-[16px] border border-[var(--border)] px-3 py-3">
+                <Check className="w-4 h-4 mt-0.5 shrink-0 text-[var(--gain)]" aria-hidden="true" />
+                <p className="text-[14px] leading-snug text-[var(--text)]">{card.summary}</p>
+              </div>
             )}
             {error && (
-              <p role="alert" className="text-sm text-[var(--loss)] border border-[var(--loss)] bg-[var(--loss-soft)] px-3 py-2">
+              <p role="alert" className="rounded-[12px] bg-[var(--loss-soft)] px-3 py-2 text-[14px] text-[var(--loss)]">
                 {error}
               </p>
             )}
 
             {!card ? (
-              <Button className="w-full" onClick={review} disabled={!valid || busy || !hasMine}>
-                {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                Review
+              <Button className="w-full min-h-12 text-[16px]" onClick={review} disabled={!valid || busy || !hasMine}>
+                {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                Review order
               </Button>
             ) : (
-              <Button
-                className={cn('w-full', confirmToken && 'bg-[var(--accent)] border-[var(--accent)]')}
-                onClick={confirm}
-                disabled={busy || arming}
-              >
-                {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {confirmToken ? 'Real money. Tap Confirm again' : 'Confirm'}
-              </Button>
+              <div className="space-y-2">
+                {confirmToken && (
+                  <div className="flex items-center justify-center gap-2 text-[13px] text-[var(--text-muted)]">
+                    <Badge kind="live">Real money</Badge>
+                    <Countdown until={until} onExpire={() => { setConfirmToken(null); setError(EXPIRED_NOTE); }} />
+                  </div>
+                )}
+                <Button
+                  variant={buy ? 'gain' : 'danger'}
+                  className={cn('w-full min-h-12 text-[16px]', confirmToken && 'ring-2 ring-offset-2 ring-offset-[var(--surface)] ring-[var(--warn)]')}
+                  onClick={confirm}
+                  disabled={busy || arming}
+                >
+                  {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {confirmToken ? `Tap again to ${verb.toLowerCase()} · real money` : `Confirm: ${verb.toLowerCase()} ${qty || ''} ${symbol}`}
+                </Button>
+              </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>
