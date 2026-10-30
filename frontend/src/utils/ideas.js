@@ -165,6 +165,55 @@ export const groupHoldingActions = (actions) => {
   return groups;
 };
 
+/** Ideas → Holdings bands: news is "watch", dated or tax rows "soon", everything else (exits, verdicts, adds,
+ * trims, reviews) "act". */
+const BAND = { bad_news: 'watch', results_soon: 'soon', ex_dividend: 'soon', ltcg_soon: 'soon', harvest: 'soon' };
+const EVENT = { results_soon: 'Results', ex_dividend: 'Ex-dividend' };
+
+/** The holdings rows as three bands. `act` and `watch`: one entry per stock, `{ symbol, items }` in the API's rank
+ * order; a stock with anything to act on goes to `act` and takes its news along. `soon`: one entry per row,
+ * `{ item, date, label }`, soonest first (the date is the id's last part for results and ex-dividend rows,
+ * `backend/mine/actions.py::_action`); undated tax rows last. Pure. */
+export const triageHoldings = (actions) => {
+  const stocks = new Map();
+  const soon = [];
+  for (const a of holdingActions(actions)) {
+    if (BAND[a.kind] === 'soon') {
+      const date = EVENT[a.kind] ? String(a.id).split(':').pop() : null;
+      soon.push({ item: a, date: /^\d{4}-\d{2}-\d{2}$/.test(date || '') ? date : null, label: EVENT[a.kind] || null });
+      continue;
+    }
+    const key = a.symbol || a.id;
+    if (!stocks.has(key)) stocks.set(key, { symbol: a.symbol, items: [] });
+    stocks.get(key).items.push(a);
+  }
+  const all = [...stocks.values()];
+  soon.sort((x, y) => (x.date || '9999').localeCompare(y.date || '9999'));
+  return {
+    act: all.filter((s) => s.items.some((a) => BAND[a.kind] !== 'watch')),
+    watch: all.filter((s) => s.items.every((a) => BAND[a.kind] === 'watch')),
+    soon,
+  };
+};
+
+/** A row's own words without its symbol, which the card already shows: "JINDALSAW: HOLD → SELL" -> "Verdict HOLD →
+ * SELL", "SUZLON: Suzlon crashes…" -> "Suzlon crashes…", "Add 9 ADANIPORTS" -> "ADD verdict: 9 more to your target
+ * weight". `sub` drops the news rows' boilerplate detail. Pure. */
+export const signalText = (a) => {
+  const sym = a.symbol || '';
+  const t = sym && a.title?.startsWith(`${sym}: `) ? a.title.slice(sym.length + 2) : a.title || '';
+  if (a.kind === 'verdict_worse') return { text: `Verdict ${t}`, sub: a.detail || null };
+  if (a.kind === 'add' && a.action?.quantity) return { text: `ADD verdict: ${a.action.quantity} more to your target weight`, sub: null };
+  return { text: t, sub: a.kind === 'bad_news' ? null : a.detail || null };
+};
+
+/** "2026-11-07" -> { dow: 'Fri', day: '7', month: 'Nov' } for the Coming up date block (date-only, no zone shift). */
+export const eventDay = (iso) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  const f = (o) => d.toLocaleDateString('en-IN', { ...o, timeZone: 'UTC' });
+  return { dow: f({ weekday: 'short' }), day: f({ day: 'numeric' }), month: f({ month: 'short' }) };
+};
+
 /** The ONE "needs you" number: holdings actions plus pending ideas (your suggestions, and today's Picks for admins). */
 export const needCount = (actions, ideas) =>
   holdingActions(actions).length + (Array.isArray(ideas) ? ideas.length : 0);

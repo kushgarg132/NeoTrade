@@ -116,7 +116,7 @@ test('a pick carries its grade, grade text, entry-zone flag and the edge over th
 test('a pick carries its levels: stop, target, entry zone, reward:risk', () => {
   const v = ideaFromPick({ ...pick, entry_ref: 100, levels: { entry_zone: [100, 103], target: 115, stop: 95.5, reward_risk: 3.33 } });
   assert.deepEqual([v.stop, v.target, v.entryZone[1], v.rewardRisk], [95.5, 115, 103, 3.33]);
-  assert.ok(Math.abs(v.toStop + 0.04) < 1e-9);
+  assert.ok(Math.abs(v.toStop + 0.045) < 1e-9);
   assert.equal(ideaFromPick(pick).stop, null);
 });
 
@@ -153,4 +153,29 @@ test('groupByGrade splits engine, A, B, C in input order; missing or unknown gra
     { kind: 'p', id: 4 }, { kind: 'p', grade: 'C', id: 5 }, { kind: 'p', grade: 'D', id: 6 }]);
   assert.deepEqual([ids(g.engine), ids(g.A), ids(g.B), ids(g.C)], [[1], [3], [2], [4, 5, 6]]);
   assert.deepEqual(groupByGrade([]), { engine: [], A: [], B: [], C: [] });
+});
+
+import { triageHoldings, signalText, eventDay } from './ideas.js';
+
+test('triageHoldings: a stock with something to act on takes its news; news-only stocks watch; dated rows soonest first', () => {
+  const rows = [
+    { id: 'verdict_worse:S:x', kind: 'verdict_worse', symbol: 'S' },
+    { id: 'bad_news:N:u', kind: 'bad_news', symbol: 'N' },
+    { id: 'bad_news:S:u', kind: 'bad_news', symbol: 'S' },
+    { id: 'results_soon:T:2026-11-07', kind: 'results_soon', symbol: 'T' },
+    { id: 'ex_dividend:A:2026-11-04', kind: 'ex_dividend', symbol: 'A' },
+    { id: 'harvest::2026', kind: 'harvest', symbol: '' },
+    { id: 'idea:I:1', kind: 'idea', symbol: 'I' },
+  ];
+  const t = triageHoldings(rows);
+  assert.deepEqual(t.act.map((s) => [s.symbol, s.items.map((a) => a.kind)]), [['S', ['verdict_worse', 'bad_news']]]);
+  assert.deepEqual(t.watch.map((s) => s.symbol), ['N']);
+  assert.deepEqual(t.soon.map((s) => [s.item.symbol, s.date, s.label]), [['A', '2026-11-04', 'Ex-dividend'], ['T', '2026-11-07', 'Results'], ['', null, null]]);
+});
+
+test('signalText drops the symbol the card shows and the news boilerplate', () => {
+  assert.deepEqual(signalText({ kind: 'verdict_worse', symbol: 'J', title: 'J: HOLD → SELL', detail: 'below 200dma' }), { text: 'Verdict HOLD → SELL', sub: 'below 200dma' });
+  assert.deepEqual(signalText({ kind: 'bad_news', symbol: 'S', title: 'S: Suzlon crashes', detail: 'Negative news in the last 36 hours.' }), { text: 'Suzlon crashes', sub: null });
+  assert.equal(signalText({ kind: 'add', symbol: 'A', title: 'Add 9 A', action: { quantity: 9 } }).text, 'ADD verdict: 9 more to your target weight');
+  assert.deepEqual(eventDay('2026-11-07'), { dow: 'Sat', day: '7', month: 'Nov' });
 });

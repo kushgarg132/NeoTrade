@@ -56,7 +56,7 @@ const Ideas = () => {
           : <>
             <HoldingActions actions={acts.data} onChanged={() => { acts.reload(); fresh.reload(); }} />
             {/* Remounts (reloads) whenever the holdings list changes, e.g. after a dismiss. */}
-            <div className="mt-4"><HandledActions key={acts.data.map((a) => a.id).join()} onChanged={acts.reload} /></div>
+            <div className="mt-6"><HandledActions key={acts.data.map((a) => a.id).join()} onChanged={acts.reload} /></div>
           </>)}
 
         {/* Each idea is its own card, so the list sits on the page, not inside a Card (no nested cards). */}

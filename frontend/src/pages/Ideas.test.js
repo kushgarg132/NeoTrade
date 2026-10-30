@@ -52,12 +52,17 @@ test('a pick row gets Skip (dismiss) and Buy SYMBOL… that opens the order tick
   assert.match(row, /disabled=\{busy\}>Buy<\/Button>/);
 });
 
-test('holding rows render the row-specific buttons from holdingButtons', () => {
-  assert.match(hold, /const b = holdingButtons\(a\)/);
+test('holdings triage into Act now (one card per stock, its own labels), Keep an eye and Coming up', () => {
+  assert.match(hold, /triageHoldings\(actions\)/);
+  assert.match(hold, /title="Act now"/);
+  assert.match(hold, /title="Keep an eye"/);
+  assert.match(hold, /title="Coming up"/);
+  assert.match(hold, /const b = holdingButtons\(lead\)/);
   assert.match(hold, /\{b\.primary\.label\}/);
-  assert.match(hold, /\{b\.later\}/);
   assert.match(hold, /\{b\.dismiss\}/);
+  assert.match(hold, /`\$\{b\.later\}: hide for 7 days`/);
   assert.match(hold, /rel="noopener noreferrer"/);
+  assert.match(hold, /You're clear\./);
 });
 
 test('Ideas splits into Picks (default) and Holdings sub-tabs', () => {

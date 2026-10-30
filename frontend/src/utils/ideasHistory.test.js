@@ -18,5 +18,5 @@ test('handled rows: state, when, back date; old rows titled from their id', asyn
   assert.equal(handledSub({ state: 'snoozed', at: '2026-10-30T12:00:00Z', until: '2026-11-06T12:00:00Z' }), 'Snoozed · 30 Oct · back on 6 Nov');
   assert.equal(handledSub({ state: 'dismissed' }), 'Dismissed');
   assert.equal(handledTitle({ title: 'A hit your stop', action_id: 'x' }), 'A hit your stop');
-  assert.equal(handledTitle({ action_id: 'stop_hit:A:90' }), 'stop hit · A');
+  assert.equal(handledTitle({ action_id: 'stop_hit:A:90' }), 'A · stop hit');
 });

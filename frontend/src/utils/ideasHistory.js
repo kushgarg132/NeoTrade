@@ -21,5 +21,5 @@ export const handledSub = (h) => [
   h.state === 'snoozed' && h.until && `back on ${short(h.until)}`,
 ].filter(Boolean).join(' · ');
 
-/** Rows hidden before titles were kept show their id's readable part ("stop_hit:A:90" -> "stop hit · A"). */
-export const handledTitle = (h) => h.title || h.action_id.split(':').slice(0, 2).join(' · ').replace(/_/g, ' ');
+/** Rows hidden before titles were kept show their id's readable part, stock first ("stop_hit:A:90" -> "A · stop hit"). */
+export const handledTitle = (h) => h.title || h.action_id.split(':').slice(0, 2).reverse().filter(Boolean).join(' · ').replace(/_/g, ' ');
