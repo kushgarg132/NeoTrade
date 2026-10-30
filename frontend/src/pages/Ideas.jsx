@@ -10,6 +10,7 @@ import ErrorLine from '../components/ui/ErrorLine';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import HoldingActions from '../components/ideas/HoldingActions';
+import HandledActions from '../components/ideas/HandledActions';
 import IdeaRow from '../components/ideas/IdeaRow';
 import { useLoad } from '../components/ideas/useLoad';
 import { useAuth } from '../context/AuthContext';
@@ -52,7 +53,11 @@ const Ideas = () => {
 
         {tab === 'holdings' && (acts.loading ? <Skeleton rows={2} />
           : acts.error ? <ErrorLine message="Could not load your holdings alerts." onRetry={acts.reload} />
-          : <HoldingActions actions={acts.data} onChanged={() => { acts.reload(); fresh.reload(); }} />)}
+          : <>
+            <HoldingActions actions={acts.data} onChanged={() => { acts.reload(); fresh.reload(); }} />
+            {/* Remounts (reloads) whenever the holdings list changes, e.g. after a dismiss. */}
+            <div className="mt-4"><HandledActions key={acts.data.map((a) => a.id).join()} onChanged={acts.reload} /></div>
+          </>)}
 
         {tab === 'picks' && <Card title="New ideas" action={<Badge kind="paper">Paper</Badge>}>
           <p className="-mt-1 mb-2 text-[13px] text-[var(--text-muted)]">Trades the engine would take: entry, stop (SL), target (T) and reward : risk (R:R). Paper record · not advice.</p>

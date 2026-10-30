@@ -31,7 +31,8 @@ const NeedsYou = ({ actions, onChanged, limit }) => {
       .catch(() => setIdeas({}));
   }, [wantIdeas, actions]);
 
-  const act = (verb, id) => api.post(endpoints.mine[verb](id)).then(onChanged).catch(() => {});
+  // The row's own words go along, so Ideas › Handled can show what was hidden.
+  const act = (verb, a) => api.post(endpoints.mine[verb](a.id), { title: a.title, symbol: a.symbol, kind: a.kind }).then(onChanged).catch(() => {});
   const decide = (s, url) => api.post(url, {}).then(onChanged);
   // Two calls: the first returns a one-time token, the second sends it and places the order.
   const approveLive = (s, token) =>
@@ -68,10 +69,10 @@ const NeedsYou = ({ actions, onChanged, limit }) => {
                       {VERB.ticket} ›
                     </button>
                   )}
-                  <button type="button" aria-label="Snooze 7 days" title="Snooze 7 days" className={ICON} onClick={() => act('snooze', a.id)}>
+                  <button type="button" aria-label="Snooze 7 days" title="Snooze 7 days" className={ICON} onClick={() => act('snooze', a)}>
                     <Clock className="w-4 h-4" />
                   </button>
-                  <button type="button" aria-label="Dismiss" title="Dismiss" className={ICON} onClick={() => act('dismiss', a.id)}>
+                  <button type="button" aria-label="Dismiss" title="Dismiss" className={ICON} onClick={() => act('dismiss', a)}>
                     <X className="w-4 h-4" />
                   </button>
                 </div>

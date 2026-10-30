@@ -27,7 +27,8 @@ const HoldingActions = ({ actions, onChanged }) => {
   const count = actions.length; // a new row may have a note by the next list refresh
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const { data: notes } = useLoad(useCallback(() => api.get(endpoints.summaries.holdings).then((r) => r.data.notes), [count]));
-  const act = (verb, id) => api.post(endpoints.mine[verb](id)).then(onChanged).catch(() => {});
+  // The row's own words go along, so Ideas › Handled can show what was hidden.
+  const act = (verb, a) => api.post(endpoints.mine[verb](a.id), { title: a.title, symbol: a.symbol, kind: a.kind }).then(onChanged).catch(() => {});
   const groups = groupHoldingActions(actions);
   if (!groups.length) {
     return (
@@ -70,8 +71,8 @@ const HoldingActions = ({ actions, onChanged }) => {
                     {b.primary?.ticket && <Button variant={a.action.side === 'BUY' ? 'primary' : 'danger'} className="px-2 text-[14px] leading-tight" onClick={() => setTicket(actionTarget(a).ticket)}>{b.primary.label}</Button>}
                     {b.primary?.link && to && <Link to={to}><Button className="w-full px-2 text-[14px] leading-tight">{b.primary.label}</Button></Link>}
                     {b.primary?.href && <a href={b.primary.href} target="_blank" rel="noopener noreferrer"><Button className="w-full px-2 text-[14px] leading-tight">{b.primary.label}</Button></a>}
-                    <Button variant="secondary" className="px-2 text-[14px] leading-tight" onClick={() => act('snooze', a.id)}>{b.later}</Button>
-                    <Button variant="secondary" className="px-2 text-[14px] leading-tight" onClick={() => act('dismiss', a.id)}>{b.dismiss}</Button>
+                    <Button variant="secondary" className="px-2 text-[14px] leading-tight" onClick={() => act('snooze', a)}>{b.later}</Button>
+                    <Button variant="secondary" className="px-2 text-[14px] leading-tight" onClick={() => act('dismiss', a)}>{b.dismiss}</Button>
                   </div>
                 </li>
               );

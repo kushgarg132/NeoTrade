@@ -11,3 +11,15 @@ export const waiting = (picks = [], records = [], today = todayIst()) =>
 
 /** The empty line of a scored section: when its first one is due. */
 export const firstDue = (rows) => (rows.length ? rows.reduce((a, b) => (a.due <= b.due ? a : b)).due : null);
+
+const short = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+
+/** A Handled row's line: what was done and when, and when a snoozed one comes back. */
+export const handledSub = (h) => [
+  h.state === 'snoozed' ? 'Snoozed' : 'Dismissed',
+  h.at && short(h.at),
+  h.state === 'snoozed' && h.until && `back on ${short(h.until)}`,
+].filter(Boolean).join(' · ');
+
+/** Rows hidden before titles were kept show their id's readable part ("stop_hit:A:90" -> "stop hit · A"). */
+export const handledTitle = (h) => h.title || h.action_id.split(':').slice(0, 2).join(' · ').replace(/_/g, ' ');

@@ -249,6 +249,8 @@ export const endpoints = {
     actions: '/mine/actions',
     dismiss: (id) => `/mine/actions/${encodeURIComponent(id)}/dismiss`,
     snooze: (id) => `/mine/actions/${encodeURIComponent(id)}/snooze`,
+    restore: (id) => `/mine/actions/${encodeURIComponent(id)}/restore`,
+    handled: '/mine/actions/handled',
     stock: (s) => `/mine/stock/${encodeURIComponent(s)}`,
     thesis: (s) => `/mine/thesis/${encodeURIComponent(s)}`,
     tax: (fy) => (fy ? `/mine/tax?fy=${encodeURIComponent(fy)}` : '/mine/tax'),
