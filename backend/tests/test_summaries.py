@@ -159,8 +159,14 @@ async def test_a_note_is_written_for_bad_news_and_results_only(db, redis, llm, h
     assert await holding.run_user(db, redis, "alice", NOW) == 2
     assert {c["feature"] for c in llm.calls} == {"news"} and {c["tier"] for c in llm.calls} == {"fast"}
     down = next(c for c in llm.calls if "bad_news" in c["prompt"])["prompt"]
-    assert "misses estimates" in down and '"weight_pct": 18.0' in down and '"stop": 100.0' in down and "turnaround" in down
+    assert "misses estimates" in down and '"share_of_account": "18.0%"' in down and '"stop": "₹100.00"' in down and "turnaround" in down
+    assert '"value": "₹18,000"' in down and '"gain_overall": "-7.5%"' in down and '"account_value": "₹1,00,000"' in down
     assert await db["ai_summaries"].count_documents({"user_id": "alice", "kind": "holding"}) == 2
+
+
+def test_rupees_are_written_the_indian_way():
+    assert [holding.rupees(x) for x in (6960.0, 696000.0, 12345678.9, 237.6, -7220.7, None)] == \
+        ["₹6,960", "₹6,96,000", "₹1,23,45,679", "₹237.60", "-₹7,221", None]
 
 
 async def test_a_note_with_an_invented_figure_is_dropped(db, redis, llm, held):

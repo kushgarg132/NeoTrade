@@ -19,6 +19,25 @@ RUN_EVERY, PER_RUN, PER_DAY, TTL = 1800, 4, 12, 15 * 86_400
 WINDOW = (time(8, 45), time(22, 0))
 
 
+def rupees(x: Optional[float]) -> Optional[str]:
+    """₹ with Indian grouping, whole rupees under ₹1,000 kept to the paisa: 696000 -> "₹6,96,000", 237.6 -> "₹237.60".
+    Facts reach the model as the reader should see them, since it copies figures exactly (6960.0 came back raw)."""
+    if x is None:
+        return None
+    if abs(x) < 1000:
+        return f"{'-' if x < 0 else ''}₹{abs(x):.2f}"
+    whole = f"{abs(round(x)):d}"
+    head, tail = whole[:-3], whole[-3:]
+    groups = []
+    while len(head) > 2:
+        head, groups = head[:-2], [head[-2:]] + groups
+    return f"{'-' if x < 0 else ''}₹{','.join(([head] if head else []) + groups + [tail])}"
+
+
+def _pct(x: Optional[float], sign: bool = False) -> Optional[str]:
+    return None if x is None else f"{x:+.1f}%" if sign else f"{x:.1f}%"
+
+
 async def _position(db, redis, user_id: str, symbol: str) -> Optional[dict]:
     from backend.ai.facts.user import portfolio
 
@@ -26,8 +45,11 @@ async def _position(db, redis, user_id: str, symbol: str) -> Optional[dict]:
     row = next((h for h in p.get("holdings") or [] if h.get("symbol") == symbol), None)
     if not row:
         return None
-    return {"holding": {k: row.get(k) for k in ("symbol", "quantity", "avg_price", "value", "pnl_pct", "weight_pct")},
-            "account_value": (p.get("totals") or {}).get("value")}
+    qty = row.get("quantity")
+    return {"holding": {"symbol": row.get("symbol"), "shares": int(qty) if qty is not None and qty == int(qty) else qty,
+                        "average_price": rupees(row.get("avg_price")), "value": rupees(row.get("value")),
+                        "gain_overall": _pct(row.get("pnl_pct"), sign=True), "share_of_account": _pct(row.get("weight_pct"))},
+            "account_value": rupees((p.get("totals") or {}).get("value"))}
 
 
 async def note_for(db, redis, user_id: str, action: dict):
@@ -39,7 +61,8 @@ async def note_for(db, redis, user_id: str, action: dict):
         if position is None:
             return None  # not in the last review's holdings: nothing to size it against
         t = (await ThesisStore(db).get(user_id, action["symbol"])) or {}
-        thesis = {k: t[k] for k in ("why", "stop", "target", "review_by") if t.get(k)}
+        thesis = {k: rupees(t[k]) if k in ("stop", "target") and isinstance(t[k], (int, float)) else t[k]
+                  for k in ("why", "stop", "target", "review_by") if t.get(k)}
         facts = {"item": {k: action[k] for k in ("kind", "title", "detail")}, "position": position, "thesis": thesis}
         system, prompt = render(
             "summary_holding", item=core.as_facts(facts["item"]), position=core.as_facts(position),

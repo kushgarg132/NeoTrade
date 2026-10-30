@@ -10,4 +10,4 @@ Their position in it:
 Their own plan for it, if they wrote one:
 {{thesis}}
 
-Write exactly one sentence of at most 35 words, no heading, no Markdown, covering: how big the position is for them (its value or share of the account), the risk this item points at, and what to watch next (their own stop or target if given, else the event or follow-up named in the item). Copy every figure exactly as it appears above; if the position size is missing, leave it out.
+Write exactly one sentence of at most 35 words, no heading, no Markdown, covering: how big the position is for them (its value or share of the account), the risk this item points at, and what to watch next (their own stop or target if given, else the event or follow-up named in the item). Copy every figure exactly as it appears above, with its ₹ or % sign; never add decimals or write "rupees". If the position size is missing, leave it out.
