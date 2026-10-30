@@ -61,10 +61,14 @@ const Ideas = () => {
 
         {/* Each idea is its own card, so the list sits on the page, not inside a Card (no nested cards). */}
         {tab === 'picks' && <div className="space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
               <h2 className="text-[15px] font-semibold text-[var(--text)]">New ideas</h2>
-              <p className="text-[13px] text-[var(--text-muted)]">Trades the engine would take: entry, stop (SL), target (T) and reward : risk (R:R). Paper record · not advice.</p>
+              <p className="text-[13px] text-[var(--text-muted)]">
+                {fresh.data?.items?.length ? `${fresh.data.items.length} shown` : 'Trades the engine would take'}
+                {fresh.data?.hiddenCount > 0 && <> · <span title={fresh.data.hiddenReason}>{fresh.data.hiddenCount} more kept back (top 3 per grade)</span></>}
+                {' · '}Paper record · not advice.
+              </p>
             </div>
             <span className="shrink-0"><Badge kind="paper">Paper</Badge></span>
           </div>

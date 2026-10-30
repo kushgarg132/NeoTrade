@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ImpactChips, NewsLink } from '../common/NewsImpacts';
 import { Link } from 'react-router-dom';
-import { ChevronRight, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import IdeaBadge from './IdeaBadge';
 import BuyBar from './BuyBar';
 import Button from '../ui/Button';
@@ -141,9 +141,17 @@ const Range = ({ idea }) => {
   );
 };
 
-/** One idea as its own card: grade, symbol and setup beside the headline move; Entry / SL / T and R:R; the likely
- * range; flags; the latest headline; then a pending engine idea's or a pick's own Skip / Buy. */
+/** The compact line under an idea's name: how sure (a pick's chance up, else the engine score), R:R and the entry. */
+const quickLine = (idea, ratio) => {
+  const sure = idea.score?.final != null ? `${Math.round(idea.score.final * 100)}/100` : typeof idea.pUp === 'number' ? `${Math.round(idea.pUp * 100)}% chance up` : null;
+  return [sure, ratio != null && `R:R ${ratio.toFixed(1)}`, idea.entry != null && `entry ${px(idea.entry)}`].filter(Boolean);
+};
+
+/** One idea as a compact card: grade, symbol, setup and the expected move, one line of how sure / R:R / entry, its
+ *  flags, then Skip / Buy. "Details" unfolds the rest in place (the confidence meter, levels, range, age, basket,
+ *  latest headline); the head opens the idea's own page. */
 const IdeaRow = ({ idea, onDone, news, results }) => {
+  const [open, setOpen] = useState(false);
   const key = bareSymbol(idea.symbol)?.toUpperCase();
   const entry = news?.[key];
   const resultsSoon = resultsFlag(results?.[key], idea.daysSince > 0 && idea.daysLeft != null ? idea.daysLeft : idea.horizon);
@@ -151,20 +159,18 @@ const IdeaRow = ({ idea, onDone, news, results }) => {
   const older = olderPickLabel(idea);
   const ratio = rr(idea);
   const actions = (idea.kind === 's' && !idea.decided && onDone) || (idea.kind === 'p' && onDone);
+  const detailsId = `idea-${idea.id}-details`;
   return (
     <article className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
-      <Link to={`/ideas/${encodeURIComponent(idea.id)}`} className="tap block p-4 space-y-3 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]">
+      <Link to={`/ideas/${encodeURIComponent(idea.id)}`} className="tap block px-4 pt-4 pb-2 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]">
         <div className="flex items-start gap-3">
           {GRADES[idea.grade] && <span className="shrink-0"><GradeTile grade={idea.grade} /></span>}
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-1.5">
               <span className="text-[12px] font-semibold text-[var(--text-muted)]">{idea.side}</span>
-              <span className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)] truncate">{bareSymbol(idea.symbol)}</span>
+              <span className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)] break-words">{bareSymbol(idea.symbol)}</span>
             </div>
-            <div className="flex min-w-0 gap-1 text-[13px] text-[var(--text-muted)]">
-              <span className="truncate">{idea.setup}{idea.horizon && !older && idea.headline?.value == null ? ` · ${idea.horizon}d` : ''}</span>
-              {ratio != null && <span className="shrink-0 whitespace-nowrap">· <span className="font-semibold text-[var(--text)] tabular-nums">R:R {ratio.toFixed(1)}</span></span>}
-            </div>
+            <div className="text-[13px] leading-snug text-[var(--text-muted)] line-clamp-2">{idea.setup}{idea.horizon && !older && idea.headline?.value == null ? ` · ${idea.horizon}d` : ''}</div>
           </div>
           {idea.headline?.value != null && (
             <div className="shrink-0 text-right tabular-nums">
@@ -174,33 +180,43 @@ const IdeaRow = ({ idea, onDone, news, results }) => {
           )}
           <ChevronRight className="w-4 h-4 mt-1 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
         </div>
-
+        <p className="mt-2 text-[13px] tabular-nums text-[var(--text)]">
+          {quickLine(idea, ratio).map((x, i) => <React.Fragment key={x}>{i > 0 && <span className="text-[var(--text-muted)]"> · </span>}{x}</React.Fragment>)}
+        </p>
         {(idea.badge || idea.experimental || resultsSoon || badSince) && (
-          <div className="flex flex-wrap items-center gap-1.5 empty:hidden">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 empty:hidden">
             <IdeaBadge badge={idea.badge} />
             {idea.experimental && <Badge>Experimental</Badge>}
             {resultsSoon && <Badge kind="unproven">{resultsSoon}</Badge>}
             {badSince && <Badge kind="alert">Bad news since signal</Badge>}
           </div>
         )}
-
-        <Confidence idea={idea} />
-        {idea.entry != null && <Levels idea={idea} />}
-        {idea.kind === 'p' && idea.spread && <Range idea={idea} />}
-
-        {(older || idea.basket) && (
-          <div className="space-y-0.5 text-[12px] text-[var(--text-muted)] tabular-nums">
-            {older && <div>{older}</div>}
-            {idea.basket && (
-              <div>
-                <span className={toneText(idea.basket.beat_nifty >= 0.6 ? 'gain' : 'neutral')}>Monthly basket beat NIFTY in {pct(idea.basket.beat_nifty, { dp: 0 })} of months</span>
-                {' · '}median {pct(idea.basket.median_vs_nifty, { sign: true, dp: 1 })}
-              </div>
-            )}
-          </div>
-        )}
       </Link>
-      {entry?.material && entry.headline && <div className="px-4 border-t border-[var(--border)]"><Headline entry={entry} /></div>}
+
+      <button type="button" aria-expanded={open} aria-controls={detailsId} onClick={() => setOpen((v) => !v)}
+        className="mx-4 inline-flex min-h-11 items-center gap-1 text-[13px] font-semibold text-[var(--text-muted)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px]">
+        <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+        {open ? 'Less' : 'Details'}
+      </button>
+      {open && (
+        <div id={detailsId} className="fade-in space-y-3 px-4 pb-3">
+          <Confidence idea={idea} />
+          {idea.entry != null && <Levels idea={idea} />}
+          {idea.kind === 'p' && idea.spread && <Range idea={idea} />}
+          {(older || idea.basket) && (
+            <div className="space-y-0.5 text-[12px] text-[var(--text-muted)] tabular-nums">
+              {older && <div>{older}</div>}
+              {idea.basket && (
+                <div>
+                  <span className={toneText(idea.basket.beat_nifty >= 0.6 ? 'gain' : 'neutral')}>Monthly basket beat NIFTY in {pct(idea.basket.beat_nifty, { dp: 0 })} of months</span>
+                  {' · '}median {pct(idea.basket.median_vs_nifty, { sign: true, dp: 1 })}
+                </div>
+              )}
+            </div>
+          )}
+          {entry?.material && entry.headline && <div className="border-t border-[var(--border)]"><Headline entry={entry} /></div>}
+        </div>
+      )}
       {actions && (
         <div className="px-4 pb-4 pt-1">
           {idea.kind === 's' && !idea.decided && onDone && <BuyBar idea={idea} id={parseIdeaId(idea.id).key} onDone={onDone} compact />}
