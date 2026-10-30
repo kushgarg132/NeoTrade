@@ -72,11 +72,11 @@ const BuyBar = ({ idea, id, onDone, compact = false }) => {
         </p>
       )}
       {failure && <p role="alert" className="text-[14px] text-[var(--loss)]">{failure}</p>}
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="secondary" onClick={skip} disabled={busy !== null}>
+      <div className="flex gap-2">
+        <Button variant="secondary" className="px-6" onClick={skip} disabled={busy !== null}>
           {busy === 'skip' && <Loader2 className="w-4 h-4 animate-spin" />}{armed ? 'Cancel' : 'Skip'}
         </Button>
-        <Button variant={armed ? 'danger' : 'primary'} onClick={buy} disabled={busy !== null}>
+        <Button variant={armed ? 'danger' : 'primary'} className="flex-1" onClick={buy} disabled={busy !== null}>
           {busy === 'buy' && <Loader2 className="w-4 h-4 animate-spin" />}
           {armed ? 'Send real order' : compact ? verb : `${verb}…`}
         </Button>
