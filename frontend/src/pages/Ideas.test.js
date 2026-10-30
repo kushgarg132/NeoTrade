@@ -61,7 +61,7 @@ test('holdings triage into Act now (one card per stock, its own labels), Keep an
   assert.match(hold, /\{b\.primary\.label\}/);
   assert.match(hold, /\{b\.dismiss\}/);
   assert.match(hold, /`\$\{b\.later\}: hide for 7 days`/);
-  assert.match(hold, /rel="noopener noreferrer"/);
+  assert.match(hold, /<ReadLink action=\{a\.action\} \/>/);
   assert.match(hold, /You're clear\./);
 });
 

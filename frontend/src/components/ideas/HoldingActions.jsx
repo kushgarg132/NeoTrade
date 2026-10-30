@@ -7,6 +7,7 @@ import DeltaChip from '../ui/DeltaChip';
 import { inr } from '../ui/format';
 import OrderTicket from '../trading/OrderTicket';
 import { AiLabel, AmountText } from '../ai/AiSummary';
+import { ImpactChips, NewsLink } from '../common/NewsImpacts';
 import useHoldings from '../money/useHoldings';
 import { useLoad } from './useLoad';
 import api, { endpoints } from '../../utils/api';
@@ -33,11 +34,12 @@ const IconButton = ({ label, children, ...props }) => (
   </button>
 );
 
-const ReadLink = ({ href }) => (
-  <a href={href} target="_blank" rel="noopener noreferrer" aria-label="Read the article" title="Read the article"
+/** A news row's way out: the story's analysis page when stored (it links the article too), else the article. */
+const ReadLink = ({ action }) => (
+  <NewsLink id={action.news_id} url={action.url}
     className="tap inline-flex items-center justify-center w-11 h-11 shrink-0 rounded-[12px] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-    <ArrowUpRight className="w-[18px] h-[18px]" aria-hidden="true" />
-  </a>
+    <ArrowUpRight className="w-[18px] h-[18px]" aria-label={action.news_id ? 'Open the news analysis' : 'Read the article'} />
+  </NewsLink>
 );
 
 const Note = ({ note }) => note ? (
@@ -93,9 +95,10 @@ const StockCard = ({ stock, h, notes, onAct, onTicket }) => {
               <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-1">
                   <p className="min-w-0 flex-1 text-[15px] leading-snug text-[var(--text)]">{s.text}</p>
-                  {a.kind === 'bad_news' && a.action?.url && <span className="-my-2.5 -mr-2"><ReadLink href={a.action.url} /></span>}
+                  {a.kind === 'bad_news' && (a.action?.news_id || a.action?.url) && <span className="-my-2.5 -mr-2"><ReadLink action={a.action} /></span>}
                 </div>
                 {s.sub && <p className="text-[13px] text-[var(--text-muted)]">{s.sub}</p>}
+                {a.kind === 'bad_news' && <ImpactChips impacts={a.action?.impacts} className="mt-0.5" />}
                 <Note note={notes?.[a.id]} />
               </div>
             </li>
@@ -170,10 +173,11 @@ const HoldingActions = ({ actions, onChanged }) => {
                         )}
                       </div>
                       <p className="mt-0.5 text-[14px] leading-snug text-[var(--text)]">{signalText(a).text}</p>
+                      <ImpactChips impacts={a.action?.impacts} className="mt-0.5" />
                       <Note note={notes?.[a.id]} />
                     </div>
                     <div className="flex shrink-0 -mr-2 -mt-1">
-                      {a.action?.url && <ReadLink href={a.action.url} />}
+                      {(a.action?.news_id || a.action?.url) && <ReadLink action={a.action} />}
                       <IconButton label={`${holdingButtons(a).dismiss}: hide this`} onClick={() => act('dismiss', [a])}><Check className="w-[18px] h-[18px]" aria-hidden="true" /></IconButton>
                     </div>
                   </div>

@@ -10,7 +10,8 @@ import Badge from '../ui/Badge';
 import api, { endpoints } from '../../utils/api';
 import { useReconnect, useTopic } from '../../hooks/useStream';
 import { formatTimeAgo } from '../../utils/formatters';
-import { impactWord, materialToday } from '../../utils/market';
+import { materialToday } from '../../utils/market';
+import { Impact } from '../common/NewsImpacts';
 import { mergeFront } from '../../utils/news';
 
 /**
@@ -23,12 +24,6 @@ const SCOPES = [
   { id: 'MARKET', label: 'Market' }, { id: 'MACRO', label: 'Macro' }, { id: 'GLOBAL', label: 'Global' },
 ];
 const PAGE = 50;
-
-const Impact = ({ impact }) => {
-  const arrow = impact.direction > 0 ? '↑' : impact.direction < 0 ? '↓' : '·';
-  const cls = impact.direction > 0 ? 'text-[var(--gain)]' : impact.direction < 0 ? 'text-[var(--loss)]' : 'text-[var(--text-muted)]';
-  return <span className={`text-[13px] tabular-nums whitespace-nowrap ${cls}`}>{impact.type === 'market' ? 'Market' : impact.target} {arrow} {impactWord(impact.impact)}</span>;
-};
 
 const BAR = { 1: 'bg-[var(--gain)]', '-1': 'bg-[var(--loss)]' };
 const barClass = (item) => {

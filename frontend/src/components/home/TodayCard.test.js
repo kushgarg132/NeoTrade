@@ -20,7 +20,8 @@ test('brief lines: none without text, AI lines when a summary exists', () => {
 test('card source contract', () => {
   assert.match(src, /return null/);
   assert.match(src, /noopener,noreferrer/);
-  assert.ok(src.includes('onClick={m.cause?.url ?'));
+  assert.ok(src.includes('to={m.cause?.id ? newsPath(m.cause.id)'));  // the story's analysis
+  assert.ok(src.includes('onClick={!m.cause?.id && m.cause?.url ?'));  // else the article
   assert.match(src, /aria-expanded/);
   assert.match(src, /Read all/);
   assert.match(src, /Show less/);

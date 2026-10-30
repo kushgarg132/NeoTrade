@@ -10,6 +10,7 @@ import { inr, pct, tone } from '../ui/format';
 import ValueChart from './ValueChart';
 import useHoldings from './useHoldings';
 import useSymbolNews from '../../hooks/useSymbolNews';
+import { ImpactChips } from '../common/NewsImpacts';
 import { topMovers, whyLine } from '../../utils/money';
 import { stockPath } from '../../utils/stocks';
 import { AiCard, AiText, AiState } from '../ai/AiSummary';
@@ -56,6 +57,7 @@ const OverviewTab = ({ headline }) => {
               dense
               title={m.symbol}
               sub={whyLine({ ...m, news: news?.[m.symbol] })}
+              extra={news?.[m.symbol]?.headline && <ImpactChips impacts={news[m.symbol].impacts} />}
               right={`${inr(m.day_rupees, { sign: true })} · ${pct(m.day_pct, { sign: true })}`}
               rightTone={tone(m.day_rupees)}
             />

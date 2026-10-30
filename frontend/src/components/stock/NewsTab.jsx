@@ -8,6 +8,7 @@ import { Segmented } from '../settings/Fields';
 import useStored from '../../hooks/useStored';
 import { endpoints } from '../../utils/api';
 import { newsPath } from '../../utils/routes';
+import { ImpactChips } from '../common/NewsImpacts';
 import { formatClock } from '../../utils/formatters';
 import { FILTERS, groupNews } from './newsGroups';
 
@@ -23,9 +24,10 @@ const NewsTab = ({ symbol, mine, ai, onAnalysis }) => {
   const rows = [
     ...(scored.data?.items || []).slice(0, SHOWN).map((n) => ({
       key: n.id, title: n.title, to: newsPath(n.id), at: n.published_at,
-      direction: n.direction, impact: n.impact, material: n.material,
+      direction: n.direction, impact: n.impact, material: n.material, impacts: n.impacts,
     })),
-    ...(mine?.news || []).map((n) => ({ key: n.id || n.url || n.headline, title: n.headline || n.title, url: n.url, at: n.published_at || n.published })),
+    ...(mine?.news || []).map((n) => ({ key: n.id || n.url || n.headline, title: n.headline || n.title, url: n.url, at: n.published_at || n.published,
+      ...(n.id && { to: newsPath(n.id), impacts: n.impacts }) })),
     ...(ai?.data?.news_articles || []).map((n) => ({ key: n.url || n.title, title: n.title, url: n.url, at: n.published_at, source: n.source })),
   ].filter((r, i, all) => r.title && all.findIndex((x) => x.title === r.title) === i);
   if (!rows.length && scored.status === 'loading') return <Skeleton rows={4} />;
@@ -51,7 +53,7 @@ const NewsTab = ({ symbol, mine, ai, onAnalysis }) => {
             {list.map((r) => {
               const score = r.impact != null && `${r.direction > 0 ? '↑' : r.direction < 0 ? '↓' : '·'} ${r.impact}/10`;
               const sub = [r.source, r.at && formatClock(r.at), score].filter(Boolean).join(' · ');
-              if (r.to) return <ListRow key={r.key} to={r.to} title={r.title} sub={sub} />;
+              if (r.to) return <ListRow key={r.key} to={r.to} title={r.title} sub={sub} extra={<ImpactChips impacts={r.impacts} material={r.material} />} />;
               return r.url ? (
                 <a key={r.key} href={r.url} target="_blank" rel="noreferrer" className="block min-h-14 py-2 border-b border-[var(--border)] last:border-b-0">
                   <div className="text-[15px] font-medium text-[var(--text)]">{r.title}</div>

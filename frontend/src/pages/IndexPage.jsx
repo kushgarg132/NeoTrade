@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ImpactChips, NewsLink } from '../components/common/NewsImpacts';
 import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import Layout from '../components/Layout';
@@ -90,8 +91,13 @@ const Why = ({ ticker }) => {
         <>
           <AiText text={data.analysis} />
           {data.headlines?.length > 0 && (
-            <ul className="mt-3 list-disc pl-5 text-[13px] text-[var(--text-muted)]">
-              {data.headlines.slice(0, 3).map((h) => <li key={h.title}>{h.title}</li>)}
+            <ul className="mt-3 space-y-2 text-[13px] text-[var(--text-muted)]">
+              {data.headlines.slice(0, 3).map((h) => (
+                <li key={h.title}>
+                  <NewsLink id={h.id} url={h.url} className="text-[var(--text)] hover:underline underline-offset-4">{h.title}</NewsLink>
+                  <ImpactChips impacts={h.impacts} className="mt-0.5" />
+                </li>
+              ))}
             </ul>
           )}
         </>

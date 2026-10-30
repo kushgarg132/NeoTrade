@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ImpactChips, NewsLink } from '../common/NewsImpacts';
 import { Link } from 'react-router-dom';
 import { ChevronRight, ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import IdeaBadge from './IdeaBadge';
@@ -21,7 +22,8 @@ const DIRECTION = {
   flat: { Icon: Minus, label: 'Mixed', cls: 'bg-[var(--surface-2)] text-[var(--text-muted)]' },
 };
 
-/** The stock's latest material headline (GET /news/symbols), one tappable line with a direction chip. Outside the row's Link: links may not nest. */
+/** The stock's latest material headline (GET /news/symbols), one tappable line with a direction chip that opens its
+ * analysis, and the analysis chips under it. Outside the row's Link: links may not nest. */
 const Headline = ({ entry }) => {
   if (!entry?.material || !entry.headline) return null;
   const d = DIRECTION[newsTone({ direction: entry.direction })] || DIRECTION.flat;
@@ -34,9 +36,12 @@ const Headline = ({ entry }) => {
     </>
   );
   const cls = 'flex items-center gap-2 min-h-11 min-w-0 text-[13px] text-[var(--text-muted)]';
-  return entry.url
-    ? <a href={entry.url} target="_blank" rel="noreferrer" className={`${cls} hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{body}</a>
-    : <div className={cls}>{body}</div>;
+  return (
+    <div className="pb-2">
+      <NewsLink id={entry.id} url={entry.url} className={`${cls} hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{body}</NewsLink>
+      <ImpactChips impacts={entry.impacts} className="-mt-1.5" />
+    </div>
+  );
 };
 
 /** A pick's own actions: Skip hides it from this list (`POST /picks/{id}/dismiss`); Buy opens the

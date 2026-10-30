@@ -7,7 +7,8 @@ const news = readFileSync(new URL('./News.jsx', import.meta.url), 'utf8');
 const watch = readFileSync(new URL('./Watchlist.jsx', import.meta.url), 'utf8');
 
 test('News uses impact words and the material-today group, not n/10', () => {
-  assert.match(news, /impactWord\(/);
+  assert.match(news, /import \{ Impact \} from '..\/common\/NewsImpacts'/);
+  assert.match(readFileSync(new URL('../common/NewsImpacts.jsx', import.meta.url), 'utf8'), /impactWord\(/);
   assert.match(news, /materialToday\(/);
   assert.doesNotMatch(news, /\/10/);
 });

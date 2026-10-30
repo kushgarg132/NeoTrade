@@ -13,6 +13,7 @@ import { taxYears } from '../../utils/mine';
 import { fyStart } from '../../utils/months';
 import { stockPath } from '../../utils/stocks';
 import useSymbolNews from '../../hooks/useSymbolNews';
+import { ImpactChips } from '../common/NewsImpacts';
 import { lossCause } from '../../utils/news';
 
 const EXEMPTION = 125000;
@@ -29,6 +30,7 @@ const LossSub = ({ h, entry }) => {
     <>
       <span className="block truncate">{`${formatQuantity(h.qty)} · loss ${inr(h.loss)}`}</span>
       <span className={`block truncate ${cause.news ? 'text-[var(--loss)]' : ''}`} title={cause.text}>{cause.text}</span>
+      {cause.news && <ImpactChips impacts={entry.impacts} className="mt-0.5" />}
     </>
   );
 };

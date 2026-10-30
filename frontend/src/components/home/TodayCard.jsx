@@ -6,10 +6,12 @@ import { inr, pct, tone } from '../ui/format';
 import { AiLabel, AmountText } from '../ai/AiSummary';
 import { bareSymbol } from '../../utils/formatters';
 import { newsWhy, todayTitle, briefLines } from '../../utils/home';
+import { ImpactChips } from '../common/NewsImpacts';
+import { newsPath } from '../../utils/routes';
 
 /**
  * The day's story: the account's big news moves (pulse.news_moves, backend/portfolio/news_moves.py; a tap opens
- * the headline) and the brief (the AI's three lines when a job wrote them, else the digest's first lines with
+ * the story's analysis, else the headline) and the brief (the AI's three lines when a job wrote them, else the digest's first lines with
  * "Read all"). Renders nothing when neither has content.
  */
 const TodayCard = ({ moves, kind, text, summary }) => {
@@ -25,8 +27,9 @@ const TodayCard = ({ moves, kind, text, summary }) => {
           {moves.map((m) => (
             <li key={m.symbol}>
               <ListRow dense title={`${bareSymbol(m.symbol)} ${pct(m.move_pct / 100, { sign: true, dp: 1 })}`}
-                sub={newsWhy(m)} right={inr(m.rupees, { sign: true })} rightTone={tone(m.rupees)}
-                onClick={m.cause?.url ? () => window.open(m.cause.url, '_blank', 'noopener,noreferrer') : undefined} />
+                sub={newsWhy(m)} extra={m.cause && <ImpactChips impacts={m.cause.impacts} />} right={inr(m.rupees, { sign: true })} rightTone={tone(m.rupees)}
+                to={m.cause?.id ? newsPath(m.cause.id) : undefined}
+                onClick={!m.cause?.id && m.cause?.url ? () => window.open(m.cause.url, '_blank', 'noopener,noreferrer') : undefined} />
             </li>
           ))}
         </ul>

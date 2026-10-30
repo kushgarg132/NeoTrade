@@ -14,6 +14,7 @@ import useHoldings from './useHoldings';
 import Rebalance from '../portfolio/Rebalance';
 import OrderTicket from '../trading/OrderTicket';
 import useSymbolNews from '../../hooks/useSymbolNews';
+import { ImpactChips } from '../common/NewsImpacts';
 import api, { endpoints } from '../../utils/api';
 import { sortHoldings, whyLine, dayFraction, MARKET_WHY } from '../../utils/money';
 import { stockPath } from '../../utils/stocks';
@@ -108,6 +109,7 @@ const Row = ({ h, news }) => {
         <Cell top={h.weight_pct != null ? `${h.weight_pct.toFixed(1)}%` : '—'} sub={h.value != null ? compactInr(h.value) : '—'} />
       </div>
       {why !== MARKET_WHY && <div className="col-span-4 text-[12px] text-[var(--text-muted)] truncate -mt-1">{why}</div>}
+      {news?.headline && <ImpactChips impacts={news.impacts} className="col-span-4 -mt-1" />}
     </>
   );
   const stripe = VERDICT[h.verdict]?.stripe || 'border-l-transparent';

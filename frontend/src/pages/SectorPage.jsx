@@ -13,6 +13,7 @@ import { endpoints } from '../utils/api';
 import { pct, tone } from '../components/ui/format';
 import { stockPath } from '../utils/stocks';
 import { newsPath } from '../utils/routes';
+import { ImpactChips } from '../components/common/NewsImpacts';
 import { formatTimeAgo } from '../utils/formatters';
 
 const SectorPage = () => {
@@ -42,7 +43,8 @@ const SectorPage = () => {
           </Card>
           <Card title="News moving this sector">
             {data.news.length === 0 ? <Empty title="No sector news yet" body="Stories that name this sector appear here once scored." /> : data.news.map((n) => (
-              <ListRow privateValue={false} key={n.id} title={n.title} sub={[n.source, formatTimeAgo(n.published_at)].filter(Boolean).join(' · ')} to={newsPath(n.id)} />
+              <ListRow privateValue={false} key={n.id} title={n.title} sub={[n.source, formatTimeAgo(n.published_at)].filter(Boolean).join(' · ')} to={newsPath(n.id)}
+                       extra={<ImpactChips impacts={n.impacts} material={n.material} />} />
             ))}
           </Card>
         </div>

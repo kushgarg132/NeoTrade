@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ImpactChips, NewsLink } from '../common/NewsImpacts';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, RefreshCw, Upload, History } from 'lucide-react';
 import Card from '../ui/Card';
@@ -61,7 +62,8 @@ export const TripHeadlines = ({ trip }) => {
       {items.map(([label, n]) => (
         <li key={label} className="text-[var(--text-muted)]">
           <span className={toneText(tone(n.direction))}>{label}, {hoursBefore(n.minutes_before)} before: </span>
-          {n.url ? <a href={n.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">{n.headline || 'headline'}</a> : (n.headline || 'headline not stored')}
+          {n.id || n.url ? <NewsLink id={n.id} url={n.url} className="text-[var(--accent)] hover:underline">{n.headline || 'headline'}</NewsLink> : (n.headline || 'headline not stored')}
+          <ImpactChips impacts={n.impacts} className="mt-0.5" />
         </li>
       ))}
     </ul>

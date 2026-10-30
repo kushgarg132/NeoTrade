@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { ImpactChips, NewsLink } from '../common/NewsImpacts';
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceDot, ReferenceLine } from 'recharts';
 import api, { endpoints } from '../../utils/api';
 import { formatClock, formatCurrency, formatDateTime } from '../../utils/formatters';
@@ -159,10 +160,11 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
             <li key={i.id ?? i.url ?? i.title} className="flex items-start gap-2 py-2 text-[14px]">
               <svg width="12" height="12" className="mt-1 shrink-0" aria-hidden="true"><NewsGlyph cx={6} cy={6} direction={Math.sign(i.direction || 0)} impact={4} /></svg>
               <span className="min-w-0">
-                {i.url ? <a href={i.url} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] underline-offset-2 hover:underline">{i.title}</a> : i.title}
+                {i.id || i.url ? <NewsLink id={i.id} url={i.url} className="text-[var(--accent)] underline-offset-2 hover:underline">{i.title}</NewsLink> : i.title}
                 <span className="block text-[12px] text-[var(--text-muted)] tabular-nums">
                   {i.direction > 0 ? 'Good' : i.direction < 0 ? 'Bad' : 'Mixed'} news · impact {i.impact}/10 · {formatDateTime(i.published_at)}
                 </span>
+                <ImpactChips impacts={i.impacts} className="mt-0.5" />
               </span>
             </li>
           ))}
