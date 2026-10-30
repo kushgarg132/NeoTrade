@@ -35,13 +35,13 @@ test('headline carries total P&L, private', () => {
   assert.match(page, /private[^\n]*h\.pnl|Stat[^\n]*Total P&L/);
 });
 
-test('holdings rows are dense: LTP, today %, P&L and weight columns, no filler', () => {
-  assert.match(holdings, /grid-cols-\[/);
+test('holdings rows: value, quantity at price, weight, private P&L and today, then verdict and why; an allocation strip', () => {
   assert.match(holdings, /h\.last_price/);
-  assert.match(holdings, /h\.pnl\b/);
+  assert.match(holdings, /<span className=\{`private font-semibold \$\{toneText\(tone\(h\.pnl\)\)\}`\}>/);
   assert.match(holdings, /MARKET_WHY/);
   assert.doesNotMatch(holdings, /min-h-16/);
-  assert.match(holdings, /className="private">\s*<Cell\s+top=\{h\.pnl/);
+  assert.doesNotMatch(holdings, /border-l-\[3px\]/); // no coloured side stripes
+  assert.match(holdings, /<Allocation rows=\{all\} \/>/);
 });
 
 test('overview does not stack empties when there is no headline, and drops the duplicate P&L card', () => {
@@ -63,7 +63,6 @@ test('a failed holdings load shows ErrorLine + Retry, not the empty state', () =
 
 test('holdings rows never truncate the ticker or the verdict', () => {
   assert.doesNotMatch(holdings, /font-semibold text-\[var\(--text\)\] truncate/);
-  assert.match(holdings, /minmax\(0,1\.8fr\)/);
   assert.match(holdings, /\{h\.verdict && <VerdictPill v=\{h\.verdict\} \/>\}/);
   assert.doesNotMatch(holdings, /VerdictPill[^\n]*truncate/);
 });
@@ -75,11 +74,19 @@ test('headline is a Hero with a today chip, no Today Stat', () => {
   assert.match(page, /suffix="today"/);
   assert.doesNotMatch(page, /label="Today"/);
   assert.match(page, /Yearly \(XIRR\)/);
-  assert.match(page, /grid grid-cols-2 gap-3 mt-3/);
+  assert.match(page, /grid grid-cols-2 gap-3 mt-4/);
   assert.match(page, /<span className="private">\{inr\(h\.value - h\.pnl\)\}/);
 });
 
 test('Connect link text sits on the accent fill via --accent-ink', () => {
   assert.match(page, /text-\[var\(--accent-ink\)\]/);
   assert.doesNotMatch(page, /text-\[var\(--surface\)\]/);
+});
+
+test('overview: chart first, then what drove it, the mix, movers, and the AI review folded', () => {
+  const at = ['<ValueChart', '<Drivers', '<Mix', 'Biggest movers today', '<WhyMoved'].map((x) => overview.indexOf(x, overview.indexOf('const OverviewTab')));
+  assert.ok(at.every((i) => i > 0), at.join());
+  assert.deepEqual([...at].sort((a, b) => a - b), at);
+  assert.match(overview, /driverRows\(drivers\?\.\[period\]\)/);
+  assert.match(overview, /Read the full review/);
 });

@@ -59,7 +59,7 @@ export const AiMarkdown = ({ text, className = '', collapse = true }) => {
 };
 
 /** Kept name for the cached-text cards. */
-export const AiText = ({ text, className = '' }) => <AiMarkdown text={text} className={className} />;
+export const AiText = ({ text, className = '', collapse = true }) => <AiMarkdown text={text} className={className} collapse={collapse} />;
 
 /** A Card marked as AI-written, with when it was written. */
 export const AiCard = ({ title, asOf, children, className = '' }) => (

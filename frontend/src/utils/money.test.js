@@ -29,3 +29,19 @@ test('whyLine: headline, then verdict reason, then the market fallback', () => {
   assert.equal(whyLine({}), MARKET_WHY);
   assert.equal(MARKET_WHY, 'Moved with the market');
 });
+
+import { allocation, driverRows } from './money.js';
+
+test('allocation keeps the largest weights and folds the rest into Others', () => {
+  const rows = [{ symbol: 'A', weight_pct: 50 }, { symbol: 'B', weight_pct: 30 }, { symbol: 'C', weight_pct: 15 }, { symbol: 'D', weight_pct: 5 }, { symbol: 'X' }];
+  assert.deepEqual(allocation(rows, 2), [{ label: 'A', pct: 50 }, { label: 'B', pct: 30 }, { label: '2 others', pct: 20 }]);
+  assert.deepEqual(allocation(rows.slice(0, 2), 6).map((r) => r.label), ['A', 'B']);
+});
+
+test('driverRows lists gainers then losers, scaled to the biggest', () => {
+  const r = driverRows({ top: [{ symbol: 'W', contribution: 1910 }], bottom: [{ symbol: 'M', contribution: -3982 }] });
+  assert.deepEqual(r.map((x) => x.symbol), ['W', 'M']);
+  assert.equal(r[1].share, 1);
+  assert.ok(Math.abs(r[0].share - 1910 / 3982) < 1e-9);
+  assert.deepEqual(driverRows(undefined), []);
+});

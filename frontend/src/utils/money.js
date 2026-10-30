@@ -44,3 +44,21 @@ export const whyLine = (h) => {
 /** A holding type in words. ETFs and funds are a type, never a sector. */
 export const KIND_LABEL = { STOCK: 'Stocks', ETF: 'ETFs', MF: 'Mutual funds' };
 export const kindLabel = (kind) => KIND_LABEL[kind] || kind;
+
+/** The allocation strip: the `top` largest holdings by weight, then the rest as one "Others" slice;
+ *  [{ label, pct }] in percent, largest first. Pure. */
+export const allocation = (holdings = [], top = 6) => {
+  const rows = holdings.filter((h) => typeof h.weight_pct === 'number' && h.weight_pct > 0)
+    .sort((a, b) => b.weight_pct - a.weight_pct);
+  const out = rows.slice(0, top).map((h) => ({ label: h.kind === 'MF' ? h.name || h.symbol : h.symbol, pct: h.weight_pct }));
+  const rest = rows.slice(top).reduce((s, h) => s + h.weight_pct, 0);
+  return rest > 0.05 ? [...out, { label: `${rows.length - top} others`, pct: rest }] : out;
+};
+
+/** /mine/overview `drivers[period]` as one list for diverging bars: the gainers then the losers, each with
+ *  `share` = |contribution| / the largest |contribution| (0..1). Pure. */
+export const driverRows = (d) => {
+  const rows = [...(d?.top || []), ...(d?.bottom || [])].filter((r) => typeof r.contribution === 'number');
+  const max = Math.max(1, ...rows.map((r) => Math.abs(r.contribution)));
+  return rows.map((r) => ({ ...r, share: Math.abs(r.contribution) / max }));
+};

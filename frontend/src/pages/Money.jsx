@@ -46,6 +46,7 @@ const Money = () => {
   useReconnect(load);
 
   const h = overview?.headline;
+  const xirrAhead = typeof h?.xirr === 'number' && typeof h?.nifty_xirr === 'number' ? h.xirr - h.nifty_xirr : null;
   return (
     <Layout>
       <PageHeader title="Money" />
@@ -55,14 +56,16 @@ const Money = () => {
             {holdingsStale(h.holdings_as_of) && (
               <div className="mt-3"><Badge kind="unproven">Stale · {formatDateTime(h.holdings_as_of)}</Badge></div>
             )}
-            <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="grid grid-cols-2 gap-3 mt-4 border-t border-[var(--border)] pt-3">
               <Stat label="Total P&L" value={inr(h.pnl, { sign: true })} delta={h.pnl_pct != null ? pct(h.pnl_pct / 100, { sign: true }) : '—'} tone={tone(h.pnl)} />
-              <Stat label="Yearly (XIRR)" value={formatXirr(h.xirr)} delta={`NIFTY ${formatXirr(h.nifty_xirr)}`} />
+              <Stat label="Yearly (XIRR)" value={formatXirr(h.xirr)}
+                delta={xirrAhead == null ? `NIFTY ${formatXirr(h.nifty_xirr)}` : `${xirrAhead >= 0 ? 'Ahead of' : 'Behind'} NIFTY ${formatXirr(h.nifty_xirr)}`}
+                tone={xirrAhead == null ? 'neutral' : tone(xirrAhead)} />
             </div>
-            <p className="text-[13px] text-[var(--text-muted)] mt-3">
+            <p className="text-[12px] text-[var(--text-muted)] mt-2">
               {holdingsStale(h.holdings_as_of)
                 ? 'Broker logged out: these figures are not live.'
-                : <>Put in <span className="private">{inr(h.value - h.pnl)}</span>. NIFTY: the same rupees put in on the same days.</>}
+                : <>Put in <span className="private">{inr(h.value - h.pnl)}</span> · NIFTY = the same rupees on the same days</>}
             </p>
           </Hero>
         ) : (
@@ -88,7 +91,7 @@ const Money = () => {
 
         <Tabs tabs={TABS} value={tab} onChange={setTab} label="Money sections" />
 
-        {tab === 'overview' && <OverviewTab headline={h} />}
+        {tab === 'overview' && <OverviewTab headline={h} overview={overview} />}
         {tab === 'holdings' && <HoldingsTab />}
         {tab === 'tax' && <TaxTab onImport={() => setTab('holdings')} />}
         {tab === 'journal' && <JournalTab onImport={() => setTab('holdings')} />}

@@ -7,7 +7,7 @@ import Empty from '../ui/Empty';
 import ErrorLine from '../ui/ErrorLine';
 import Skeleton from '../ui/Skeleton';
 import ListRow from '../ui/ListRow';
-import { inr, pct, compactInr } from '../ui/format';
+import { inr, pct } from '../ui/format';
 import { toneText } from '../ui/tone';
 import ImportFiles from './ImportFiles';
 import useHoldings from './useHoldings';
@@ -16,7 +16,7 @@ import OrderTicket from '../trading/OrderTicket';
 import useSymbolNews from '../../hooks/useSymbolNews';
 import { ImpactChips } from '../common/NewsImpacts';
 import api, { endpoints } from '../../utils/api';
-import { sortHoldings, whyLine, dayFraction, MARKET_WHY } from '../../utils/money';
+import { sortHoldings, whyLine, dayFraction, allocation, MARKET_WHY } from '../../utils/money';
 import { stockPath } from '../../utils/stocks';
 import { formatDateTime, formatQuantity } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
@@ -30,15 +30,16 @@ const NewsDot = ({ entry }) => {
   return d ? <span role="img" aria-label={d[1]} title={d[1]} className={`inline-block w-2 h-2 shrink-0 rounded-full ${d[0]}`} /> : null;
 };
 
-const SORTS = [['day', 'Today'], ['value', 'Value'], ['weight', 'Weight'], ['pnl', 'P&L']];
+const SORTS = [['value', 'Value'], ['day', 'Today'], ['pnl', 'P&L'], ['weight', 'Weight']];
 // Each verdict gets its own colour + icon, so Sell / Add / Hold read at a glance (icon covers colour-blind).
 const VERDICT = {
-  SELL: { label: 'Sell', Icon: ArrowDown, pill: 'bg-[var(--loss-soft)] text-[var(--loss)]', stripe: 'border-l-[var(--loss)]', on: 'bg-[var(--loss)]' },
-  ADD: { label: 'Add', Icon: Plus, pill: 'bg-[var(--gain-soft)] text-[var(--gain)]', stripe: 'border-l-[var(--gain)]', on: 'bg-[var(--gain)]' },
-  REVIEW: { label: 'Review first', Icon: AlertTriangle, pill: 'bg-[color-mix(in_oklab,var(--warn)_14%,var(--surface))] text-[var(--warn)]', stripe: 'border-l-[var(--warn)]', on: 'bg-[var(--warn)]' },
-  HOLD: { label: 'Hold', Icon: Pause, pill: 'bg-[var(--surface-2)] text-[var(--text-muted)]', stripe: 'border-l-transparent', on: 'bg-[var(--text-muted)]' },
+  SELL: { label: 'Sell', Icon: ArrowDown, pill: 'bg-[var(--loss-soft)] text-[var(--loss)]', on: 'bg-[var(--loss)]' },
+  ADD: { label: 'Add', Icon: Plus, pill: 'bg-[var(--gain-soft)] text-[var(--gain)]', on: 'bg-[var(--gain)]' },
+  REVIEW: { label: 'Review first', Icon: AlertTriangle, pill: 'bg-[color-mix(in_oklab,var(--warn)_14%,var(--surface))] text-[var(--warn)]', on: 'bg-[var(--warn)]' },
+  HOLD: { label: 'Hold', Icon: Pause, pill: 'bg-[var(--surface-2)] text-[var(--text-muted)]', on: 'bg-[var(--text-muted)]' },
+  KEEP: { label: 'Keep', Icon: Pause, pill: 'bg-[var(--surface-2)] text-[var(--text-muted)]', on: 'bg-[var(--text-muted)]' },
 };
-const VERDICT_ORDER = ['SELL', 'REVIEW', 'ADD', 'HOLD'];
+const VERDICT_ORDER = ['SELL', 'REVIEW', 'ADD', 'HOLD', 'KEEP'];
 
 const VerdictPill = ({ v }) => {
   const s = VERDICT[v];
@@ -65,62 +66,71 @@ const Chip = ({ on, onClick, children, onCls = 'bg-[var(--accent)]', offCls = 't
   </button>
 );
 
-const Cell = ({ top, sub, topCls = 'text-[var(--text)]', subCls = 'text-[var(--text-muted)]' }) => (
-  <div className="text-right tabular-nums min-w-0">
-    <div className={`text-[14px] font-medium ${topCls}`}>{top}</div>
-    <div className={`text-[12px] ${subCls}`}>{sub}</div>
-  </div>
-);
-
-// symbol+qty | LTP, today % | P&L rupees, % | weight, value
-const COLS = 'grid grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)] gap-x-2 items-center';
-
-const Head = () => (
-  <div className={`${COLS} text-[12px] text-[var(--text-muted)] pb-1 border-b border-[var(--border)]`} aria-hidden="true">
-    <span>Stock · qty</span><span className="text-right">LTP · today</span><span className="text-right">P&amp;L</span><span className="text-right">Weight</span>
-  </div>
-);
-
+/** One holding in two lines: name and value, then quantity and weight beside its gain and today's move; then its
+ *  verdict and why, and its news analysis. A fund has no stock page, so it is not a link. */
 const Row = ({ h, news }) => {
   const day = h.day_pct;
   const why = whyLine({ ...h, news });
   const mf = h.kind === 'MF';
   const body = (
     <>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-1.5 text-[15px] font-semibold text-[var(--text)] break-words">
-          <span className="min-w-0">{mf ? h.name || h.symbol : h.symbol}</span>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="min-w-0 break-words text-[15px] font-bold text-[var(--text)]">{mf ? h.name || h.symbol : h.symbol}</span>
           {!mf && <NewsDot entry={news} />}
           {!mf && newsToday(news) && <Badge kind={newsTone(news) === 'neg' ? 'alert' : 'neutral'}>News</Badge>}
+        </span>
+        <span className="private shrink-0 text-[15px] font-semibold tabular-nums text-[var(--text)]">{h.value != null ? inr(h.value) : '—'}</span>
+      </div>
+      <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[13px] tabular-nums">
+        <span className="min-w-0 truncate text-[var(--text-muted)]">
+          <span className="private">{formatQuantity(h.quantity)}</span>{h.last_price != null && <> @ {inr(h.last_price)}</>}{h.weight_pct != null && <> · <span className="private">{h.weight_pct.toFixed(1)}%</span></>}
+        </span>
+        <span className="shrink-0 whitespace-nowrap">
+          <span className={`private font-semibold ${toneText(tone(h.pnl))}`}>{h.pnl != null ? inr(h.pnl, { sign: true }) : '—'}</span>
+          {h.pnl_pct != null && <span className={toneText(tone(h.pnl))}> {pct(h.pnl_pct / 100, { sign: true, dp: 1 })}</span>}
+          {day != null && <span className="text-[var(--text-muted)]"> · today <span className={toneText(tone(day))}>{pct(day, { sign: true })}</span></span>}
+        </span>
+      </div>
+      {(h.verdict || why !== MARKET_WHY) && (
+        <div className="mt-1.5 flex items-center gap-2 min-w-0">
+          {h.verdict && <VerdictPill v={h.verdict} />}
+          {why !== MARKET_WHY && <span className="min-w-0 truncate text-[12px] text-[var(--text-muted)]">{why}</span>}
         </div>
-        <div className="text-[12px] text-[var(--text-muted)] tabular-nums truncate"><span className="private">{formatQuantity(h.quantity)}</span></div>
-        {h.verdict && <VerdictPill v={h.verdict} />}
-      </div>
-      <Cell top={h.last_price != null ? inr(h.last_price) : '—'} sub={day != null ? pct(day, { sign: true }) : '—'} subCls={toneText(tone(day))} />
-      <div className="private">
-        <Cell
-          top={h.pnl != null ? inr(h.pnl, { sign: true }) : '—'}
-          topCls={toneText(tone(h.pnl))}
-          sub={h.pnl_pct != null ? pct(h.pnl_pct / 100, { sign: true, dp: 1 }) : '—'}
-          subCls={toneText(tone(h.pnl))}
-        />
-      </div>
-      <div className="private">
-        <Cell top={h.weight_pct != null ? `${h.weight_pct.toFixed(1)}%` : '—'} sub={h.value != null ? compactInr(h.value) : '—'} />
-      </div>
-      {why !== MARKET_WHY && <div className="col-span-4 text-[12px] text-[var(--text-muted)] truncate -mt-1">{why}</div>}
-      {news?.headline && <ImpactChips impacts={news.impacts} className="col-span-4 -mt-1" />}
+      )}
+      {news?.headline && <ImpactChips impacts={news.impacts} className="mt-1" />}
     </>
   );
-  const stripe = VERDICT[h.verdict]?.stripe || 'border-l-transparent';
-  const cls = `${COLS} gap-y-1 min-h-14 py-2 pl-2 border-l-[3px] ${stripe} border-b border-b-[var(--border)] last:border-b-0`;
-  return mf ? <div className={cls}>{body}</div> : <Link to={stockPath(h.symbol)} className={`${cls} transition-colors hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{body}</Link>;
+  const cls = 'block py-3 border-b border-[var(--border)] last:border-b-0';
+  return mf ? <div className={cls}>{body}</div> : <Link to={stockPath(h.symbol)} className={`${cls} tap -mx-2 px-2 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{body}</Link>;
+};
+
+/** Where the money sits: the largest holdings as one stacked bar, with a legend. */
+const Allocation = ({ rows }) => {
+  const parts = allocation(rows);
+  if (parts.length < 2) return null;
+  const color = (i, last) => (last && parts.length > 6 ? 'var(--surface-2)' : `var(--chart-${(i % 6) + 1})`);
+  return (
+    <div className="mb-4">
+      <div className="flex h-3 gap-0.5 overflow-hidden rounded-full" role="img" aria-label={parts.map((p) => `${p.label} ${p.pct.toFixed(0)}%`).join(', ')}>
+        {parts.map((p, i) => <span key={p.label} style={{ width: `${p.pct}%`, background: color(i, i === parts.length - 1) }} />)}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12px] tabular-nums text-[var(--text-muted)]">
+        {parts.map((p, i) => (
+          <span key={p.label} className="inline-flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ background: color(i, i === parts.length - 1) }} aria-hidden="true" />
+            <span className="max-w-[9rem] truncate">{p.label}</span> <span className="private">{p.pct.toFixed(0)}%</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 const HoldingsTab = () => {
   const [params, setParams] = useSearchParams();
   const { snapshot, loading, error, reload } = useHoldings({ poll: true });
-  const [sort, setSort] = useState('day');
+  const [sort, setSort] = useState('value');
   const [ticket, setTicket] = useState(null);
   const [importing, setImporting] = useState(false);
   const [reading, setReading] = useState(null);
@@ -177,30 +187,35 @@ const HoldingsTab = () => {
           />
         ) : (
           <>
-            <p className="text-[13px] text-[var(--text-muted)] mb-2">
+            <p className="text-[13px] text-[var(--text-muted)] mb-3">
               {asOf ? `Holdings as of ${formatDateTime(asOf)}. Broker logged out: priced from market quotes.` : `${all.length} holdings · ${formatDateTime(snapshot.at)}`}
             </p>
-            <div className="flex gap-2 mb-2 overflow-x-auto" role="group" aria-label="Sort by">
-              {SORTS.map(([id, label]) => <Chip key={id} on={sort === id} onClick={() => setSort(id)}>{label}</Chip>)}
-              <Chip on={needsOnly} onClick={() => setNeedsOnly((v) => !v)}>Needs you</Chip>
-              <Chip on={newsOnly} onClick={() => setNewsOnly((v) => !v)}>Has news</Chip>
-            </div>
-            {Object.keys(counts).length > 0 && (
-              <div className="flex gap-2 mb-2 overflow-x-auto" role="group" aria-label="Show verdict">
+            <Allocation rows={all} />
+            <div className="mb-2 flex items-center gap-2">
+              <label className="shrink-0 inline-flex items-center gap-1.5 text-[13px] text-[var(--text-muted)]">
+                Sort
+                <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort holdings by"
+                  className="min-h-11 rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 text-[14px] font-medium text-[var(--text)]">
+                  {SORTS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                </select>
+              </label>
+              <div className="-mr-4 flex min-w-0 flex-1 gap-2 overflow-x-auto pr-4" role="group" aria-label="Show">
+                <Chip on={needsOnly} onClick={() => setNeedsOnly((v) => !v)}>Needs you</Chip>
+                <Chip on={newsOnly} onClick={() => setNewsOnly((v) => !v)}>Has news</Chip>
                 {VERDICT_ORDER.filter((v) => counts[v]).map((v) => {
                   const { label, Icon, on, pill } = VERDICT[v];
                   return (
                     <Chip key={v} on={verdict === v} onCls={on} offCls={pill.split(' ')[1]} onClick={() => setVerdict((cur) => (cur === v ? null : v))}>
-                      <span className="inline-flex items-center gap-1"><Icon className="w-3.5 h-3.5" aria-hidden="true" />{label} · {counts[v]}</span>
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap"><Icon className="w-3.5 h-3.5" aria-hidden="true" />{label} · {counts[v]}</span>
                     </Chip>
                   );
                 })}
               </div>
-            )}
+            </div>
             {rows.length === 0 ? (
               <Empty title="Nothing matches" body="Clear the filter to see the rest." />
             ) : (
-              <div><Head />{rows.map((h) => <Row key={h.isin || h.symbol} h={h} news={news?.[h.symbol]} />)}</div>
+              <div>{rows.map((h) => <Row key={h.isin || h.symbol} h={h} news={news?.[h.symbol]} />)}</div>
             )}
           </>
         )}
