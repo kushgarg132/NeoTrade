@@ -85,7 +85,7 @@ mount only; `.fade-in` 150 ms on tab panels. All off under `prefers-reduced-moti
 
 - Every data section: Skeleton while loading, a one-line error with Retry, an Empty that offers the action
   that fills it. One failing section never blanks a page.
-- Money the user owns carries the `private` class so the header's hide-amounts toggle blurs it.
+- Money the user owns carries the `private` class so the header's hide-amounts toggle masks it with a fixed `••••`.
 - Navigation: five tabs (Home, Money, Ideas, AI, Market) as a bottom bar on phones and a left rail on desktop;
   the header holds search, market dot, privacy, theme and profile/settings; on phones the theme button is hidden and
   theme is set in Settings.

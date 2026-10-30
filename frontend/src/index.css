@@ -441,15 +441,28 @@ body::before {
 }
 
 /* Hide amounts (hooks/usePrivacy.js): every figure in the user's own money
-   regions is blurred past reading, for when someone can see the screen.
+   regions is masked with a fixed "••••" (a blur looked smudgy and still hinted
+   at the digits), for when someone can see the screen. The real text goes
+   transparent so the layout keeps its width; the dots sit on top.
    `.private` is either a region (blur its .figure-* and nested .private) or,
    holding neither, an amount line that blurs whole. It used to match only
    .figure-* nested inside .private, so `private figure-md` on one element
    (every tile, Stat, ListRow) was never blurred. */
 html[data-private="on"] :is(.private .figure-md, .private .figure-lg, .private.figure-md, .private.figure-lg,
                             .private:not(:has(.figure-md, .figure-lg, .private))) {
-  filter: blur(0.4em);
+  position: relative;
+  color: transparent;
   user-select: none;
+  & * { color: transparent; }
+  &::after {
+    content: '••••';
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+  }
 }
 
 /* Whose money a number is: the user's own (Mine), the AI account's (AI), practice (Paper). */
