@@ -14,3 +14,8 @@ export const tabsFor = (isAdmin) => MAIN_TABS.filter((t) => isAdmin || t.path !=
 
 export const tabActive = (item, pathname) =>
   item.path === '/' ? pathname === '/' : pathname === item.path || pathname.startsWith(`${item.path}/`) || (item.path === '/market' && pathname.startsWith('/news/'));
+
+/** The main section a path belongs to, for its colour (index.css `[data-section]`): the active tab's, else
+ *  Home's (stock pages, settings and the rest open from anywhere). */
+export const sectionOf = (pathname) =>
+  (MAIN_TABS.find((t) => tabActive(t, pathname))?.label || 'Home').toLowerCase();

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { X } from 'lucide-react';
 import SideRail from './layout/SideRail';
 import BottomTabs from './layout/BottomTabs';
+import { sectionOf } from './layout/tabs';
 import Header from './layout/Header';
 import ErrorBoundary from './ErrorBoundary';
 import api, { endpoints } from '../utils/api';
@@ -17,6 +18,14 @@ import { PendingContext } from '../context/pendingContext';
  */
 const Layout = ({ children }) => {
   const pending = useNeedCount().count; // the one "needs you" number, shared with Home
+
+  // Each section's colour (index.css `[data-section]`), on <html> so the theme class and it meet.
+  const { pathname } = useLocation();
+  const section = sectionOf(pathname);
+  useEffect(() => {
+    document.documentElement.dataset.section = section;
+    return () => { delete document.documentElement.dataset.section; }; // Login and the rest: the base accent
+  }, [section]);
 
   // The nav badge: what needs the user outside practice (GET /today/attention).
   const [attention, setAttention] = useState(0);

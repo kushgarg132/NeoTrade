@@ -137,6 +137,30 @@
     --heat-neg-3: color-mix(in oklab, var(--loss) 50%, var(--surface));
   }
 
+  /* A hue per main section (layout/tabs.js::sectionOf, set on <html> by Layout): the accent, its soft fill
+     and the hero glow follow it. Gain/loss stay green/red everywhere; neutrals stay gray. The dark rules
+     come after the light ones: both match <html>, at the same specificity. */
+  :root[data-section="home"] { --accent: #1d4ed8; --accent-ink: #ffffff; }
+  :root[data-section="money"] { --accent: #b45309; --accent-ink: #ffffff; }
+  :root[data-section="ideas"] { --accent: #6d28d9; --accent-ink: #ffffff; }
+  :root[data-section="ai"] { --accent: #0e7490; --accent-ink: #ffffff; }
+  :root[data-section="market"] { --accent: #be185d; --accent-ink: #ffffff; }
+  :root[data-section] {
+    --accent-soft: color-mix(in oklab, var(--accent) 14%, var(--surface));
+    --glow: radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, var(--accent) 24%, var(--surface)) 0%,
+      color-mix(in oklab, var(--accent) 8%, var(--surface)) 55%, var(--surface) 100%);
+  }
+  .dark[data-section="home"] { --accent: #60a5fa; --accent-ink: #04122b; }
+  .dark[data-section="money"] { --accent: #fbbf24; --accent-ink: #1f1300; }
+  .dark[data-section="ideas"] { --accent: #a78bfa; --accent-ink: #160b33; }
+  .dark[data-section="ai"] { --accent: #22d3ee; --accent-ink: #032027; }
+  .dark[data-section="market"] { --accent: #f472b6; --accent-ink: #2b0717; }
+  .dark[data-section] {
+    --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
+    --glow: radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, var(--accent) 34%, var(--bg)) 0%,
+      color-mix(in oklab, var(--accent) 12%, var(--bg)) 55%, var(--bg) 100%);
+  }
+
   * {
     border-color: var(--rule);
   }

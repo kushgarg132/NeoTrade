@@ -25,6 +25,21 @@ Theme default is dark; a stored `light`/`dark` choice wins (the OS setting is ig
 | `--chart-1`…`--chart-6` | #3987e5 #d95926 #199e70 #c98500 #d55181 #008300 | #2a78d6 #eb6834 #1baf7a #eda100 #e87ba4 #008300 | chart series, in this order, never cycled (dataviz-validated) |
 | `--heat-neg-3`…`--heat-0`…`--heat-pos-3` | `--loss` / `--gain` mixed 22/36/50% into `--surface`; 0 = `--surface-2` | same, at 22/48/65% | heatmap cells by % change (`heatColor`) |
 
+Section colours (owner, 2026-10-30): `--accent`, `--accent-ink`, `--accent-soft` and `--glow` follow the main
+section, set as `data-section` on `<html>` by `Layout` from `layout/tabs.js::sectionOf` (no active tab = home):
+
+| section | dark accent / ink | light accent / ink |
+|---|---|---|
+| home | #60a5fa / #04122b | #1d4ed8 / #ffffff |
+| money | #fbbf24 / #1f1300 | #b45309 / #ffffff |
+| ideas | #a78bfa / #160b33 | #6d28d9 / #ffffff |
+| ai | #22d3ee / #032027 | #0e7490 / #ffffff |
+| market | #f472b6 / #2b0717 | #be185d / #ffffff |
+
+`--accent-soft` is the accent mixed into `--surface` (18% dark, 14% light); `--glow` a radial of the accent into
+`--bg` (dark) / `--surface` (light). The green `--accent` above is the base, for pages outside `Layout` (Login).
+`theme.test.js` checks ink on each accent and each accent on bg/surface at >= 4.5:1.
+
 Rules: neutrals (bg, surfaces, border, text) are true grays with no green cast (owner, 2026-10-30; `theme.test.js` checks it);
 green is for `--accent`, gain and badges. `--accent` never colours a number; numbers use `--gain`/`--loss`/`--text`, and every gain or loss carries
 a sign or ▲/▼. No raw hex in components: tokens only. A contrast test (`src/theme.test.js`) covers both themes.

@@ -60,3 +60,14 @@ test('font, theme default, motion', () => {
   assert.match(css, /\.tap\s*\{/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });
+
+test('each section accent: ink on it and it on the surface read (>= 4.5)', () => {
+  const rules = [...css.matchAll(/(:root|\.dark)\[data-section="(\w+)"\] \{ --accent: (#[0-9a-f]{6}); --accent-ink: (#[0-9a-f]{6}); \}/g)];
+  assert.equal(rules.length, 10);
+  for (const [, scope, section, accent, ink] of rules) {
+    const t = scope === '.dark' ? themes.dark : themes.light;
+    assert.ok(ratio(ink, accent) >= 4.5, `${scope} ${section} ink: ${ratio(ink, accent).toFixed(2)}`);
+    for (const bg of ['bg', 'surface'])
+      assert.ok(ratio(accent, t[bg]) >= 4.5, `${scope} ${section} on ${bg}: ${ratio(accent, t[bg]).toFixed(2)}`);
+  }
+});
