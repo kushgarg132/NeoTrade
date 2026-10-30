@@ -47,7 +47,8 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
 
     today = now.astimezone(IST).date()
     trades = [t for t in await mine_trades(db, user_id) if t["symbol"] == symbol]
-    mine = brokers_for((await PrefsStore(db).get(user_id)).get("broker_roles") or {}, "mine")
+    prefs = await PrefsStore(db).get(user_id)
+    mine = brokers_for(prefs.get("broker_roles") or {}, "mine")
     snap = await service.latest_snapshot(db, user_id) or {}
     raw = [h for h in snap.get("raw_holdings") or []
            if h["symbol"] == symbol and h.get("kind", "STOCK") != "MF" and (not mine or h.get("broker") in mine)]
@@ -94,7 +95,13 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
         "lots": lot_rows, "unknown_qty": unknown,
         "thesis": await ThesisStore(db).get(user_id, symbol) or {},
         "verdict": {"current": row.get("verdict"), "reasons": row.get("reason_codes") or [],
-                    "note": row.get("note"), "history": hist},
+                    "note": row.get("note"), "history": hist, "since": row.get("verdict_since"),
+                    # The figures the rules read (portfolio/rules.py) and the limits they compare against.
+                    "facts": {**{k: row.get(k) for k in ("pnl_pct", "weight_pct", "nifty_pnl_pct", "first_bought")},
+                              **((row.get("health") or {}).get("trend") or {}),
+                              **((row.get("health") or {}).get("fundamentals") or {})} if row else {},
+                    "limits": {"max_loss_pct": prefs.get("portfolio_max_loss_pct"),
+                               "max_weight_pct": prefs.get("portfolio_max_weight_pct")}},
         "events": await events.upcoming(db, [symbol], today, EVENT_DAYS),
         "dividends": divs,
         "news": await _news(db, symbol),

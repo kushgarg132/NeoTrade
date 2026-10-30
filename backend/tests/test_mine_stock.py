@@ -157,3 +157,17 @@ def test_held_without_a_price_has_unknown_pnl_not_realised(setup):
     seed("portfolio_snapshots", [_held(5, 100, None)])
     body = client.get("/api/v1/mine/stock/INFY").json()["position"]
     assert body["value"] is None and body["pnl"] is None and body["pnl_pct"] is None
+
+
+def test_verdict_carries_its_facts_limits_and_since(setup):
+    client, seed, _ = setup
+    seed("journal_trades", [_trade("BUY", 1, 100, 5)])
+    snap = _snap(0, "SELL")
+    snap["holdings"][0].update({"verdict_since": "2026-10-21", "pnl_pct": -31.0, "weight_pct": 3.3, "nifty_pnl_pct": -8.7,
+                                "health": {"trend": {"sma_200": 522.6, "below_high_pct": 47.0},
+                                           "fundamentals": {"pe": 34.1, "debt_to_equity": 0.03}}})
+    seed("portfolio_snapshots", [snap])
+    v = client.get("/api/v1/mine/stock/INFY").json()["verdict"]
+    assert v["since"] == "2026-10-21"
+    assert v["facts"]["pnl_pct"] == -31.0 and v["facts"]["sma_200"] == 522.6 and v["facts"]["pe"] == 34.1
+    assert v["limits"] == {"max_loss_pct": 25.0, "max_weight_pct": 20.0}
