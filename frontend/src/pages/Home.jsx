@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Tile from '../components/ui/Tile';
 import Skeleton from '../components/ui/Skeleton';
+import Card from '../components/ui/Card';
 import ErrorLine from '../components/ui/ErrorLine';
 import Badge from '../components/ui/Badge';
 import HeroRow from '../components/home/HeroRow';
@@ -17,7 +18,7 @@ import { useReconnect, useRefetchOn } from '../hooks/useStream';
 import { useAuth } from '../context/AuthContext';
 import { useNeedCount } from '../hooks/useNeedCount';
 import { aiBook } from '../utils/ai';
-import { tileHeadlines, phaseLabel, briefKind, alerts } from '../utils/home';
+import { tileHeadlines, phaseLabel, briefKind, alerts, todayTitle } from '../utils/home';
 import { REFRESH_FAILED } from '../utils/formatters';
 
 /** An expired-login alert goes straight to that broker's login, in this tab: iOS blocks a pop-up opened
@@ -38,7 +39,7 @@ const Home = () => {
   const [indices, setIndices] = useState(null);
   const [pnl, setPnl] = useState(null);
   const [card, setCard] = useState(null);
-  const [day, setDay] = useState(null);
+  const [day, setDay] = useState(undefined); // undefined until the AI day summary has answered (null = none)
   const [error, setError] = useState(null);
   const [failed, setFailed] = useState({}); // tile -> its last refresh failed
   const need = useNeedCount();
@@ -55,7 +56,7 @@ const Home = () => {
     track('ai', api.get(endpoints.analytics.pnl('paper')), setPnl);
     track('ai', api.get(endpoints.analytics.scorecard('paper')), setCard);
     track('market', api.get(endpoints.marketIndices), setIndices);
-    api.get(endpoints.summaries.day).then((r) => setDay(r.data.summary)).catch(() => {}); // the digest below stands in
+    api.get(endpoints.summaries.day).then((r) => setDay(r.data.summary ?? null)).catch(() => setDay((d) => d ?? null)); // the digest stands in
     reloadNeed();
   }, [reloadNeed]);
   useEffect(() => {
@@ -100,7 +101,10 @@ const Home = () => {
           </Link>
         ))}
         <SetupChecklist setup={today.setup} />
-        <TodayCard moves={(overview?.headline || today.pulse)?.news_moves} kind={kind} text={kind ? today[kind] : undefined} summary={day} />
+        {/* Its moves and lines come from three answers; drawn once they are all in, not swapped a second later. */}
+        {day !== undefined && (overview || failed.money)
+          ? <TodayCard moves={(overview?.headline || today.pulse)?.news_moves} kind={kind} text={kind ? today[kind] : undefined} summary={day} />
+          : <Card title={todayTitle(kind)}><Skeleton rows={3} /></Card>}
         <div className="grid grid-cols-2 gap-3">
           <Tile title={<>AI <Badge kind={today.autopilot?.live ? 'live' : 'paper'}>{today.autopilot?.live ? 'Live' : 'Paper'}</Badge></>} icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.value === '—' ? 'Start the AI account' : h.ai.sub} tone={h.ai.tone} subTone={h.ai.subTone} meta={meta('ai', null)} />
           <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} meta={meta('market', h.market.meta)} />

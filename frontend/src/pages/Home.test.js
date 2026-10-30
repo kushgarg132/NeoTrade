@@ -73,3 +73,9 @@ test('needs pill and alerts: tap, accent ink, soft loss fill, role and login kep
   assert.doesNotMatch(page, /border-\[var\(--loss\)\]/);
   assert.match(page, /text-\[var\(--loss\)\] tap/);
 });
+
+test('the Today card draws once its three sources are in, not swapped a second later', () => {
+  assert.match(page, /useState\(undefined\); \/\/ undefined until the AI day summary has answered/);
+  assert.match(page, /day !== undefined && \(overview \|\| failed\.money\)/);
+  assert.match(page, /setDay\(\(d\) => d \?\? null\)/); // a failed summary still lets the digest show
+});
