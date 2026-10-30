@@ -45,7 +45,11 @@ const NewsMark = ({ cx, cy, m, onPick }) => {
  * `thesis` draws target / stop lines. 1D swaps in the latest session's 5-minute candles. `initialRange`
  * defaults to today (1D); a trade page passes a longer one so its fills are on screen.
  */
-const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initialRange = '1D' }) => {
+const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initialRange = '1D', intradayUrl, newsUrl }) => {
+  // An index charts in points, with its own intraday feed (rows carry `t`) and no per-symbol news markers.
+  const fmt = (v) => (currency === 'pts' ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : formatCurrency(v, currency));
+  const newsFrom = newsUrl === undefined ? (symbol && endpoints.newsHistory(symbol)) : newsUrl;
+  const dayFrom = intradayUrl || (symbol && endpoints.intraday(symbol));
   const [range, setRange] = useState(initialRange);
   const [loaded, setLoaded] = useState(null); // keyed by symbol so another stock's candles never show
   const isDay = range === '1D';
@@ -56,18 +60,19 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
 
   useEffect(() => {
     if (!symbol) return undefined;
+    if (!newsFrom) return undefined; // no markers: `news` stays null, so none are drawn
     let gone = false;
-    api.get(endpoints.newsHistory(symbol))
+    api.get(newsFrom)
       .then((res) => !gone && setNews({ symbol, items: res.data.items || [] }))
       .catch(() => !gone && setNews({ symbol, items: [] })); // markers are extra: the chart works without them
     return () => { gone = true; };
-  }, [symbol]);
+  }, [symbol, newsFrom]);
 
   useEffect(() => {
-    if (!isDay || !symbol) return undefined;
+    if (!isDay || !symbol || !dayFrom) return undefined;
     let gone = false;
     const load = () =>
-      api.get(endpoints.intraday(symbol))
+      api.get(dayFrom)
         .then((res) => !gone && setLoaded({ symbol, rows: res.data }))
         .catch(() => !gone && setLoaded({ symbol, rows: [] }));
     load();
@@ -76,10 +81,10 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
       gone = true;
       clearInterval(timer);
     };
-  }, [isDay, symbol]);
+  }, [isDay, symbol, dayFrom]);
 
   const data = useMemo(() => {
-    if (isDay) return (intraday || []).map((r) => ({ date: formatClock(r.timestamp), close: Number(r.close) }));
+    if (isDay) return (intraday || []).map((r) => ({ date: formatClock(r.timestamp ?? r.t), close: Number(r.close) }));
     return (closes || []).slice(-RANGES.find(([k]) => k === range)[1]);
   }, [closes, range, isDay, intraday]);
 
@@ -99,8 +104,8 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
   const pick = (date) => setPicked((p) => (p?.symbol === symbol && p.date === date ? null : { symbol, date }));
 
   const lines = [
-    thesis?.target != null && { y: thesis.target, color: 'var(--gain)', name: 'Target', amount: formatCurrency(thesis.target, currency) },
-    thesis?.stop != null && { y: thesis.stop, color: 'var(--loss)', name: 'Stop', amount: formatCurrency(thesis.stop, currency) },
+    thesis?.target != null && { y: thesis.target, color: 'var(--gain)', name: 'Target', amount: fmt(thesis.target) },
+    thesis?.stop != null && { y: thesis.stop, color: 'var(--loss)', name: 'Stop', amount: fmt(thesis.stop) },
   ].filter(Boolean);
   const first = data[0]?.close;
   const last = data.at(-1)?.close;
@@ -128,14 +133,14 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
           {isDay && intraday === null ? 'Loading…' : 'No price history for this range.'}
         </div>
       ) : (
-        <div className="h-56 sm:h-72" role="img" aria-label={`Price, last ${formatCurrency(last, currency)}, ${dots.length} of your trades and ${newsDots.length} news days marked`}>
+        <div className="h-56 sm:h-72" role="img" aria-label={`Price, last ${fmt(last)}, ${dots.length} of your trades and ${newsDots.length} news days marked`}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid {...GRID} />
               <XAxis dataKey="date" tickFormatter={isDay ? undefined : short} {...AXIS} minTickGap={48} />
               <YAxis {...AXIS} width={52} axisLine={false} domain={['auto', 'auto']} tickFormatter={(v) => Math.round(v).toLocaleString('en-IN')} />
               <Tooltip
-                formatter={(v) => [formatCurrency(v, currency), 'Price']}
+                formatter={(v) => [fmt(v), currency === 'pts' ? 'Level' : 'Price']}
                 labelFormatter={isDay ? undefined : short}
                 contentStyle={TOOLTIP_STYLE}
               />

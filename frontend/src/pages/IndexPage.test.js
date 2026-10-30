@@ -11,8 +11,12 @@ test('level shows on the Hero, not a Stat', () => {
   assert.doesNotMatch(src, /label="Level"/);
 });
 
-test('other stats and the close line stay', () => {
-  for (const s of ['52-week range', '50-day average', '200-day average', '<CloseLine']) assert.ok(src.includes(s), s);
+test('laid out like a stock: Chart (the stock TradingChart, intraday to 5Y), News and Details tabs', () => {
+  for (const s of ['52-week high', '52-week low', '50-day average', '200-day average', '1 year', '5 years']) assert.ok(src.includes(s), s);
+  assert.match(src, /<TradingChart closes=\{data\.points\} symbol=\{ticker\} currency="pts" intradayUrl=\{endpoints\.marketIndexIntraday\(ticker\)\} newsUrl=\{null\} \/>/);
+  assert.match(src, /const TABS = \[\{ id: 'chart'[^\n]*'news'[^\n]*'details'/);
+  assert.match(src, /<IndexNews ticker=\{ticker\} \/>/);
+  assert.doesNotMatch(src, /CloseLine/);
 });
 
 test('why it moved streams over the socket, HTTP only as fallback', () => {
@@ -28,6 +32,8 @@ test('opening shows only the stored explanation; Generate writes one', () => {
   assert.match(src, /run\.ticker === ticker \? run\.n : 0/);
 });
 
-test('the explanation sits under the chart', () => {
-  assert.ok(src.indexOf('<CloseLine points') < src.indexOf('<Why ticker'));
+test('the explanation sits where a stock AI read does: under the hero, above the tabs', () => {
+  const at = ['<Hero label={data.name}', '<Why ticker', '<Tabs tabs={TABS}'].map((x) => src.indexOf(x, src.indexOf('const IndexPage')));
+  assert.ok(at.every((i) => i > 0), at.join());
+  assert.deepEqual([...at].sort((a, b) => a - b), at);
 });

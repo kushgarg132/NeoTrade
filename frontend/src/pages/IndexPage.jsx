@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ImpactChips, NewsLink } from '../components/common/NewsImpacts';
 import { useParams, Link } from 'react-router-dom';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
@@ -10,31 +9,22 @@ import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
 import Hero from '../components/ui/Hero';
 import DeltaChip from '../components/ui/DeltaChip';
-import Stat from '../components/ui/Stat';
 import Button from '../components/ui/Button';
 import { AiCard, AiText } from '../components/ai/AiSummary';
 import useStored from '../hooks/useStored';
 import api, { endpoints } from '../utils/api';
 import { stream } from '../lib/ws';
-import { points } from '../components/ui/format';
-import { AXIS, GRID, SERIES, TOOLTIP_STYLE } from '../components/ui/chartTheme';
+import { pct, points, tone } from '../components/ui/format';
+import { toneText } from '../components/ui/tone';
+import Tabs, { useTabParam } from '../components/ui/Tabs';
+import ListRow from '../components/ui/ListRow';
+import TradingChart from '../components/stock/TradingChart';
+import { newsPath } from '../utils/routes';
+import { formatTimeAgo, marketPhase } from '../utils/formatters';
+import { rangeAt } from '../utils/market';
+import { sourceName } from '../utils/newsItem';
 
 const num = (n) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-
-/** A year of closes as one line. */
-const CloseLine = ({ points }) => (
-  <div role="img" aria-label="Closing level over the past year" className="h-40">
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-        <CartesianGrid {...GRID} />
-        <XAxis dataKey="date" {...AXIS} minTickGap={48} tickFormatter={(d) => new Date(d).toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' })} />
-        <YAxis {...AXIS} width={48} domain={['auto', 'auto']} tickFormatter={(v) => num(v)} />
-        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [num(v), 'Close']} />
-        <Line type="monotone" dataKey="close" stroke={SERIES[0]} strokeWidth={1.5} dot={false} isAnimationActive={false} />
-      </LineChart>
-    </ResponsiveContainer>
-  </div>
-);
 
 /** On open only the stored story (`?cached=true`, no model call; 404 = none yet: status `none`). `generate`
  *  writes one: the socket streams it as it is written; HTTP is the fallback when there is no socket. */
@@ -106,31 +96,108 @@ const Why = ({ ticker }) => {
   );
 };
 
+const TABS = [{ id: 'chart', label: 'Chart' }, { id: 'news', label: 'News' }, { id: 'details', label: 'Details' }];
+// Indian indices read the market news; the rest the global feed.
+const scopeOf = (ticker) => (/^\^(NSE|BSE|CNX)|INDIA/.test(ticker) ? 'MARKET' : 'GLOBAL');
+
+/** The news that moves this index: the market (or global) feed, newest first, each with its analysis. */
+const IndexNews = ({ ticker }) => {
+  const [s, setS] = useState({ ticker: null, items: null, error: false });
+  useEffect(() => {
+    let live = true;
+    api.get(endpoints.newsFeed, { params: { scope: scopeOf(ticker), limit: 20 } })
+      .then((r) => live && setS({ ticker, items: r.data.items || [], error: false }))
+      .catch(() => live && setS({ ticker, items: null, error: true }));
+    return () => { live = false; };
+  }, [ticker]);
+  const mine = s.ticker === ticker ? s : { items: null, error: false };
+  if (mine.error) return <Card><ErrorLine message="Could not load the news." onRetry={() => setS({ ticker: null, items: null, error: false })} /></Card>;
+  if (!mine.items) return <Card><Skeleton rows={5} /></Card>;
+  if (!mine.items.length) return <Card><Empty title="No market news yet" body="Scored market stories appear here as the news desk reads them." action={<Link to="/market?tab=news" className="text-[var(--accent)]">Open News</Link>} /></Card>;
+  return (
+    <Card>
+      {mine.items.map((n) => (
+        <ListRow privateValue={false} key={n.id} title={n.title} to={newsPath(n.id)}
+          sub={[sourceName(n.source), formatTimeAgo(n.published_at)].filter(Boolean).join(' · ')}
+          extra={<ImpactChips impacts={n.impacts} material={n.material} />} />
+      ))}
+    </Card>
+  );
+};
+
+/** A public figure (an index level is nobody's money): not masked by hide-amounts, unlike ui/Stat. */
+const Stat = ({ label, value, delta }) => (
+  <div className="min-w-0">
+    <div className="text-[13px] text-[var(--text-muted)]">{label}</div>
+    <div className="text-[17px] font-semibold tabular-nums text-[var(--text)] truncate">{value}</div>
+    {delta != null && <div className="text-[13px] tabular-nums">{delta}</div>}
+  </div>
+);
+
+const ret = (pts, n) => (pts?.length > n ? pts[pts.length - 1].close / pts[pts.length - 1 - n].close - 1 : null);
+
+/** The figures a reader checks: the averages and where the level sits against them, and the returns. */
+const Details = ({ data }) => {
+  const vs = (avg) => (avg ? data.value / avg - 1 : null);
+  const line = (v) => (v == null ? null : <span className={toneText(tone(v))}>{pct(v, { sign: true, dp: 1 })}</span>);
+  return (
+    <Card>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-3">
+        <Stat label="52-week high" value={num(data.high_52w)} delta={line(data.high_52w ? data.value / data.high_52w - 1 : null)} />
+        <Stat label="52-week low" value={num(data.low_52w)} delta={line(data.low_52w ? data.value / data.low_52w - 1 : null)} />
+        <Stat label="50-day average" value={data.sma_50 == null ? 'n/a' : num(data.sma_50)} delta={line(vs(data.sma_50))} />
+        <Stat label="200-day average" value={data.sma_200 == null ? 'n/a' : num(data.sma_200)} delta={line(vs(data.sma_200))} />
+        <Stat label="1 year" value={line(ret(data.points, 252)) || 'n/a'} />
+        <Stat label="5 years" value={line(ret(data.points, 1255)) || 'n/a'} />
+      </div>
+      <p className="mt-3 text-[12px] text-[var(--text-muted)]">Figures under each: where today's level sits against it.</p>
+    </Card>
+  );
+};
+
+/** /market/index/:ticker, laid out as a stock page: the level and its day on top with the 52-week range, the AI's
+ *  read of the last session, then Chart (1D intraday to 5Y), News and Details. Nothing to buy: an index. */
 const IndexPage = () => {
   const { ticker } = useParams();
   const { data, status, retry } = useStored(endpoints.marketIndex(ticker));
+  const [tab, setTab] = useTabParam(TABS.map((t) => t.id), 'chart');
+  const at = data ? rangeAt(data.value, data.low_52w, data.high_52w) : null;
   return (
     <Layout>
       <PageHeader title={data?.name || 'Index'} back="/market" backLabel="Market" />
-      {status === 'loading' && <Skeleton rows={6} />}
+      {status === 'loading' && <Card className="mb-3"><Skeleton rows={2} /></Card>}
       {status === 'empty' && <Empty title="Not found" body="This index is not tracked." action={<Link to="/market" className="text-[var(--accent)]">Back to Market</Link>} />}
-      {status === 'error' && <ErrorLine message="Could not load this index." onRetry={retry} />}
+      {status === 'error' && <Card className="mb-3"><ErrorLine message="Could not load this index." onRetry={retry} /></Card>}
       {status === 'ok' && (
-        <div className="space-y-3">
+        <div className="mb-3">
           <Hero label={data.name} value={data.value} format={points} privateValue={false}
-            change={<DeltaChip value={data.change} pct={data.percent} format={points} privateValue={false} />} />
-          <Card>
-            <div className="grid grid-cols-2 gap-3">
-              <Stat label="52-week range" value={`${num(data.low_52w)} - ${num(data.high_52w)}`} />
-              <Stat label="50-day average" value={data.sma_50 == null ? 'n/a' : num(data.sma_50)} />
-              <Stat label="200-day average" value={data.sma_200 == null ? 'n/a' : num(data.sma_200)} />
-            </div>
-            {data.points?.length > 1 && <div className="mt-3"><CloseLine points={data.points} /></div>}
-          </Card>
+            change={<DeltaChip value={data.change} pct={data.percent} format={points} privateValue={false} suffix={marketPhase() === 'open' ? 'today' : 'last session'} />}>
+            {at != null && (
+              <div className="mt-4 flex items-center gap-2 text-[12px] tabular-nums text-[var(--text-muted)]" role="img"
+                aria-label={`52-week range ${num(data.low_52w)} to ${num(data.high_52w)}, now ${Math.round(at * 100)}% of the way up`}>
+                <span className="shrink-0">52w {num(data.low_52w)}</span>
+                <span className="relative h-1 flex-1 rounded-full bg-[var(--surface-2)]">
+                  <span className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--surface)] bg-[var(--text)]" style={{ left: `${at * 100}%` }} />
+                </span>
+                <span className="shrink-0">{num(data.high_52w)}</span>
+              </div>
+            )}
+          </Hero>
         </div>
       )}
-      {/* Under the chart, on its own read: it shows even while the price data loads or fails. */}
-      {status !== 'empty' && <div className="mt-3"><Why ticker={ticker} /></div>}
+      {status !== 'empty' && <div className="mb-3"><Why ticker={ticker} /></div>}
+      {status === 'ok' && (
+        <>
+          <Tabs tabs={TABS} value={tab} onChange={setTab} label="Index sections" />
+          <div className="mt-3">
+            {tab === 'chart' && (data.points?.length > 1
+              ? <Card><TradingChart closes={data.points} symbol={ticker} currency="pts" intradayUrl={endpoints.marketIndexIntraday(ticker)} newsUrl={null} /></Card>
+              : <Empty title="No price data" body={`Could not load the history for ${data.name}.`} action={<Button variant="secondary" onClick={retry}>Retry</Button>} />)}
+            {tab === 'news' && <IndexNews ticker={ticker} />}
+            {tab === 'details' && <Details data={data} />}
+          </div>
+        </>
+      )}
     </Layout>
   );
 };
