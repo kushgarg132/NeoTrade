@@ -215,15 +215,18 @@ const BrokerSheet = () => {
     }
   };
 
+  // One row of three on a phone too: the picker spans the card, not the header beside the title.
   const brokerPicker = (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="grid grid-cols-3 gap-1.5 mb-4" role="radiogroup" aria-label="Broker">
       {Object.keys(BROKER_LABEL).map((key) => (
         <button
           key={key}
           type="button"
+          role="radio"
+          aria-checked={key === broker}
           onClick={() => setBroker(key)}
           className={cn(
-            'min-h-11 px-3 rounded-full border text-[14px] font-semibold',
+            'min-h-11 px-1 rounded-full border text-[13px] font-semibold whitespace-nowrap truncate',
             key === broker
               ? 'border-transparent bg-[var(--accent-soft)] text-[var(--accent)]'
               : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)]',
@@ -237,7 +240,8 @@ const BrokerSheet = () => {
 
   if (!state) {
     return (
-      <Sheet title="Broker" actions={brokerPicker}>
+      <Sheet title="Broker">
+        {brokerPicker}
         <Ruling rows={2} />
       </Sheet>
     );
@@ -246,13 +250,9 @@ const BrokerSheet = () => {
   return (
     <Sheet
       title="Broker"
-      actions={
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          {brokerPicker}
-          <Badge variant={BROKER_TONE[state.state]}>{state.state.replace('_', ' ')}</Badge>
-        </div>
-      }
+      actions={<Badge variant={BROKER_TONE[state.state]}>{state.state.replace('_', ' ')}</Badge>}
     >
+      {brokerPicker}
       <p className="text-[14px] font-medium text-[var(--text)]">What connecting does</p>
       <ul className="mt-1 list-disc pl-5 space-y-1 text-[14px] text-[var(--text-muted)]">
         <li>Imports your {BROKER_LABEL[broker]} trades into the journal and lets guardrails check your account.</li>
