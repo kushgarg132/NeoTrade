@@ -287,7 +287,9 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | GET /mine/tax?fy= | `::tax` | user | `realised{short_gain,long_gain,exemption_used,exemption_left,charges,est_tax,rows,uncertain}`, `unrealised`, `turning_long`, `harvest{loss,gain}`, `unknown`, `pre_2018`, `has_history` |
 | GET /mine/stock/{symbol} | `::stock_detail` | user | `position`, `lots`, `unknown_qty`, `thesis`, `verdict{current,reasons,note,history,since,facts,limits}` (`facts`: the row's pnl_pct/weight_pct/nifty_pnl_pct/first_bought plus its `health.trend` and `health.fundamentals`; `limits`: prefs `portfolio_max_loss_pct`/`portfolio_max_weight_pct`), `events`, `past_events{dividends[{date,per_share}],results[dates]}` (`mine/events.py::past`, newest first), `dividends`, `news`, `closes`, `trades`; 404 if neither held nor traded |
 | GET /mine/actions | `::mine_actions` | user | list of `{id,kind,symbol,title,detail,rank,at,action{type,...}}` |
-| POST /mine/actions/{id:path}/dismiss, /snooze | `::dismiss_action`, `::snooze_action` | user | `{ok}` |
+| POST /mine/actions/{id:path}/dismiss, /snooze | `::dismiss_action`, `::snooze_action` | user | optional body `{title,symbol,kind}` (`ActionAbout`, kept on the `mine_action_state` row with `at`) -> `{ok}` |
+| GET /mine/actions/handled | `::handled_actions` | user | `{handled[{action_id,state,until,at,title?,symbol?,kind?}]}`: still-hidden rows, newest first, at most 50 (`mine/actions.py::handled`; a run-out snooze is left out) |
+| POST /mine/actions/{id:path}/restore | `::restore_action` | user | deletes the user's state row (`actions.py::restore`) -> `{ok}`; 404 when not hidden |
 | GET /portfolio?account=all\|ai\|mine&live= | `routers/portfolio.py::get_portfolio` | user | snapshot minus `raw_holdings`, plus `verdicts_visible`; rows add `suggested`, `thesis_target`; 404 before the first refresh |
 | POST /portfolio/refresh | `::refresh` | user | as above; 409 if no holdings and no errors |
 | GET /portfolio/rebalance/candidates | `::rebalance_candidates` | user | `[{symbol,price,source,score,preselect}]` |

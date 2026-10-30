@@ -175,17 +175,43 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
     return out
 
 
-async def _set_state(db, user_id: str, action_id: str, state: str, until: Optional[datetime]) -> None:
+ABOUT = ("title", "symbol", "kind")  # what the row said, kept so the Handled list can show it
+HANDLED_LIMIT = 50
+
+
+async def _set_state(db, user_id: str, action_id: str, state: str, until: Optional[datetime],
+                     now: Optional[datetime] = None, about: Optional[dict] = None) -> None:
+    kept = {k: str(v)[:200] for k, v in (about or {}).items() if k in ABOUT and v}
     await db[STATE].update_one({"user_id": user_id, "action_id": action_id},
-                               {"$set": {"state": state, "until": until}}, upsert=True)
+                               {"$set": {"state": state, "until": until, "at": now or datetime.now(timezone.utc), **kept}},
+                               upsert=True)
 
 
-async def dismiss(db, user_id: str, action_id: str) -> None:
-    await _set_state(db, user_id, action_id, "dismissed", None)
+async def dismiss(db, user_id: str, action_id: str, about: Optional[dict] = None, now: Optional[datetime] = None) -> None:
+    await _set_state(db, user_id, action_id, "dismissed", None, now, about)
 
 
-async def snooze(db, user_id: str, action_id: str, now: datetime, days: int = SNOOZE_DAYS) -> None:
-    await _set_state(db, user_id, action_id, "snoozed", now + timedelta(days=days))
+async def snooze(db, user_id: str, action_id: str, now: datetime, days: int = SNOOZE_DAYS,
+                 about: Optional[dict] = None) -> None:
+    await _set_state(db, user_id, action_id, "snoozed", now + timedelta(days=days), now, about)
+
+
+async def handled(db, user_id: str, now: datetime) -> list[dict]:
+    """The user's rows still hidden by a dismiss or a snooze, newest first. A snooze that ran out is back
+    in the list, so it is left out. Rows hidden before `at` was stored sort last."""
+    out = []
+    async for d in db[STATE].find({"user_id": user_id}, {"_id": 0, "user_id": 0}):
+        until = _aware(d.get("until"))
+        if d["state"] == "snoozed" and (until is None or until <= now):
+            continue
+        out.append({**d, "until": until, "at": _aware(d.get("at"))})
+    out.sort(key=lambda d: d["at"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    return out[:HANDLED_LIMIT]
+
+
+async def restore(db, user_id: str, action_id: str) -> bool:
+    """Undo a dismiss or snooze: the row is back in the list at the next build."""
+    return (await db[STATE].delete_one({"user_id": user_id, "action_id": action_id})).deleted_count > 0
 
 
 async def level_alerts(db, redis, user_id: str, now: datetime) -> list[dict]:

@@ -4,11 +4,12 @@ and the value curve against NIFTY. Everything is the user's own account
 Later endpoints are appended below; do not reorder these."""
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Literal
+from typing import Literal, Optional
 
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
@@ -177,19 +178,47 @@ async def mine_actions(user: User = Depends(get_current_user)):
     return await actions.build(db.db, user.id, datetime.now(timezone.utc), await verdicts_visible(db.db, user.id))
 
 
-@router.post("/actions/{action_id:path}/dismiss")
-async def dismiss_action(action_id: str = ACTION_ID, user: User = Depends(get_current_user)):
+class ActionAbout(BaseModel):
+    """What the row said, so the Handled list can show it. Optional: old clients send no body."""
+    title: Optional[str] = Field(None, max_length=200)
+    symbol: Optional[str] = Field(None, max_length=40)
+    kind: Optional[str] = Field(None, max_length=40)
+
+
+@router.get("/actions/handled")
+async def handled_actions(user: User = Depends(get_current_user)):
+    """Rows the user dismissed or snoozed (still hidden), newest first: {action_id, state, until, at, title, symbol, kind}."""
     from backend.mine import actions
 
-    await actions.dismiss(db.db, user.id, action_id)
+    return {"handled": await actions.handled(db.db, user.id, datetime.now(timezone.utc))}
+
+
+@router.post("/actions/{action_id:path}/dismiss")
+async def dismiss_action(action_id: str = ACTION_ID, about: Optional[ActionAbout] = None,
+                         user: User = Depends(get_current_user)):
+    from backend.mine import actions
+
+    await actions.dismiss(db.db, user.id, action_id, about.model_dump() if about else None)
     return {"ok": True}
 
 
 @router.post("/actions/{action_id:path}/snooze")
-async def snooze_action(action_id: str = ACTION_ID, user: User = Depends(get_current_user)):
+async def snooze_action(action_id: str = ACTION_ID, about: Optional[ActionAbout] = None,
+                        user: User = Depends(get_current_user)):
     from backend.mine import actions
 
-    await actions.snooze(db.db, user.id, action_id, datetime.now(timezone.utc))
+    await actions.snooze(db.db, user.id, action_id, datetime.now(timezone.utc),
+                         about=about.model_dump() if about else None)
+    return {"ok": True}
+
+
+@router.post("/actions/{action_id:path}/restore")
+async def restore_action(action_id: str = ACTION_ID, user: User = Depends(get_current_user)):
+    """Undo a dismiss or snooze; 404 when the row was not hidden."""
+    from backend.mine import actions
+
+    if not await actions.restore(db.db, user.id, action_id):
+        raise HTTPException(status_code=404, detail="Not hidden")
     return {"ok": True}
 
 

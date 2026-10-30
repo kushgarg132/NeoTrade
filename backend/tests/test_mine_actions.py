@@ -219,3 +219,32 @@ async def test_verdict_worse_not_to_sell_stays_a_stock_link(db):
     await _seed(db, ("HOLD", "REVIEW"))
     found = [a for a in await actions.build(db, "alice", NOW, True) if a["kind"] == "verdict_worse"]
     assert found and found[0]["action"] == {"type": "stock"}
+
+
+async def test_handled_lists_hidden_rows_newest_first_and_restore_brings_one_back(db, monkeypatch):
+    from backend.routers import mine as mine_router
+
+    await _seed(db)
+    client = _client(monkeypatch, mine_router, db, "alice")
+    assert client.post("/api/v1/mine/actions/stop_hit:A:90/dismiss",
+                       json={"title": "A hit your stop ₹90", "symbol": "A", "kind": "stop_hit"}).status_code == 200
+    assert client.post("/api/v1/mine/actions/other:B/snooze").status_code == 200  # an old client: no body
+    await actions.snooze(db, "alice", "old:C", NOW - timedelta(days=30))  # ran out: back in the list
+    rows = client.get("/api/v1/mine/actions/handled").json()["handled"]
+    assert [r["action_id"] for r in rows] == ["other:B", "stop_hit:A:90"]
+    assert rows[1]["title"] == "A hit your stop ₹90" and rows[1]["state"] == "dismissed" and rows[1]["at"]
+    assert rows[0]["state"] == "snoozed" and rows[0]["until"] and "title" not in rows[0]
+
+    assert client.post("/api/v1/mine/actions/stop_hit:A:90/restore").status_code == 200
+    assert "stop_hit:A:90" in [a["id"] for a in await actions.build(db, "alice", NOW, True)]
+    assert client.post("/api/v1/mine/actions/stop_hit:A:90/restore").status_code == 404
+    assert client.post("/api/v1/mine/actions/x/dismiss", json={"title": "t" * 201}).status_code == 422
+
+
+async def test_restore_is_scoped_to_the_user(db, monkeypatch):
+    from backend.routers import mine as mine_router
+
+    await actions.dismiss(db, "alice", "stop_hit:A:90")
+    bob = _client(monkeypatch, mine_router, db, "bob")
+    assert bob.post("/api/v1/mine/actions/stop_hit:A:90/restore").status_code == 404
+    assert await db[actions.STATE].find_one({"user_id": "alice", "action_id": "stop_hit:A:90"})

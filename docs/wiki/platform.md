@@ -217,6 +217,8 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/mine/actions` | `backend/routers/mine.py::mine_actions` | user |
 | POST | `/api/v1/mine/actions/{action_id:path}/dismiss` | `backend/routers/mine.py::dismiss_action` | user |
 | POST | `/api/v1/mine/actions/{action_id:path}/snooze` | `backend/routers/mine.py::snooze_action` | user |
+| GET | `/api/v1/mine/actions/handled` | `backend/routers/mine.py::handled_actions` | user |
+| POST | `/api/v1/mine/actions/{action_id:path}/restore` | `backend/routers/mine.py::restore_action` | user |
 | GET | `/api/v1/mine/review/latest` | `backend/routers/mine.py::latest_review` | user |
 | GET | `/api/v1/reports/weekly?week=` | `backend/routers/reports.py::weekly_report` | user |
 | GET | `/api/v1/summaries/day` | `backend/routers/summaries.py::day` | user |
