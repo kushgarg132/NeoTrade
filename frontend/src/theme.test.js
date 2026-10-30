@@ -39,10 +39,18 @@ for (const [name, t] of Object.entries(themes)) {
 
 test('dark hero values', () => {
   const d = themes.dark;
-  assert.equal(d.bg, '#07100c');
+  assert.equal(d.bg, '#0b0b0c');
   assert.equal(d.accent, '#10b981');
   assert.equal(d.gain, '#3ddc97');
   assert.equal(d.loss, '#ff6b6b');
+});
+
+test('neutrals are gray: no green cast in bg, surfaces, border or text', () => {
+  for (const t of Object.values(themes))
+    for (const k of ['bg', 'surface', 'surface-2', 'border', 'text', 'text-muted']) {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(t[k].slice(i, i + 2), 16));
+      assert.ok(g - Math.min(r, b) <= 3, `${k} ${t[k]} leans green`);
+    }
 });
 
 test('font, theme default, motion', () => {

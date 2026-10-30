@@ -52,13 +52,14 @@
   :root {
     color-scheme: light;
 
-    /* The design system. Components use only these. */
-    --bg: #f6f8f6;
+    /* The design system. Components use only these. Neutrals are true grays (2026-10-30: the green-tinted
+       ones tinted the whole app); green is for the accent, gains and badges only. */
+    --bg: #f7f7f8;
     --surface: #ffffff;
-    --surface-2: #edf2ee;
-    --border: #dce5df;
-    --text: #0f1a14;
-    --text-muted: #4f6157;
+    --surface-2: #f0f0f2;
+    --border: #e4e4e7;
+    --text: #18181b;
+    --text-muted: #52525b;
     --accent: #047857;
     --accent-soft: #d9f0e6;
     --gain: #0f7b4f;
@@ -74,7 +75,7 @@
     --accent-ink: #ffffff;
     --gain-soft: color-mix(in oklab, var(--gain) 10%, var(--surface));
     --loss-soft: color-mix(in oklab, var(--loss) 10%, var(--surface));
-    --glow: radial-gradient(120% 90% at 0% 0%, #c9f0dd 0%, #e8f6ef 55%, var(--surface) 100%);
+    --glow: radial-gradient(120% 90% at 0% 0%, #ececef 0%, #f4f4f5 55%, var(--surface) 100%);
     --fs-12: 12px; --fs-13: 13px; --fs-15: 15px; --fs-17: 17px; --fs-22: 22px; --fs-28: 28px; --fs-44: 44px;
 
     /* Charts (dataviz-validated categorical order; heat ramp = gain/loss mixed into the surface). */
@@ -103,12 +104,12 @@
   .dark {
     color-scheme: dark;
 
-    --bg: #07100c;
-    --surface: #0d1914;
-    --surface-2: #12211a;
-    --border: #17271f;
-    --text: #e9f3ee;
-    --text-muted: #9dbcad;
+    --bg: #0b0b0c;
+    --surface: #141416;
+    --surface-2: #1c1c1f;
+    --border: #27272a;
+    --text: #ededef;
+    --text-muted: #a1a1aa;
     --accent: #10b981;
     --accent-soft: #12332a;
     --gain: #3ddc97;
@@ -122,7 +123,7 @@
     --accent-ink: #04140d;
     --gain-soft: color-mix(in oklab, var(--gain) 14%, var(--surface));
     --loss-soft: color-mix(in oklab, var(--loss) 14%, var(--surface));
-    --glow: radial-gradient(120% 90% at 0% 0%, #0f5c3f 0%, #0b2a1f 55%, var(--bg) 100%);
+    --glow: radial-gradient(120% 90% at 0% 0%, #2a2a2e 0%, #18181b 55%, var(--bg) 100%);
 
     /* Charts (dataviz-validated categorical order; heat ramp = gain/loss mixed into the surface). */
     --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70;

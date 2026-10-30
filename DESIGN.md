@@ -11,21 +11,22 @@ Theme default is dark; a stored `light`/`dark` choice wins (the OS setting is ig
 
 | token | dark | light | use |
 |---|---|---|---|
-| `--bg` | #07100c | #f6f8f6 | page |
-| `--surface` | #0d1914 | #ffffff | cards, header, tabs bar |
-| `--surface-2` | #12211a | #edf2ee | segmented track, pressed rows, skeleton |
-| `--border` | #17271f | #dce5df | hairlines |
-| `--text` | #e9f3ee | #0f1a14 | primary text |
-| `--text-muted` | #9dbcad | #4f6157 | secondary text (>= 4.5:1 on bg, surface, surface-2) |
+| `--bg` | #0b0b0c | #f7f7f8 | page |
+| `--surface` | #141416 | #ffffff | cards, header, tabs bar |
+| `--surface-2` | #1c1c1f | #f0f0f2 | segmented track, pressed rows, skeleton |
+| `--border` | #27272a | #e4e4e7 | hairlines |
+| `--text` | #ededef | #18181b | primary text |
+| `--text-muted` | #a1a1aa | #52525b | secondary text (>= 4.5:1 on bg, surface, surface-2) |
 | `--accent` | #10b981 | #047857 | brand: links, active tab, primary button fill |
 | `--accent-ink` | #04140d | #ffffff | text on an accent fill (>= 4.5:1) |
 | `--gain` / `--loss` / `--warn` | #3ddc97 / #ff6b6b / #f2b24a | #0f7b4f / #c2281d / #9a5b00 | tone, never decoration |
 | `--gain-soft` / `--loss-soft` | gain / loss 14% over `--surface` | 10% over `--surface` | chip fills |
-| `--glow` | radial emerald, #0f5c3f to #0b2a1f to `--bg` | radial mint, #c9f0dd to #e8f6ef to `--surface` | the Hero background |
+| `--glow` | radial gray, #2a2a2e to #18181b to `--bg` | radial gray, #ececef to #f4f4f5 to `--surface` | the Hero background |
 | `--chart-1`…`--chart-6` | #3987e5 #d95926 #199e70 #c98500 #d55181 #008300 | #2a78d6 #eb6834 #1baf7a #eda100 #e87ba4 #008300 | chart series, in this order, never cycled (dataviz-validated) |
 | `--heat-neg-3`…`--heat-0`…`--heat-pos-3` | `--loss` / `--gain` mixed 22/36/50% into `--surface`; 0 = `--surface-2` | same, at 22/48/65% | heatmap cells by % change (`heatColor`) |
 
-Rules: `--accent` never colours a number; numbers use `--gain`/`--loss`/`--text`, and every gain or loss carries
+Rules: neutrals (bg, surfaces, border, text) are true grays with no green cast (owner, 2026-10-30; `theme.test.js` checks it);
+green is for `--accent`, gain and badges. `--accent` never colours a number; numbers use `--gain`/`--loss`/`--text`, and every gain or loss carries
 a sign or ▲/▼. No raw hex in components: tokens only. A contrast test (`src/theme.test.js`) covers both themes.
 The old names (`--paper`, `--ink`, `--rule`, `--stamp`) are aliases until the last component using them is rebuilt.
 
