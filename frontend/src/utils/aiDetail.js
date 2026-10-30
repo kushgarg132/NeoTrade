@@ -33,3 +33,17 @@ export const openTradeIds = (trades) => {
   (trades || []).filter((t) => t.status === 'OPEN' && t.id != null).forEach((t) => { by[t.symbol] = t.symbol in by ? null : t.id; });
   return by;
 };
+
+/** AI -> Positions -> Closed: closed trades newest first, each with its net P&L (after charges) and return on
+ *  cost, plus the totals. */
+export const closedTrades = (trades = []) => {
+  const rows = trades
+    .filter((t) => t.status === 'CLOSED')
+    .map((t) => {
+      const net = t.net_pnl ?? (t.realized_pnl ?? 0) - (t.costs ?? 0);
+      const cost = (t.quantity || 0) * (t.entry_price || 0);
+      return { ...t, net, ret: cost ? net / cost : null };
+    })
+    .sort((a, b) => String(b.exit_at).localeCompare(String(a.exit_at)));
+  return { rows, total: rows.reduce((s, t) => s + t.net, 0), wins: rows.filter((t) => t.net > 0).length };
+};

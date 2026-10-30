@@ -39,3 +39,15 @@ test('openTradeIds drops a symbol with two open trades so the row links to the s
   assert.equal(ids.TCS, null);
   assert.equal(ids.INFY, 'c');
 });
+
+test('closedTrades: net after charges, newest first, totals', async () => {
+  const { closedTrades } = await import('./aiDetail.js');
+  const { rows, total, wins } = closedTrades([
+    { id: 'a', status: 'CLOSED', exit_at: '2026-10-20T04:00:00Z', quantity: 1, entry_price: 100, realized_pnl: 10, costs: 2 },
+    { id: 'b', status: 'CLOSED', exit_at: '2026-10-29T04:00:00Z', quantity: 2, entry_price: 50, net_pnl: -5 },
+    { id: 'c', status: 'OPEN', quantity: 1, entry_price: 10 },
+  ]);
+  assert.deepEqual(rows.map((r) => [r.id, r.net, r.ret]), [['b', -5, -0.05], ['a', 8, 0.08]]);
+  assert.equal(total, 3);
+  assert.equal(wins, 1);
+});
