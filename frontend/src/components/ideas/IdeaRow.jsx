@@ -69,7 +69,8 @@ const PickBar = ({ idea, onDone }) => {
   );
 };
 
-/** Entry / SL / T as three cells; stop and target also say how far they sit from entry. */
+/** Entry / SL / T as three cells; stop and target also say how far they sit from entry. A pick's plan is to hold to
+ * its due date (it beat selling at the levels in every setup, backend/forecast/study.py::levels_exit), so it says so. */
 const Levels = ({ idea }) => {
   const from = (x) => (x != null && idea.entry ? x / idea.entry - 1 : null);
   const cell = (label, value, move) => (
@@ -80,29 +81,35 @@ const Levels = ({ idea }) => {
     </div>
   );
   return (
-    <div className="grid grid-cols-3 divide-x divide-[var(--border)] rounded-[12px] bg-[var(--surface-2)]">
-      {cell('Entry', idea.entry)}
-      {cell('SL ', idea.stop, from(idea.stop))}
-      {cell('Target', idea.target, from(idea.target))}
+    <div>
+      <div className="grid grid-cols-3 divide-x divide-[var(--border)] rounded-[12px] bg-[var(--surface-2)]">
+        {cell('Entry', idea.entry)}
+        {cell('SL ', idea.stop, from(idea.stop))}
+        {cell('Target', idea.target, from(idea.target))}
+      </div>
+      {idea.kind === 'p' && <div className="mt-1 text-[12px] text-[var(--text-muted)]">Hold to the due date · SL is protection · target is the best 10%</div>}
     </div>
   );
 };
 
-/** How sure the idea is, as a meter: an engine idea's composite score (rules plus a capped AI part), or for a pick the
- * share of similar past setups that ended up (`p_up`). One number, one bar; the detail page splits the score. */
+/** How sure the idea is, as a meter: an engine idea's composite score (rules plus a capped AI part) with High / Medium /
+ * Low, or a pick's chance up (`p_up`): the setup's own past rate unless its similar-setups forecast passed validation
+ * (`forecast: similar`), so picks of one setup share it. No High / Low for picks: single stocks over 20-60 days rarely
+ * pass 60% up, and 55-58% is the edge (backend/forecast/similar.py::validate). The detail page splits the score. */
 const Confidence = ({ idea }) => {
   const v = idea.score?.final ?? (idea.kind === 'p' ? idea.pUp : null);
   if (typeof v !== 'number') return null;
   const n = Math.round(v * 100);
-  const level = n >= 65 ? 'High' : n >= 50 ? 'Medium' : 'Low';
+  const pick = !idea.score;
+  const note = pick ? (idea.forecast === 'similar' ? 'similar setups' : 'setup average') : n >= 65 ? 'High' : n >= 50 ? 'Medium' : 'Low';
   return (
     <div className="flex items-center gap-3 text-[12px] tabular-nums">
-      <span className="w-[76px] shrink-0 text-[var(--text-muted)]">Confidence</span>
-      <div role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={n} aria-label={`Confidence ${n}${idea.score ? '/100' : '% chance up'}`}
+      <span className="w-[76px] shrink-0 text-[var(--text-muted)]">{pick ? 'Chance up' : 'Confidence'}</span>
+      <div role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={n} aria-label={pick ? `Chance up ${n}%, ${note}` : `Confidence ${n}/100`}
         className="relative h-1.5 flex-1 rounded-full bg-[var(--surface-2)]">
         <div className="absolute inset-y-0 left-0 rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(0, Math.min(100, n))}%` }} />
       </div>
-      <span className="shrink-0 text-right"><b className="text-[var(--text)]">{idea.score ? `${n}/100` : `${n}%`}</b> <span className="text-[var(--text-muted)]">{level}</span></span>
+      <span className="shrink-0 text-right"><b className="text-[var(--text)]">{pick ? `${n}%` : `${n}/100`}</b> <span className="text-[var(--text-muted)]">{note}</span></span>
     </div>
   );
 };

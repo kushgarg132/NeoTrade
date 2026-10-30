@@ -96,10 +96,10 @@ export const ideaFromPick = (p, setup, gradeText = null) => {
     spread: p.expected ? { p10: p.expected.range_stock?.p10 ?? p.expected.p10, p90: p.expected.range_stock?.p90 ?? p.expected.p90 } : null,
     rupees: rupeeMove(p.entry_ref, p.expected?.median),
     badge: { source: 'picks', name: p.setup },
-    // Levels (GET /picks `levels`, backend/forecast/picks.py::levels): target = median, stretch = p90,
-    // stop = the tighter of p10 and 2 ATR below entry.
+    // Levels (GET /picks `levels`, backend/forecast/picks.py::levels): target = p90, stop = the tighter of p10 and
+    // 3 ATR below entry. A protective plan: the pick is meant to be held to its due date.
     entry: p.entry_ref, stop: p.levels?.stop ?? null, target: p.levels?.target ?? null, qty: null, notional: null, risk: null,
-    entryZone: p.levels?.entry_zone ?? null, stretch: p.levels?.stretch ?? null, rewardRisk: p.levels?.reward_risk ?? null,
+    entryZone: p.levels?.entry_zone ?? null, rewardRisk: p.levels?.reward_risk ?? null,
     toStop: p.levels?.stop != null && p.entry_ref ? p.levels.stop / p.entry_ref - 1 : null,
     reasons: [], thesis: null, why: p.explanation || null,
     range: p.expected ? { p10: p.expected.p10, median: p.expected.median, p90: p.expected.p90 } : null,

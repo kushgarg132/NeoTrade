@@ -165,7 +165,6 @@ const IdeaDetail = () => {
         <div className="mt-3 grid grid-cols-3 gap-3">
           <Stat label="R:R (reward : risk)" value={rewardRisk(idea) != null ? `${rewardRisk(idea).toFixed(1)} : 1` : '—'} />
           {idea.kind === 'p' && idea.entryZone && <Stat label="Buy up to" value={px(idea.entryZone[1])} />}
-          {idea.kind === 'p' && idea.stretch != null && <Stat label="Stretch" value={px(idea.stretch)} />}
           {idea.kind === 's' && idea.headline?.value != null && <Stat label="If it hits target" value={<span className="text-[var(--gain)]">{pct(idea.headline.value, { sign: true, dp: 1 })}</span>} />}
         </div>
         {idea.qty != null && (
@@ -177,7 +176,7 @@ const IdeaDetail = () => {
         )}
         {idea.score && <div className="mt-3"><Confidence score={idea.score} /></div>}
         <p className="mt-3 text-[12px] text-[var(--text-muted)]">
-          Paper record · not advice.{idea.kind === 'p' ? " Levels come from this setup's past range; they are not a promise." : ' Levels are the engine\'s, set when the idea was made.'}
+          Paper record · not advice.{idea.kind === 'p' ? " Plan: hold to the due date. Held, this setup's past picks earned more than when sold at the stop or target, so the stop is protection and the target is the best 10% of past outcomes, not a promise." : ' Levels are the engine\'s, set when the idea was made.'}
         </p>
       </Card>
 

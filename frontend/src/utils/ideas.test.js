@@ -113,9 +113,9 @@ test('a pick carries its grade, grade text, entry-zone flag and the edge over th
   assert.equal(ideaFromPick(pick).grade, null);
 });
 
-test('a pick carries its levels: stop, target, entry zone, stretch, reward:risk', () => {
-  const v = ideaFromPick({ ...pick, entry_ref: 100, levels: { entry_zone: [100, 103], target: 104, stretch: 115, stop: 96, reward_risk: 1 } });
-  assert.deepEqual([v.stop, v.target, v.entryZone[1], v.stretch, v.rewardRisk], [96, 104, 103, 115, 1]);
+test('a pick carries its levels: stop, target, entry zone, reward:risk', () => {
+  const v = ideaFromPick({ ...pick, entry_ref: 100, levels: { entry_zone: [100, 103], target: 115, stop: 95.5, reward_risk: 3.33 } });
+  assert.deepEqual([v.stop, v.target, v.entryZone[1], v.rewardRisk], [95.5, 115, 103, 3.33]);
   assert.ok(Math.abs(v.toStop + 0.04) < 1e-9);
   assert.equal(ideaFromPick(pick).stop, null);
 });

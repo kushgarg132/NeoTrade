@@ -23,6 +23,12 @@ test('each idea card shows a confidence meter: the engine score, else a pick\'s 
   assert.match(row, /<Confidence idea=\{idea\} \/>/);
 });
 
+test('a pick reads as chance up with its source, never High / Low, and says to hold to the due date', () => {
+  assert.match(row, /pick \? 'Chance up' : 'Confidence'/);
+  assert.match(row, /idea\.forecast === 'similar' \? 'similar setups' : 'setup average'/);
+  assert.match(row, /Hold to the due date/);
+});
+
 test('soft tokens, no wash', () => {
   assert.doesNotMatch(row, /-wash\)/);
   assert.doesNotMatch(rec, /-wash\)/);
