@@ -52,9 +52,10 @@ def _atr(t: dict, symbol: str, last: int) -> Optional[float]:
 
 
 def levels(p: dict) -> Optional[dict]:
-    """Price levels for a pick, from its stored range: entry zone (entry_ref to ENTRY_ZONE above), target
-    (median), stretch (p90), stop (the tighter of p10 and STOP_ATR x ATR below entry; always below entry) and
-    reward:risk. The range is the stock's own (`range_stock`) when the backend chose one. Pure."""
+    """Price levels for a pick, from its stored range: entry zone (entry_ref to ENTRY_ZONE above), target (p90,
+    the study's TARGET_Q), stop (the tighter of p10 and STOP_ATR x ATR below entry; always below entry) and
+    reward:risk. The range is the stock's own (`range_stock`) when the backend chose one. A protective plan, not
+    the edge: every setup earned more held to its due date (`study.levels_exit`), so the card says hold. Pure."""
     e, x = p.get("entry_ref"), p.get("expected") or {}
     if not e or x.get("median") is None:
         return None
@@ -64,10 +65,9 @@ def levels(p: dict) -> Optional[dict]:
     if p.get("atr"):
         stops.append(e - STOP_ATR * p["atr"])
     stop = max(stops) if stops else None
-    target = e * (1 + x["median"]) if x["median"] > 0 else None
+    target = e * (1 + hi) if hi is not None and hi > 0 else None
     r2 = lambda v: None if v is None else round(v, 2)
-    return {"entry_zone": [r2(e), r2(e * (1 + ENTRY_ZONE))], "target": r2(target),
-            "stretch": r2(e * (1 + hi)) if hi is not None and hi > 0 else None, "stop": r2(stop),
+    return {"entry_zone": [r2(e), r2(e * (1 + ENTRY_ZONE))], "target": r2(target), "stop": r2(stop),
             "reward_risk": round((target - e) / (e - stop), 2) if target and stop and stop < e else None}
 
 

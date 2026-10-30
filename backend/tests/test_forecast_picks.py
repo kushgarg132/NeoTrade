@@ -364,7 +364,7 @@ def test_latest_picks_age_and_expire_like_older_ones_when_no_new_pass_ran():
 
 
 def test_payload_has_shown_and_keeps_picks(mongo):
-    asyncio.run(mongo.picks.insert_one({**_p("2026-10-21", "X", 0.0, 0.5), "strength": 1.0}))
+    asyncio.run(mongo.picks.insert_one({**_p("2026-10-21", "X", 0.0, 0.5, due="2099-01-01"), "strength": 1.0}))  # the API serves by the real date
     asyncio.run(mongo.picks_study.insert_one({"_id": "latest", "setups": [{"setup": "momentum", "adjusted": {"edge": False}}]}))
     body = _client("admin").get("/api/v1/picks").json()
     assert [p["symbol"] for p in body["picks"]] == ["X"]
@@ -409,8 +409,8 @@ def test_grade_a_needs_the_corrected_t_and_both_halves():
 def test_levels_exit_quantiles_come_only_from_events_matured_before_the_test_year(monkeypatch):
     seen = []
 
-    def spy(t, ev, p10, median):
-        seen.append((sorted(ev["signal"].dt.year.unique()), p10, median))
+    def spy(t, ev, p10, top):
+        seen.append((sorted(ev["signal"].dt.year.unique()), p10, top))
         return ev
 
     monkeypatch.setattr(study, "levels_exit", spy)
@@ -421,7 +421,7 @@ def test_levels_exit_quantiles_come_only_from_events_matured_before_the_test_yea
     wf = {"years": [{"year": 2021}]}
     study._levels_exit({}, ev, study.stats(ev), pd.Series(dtype=float), wf, {"excess": 0.0})
     prior = ev["net"].iloc[:40]
-    assert seen == [([2021], pytest.approx(prior.quantile(0.1)), pytest.approx(prior.median()))]
+    assert seen == [([2021], pytest.approx(prior.quantile(0.1)), pytest.approx(prior.quantile(study.TARGET_Q)))]
 
 
 def test_the_baseline_has_every_matured_month_even_when_the_horizon_spans_several():
@@ -439,15 +439,15 @@ def _bars(lows, highs, closes):
 
 
 def test_levels_exit_takes_the_first_touch_else_the_horizon_close():
-    # entry day 15 (open 100); flat ATR 1 -> 2-ATR stop 98 is tighter than p10 -5% (95); target +4% = 104
+    # entry day 15 (open 100); flat ATR 1 -> 3-ATR stop 97 is tighter than p10 -5% (95); target +4% = 104
     n = 20
     lows, highs, closes = [99.5] * n, [100.5] * n, [100.0] * n
     t, days = _bars(lows, highs, closes)
     ev = pd.DataFrame({"symbol": ["X"], "entry": [days[15]], "exit": [days[18]]})
     held = study.levels_exit(t, ev, -0.05, 0.04)["net"].iat[0]
     assert held == study.net_return(100.0, 100.0)
-    lows[17] = 97.0
-    assert study.levels_exit(_bars(lows, highs, closes)[0], ev, -0.05, 0.04)["net"].iat[0] == study.net_return(100.0, 98.0)
+    lows[17] = 96.0
+    assert study.levels_exit(_bars(lows, highs, closes)[0], ev, -0.05, 0.04)["net"].iat[0] == study.net_return(100.0, 97.0)
     lows[17], highs[16] = 99.5, 105.0
     assert study.levels_exit(_bars(lows, highs, closes)[0], ev, -0.05, 0.04)["net"].iat[0] == study.net_return(100.0, 104.0)
 
@@ -455,18 +455,18 @@ def test_levels_exit_takes_the_first_touch_else_the_horizon_close():
 # --- price levels ------------------------------------------------------------------
 
 def test_levels_take_the_tighter_stop_and_the_stocks_own_range():
-    p = {"entry_ref": 100.0, "atr": 2.0, "expected": {"median": 0.04, "p10": -0.08, "p90": 0.12,
+    p = {"entry_ref": 100.0, "atr": 1.5, "expected": {"median": 0.04, "p10": -0.08, "p90": 0.12,
                                                       "range_stock": {"p10": -0.06, "p90": 0.15}}}
     lv = picks.levels(p)
     assert lv["entry_zone"] == [100.0, 103.0]
-    assert lv["target"] == 104.0 and lv["stretch"] == 115.0
-    assert lv["stop"] == 96.0  # 2 ATR (96) is tighter than the stock's p10 (94)
-    assert lv["reward_risk"] == 1.0
+    assert lv["target"] == 115.0  # the stock's p90, not the median
+    assert lv["stop"] == 95.5  # 3 ATR (95.5) is tighter than the stock's p10 (94)
+    assert lv["reward_risk"] == 3.33
 
 
 def test_levels_never_put_a_stop_above_entry_or_a_target_below_it():
-    lv = picks.levels({"entry_ref": 100.0, "expected": {"median": -0.001, "p10": 0.01, "p90": 0.05}})
-    assert lv["stop"] is None and lv["target"] is None and lv["reward_risk"] is None and lv["stretch"] == 105.0
+    lv = picks.levels({"entry_ref": 100.0, "expected": {"median": -0.001, "p10": 0.01, "p90": -0.02}})
+    assert lv["stop"] is None and lv["target"] is None and lv["reward_risk"] is None
     assert picks.levels({"entry_ref": 100.0, "expected": {}}) is None
 
 
@@ -481,7 +481,7 @@ def test_atr_is_the_mean_true_range():
 
 def test_served_picks_carry_levels():
     out = picks.serve([{**_p("2026-10-21", "A"), "expected": {"median": 0.05, "p10": -0.05, "p90": 0.1}}], [], {}, TODAY, GRADES)
-    assert out["shown"][0]["levels"]["target"] == 105.0
+    assert out["shown"][0]["levels"]["target"] == 110.0
 
 
 # --- backfill ------------------------------------------------------------------------
@@ -532,7 +532,7 @@ def test_the_store_cap_is_per_setup_so_one_setup_cannot_crowd_out_another():
 
 
 def test_dismissed_pick_leaves_the_users_shown_list(mongo):
-    asyncio.run(mongo.picks.insert_one({**_p("2026-10-21", "X", 0.0, 0.5), "strength": 1.0}))
+    asyncio.run(mongo.picks.insert_one({**_p("2026-10-21", "X", 0.0, 0.5, due="2099-01-01"), "strength": 1.0}))  # the API serves by the real date
     pid = asyncio.run(mongo.picks.find_one({"symbol": "X"}))["_id"]
     client = _client("admin")
     assert [p["symbol"] for p in client.get("/api/v1/picks").json()["shown"]] == ["X"]

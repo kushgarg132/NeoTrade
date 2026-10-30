@@ -217,14 +217,17 @@ def adjusted_edge(ev: pd.DataFrame, baseline: pd.Series, wf: dict, need_t: float
 
 
 ATR_DAYS = 14
-STOP_ATR = 2.0  # a stop no further than this many ATRs below entry (forecast/picks.py::levels)
+STOP_ATR = 3.0  # a stop no further than this many ATRs below entry (forecast/picks.py::levels)
+TARGET_Q = 0.9  # target at this quantile of past returns (forecast/picks.py::levels)
+# 2026-10-30 sweep (q50/65/75/90 x 1-3 ATR, out of sample): wider was better at every step and none beat the
+# horizon close; the median target with a 2 ATR stop lost most (breakout -4.7% vs +0.1% held).
 
 
-def levels_exit(t: dict, ev: pd.DataFrame, p10: float, median: float) -> pd.DataFrame:
+def levels_exit(t: dict, ev: pd.DataFrame, p10: float, top: float) -> pd.DataFrame:
     """`ev` with `net` re-priced under the exits the autopilot trades (forecast/picks.py::levels): stop at the
-    tighter of entry x (1 + p10) and STOP_ATR x ATR below entry, target at entry x (1 + median); the first touch
+    tighter of entry x (1 + p10) and STOP_ATR x ATR below entry, target at entry x (1 + top); the first touch
     inside the horizon exits (a stop before a target on the same bar, a gap through either fills at the open),
-    else the horizon close as before. `_levels_exit` passes each test year the p10/median of the events that
+    else the horizon close as before. `_levels_exit` passes each test year the p10/TARGET_Q of the events that
     matured before it began, so the comparison stays out of sample."""
     if ev.empty:
         return ev
@@ -242,7 +245,7 @@ def levels_exit(t: dict, ev: pd.DataFrame, p10: float, median: float) -> pd.Data
         if np.isfinite(A[i - 1, j]):
             stops.append(e - STOP_ATR * A[i - 1, j])
         stop = max(stops) if stops else -np.inf
-        target = e * (1 + median) if median > 0 else np.inf
+        target = e * (1 + top) if top > 0 else np.inf
         out = C[k, j]
         for d in range(i, k + 1):
             if L[d, j] <= stop:
@@ -279,10 +282,10 @@ def _levels_exit(t, ev, st, baseline, wf, adj) -> dict:
     if not st.get("n"):
         return {"excess": None, "t": None, "better": False}
     parts = []
-    for y in wf["years"]:  # each test year priced with the p10/median known on its Jan 1, as walk_forward
+    for y in wf["years"]:  # each test year priced with the p10/TARGET_Q known on its Jan 1, as walk_forward
         prior = ev.loc[ev["exit"] < pd.Timestamp(y["year"], 1, 1), "net"]
         test = ev[ev["signal"].dt.year == y["year"]]
-        parts.append(levels_exit(t, test, float(prior.quantile(0.1)), float(prior.median())))
+        parts.append(levels_exit(t, test, float(prior.quantile(0.1)), float(prior.quantile(TARGET_Q))))
     lv = adjusted_edge(pd.concat(parts) if parts else ev.iloc[:0], baseline, wf)
     better = lv["excess"] is not None and adj["excess"] is not None and lv["excess"] > adj["excess"]
     return {"excess": lv["excess"], "t": lv["t"], "better": bool(better)}

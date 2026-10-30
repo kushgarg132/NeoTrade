@@ -210,7 +210,7 @@ async def test_only_grade_a_setups_are_bought_best_adjusted_excess_first(world):
 
 
 def _leveled(symbol="INFY"):
-    # Priced off a ₹1000 close: stop ₹950, target ₹1080 (levels() from the stored range and ATR).
+    # Priced off a ₹1000 close: stop ₹950 (p10, tighter than 3 ATR ₹925), target ₹1150 (p90).
     return {**_pick(symbol), "entry_ref": 1000.0, "atr": 25.0,
             "expected": {"median": 0.08, "p10": -0.05, "p90": 0.15}}
 
@@ -226,10 +226,10 @@ async def test_a_pick_sells_at_its_stop_or_target_before_the_horizon(world, monk
     db, _, _ = world
     await _setup(db)
     await db["picks"].insert_one(_leveled())
-    _mark(monkeypatch, 1010.0)  # filled ~₹1011 (10 bps slip): stop ~₹961, target ~₹1091
+    _mark(monkeypatch, 1010.0)  # filled ~₹1011 (10 bps slip): stop ~₹961, target ~₹1162
     await trading.enter(db, None, "alice", MORNING)
     [trade] = await _trades(db)
-    assert trade["context"]["stop"] == 950.0 and trade["context"]["target"] == 1080.0
+    assert trade["context"]["stop"] == 950.0 and trade["context"]["target"] == 1150.0
     early = datetime(2026, 10, 7, 11, 0, tzinfo=IST)  # two days before the due date
     _mark(monkeypatch, 965.0)
     assert await trading.exit_due(db, None, "alice", early) == []  # above the fill-anchored stop
@@ -243,7 +243,7 @@ async def test_a_pick_takes_its_target(world, monkeypatch):
     await _setup(db)
     await db["picks"].insert_one(_leveled())
     await trading.enter(db, None, "alice", MORNING)  # fixture mark ₹1000
-    _mark(monkeypatch, 1095.0)
+    _mark(monkeypatch, 1165.0)
     [sold] = await trading.exit_due(db, None, "alice", datetime(2026, 10, 7, 11, 0, tzinfo=IST))
     assert sold["why"] == "target"
 
