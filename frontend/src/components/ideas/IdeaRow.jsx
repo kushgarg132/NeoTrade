@@ -9,7 +9,7 @@ import api, { endpoints } from '../../utils/api';
 import Badge from '../ui/Badge';
 import GradeTile from '../ui/GradeTile';
 import { px, rewardRisk as rr } from './levels';
-import { olderPickLabel, GRADES, parseIdeaId } from '../../utils/ideas';
+import { olderPickLabel, GRADES, parseIdeaId, rangeBar } from '../../utils/ideas';
 import { bareSymbol } from '../../utils/formatters';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
@@ -60,75 +60,142 @@ const PickBar = ({ idea, onDone }) => {
   return (
     <div className="space-y-2">
       {failure && <p role="alert" className="text-[14px] text-[var(--loss)]">{failure}</p>}
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="secondary" onClick={skip} disabled={busy}>Skip</Button>
-        <Button onClick={() => setTicket(true)} disabled={busy}>Buy</Button>
+      <div className="flex gap-2">
+        <Button variant="secondary" className="px-6" onClick={skip} disabled={busy}>Skip</Button>
+        <Button className="flex-1" onClick={() => setTicket(true)} disabled={busy}>Buy</Button>
       </div>
       {ticket && <OrderTicket symbol={idea.symbol} side="BUY" lastPrice={idea.entry} limitPrice={idea.entryZone?.[1]} onClose={() => setTicket(false)} onDone={onDone} />}
     </div>
   );
 };
 
-/** One idea in the list: action + symbol, setup and horizon, headline %, proven badge; a pending engine idea or a pick gets its own Skip / Buy bar. */
+/** Entry / SL / T as three cells; stop and target also say how far they sit from entry. */
+const Levels = ({ idea }) => {
+  const from = (x) => (x != null && idea.entry ? x / idea.entry - 1 : null);
+  const cell = (label, value, move) => (
+    <div className="min-w-0 px-3 py-2">
+      <div className="text-[12px] text-[var(--text-muted)]">{label}</div>
+      <div className="text-[15px] font-semibold text-[var(--text)] tabular-nums truncate">{value != null ? px(value) : '–'}</div>
+      {move != null && <div className={`text-[12px] tabular-nums ${toneText(tone(move))}`}>{pct(move, { sign: true, dp: 1 })}</div>}
+    </div>
+  );
+  return (
+    <div className="grid grid-cols-3 divide-x divide-[var(--border)] rounded-[12px] bg-[var(--surface-2)]">
+      {cell('Entry', idea.entry)}
+      {cell('SL ', idea.stop, from(idea.stop))}
+      {cell('Target', idea.target, from(idea.target))}
+    </div>
+  );
+};
+
+/** How sure the idea is, as a meter: an engine idea's composite score (rules plus a capped AI part), or for a pick the
+ * share of similar past setups that ended up (`p_up`). One number, one bar; the detail page splits the score. */
+const Confidence = ({ idea }) => {
+  const v = idea.score?.final ?? (idea.kind === 'p' ? idea.pUp : null);
+  if (typeof v !== 'number') return null;
+  const n = Math.round(v * 100);
+  const level = n >= 65 ? 'High' : n >= 50 ? 'Medium' : 'Low';
+  return (
+    <div className="flex items-center gap-3 text-[12px] tabular-nums">
+      <span className="w-[76px] shrink-0 text-[var(--text-muted)]">Confidence</span>
+      <div role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={n} aria-label={`Confidence ${n}${idea.score ? '/100' : '% chance up'}`}
+        className="relative h-1.5 flex-1 rounded-full bg-[var(--surface-2)]">
+        <div className="absolute inset-y-0 left-0 rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(0, Math.min(100, n))}%` }} />
+      </div>
+      <span className="shrink-0 text-right"><b className="text-[var(--text)]">{idea.score ? `${n}/100` : `${n}%`}</b> <span className="text-[var(--text-muted)]">{level}</span></span>
+    </div>
+  );
+};
+
+/** A pick's likely range (p10 to p90) as a thin bar with the median tick and zero line, how it does against NIFTY under it. */
+const Range = ({ idea }) => {
+  const r = rangeBar(idea.spread.p10, idea.expectedMedian ?? (idea.spread.p10 + idea.spread.p90) / 2, idea.spread.p90);
+  const odds = [idea.exMedian != null && `vs NIFTY ${pct(idea.exMedian, { sign: true, dp: 1 })}`,
+    idea.pBeat != null && `beats it ${pct(idea.pBeat, { dp: 0 })}`].filter(Boolean).join(' · ');
+  return (
+    <div>
+      <div className="flex items-center gap-2 text-[12px] tabular-nums text-[var(--text-muted)]">
+        <span className="w-12 shrink-0">{pct(idea.spread.p10, { sign: true, dp: 1 })}</span>
+        <div role="img" aria-label={`Likely range ${pct(idea.spread.p10, { sign: true, dp: 1 })} to ${pct(idea.spread.p90, { sign: true, dp: 1 })}`}
+          className="relative h-1.5 flex-1 rounded-full bg-[var(--surface-2)]">
+          <div className="absolute -inset-y-1 w-px bg-[var(--text-muted)]" style={{ left: `${r.zero}%` }} />
+          <div className="absolute inset-y-0 rounded-full bg-[var(--accent)] opacity-40" style={{ left: `${r.p10}%`, width: `${r.p90 - r.p10}%` }} />
+          <div className="absolute -inset-y-1 w-1 rounded-full bg-[var(--accent)]" style={{ left: `calc(${r.median}% - 2px)` }} />
+        </div>
+        <span className="w-12 shrink-0 text-right">{pct(idea.spread.p90, { sign: true, dp: 1 })}</span>
+      </div>
+      {odds && <div className="mt-1 text-[12px] text-[var(--text-muted)] tabular-nums">{odds}</div>}
+    </div>
+  );
+};
+
+/** One idea as its own card: grade, symbol and setup beside the headline move; Entry / SL / T and R:R; the likely
+ * range; flags; the latest headline; then a pending engine idea's or a pick's own Skip / Buy. */
 const IdeaRow = ({ idea, onDone, news, results }) => {
   const key = bareSymbol(idea.symbol)?.toUpperCase();
   const entry = news?.[key];
   const resultsSoon = resultsFlag(results?.[key], idea.daysSince > 0 && idea.daysLeft != null ? idea.daysLeft : idea.horizon);
   const badSince = idea.kind === 'p' && idea.daysSince > 0 && badNewsSince(entry, idea.firedOn);
+  const older = olderPickLabel(idea);
+  const ratio = rr(idea);
+  const actions = (idea.kind === 's' && !idea.decided && onDone) || (idea.kind === 'p' && onDone);
   return (
-    <div className="py-1.5 border-b border-[var(--border)] last:border-b-0">
-      <Link to={`/ideas/${encodeURIComponent(idea.id)}`} className="flex items-center gap-3 min-h-11 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-        {GRADES[idea.grade] && <span className="shrink-0"><GradeTile grade={idea.grade} /></span>}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] font-semibold text-[var(--text-muted)]">{idea.side}</span>
-            <span className="text-[15px] font-semibold text-[var(--text)] truncate">{bareSymbol(idea.symbol)}</span>
+    <article className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+      <Link to={`/ideas/${encodeURIComponent(idea.id)}`} className="tap block p-4 space-y-3 active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]">
+        <div className="flex items-start gap-3">
+          {GRADES[idea.grade] && <span className="shrink-0"><GradeTile grade={idea.grade} /></span>}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[12px] font-semibold text-[var(--text-muted)]">{idea.side}</span>
+              <span className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)] truncate">{bareSymbol(idea.symbol)}</span>
+            </div>
+            <div className="flex min-w-0 gap-1 text-[13px] text-[var(--text-muted)]">
+              <span className="truncate">{idea.setup}{idea.horizon && !older && idea.headline?.value == null ? ` · ${idea.horizon}d` : ''}</span>
+              {ratio != null && <span className="shrink-0 whitespace-nowrap">· <span className="font-semibold text-[var(--text)] tabular-nums">R:R {ratio.toFixed(1)}</span></span>}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-2 text-[13px] text-[var(--text-muted)]">
-            <span>{idea.setup}{idea.horizon && !olderPickLabel(idea) ? ` · ${idea.horizon}d` : ''}</span>
-            <span className="shrink-0"><IdeaBadge badge={idea.badge} /></span>
-            {idea.experimental && <span className="shrink-0"><Badge>Experimental</Badge></span>}
-            {resultsSoon && <span className="shrink-0"><Badge kind="unproven">{resultsSoon}</Badge></span>}
-            {badSince && <span className="shrink-0"><Badge kind="alert">Bad news since signal</Badge></span>}
-          </div>
-          {idea.entry != null && (
-            <div className="flex flex-wrap gap-x-2 text-[13px] text-[var(--text)] tabular-nums">
-              <span className="whitespace-nowrap">Entry {px(idea.entry)}</span>
-              {idea.stop != null && <span className="whitespace-nowrap">SL {px(idea.stop)}</span>}
-              {idea.target != null && <span className="whitespace-nowrap">T {px(idea.target)}</span>}
-              {rr(idea) != null && <span className="whitespace-nowrap font-semibold">R:R {rr(idea).toFixed(1)}</span>}
+          {idea.headline?.value != null && (
+            <div className="shrink-0 text-right tabular-nums">
+              <div className={`text-[22px] font-bold leading-none tracking-[-0.02em] ${toneText(tone(idea.headline.value))}`}>{pct(idea.headline.value, { sign: true, dp: 1 })}</div>
+              <div className="mt-1 text-[12px] text-[var(--text-muted)] whitespace-nowrap">{idea.kind === 'p' && idea.horizon && !older ? `in ${idea.horizon} days` : idea.headline.label}</div>
             </div>
           )}
-          {olderPickLabel(idea) && <div className="text-[12px] text-[var(--text-muted)] tabular-nums">{olderPickLabel(idea)}</div>}
-          {idea.basket && (
-            <div className="text-[12px] tabular-nums">
-              <span className={toneText(idea.basket.beat_nifty >= 0.6 ? 'gain' : 'neutral')}>
-                As a monthly basket: beat NIFTY in {pct(idea.basket.beat_nifty, { dp: 0 })} of months
-              </span>
-              <span className="text-[var(--text-muted)]"> · median {pct(idea.basket.median_vs_nifty, { sign: true, dp: 1 })} vs NIFTY</span>
-            </div>
-          )}
-          {idea.kind === 'p' && idea.spread && (
-            <div className="text-[12px] text-[var(--text-muted)] tabular-nums">
-              Range {pct(idea.spread.p10, { sign: true, dp: 1 })} to {pct(idea.spread.p90, { sign: true, dp: 1 })}{idea.pUp != null ? ` · chance up ${pct(idea.pUp, { dp: 0 })}` : ''}
-              {idea.exMedian != null && <span className="text-[12px]"> · vs NIFTY {pct(idea.exMedian, { sign: true, dp: 1 })}{idea.pBeat != null ? ` · beats ${pct(idea.pBeat, { dp: 0 })}` : ''}</span>}
-            </div>
-          )}
+          <ChevronRight className="w-4 h-4 mt-1 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
         </div>
-        {idea.headline?.value != null && (
-          <div className="shrink-0 max-w-[88px] text-right tabular-nums">
-            <div className={`text-[15px] font-semibold ${toneText(tone(idea.headline.value))}`}>{pct(idea.headline.value, { sign: true, dp: 1 })}</div>
-            <div className="text-[12px] text-[var(--text-muted)]">{idea.headline.label}{idea.kind === 'p' && idea.expectedMedian == null && idea.pBeat != null ? ` · beats ${pct(idea.pBeat, { dp: 0 })}` : ''}</div>
+
+        {(idea.badge || idea.experimental || resultsSoon || badSince) && (
+          <div className="flex flex-wrap items-center gap-1.5 empty:hidden">
+            <IdeaBadge badge={idea.badge} />
+            {idea.experimental && <Badge>Experimental</Badge>}
+            {resultsSoon && <Badge kind="unproven">{resultsSoon}</Badge>}
+            {badSince && <Badge kind="alert">Bad news since signal</Badge>}
           </div>
         )}
-        <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+
+        <Confidence idea={idea} />
+        {idea.entry != null && <Levels idea={idea} />}
+        {idea.kind === 'p' && idea.spread && <Range idea={idea} />}
+
+        {(older || idea.basket) && (
+          <div className="space-y-0.5 text-[12px] text-[var(--text-muted)] tabular-nums">
+            {older && <div>{older}</div>}
+            {idea.basket && (
+              <div>
+                <span className={toneText(idea.basket.beat_nifty >= 0.6 ? 'gain' : 'neutral')}>Monthly basket beat NIFTY in {pct(idea.basket.beat_nifty, { dp: 0 })} of months</span>
+                {' · '}median {pct(idea.basket.median_vs_nifty, { sign: true, dp: 1 })}
+              </div>
+            )}
+          </div>
+        )}
       </Link>
-      <Headline entry={entry} />
-      {idea.kind === 's' && !idea.decided && onDone && (
-        <div className="mt-1.5"><BuyBar idea={idea} id={parseIdeaId(idea.id).key} onDone={onDone} compact /></div>
+      {entry?.material && entry.headline && <div className="px-4 border-t border-[var(--border)]"><Headline entry={entry} /></div>}
+      {actions && (
+        <div className="px-4 pb-4 pt-1">
+          {idea.kind === 's' && !idea.decided && onDone && <BuyBar idea={idea} id={parseIdeaId(idea.id).key} onDone={onDone} compact />}
+          {idea.kind === 'p' && onDone && <PickBar idea={idea} onDone={onDone} />}
+        </div>
       )}
-      {idea.kind === 'p' && onDone && <div className="mt-1.5"><PickBar idea={idea} onDone={onDone} /></div>}
-    </div>
+    </article>
   );
 };
 

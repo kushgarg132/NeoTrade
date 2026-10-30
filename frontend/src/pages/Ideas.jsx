@@ -36,10 +36,10 @@ const Ideas = () => {
   const row = (i) => <IdeaRow key={i.id} idea={i} onDone={fresh.reload} news={news} results={results} />;
 
   const group = (title, rows) => rows.length > 0 && (
-    <>
-      <h3 className="mt-3 mb-1 text-[13px] font-semibold text-[var(--text-muted)]">{title}</h3>
+    <section className="space-y-3">
+      <h3 className="pt-2 text-[13px] font-semibold text-[var(--text-muted)]">{title}</h3>
       {rows.map(row)}
-    </>
+    </section>
   );
 
   return (
@@ -59,16 +59,23 @@ const Ideas = () => {
             <div className="mt-4"><HandledActions key={acts.data.map((a) => a.id).join()} onChanged={acts.reload} /></div>
           </>)}
 
-        {tab === 'picks' && <Card title="New ideas" action={<Badge kind="paper">Paper</Badge>}>
-          <p className="-mt-1 mb-2 text-[13px] text-[var(--text-muted)]">Trades the engine would take: entry, stop (SL), target (T) and reward : risk (R:R). Paper record · not advice.</p>
-          {fresh.loading ? <Skeleton rows={4} />
-            : fresh.error ? <ErrorLine message="Could not load ideas." onRetry={fresh.reload} />
+        {/* Each idea is its own card, so the list sits on the page, not inside a Card (no nested cards). */}
+        {tab === 'picks' && <div className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-semibold text-[var(--text)]">New ideas</h2>
+              <p className="text-[13px] text-[var(--text-muted)]">Trades the engine would take: entry, stop (SL), target (T) and reward : risk (R:R). Paper record · not advice.</p>
+            </div>
+            <span className="shrink-0"><Badge kind="paper">Paper</Badge></span>
+          </div>
+          {fresh.loading ? <Card><Skeleton rows={4} /></Card>
+            : fresh.error ? <Card><ErrorLine message="Could not load ideas." onRetry={fresh.reload} /></Card>
             : fresh.data.items.length === 0 ? (
-              <Empty title={noPickText(fresh.data.hiddenReason).title} body={noPickText(fresh.data.hiddenReason).body}
-                action={<Link to="/ideas/history"><Button variant="secondary">Open history</Button></Link>} />
+              <Card><Empty title={noPickText(fresh.data.hiddenReason).title} body={noPickText(fresh.data.hiddenReason).body}
+                action={<Link to="/ideas/history"><Button variant="secondary">Open history</Button></Link>} /></Card>
             ) : (
               <>
-                {engine.length === 0 && A.length === 0 && B.length === 0 && C.length > 0 && <p className="py-3 text-[14px] text-[var(--text-muted)]">No proven setup has fired right now. The ones below have no edge over the average stock so far.</p>}
+                {engine.length === 0 && A.length === 0 && B.length === 0 && C.length > 0 && <p className="text-[14px] text-[var(--text-muted)]">No proven setup has fired right now. The ones below have no edge over the average stock so far.</p>}
                 {group('Engine ideas', engine)}
                 {group(GRADES.A.label, A)}
                 {group(GRADES.B.label, B)}
@@ -78,12 +85,12 @@ const Ideas = () => {
                       className="mt-2 min-h-11 w-full text-left text-[14px] font-semibold text-[var(--text-muted)]">
                       {showUnproven ? 'Hide' : 'Show'} {C.length} unproven idea{C.length > 1 ? 's' : ''} (grade C: no edge yet)
                     </button>
-                    {showUnproven && <div className="opacity-80">{C.map(row)}</div>}
+                    {showUnproven && <div className="space-y-3 opacity-80">{C.map(row)}</div>}
                   </>
                 )}
               </>
             )}
-        </Card>}
+        </div>}
       </div>
     </Layout>
   );

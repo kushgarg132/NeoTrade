@@ -62,7 +62,8 @@ test('holding rows render the row-specific buttons from holdingButtons', () => {
 
 test('Ideas splits into Picks (default) and Holdings sub-tabs', () => {
   assert.match(page, /const IDS = \['picks', 'holdings'\]/);
-  assert.match(page, /tab === 'picks' && <Card title="New ideas"/);
+  assert.match(page, /tab === 'picks' && <div className="space-y-3">/);
+  assert.match(page, />New ideas<\/h2>/);
   assert.match(page, /tab === 'holdings' && \(acts\.loading/);
 });
 
