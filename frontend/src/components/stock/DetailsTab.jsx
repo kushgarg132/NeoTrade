@@ -8,32 +8,53 @@ import TradingLevels from '../analysis/TradingLevels';
 import TechGauge from './TechGauge';
 import { REASONS } from '../../utils/mine';
 import { day, verdictLabel, verdictKind } from './common';
+import { toneText } from '../ui/tone';
+import { keyNumbers, plainNote, reasonFact } from '../../utils/verdict';
 
-/** Verdict (when held), then the instant snapshot. The AI read lives in the card above the tabs; fundamentals sit under the chart. */
+/** Verdict (when held: each rule with its figures, key numbers, the AI note), then the instant snapshot. The AI read lives in the card above the tabs; fundamentals sit under the chart. */
 const DetailsTab = ({ mine, quick, reloadQuick }) => {
   const v = mine?.verdict;
   const company = quick.data?.company_info;
   const currency = company?.currency || 'INR';
+  const numbers = keyNumbers(v?.facts);
   return (
     <div className="space-y-3">
       {v?.current && (
-        <Card title="Our verdict">
-          <Badge kind={verdictKind(v.current)}>{verdictLabel(v.current)}</Badge>
+        <Card title="Our verdict" action={<Badge kind={verdictKind(v.current)}>{verdictLabel(v.current)}</Badge>}>
+          {v.since && <p className="-mt-1 text-[13px] text-[var(--text-muted)]">Since {day(v.since)}</p>}
           {v.reasons?.length > 0 && (
-            <ul className="mt-3 space-y-1 text-[14px] text-[var(--text-muted)]">
-              {v.reasons.map((c) => <li key={c}>{REASONS[c] || c.replace(/_/g, ' ')}</li>)}
+            <ul className="mt-3 space-y-2.5">
+              {v.reasons.map((c) => {
+                const fact = reasonFact(c, v.facts, v.limits);
+                return (
+                  <li key={c}>
+                    <div className="text-[15px] font-medium text-[var(--text)]">{REASONS[c] || c.replace(/_/g, ' ')}</div>
+                    {fact && <div className="private text-[13px] tabular-nums text-[var(--text-muted)]">{fact}</div>}
+                  </li>
+                );
+              })}
             </ul>
           )}
-          {v.note && <p className="mt-3 text-[15px] text-[var(--text)]">{v.note}</p>}
-          {v.history?.length > 0 && (
-            <ul className="mt-3">
-              {[...v.history].reverse().map((h, i) => (
-                <li key={i} className="flex justify-between min-h-9 items-center border-t border-[var(--border)] text-[14px]">
-                  <span className="text-[var(--text-muted)]">{day(h.date)}</span>
-                  <span className="font-semibold text-[var(--text)]">{verdictLabel(h.verdict)}</span>
-                </li>
+          {numbers.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-[var(--border)] grid grid-cols-2 gap-x-4 gap-y-3">
+              {numbers.map(([label, value, t]) => (
+                <div key={label} className="min-w-0">
+                  <div className="text-[13px] text-[var(--text-muted)]">{label}</div>
+                  <div className={`private text-[15px] font-semibold tabular-nums truncate ${toneText(t)}`}>{value}</div>
+                </div>
               ))}
-            </ul>
+            </div>
+          )}
+          {v.note && (
+            <div className="mt-4 pt-3 border-t border-[var(--border)]">
+              <p className="text-[13px] text-[var(--text-muted)] mb-1">AI note</p>
+              <p className="text-[14px] text-[var(--text)]">{plainNote(v.note)}</p>
+            </div>
+          )}
+          {v.history?.length > 1 && (
+            <p className="mt-3 text-[13px] text-[var(--text-muted)]">
+              Earlier: {[...v.history].reverse().slice(1).map((h) => `${verdictLabel(h.verdict)} from ${day(h.date)}`).join(' · ')}
+            </p>
           )}
         </Card>
       )}
