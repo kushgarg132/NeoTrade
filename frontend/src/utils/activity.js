@@ -26,3 +26,13 @@ export const tally = (rows) => {
   const n = (s) => rows.filter((r) => r.status === s).length;
   return [n('FILLED') && `${n('FILLED')} filled`, n('REFUSED') && `${n('REFUSED')} refused`].filter(Boolean).join(' · ');
 };
+
+/** A day's rows with its refusals folded: { shown (everything but REFUSED, in order), refused, reason (the most
+ *  common refusal reason, null when there are none), reasonCount }. Pure. */
+export const foldRefusals = (rows = []) => {
+  const refused = rows.filter((r) => r.status === 'REFUSED');
+  const counts = new Map();
+  for (const r of refused) counts.set(r.reason || 'no reason given', (counts.get(r.reason || 'no reason given') || 0) + 1);
+  const [reason, reasonCount] = [...counts].sort((a, b) => b[1] - a[1])[0] || [null, 0];
+  return { shown: rows.filter((r) => r.status !== 'REFUSED'), refused, reason, reasonCount };
+};

@@ -3,7 +3,7 @@ import Button from '../ui/Button';
 import api, { endpoints } from '../../utils/api';
 
 /** Stop AI: turns the autopilot off (same call as the old Stop autopilot), after a confirm. */
-const StopAi = ({ onStopped }) => {
+const StopAi = ({ onStopped, compact = false }) => {
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -20,9 +20,9 @@ const StopAi = ({ onStopped }) => {
       setBusy(false);
     }
   };
-  if (!asking) return <Button variant="danger" onClick={() => setAsking(true)}>Stop AI</Button>;
+  if (!asking) return <Button variant="danger" className={compact ? 'shrink-0 px-4 text-[14px]' : ''} onClick={() => setAsking(true)}>Stop AI</Button>;
   return (
-    <div role="alertdialog" aria-label="Confirm stop AI" className="w-full rounded-[12px] border border-[var(--loss)] p-3 space-y-2">
+    <div role="alertdialog" aria-label="Confirm stop AI" className={`${compact ? 'basis-full' : ''} w-full rounded-[12px] border border-[var(--loss)] p-3 space-y-2`}>
       <p className="text-[15px] text-[var(--text)]">Stop the AI trading? It places no new orders until you turn it on again.</p>
       {error && <p role="alert" className="text-[14px] text-[var(--loss)]">{error}</p>}
       <div className="flex gap-2">

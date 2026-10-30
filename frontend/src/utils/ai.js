@@ -12,9 +12,10 @@ export const scoreboard = ({ month, card, capital, mineValue } = {}) => {
   const share = (v, base) => (v == null || !base ? '—' : pct(v / base, { sign: true, dp: 1 }));
   return {
     versus: [
-      { label: 'AI', value: share(month?.ai, capital), tone: tone(month?.ai) },
-      { label: 'You', value: share(month?.mine, mineValue), tone: tone(month?.mine) },
-      { label: 'NIFTY', value: p(card?.nifty_return_pct, true), tone: tone(card?.nifty_return_pct) },
+      // `pct` is the same figure in percent (null when missing), for the bars on one scale.
+      { label: 'AI', value: share(month?.ai, capital), tone: tone(month?.ai), pct: month?.ai == null || !capital ? null : (month.ai / capital) * 100 },
+      { label: 'You', value: share(month?.mine, mineValue), tone: tone(month?.mine), pct: month?.mine == null || !mineValue ? null : (month.mine / mineValue) * 100 },
+      { label: 'NIFTY', value: p(card?.nifty_return_pct, true), tone: tone(card?.nifty_return_pct), pct: card?.nifty_return_pct ?? null },
     ],
     niftyFrom: card?.totals?.first_day || null,
     stats: [

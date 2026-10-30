@@ -27,3 +27,14 @@ test('sources present and a day tally', () => {
   assert.equal(tally(rows.slice(0, 3)), '1 filled · 2 refused');
   assert.equal(tally([]), '');
 });
+
+import { foldRefusals } from './activity.js';
+
+test('foldRefusals keeps fills in order and names the commonest refusal reason', () => {
+  const rows = [{ status: 'REFUSED', reason: 'parked' }, { status: 'FILLED', symbol: 'A' }, { status: 'REFUSED', reason: 'parked' }, { status: 'REFUSED', reason: 'cap' }];
+  const f = foldRefusals(rows);
+  assert.deepEqual(f.shown.map((r) => r.symbol), ['A']);
+  assert.equal(f.refused.length, 3);
+  assert.deepEqual([f.reason, f.reasonCount], ['parked', 2]);
+  assert.deepEqual(foldRefusals([{ status: 'FILLED' }]).reason, null);
+});

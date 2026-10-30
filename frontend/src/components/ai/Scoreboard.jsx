@@ -14,7 +14,27 @@ import { toneText } from '../ui/tone';
 import { scoreboard } from '../../utils/ai';
 import { strategyPath } from '../../utils/routes';
 
-const Paper = () => <Badge kind="paper">Paper</Badge>;
+// Track-record labels short enough for a phone's three columns.
+const SHORT = { 'Max drawdown (peak to trough)': 'Max drawdown', 'vs same money in NIFTY': 'vs NIFTY' };
+
+/** AI, You and NIFTY this month as bars from a zero line on one scale, the figure beside each. */
+const Versus = ({ rows }) => {
+  const max = Math.max(0.5, ...rows.map((r) => Math.abs(r.pct ?? 0)));
+  return (
+    <ul className="space-y-2.5">
+      {rows.map((r) => (
+        <li key={r.label} className="grid grid-cols-[3.5rem_minmax(0,1fr)_4rem] items-center gap-3">
+          <span className="text-[14px] font-semibold text-[var(--text)]">{r.label}</span>
+          <span className="relative h-2.5 rounded-full bg-[var(--surface-2)]" aria-hidden="true">
+            <span className="absolute inset-y-[-3px] left-1/2 w-px bg-[var(--border)]" />
+            {r.pct ? <span className={`absolute inset-y-0 rounded-full ${r.pct > 0 ? 'left-1/2 bg-[var(--gain)]' : 'right-1/2 bg-[var(--loss)]'}`} style={{ width: `${(Math.abs(r.pct) / max) * 50}%` }} /> : null}
+          </span>
+          <span className={`text-right text-[15px] font-semibold tabular-nums ${toneText(r.tone)}`}>{r.value}</span>
+        </li>
+      ))}
+    </ul>
+  );
+};
 const settingsLink = (label) => <Link to="/settings/autopilot" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold">{label}</Link>;
 const Section = ({ state, children, what, ...p }) => {
   if (state.error) return <ErrorLine message={`Couldn't load the AI's ${what}.`} onRetry={state.retry} />;
@@ -36,26 +56,24 @@ const Scoreboard = ({ board, card, forward, capital, mineValue }) => {
   const strategies = card.data?.strategies || [];
   return (
     <div className="space-y-3">
-      <Card title="This month" action={<Paper />}>
+      <Card title="This month">
         <Section state={board} rows={2} what="monthly score">
-          <div className="grid grid-cols-3 gap-3">
-            {s.versus.map((v) => <Stat key={v.label} label={v.label} value={<span className={toneText(v.tone)}>{v.value}</span>} />)}
-          </div>
-          <p className="mt-2 text-[13px] text-[var(--text-muted)]">Closed trades this month, after charges, as % of each book's capital. You = your own account. NIFTY is the index since the AI began{s.niftyFrom ? ` (${s.niftyFrom})` : ''}, not this month.</p>
+          <Versus rows={s.versus} />
+          <p className="mt-3 text-[12px] text-[var(--text-muted)]">Closed trades after charges, as % of each book's capital. NIFTY is since the AI began{s.niftyFrom ? ` (${s.niftyFrom})` : ''}.</p>
         </Section>
       </Card>
-      <Card title="Track record" action={<Paper />}>
+      <Card title="Track record">
         <Section state={card} rows={2} what="track record">
           {card.data?.totals?.trades === 0 ? (
             <Empty title="No closed trades yet" body="Each closed AI trade lands here, after charges. It starts once the autopilot places a trade." action={settingsLink('Check autopilot settings')} />
           ) : (
-            <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-              {s.stats.map((v) => <Stat key={v.label} label={v.label} value={<span className={toneText(v.tone)}>{v.value}</span>} />)}
+            <div className="grid grid-cols-3 gap-x-3 gap-y-3 sm:grid-cols-5">
+              {s.stats.map((v) => <Stat key={v.label} label={SHORT[v.label] || v.label} value={<span className={toneText(v.tone)}>{v.value}</span>} />)}
             </div>
           )}
         </Section>
       </Card>
-      <Card title="Strategies" action={<Paper />}>
+      <Card title="Strategies">
         <Section state={card} rows={3} what="strategies">
           {strategies.length === 0 ? (
             <Empty title="No strategies yet" body="Each strategy the AI trades gets a line here with its proven status." action={settingsLink('Check autopilot settings')} />

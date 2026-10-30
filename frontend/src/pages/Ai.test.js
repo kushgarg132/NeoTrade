@@ -9,13 +9,14 @@ const board = rd('../components/ai/Scoreboard.jsx');
 const pos = rd('../components/ai/Positions.jsx');
 const act = rd('../components/ai/Activity.jsx');
 
-test('book header carries the Paper label next to the value and today', () => {
-  assert.match(page, /ap\?\.live[\s\S]*Paper/);
+test('book header says Paper or Live once, with the autopilot state, under the value and today', () => {
+  assert.match(page, /\{ap\.live \? 'Live' : 'Paper'\} · Autopilot \{on \? 'on' : 'off'\}/);
   assert.match(page, /AI book/);
 });
 
-test('scoreboard cards each carry a Paper chip', () => {
-  assert.ok((board.match(/<Paper\b|kind="paper"/g) || []).length >= 3);
+test('scoreboard: this month as bars on one scale; no Paper chip repeated per card', () => {
+  assert.match(board, /<Versus rows=\{s\.versus\} \/>/);
+  assert.doesNotMatch(board, /<Paper\b|kind="paper"/);
 });
 
 test('positions: dense rows, Paper label, signed percent, Empty with an action', () => {
@@ -24,8 +25,10 @@ test('positions: dense rows, Paper label, signed percent, Empty with an action',
   assert.match(pos, /<Empty[\s\S]*action=/);
 });
 
-test('activity: dense rows, Paper label, Empty with an action', () => {
-  assert.match(act, /'paper'/);
+test('activity: one-line rows, Live flagged per row, refusals folded per day, Empty with an action', () => {
+  assert.match(act, /\{live && <span[^\n]*<Badge kind="live">Live<\/Badge>/);
+  assert.match(act, /foldRefusals\(list\)/);
+  assert.match(act, /fold=\{status === 'all'\}/); // the Refused filter shows them unfolded
   assert.match(act, /<Empty[\s\S]*action=/);
 });
 
@@ -39,13 +42,12 @@ test('Paper or Live comes from the data: per Activity row, and the book badge de
   assert.doesNotMatch(act, /title="Last 30" action=/);
   assert.match(act, /r\.mode\)\.toUpperCase\(\) === 'LIVE'/);
   const ai = rd('./Ai.jsx');
-  assert.match(ai, /kind=\{ap\?\.live \? 'live' : 'paper'\}/);
   assert.match(ai, /<ErrorLine message="Couldn't load the autopilot status\." onRetry=\{today\.retry\}/);
 });
 
 test('book header says when the Lab is off and which strategies are paused', () => {
   assert.match(page, /ap\.lab === false[\s\S]*Lab off/);
-  assert.match(page, /ap\?\.paused[\s\S]*Paused on paper/);
+  assert.match(page, /ap\.paused\?\.length > 0[\s\S]*Paused on paper/);
 });
 
 test('book header is the Hero with a today chip; null-safe percent', () => {
@@ -56,7 +58,7 @@ test('book header is the Hero with a today chip; null-safe percent', () => {
   assert.match(page, /suffix="today"/);
   assert.doesNotMatch(page, /rounded-\[16px\]/);
   assert.match(page, /<Card><Skeleton rows=\{2\} \/><\/Card>/);
-  for (const s of ['Autopilot on', 'cap deployed', 'Lab off', 'Paused on paper', '<StopAi', '/settings/autopilot']) assert.ok(page.includes(s), s);
+  for (const s of ['Autopilot {on ?', 'cap deployed', 'Lab off', 'Paused on paper', '<StopAi compact', '/settings/autopilot', 'role="progressbar"']) assert.ok(page.includes(s), s);
 });
 
 test('accent buttons use accent-ink, not surface', () => {

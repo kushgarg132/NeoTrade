@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Tabs, { useTabParam } from '../components/ui/Tabs';
-import Badge from '../components/ui/Badge';
 import ErrorLine from '../components/ui/ErrorLine';
 import Card from '../components/ui/Card';
 import Hero from '../components/ui/Hero';
@@ -70,17 +69,33 @@ const Ai = () => {
       <div className="mb-3">
         {!today.loaded || !pnl.loaded ? <Card><Skeleton rows={2} /></Card> : (
           <Hero label="AI book" value={value} change={<DeltaChip value={day} pct={typeof dayPct === 'number' ? dayPct * 100 : undefined} suffix="today" />}>
-            <div className="mt-3 flex items-center gap-2">
-              <Badge kind={ap?.live ? 'live' : 'paper'}>{ap?.live ? 'Live' : 'Paper'}</Badge>
-              {ap && <Badge kind={on ? 'proven' : 'neutral'}>{on ? 'Autopilot on' : 'Autopilot off'}</Badge>}
-            </div>
-            <div className="mt-2 text-[13px] text-[var(--text-muted)]">
-              {ap ? (ap.exposure_cap ? <span className="private">{inr(ap.deployed)} of {inr(ap.exposure_cap)} cap deployed</span> : 'No exposure cap set') : <ErrorLine message="Couldn't load the autopilot status." onRetry={today.retry} />}
-            </div>
-            {ap && ap.lab === false && <div className="mt-1 text-[13px] text-[var(--text-muted)]">Lab off: no intraday auto-run, news-triggered entries or game plan.</div>}
-            {ap?.paused?.length > 0 && <div className="mt-1 text-[13px] text-[var(--text-muted)]">Paused on paper (losing over 30+ trades): {ap.paused.join(', ')}</div>}
-            {on && <div className="mt-3"><StopAi onStopped={() => { setStopped(true); today.reload(); }} /></div>}
-            {ap && !on && <Link to="/settings/autopilot" className="mt-2 inline-flex items-center min-h-11 text-[15px] font-semibold text-[var(--accent)]">Turn the autopilot on in Settings</Link>}
+            {!ap ? <div className="mt-3"><ErrorLine message="Couldn't load the autopilot status." onRetry={today.retry} /></div> : (
+              <>
+                <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-3">
+                  <span aria-hidden="true" className={`w-2 h-2 shrink-0 rounded-full ${on ? 'bg-[var(--gain)]' : 'bg-[var(--text-muted)]'}`} />
+                  <span className="min-w-0 flex-1 text-[15px] font-semibold text-[var(--text)]">
+                    {ap.live ? 'Live' : 'Paper'} · Autopilot {on ? 'on' : 'off'}
+                  </span>
+                  {on && <StopAi compact onStopped={() => { setStopped(true); today.reload(); }} />}
+                  {!on && <Link to="/settings/autopilot" className="inline-flex items-center min-h-11 text-[14px] font-semibold text-[var(--accent)]">Turn on</Link>}
+                </div>
+                {ap.exposure_cap ? (
+                  <div className="mt-2">
+                    <div className="h-1.5 rounded-full bg-[var(--surface-2)]" role="progressbar" aria-label="Deployed of the exposure cap"
+                      aria-valuenow={Math.round(Math.min(1, (ap.deployed || 0) / ap.exposure_cap) * 100)} aria-valuemin={0} aria-valuemax={100}>
+                      <div className="h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${Math.min(1, (ap.deployed || 0) / ap.exposure_cap) * 100}%` }} />
+                    </div>
+                    <div className="mt-1.5 text-[12px] tabular-nums text-[var(--text-muted)]"><span className="private">{inr(ap.deployed)} of {inr(ap.exposure_cap)}</span> cap deployed</div>
+                  </div>
+                ) : <div className="mt-2 text-[12px] text-[var(--text-muted)]">No exposure cap set</div>}
+                {(ap.lab === false || ap.paused?.length > 0) && (
+                  <p className="mt-2 text-[12px] text-[var(--text-muted)]">
+                    {ap.lab === false && 'Lab off: no intraday auto-run, news entries or game plan.'}
+                    {ap.paused?.length > 0 && ` Paused on paper (losing over 30+ trades): ${ap.paused.join(', ')}.`}
+                  </p>
+                )}
+              </>
+            )}
           </Hero>
         )}
       </div>
