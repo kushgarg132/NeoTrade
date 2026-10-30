@@ -36,8 +36,9 @@ def test_cause_is_the_strongest_material_company_or_sector_item():
     out = news_moves.attribute([{"symbol": "BANKA", "move_pct": -4.0, "rupees": -400},
                                 {"symbol": "BANKB", "move_pct": -3.0, "rupees": -300},
                                 {"symbol": "IT1", "move_pct": 0.1, "rupees": 1}], 0.0, items[:3], SECTORS)
-    assert out[0]["cause"] == {"title": "company", "url": "https://x/company", "scope": "COMPANY",
-                               "direction": -0.8, "impact": 7}   # a company item wins the tie
+    assert {k: v for k, v in out[0]["cause"].items() if k not in ("id", "impacts")} == {
+        "title": "company", "url": "https://x/company", "scope": "COMPANY", "direction": -0.8, "impact": 7}   # a company item wins the tie
+    assert "impacts" in out[0]["cause"]
     assert out[1]["cause"]["title"] == "sector" and out[1]["cause"]["scope"] == "SECTOR"
     assert out[2]["cause"] is None and digest.news_why(out[2]) == "moved with the market"
     assert digest.news_why({"cause": None, "vs_nifty": -5.0}) == "no news found"

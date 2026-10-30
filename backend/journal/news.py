@@ -39,6 +39,8 @@ def _after_pct(frame, day) -> float | None:
 
 
 async def attach_news(db, trips: list[dict]) -> list[dict]:
+    from backend.datalayer.news import ref
+
     if not trips:
         return trips
     names = {t.get("underlying") or t["symbol"] for t in trips}
@@ -54,7 +56,7 @@ async def attach_news(db, trips: list[dict]) -> list[dict]:
         at = _aware(doc["published_at"])
         for i in doc.get("impacts") or []:
             if i.get("type") == "symbol" and i.get("target") in names:
-                by_name[i["target"]].append((at, i["impact"], i["direction"], doc.get("title"), doc.get("url")))
+                by_name[i["target"]].append((at, i["impact"], i["direction"], doc.get("title"), doc.get("url"), ref(doc)))
     for rows in by_name.values():
         rows.sort(key=lambda r: r[0])
     times = {name: [r[0] for r in rows] for name, rows in by_name.items()}
@@ -65,7 +67,7 @@ async def attach_news(db, trips: list[dict]) -> list[dict]:
         moment = _aware(moment)
         lo, hi = bisect_left(times.get(name, []), moment - WINDOW), bisect_right(times.get(name, []), moment)
         best = max(by_name.get(name, [])[lo:hi], key=lambda r: r[1], default=None)
-        return ({"direction": best[2], "impact": best[1], "headline": best[3], "url": best[4],
+        return ({"direction": best[2], "impact": best[1], "headline": best[3], "url": best[4], **best[5],
                  "minutes_before": int((moment - best[0]).total_seconds() // 60)} if best else None)
 
     for trip in trips:

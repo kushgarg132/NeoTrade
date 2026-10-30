@@ -39,7 +39,9 @@ async def verdicts_visible(db, user_id: str) -> bool:
 
 
 async def headlines_for(db, symbols: list[str], since: datetime) -> dict[str, dict]:
-    """symbol -> the most material scored headline about it since `since`."""
+    """symbol -> the most material scored headline about it since `since`, with its id and impacts."""
+    from backend.datalayer.news import ref as news_ref
+
     if not symbols:
         return {}
     best: dict[str, tuple[float, dict]] = {}
@@ -54,6 +56,7 @@ async def headlines_for(db, symbols: list[str], since: datetime) -> dict[str, di
                 best[target] = (impact.get("impact") or 0, {
                     "title": item.get("event") or item.get("title"), "url": item.get("url"),
                     "direction": impact.get("direction"), "published_at": _aware(item.get("published_at")),
+                    **news_ref(item),
                 })
     return {symbol: found for symbol, (_, found) in best.items()}
 

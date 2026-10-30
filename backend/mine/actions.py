@@ -125,7 +125,8 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
         if (n.get("direction") or 0) < 0:
             out.append(_action("bad_news", s, n.get("url"), f"{s}: {n.get('title') or 'bad news'}",
                                "Negative news in the last 36 hours.", n.get("published_at") or now,
-                               {"type": "stock", "url": n.get("url")}))
+                               {"type": "stock", "url": n.get("url"), "news_id": n.get("id"),
+                                "impacts": n.get("impacts") or []}))
 
     for i in await ideas(db, user_id):
         conviction = (i.get("score") or {}).get("final")

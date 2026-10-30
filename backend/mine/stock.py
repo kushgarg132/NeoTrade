@@ -31,11 +31,14 @@ async def _verdicts(db, user_id: str, symbol: str, show: bool) -> tuple[dict, li
 
 
 async def _news(db, symbol: str) -> list[dict]:
+    from backend.datalayer.news import ref
+
     out = []
     async for n in db["news_items"].find({"impacts.target": symbol}).sort("published_at", -1).limit(NEWS):
         i = next(i for i in n["impacts"] if i.get("target") == symbol)
         out.append({"title": n.get("event") or n.get("title"), "url": n.get("url"),
-                    "published_at": n.get("published_at"), "direction": i.get("direction"), "impact": i.get("impact")})
+                    "published_at": n.get("published_at"), "direction": i.get("direction"), "impact": i.get("impact"),
+                    **ref(n)})
     return out
 
 

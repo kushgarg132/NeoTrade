@@ -166,6 +166,17 @@ def item_id(title: str) -> str:
     return hashlib.sha1(_title_key(title).encode()).hexdigest()
 
 
+REF_IMPACTS = 4
+
+
+def ref(doc: dict) -> dict:
+    """What a list page needs to show a stored item's analysis like the News tab: its id (for /news/:id) and
+    its strongest impacts, {type, target, direction, impact} each, strongest first."""
+    top = sorted(doc.get("impacts") or [], key=lambda i: -(i.get("impact") or 0))[:REF_IMPACTS]
+    _id = doc.get("_id")
+    return {"id": None if _id is None else str(_id), "impacts": [{k: i.get(k) for k in ("type", "target", "direction", "impact")} for i in top]}
+
+
 async def ensure_indexes(db) -> None:
     coll = db[COLLECTION]
     await coll.create_index("expire_at", expireAfterSeconds=0)

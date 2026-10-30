@@ -39,6 +39,8 @@ def big_moves(rows: list[dict], nifty_pct: Optional[float], big: float = BIG_PCT
 def causes(items: list[dict], symbol: str, sector: Optional[str], limit: int = 1) -> list[dict]:
     """The strongest material impacts on `symbol` (or its sector) among scored `items`: by impact, a
     company item ahead of a sector one on a tie; one per item."""
+    from backend.datalayer.news import ref
+
     found = []
     for item in items:
         best = None
@@ -53,7 +55,7 @@ def causes(items: list[dict], symbol: str, sector: Optional[str], limit: int = 1
             imp = best[1]
             found.append((best[0], {"title": item.get("event") or item.get("title"), "url": item.get("url"),
                                     "scope": SCOPES.get(imp.get("type"), "COMPANY"), "direction": imp.get("direction"),
-                                    "impact": imp.get("impact"), "themes": item.get("themes") or []}))
+                                    "impact": imp.get("impact"), "themes": item.get("themes") or [], **ref(item)}))
     found.sort(key=lambda f: f[0], reverse=True)
     return [c for _, c in found[:limit]]
 

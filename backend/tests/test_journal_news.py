@@ -32,7 +32,8 @@ async def test_attach_news_uses_the_underlying_and_the_24h_window(mongo):
         _news("b", "TCS", T0 + timedelta(days=1) - timedelta(hours=30)),   # older than 24h before trip 1
     ])
     out = await attach_news(mongo, trips)
-    assert out[0]["news"] == {"direction": -0.7, "impact": 8, "minutes_before": 10, "headline": None, "url": None}
+    assert out[0]["news"] == {"direction": -0.7, "impact": 8, "minutes_before": 10, "headline": None, "url": None,
+                              "id": "a", "impacts": [{"type": "symbol", "target": "NIFTY", "direction": -0.7, "impact": 8}]}
     assert out[1]["news"] is None
 
 
@@ -87,8 +88,10 @@ async def test_attach_news_tags_the_exit_and_what_the_stock_did_next(mongo):
                                            for i, d in enumerate(days)])
     out = (await attach_news(mongo, [trip]))[0]
     assert out["news"] is None  # nothing in the 24h before entry
-    assert out["exit_news"] == {"direction": -0.6, "impact": 8, "headline": "TCS cuts guidance",
-                                "url": "https://e.x/tcs", "minutes_before": 120, "after_5d_pct": 10.0}
+    exit_news = {k: v for k, v in out["exit_news"].items() if k not in ("id", "impacts")}
+    assert exit_news == {"direction": -0.6, "impact": 8, "headline": "TCS cuts guidance",
+                         "url": "https://e.x/tcs", "minutes_before": 120, "after_5d_pct": 10.0}
+    assert out["exit_news"]["id"] and out["exit_news"]["impacts"][0]["target"] == "TCS"  # opens its analysis
 
 
 async def test_exit_news_without_bars_has_no_after_move(mongo):

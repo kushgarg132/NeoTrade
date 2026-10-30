@@ -212,7 +212,9 @@ async def test_verdict_to_sell_carries_a_sell_ticket_and_bad_news_its_url(db):
     await _seed(db, ("HOLD", "SELL"))
     built = {a["kind"]: a for a in await actions.build(db, "alice", NOW, True)}
     assert built["verdict_worse"]["action"] == {"type": "ticket", "side": "SELL", "quantity": 10, "price": 85.0}
-    assert built["bad_news"]["action"] == {"type": "stock", "url": "https://n/b"}
+    news = built["bad_news"]["action"]
+    assert {k: news[k] for k in ("type", "url")} == {"type": "stock", "url": "https://n/b"}
+    assert news["news_id"] and news["impacts"][0]["direction"] < 0  # opens the story's analysis
 
 
 async def test_verdict_worse_not_to_sell_stays_a_stock_link(db):

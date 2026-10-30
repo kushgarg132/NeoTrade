@@ -124,8 +124,10 @@ async def _headlines(ticker: str) -> List[Dict[str, Any]]:
         logger.warning("index_move: stored headlines unavailable: %s", e)
         stored = []
     if stored:
+        from backend.datalayer.news import ref
+
         return [{"title": d["title"], "url": d.get("url", ""), "source": d.get("source", ""),
-                 "published_at": d["published_at"].isoformat()} for d in stored]
+                 "published_at": d["published_at"].isoformat(), **ref(d)} for d in stored]
     articles = await fresh_headlines(NEWS_QUERIES.get(ticker, []), max_age=HEADLINE_MAX_AGE, limit=HEADLINE_LIMIT)
     return [
         {"title": a.title, "url": a.url, "source": a.source, "published_at": a.published_at.isoformat()}

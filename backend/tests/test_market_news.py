@@ -121,8 +121,9 @@ def test_symbol_news_summarises_sentiment_and_latest_headline(monkeypatch):
     body = client.get("/news/symbols", params={"symbols": "tcs.NS,INFY,WIPRO"}).json()["symbols"]
     assert body["TCS"]["headline"] == "title new" and body["TCS"]["direction"] == -0.6
     assert body["TCS"]["material"] is True and body["TCS"]["sentiment"] == -0.3
+    assert body["TCS"]["id"] and body["TCS"]["impacts"][0]["target"] == "TCS"  # the News tab's analysis
     assert body["WIPRO"] == {"sentiment": 0.1, "headline": None, "direction": None, "impact": None,
-                             "material": False, "published_at": None, "url": None}
+                             "material": False, "published_at": None, "url": None, "id": None, "impacts": []}
     assert "INFY" not in body  # its only news is older than 72h and it has no sentiment
 
 

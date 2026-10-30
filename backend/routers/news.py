@@ -236,7 +236,7 @@ async def symbol_news(symbols: str = "", user: User = Depends(get_current_user))
     its blended sentiment and its latest scored headline (72h). Quiet names
     are left out."""
     from backend.database import db
-    from backend.datalayer.news import COLLECTION, SCORED
+    from backend.datalayer.news import COLLECTION, SCORED, ref
     from backend.datalayer.prices import _bare
     from backend.strategies.longterm.analyst_verdict import MATERIALITY_THRESHOLD
 
@@ -265,9 +265,10 @@ async def symbol_news(symbols: str = "", user: User = Depends(get_current_user))
                 "headline": doc.get("title"), "url": doc.get("url"), "direction": impact.get("direction"),
                 "impact": impact.get("impact"), "material": material,
                 "published_at": (published if published.tzinfo else published.replace(tzinfo=timezone.utc)),
+                **ref(doc),
             }
     empty = {"headline": None, "direction": None, "impact": None, "material": False, "published_at": None,
-             "url": None}
+             "url": None, "id": None, "impacts": []}
     sentiments: dict[str, float] = {}
     if db.redis is not None:
         try:  # one round trip for every symbol, not one each
@@ -294,7 +295,7 @@ async def symbol_history(symbol: str, days: int = Query(180, ge=1, le=365), user
     impact, material judged on that impact (an item only tagged with the
     symbol has direction/impact None and is not material)."""
     from backend.database import db
-    from backend.datalayer.news import COLLECTION, SCORED
+    from backend.datalayer.news import COLLECTION, SCORED, ref
     from backend.datalayer.prices import _bare
     from backend.strategies.longterm.analyst_verdict import MATERIALITY_THRESHOLD
 
@@ -312,7 +313,7 @@ async def symbol_history(symbol: str, days: int = Query(180, ge=1, le=365), user
         items.append({"id": doc["_id"], "title": doc.get("title"), "url": doc.get("url"),
                       "published_at": published if published.tzinfo else published.replace(tzinfo=timezone.utc),
                       "direction": own.get("direction"), "impact": own.get("impact"),
-                      "material": (own.get("impact") or 0) >= MATERIALITY_THRESHOLD})
+                      "material": (own.get("impact") or 0) >= MATERIALITY_THRESHOLD, "impacts": ref(doc)["impacts"]})
     return {"symbol": sym, "items": items}
 
 
