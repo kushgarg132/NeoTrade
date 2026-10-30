@@ -10,6 +10,7 @@ import Skeleton from '../components/ui/Skeleton';
 import Hero from '../components/ui/Hero';
 import DeltaChip from '../components/ui/DeltaChip';
 import Stat from '../components/ui/Stat';
+import Button from '../components/ui/Button';
 import { AiCard, AiText } from '../components/ai/AiSummary';
 import useStored from '../hooks/useStored';
 import api, { endpoints } from '../utils/api';
@@ -34,14 +35,23 @@ const CloseLine = ({ points }) => (
   </div>
 );
 
-/** The socket streams a fresh story as it is written; HTTP is the fallback when there is no socket. */
+/** On open only the stored story (`?cached=true`, no model call; 404 = none yet: status `none`). `generate`
+ *  writes one: the socket streams it as it is written; HTTP is the fallback when there is no socket. */
 const useIndexWhy = (ticker) => {
   const [state, setState] = useState({ ticker, status: 'loading', text: '', data: null, code: null });
-  const [tick, setTick] = useState(0);
+  // Runs asked for on this ticker; another ticker's count reads as 0, so opening an index never runs one.
+  const [run, setRun] = useState({ ticker, n: 0 });
+  const tick = run.ticker === ticker ? run.n : 0;
   useEffect(() => {
     let live = true;
     const base = (s) => (s.ticker === ticker ? s : { ticker, status: 'loading', text: '', data: null, code: null });
     const set = (next) => live && setState((s) => ({ ...base(s), ...next }));
+    if (!tick) {
+      api.get(endpoints.marketIndexAnalysis(ticker), { params: { cached: true } })
+        .then((r) => set({ status: 'ok', data: r.data }))
+        .catch((e) => set(e?.response?.status === 404 ? { status: 'none' } : { status: 'error', code: e?.response?.status ?? null }));
+      return () => { live = false; };
+    }
     const request = stream.request('index_why', { ticker }, (m) => {
       if (m.event === 'delta') live && setState((s) => ({ ...base(s), text: base(s).text + m.data.text }));
       else if (m.event === 'report') set({ status: 'ok', data: m.data, text: '' });
@@ -55,17 +65,26 @@ const useIndexWhy = (ticker) => {
     return () => { live = false; request.cancel(); };
   }, [ticker, tick]);
   const shown = state.ticker === ticker ? state : { status: 'loading', text: '', data: null, code: null };
-  const retry = () => { setState({ ticker, status: 'loading', text: '', data: null, code: null }); setTick((t) => t + 1); };
-  return { ...shown, retry };
+  const generate = () => {
+    setState({ ticker, status: 'loading', text: '', data: null, code: null });
+    setRun((r) => ({ ticker, n: (r.ticker === ticker ? r.n : 0) + 1 }));
+  };
+  return { ...shown, generate };
 };
 
 const Why = ({ ticker }) => {
-  const { data, status, code, text, retry } = useIndexWhy(ticker);
+  const { data, status, code, text, generate } = useIndexWhy(ticker);
   return (
     <AiCard title="Why it moved" asOf={data?.session?.date}>
       {status === 'loading' && (text ? <AiText text={text} /> : <Skeleton rows={4} />)}
+      {status === 'none' && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[14px] text-[var(--text-muted)]">No explanation for the last session yet.</p>
+          <Button onClick={generate}>Generate explanation</Button>
+        </div>
+      )}
       {status === 'error' && (
-        <ErrorLine message={code === 503 ? 'Explanation unavailable right now' : 'Could not load the explanation.'} onRetry={retry} />
+        <ErrorLine message={code === 503 ? 'Explanation unavailable right now' : 'Could not load the explanation.'} onRetry={generate} />
       )}
       {status === 'ok' && (
         <>
@@ -87,8 +106,6 @@ const IndexPage = () => {
   return (
     <Layout>
       <PageHeader title={data?.name || 'Index'} back="/market" backLabel="Market" />
-      {/* The AI explanation first, on its own read: it shows even while the price data loads or fails. */}
-      {status !== 'empty' && <div className="mb-3"><Why ticker={ticker} /></div>}
       {status === 'loading' && <Skeleton rows={6} />}
       {status === 'empty' && <Empty title="Not found" body="This index is not tracked." action={<Link to="/market" className="text-[var(--accent)]">Back to Market</Link>} />}
       {status === 'error' && <ErrorLine message="Could not load this index." onRetry={retry} />}
@@ -106,6 +123,8 @@ const IndexPage = () => {
           </Card>
         </div>
       )}
+      {/* Under the chart, on its own read: it shows even while the price data loads or fails. */}
+      {status !== 'empty' && <div className="mt-3"><Why ticker={ticker} /></div>}
     </Layout>
   );
 };

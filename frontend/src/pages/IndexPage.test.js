@@ -20,3 +20,14 @@ test('why it moved streams over the socket, HTTP only as fallback', () => {
   assert.match(src, /m\.event === 'delta'/);
   assert.match(src, /if \(!request\.ok\)/);
 });
+
+test('opening shows only the stored explanation; Generate writes one', () => {
+  assert.match(src, /params: \{ cached: true \}/);
+  assert.match(src, /e\?\.response\?\.status === 404 \? \{ status: 'none' \}/);
+  assert.match(src, /Generate explanation/);
+  assert.match(src, /run\.ticker === ticker \? run\.n : 0/);
+});
+
+test('the explanation sits under the chart', () => {
+  assert.ok(src.indexOf('<CloseLine points') < src.indexOf('<Why ticker'));
+});
