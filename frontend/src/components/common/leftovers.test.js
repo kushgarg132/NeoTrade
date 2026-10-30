@@ -109,3 +109,9 @@ test('a tab switch (a REPLACE on the same path) keeps the scroll; a new path ope
   assert.match(app, /if \(scrolledPath\.current === pathname\) return;/);
   assert.match(app, /if \(navigationType !== 'POP'\) window\.scrollTo\(0, 0\);/);
 });
+
+test('AiRead shows a stored read: it says summary/sentiment_analysis, a fresh report analyst_summary/sentiment', () => {
+  const card = f('../stock/AiRead.jsx');
+  assert.match(card, /read\?\.analyst_summary \?\? read\?\.summary/);
+  assert.match(card, /read\?\.sentiment \?\? read\?\.sentiment_analysis/);
+});

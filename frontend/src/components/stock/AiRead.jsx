@@ -20,7 +20,9 @@ const AiRead = ({ aiRead, retryAi }) => {
   const [open, setOpen] = useState(false);
   const { read, at, stale, stage, text, streaming, error, loading } = aiRead;
   const live = text ? splitThesis(text) : null;
-  const summary = live ? live.summary : read?.analyst_summary;
+  // A fresh run's report says analyst_summary/sentiment; the stored read (analyst.py::latest) summary/sentiment_analysis.
+  const summary = live ? live.summary : read?.analyst_summary ?? read?.summary;
+  const relevant = (read?.sentiment ?? read?.sentiment_analysis)?.relevant_count;
   const thesis = live ? live.thesis : read?.thesis;
   const score = read?.sentiment?.score ?? read?.sentiment_score;
   const [word, tone] = label(Number(score) || 0);
@@ -68,7 +70,7 @@ const AiRead = ({ aiRead, retryAi }) => {
           </button>
           {read && (
             <p className="text-[13px] text-[var(--text-muted)]">
-              {read.sentiment?.relevant_count != null && `Based on ${read.sentiment.relevant_count} articles · `}
+              {relevant != null && `Based on ${relevant} articles · `}
               {at ? `as of ${formatDateTime(at)}` : ''}
             </p>
           )}
