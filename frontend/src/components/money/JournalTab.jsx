@@ -10,7 +10,6 @@ import Skeleton from '../ui/Skeleton';
 import Stat from '../ui/Stat';
 import { inr, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
-import GuardrailsSheet from '../journal/GuardrailsSheet';
 import GuardrailAlerts from '../journal/GuardrailAlerts';
 import BrokerPnl from '../dashboard/BrokerPnl';
 import LivePnl from '../journal/LivePnl';
@@ -27,10 +26,10 @@ import { formatQuantity, formatPercent, formatSigned, formatDateTime } from '../
 
 /**
  * The journal for the user's own account: every fill from their broker, grouped into round trips.
- * It reports what the user did, it never says what to do next. Sub-tab in `?jtab=` (trades | habits | guardrails).
+ * It reports what the user did, it never says what to do next. Sub-tab in `?jtab=` (trades | habits). Guardrails are edited in Settings (`/settings/guardrails`).
  */
 
-const SUBTABS = [{ id: 'trades', label: 'Trades' }, { id: 'habits', label: 'Habits' }, { id: 'guardrails', label: 'Guardrails' }];
+const SUBTABS = [{ id: 'trades', label: 'Trades' }, { id: 'habits', label: 'Habits' }];
 const SUBTAB_IDS = SUBTABS.map((t) => t.id);
 const small = 'inline-flex items-center gap-1.5 min-h-11 px-3 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] text-[14px] font-medium text-[var(--text)] disabled:opacity-50';
 
@@ -161,7 +160,6 @@ const JournalTab = ({ onImport }) => {
   const { account, roles, hasRole } = useAccount('mine');
   const trades = sub === 'trades';
   const habits = sub === 'habits';
-  const guardrails = sub === 'guardrails';
   // Read only when the Habits tab is open: the weekly paragraph a job wrote.
   const words = useLoad(useCallback(() => (habits ? api.get(endpoints.summaries.habits).then((r) => r.data) : Promise.resolve(null)), [habits]));
 
@@ -280,10 +278,8 @@ const JournalTab = ({ onImport }) => {
       <GuardrailAlerts />
       <Tabs tabs={SUBTABS} value={sub} onChange={setSub} label="Journal sections" />
 
-      {guardrails && <GuardrailsSheet />}
-
-      {!guardrails && !data && !error && <Card><Skeleton rows={6} /></Card>}
-      {!guardrails && error && <Card title="Journal"><ErrorLine message={error} onRetry={() => load()} /></Card>}
+      {!data && !error && <Card><Skeleton rows={6} /></Card>}
+      {error && <Card title="Journal"><ErrorLine message={error} onRetry={() => load()} /></Card>}
 
       {trades && (
         <>
