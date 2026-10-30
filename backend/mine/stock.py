@@ -103,6 +103,7 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
                     "limits": {"max_loss_pct": prefs.get("portfolio_max_loss_pct"),
                                "max_weight_pct": prefs.get("portfolio_max_weight_pct")}},
         "events": await events.upcoming(db, [symbol], today, EVENT_DAYS),
+        "past_events": await events.past(db, symbol, today),
         "dividends": divs,
         "news": await _news(db, symbol),
         "closes": closes,

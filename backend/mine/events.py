@@ -94,6 +94,20 @@ async def upcoming(db, symbols, today: date, days: int) -> list[dict]:
     return sorted(await cur.to_list(None), key=lambda e: (e["date"], e["symbol"]))
 
 
+PAST_DIVIDENDS = 8
+PAST_RESULTS = 4
+
+
+async def past(db, symbol: str, today: date) -> dict:
+    """The stock's last ex-dividends (per share, as yfinance gives them) and results dates
+    (datalayer/results.py, naive IST), newest first, whether or not the user held it then."""
+    divs = await db[EVENTS].find({"symbol": symbol, "kind": "ex_dividend", "amount": {"$ne": None},
+                                  "date": {"$lt": today.isoformat()}}, {"_id": 0, "date": 1, "amount": 1}) \
+        .sort("date", -1).to_list(PAST_DIVIDENDS)
+    doc = await db["results_dates"].find_one({"_id": symbol}, {"at": 1}) or {}
+    results = [d.date().isoformat() for d in doc.get("at") or [] if d.date() <= today][-PAST_RESULTS:]
+    return {"dividends": [{"date": d["date"], "per_share": d["amount"]} for d in divs], "results": results[::-1]}
+
 async def dividends_received(db, trades: list[dict], symbol: str, until: date, ratio: int = 1) -> list[dict]:
     """Dividends the journal's holding earned: quantity held before each
     ex-date (buys minus sells) times the per-share amount. yfinance amounts are

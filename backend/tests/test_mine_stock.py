@@ -171,3 +171,19 @@ def test_verdict_carries_its_facts_limits_and_since(setup):
     assert v["since"] == "2026-10-21"
     assert v["facts"]["pnl_pct"] == -31.0 and v["facts"]["sma_200"] == 522.6 and v["facts"]["pe"] == 34.1
     assert v["limits"] == {"max_loss_pct": 25.0, "max_weight_pct": 20.0}
+
+
+def test_past_events_newest_first(setup):
+    client, seed, _ = setup
+    seed("journal_trades", [_trade("BUY", 1, 100, 5)])
+    seed("corporate_events", [
+        {"symbol": "INFY", "kind": "ex_dividend", "date": "2025-09-18", "amount": 1.46},
+        {"symbol": "INFY", "kind": "ex_dividend", "date": "2026-02-13", "amount": 1.0},
+        {"symbol": "INFY", "kind": "ex_dividend", "date": "2099-01-01", "amount": 9.0},  # future: Coming up, not past
+        {"symbol": "TCS", "kind": "ex_dividend", "date": "2026-01-01", "amount": 5.0},
+    ])
+    seed("results_dates", [{"_id": "INFY", "at": [datetime(2026, 1, 29, 15, 30), datetime(2026, 5, 12, 15, 30),
+                                                  datetime(2026, 7, 31, 15, 30), datetime(2099, 1, 1)]}])
+    past = client.get("/api/v1/mine/stock/INFY").json()["past_events"]
+    assert past["dividends"] == [{"date": "2026-02-13", "per_share": 1.0}, {"date": "2025-09-18", "per_share": 1.46}]
+    assert past["results"] == ["2026-07-31", "2026-05-12", "2026-01-29"]
