@@ -3,6 +3,7 @@ import Card from '../ui/Card';
 import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
 import Badge from '../ui/Badge';
+import Button from '../ui/Button';
 import { AiMarkdown } from '../ai/AiSummary';
 import { splitThesis } from '../../utils/aiRead';
 import { formatDateTime } from '../../utils/formatters';
@@ -13,7 +14,8 @@ const stageCopy = (stage) =>
   stage?.step === 'news' ? (stage.count != null ? `Reading ${stage.count} headlines…` : 'Reading headlines…')
     : stage?.step === 'writing' ? 'Writing the note…' : null;
 
-/** The AI read on top of /stock/:symbol: last read at once, refreshed and streamed when stale. */
+/** The AI read on top of /stock/:symbol: the last read at once; a new one (streamed) only when asked, from
+ *  Generate when there is none or Refresh when it is stale. */
 const AiRead = ({ aiRead, retryAi }) => {
   const [open, setOpen] = useState(false);
   const { read, at, stale, stage, text, streaming, error, loading } = aiRead;
@@ -24,12 +26,21 @@ const AiRead = ({ aiRead, retryAi }) => {
   const [word, tone] = label(Number(score) || 0);
   const updating = stale && !error && (loading || streaming);
   const copy = stageCopy(stage);
+  const busy = loading || streaming;
+  const refresh = read && stale && !busy && !error
+    ? <Button variant="secondary" onClick={retryAi}>Refresh</Button> : null;
 
   return (
-    <Card title="AI read" className="mb-3" action={updating && read ? <Badge>Updating…</Badge> : null}>
+    <Card title="AI read" className="mb-3" action={updating && read ? <Badge>Updating…</Badge> : refresh}>
       <div id="ai-read" />
       {!summary && error && <ErrorLine message={`Could not load the AI read: ${error}`} onRetry={retryAi} />}
-      {!summary && !error && (
+      {!summary && !error && !busy && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[14px] text-[var(--text-muted)]">No AI read on this stock yet.</p>
+          <Button onClick={retryAi}>Generate AI read</Button>
+        </div>
+      )}
+      {!summary && !error && busy && (
         <>
           <p className="mb-2 text-[13px] text-[var(--text-muted)]" role="status">{copy || 'Loading the AI read…'}</p>
           <Skeleton rows={3} />

@@ -5,16 +5,19 @@ import { rememberStock } from '../../utils/stocks';
 import { AI_EMPTY, aiReducer } from '../../utils/aiRead';
 
 /**
- * The instant snapshot (quote, fundamentals, technicals: no LLM call) and the AI read, which starts on every
- * open: the socket sends the last read at once and streams a fresh one when it is stale. The HTTP routes are the
- * fallback when there is no socket. `{ ai: false }` skips the AI read (pages that only need the snapshot).
+ * The instant snapshot (quote, fundamentals, technicals: no LLM call) and the AI read. On open only the stored
+ * read loads (no LLM call); `retryAi` runs one: the socket sends the last read at once and streams a fresh one
+ * when it is stale. The HTTP routes are the fallback when there is no socket. `{ ai: false }` skips the AI read
+ * (pages that only need the snapshot).
  */
 const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
   // Each state remembers its symbol: another stock's answer reads as the initial state, no reset effect needed.
   const QUICK0 = { data: null, loading: true, error: null };
   const [quickRaw, setQuick] = useState({ ...QUICK0, symbol });
   const [aiState, dispatch] = useReducer(aiReducer, AI_EMPTY);
-  const [aiTry, setAiTry] = useState(0);
+  // Runs asked for on this symbol; another symbol's count reads as 0, so opening a stock never runs one.
+  const [aiRun, setAiRun] = useState({ symbol, n: 0 });
+  const aiTry = aiRun.symbol === symbol ? aiRun.n : 0;
   const quick = quickRaw.symbol === symbol ? quickRaw : QUICK0;
   const aiRead = aiState.symbol === symbol ? aiState : { ...AI_EMPTY, symbol };
   const ai = { data: aiRead.read, loading: aiRead.loading && !aiRead.read, error: aiRead.error };
@@ -47,6 +50,13 @@ const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
     let current = true;
     const send = (event, data) => current && dispatch({ symbol, event, data });
     send('reset');
+    if (!aiTry) { // on open: the stored read only, no LLM call
+      api.get(endpoints.stockNote(symbol))
+        .then(({ data }) => send('cached', { read: data.read, at: data.at, stale: !!data.stale }))
+        .catch(() => send('cached', { read: null, at: null, stale: true })) // 404 = no read yet
+        .finally(() => send('done'));
+      return () => { current = false; };
+    }
     const request = stream.request('analyze', { symbol }, (m) => {
       send(m.event, m.data);
       if (m.event === 'error') send('done');
@@ -74,7 +84,7 @@ const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
     return () => { current = false; request.cancel(); };
   }, [symbol, aiTry, wantAi]);
 
-  return { quick, ai, aiRead, retryAi: () => setAiTry((n) => n + 1), reloadQuick: () => { setQuick({ ...QUICK0, symbol }); setRetry((n) => n + 1); } };
+  return { quick, ai, aiRead, retryAi: () => setAiRun((r) => ({ symbol, n: (r.symbol === symbol ? r.n : 0) + 1 })), reloadQuick: () => { setQuick({ ...QUICK0, symbol }); setRetry((n) => n + 1); } };
 };
 
 export default useStockAnalysis;

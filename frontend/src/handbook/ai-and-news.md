@@ -126,10 +126,11 @@ the last stored text; a figure the facts do not contain drops its sentence (`ai/
 
 ## The AI read on a stock page
 
-Opening `/stock/:symbol` always starts the AI read (`components/stock/AiRead.jsx::AiRead`,
-`useStockAnalysis`). The last read shows at once. It counts as fresh for an hour in session
+Opening `/stock/:symbol` loads only the stored AI read (`components/stock/AiRead.jsx::AiRead`,
+`useStockAnalysis`, `GET /research/{symbol}/note`); it never calls a model. A run starts only from the
+card's "Generate AI read" button (no read yet) or "Refresh" (the read is stale). The last read shows at once. It counts as fresh for an hour in session
 (`backend/ai/analyst.py::FRESH_IN_SESSION`), and outside the session for as long as the 4 h cache
-holds; fresh, nothing more happens and nothing is spent. Stale, the page keeps the old read, shows
+holds; fresh, a run sends it back and nothing is spent. Stale, a run keeps the old read on the page, shows
 "Updating…", and streams the new note as the model writes it (`llm.py::LLMService.stream_completion`,
 forwarded through `analyst.py::report_sink` by `ws/routes.py::_stream_analysis`). A refresh skips the 4 h cache, and one that returns the same note re-stamps the last read so the next open is fresh. A failed note is an error, never a replacement. Only a run counts
 against the 10 a minute limit. If the update fails, the last read stays with a "Couldn't refresh" line.
