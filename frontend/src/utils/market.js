@@ -82,3 +82,14 @@ export const materialToday = (items = [], now = new Date()) => {
   for (const it of items) (it.material && Date.parse(it.published_at) >= start ? pinned : rest).push(it);
   return { pinned, rest };
 };
+
+/** An instrument-master name for display, as the exchange writes it (acronyms intact); none when it only repeats
+ *  the symbol. */
+export const companyName = (name, symbol) => {
+  const bare = String(symbol || '').toUpperCase().replace(/\.(NS|BO)$/, '');
+  return !name || name.toUpperCase() === bare ? null : name;
+};
+
+/** Where `price` sits in [low, high] as 0..1 (clamped: a live price can leave the stored range); null without a range. */
+export const rangeAt = (price, low, high) => (price == null || low == null || high == null || !(high > low)
+  ? null : Math.min(1, Math.max(0, (price - low) / (high - low))));

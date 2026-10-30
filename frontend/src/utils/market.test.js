@@ -82,3 +82,20 @@ test('newsMood: words at the divergence threshold, null without news', () => {
   assert.equal(newsMood(0.07).label, 'Mixed news');
   assert.equal(newsMood(null), null);
 });
+
+import { companyName, rangeAt } from './market.js';
+
+test('companyName hides a name that repeats the symbol, else keeps it as written', () => {
+  assert.equal(companyName('TRENT', 'TRENT.NS'), null);
+  assert.equal(companyName('HDFC LIFE INS CO', 'HDFCLIFE'), 'HDFC LIFE INS CO');
+  assert.equal(companyName('Trent Ltd', 'TRENT'), 'Trent Ltd');
+  assert.equal(companyName(undefined, 'X'), null);
+});
+
+test('rangeAt places the price in its 52-week range, clamped, null without one', () => {
+  assert.equal(rangeAt(150, 100, 200), 0.5);
+  assert.equal(rangeAt(250, 100, 200), 1);
+  assert.equal(rangeAt(50, 100, 200), 0);
+  assert.equal(rangeAt(150, null, 200), null);
+  assert.equal(rangeAt(150, 200, 200), null);
+});

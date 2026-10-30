@@ -1,12 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Trash2 } from 'lucide-react';
-import OrderTicket from '../trading/OrderTicket';
-import Card from '../ui/Card';
+import { Link } from 'react-router-dom';
+import { X } from 'lucide-react';
 import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
 import Empty from '../ui/Empty';
-import Button from '../ui/Button';
 import AsOf from '../ui/AsOf';
 import api, { endpoints } from '../../utils/api';
 import { stream } from '../../lib/ws';
@@ -14,16 +11,77 @@ import { inr, pct, points, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
 import { stockPath } from '../../utils/stocks';
 import { bareSymbol } from '../../utils/formatters';
+import { companyName, rangeAt } from '../../utils/market';
 import SmartSearch from '../dashboard/SmartSearch';
+import { px } from '../ideas/levels';
 import NewsChip from '../common/NewsChip';
 import useSymbolNews from '../../hooks/useSymbolNews';
 
+const Panel = ({ children, className = '' }) => (
+  <section className={`rounded-[20px] border border-[var(--border)] bg-[var(--surface)] ${className}`}>{children}</section>
+);
+
+/** Today's price inside its 52-week low..high, as a dot on a line with both ends priced. */
+const Range52 = ({ s, money }) => {
+  const at = rangeAt(s.current_price, s.low_52w, s.high_52w);
+  if (at == null) return null;
+  return (
+    <div className="mt-2.5 flex items-center gap-2 sm:max-w-md text-[12px] tabular-nums text-[var(--text-muted)]"
+      role="img" aria-label={`52-week range ${money(s.low_52w)} to ${money(s.high_52w)}, now ${Math.round(at * 100)}% of the way up`}>
+      <span className="shrink-0">52w {money(s.low_52w)}</span>
+      <div className="relative h-1 flex-1 rounded-full bg-[var(--surface-2)]">
+        <span className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--surface)] bg-[var(--text)]" style={{ left: `${at * 100}%` }} />
+      </div>
+      <span className="shrink-0">{money(s.high_52w)}</span>
+    </div>
+  );
+};
+
+/** One watched stock: symbol and company, price and day move, where it sits in its year, its latest news. */
+const Row = ({ s, entry, editing, onRemove }) => {
+  const money = s.currency && s.currency !== 'INR' ? points : inr; // range ends: whole rupees
+  const price = s.currency && s.currency !== 'INR' ? points : px;  // the quote: to the paisa
+  const name = companyName(s.name, s.symbol);
+  const move = s.day_change_percent;
+  return (
+    <li className="flex items-start gap-2 px-4 py-3.5 border-b border-[var(--border)] last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <Link to={stockPath(s.symbol)} className="tap -mx-2 block rounded-[12px] px-2 py-1 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="min-w-0 truncate text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">{bareSymbol(s.symbol)}</span>
+            <span className="shrink-0 text-[17px] font-semibold tabular-nums text-[var(--text)]">{s.error ? '—' : price(s.current_price)}</span>
+          </div>
+          <div className="mt-0.5 flex items-center justify-between gap-3">
+            <span className="min-w-0 truncate text-[13px] text-[var(--text-muted)]">{s.error ? 'Quote unavailable' : name}</span>
+            {move != null && (
+              <span className={`shrink-0 inline-flex items-center gap-0.5 rounded-full px-2 min-h-6 text-[13px] font-semibold tabular-nums ${toneText(tone(move))}`}
+                style={{ background: `var(${move > 0 ? '--gain-soft' : move < 0 ? '--loss-soft' : '--surface-2'})` }}>
+                {move > 0 ? '▲' : move < 0 ? '▼' : ''} {pct(Math.abs(move) / 100)}
+              </span>
+            )}
+          </div>
+          {!s.error && <Range52 s={s} money={money} />}
+        </Link>
+        {entry?.headline && <NewsChip entry={entry} className="mt-2 max-w-none" />}
+      </div>
+      {editing && (
+        <button type="button" onClick={(e) => onRemove(e, s.symbol)} aria-label={`Remove ${bareSymbol(s.symbol)} from the watchlist`}
+          className="tap mt-0.5 -mr-1 inline-flex w-11 h-11 shrink-0 items-center justify-center rounded-[12px] bg-[var(--loss-soft)] text-[var(--loss)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+          <X className="w-5 h-5" aria-hidden="true" />
+        </button>
+      )}
+    </li>
+  );
+};
+
+/** Market → Watchlist: add from the search on top, each watched stock as a quiet quote row (live prices over the
+ * socket), Edit to remove. Buying happens on the stock page. */
 const Watchlist = () => {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(false);
-  const [ticket, setTicket] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [addError, setAddError] = useState(null);
   const { news } = useSymbolNews((rows || []).map((r) => r.symbol));
-  const navigate = useNavigate();
 
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -49,6 +107,13 @@ const Watchlist = () => {
     return () => offs.forEach((off) => off());
   }, [symbolsKey]);
 
+  const add = (symbol) => {
+    setAddError(null);
+    if ((rows || []).some((r) => bareSymbol(r.symbol).toUpperCase() === bareSymbol(symbol).toUpperCase())) return;
+    api.post(endpoints.watchlist.add(symbol)).then(load)
+      .catch((err) => setAddError(err?.response?.data?.detail || `Could not add ${bareSymbol(symbol)}.`));
+  };
+
   const remove = async (event, symbol) => {
     event.stopPropagation();
     const at = rows.findIndex((item) => item.symbol === symbol);
@@ -62,34 +127,34 @@ const Watchlist = () => {
     }
   };
 
+  if (error) return <Panel className="p-4"><ErrorLine message="Could not load the watchlist." onRetry={load} /></Panel>;
+  if (!rows) return <Panel className="p-4"><Skeleton rows={4} /></Panel>;
+  if (rows.length === 0) {
+    return (
+      <Panel className="p-4">
+        <Empty title="Track a stock" body="Search a company or symbol to watch its price, its 52-week range and its news." action={<div className="w-full max-w-sm text-left"><SmartSearch compact onSearch={add} /></div>} />
+        {addError && <p role="alert" className="mt-2 text-center text-[14px] text-[var(--loss)]">{addError}</p>}
+      </Panel>
+    );
+  }
   return (
-    <Card title="Watchlist">
-      {error ? <ErrorLine message="Could not load the watchlist." onRetry={load} />
-        : !rows ? <Skeleton rows={4} />
-        : rows.length === 0 ? <Empty title="Track a stock" body="Search a name; its page has the Watch toggle." action={<div className="w-full max-w-sm text-left"><SmartSearch compact onSearch={(symbol) => navigate(stockPath(symbol))} /></div>} />
-        : rows.map((s) => (
-          <div key={s.symbol} className="flex items-center gap-3 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0">
-            <button type="button" onClick={() => navigate(stockPath(s.symbol))} className="min-w-0 flex-1 min-h-11 rounded-[8px] text-left active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-              <div className="text-[15px] font-medium text-[var(--text)] truncate">{bareSymbol(s.symbol)}</div>
-              <div className="text-[13px] text-[var(--text-muted)] truncate">{s.error ? 'Quote unavailable' : s.name}</div>
-              <NewsChip entry={news[s.symbol?.toUpperCase().replace(/\.NS$/, '')]} link={false} />
-            </button>
-            <div className="text-right shrink-0">
-              <div className="text-[15px] tabular-nums text-[var(--text)]">{(s.currency && s.currency !== 'INR' ? points : inr)(s.current_price)}</div>
-              <div className={`text-[13px] tabular-nums ${toneText(tone(s.day_change_percent))}`}>
-                {s.day_change_percent == null ? '—' : pct(s.day_change_percent / 100, { sign: true })}
-              </div>
-            </div>
-            <Button variant="secondary" className="px-3" onClick={() => setTicket({ symbol: s.symbol, lastPrice: s.current_price })}>Buy</Button>
-            <button type="button" onClick={(e) => remove(e, s.symbol)} aria-label={`Remove ${s.symbol} from the watchlist`}
-                    className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-[8px] text-[var(--text-muted)] hover:text-[var(--loss)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
-      {rows?.length > 0 && <AsOf rows={rows} />}
-      {ticket && <OrderTicket {...ticket} onClose={() => setTicket(null)} />}
-    </Card>
+    <div className="space-y-3">
+      <div>
+        <SmartSearch compact onSearch={add} />
+        {addError && <p role="alert" className="mt-1.5 text-[14px] text-[var(--loss)]">{addError}</p>}
+      </div>
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-[15px] font-semibold text-[var(--text)]">Watching <span className="font-medium tabular-nums text-[var(--text-muted)]">{rows.length}</span></h2>
+        <button type="button" aria-pressed={editing} onClick={() => setEditing((v) => !v)}
+          className="tap min-h-11 rounded-[12px] px-3 text-[14px] font-semibold text-[var(--accent)] hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+          {editing ? 'Done' : 'Edit'}
+        </button>
+      </div>
+      <Panel>
+        <ul>{rows.map((s) => <Row key={s.symbol} s={s} entry={news[s.symbol?.toUpperCase().replace(/\.NS$/, '')]} editing={editing} onRemove={remove} />)}</ul>
+      </Panel>
+      <div className="px-1"><AsOf rows={rows} /></div>
+    </div>
   );
 };
 
