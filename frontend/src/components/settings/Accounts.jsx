@@ -90,7 +90,8 @@ const BrokerSheet = () => {
     if (requestToken) return { broker: 'kite', token: requestToken };
     return null;
   });
-  const [broker, setBroker] = useState(pending?.broker || 'kite');
+  // Settings' Needs you links here with ?broker= to open the one that needs a login.
+  const [broker, setBroker] = useState(() => pending?.broker || (BROKER_LABEL[searchParams.get('broker')] ? searchParams.get('broker') : 'kite'));
   const [state, setState] = useState(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);

@@ -11,13 +11,16 @@ test('old ?tab= links redirect once, replacing history', () => {
   assert.match(home, /<Navigate replace to=\{old\}/);
 });
 
-test('admin rows sit behind isAdmin', () => {
+test('admin lines sit behind isAdmin', () => {
+  assert.match(home, /\{isAdmin && <Line parts=\{autopilotLine\(prefs\)\} to="\/settings\/autopilot"/);
   const i = home.indexOf('{isAdmin && (');
   assert.ok(i > 0);
-  const admin = home.slice(i);
-  assert.match(admin, /Autopilot/);
-  assert.match(admin, /title="Lab"/);
-  assert.ok(!home.slice(0, i).includes('title="Autopilot"'));
+  assert.match(home.slice(i), /to="\/settings\/lab"/);
+  assert.equal((home.match(/to="\/settings\/(autopilot|lab)"/g) || []).length, 2);
+});
+
+test('Needs you comes first and only when something is broken', () => {
+  assert.match(home, /\{needs\.length > 0 && <NeedsYou items=\{needs\} \/>\}\s*<Group title="Your account"/);
 });
 
 test('App has the eight settings routes, RequireAdmin on autopilot and lab', () => {
@@ -55,8 +58,9 @@ test('Telegram state comes from GET /guardrails (only DELETE exists on /guardrai
   assert.match(home, /api\.get\(endpoints\.guardrails\.status\)[^\n]*res\.data\.telegram/);
 });
 
-test('profile card: photo, one tap to /profile', () => {
+test('profile: photo in the header, one tap to /profile', () => {
   assert.match(home, /<Link to="\/profile"/);
+  assert.match(home, /<PageHeader title="Settings" right=\{profile\} \/>/);
   assert.match(home, /<Avatar src=\{user\?\.picture\}/);
   assert.doesNotMatch(app, /path="\/settings\/profile"/);
 });
