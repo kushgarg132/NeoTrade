@@ -5,9 +5,11 @@ name: neotrade
 #
 # Mongo and Redis are managed cloud services (Atlas + Upstash, same ones the
 # Render deployment used). See MONGODB_URL/REDIS_URL in .env. Exception: the
-# big market-data collections (daily_bars, news_history*) live in the `mongo`
-# service below (backend/database.py::LOCAL_COLLECTIONS), since Atlas M0 caps
-# at 512 MB. No host port: only these containers reach it.
+# big or often-read collections (daily_bars, news_*, instruments,
+# strategy_backtests, portfolio_snapshots, stock_health) live in the `mongo`
+# service below (backend/database.py::LOCAL_COLLECTIONS): Atlas M0 caps at
+# 512 MB and throttles to ~100 KB/s past its weekly transfer allowance.
+# No host port: only these containers reach it.
 
 services:
   backend:
@@ -95,8 +97,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # daily_bars + news_history* (see the header). Not backed up: bars refetch from Yahoo
-  # (`bars` full pass), news_history from backfill_news (its LLM scores would cost quota again).
+  # LOCAL_COLLECTIONS (see the header). Not backed up: bars refetch from Yahoo
+  # (`bars` full pass), news_history from backfill_news (its LLM scores would cost quota again);
+  # the rest moved from Atlas 2026-10-30 (dumps in ~/backups/neotrade-atlas-move-20261030/).
   mongo:
     image: mongo:8.0
     container_name: neotrade-mongo

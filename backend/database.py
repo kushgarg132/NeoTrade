@@ -8,15 +8,21 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def mongo_client(url: str) -> AsyncIOMotorClient:
+def mongo_client(url: str, **kwargs) -> AsyncIOMotorClient:
     """Datetimes come back UTC-aware: Mongo stores UTC, and a naive value sent
     to the browser without an offset is read as IST, 5h30m early."""
-    return AsyncIOMotorClient(url, tz_aware=True, tzinfo=timezone.utc)
+    return AsyncIOMotorClient(url, tz_aware=True, tzinfo=timezone.utc, **kwargs)
 
 
-# On LOCAL_MONGODB_URL when set (2026-10-27: Atlas M0 hit its 512 MB cap). Nothing joins these with Atlas
-# collections ($lookup/$merge), which would not work across two servers.
-LOCAL_COLLECTIONS = frozenset({"daily_bars", "news_history", "news_history_outcomes", "news_history_fetch"})
+# On LOCAL_MONGODB_URL when set. 2026-10-27: Atlas M0 hit its 512 MB cap (daily_bars, news_history*).
+# 2026-10-30: M0 throttles to ~100 KB/s past its weekly transfer allowance, which made Today take 15 s;
+# the big or often-read rest followed. Nothing joins these with Atlas collections ($lookup/$merge),
+# which would not work across two servers.
+LOCAL_COLLECTIONS = frozenset({
+    "daily_bars", "news_history", "news_history_outcomes", "news_history_fetch",
+    "news_items", "news_outcomes", "news_accuracy", "instruments", "strategy_backtests",
+    "portfolio_snapshots", "stock_health",
+})
 
 
 class RoutedDatabase:
@@ -41,7 +47,7 @@ class DatabaseManager:
 
     async def connect_to_database(self):
         logger.info("Connecting to MongoDB...")
-        self.client = mongo_client(settings.MONGODB_URL)
+        self.client = mongo_client(settings.MONGODB_URL, compressors="zlib")  # less of M0's transfer allowance
         self.db = self.client[settings.DATABASE_NAME]
         if settings.LOCAL_MONGODB_URL:
             self.local_client = mongo_client(settings.LOCAL_MONGODB_URL)
