@@ -171,8 +171,11 @@ def _mean_of_last(closes: List[float], window: int):
     return sum(closes[-window:]) / window
 
 
+YEAR_SESSIONS = 252  # trading days in a year: the 52-week range
+
+
 def _fetch_index_detail_sync(ticker: str, name: str) -> Dict[str, Any] | None:
-    hist = yf.Ticker(ticker).history(period="1y", interval="1d")
+    hist = yf.Ticker(ticker).history(period="5y", interval="1d")  # five years for the chart's 5Y range
     if hist is None or hist.empty:
         return None
 
@@ -191,8 +194,8 @@ def _fetch_index_detail_sync(ticker: str, name: str) -> Dict[str, Any] | None:
         "value": value,
         "change": change,
         "percent": (change / previous) * 100 if previous else 0.0,
-        "high_52w": max(closes),
-        "low_52w": min(closes),
+        "high_52w": max(closes[-YEAR_SESSIONS:]),
+        "low_52w": min(closes[-YEAR_SESSIONS:]),
         "sma_50": _mean_of_last(closes, 50),
         "sma_200": _mean_of_last(closes, 200),
         "points": points,
@@ -201,8 +204,8 @@ def _fetch_index_detail_sync(ticker: str, name: str) -> Dict[str, Any] | None:
 
 @router.get("/market/index/{ticker}")
 async def get_index_detail(ticker: str):
-    """A year of daily closes plus the figures a reader checks on an index:
-    level, day change, 52-week range and the 50/200-day averages."""
+    """Five years of daily closes (the chart's 1M / 1Y / 5Y) plus the figures a reader checks on an
+    index: level, day change, 52-week range and the 50/200-day averages."""
     name = _known_index_names().get(ticker)
     if name is None:
         raise HTTPException(status_code=404, detail=f"{ticker} is not a tracked index")

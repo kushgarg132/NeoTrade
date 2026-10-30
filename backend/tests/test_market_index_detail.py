@@ -55,3 +55,14 @@ def test_no_data_is_a_502_not_a_crash(monkeypatch):
     app = FastAPI()
     app.include_router(market_data.router, prefix="/api/v1")
     assert TestClient(app).get("/api/v1/market/index/%5ENSEI").status_code == 502
+
+
+def test_the_52_week_range_is_the_last_year_of_five(monkeypatch):
+    """Five years of closes feed the chart; the 52-week high and low read only the last 252 sessions."""
+    closes = [1000.0] + [100.0 + i for i in range(1, 1260)]  # an old peak, then a slow rise
+    monkeypatch.setattr(market_data.yf, "Ticker", lambda ticker: _FakeTicker(closes))
+    app = FastAPI()
+    app.include_router(market_data.router, prefix="/api/v1")
+    body = TestClient(app).get("/api/v1/market/index/%5EBSESN").json()
+    assert len(body["points"]) == 1260
+    assert body["high_52w"] == closes[-1] and body["low_52w"] == closes[-252]
