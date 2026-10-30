@@ -107,6 +107,15 @@ def test_a_second_tap_is_served_from_cache(world, client):
     assert first["cached"] is False and second["cached"] is True
 
 
+
+def test_cached_only_reads_the_store_and_never_calls_the_model(world, client):
+    url = "/api/v1/market/index/%5ENSEI/analysis"
+    assert client.get(url, params={"cached": "true"}).status_code == 404
+    assert world["llm"] == []
+    client.get(url)  # the Generate button
+    stored = client.get(url, params={"cached": "true"})
+    assert stored.status_code == 200 and stored.json()["cached"] is True and len(world["llm"]) == 1
+
 @pytest.mark.parametrize("reply", ["LLM_DISABLED", "Error generating response: boom", ""])
 def test_an_unavailable_model_is_a_503_not_error_text(world, client, monkeypatch, reply):
     async def broken(prompt, system_prompt, tier=None, feature=None):

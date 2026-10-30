@@ -277,15 +277,20 @@ async def get_cached_note(symbol: str):
 
 
 @router.get("/market/index/{ticker}/analysis")
-async def get_index_analysis(ticker: str):
+async def get_index_analysis(ticker: str, cached: bool = False):
     """AI-written explanation of why this index moved in its latest session,
     with the session figures and headlines it was written from. Explains the
-    past only -- no forecasts, no calls."""
-    from backend.research.index_move import ExplanationUnavailable, explain_index_move
+    past only -- no forecasts, no calls. `cached=true` returns only a stored
+    one, never calling the model: 404 when there is none."""
+    from backend.research.index_move import ExplanationUnavailable, cached_index_move, explain_index_move
 
     name = _known_index_names().get(ticker)
     if name is None:
         raise HTTPException(status_code=404, detail=f"{ticker} is not a tracked index")
+    if cached:
+        if (story := await cached_index_move(ticker)) is None:
+            raise HTTPException(status_code=404, detail="No stored explanation")
+        return story
     try:
         return await explain_index_move(ticker, name)
     except ExplanationUnavailable as e:

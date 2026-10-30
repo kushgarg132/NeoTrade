@@ -156,6 +156,14 @@ def _bullets(rows: List[str], empty: str) -> str:
     return "\n".join(rows) if rows else empty
 
 
+async def cached_index_move(ticker: str) -> Optional[Dict[str, Any]]:
+    """The stored story, or None; never calls the model (the Index page shows this on open)."""
+    from backend.database import db
+
+    raw = await db.redis.get(CACHE_KEY.format(ticker)) if db.redis is not None else None
+    return {**json.loads(raw), "cached": True} if raw else None
+
+
 async def explain_index_move(ticker: str, name: str) -> Dict[str, Any]:
     from backend.database import db
 
