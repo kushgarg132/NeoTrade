@@ -70,6 +70,7 @@ Radius: 12 controls, 20 cards, 28 hero, 999 pills. 1 px `--border`; no box shado
   a link. At most one per page (Home today).
 - `DeltaChip({ value, pct, suffix })`: pill on `--gain-soft` / `--loss-soft`, ▲ / ▼ prefix, `value` in rupees,
   `pct` in percent units; 0 renders neutral (`--surface-2`, no arrow); carries `private`.
+- Settings controls (`components/settings/Fields.jsx`): `Toggle` is a 52x32 switch (on = `--accent` track, `--accent-ink` knob; `danger` on = `--loss`), `Segmented` the segmented track (`--surface-2`, chosen `--surface`; `dangerValue` chosen = `--loss`), `NumberField` a `--surface-2` box with its unit inside (₹ before, %/min/days after). Settings home writes each setting as a sentence with its values as chips (`--surface-2` pills, 600, tabular).
 - `GradeTile({ grade })`: 40 px, radius 12; A = `--accent` + `--accent-ink`, B = `--surface-2` + `--text`,
   C = transparent + `--border` + `--text-muted`; `aria-label="Grade A"`.
 

@@ -1,10 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Sheet, Ruling } from '../doc/Doc';
-import { Row, NumberField } from '../settings/Fields';
+import { Sheet, Ruling } from '../settings/Panel';
 import api, { endpoints, getPreferences } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import { formatCurrency } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 import { promotionGaps, shortStatus } from '../../utils/promotion';
 import StrategyRow, { GO_LIVE_RULE, StrategyFold } from './StrategyRow';
@@ -63,7 +60,7 @@ const EngineSettings = () => {
 
   if (!prefs) {
     return (
-      <Sheet title="Trading limits">
+      <Sheet title="Strategies">
         <Ruling rows={3} />
       </Sheet>
     );
@@ -71,25 +68,6 @@ const EngineSettings = () => {
 
   return (
     <div className="space-y-4">
-      <Sheet title="Trading limits" meta="Paper and live">
-        {[
-          ['Account size', prefs.account_size],
-          ['Max invested', prefs.max_exposure],
-          ['Per trade', prefs.per_trade_cap],
-          ['Daily loss limit', prefs.daily_loss_limit],
-        ].map(([label, value]) => (
-          <Row key={label} label={label}>
-            <span className="figure-md text-sm">{formatCurrency(value)}</span>
-          </Row>
-        ))}
-        <p className="pt-3 doc-meta normal-case">
-          Sizing risks up to 1% of {formatCurrency(prefs.account_size)} per trade at full
-          conviction, scaled down as conviction falls. One set for paper and live:{' '}
-          <Link to="/lab/limits" className="underline">change them on Lab › Autopilot limits</Link>, where the
-          engine's daily runs and scan are switched on and off too.
-        </p>
-      </Sheet>
-
       {strategyNames.length > 0 && (
         <Sheet title="Strategies" meta={`${(prefs.live_strategies || []).length} live`}>
           <StrategyFold

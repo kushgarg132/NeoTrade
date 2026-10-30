@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Sheet } from './Panel';
 import api, { endpoints, getPreferences } from '../../utils/api';
-import { cn } from '../../utils/cn';
-import { Row, NumberField } from './Fields';
+import { Row, NumberField, Segmented } from './Fields';
 
 const PortfolioSheet = ({ isAdmin }) => {
   const [prefs, setPrefs] = useState(null);
@@ -58,11 +57,13 @@ const PortfolioSheet = ({ isAdmin }) => {
         Your own limits for the Portfolio page's review: a holding past either one counts against it.
       </p>
       {[
-        ['portfolio_max_loss_pct', 'Loss limit, % below cost', 'A holding this far under its average cost.'],
-        ['portfolio_max_weight_pct', 'Size limit, % of portfolio', 'A holding larger than this share of the whole.'],
+        ['portfolio_max_loss_pct', 'Loss limit, below cost', 'A holding this far under its average cost.'],
+        ['portfolio_max_weight_pct', 'Size limit, of portfolio', 'A holding larger than this share of the whole.'],
       ].map(([key, label, hint]) => (
         <Row key={key} label={label} hint={hint}>
           <NumberField
+            label={label}
+            suffix="%"
             value={draft[key] ?? ''}
             onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
             onCommit={() => commit(key)}
@@ -74,20 +75,13 @@ const PortfolioSheet = ({ isAdmin }) => {
           label="Who sees verdicts"
           hint="Deployment-wide. Everyone else sees the facts with serious holdings marked Review first. Verdicts for all users need SEBI RA registration."
         >
-          <button
-            type="button"
-            role="switch"
-            aria-checked={audience === 'all'}
-            onClick={() => setVerdicts(audience === 'all' ? 'admin' : 'all')}
-            className={cn(
-              'px-3 py-1 border text-[13px] font-semibold transition-colors',
-              audience === 'all'
-                ? 'bg-[var(--loss)] text-[var(--surface)] border-[var(--loss)]'
-                : 'text-[var(--text-muted)] border-[var(--border)]'
-            )}
-          >
-            {audience === 'all' ? 'All users' : 'Admins only'}
-          </button>
+          <Segmented
+            label="Who sees verdicts"
+            options={[['admin', 'Admins only'], ['all', 'All users']]}
+            value={audience}
+            dangerValue="all"
+            onChange={(v) => v !== audience && setVerdicts(v)}
+          />
         </Row>
       )}
     </Sheet>

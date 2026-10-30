@@ -11,6 +11,7 @@ const TelegramLink = () => {
   const [botToken, setBotToken] = useState('');
   const [note, setNote] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [addBot, setAddBot] = useState(false); // the own-bot token form, folded until asked for
 
   const loadTelegram = () =>
     api
@@ -34,59 +35,13 @@ const TelegramLink = () => {
   return (
     <>
       <Row
-        label="Your Telegram bot"
-        hint={
-          telegram?.own_bot
-            ? `Alerts come from @${telegram.own_bot}. Removing it unlinks your chat.`
-            : 'Optional. In Telegram, message @BotFather, send /newbot, and paste the token it gives you. It is stored encrypted and never shown again.'
-        }
-      >
-        {telegram?.own_bot ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={busy}
-            onClick={() => act(() => api.delete(endpoints.guardrails.telegramBot), () => {
-              setLinkUrl(null);
-              loadTelegram();
-            })}
-          >
-            Remove bot
-          </Button>
-        ) : (
-          <form
-            className="flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              act(() => api.put(endpoints.guardrails.telegramBot, { token: botToken.trim() }), (res) => {
-                setBotToken('');
-                setLinkUrl(null);
-                setTelegram((t) => ({ ...t, configured: true, linked: false, own_bot: res.data.own_bot }));
-              });
-            }}
-          >
-            <input
-              type="password"
-              autoComplete="off"
-              value={botToken}
-              onChange={(event) => setBotToken(event.target.value)}
-              placeholder="123456:ABC…"
-              aria-label="Telegram bot token"
-              className="min-w-0 w-40 sm:w-56 bg-[var(--surface)] border border-[var(--border)] rounded-[12px] px-3 min-h-11 text-[15px] focus:outline-none focus:border-[var(--accent)]"
-            />
-            <Button type="submit" variant="primary" size="sm" disabled={busy || !botToken.trim()}>
-              Save
-            </Button>
-          </form>
-        )}
-      </Row>
-
-      <Row
         label="Telegram alerts"
         hint={
           telegram?.configured === false
-            ? 'Add your own bot above to get alerts on your phone. They still appear in the app.'
-            : 'Alerts arrive on your phone even when the app is closed.'
+            ? 'Add your own bot below to get alerts on your phone. They still appear in the app.'
+            : telegram?.linked
+              ? 'Linked. Alerts arrive on your phone even when the app is closed.'
+              : 'Alerts arrive on your phone even when the app is closed.'
         }
       >
         {telegram?.configured &&
@@ -136,7 +91,60 @@ const TelegramLink = () => {
             </Button>
           ))}
       </Row>
-      {note && <p role="alert" className="text-[13px] text-[var(--text-muted)] pt-2">{note}</p>}
+      <Row
+        label="Your own bot"
+        hint={
+          telegram?.own_bot
+            ? `Alerts come from @${telegram.own_bot}. Removing it unlinks your chat.`
+            : addBot
+              ? 'In Telegram, message @BotFather, send /newbot, and paste the token it gives you. It is stored encrypted and never shown again.'
+              : 'Optional: alerts from a bot you made instead of NeoTrade\'s.'
+        }
+      >
+        {!telegram?.own_bot && !addBot ? (
+          <Button variant="secondary" onClick={() => setAddBot(true)}>Add bot</Button>
+        ) : telegram?.own_bot ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={() => act(() => api.delete(endpoints.guardrails.telegramBot), () => {
+              setLinkUrl(null);
+              loadTelegram();
+            })}
+          >
+            Remove bot
+          </Button>
+        ) : (
+          <form
+            className="flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              act(() => api.put(endpoints.guardrails.telegramBot, { token: botToken.trim() }), (res) => {
+                setBotToken('');
+                setAddBot(false);
+                setLinkUrl(null);
+                setTelegram((t) => ({ ...t, configured: true, linked: false, own_bot: res.data.own_bot }));
+              });
+            }}
+          >
+            <input
+              type="password"
+              autoComplete="off"
+              value={botToken}
+              onChange={(event) => setBotToken(event.target.value)}
+              placeholder="123456:ABC…"
+              aria-label="Telegram bot token"
+              className="min-w-0 w-40 sm:w-56 bg-[var(--surface)] border border-[var(--border)] rounded-[12px] px-3 min-h-11 text-[15px] focus:outline-none focus:border-[var(--accent)]"
+            />
+            <Button type="submit" variant="primary" size="sm" disabled={busy || !botToken.trim()}>
+              Save
+            </Button>
+          </form>
+        )}
+      </Row>
+
+      {note && <p role="alert" className="text-[13px] text-[var(--loss)] pt-2">{note}</p>}
     </>
   );
 };

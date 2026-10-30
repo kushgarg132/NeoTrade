@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Sheet, Ruling } from './Panel';
-import { Row, NumberField } from './Fields';
+import { Row, NumberField, Toggle, Segmented } from './Fields';
 import api, { endpoints, getPreferences } from '../../utils/api';
-import { cn } from '../../utils/cn';
 import { Link } from 'react-router-dom';
 import EngineSwitches from './EngineSwitches';
 import { useAuth } from '../../context/AuthContext';
@@ -10,11 +9,11 @@ import { useAuth } from '../../context/AuthContext';
 // One set for paper and live: Practice, live strategies, the autopilot and
 // Watch my broker all read these fields.
 const LIMITS = [
-  ['account_size', 'Account size', 'What sizing risks up to 1% of per trade (₹).'],
-  ['max_exposure', 'Max invested', 'The most open at once (₹).'],
-  ['per_trade_cap', 'Per trade', 'Largest single order (₹). Halved while the market is risk-off.'],
+  ['account_size', 'Account size', 'What sizing risks up to 1% of per trade.', '₹'],
+  ['max_exposure', 'Max invested', 'The most open at once.', '₹'],
+  ['per_trade_cap', 'Per trade', 'Largest single order. Halved while the market is risk-off.', '₹'],
   ['max_trades_per_day', 'Trades per day', 'New positions a day. 0 is off.'],
-  ['daily_loss_limit', 'Daily loss limit', 'Stops new trades for the day once lost (₹).'],
+  ['daily_loss_limit', 'Daily loss limit', 'Stops new trades for the day once lost.', '₹'],
 ];
 
 /** The fenced autopilot on the AI account (backend/autopilot/), then the
@@ -70,7 +69,7 @@ const AutopilotSheet = () => {
         Telegram with a stop button.
       </p>
       {!aiBroker && (
-        <p className="text-[13px] text-[var(--text-muted)] text-[var(--loss)] mt-2">Set one broker as the AI account in Broker settings first.</p>
+        <p className="text-[13px] text-[var(--loss)] mt-2">Set one broker as the AI account in Broker settings first.</p>
       )}
       <Row
         label="Autopilot"
@@ -79,39 +78,30 @@ const AutopilotSheet = () => {
           : 'Paper: fills in the AI account’s paper book. Nothing sent to the broker.'}
       >
         {confirmLive === null ? (
-          <span className="inline-flex" role="radiogroup" aria-label="Autopilot mode">
-            {[
-              ['off', 'Off', !prefs.autopilot_enabled, () => save({ autopilot_enabled: false, autopilot_live: false })],
-              ['paper', 'Paper', prefs.autopilot_enabled && !prefs.autopilot_live, () => save({ autopilot_enabled: true, autopilot_live: false })],
-              ['live', 'Live', prefs.autopilot_enabled && prefs.autopilot_live, () => setConfirmLive('')],
-            ].map(([key, label, active, choose]) => (
-              <button
-                key={key}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                disabled={!aiBroker && key !== 'off'}
-                onClick={() => !active && choose()}
-                className={cn('h-11 sm:h-8 px-4 text-[13px] border -ml-px first:ml-0 transition-colors disabled:opacity-40',
-                  !active && 'border-[var(--border)]',
-                  active && key !== 'live' && 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]',
-                  active && key === 'live' && 'bg-[var(--loss)] text-[var(--surface)] border-[var(--loss)]')}
-              >
-                {label}
-              </button>
-            ))}
-          </span>
+          <Segmented
+            label="Autopilot mode"
+            options={[['off', 'Off'], ['paper', 'Paper'], ['live', 'Live']]}
+            value={!prefs.autopilot_enabled ? 'off' : prefs.autopilot_live ? 'live' : 'paper'}
+            dangerValue="live"
+            disabled={(v) => !aiBroker && v !== 'off'}
+            onChange={(v) => {
+              const now = !prefs.autopilot_enabled ? 'off' : prefs.autopilot_live ? 'live' : 'paper';
+              if (v === now) return;
+              if (v === 'live') setConfirmLive('');
+              else save({ autopilot_enabled: v === 'paper', autopilot_live: false });
+            }}
+          />
         ) : (
           <span className="flex items-center gap-2">
             <input autoFocus value={confirmLive} onChange={(e) => setConfirmLive(e.target.value)}
               placeholder="Type LIVE" aria-label="Type LIVE to confirm real orders"
-              className="w-24 bg-transparent border-b border-[var(--loss)] py-1 text-sm focus:outline-none" />
+              className="w-28 min-h-11 rounded-[12px] border border-[var(--loss)] bg-[var(--surface-2)] px-3 text-[15px] focus:outline-none" />
             <button type="button" disabled={confirmLive !== 'LIVE'}
               onClick={() => save({ autopilot_enabled: true, autopilot_live: true }).then(() => setConfirmLive(null))}
-              className="h-11 sm:h-8 px-3 text-[13px] bg-[var(--loss)] text-[var(--surface)] disabled:opacity-40">
+              className="tap min-h-11 px-4 rounded-[12px] bg-[var(--loss)] text-[var(--accent-ink)] text-[14px] font-semibold disabled:opacity-40">
               Go live
             </button>
-            <button type="button" onClick={() => setConfirmLive(null)} className="text-xs text-[var(--text-muted)]">Cancel</button>
+            <button type="button" onClick={() => setConfirmLive(null)} className="min-h-11 px-2 text-[14px] text-[var(--text-muted)]">Cancel</button>
           </span>
         )}
       </Row>
@@ -119,36 +109,27 @@ const AutopilotSheet = () => {
         label="Trade on news"
         hint="Buys a proposal from material news at once instead of waiting for the morning pass. At most 3 a day, none while the market is risk-off. Sells on bad news are only logged for now."
       >
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!!prefs.autopilot_news}
-          onClick={() => save({ autopilot_news: !prefs.autopilot_news })}
-          className={cn('h-11 sm:h-8 px-4 text-[13px] border transition-colors disabled:opacity-40',
-            prefs.autopilot_news ? 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]' : 'border-[var(--border)]')}
-        >
-          {prefs.autopilot_news ? 'On' : 'Off'}
-        </button>
+        <Toggle on={prefs.autopilot_news} label="Trade on news" onClick={() => save({ autopilot_news: !prefs.autopilot_news })} />
       </Row>}
       {isAdmin && <Row
         label="Picks with real money"
         hint="Picks trade the AI account on paper as their forward record. Real money waits until 100 picks are scored, their calibration is within 5 points and they beat the Nifty after charges; then the owner turns on picks_live."
       >
-        <button type="button" disabled className="h-11 sm:h-8 px-4 text-[13px] border border-[var(--border)] disabled:opacity-40">
-          Off
-        </button>
+        <Toggle on={false} label="Picks with real money" disabled />
       </Row>}
-      {note && <p className="text-[13px] text-[var(--text-muted)] text-[var(--loss)] mt-2">{note}</p>}
-      <Link to="/ai/activity" className="text-[13px] font-medium text-[var(--text-muted)] text-[var(--accent)] hover:underline inline-block mt-3">What it did ›</Link>
+      {note && <p className="text-[13px] text-[var(--loss)] mt-2">{note}</p>}
+      <Link to="/ai/activity" className="inline-flex items-center min-h-11 mt-1 text-[14px] font-medium text-[var(--accent)] hover:underline">What it did ›</Link>
     </Sheet>
     <EngineSwitches prefs={prefs} save={save} />
     <Sheet title="Trading limits" meta="Paper and live" className="mt-3 sm:mt-4">
       <p className="text-sm text-[var(--text-muted)]">
         One set for everything: the AI account (paper and live), and Watch my broker on your own account.
       </p>
-      {LIMITS.map(([key, label, hint]) => (
+      {LIMITS.map(([key, label, hint, prefix]) => (
         <Row key={key} label={label} hint={hint}>
           <NumberField
+            label={label}
+            prefix={prefix}
             value={draft[key]}
             onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
             onCommit={() => {

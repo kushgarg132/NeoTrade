@@ -52,9 +52,11 @@ const GuardrailsSheet = () => {
     );
   }
 
-  const numberRow = (key, label, hint) => (
+  const numberRow = (key, label, hint, suffix) => (
     <Row label={label} hint={hint}>
       <NumberField
+        label={label}
+        suffix={suffix}
         value={draft[key]}
         onChange={(value) => setDraft((d) => ({ ...d, [key]: value }))}
         onCommit={() => commit(key, Math.round(Number(draft[key])))}
@@ -64,6 +66,7 @@ const GuardrailsSheet = () => {
   );
 
   return (
+    <>
     <Sheet
       title="Guardrails"
       meta={
@@ -86,9 +89,11 @@ const GuardrailsSheet = () => {
 
       <Row
         label="Daily loss limit"
-        hint="Checked against your broker's own day P&L. Reaching it also trips the engine's kill-switch for the day. Shared with the AI account (AI › Settings › Trading limits)."
+        hint="Checked against your broker's own day P&L. Reaching it also trips the engine's kill-switch for the day. Shared with the AI account's trading limits."
       >
         <NumberField
+          label="Daily loss limit"
+          prefix="₹"
           value={draft.daily_loss_limit}
           onChange={(value) => {
             setConfirmOff(false);
@@ -126,19 +131,6 @@ const GuardrailsSheet = () => {
         </div>
       )}
 
-      {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this; the autopilot opens no more. Shared with AI › Settings › Trading limits. 0 is off.')}
-      {numberRow('cooldown_after_losses', 'Cooldown after losses in a row', 'Start a cooldown after this many losses in a row. 0 is off.')}
-      {numberRow('cooldown_minutes', 'Cooldown length, minutes', 'Any trade opened inside it is flagged.')}
-      {numberRow('max_option_trades_per_day', 'Options trades per day', 'Alert when you open more options trades than this. 0 is off.')}
-      {numberRow('max_option_lots', 'Lots per options trade', 'Alert when one options position is bigger than this many lots. Needs Kite connected for lot sizes. 0 is off.')}
-      {numberRow('no_buy_before_results_days', 'No buys before results, days', 'Refuse a buy from NeoTrade, and alert on one from your broker app, when the stock reports results within this many days. 0 is off.')}
-
-      <Row
-        label="Warn on unhedged option selling"
-        hint="Alert when you sell an option with no bought option on the same underlying open to cap the loss. A sold option's loss has no fixed limit."
-      >
-        <Toggle on={prefs.warn_naked_options} label="Warn on unhedged option selling" onClick={() => save({ warn_naked_options: !prefs.warn_naked_options })} />
-      </Row>
 
       <Row
         label="Square off at the loss limit"
@@ -166,8 +158,25 @@ const GuardrailsSheet = () => {
           }}
         />
       </Row>
-      {note && <p className="text-[13px] text-[var(--text-muted)] pt-2">{note}</p>}
+      {note && <p role="alert" className="text-[13px] text-[var(--loss)] pt-2">{note}</p>}
     </Sheet>
+    <Sheet title="Pace">
+      {numberRow('max_trades_per_day', 'Trades per day', 'Alert when you open more than this; the autopilot opens no more. Shared with the AI account. 0 is off.')}
+      {numberRow('cooldown_after_losses', 'Cooldown after losses in a row', 'Start a cooldown after this many losses in a row. 0 is off.', 'losses')}
+      {numberRow('cooldown_minutes', 'Cooldown length', 'Any trade opened inside it is flagged.', 'min')}
+      {numberRow('no_buy_before_results_days', 'No buys before results', 'Refuse a buy from NeoTrade, and alert on one from your broker app, when the stock reports results within this many days. 0 is off.', 'days')}
+    </Sheet>
+    <Sheet title="Options">
+      {numberRow('max_option_trades_per_day', 'Options trades per day', 'Alert when you open more options trades than this. 0 is off.')}
+      {numberRow('max_option_lots', 'Lots per options trade', 'Alert when one options position is bigger than this many lots. Needs Kite connected for lot sizes. 0 is off.', 'lots')}
+      <Row
+        label="Warn on unhedged option selling"
+        hint="Alert when you sell an option with no bought option on the same underlying open to cap the loss. A sold option's loss has no fixed limit."
+      >
+        <Toggle on={prefs.warn_naked_options} label="Warn on unhedged option selling" onClick={() => save({ warn_naked_options: !prefs.warn_naked_options })} />
+      </Row>
+    </Sheet>
+    </>
   );
 };
 

@@ -1,8 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Sheet } from '../doc/Doc';
-import { Row } from './Fields';
-import { cn } from '../../utils/cn';
+import { Sheet } from './Panel';
+import { Row, Toggle } from './Fields';
 import useSchedule from '../../hooks/useSchedule';
 
 /**
@@ -14,8 +13,6 @@ import useSchedule from '../../hooks/useSchedule';
  * per-strategy live switches stay in Lab › Autopilot limits.
  */
 
-const SWITCH = 'min-h-11 inline-flex items-center px-3 rounded-full border text-[14px] font-semibold transition-colors';
-
 const EngineSwitches = ({ prefs, save }) => {
   const { t, raw } = useSchedule();
   const autopilot = Boolean(prefs.autopilot_enabled);
@@ -23,24 +20,9 @@ const EngineSwitches = ({ prefs, save }) => {
 
   const switchRow = (key, label, hint, byAutopilot = false) => (
     <Row label={label} hint={byAutopilot && autopilot ? `Kept on while the autopilot is on. ${hint}` : hint}>
-      {byAutopilot && autopilot ? (
-        <span className={cn(SWITCH, 'text-[var(--text-muted)] border-[var(--border)]')}>Autopilot</span>
-      ) : (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={Boolean(prefs[key])}
-          onClick={() => save({ [key]: !prefs[key] })}
-          className={cn(
-            SWITCH,
-            prefs[key]
-              ? 'bg-[var(--text)] text-[var(--surface)] border-[var(--text)]'
-              : 'text-[var(--text-muted)] border-[var(--border)]'
-          )}
-        >
-          {prefs[key] ? 'On' : 'Off'}
-        </button>
-      )}
+      {byAutopilot && autopilot
+        ? <Toggle on label={`${label}: kept on by the autopilot`} disabled />
+        : <Toggle on={prefs[key]} label={label} onClick={() => save({ [key]: !prefs[key] })} />}
     </Row>
   );
 
@@ -73,10 +55,6 @@ const EngineSwitches = ({ prefs, save }) => {
         `Runs the factor portfolio on paper with its own ₹3 lakh book: the top Nifty 200 stocks by momentum and low volatility, rebalanced at ${t.morning} on the first trading day of each month, in a liquid ETF whenever the Nifty is below its 200-day average. Also sells an approved long-term paper position at its stop or target (checked every ${raw.exit_check_minutes} minutes in session) and sends a Telegram digest.`,
         true
       )}
-      <p className="pt-3 text-[13px] text-[var(--text-muted)]">
-        Which strategies may trade real money:{' '}
-        <Link to="/lab/limits" className="underline">Lab › Autopilot limits</Link>.
-      </p>
     </Sheet>
   );
 };
