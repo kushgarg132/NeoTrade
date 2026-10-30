@@ -103,3 +103,9 @@ test('opening a stock loads the stored AI read only; a run needs the Generate or
   assert.match(card, /Generate AI read/);
   assert.match(card, /read && stale && !busy && !error/);
 });
+
+test('a tab switch (a REPLACE on the same path) keeps the scroll; a new path opens at the top', () => {
+  const app = f('../../App.jsx');
+  assert.match(app, /if \(scrolledPath\.current === pathname\) return;/);
+  assert.match(app, /if \(navigationType !== 'POP'\) window\.scrollTo\(0, 0\);/);
+});

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect } from 'react';
+import React, { Suspense, lazy, useEffect, useRef } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 const Strategies = lazy(() => import('./pages/Strategies'));
 const OptionChain = lazy(() => import('./pages/OptionChain'));
@@ -96,7 +96,11 @@ const App = () => {
   // the last page was left at. Back/forward (POP) keeps the browser's own
   // restoration. Keyed on the path only: a tab or filter change (?tab=,
   // ?book=) stays where the reader is.
+  // navigationType is not the trigger: a tab switch is a REPLACE on the same path.
+  const scrolledPath = useRef(pathname);
   useEffect(() => {
+    if (scrolledPath.current === pathname) return;
+    scrolledPath.current = pathname;
     if (navigationType !== 'POP') window.scrollTo(0, 0);
   }, [pathname, navigationType]);
 
