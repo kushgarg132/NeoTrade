@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Newspaper, ChevronRight } from 'lucide-react';
+import { Bot, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
-import Tile from '../components/ui/Tile';
 import Skeleton from '../components/ui/Skeleton';
 import Card from '../components/ui/Card';
 import ErrorLine from '../components/ui/ErrorLine';
@@ -12,13 +11,16 @@ import HeroRow from '../components/home/HeroRow';
 import TodayCard from '../components/home/TodayCard';
 import GoalTile from '../components/home/GoalTile';
 import WeeklyLink from '../components/home/WeeklyLink';
+import NeedsYou from '../components/home/NeedsYou';
+import { pct, tone } from '../components/ui/format';
+import { toneText } from '../components/ui/tone';
 import SetupChecklist from '../components/home/SetupChecklist';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useRefetchOn } from '../hooks/useStream';
 import { useAuth } from '../context/AuthContext';
 import { useNeedCount } from '../hooks/useNeedCount';
 import { aiBook } from '../utils/ai';
-import { tileHeadlines, phaseLabel, briefKind, alerts, todayTitle } from '../utils/home';
+import { tileHeadlines, phaseLabel, briefKind, alerts, todayTitle, nextOpenLabel } from '../utils/home';
 import { REFRESH_FAILED } from '../utils/formatters';
 
 /** An expired-login alert goes straight to that broker's login, in this tab: iOS blocks a pop-up opened
@@ -76,40 +78,61 @@ const Home = () => {
     }
     const h = tileHeadlines(today, overview, indices, need.loaded ? need : null, aiBook({ autopilot: today.autopilot, pnl, card }));
     const meta = (tile, m) => (failed[tile] || (tile === 'ideas' && need.error) ? REFRESH_FAILED : m);
-    const nifty = (Array.isArray(indices) ? indices : []).find((r) => r.name === 'NIFTY 50');
+    const rows = Array.isArray(indices) ? indices : [];
+    const nifty = rows.find((r) => r.name === 'NIFTY 50');
     const kind = briefKind(today.phase);
-    const needs = need.count;
+    const headline = overview?.headline || today.pulse;
+    const opens = today.phase !== 'session' && nextOpenLabel(today.next_open);
     return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center min-h-11 text-[14px] font-medium text-[var(--text-muted)]">{phaseLabel(today.phase)}</span>
-          {needs > 0 && (
-            <Link to={isAdmin ? '/ideas' : '/money'} title={h.ideas.sub}
-                  className="ml-auto inline-flex items-center gap-1 min-h-11 px-4 rounded-full bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold tap active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-              {needs} need{needs === 1 ? 's' : ''} you
-              <ChevronRight className="w-4 h-4" aria-hidden="true" />
+      <div className="space-y-5">
+        <div className="space-y-2">
+          <p className="flex items-center gap-2 min-h-8 text-[14px] font-medium text-[var(--text-muted)]">
+            <span aria-hidden="true" className={`w-2 h-2 rounded-full ${today.phase === 'session' ? 'bg-[var(--gain)]' : 'bg-[var(--text-muted)]'}`} />
+            {phaseLabel(today.phase)}{opens && ` · ${opens}`}
+          </p>
+          {alerts(today).map((a) => (
+            <Link key={a.id} to={a.to} role="alert" onClick={a.login ? (e) => openBrokerLogin(e, a) : undefined}
+                  style={{ background: 'var(--loss-soft)' }}
+                  className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] px-3 py-2 text-[14px] font-medium text-[var(--loss)] tap">
+              <span>{a.text}</span>
+              <span className="shrink-0 font-semibold underline">{a.action}</span>
             </Link>
-          )}
+          ))}
         </div>
-        <HeroRow headline={overview?.headline || today.pulse} nifty={nifty} phase={today.phase} failed={failed.money} onRetry={load} meta={meta('money', h.money.meta)} />
-        {alerts(today).map((a) => (
-          <Link key={a.id} to={a.to} role="alert" onClick={a.login ? (e) => openBrokerLogin(e, a) : undefined}
-                style={{ background: 'var(--loss-soft)' }}
-                className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] px-3 py-2 text-[14px] font-medium text-[var(--loss)] tap">
-            <span>{a.text}</span>
-            <span className="shrink-0 font-semibold underline">{a.action}</span>
-          </Link>
-        ))}
+        <HeroRow headline={headline} nifty={nifty} phase={today.phase} failed={failed.money} onRetry={load} meta={meta('money', h.money.meta)}>
+          <GoalTile compact />
+        </HeroRow>
         <SetupChecklist setup={today.setup} />
+        <NeedsYou need={need} isAdmin={isAdmin} onDone={load} />
         {/* Its moves and lines come from three answers; drawn once they are all in, not swapped a second later. */}
         {day !== undefined && (overview || failed.money)
-          ? <TodayCard moves={(overview?.headline || today.pulse)?.news_moves} kind={kind} text={kind ? today[kind] : undefined} summary={day} />
+          ? <TodayCard moves={headline?.news_moves} kind={kind} text={kind ? today[kind] : undefined} summary={day} />
           : <Card title={todayTitle(kind)}><Skeleton rows={3} /></Card>}
-        <div className="grid grid-cols-2 gap-3">
-          <Tile title={<>AI <Badge kind={today.autopilot?.live ? 'live' : 'paper'}>{today.autopilot?.live ? 'Live' : 'Paper'}</Badge></>} icon={Bot} to="/ai" value={h.ai.value} sub={h.ai.value === '—' ? 'Start the AI account' : h.ai.sub} tone={h.ai.tone} subTone={h.ai.subTone} meta={meta('ai', null)} />
-          <Tile title="Market" icon={Newspaper} to="/market" value={h.market.value} sub={h.market.sub} tone={h.market.tone} meta={meta('market', h.market.meta)} />
-        </div>
-        <GoalTile />
+        <section aria-label="You, the AI and the market" className="space-y-2">
+          <Link to="/ai" className="tap flex items-center gap-3 min-h-14 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+            <Bot className="w-5 h-5 shrink-0 text-[var(--accent)]" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--text)]">
+                AI account <Badge kind={today.autopilot?.live ? 'live' : 'paper'}>{today.autopilot?.live ? 'Live' : 'Paper'}</Badge>
+              </div>
+              <div className="text-[13px] tabular-nums text-[var(--text-muted)] truncate">
+                {h.ai.value === '—' ? 'Start the AI account' : <><span className="private">{h.ai.value}</span> · <span className={toneText(h.ai.subTone)}>{h.ai.sub}</span></>}
+                {failed.ai && ` · ${REFRESH_FAILED.text}`}
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+          </Link>
+          {rows.length > 0 && (
+            <Link to="/market" aria-label="Market: the indices" className="tap -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[12px]">
+              {rows.map((r) => (
+                <span key={r.name} className="shrink-0 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                  <span className="block text-[12px] text-[var(--text-muted)] whitespace-nowrap">{r.name}</span>
+                  <span className={`block text-[15px] font-semibold tabular-nums ${toneText(tone(r.percent))}`}>{pct(r.percent / 100, { sign: true })}</span>
+                </span>
+              ))}
+            </Link>
+          )}
+        </section>
         <WeeklyLink />
       </div>
     );
@@ -117,7 +140,7 @@ const Home = () => {
 
   return (
     <Layout>
-      <PageHeader title="Home" />
+      <PageHeader title="Today" />
       {body()}
     </Layout>
   );

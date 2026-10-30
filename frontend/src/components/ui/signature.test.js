@@ -51,6 +51,6 @@ test('HeroRow uses Hero and DeltaChip and keeps the NIFTY gap and meta lines', (
   assert.match(row, /import Hero /);
   assert.match(row, /import DeltaChip /);
   assert.match(row, /NIFTY/);
-  assert.match(row, /sgnPts/);
+  assert.match(row, /vsNifty\(headline\.day_change_pct, idx\)/); // the gap in words (utils/home.js::vsNifty)
   assert.match(row, /meta\.text/);
 });

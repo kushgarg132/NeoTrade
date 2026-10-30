@@ -93,5 +93,24 @@ export const todayTitle = (kind) => (kind === 'premarket' ? 'Before the open' : 
 export const briefLines = (text, summary) => {
   if (!text) return { ai: false, lines: [] };
   const ai = summaryLines(summary?.text);
-  return ai.length ? { ai: true, lines: ai } : { ai: false, lines: digestLines(text).slice(1) };
+  // The digest's "Your account: ₹…, today …" line repeats Home's hero, so it is left out here.
+  return ai.length ? { ai: true, lines: ai } : { ai: false, lines: digestLines(text).slice(1).filter((l) => !/^Your account:/.test(l)) };
+};
+
+/** Your day against NIFTY in words: { gap (points), text } — "2.5 pts behind NIFTY", "level with NIFTY"; null without
+ *  both. Percents as 1.65 (= 1.65%). */
+export const vsNifty = (mine, nifty) => {
+  if (typeof mine !== 'number' || typeof nifty !== 'number') return null;
+  const gap = mine - nifty;
+  if (Math.abs(gap) < 0.05) return { gap: 0, text: 'level with NIFTY' };
+  return { gap, text: `${Math.abs(gap).toFixed(1)} pts ${gap > 0 ? 'ahead of' : 'behind'} NIFTY` };
+};
+
+/** "opens Mon 09:15" from /today's next_open (an IST ISO string); null without one. */
+export const nextOpenLabel = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const f = (o) => d.toLocaleString('en-IN', { ...o, timeZone: 'Asia/Kolkata' });
+  return `opens ${f({ weekday: 'short' })} ${f({ hour: '2-digit', minute: '2-digit', hour12: false })}`;
 };

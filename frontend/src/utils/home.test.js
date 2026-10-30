@@ -81,3 +81,25 @@ test('an expired login alert names its broker so the tap can open that broker lo
   assert.equal(ai.login, 'kite');
   assert.equal(up.to, '/settings/brokers'); // the fallback when the login URL cannot be built
 });
+
+import { vsNifty, nextOpenLabel } from './home.js';
+
+test('vsNifty says the gap in points and words', () => {
+  assert.deepEqual(vsNifty(-1.47, 1.05), { gap: -2.52, text: '2.5 pts behind NIFTY' });
+  assert.equal(vsNifty(2, 1).text, '1.0 pts ahead of NIFTY');
+  assert.equal(vsNifty(1.02, 1).text, 'level with NIFTY');
+  assert.equal(vsNifty(null, 1), null);
+});
+
+test('nextOpenLabel reads the IST weekday and time', () => {
+  assert.equal(nextOpenLabel('2026-11-02T09:15:00+05:30'), 'opens Mon 09:15');
+  assert.equal(nextOpenLabel(null), null);
+});
+
+import { briefLines } from './home.js';
+
+test('the digest brief drops its account line: the hero already says it', () => {
+  const text = 'After the close\nYour account: ₹390,135, today −₹5,818 (-1.5%)\nWhat moved your money:\n• CPPLUS -3.5% — no news found';
+  assert.ok(!briefLines(text, null).lines.some((l) => l.startsWith('Your account:')));
+  assert.ok(briefLines(text, null).lines.includes('What moved your money:'));
+});

@@ -1,18 +1,20 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import Empty from '../ui/Empty';
 import ErrorLine from '../ui/ErrorLine';
 import Hero from '../ui/Hero';
 import DeltaChip from '../ui/DeltaChip';
-import { pct, tone } from '../ui/format';
+import { inr, pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
+import { vsNifty } from '../../utils/home';
 
 /**
- * The glance: your account's value, today's change in rupees and percent, and how that sits against NIFTY.
- * `headline` is /mine/overview's headline (or /today's pulse), `nifty` the NIFTY 50 row of /market/indices.
- * Percents arrive as 1.65 (= 1.65%).
+ * "Where am I?": your account's value and today's change, today against NIFTY in words, the overall gain with XIRR
+ * against NIFTY's on the same cash flows, then `children` (the goal line). `headline` is /mine/overview's headline
+ * (or /today's pulse), `nifty` the NIFTY 50 row of /market/indices. Percents arrive as 1.65 (= 1.65%), XIRR as 0.06.
  */
-const HeroRow = ({ headline, nifty, phase, meta, failed, onRetry }) => {
+const HeroRow = ({ headline, nifty, phase, meta, failed, onRetry, children }) => {
   if (failed && (!headline || typeof headline.value !== 'number')) return <ErrorLine message="Couldn't load your account value." onRetry={onRetry} />;
   if (!headline || typeof headline.value !== 'number') {
     return (
@@ -20,21 +22,40 @@ const HeroRow = ({ headline, nifty, phase, meta, failed, onRetry }) => {
              action={<Link to="/settings/brokers" className="inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold">Connect your broker</Link>} />
     );
   }
-  const day = phase === 'session' ? 'Today' : 'Last session';
-  const mine = headline.day_change_pct;
+  const day = phase === 'session' ? 'today' : 'last session';
   const idx = nifty && typeof nifty.percent === 'number' ? nifty.percent : null;
-  const gap = typeof mine === 'number' && idx !== null ? mine - idx : null;
-  const sgnPts = (g) => `${g < 0 ? '-' : '+'}${Math.abs(g).toFixed(2)} pts`;
+  const vs = vsNifty(headline.day_change_pct, idx);
+  const x = headline.xirr;
+  const nx = headline.nifty_xirr;
+  const xAhead = typeof x === 'number' && typeof nx === 'number' ? x - nx : null;
   return (
-    <Hero to="/money" label="Your account" value={headline.value}
-          change={<DeltaChip value={headline.day_change} pct={mine} suffix={day.toLowerCase()} />}>
-      {idx !== null && (
-        <div className="mt-3 text-[14px] tabular-nums text-[var(--text-muted)]">
-          NIFTY {pct(idx / 100, { sign: true })}
-          {gap !== null && <> · you <span className={`font-semibold ${toneText(tone(gap))}`}>{sgnPts(gap)}</span></>}
-        </div>
+    <Hero label={(
+      <span className="flex items-center justify-between gap-3">
+        Your account
+        <Link to="/money" className="inline-flex items-center gap-0.5 min-h-11 -my-3 text-[13px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px]">
+          Your money <ChevronRight className="w-4 h-4" aria-hidden="true" />
+        </Link>
+      </span>
+    )} value={headline.value}
+          change={<DeltaChip value={headline.day_change} pct={headline.day_change_pct} suffix={day} />}>
+      {vs && (
+        <p className="mt-3 text-[15px] text-[var(--text)]">
+          <span className={`font-semibold ${toneText(tone(vs.gap))}`}>{vs.text}</span>
+          <span className="text-[var(--text-muted)] tabular-nums"> · NIFTY {pct(idx / 100, { sign: true })}</span>
+        </p>
       )}
-      {meta && <div className={`mt-0.5 text-[12px] ${meta.stale ? 'text-[var(--warn)]' : 'text-[var(--text-muted)]'}`}>{meta.text}</div>}
+      {typeof headline.pnl === 'number' && (
+        <p className="mt-1 text-[13px] tabular-nums text-[var(--text-muted)]">
+          Overall <span className={`private font-semibold ${toneText(tone(headline.pnl))}`}>{inr(headline.pnl, { sign: true })}</span>
+          {typeof headline.pnl_pct === 'number' && <> ({pct(headline.pnl_pct / 100, { sign: true, dp: 1 })})</>}
+          {xAhead !== null && (
+            <> · XIRR {pct(x, { sign: true, dp: 1 })} vs NIFTY {pct(nx, { sign: true, dp: 1 })}{' '}
+              <span className={`font-semibold ${toneText(tone(xAhead))}`}>{xAhead >= 0 ? 'ahead' : 'behind'}</span></>
+          )}
+        </p>
+      )}
+      {meta && <div className={`mt-1 text-[12px] ${meta.stale ? 'text-[var(--warn)]' : 'text-[var(--text-muted)]'}`}>{meta.text}</div>}
+      {children && <div className="mt-4 border-t border-[var(--border)] pt-3">{children}</div>}
     </Hero>
   );
 };

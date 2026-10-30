@@ -19,17 +19,23 @@ test('hero empty state names the action and links to accounts', () => {
   assert.match(hero, /settings\/brokers/);
 });
 
-test('Needs you is a 44px tappable control, not a body-text link', () => {
-  assert.match(page, /to=\{isAdmin \? .\/ideas. : .\/money.\}[^>]*min-h-11/);
-  assert.doesNotMatch(page, /<> · <Link/);
+const needs = readFileSync(new URL('../components/home/NeedsYou.jsx', import.meta.url), 'utf8');
+
+test('Needs you shows the top stocks inline with their action, ideas waiting and See all', () => {
+  assert.match(page, /<NeedsYou need=\{need\} isAdmin=\{isAdmin\}/);
+  assert.match(needs, /triageHoldings\(need\.actions\)/); // the Ideas tab's own order
+  assert.match(needs, /<OrderTicket \{\.\.\.ticket\}/);
+  assert.match(needs, /const all = isAdmin \? '\/ideas\?tab=holdings' : '\/money'/);
+  assert.match(needs, /See all/);
+  assert.match(needs, /You're clear\./);
 });
 
-test('the AI tile carries the Paper label', () => {
-  assert.match(page, /title=\{<>AI <Badge kind=\{today\.autopilot\?\.live[^\n]*'Paper'/);
+test('the AI row carries the Paper label', () => {
+  assert.match(page, /AI account <Badge kind=\{today\.autopilot\?\.live \? 'live' : 'paper'\}>/);
 });
 
-test('setup checklist sits above the tiles; one stale banner only', () => {
-  assert.ok(page.indexOf('<SetupChecklist') < page.indexOf('<Tile'));
+test('setup checklist sits above Needs you; one stale banner only', () => {
+  assert.ok(page.indexOf('<SetupChecklist') < page.indexOf('<NeedsYou'));
   assert.doesNotMatch(page, /Some figures couldn't refresh/);
 });
 
@@ -58,15 +64,14 @@ test('every unfinished setup step can be skipped, saved to the account, and undo
   assert.match(setup, /min-h-11 min-w-11/);
 });
 
-test('Home order: hero, alerts, setup, today card, tiles, goal, weekly', () => {
-  const at = ['<HeroRow', 'alerts(today)', '<SetupChecklist', '<TodayCard', 'grid grid-cols-2', '<GoalTile', '<WeeklyLink'].map((s) => page.indexOf(s));
+test('Home order: status and alerts, hero with the goal, setup, needs you, today card, AI and indices, weekly', () => {
+  const at = ['phaseLabel(today.phase)', 'alerts(today)', '<HeroRow', '<GoalTile compact', '<SetupChecklist', '<NeedsYou', '<TodayCard', 'AI account', 'r.percent', '<WeeklyLink'].map((s) => page.indexOf(s));
   assert.ok(at.every((i) => i >= 0), at.join());
   assert.deepEqual([...at].sort((a, b) => a - b), at);
   assert.doesNotMatch(page, /NewsMoves|BriefCard/);
 });
 
-test('needs pill and alerts: tap, accent ink, soft loss fill, role and login kept', () => {
-  assert.match(page, /to=\{isAdmin \? .\/ideas. : .\/money.\}[^>]*text-\[var\(--accent-ink\)\][^>]*tap/);
+test('alerts: tap, soft loss fill, role and login kept', () => {
   assert.match(page, /role="alert"/);
   assert.match(page, /openBrokerLogin/);
   assert.match(page, /var\(--loss-soft\)/);

@@ -1,0 +1,83 @@
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ChevronRight, Lightbulb } from 'lucide-react';
+import Button from '../ui/Button';
+import Skeleton from '../ui/Skeleton';
+import ErrorLine from '../ui/ErrorLine';
+import OrderTicket from '../trading/OrderTicket';
+import { actionTarget } from '../../utils/mine';
+import { stockPath } from '../../utils/stocks';
+import { bareSymbol } from '../../utils/formatters';
+import { holdingButtons, holdingActions, signalText, triageHoldings } from '../../utils/ideas';
+
+const SHOWN = 3;
+const DOT = { verdict_worse: 'bg-[var(--loss)]', stop_hit: 'bg-[var(--loss)]', idea_exit: 'bg-[var(--loss)]', target_hit: 'bg-[var(--gain)]', add: 'bg-[var(--gain)]' };
+
+/**
+ * Home's "anything waiting for me?": the first SHOWN stocks to act on (Ideas → Holdings' own triage, so both agree on
+ * order), each with its one action ("Sell 213" opens the order ticket), then the ideas waiting, then "See all N".
+ * `need` is useNeedCount's result.
+ */
+const NeedsYou = ({ need, isAdmin, onDone }) => {
+  const [ticket, setTicket] = useState(null);
+  const all = isAdmin ? '/ideas?tab=holdings' : '/money';
+  if (!need.loaded) return need.error ? <ErrorLine message="Couldn't load what needs you." onRetry={need.reload} /> : <Skeleton rows={3} />;
+  const { act } = triageHoldings(need.actions);
+  const top = act.slice(0, SHOWN);
+  const ideas = need.ideas.length;
+  const rest = holdingActions(need.actions).length - top.reduce((n, s) => n + s.items.length, 0);
+  return (
+    <section aria-label="Needs you">
+      <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
+        <h2 className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">
+          Needs you {need.count > 0 && <span className="text-[15px] font-medium tabular-nums text-[var(--text-muted)]">{need.count}</span>}
+        </h2>
+        {need.count > 0 && (
+          <Link to={all} className="inline-flex items-center gap-0.5 min-h-11 -my-3 text-[14px] font-semibold text-[var(--accent)]">
+            See all <ChevronRight className="w-4 h-4" aria-hidden="true" />
+          </Link>
+        )}
+      </div>
+      <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4">
+        {need.count === 0 && <p className="py-4 text-[15px] text-[var(--text)]">You're clear. <span className="text-[var(--text-muted)]">Nothing on your holdings or ideas needs a decision.</span></p>}
+        {top.map((s) => {
+          const lead = s.items.find((a) => a.action?.type === 'ticket') || s.items[0];
+          const b = holdingButtons(lead);
+          const t = actionTarget(lead).ticket;
+          return (
+            <div key={s.symbol || lead.id} className="flex items-center gap-3 py-3 border-b border-[var(--border)] last:border-b-0">
+              <span aria-hidden="true" className={`w-2 h-2 shrink-0 rounded-full ${DOT[lead.kind] || 'bg-[var(--warn)]'}`} />
+              <Link to={s.symbol ? stockPath(s.symbol) : all} className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px]">
+                <div className="text-[15px] font-bold text-[var(--text)] truncate">{bareSymbol(s.symbol) || lead.title}</div>
+                <div className="text-[13px] text-[var(--text-muted)] truncate">
+                  {signalText(lead).text}{s.items.length > 1 ? ` · +${s.items.length - 1} more` : ''}
+                </div>
+              </Link>
+              {b.primary?.ticket && t && (
+                <Button variant={t.side === 'SELL' ? 'danger' : 'primary'} className="shrink-0 px-3.5 text-[14px]" onClick={() => setTicket(t)}>
+                  {b.primary.label} {lead.action.quantity}
+                </Button>
+              )}
+            </div>
+          );
+        })}
+        {ideas > 0 && (
+          <Link to="/ideas" className="tap flex items-center gap-3 py-3 border-b border-[var(--border)] last:border-b-0 hover:opacity-80">
+            <Lightbulb className="w-4 h-4 shrink-0 text-[var(--accent)]" aria-hidden="true" />
+            <span className="flex-1 text-[15px] text-[var(--text)]">{ideas} idea{ideas === 1 ? '' : 's'} waiting</span>
+            <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+          </Link>
+        )}
+        {rest > 0 && (
+          <Link to={all} className="tap flex items-center gap-3 py-3 hover:opacity-80">
+            <span className="flex-1 text-[14px] text-[var(--text-muted)]">{rest} more on your holdings: news, results, dividends</span>
+            <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+          </Link>
+        )}
+      </div>
+      {ticket && <OrderTicket {...ticket} onClose={() => setTicket(null)} onDone={onDone} />}
+    </section>
+  );
+};
+
+export default NeedsYou;

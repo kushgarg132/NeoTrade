@@ -13,7 +13,7 @@ const PACE = { ahead: ['proven', 'Ahead'], on: ['neutral', 'On pace'], behind: [
 const month = (d) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 /** Home: how far along the owner's goal is. Own fetches, so a failure only blanks this card. */
-const GoalTile = () => {
+const GoalTile = ({ compact = false }) => {
   const [state, setState] = useState({ loading: true });
 
   const load = useCallback(() => {
@@ -27,9 +27,17 @@ const GoalTile = () => {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  if (compact && (state.failed || state.loading)) return null; // inside the hero: nothing beats a broken line
   if (state.failed) return <Card title="Goal"><ErrorLine message="Could not load your goal." onRetry={() => { setState({ loading: true }); load(); }} /></Card>;
   if (state.loading) return <Card title="Goal"><Skeleton rows={2} /></Card>;
   const { goal } = state;
+  if (!goal && compact) {
+    return (
+      <Link to="/settings/goal" className="inline-flex items-center gap-1.5 min-h-11 -my-2 text-[14px] font-semibold text-[var(--accent)]">
+        <Target className="w-4 h-4" aria-hidden="true" /> Set a goal <ChevronRight className="w-4 h-4" aria-hidden="true" />
+      </Link>
+    );
+  }
   if (!goal) {
     return (
       <Link to="/settings/goal" className="flex items-center gap-3 min-h-11 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 tap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
@@ -45,6 +53,23 @@ const GoalTile = () => {
   const [kind, label] = PACE[p.pace];
   const what = goal.kind === 'value' ? `${inr(goal.target)} by ${month(goal.by)}` : `NIFTY +${goal.target}% by ${month(goal.by)}`;
   const monthly = p.neededMonthly != null && Number.isFinite(p.neededMonthly) && p.neededMonthly > 0 ? `needs ${pct(p.neededMonthly, { dp: 1 })} a month` : null;
+  if (compact) {
+    return (
+      <Link to="/settings/goal" className="tap -mx-1 block rounded-[12px] px-1 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+        <div className="flex items-center justify-between gap-2 text-[14px] text-[var(--text)]">
+          <span className="min-w-0 truncate">Goal <span className="private font-semibold">{what}</span></span>
+          <Badge kind={kind}>{label}</Badge>
+        </div>
+        <div className="mt-2 h-1.5 rounded-full bg-[var(--surface-2)]" role="progressbar" aria-valuenow={Math.round(p.pct * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Goal progress">
+          <div className="h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(p.pct * 100, 1.5)}%` }} />
+        </div>
+        <p className="mt-1.5 text-[12px] text-[var(--text-muted)] tabular-nums">
+          {Math.round(p.pct * 100)}% there{monthly && ` · ${monthly}`}
+          {p.actualMonthly != null && ` · lately ${pct(p.actualMonthly, { dp: 1, sign: true })} a month`}
+        </p>
+      </Link>
+    );
+  }
   return (
     <Card title="Goal" action={<Badge kind={kind}>{label}</Badge>}>
       <Link to="/settings/goal" className="block active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
