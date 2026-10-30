@@ -343,7 +343,9 @@ async def premarket_for(db, user_id: str, now: datetime) -> str:
     return premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs), moved, acts)
 
 
-async def postclose_for(db, user_id: str, now: datetime, events: Optional[list[dict]] = None) -> str:
+async def postclose_for(db, user_id: str, now: datetime, events: Optional[list[dict]] = None,
+                        actions: Optional[list[dict]] = None) -> str:
+    """`actions`: Mine's list when the caller already built it (Today does)."""
     from backend.datalayer import market
     from backend.engine import broker_recon
     from backend.prefs import PrefsStore
@@ -356,7 +358,7 @@ async def postclose_for(db, user_id: str, now: datetime, events: Optional[list[d
     recon = broker_recon.summary(await broker_recon.latest(db, user_id, day))
     return postclose_text(await cached_pulse(db, user_id, now),
                           await pnl_since(db, user_id, roles, datetime.combine(day, time(0, 0), tzinfo=IST)),
-                          events, await _actions(db, user_id, now), recon)
+                          events, actions if actions is not None else await _actions(db, user_id, now), recon)
 
 
 async def send_premarket(db, redis, now: datetime) -> int:

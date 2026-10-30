@@ -239,12 +239,13 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
                      .sort("at", -1).limit(5).to_list(length=5))
     for row in log or []:
         row["at"] = _aware(row.get("at"))  # Mongo hands back naive UTC; say so to the browser
+    acts = await part("mine_actions", _mine_actions(user.id, now)) or []  # also the post-close digest's
     return {
         "market": {"open": in_session(now), "as_of": now},
         "phase": phase,
         "next_open": market_calendar.next_open(now),
         "premarket": await part("premarket", digest.premarket_for(db.db, user.id, now)) if phase == "pre" else None,
-        "postclose": await part("postclose", digest.postclose_for(db.db, user.id, now))
+        "postclose": await part("postclose", digest.postclose_for(db.db, user.id, now, actions=acts))
         if phase in ("post", "closed") else None,
         "unjournaled": await part("unjournaled", _unjournaled(user.id, roles, now)) if phase == "post" else None,
         "picks_top": await part("picks_top", _picks_top(user.id)) if admin and phase == "pre" else None,
@@ -254,7 +255,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         "kill_switch": kill,
         "pulse": await part("pulse", digest.cached_pulse(db.db, user.id, now)),
         "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now, user.role == "admin")) or [],
-        "mine_actions": (acts := await part("mine_actions", _mine_actions(user.id, now)) or [])[:TOP_ACTIONS],
+        "mine_actions": acts[:TOP_ACTIONS],
         "mine_actions_total": len(acts),
         # You vs Picks: admin-only while Picks is (routers/picks.py).
         "scoreboard": await part("scoreboard", digest.scoreboard(db.db, user.id, roles, now))
