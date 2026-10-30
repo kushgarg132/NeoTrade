@@ -32,7 +32,7 @@ const Layout = ({ children }) => {
   });
 
   // Material news on something the user holds (backend/datalayer/reactor.py):
-  // a toast for a while, wherever they are. The News page keeps the full list.
+  // a toast for a while, wherever they are, just under the header. The News page keeps the full list.
   const [alerts, setAlerts] = useState([]);
   const dismiss = (id) => setAlerts((list) => list.filter((a) => a.id !== id));
   useTopic('news', (message) => {
@@ -56,7 +56,7 @@ const Layout = ({ children }) => {
         </main>
       </div>
 
-      <div role="status" aria-live="polite" className="fixed z-50 right-3 bottom-20 lg:bottom-4 w-[min(22rem,calc(100vw-1.5rem))] space-y-2">
+      <div role="status" aria-live="polite" className="fixed z-50 right-3 top-[calc(env(safe-area-inset-top)+4rem)] w-[min(22rem,calc(100vw-1.5rem))] space-y-2">
         {alerts.map((alert) => (
           <div key={alert.id} className="rounded-[12px] border border-[var(--border)] px-3 py-2.5 flex gap-2 items-start bg-[var(--surface)]">
             <Link to="/market?tab=news" onClick={() => dismiss(alert.id)} className="flex-1 min-w-0 text-sm hover:text-[var(--accent)]">
