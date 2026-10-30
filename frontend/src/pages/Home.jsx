@@ -92,8 +92,8 @@ const Home = () => {
           </p>
           {alerts(today).map((a) => (
             <Link key={a.id} to={a.to} role="alert" onClick={a.login ? (e) => openBrokerLogin(e, a) : undefined}
-                  style={{ background: 'var(--loss-soft)' }}
-                  className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] px-3 py-2 text-[14px] font-medium text-[var(--loss)] tap">
+                  style={{ background: 'color-mix(in oklab, var(--warn) 14%, var(--surface))' }}
+                  className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] px-3 py-2 text-[14px] font-medium text-[var(--warn)] tap">
               <span>{a.text}</span>
               <span className="shrink-0 font-semibold underline">{a.action}</span>
             </Link>

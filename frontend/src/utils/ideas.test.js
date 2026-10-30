@@ -58,9 +58,9 @@ test('empty state names the hidden reason', () => {
   assert.match(noPickText('').body, /No setup has fired/);
 });
 
-test('needCount: holdings actions (not idea rows) plus pending ideas; bad shapes count 0', () => {
+test('needCount: act-now holdings rows (not FYI, not idea rows) plus pending ideas; bad shapes count 0', () => {
   const acts = [{ kind: 'bad_news' }, { kind: 'results_soon' }, { kind: 'idea' }, { kind: 'stop_hit' }];
-  assert.equal(needCount(acts, [{}, {}]), 5);
+  assert.equal(needCount(acts, [{}, {}]), 3);
   assert.equal(needCount(null, undefined), 0);
 });
 

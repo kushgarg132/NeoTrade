@@ -32,7 +32,7 @@ const BottomTabs = ({ counts = {} }) => {
                 <span className="relative">
                   <item.icon className="w-6 h-6" strokeWidth={on ? 2.25 : 1.75} aria-hidden="true" />
                   {n > 0 && (
-                    <span className="absolute -top-1.5 -right-2.5 min-w-4 px-1 rounded-full bg-[var(--loss)] text-[var(--surface)] text-[12px] leading-4 text-center tabular-nums">
+                    <span className="absolute -top-1.5 -right-2.5 min-w-4 px-1 rounded-full bg-[var(--accent)] text-[var(--accent-ink)] text-[12px] leading-4 text-center tabular-nums">
                       {n}
                     </span>
                   )}

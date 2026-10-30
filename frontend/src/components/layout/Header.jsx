@@ -14,11 +14,11 @@ const PHASE = { open: 'Market open', pre: 'Pre-open', closed: 'Market closed' };
 const SHORT = { open: 'Open', pre: 'Pre-open', closed: 'Closed' };
 const BTN = 'tap inline-flex items-center justify-center min-h-11 min-w-11 rounded-[12px] text-[var(--text-muted)]';
 
-/** The dot is the live socket: green while connected, red otherwise. The word is the market phase, or "Offline"/"Stale" on phones when the feed is down. */
+/** The dot is the live socket: green while connected, amber otherwise (red is kept for money). The word is the market phase, or "Offline"/"Stale" on phones when the feed is down. */
 const MarketDot = () => {
   const feed = useStreamStatus();
   const phase = marketPhase();
-  const color = feed === 'live' ? 'var(--gain)' : 'var(--loss)';
+  const color = feed === 'live' ? 'var(--gain)' : 'var(--warn)';
   return (
     <span role="img" aria-label={`${PHASE[phase]}. Feed ${feed}.`} className="inline-flex items-center gap-1.5 px-1 text-[12px] text-[var(--text-muted)]">
       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />

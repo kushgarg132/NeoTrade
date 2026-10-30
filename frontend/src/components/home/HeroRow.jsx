@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import Empty from '../ui/Empty';
 import ErrorLine from '../ui/ErrorLine';
 import Hero from '../ui/Hero';
@@ -11,7 +11,7 @@ import { vsNifty } from '../../utils/home';
 
 /**
  * "Where am I?": your account's value and today's change, today against NIFTY in words, the overall gain with XIRR
- * against NIFTY's on the same cash flows, then `children` (the goal line). `headline` is /mine/overview's headline
+ * against NIFTY's on the same cash flows and `children` (the goal line) folded under "Goal and XIRR". `headline` is /mine/overview's headline
  * (or /today's pulse), `nifty` the NIFTY 50 row of /market/indices. Percents arrive as 1.65 (= 1.65%), XIRR as 0.06.
  */
 const HeroRow = ({ headline, nifty, phase, meta, failed, onRetry, children }) => {
@@ -48,14 +48,25 @@ const HeroRow = ({ headline, nifty, phase, meta, failed, onRetry, children }) =>
         <p className="mt-1 text-[13px] tabular-nums text-[var(--text-muted)]">
           Overall <span className={`private font-semibold ${toneText(tone(headline.pnl))}`}>{inr(headline.pnl, { sign: true })}</span>
           {typeof headline.pnl_pct === 'number' && <> ({pct(headline.pnl_pct / 100, { sign: true, dp: 1 })})</>}
-          {xAhead !== null && (
-            <> · XIRR {pct(x, { sign: true, dp: 1 })} vs NIFTY {pct(nx, { sign: true, dp: 1 })}{' '}
-              <span className={`font-semibold ${toneText(tone(xAhead))}`}>{xAhead >= 0 ? 'ahead' : 'behind'}</span></>
-          )}
         </p>
       )}
       {meta && <div className={`mt-1 text-[12px] ${meta.stale ? 'text-[var(--warn)]' : 'text-[var(--text-muted)]'}`}>{meta.text}</div>}
-      {children && <div className="mt-4 border-t border-[var(--border)] pt-3">{children}</div>}
+      {(xAhead !== null || children) && (
+        // The glance stops at the line above; XIRR and the goal are a tap away (native <details>, keyboard included).
+        <details className="group mt-3 border-t border-[var(--border)]">
+          <summary className="flex items-center justify-between min-h-11 cursor-pointer list-none text-[13px] font-semibold text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px] [&::-webkit-details-marker]:hidden">
+            {children ? 'Goal and XIRR' : 'XIRR'}
+            <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          {xAhead !== null && (
+            <p className="pb-3 text-[13px] tabular-nums text-[var(--text-muted)]">
+              XIRR {pct(x, { sign: true, dp: 1 })} vs NIFTY {pct(nx, { sign: true, dp: 1 })}{' '}
+              <span className={`font-semibold ${toneText(tone(xAhead))}`}>{xAhead >= 0 ? 'ahead' : 'behind'}</span>
+            </p>
+          )}
+          {children && <div className="pb-1">{children}</div>}
+        </details>
+      )}
     </Hero>
   );
 };

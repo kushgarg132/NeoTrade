@@ -29,7 +29,7 @@ const SideRail = ({ counts = {} }) => {
             >
               <item.icon className="w-5 h-5 shrink-0" aria-hidden="true" />
               <span className="flex-1">{item.label}</span>
-              {n > 0 && <span className="min-w-5 px-1 rounded-full bg-[var(--loss)] text-[var(--surface)] text-[12px] leading-5 text-center tabular-nums">{n}</span>}
+              {n > 0 && <span className="min-w-5 px-1 rounded-full bg-[var(--accent)] text-[var(--accent-ink)] text-[12px] leading-5 text-center tabular-nums">{n}</span>}
             </NavLink>
           );
         })}

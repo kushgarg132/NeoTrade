@@ -22,6 +22,6 @@ test('nav: accent active, muted inactive, surface bar with border, tap links', (
   }
 });
 
-test('market dot: green only while the socket is live, red otherwise', () => {
-  assert.match(src, /const color = feed === 'live' \? 'var\(--gain\)' : 'var\(--loss\)';/);
+test('market dot: green only while the socket is live, amber otherwise', () => {
+  assert.match(src, /const color = feed === 'live' \? 'var\(--gain\)' : 'var\(--warn\)';/);
 });

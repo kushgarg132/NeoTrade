@@ -71,12 +71,12 @@ test('Home order: status and alerts, hero with the goal, setup, needs you, today
   assert.doesNotMatch(page, /NewsMoves|BriefCard/);
 });
 
-test('alerts: tap, soft loss fill, role and login kept', () => {
+test('alerts: tap, soft warn fill (red is kept for money), role and login kept', () => {
   assert.match(page, /role="alert"/);
   assert.match(page, /openBrokerLogin/);
-  assert.match(page, /var\(--loss-soft\)/);
-  assert.doesNotMatch(page, /border-\[var\(--loss\)\]/);
-  assert.match(page, /text-\[var\(--loss\)\] tap/);
+  assert.match(page, /var\(--warn\) 14%/);
+  assert.doesNotMatch(page, /var\(--loss/);
+  assert.match(page, /text-\[var\(--warn\)\] tap/);
 });
 
 test('the Today card draws once its three sources are in, not swapped a second later', () => {

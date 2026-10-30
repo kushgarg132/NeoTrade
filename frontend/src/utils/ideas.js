@@ -214,9 +214,13 @@ export const eventDay = (iso) => {
   return { dow: f({ weekday: 'short' }), day: f({ day: 'numeric' }), month: f({ month: 'short' }) };
 };
 
-/** The ONE "needs you" number: holdings actions plus pending ideas (your suggestions, and today's Picks for admins). */
+/** Holdings rows that ask for a decision (exits, verdicts, reviews, adds), not the FYI bands (news, dated events, tax). */
+export const actNowCount = (actions) => holdingActions(actions).filter((a) => !BAND[a.kind]).length;
+
+/** The ONE "needs you" number: act-now holdings rows plus pending ideas (your suggestions, and today's Picks for
+ * admins). News, results, dividends and tax dates are FYI and never inflate it. */
 export const needCount = (actions, ideas) =>
-  holdingActions(actions).length + (Array.isArray(ideas) ? ideas.length : 0);
+  actNowCount(actions) + (Array.isArray(ideas) ? ideas.length : 0);
 
 const HOLDING_DISMISS = {
   stop_hit: 'Keep holding', target_hit: 'Keep holding', idea_exit: 'Keep holding', add: 'Not now',

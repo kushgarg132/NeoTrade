@@ -8,7 +8,7 @@ import OrderTicket from '../trading/OrderTicket';
 import { actionTarget } from '../../utils/mine';
 import { stockPath } from '../../utils/stocks';
 import { bareSymbol } from '../../utils/formatters';
-import { holdingButtons, holdingActions, signalText, triageHoldings } from '../../utils/ideas';
+import { actNowCount, holdingButtons, holdingActions, signalText, triageHoldings } from '../../utils/ideas';
 
 const SHOWN = 3;
 const DOT = { verdict_worse: 'bg-[var(--loss)]', stop_hit: 'bg-[var(--loss)]', idea_exit: 'bg-[var(--loss)]', target_hit: 'bg-[var(--gain)]', add: 'bg-[var(--gain)]' };
@@ -25,7 +25,9 @@ const NeedsYou = ({ need, isAdmin, onDone }) => {
   const { act } = triageHoldings(need.actions);
   const top = act.slice(0, SHOWN);
   const ideas = need.ideas.length;
-  const rest = holdingActions(need.actions).length - top.reduce((n, s) => n + s.items.length, 0);
+  const shown = top.reduce((n, s) => n + s.items.filter((a) => actNowCount([a])).length, 0);
+  const more = actNowCount(need.actions) - shown;
+  const fyi = holdingActions(need.actions).length - actNowCount(need.actions);
   return (
     <section aria-label="Needs you">
       <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
@@ -49,13 +51,14 @@ const NeedsYou = ({ need, isAdmin, onDone }) => {
               <span aria-hidden="true" className={`w-2 h-2 shrink-0 rounded-full ${DOT[lead.kind] || 'bg-[var(--warn)]'}`} />
               <Link to={s.symbol ? stockPath(s.symbol) : all} className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px]">
                 <div className="text-[15px] font-bold text-[var(--text)] truncate">{bareSymbol(s.symbol) || lead.title}</div>
-                <div className="text-[13px] text-[var(--text-muted)] truncate">
+                <div className="text-[13px] text-[var(--text-muted)] line-clamp-2">
                   {signalText(lead).text}{s.items.length > 1 ? ` · +${s.items.length - 1} more` : ''}
                 </div>
               </Link>
               {b.primary?.ticket && t && (
-                <Button variant={t.side === 'SELL' ? 'danger' : 'primary'} className="shrink-0 px-3.5 text-[14px]" onClick={() => setTicket(t)}>
-                  {b.primary.label} {lead.action.quantity}
+                // The ticket is the review; solid red waits for its final confirm.
+                <Button variant="secondary" className="shrink-0 px-3.5 text-[14px]" onClick={() => setTicket(t)}>
+                  Review · {b.primary.label} {lead.action.quantity}
                 </Button>
               )}
             </div>
@@ -68,9 +71,15 @@ const NeedsYou = ({ need, isAdmin, onDone }) => {
             <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
           </Link>
         )}
-        {rest > 0 && (
+        {more > 0 && (
+          <Link to={all} className="tap flex items-center gap-3 py-3 border-b border-[var(--border)] last:border-b-0 hover:opacity-80">
+            <span className="flex-1 text-[15px] text-[var(--text)]">{more} more to decide on your holdings</span>
+            <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+          </Link>
+        )}
+        {fyi > 0 && (
           <Link to={all} className="tap flex items-center gap-3 py-3 hover:opacity-80">
-            <span className="flex-1 text-[14px] text-[var(--text-muted)]">{rest} more on your holdings: news, results, dividends</span>
+            <span className="flex-1 text-[14px] text-[var(--text-muted)]">{fyi} FYI: news, results, dividends, tax dates</span>
             <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
           </Link>
         )}
