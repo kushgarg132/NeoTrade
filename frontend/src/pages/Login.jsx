@@ -49,7 +49,8 @@ const Login = () => {
           Works with Zerodha, Upstox and Angel One.
         </p>
 
-          <div className="flex justify-center">
+          {/* Google's iframe is light; under the page's dark color-scheme the browser paints it an opaque white backdrop. */}
+          <div className="flex justify-center [color-scheme:light]">
             <GoogleLogin
               onSuccess={onSuccess}
               onError={() => setError('Sign-in failed. Try again.')}

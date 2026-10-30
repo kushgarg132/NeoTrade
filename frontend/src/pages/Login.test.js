@@ -38,5 +38,6 @@ test('error uses soft loss fill and keeps role=alert', () => {
 test('features kept', () => {
   assert.match(src, /GoogleLogin/);
   assert.match(src, /filled_black/);
+  assert.match(src, /\[color-scheme:light\]/); // else a white box around the Google button in dark mode
   assert.match(src, /Paper until proven/);
 });
