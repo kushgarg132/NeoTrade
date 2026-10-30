@@ -1,22 +1,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { outcomeRows } from './newsItem.js';
+import { targetCalls, sourceName } from './newsItem.js';
 
-test('no outcomes is an empty list', () => {
-  assert.deepEqual(outcomeRows([]), []);
-  assert.deepEqual(outcomeRows(undefined), []);
+test('targetCalls joins each call to its outcome and judges it at the longest measured horizon', () => {
+  const item = {
+    impacts: [{ type: 'symbol', target: 'INFY', direction: 0.5, impact: 5 }, { type: 'symbol', target: 'JSW', direction: 0.8, impact: 7 },
+      { type: 'market', target: 'INDIA', direction: 0.5, impact: 6 }, { type: 'sector', target: 'IT', direction: -0.4, impact: 3 }],
+    outcomes: [
+      { type: 'symbol', target: 'INFY', ret_1d: 0, bench_1d: 0, ret_5d: -0.0266, bench_5d: 0.0043 },
+      { type: 'symbol', target: 'JSW', ret_1d: 0, bench_1d: 0, ret_5d: 0.047, bench_5d: 0.0044 },
+      { type: 'market', target: 'INDIA', ret_5d: 0.0012, bench_5d: 0.0012 },
+    ],
+  };
+  const c = Object.fromEntries(targetCalls(item).map((x) => [x.target, x]));
+  assert.deepEqual(targetCalls(item).map((x) => x.target), ['JSW', 'INDIA', 'INFY', 'IT']); // strongest call first
+  assert.equal(c.JSW.verdict, 'right');
+  assert.equal(c.INFY.verdict, 'wrong');
+  assert.equal(c.INFY.at, '5d');
+  assert.equal(c.INDIA.verdict, 'flat'); // the market judged on its own move, here +0.12%
+  assert.equal(c.IT.verdict, 'pending');
+  assert.equal(c.JSW.moves[0].move, null); // 1h not measured
 });
 
-test('a row with only the 1d horizon yields one entry, vsBench = ret - bench', () => {
-  const rows = outcomeRows([{ target: 'TCS', ret_1d: 0.02, bench_1d: 0.005 }]);
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].target, 'TCS');
-  assert.equal(rows[0].horizon, '1d');
-  assert.equal(rows[0].move, 0.02);
-  assert.ok(Math.abs(rows[0].vsBench - 0.015) < 1e-9);
-});
-
-test('horizons come out 1h, 1d, 5d', () => {
-  const rows = outcomeRows([{ target: 'A', ret_5d: 0.1, bench_5d: 0.1, ret_1h: 0.01, bench_1h: 0 }]);
-  assert.deepEqual(rows.map((r) => r.horizon), ['1h', '5d']);
+test('sourceName names the feed ids and leaves real names alone', () => {
+  assert.equal(sourceName('hbl_markets'), 'BusinessLine');
+  assert.equal(sourceName('et_economy'), 'Economic Times');
+  assert.equal(sourceName('India Infoline'), 'India Infoline');
+  assert.equal(sourceName(undefined), undefined);
 });

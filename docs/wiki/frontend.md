@@ -160,7 +160,7 @@ Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`en
 `pages/SectorPage.jsx`: `GET /market/sector/{name}` -> `change_pct`, `up`, `n`, `sentiment`, `members[]` (each opens the stock) and the sector's news (each opens `/news/:id`); 404 = "Unknown sector". Opened from the Sectors grid.
 
 ### 18. News item (`/news/:id`)
-`pages/NewsItem.jsx`: `GET /news/item/{id}` (404 = "Not found", link to Market news); cards "What it moves" (impacts link to the stock or sector, `utils/newsItem.js`) and "What the market did" (`outcomeRows`).
+`pages/NewsItem.jsx` ("Story"): `GET /news/item/{id}` (404 = "Not found", link to Market news). A story panel: Material / scope badges, publisher (`utils/newsItem.js::sourceName` turns feed ids like `hbl_markets` into BusinessLine) and time ago, the title, the scorer's `event` as "AI read" with its `themes`, "Read the article". Then "The call and what happened" (`::targetCalls`): one entry per impact, strongest first, linking the stock or sector, with the call (Up/Down · impact word, a 10-segment strength bar, n/10, horizon), the move after 1h / 1d / 5d and vs Nifty (the market's own move for a market target), and a verdict Badge at the longest measured horizon (Played out / Went the other way / No real move within ±0.3% / Too early to tell); the header counts "n of m played out".
 
 Other dead-end cards (task 8): `Card` takes `to` (no inner links) or `more` (has inner links), never both (guard in `ui/Card.test.js`). Home `TodayCard` `more` -> `/market` (pre-market) or `/money` (otherwise); Weekly report AI book `to=/ai`, Ideas `to=/ideas/history`, Journal `to=/money?tab=journal`, best/worst rows and Tax lot rows open the stock; Analysis "News sentiment" `more` -> `?tab=news`.
 
