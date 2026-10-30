@@ -89,6 +89,9 @@ def test_autopilot_log_endpoint_lists_newest_first(monkeypatch):
     ]))
     rows = _client(db).get("/api/v1/settings/autopilot/log").json()["rows"]
     assert [r["symbol"] for r in rows] == ["TCS", "INFY"]
+    client = _client(db)
+    assert [r["symbol"] for r in client.get("/api/v1/settings/autopilot/log", params={"limit": 1}).json()["rows"]] == ["TCS"]
+    assert client.get("/api/v1/settings/autopilot/log", params={"limit": 501}).status_code == 422
 
 
 def test_cas_funds_count_as_mine_only_when_roles_are_set():

@@ -17,7 +17,7 @@ from typing import Literal, Optional
 
 import httpx
 from pymongo.errors import DuplicateKeyError
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 from backend.app_settings import AppSettingsStore
@@ -165,12 +165,12 @@ async def _stamp_goal(user_id: str, goal: dict, old: Optional[dict]) -> dict:
 
 
 @router.get("/settings/autopilot/log")
-async def autopilot_log(user: User = Depends(get_current_user)):
-    """The autopilot's last 30 orders and refusals, newest first."""
+async def autopilot_log(user: User = Depends(get_current_user), limit: int = Query(30, ge=1, le=500)):
+    """The autopilot's last `limit` orders and refusals, newest first (AI -> Activity asks for 200)."""
     from backend.database import db
 
     rows = await db.db["autopilot_log"].find({"user_id": user.id}, {"_id": 0, "user_id": 0}) \
-        .sort("at", -1).limit(30).to_list(length=30)
+        .sort("at", -1).limit(limit).to_list(length=limit)
     for row in rows:  # Mongo hands back naive UTC; say so to the browser
         if row.get("at") is not None and row["at"].tzinfo is None:
             row["at"] = row["at"].replace(tzinfo=timezone.utc)

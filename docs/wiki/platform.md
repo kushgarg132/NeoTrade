@@ -168,7 +168,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/settings/preferences` | `backend/routers/settings.py::get_preferences` | user |
 | DELETE | `/api/v1/settings/goal` | `backend/routers/settings.py::remove_goal` | user |
 | PUT | `/api/v1/settings/preferences` | `backend/routers/settings.py::update_preferences` | user |
-| GET | `/api/v1/settings/autopilot/log` | `backend/routers/settings.py::autopilot_log` | user |
+| GET | `/api/v1/settings/autopilot/log` (`?limit=` 1-500, default 30; AI Activity asks 200) | `backend/routers/settings.py::autopilot_log` | user |
 | GET | `/api/v1/settings/strategies` | `backend/routers/settings.py::list_strategies` | user |
 | GET | `/api/v1/strategies/vocabulary` | `backend/routers/settings.py::strategy_vocabulary` | user |
 | POST | `/api/v1/strategies/describe` | `backend/routers/settings.py::describe_strategy` | user |
