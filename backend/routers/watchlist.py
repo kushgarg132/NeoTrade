@@ -7,6 +7,7 @@ the session token only.
 
 import time
 from datetime import datetime, timezone
+import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -17,6 +18,7 @@ from backend.datalayer.stock_info import fetch_stock_info_logic
 from backend.core.models import Watchlist
 from backend.database import db
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/watchlist", tags=["Watchlist"])
 
 MAX_SYMBOLS = 100
@@ -69,6 +71,22 @@ async def remove_from_watchlist(symbol: str, user: User = Depends(get_current_us
     return await _load_or_create(user.id)
 
 
+async def _ranges_52w(symbols: List[str]) -> Dict[str, tuple]:
+    """symbol -> (52-week high, low) from the stored daily bars, as the market scan reads them; {} on failure."""
+    from datetime import timedelta
+
+    from backend.datalayer.bars import BARS, today_ist
+
+    try:
+        since = (today_ist() - timedelta(days=365)).isoformat()
+        return {r["_id"]: (r["hi"], r["lo"]) async for r in db.db[BARS].aggregate([
+            {"$match": {"symbol": {"$in": symbols}, "date": {"$gte": since}}},
+            {"$group": {"_id": "$symbol", "hi": {"$max": "$high"}, "lo": {"$min": "$low"}}}])}
+    except Exception as exc:  # the range is context; the quotes still serve
+        logger.warning("watchlist 52-week ranges unavailable: %s", exc)
+        return {}
+
+
 @router.get("/details", response_model=List[Dict[str, Any]])
 async def get_watchlist_details(user: User = Depends(get_current_user)):
     """Price, day change and `at` from the ingest quote cache (watched names are
@@ -81,18 +99,20 @@ async def get_watchlist_details(user: User = Depends(get_current_user)):
     quotes = await _cached_quotes(bare)
     names = {d["tradingsymbol"]: d.get("name") async for d in db.db["instruments"].find(
         {"exchange": "NSE", "tradingsymbol": {"$in": bare}}, {"tradingsymbol": 1, "name": 1})}
+    ranges = await _ranges_52w(bare)
     details = []
     for sym, b in zip(watchlist.symbols, bare):
         q = quotes.get(b)
+        hi, lo = ranges.get(b, (None, None))
         if q:
             prev = q["prev_close"]
             details.append({"symbol": sym, "name": names.get(b) or b, "current_price": q["price"], "previous_close": prev,
                             "day_change": q["price"] - prev if prev else None, "day_change_percent": q["change_pct"],
-                            "at": q["at"]})
+                            "at": q["at"], "high_52w": hi, "low_52w": lo})
             continue
         try:
             info = await fetch_stock_info_logic(sym)
-            details.append({**info.model_dump(), "at": time.time()})
+            details.append({**info.model_dump(), "at": time.time(), "high_52w": hi, "low_52w": lo})
         except Exception:
             details.append({"symbol": sym, "error": "Failed to fetch data"})
     return details

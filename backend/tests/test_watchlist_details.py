@@ -1,7 +1,7 @@
 """/watchlist/details: prices from the ingest quote cache, Yahoo only for a miss."""
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -21,6 +21,11 @@ async def test_details_read_the_quote_cache_and_fetch_only_misses(monkeypatch):
     mongo = AsyncMongoMockClient()["test_db"]
     await mongo["watchlist"].insert_one({"user_id": "u1", "symbols": ["TCS", "NOPE"]})
     await mongo["instruments"].insert_one({"exchange": "NSE", "tradingsymbol": "TCS", "name": "TATA CONSULTANCY"})
+    from backend.datalayer.bars import BARS, today_ist
+    await mongo[BARS].insert_many([  # the last year of bars gives the 52-week range; an older bar does not count
+        {"symbol": "TCS", "date": today_ist().isoformat(), "high": 120.0, "low": 95.0},
+        {"symbol": "TCS", "date": (today_ist() - timedelta(days=400)).isoformat(), "high": 500.0, "low": 1.0},
+        {"symbol": "TCS", "date": today_ist().replace(day=1).isoformat(), "high": 130.0, "low": 90.0}])
     monkeypatch.setattr(db, "db", mongo)
     monkeypatch.setattr(db, "redis", _Redis())
     asked = []
@@ -33,7 +38,7 @@ async def test_details_read_the_quote_cache_and_fetch_only_misses(monkeypatch):
     user = User(id="u1", google_sub="g", email="a@b.c", name="A", created_at=datetime.now(timezone.utc))
     rows = await watchlist.get_watchlist_details(user)
     assert rows[0] == {"symbol": "TCS", "name": "TATA CONSULTANCY", "current_price": 110.0, "previous_close": 100.0,
-                       "day_change": 10.0, "day_change_percent": 10.0, "at": 7.0}
+                       "day_change": 10.0, "day_change_percent": 10.0, "at": 7.0, "high_52w": 130.0, "low_52w": 90.0}
     assert rows[1] == {"symbol": "NOPE", "error": "Failed to fetch data"}
     assert asked == ["NOPE"]
 

@@ -249,7 +249,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/watchlist` | `backend/routers/watchlist.py::get_watchlist` | user |
 | POST | `/api/v1/watchlist/add` | `backend/routers/watchlist.py::add_to_watchlist` | user |
 | DELETE | `/api/v1/watchlist/remove/{symbol}` | `backend/routers/watchlist.py::remove_from_watchlist` | user |
-| GET | `/api/v1/watchlist/details` | `backend/routers/watchlist.py::get_watchlist_details` (price/day change/`at` from `market_data._cached_quotes`, names from `instruments`; Yahoo `fetch_stock_info_logic` only for a miss) | user |
+| GET | `/api/v1/watchlist/details` | `backend/routers/watchlist.py::get_watchlist_details` (price/day change/`at` from `market_data._cached_quotes`, `high_52w`/`low_52w` from the last year of stored bars (`::_ranges_52w`, {} on failure), names from `instruments`; Yahoo `fetch_stock_info_logic` only for a miss) | user |
 | POST | `/api/v1/trading/start` | `backend/routers/trading.py::start_trading` | user |
 | POST | `/api/v1/trading/stop` | `backend/routers/trading.py::stop_trading` | user |
 | GET | `/api/v1/trading/runs` | `backend/routers/trading.py::list_runs` | user |
