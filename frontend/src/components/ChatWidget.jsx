@@ -1,15 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, matchPath } from 'react-router-dom';
-import { MessageSquare, X, Send, Loader2, Maximize2, Minimize2, Check } from 'lucide-react';
+import { ArrowUp, Check, Loader2, Sparkles, X } from 'lucide-react';
 import Markdown from './common/Markdown';
 import { stream } from '../lib/ws';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import Countdown from './common/Countdown';
+import Button from './ui/Button';
+import Badge from './ui/Badge';
 import { tokenRefusal, deadlineFrom, EXPIRED_NOTE } from '../utils/liveConfirm';
 
 /**
- * The margin note: an assistant docked to the corner of the sheet.
+ * The assistant ("Ask NeoTrade"): a full-height bottom panel on a phone (opened from the masthead), a panel docked to the right
+ * edge on a desktop (opened from the corner button).
  *
  * Replies stream over the app's socket rather than the old hand-parsed SSE
  * reader, which existed only because EventSource cannot carry an
@@ -68,48 +71,33 @@ const ActionCard = ({ action, onUpdate }) => {
     }
   };
 
+  const second = action.state === 'NEEDS_SECOND_TAP';
   return (
-    <div className={cn('border px-3 py-2.5 text-sm', live ? 'border-[var(--loss)]' : 'border-[var(--border)]')}>
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="field-label text-[var(--text)]">Proposed change</span>
-        <span className={cn('field-label', live ? 'text-[var(--loss)]' : 'text-[var(--text-muted)]')}>
-          {live ? 'Live · real money' : action.card.venue === 'paper' ? 'Paper' : ''}
-        </span>
+    <div className={cn('rounded-[16px] border p-3.5', live ? 'border-[var(--loss)] bg-[var(--loss-soft)]' : 'border-[var(--border)] bg-[var(--surface)]')}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[13px] font-semibold text-[var(--text-muted)]">Proposed change</span>
+        {live ? <Badge kind="live">Real money</Badge> : action.card.venue === 'paper' ? <Badge kind="paper">Paper</Badge> : null}
       </div>
-      <p className="figure-md">{action.card.summary}</p>
-      {action.state === 'NEEDS_SECOND_TAP' && (
-        <p className="mt-1.5 text-[var(--loss)]" role="alert">
-          Real money. Tap Confirm again to send it.{' '}
-          {action.until && <Countdown until={action.until} onExpire={() => onUpdate({ state: 'PROPOSED', note: EXPIRED_NOTE, token: undefined, until: undefined })} />}
+      <p className="mt-1.5 text-[15px] font-semibold leading-snug text-[var(--text)]">{action.card.summary}</p>
+      {second && (
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[14px] font-medium text-[var(--loss)]" role="alert">
+          Real money. Tap Send to place it.
+          {action.until && <span className="text-[var(--text-muted)]"><Countdown until={action.until} onExpire={() => onUpdate({ state: 'PROPOSED', note: EXPIRED_NOTE, token: undefined, until: undefined })} /></span>}
         </p>
       )}
-      {action.note && action.state !== 'NEEDS_SECOND_TAP' && (
-        <p className={cn('mt-1.5', action.state === 'FAILED' ? 'text-[var(--loss)]' : 'text-[var(--text-muted)]')}>
-          {action.note}
+      {action.note && !second && (
+        <p className={cn('mt-2 text-[14px]', action.state === 'FAILED' ? 'text-[var(--loss)]' : action.state === 'CONFIRMED' ? 'text-[var(--gain)]' : 'text-[var(--text-muted)]')}>
+          {action.state === 'CONFIRMED' && <Check className="mr-1 inline w-4 h-4 align-[-3px]" aria-hidden="true" />}{action.note}
         </p>
       )}
       {!final && (
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => run('cancel')}
-            disabled={busy}
-            className="min-h-9 border border-[var(--border)] field-label text-[var(--text)] disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => run('confirm')}
-            disabled={busy}
-            className={cn(
-              'min-h-9 inline-flex items-center justify-center gap-1.5 field-label text-white disabled:opacity-50',
-              live ? 'bg-[var(--loss)]' : 'bg-[var(--gain)]'
-            )}
-          >
-            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            {action.state === 'NEEDS_SECOND_TAP' ? 'Send real order' : 'Confirm'}
-          </button>
+        <div className="mt-3 flex gap-2">
+          <Button variant="secondary" className="px-4" onClick={() => run('cancel')} disabled={busy}>Cancel</Button>
+          <Button variant={live ? 'danger' : 'primary'} onClick={() => run('confirm')} disabled={busy}
+            className={cn('flex-1', second && 'ring-2 ring-offset-2 ring-offset-[var(--surface)] ring-[var(--warn)]')}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            {second ? 'Send real order' : 'Confirm'}
+          </Button>
         </div>
       )}
     </div>
@@ -126,7 +114,6 @@ const ChatWidget = () => {
     window.addEventListener('margin-note:toggle', onToggle);
     return () => window.removeEventListener('margin-note:toggle', onToggle);
   }, []);
-  const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState([OPENING]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -143,6 +130,15 @@ const ChatWidget = () => {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, thinking, followups]);
+
+  // Escape closes; opening focuses the composer on a desktop (on a phone that would raise the keyboard at once).
+  useEffect(() => {
+    if (!open) return undefined;
+    if (window.matchMedia?.('(min-width: 1024px)').matches) inputRef.current?.focus();
+    const onKey = (e) => e.key === 'Escape' && setOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
 
   const updateAction = (id, patch) =>
     setMessages((list) => list.map((m) => (m.role === 'action' && m.card.id === id ? { ...m, ...patch } : m)));
@@ -219,71 +215,61 @@ const ChatWidget = () => {
     }
   };
 
+  const fresh = messages.length === 1;
+  const chips = !busy && (fresh ? suggestionsFor(location.pathname) : followups);
+
   return (
-    <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 lg:bottom-6 lg:right-6 z-50 flex flex-col items-end pointer-events-none">
+    <>
+      {open && <div className="fixed inset-0 z-[55] bg-black/50 lg:hidden" onClick={() => setOpen(false)} aria-hidden="true" />}
       {open && (
-        <div
-          className={cn(
-            'mb-3 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] flex flex-col overflow-hidden pointer-events-auto',
-            expanded ? 'w-[min(34rem,calc(100vw-2rem))] h-[70vh]' : 'w-[min(22rem,calc(100vw-2rem))] h-[26rem]'
-          )}
+        <aside
+          role="dialog"
+          aria-label="Ask NeoTrade"
+          className="fade-in fixed z-[56] flex flex-col bg-[var(--surface)] border-[var(--border)]
+            inset-x-0 bottom-0 h-[92dvh] rounded-t-[28px] border-t
+            lg:inset-x-auto lg:right-0 lg:top-0 lg:h-dvh lg:w-[420px] lg:rounded-none lg:border-t-0 lg:border-l"
         >
-          <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border)] bg-[var(--surface-2)]">
-            <span className="field-label text-[var(--text)]">Margin note</span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setExpanded((value) => !value)}
-                className="p-1 text-[var(--text-muted)] hover:text-[var(--text)]"
-                aria-label={expanded ? 'Shrink' : 'Expand'}
-              >
-                {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="p-1 text-[var(--text-muted)] hover:text-[var(--text)]"
-                aria-label="Close"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+          <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-[var(--border)] lg:hidden" aria-hidden="true" />
+          <header className="flex items-center gap-3 px-5 pt-3 pb-3 lg:pt-5 border-b border-[var(--border)]">
+            <span className="inline-flex w-9 h-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent)]"><Sparkles className="w-[18px] h-[18px]" aria-hidden="true" /></span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">Ask NeoTrade</h2>
+              <p className="text-[12px] text-[var(--text-muted)] truncate">Your data only · nothing changes without Confirm</p>
             </div>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close the assistant"
+              className="tap -mr-2 inline-flex w-11 h-11 shrink-0 items-center justify-center rounded-[12px] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+              <X className="w-5 h-5" />
+            </button>
           </header>
 
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-            {messages.map((message, index) =>
-              message.role === 'action' ? (
-                <ActionCard
-                  key={message.card.id}
-                  action={message}
-                  onUpdate={(patch) => updateAction(message.card.id, patch)}
-                />
+          <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4" aria-live="polite">
+            {fresh ? (
+              <div className="pt-4">
+                <h3 className="text-[22px] font-bold leading-tight tracking-[-0.02em] text-[var(--text)]">What do you want to know?</h3>
+                <p className="mt-1.5 text-[15px] leading-snug text-[var(--text-muted)]">{OPENING.content}</p>
+              </div>
+            ) : messages.map((message, index) => {
+              if (message === OPENING) return null;
+              if (message.role === 'action') {
+                return <ActionCard key={message.card.id} action={message} onUpdate={(patch) => updateAction(message.card.id, patch)} />;
+              }
+              return message.role === 'user' ? (
+                <div key={index} className="flex justify-end">
+                  <div className="max-w-[85%] rounded-[20px] rounded-br-[6px] bg-[var(--accent)] px-4 py-2.5 text-[15px] leading-snug text-[var(--accent-ink)]">{message.content}</div>
+                </div>
               ) : (
-              <div key={index} className={cn(message.role === 'user' && 'text-right')}>
-                <p className="field-label mb-1">{message.role === 'user' ? 'You' : 'Assistant'}</p>
-                <div
-                  className={cn(
-                    'inline-block text-left text-sm leading-relaxed px-3 py-2 border max-w-[92%]',
-                    message.role === 'user'
-                      ? 'border-[var(--border)] bg-[var(--surface-2)]'
-                      : 'border-[var(--border)]'
-                  )}
-                >
+                <div key={index} className="text-[15px] leading-relaxed text-[var(--text)] [&_p]:my-1.5 [&_ul]:my-1.5">
                   <Markdown>{message.content}</Markdown>
                 </div>
-              </div>
-              )
-            )}
+              );
+            })}
 
-            {!busy && (messages.length === 1 || followups.length > 0) && (
-              <div className="flex flex-wrap gap-1.5">
-                {(messages.length === 1 ? suggestionsFor(location.pathname) : followups).map((question) => (
-                  <button
-                    key={question}
-                    type="button"
-                    onClick={() => send(question)}
-                    className="min-h-11 lg:min-h-0 px-2.5 py-1.5 border border-[var(--border)] text-xs text-[var(--text)] hover:bg-[var(--accent-soft)] active:bg-[var(--accent-soft)] text-left touch-manipulation"
-                  >
+            {chips?.length > 0 && (
+              <div className={cn('flex gap-2', fresh ? 'flex-col items-stretch pt-2' : 'flex-wrap')}>
+                {chips.map((question) => (
+                  <button key={question} type="button" onClick={() => send(question)}
+                    className={cn('tap min-h-11 rounded-[14px] border border-[var(--border)] px-3.5 py-2 text-left text-[14px] text-[var(--text)] hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]',
+                      fresh && 'bg-[var(--surface-2)] text-[15px] font-medium')}>
                     {question}
                   </button>
                 ))}
@@ -291,45 +277,43 @@ const ChatWidget = () => {
             )}
 
             {busy && (
-              <div className="flex items-center gap-2 text-[var(--text-muted)]">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)] shrink-0" />
-                <span className="text-[13px] text-[var(--text-muted)] truncate">{thinking || 'Thinking…'}</span>
+              <div className="flex items-center gap-2.5 text-[var(--text-muted)]">
+                <span className="flex gap-1" aria-hidden="true">
+                  {[0, 1, 2].map((i) => <span key={i} className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" style={{ animationDelay: `${i * 150}ms` }} />)}
+                </span>
+                <span className="text-[13px] truncate">{thinking || 'Thinking…'}</span>
               </div>
             )}
             <div ref={endRef} />
           </div>
 
-          <form onSubmit={submit} className="flex items-center gap-2 px-3 py-2 border-t border-[var(--border)]">
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask about your account or a stock"
-              disabled={busy}
-              className="flex-1 bg-transparent border-0 py-1.5 text-sm focus:outline-none disabled:opacity-50"
-              aria-label="Message"
-            />
-            <button
-              type="submit"
-              disabled={busy || !input.trim()}
-              className="p-1.5 text-[var(--accent)] disabled:opacity-30"
-              aria-label="Send"
-            >
-              <Send className="w-4 h-4" />
-            </button>
+          <form onSubmit={submit} className="px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-[var(--border)]">
+            <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] pl-4 pr-1.5 focus-within:ring-2 focus-within:ring-[var(--accent)]">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Ask about your account or a stock"
+                disabled={busy}
+                className="min-h-12 flex-1 min-w-0 bg-transparent border-0 p-0 text-[15px] text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-0 disabled:opacity-50"
+                aria-label="Message"
+              />
+              <button type="submit" disabled={busy || !input.trim()} aria-label="Send"
+                className="tap inline-flex w-10 h-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-ink)] disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-5 h-5" />}
+              </button>
+            </div>
           </form>
-        </div>
+        </aside>
       )}
 
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="pointer-events-auto hidden lg:flex w-11 h-11 border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] items-center justify-center hover:bg-[var(--accent-soft)] transition-colors"
-        aria-label={open ? 'Close the margin note' : 'Open the margin note'}
-      >
-        {open ? <X className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />}
-      </button>
-    </div>
+      {!open && (
+        <button type="button" onClick={() => setOpen(true)} aria-label="Open the assistant"
+          className="tap fixed bottom-6 right-6 z-50 hidden lg:inline-flex items-center gap-2 min-h-11 rounded-full border border-[var(--border)] bg-[var(--surface)] pl-3.5 pr-4 text-[14px] font-semibold text-[var(--text)] hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+          <Sparkles className="w-4 h-4 text-[var(--accent)]" aria-hidden="true" /> Ask NeoTrade
+        </button>
+      )}
+    </>
   );
 };
 
