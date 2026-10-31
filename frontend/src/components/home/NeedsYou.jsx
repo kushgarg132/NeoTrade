@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Lightbulb } from 'lucide-react';
-import Button from '../ui/Button';
 import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
 import OrderTicket from '../trading/OrderTicket';
@@ -46,20 +45,30 @@ const NeedsYou = ({ need, isAdmin, onDone }) => {
           const lead = s.items.find((a) => a.action?.type === 'ticket') || s.items[0];
           const b = holdingButtons(lead);
           const t = actionTarget(lead).ticket;
+          const stamp = b.primary?.ticket && t;
           return (
             <div key={s.symbol || lead.id} className="flex items-center gap-3 py-3 border-b border-[var(--border)] last:border-b-0">
-              <span aria-hidden="true" className={`w-2 h-2 shrink-0 rounded-full ${DOT[lead.kind] || 'bg-[var(--warn)]'}`} />
+              {!stamp && <span aria-hidden="true" className={`w-2 h-2 shrink-0 rounded-full ${DOT[lead.kind] || 'bg-[var(--warn)]'}`} />}
               <Link to={s.symbol ? stockPath(s.symbol) : all} className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px]">
                 <div className="text-[15px] font-bold text-[var(--text)] truncate">{bareSymbol(s.symbol) || lead.title}</div>
                 <div className="text-[13px] text-[var(--text-muted)] line-clamp-2">
                   {signalText(lead).text}{s.items.length > 1 ? ` · +${s.items.length - 1} more` : ''}
                 </div>
               </Link>
-              {b.primary?.ticket && t && (
-                // The ticket is the review; solid red waits for its final confirm.
-                <Button variant="secondary" className="shrink-0 px-3.5 text-[14px]" onClick={() => setTicket(t)}>
-                  Review · {b.primary.label} {lead.action.quantity}
-                </Button>
+              {stamp && (
+                // A stamp, side over quantity, tinted by side (it replaces the dot). It opens the ticket, which is
+                // the review; solid red waits for the ticket's final confirm.
+                <button
+                  type="button"
+                  onClick={() => setTicket(t)}
+                  aria-label={`${b.primary.label} ${lead.action.quantity} shares, opens the order ticket`}
+                  className={`tap shrink-0 w-14 h-12 rounded-[12px] grid place-content-center justify-items-center gap-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+                    b.primary.label === 'Sell' ? 'bg-[var(--loss-soft)] text-[var(--loss)]' : 'bg-[var(--gain-soft)] text-[var(--gain)]'
+                  }`}
+                >
+                  <span className="text-[10px] font-extrabold tracking-[0.08em] uppercase leading-none">{b.primary.label}</span>
+                  <span className="text-[17px] font-extrabold leading-none tabular-nums">{lead.action.quantity}</span>
+                </button>
               )}
             </div>
           );

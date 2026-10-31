@@ -30,6 +30,13 @@ test('Needs you shows the top stocks inline with their action, ideas waiting and
   assert.match(needs, /You're clear\./);
 });
 
+test('Needs you action is a stamp: side over quantity, red for a sell, green for a buy, says it opens the ticket', () => {
+  assert.doesNotMatch(needs, /Review ·/);
+  assert.match(needs, /bg-\[var\(--loss-soft\)\] text-\[var\(--loss\)\]/);
+  assert.match(needs, /bg-\[var\(--gain-soft\)\] text-\[var\(--gain\)\]/);
+  assert.match(needs, /aria-label=\{`\$\{b\.primary\.label\} \$\{lead\.action\.quantity\} shares, opens the order ticket`\}/);
+});
+
 test('the AI row carries the Paper label', () => {
   assert.match(page, /AI account <Badge kind=\{today\.autopilot\?\.live \? 'live' : 'paper'\}>/);
 });
