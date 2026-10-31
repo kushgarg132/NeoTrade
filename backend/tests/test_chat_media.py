@@ -54,3 +54,16 @@ async def test_stream_emits_queued_chart_after_its_tool(monkeypatch):
     db = AsyncMongoMockClient()["test_db"]
     events = [e async for e in agent.stream_chat(db, None, "alice", "chart it", [], {"page": "/"}, media=True)]
     assert any(e["type"] == "chart" and e["data"]["kind"] == "line" for e in events)
+
+
+@pytest.mark.parametrize("kind", ["line", "bar", "area", "pie"])
+def test_render_png_draws_every_kind(kind):
+    from backend.chat.media import render_png
+
+    spec = chart_spec("Mix", kind, ["2026-10-01", "2026-10-02", "2026-10-03"],
+                      [{"name": "A", "values": [1.0, None, 3.0]}] if kind == "pie" else
+                      [{"name": "A", "values": [1.0, None, 3.0]}, {"name": "B", "values": [2.0, 2.5, -1.0]}], "₹")
+    if kind == "pie":
+        spec["series"][0]["values"] = [1.0, 2.0, 3.0]
+    png = render_png(spec)
+    assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 2000
