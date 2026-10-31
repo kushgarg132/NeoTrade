@@ -175,14 +175,14 @@ const Stock = () => {
                 privateValue={false}
               />
             )}
-          >
-            {watching !== null && (
+            action={watching !== null && (
               <button type="button" onClick={toggleWatch} aria-pressed={watching}
-                      className={`mt-2 min-h-11 px-3 -ml-3 inline-flex items-center gap-1.5 rounded-[10px] text-[13px] font-semibold ${watching ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+                      className={`shrink-0 -my-3 -mr-2 min-h-11 px-2 inline-flex items-center gap-1.5 rounded-[10px] text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${watching ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
                 <Star className="w-4 h-4" fill={watching ? 'currentColor' : 'none'} aria-hidden="true" />
                 {watching ? 'Watching' : 'Watch'}
               </button>
             )}
+          >
             <AsOf at={live?.at} />
           </Hero>
         </div>

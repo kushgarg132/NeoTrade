@@ -6,9 +6,9 @@ const reduced = () => typeof window !== 'undefined' && window.matchMedia?.('(pre
 
 /**
  * The big number on a glow surface. Counts up 0 -> value once, on first mount; a later change renders directly.
- * `anim` is the in-flight number, null once settled, so the settled text is always exactly format(value).
+ * `action` sits at the right of the label row (never with `to`). `anim` is the in-flight number, null once settled, so the settled text is always exactly format(value).
  */
-const Hero = ({ label, value, format = inr, change, children, to, privateValue = true }) => {
+const Hero = ({ label, value, format = inr, change, action, children, to, privateValue = true }) => {
   const [anim, setAnim] = useState(() => (reduced() || typeof value !== 'number' ? null : 0));
   const target = useRef(value);
   target.current = value;
@@ -28,7 +28,10 @@ const Hero = ({ label, value, format = inr, change, children, to, privateValue =
   }, []);
   const body = (
     <>
-      <div className="text-[13px] font-medium text-[var(--text-muted)]">{label}</div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 text-[13px] font-medium text-[var(--text-muted)]">{label}</div>
+        {action}
+      </div>
       <div className={`${privateValue ? 'private ' : ''}figure-md hero-num mt-2 text-[var(--text)]`}>{format(anim === null ? value : anim)}</div>
       {change && <div className="mt-2">{change}</div>}
       {children}
