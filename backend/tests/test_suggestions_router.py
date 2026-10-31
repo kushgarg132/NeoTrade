@@ -308,7 +308,7 @@ def test_equity_approve_live_rejected_goes_back_to_pending(mine_client, store):
     assert body["status"] == "PENDING" and body["reason"] == "Broker rejected the order"
 
 
-@pytest.mark.parametrize("why", ["closed", "cap", "kill", "no_mine"])
+@pytest.mark.parametrize("why", ["closed", "kill", "no_mine"])
 def test_equity_approve_live_refusals_place_nothing(mine_client, store, mongo, monkeypatch, why):
     import asyncio
 
@@ -320,8 +320,6 @@ def test_equity_approve_live_refusals_place_nothing(mine_client, store, mongo, m
     _with_mine(mine_client, None if why == "no_mine" else broker)
     if why == "closed":
         monkeypatch.setattr(suggestions_router, "_now", lambda: datetime(2026, 10, 4, 5, 0, tzinfo=timezone.utc))
-    if why == "cap":
-        asyncio.run(PrefsStore(mongo).update("alice", {"per_trade_cap": 500.0}))
     if why == "kill":
         # The route's own (patched) clock decides "today", not the wall clock.
         today = suggestions_router._now().astimezone(IST).date()
@@ -331,6 +329,18 @@ def test_equity_approve_live_refusals_place_nothing(mine_client, store, mongo, m
     assert resp.status_code == 409, resp.text
     assert broker.placed == []
     assert asyncio.run(store.get("alice", suggestion["id"]))["status"] == "PENDING"
+
+
+def test_equity_approve_live_ignores_the_per_trade_cap(mine_client, store, mongo):
+    """The per-trade cap is the AI account's rail; a tap on the user's own account is not held to it."""
+    import asyncio
+    from backend.prefs import PrefsStore
+    broker = _FakeMine()
+    _with_mine(mine_client, broker)
+    asyncio.run(PrefsStore(mongo).update("alice", {"per_trade_cap": 500.0}))
+    suggestion = asyncio.run(_seed(store))
+    assert _approve_live(mine_client, suggestion).status_code == 200
+    assert len(broker.placed) == 1
 
 
 def test_equity_approve_live_twice_places_one_order(mine_client, store):
@@ -434,7 +444,7 @@ def test_an_option_cannot_be_approved_live_outside_market_hours(live_client, sto
     assert broker.placed == []
 
 
-def test_an_option_over_the_per_trade_cap_is_refused(live_client, store, mongo):
+def test_an_option_over_the_per_trade_cap_still_goes_to_my_account(live_client, store, mongo):
     import asyncio
     from backend.prefs import PrefsStore
     broker = _FakeBroker()
@@ -445,8 +455,8 @@ def test_an_option_over_the_per_trade_cap_is_refused(live_client, store, mongo):
     asyncio.run(mongo["suggestions"].update_one(
         {"id": suggestion["id"]}, {"$set": {"option_contract.margin_estimate": 80_000.0}}))
     resp = _approve_live(live_client, suggestion)
-    assert resp.status_code == 409 and "per-trade cap" in resp.json()["detail"]
-    assert broker.placed == []
+    assert resp.status_code == 200, resp.text
+    assert len(broker.placed) == 1
 
 
 

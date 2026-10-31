@@ -248,7 +248,8 @@ def read_tools(db, redis, user_id: str) -> list:
             "Proposals from the engine with their id, terms (entry, stop, target, quantity), score and thesis. "
             "status pending or decided; symbol narrows to one scrip. Use the id with propose_approve or propose_decline.")),
         StructuredTool.from_function(coroutine=get_limits, name="get_limits", description=(
-            "The user's own limits (daily loss limit, per-trade cap, trades per day, cooldown, switches) and "
+            "The user's own limits (daily loss limit, per-trade cap (AI account only; the user's own account has none), "
+            "trades per day, cooldown, switches) and "
             "today's guardrail alerts.")),
         StructuredTool.from_function(coroutine=query_my_data, name="query_my_data", description=(
             "Read any of the user's NeoTrade data when the other tools do not cover it (history, older records, "
