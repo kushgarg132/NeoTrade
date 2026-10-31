@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, matchPath } from 'react-router-dom';
-import { ArrowUp, Check, Loader2, Sparkles, X } from 'lucide-react';
+import { ArrowUp, Check, Loader2, RotateCcw, Sparkles, X } from 'lucide-react';
 import Markdown from './common/Markdown';
 import ChatChart from './ChatChart';
 import { stream } from '../lib/ws';
@@ -165,6 +165,16 @@ const ChatWidget = () => {
   const updateAction = (id, patch) =>
     setMessages((list) => list.map((m) => (m.role === 'action' && m.card.id === id ? { ...m, ...patch } : m)));
 
+  // Starts over: stops a reply still streaming and drops the conversation.
+  const clear = () => {
+    requestRef.current?.cancel();
+    setMessages([OPENING]);
+    setFollowups([]);
+    setBusy(false);
+    setThinking('');
+    setInput('');
+  };
+
   const submit = (event) => {
     event.preventDefault();
     send(input.trim());
@@ -264,6 +274,12 @@ const ChatWidget = () => {
               <h2 className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">Ask NeoTrade</h2>
               <p className="text-[12px] text-[var(--text-muted)] truncate">Your data only · nothing changes without Confirm</p>
             </div>
+            {messages.length > 1 && (
+              <button type="button" onClick={clear} aria-label="Clear the chat" title="Clear the chat"
+                className="tap inline-flex w-11 h-11 shrink-0 items-center justify-center rounded-[12px] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+                <RotateCcw className="w-5 h-5" />
+              </button>
+            )}
             <button type="button" onClick={() => setOpen(false)} aria-label="Close the assistant"
               className="tap -mr-2 inline-flex w-11 h-11 shrink-0 items-center justify-center rounded-[12px] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
               <X className="w-5 h-5" />
