@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import api, { endpoints } from '../../utils/api';
 import { formatCurrency } from '../../utils/formatters';
 import {
-  RANGES, newsMarkers, prevClose, rangeChange, toBars, tradeMarkers, visibleRanges,
+  RANGES, newsLean, newsMarkers, prevClose, rangeChange, toBars, tradeMarkers, visibleRanges,
 } from '../../utils/stock';
 import { usePrivacy } from '../../hooks/usePrivacy';
 import { toneText } from '../ui/tone';
@@ -22,14 +22,11 @@ const compact = (v) => (v == null ? '—' : Intl.NumberFormat('en-IN', { notatio
 
 const Chip = ({ on, disabled, onClick, children, label }) => (
   <button type="button" aria-pressed={on} aria-label={label} disabled={disabled} onClick={onClick}
-    className={`min-h-11 min-w-11 px-3 rounded-full text-[13px] font-medium tabular-nums transition-colors disabled:opacity-40 ${
+    className={`min-h-11 min-w-10 px-2 rounded-full text-[13px] font-medium tabular-nums transition-colors disabled:opacity-40 ${
       on ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
     }`}>
     {children}
   </button>
-);
-const Group = ({ label, children }) => (
-  <div role="group" aria-label={label} className="inline-flex items-center rounded-full bg-[var(--surface-2)] p-1">{children}</div>
 );
 
 /**
@@ -63,7 +60,7 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
     if (!symbol || !newsFrom) return undefined; // no markers: `news` stays null
     let gone = false;
     api.get(newsFrom)
-      .then((res) => !gone && setNews({ symbol, items: res.data.items || [] }))
+      .then((res) => !gone && setNews({ symbol, items: (res.data.items || []).map(newsLean) }))
       .catch(() => !gone && setNews({ symbol, items: [] })); // markers are extra: the chart works without them
     return () => { gone = true; };
   }, [symbol, newsFrom]);
@@ -84,7 +81,8 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
     [loaded, symbol, days],
   );
   const shown = useMemo(
-    () => (days ? intra || { bars: [], ohlc: false } : { bars: daily.bars.slice(-spec), ohlc: daily.ohlc }),
+    () => (days ? intra || { bars: [], ohlc: false }
+      : { bars: daily.bars.slice(-spec), ohlc: daily.full.slice(-spec).every(Boolean) }), // candles if the shown bars have OHLC
     [days, intra, daily, spec],
   );
   const bars = shown.bars;
@@ -95,7 +93,7 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
     const have = new Set(bars.map((b) => b.date));
     return tradeMarkers(daily.bars, trades).filter((m) => have.has(m.date)).map((m) => ({ date: m.date, kind: m.side === 'SELL' ? 'sell' : 'buy' }));
   }, [days, bars, daily, trades]);
-  const allNews = useMemo(() => (days || news?.symbol !== symbol ? [] : newsMarkers(bars, news.items)), [days, news, symbol, bars]);
+  const allNews = useMemo(() => (news?.symbol !== symbol ? [] : newsMarkers(bars, news.items)), [news, symbol, bars]);
   const newsDots = useMemo(() => (showNews ? allNews : []), [showNews, allNews]); // stable: markers feed the canvas
   const markers = useMemo(
     () => [...tradeDots, ...newsDots.map((m) => ({ date: m.date, kind: 'news', direction: m.direction, impact: m.impact }))],
@@ -104,15 +102,19 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
   const pickedMark = pickedDay?.symbol === symbol ? newsDots.find((m) => m.date === pickedDay.date) : null;
   const pick = (date) => setPickedDay((p) => (p?.symbol === symbol && p.date === date ? null : { symbol, date }));
 
+  const target = thesis?.target;
+  const stop = thesis?.stop;
   const lines = useMemo(() => (days ? [] : [
-    thesis?.target != null && { price: thesis.target, tone: 'gain', title: 'Target', name: 'Target', amount: fmt(thesis.target) },
-    thesis?.stop != null && { price: thesis.stop, tone: 'loss', title: 'Stop', name: 'Stop', amount: fmt(thesis.stop) },
-  ].filter(Boolean)), [days, thesis?.target, thesis?.stop, currency]); // eslint-disable-line react-hooks/exhaustive-deps
+    target != null && { price: target, tone: 'gain', title: 'Target' },
+    stop != null && { price: stop, tone: 'loss', title: 'Stop' },
+  ].filter(Boolean)), [days, target, stop]);
   const baseline = days === 1 && bars.length ? prevClose(daily.bars, String(bars[0].date).slice(0, 10)) : null;
 
   // Readout: the hovered bar, else the latest; change is from the range's first bar (1D: the previous close).
   const last = bars.at(-1);
-  const focus = hover || last;
+  // Re-read the hovered bar from the current bars: a poll may have replaced it.
+  const hoverBar = hover ? bars.find((b) => b.date === hover.date) || null : null;
+  const focus = hoverBar || last;
   const from = baseline ?? bars[0]?.close;
   const change = focus && from != null ? { abs: focus.close - from, pct: from ? ((focus.close - from) / from) * 100 : 0 } : rangeChange(bars);
   const tone = !change || change.abs === 0 ? 'neutral' : change.abs > 0 ? 'gain' : 'loss';
@@ -129,10 +131,10 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
               {sign}{fmt(change.abs)} ({sign}{change.pct.toFixed(2)}%)
             </span>
           )}
-          <span className="text-[13px] text-[var(--text-muted)]">{hover ? when(hover.date, range === '1W') : span}</span>
+          <span className="text-[13px] text-[var(--text-muted)]">{hoverBar ? when(hoverBar.date, range === '1W') : span}</span>
         </div>
         <div className="text-[12px] text-[var(--text-muted)] tabular-nums h-5">
-          {hover && shown.ohlc && <>O {fmt(hover.open)} · H {fmt(hover.high)} · L {fmt(hover.low)}{hover.volume ? ` · Vol ${compact(hover.volume)}` : ''}</>}
+          {hoverBar && shown.ohlc && <>O {fmt(hoverBar.open)} · H {fmt(hoverBar.high)} · L {fmt(hoverBar.low)}{hoverBar.volume ? ` · Vol ${compact(hoverBar.volume)}` : ''}</>}
         </div>
       </div>
 
@@ -148,42 +150,38 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <Group label="Chart range">
-          {chips.map((k) => <Chip key={k} on={range === k} onClick={() => { setRange(k); setHover(null); }}>{k}</Chip>)}
-        </Group>
-        <div className="flex items-center gap-2">
-          <Group label="Chart style">
-            <Chip on={view === 'candle'} disabled={!shown.ohlc} onClick={() => setMode('candle')} label="Candles">
-              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="currentColor"><rect x="2" y="4" width="3" height="6" /><rect x="3" y="1" width="1" height="12" /><rect x="9" y="3" width="3" height="5" /><rect x="10" y="1" width="1" height="11" /></svg>
-            </Chip>
-            <Chip on={view === 'area'} onClick={() => setMode('area')} label="Area">
-              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M1 11 L5 6 L8 8 L13 2" /></svg>
-            </Chip>
-          </Group>
-          {!days && allNews.length > 0 && (
-            <Group label="News on chart">
-              <Chip on={showNews} onClick={() => setShowNews((v) => !v)}>
-                News <span className="text-[12px] opacity-70">{allNews.length}</span>
-              </Chip>
-            </Group>
+      <div role="group" aria-label="Chart range and type"
+        className="mt-3 flex items-center gap-0.5 rounded-full bg-[var(--surface-2)] p-1 w-fit max-w-full overflow-x-auto">
+        {chips.map((k) => <Chip key={k} on={range === k} onClick={() => { setRange(k); setHover(null); }}>{k}</Chip>)}
+        <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-[var(--border)]" />
+        <Chip on={view === 'candle'} disabled={!shown.ohlc} onClick={() => setMode(view === 'candle' ? 'area' : 'candle')}
+          label={view === 'candle' ? 'Candles, switch to area' : 'Area, switch to candles'}>
+          {view === 'candle' ? (
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="currentColor"><rect x="2" y="4" width="3" height="6" /><rect x="3" y="1" width="1" height="12" /><rect x="9" y="3" width="3" height="5" /><rect x="10" y="1" width="1" height="11" /></svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M1 11 L5 6 L8 8 L13 2" /></svg>
           )}
-        </div>
+        </Chip>
       </div>
 
       {pickedMark && <NewsStrip mark={pickedMark} onClose={() => setPickedDay(null)} />}
-      {!pickedMark && newsDots.length > 0 && (
-        // Canvas dots are not focusable: the same news days as buttons, newest first.
+      {allNews.length > 0 && !pickedMark && (
+        // Canvas dots are not focusable: the same news days as buttons, newest first, after the on/off switch.
         <ul aria-label="News days" className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+          <li className="shrink-0">
+            <Chip on={showNews} onClick={() => setShowNews((v) => !v)} label={showNews ? 'Hide news on chart' : 'Show news on chart'}>
+              News <span className="text-[12px] opacity-70">{allNews.length}</span>
+            </Chip>
+          </li>
           {[...newsDots].reverse().map((m) => (
             <li key={m.date} className="shrink-0">
               <button type="button" onClick={() => pick(m.date)}
-                aria-label={`${m.count} news ${m.count === 1 ? 'item' : 'items'} on ${when(m.date)}: ${m.items[0].title}`}
+                aria-label={`${m.count} news ${m.count === 1 ? 'item' : 'items'} on ${when(m.date, true)}: ${m.items[0].title}`}
                 className="min-h-11 px-3 rounded-full bg-[var(--surface-2)] text-[12px] font-medium tabular-nums inline-flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text)]">
                 <span aria-hidden="true" className={m.direction > 0 ? 'text-[var(--gain)]' : m.direction < 0 ? 'text-[var(--loss)]' : ''}>
                   {m.direction > 0 ? '▲' : m.direction < 0 ? '▼' : '◆'}
                 </span>
-                {when(m.date)}{m.count > 1 ? ` · ${m.count}` : ''}
+                {when(m.date, range === '1W')}{m.count > 1 ? ` · ${m.count}` : ''}
               </button>
             </li>
           ))}
@@ -193,9 +191,9 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
       {lines.length > 0 && (
         <ul className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px] text-[var(--text-muted)]">
           {lines.map((l) => (
-            <li key={l.name} className="inline-flex items-center gap-1.5">
+            <li key={l.title} className="inline-flex items-center gap-1.5">
               <svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke={`var(--${l.tone})`} strokeWidth="2" strokeDasharray="5 4" /></svg>
-              {l.name} <span className="private">{l.amount}</span>
+              {l.title} <span className="private">{fmt(l.price)}</span>
             </li>
           ))}
         </ul>

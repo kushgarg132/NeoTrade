@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   AreaSeries, CandlestickSeries, CrosshairMode, HistogramSeries, LineStyle, createChart, createSeriesMarkers,
 } from 'lightweight-charts';
@@ -40,10 +40,12 @@ const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, on
   const box = useRef(null);
   const probe = useRef(null);
   const chartRef = useRef(null);
+  const mainRef = useRef(null); // the price series, for the tap hit test
   const latest = useRef({});
   const fitKey = useRef('');
   const [theme, setTheme] = useState(0);
-  latest.current = { bars, markers, onCrosshair, onPickDate };
+  // The chart's handlers read the latest props through this ref (refreshed after each render).
+  useLayoutEffect(() => { latest.current = { bars, markers, onCrosshair, onPickDate }; });
 
   // The chart lives as long as the component; data changes below reuse it.
   useEffect(() => {
@@ -74,7 +76,12 @@ const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, on
         const gap = x == null ? Infinity : Math.abs(x - param.point.x);
         if (gap <= NEWS_HIT_PX && (!best || gap < best.gap)) best = { date: m.date, gap };
       }
-      if (best) latest.current.onPickDate?.(best.date);
+      if (!best) return;
+      // The dot sits just above its bar's high: a tap far below it (the volume pane, another bar) is not for it.
+      const bar = latest.current.bars.find((b) => b.date === best.date);
+      const y = bar && mainRef.current ? mainRef.current.priceToCoordinate(bar.high) : null;
+      if (y != null && (param.point.y < y - 48 || param.point.y > y + 24)) return;
+      latest.current.onPickDate?.(best.date);
     };
     chart.subscribeCrosshairMove(move);
     chart.subscribeClick(click);
@@ -122,6 +129,7 @@ const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, on
         bottomColor: color(soft(up ? '--gain' : '--loss', 0)),
         lineWidth: 2,
       });
+    mainRef.current = main;
     main.priceScale().applyOptions({ scaleMargins: margins });
     main.setData(bars.map((b) => (mode === 'candle'
       ? { time: chartTime(b.date), open: b.open, high: b.high, low: b.low, close: b.close }

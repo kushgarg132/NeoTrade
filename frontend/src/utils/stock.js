@@ -32,25 +32,30 @@ const IST_MS = 5.5 * 3600 * 1000;
 export const NEWS_MARKER_CAP = 200;
 
 /**
- * Material news on a price series (GET /news/symbol/{symbol} `items`), one marker per trading day.
- * An item lands on the first close on or after its IST date (weekend / after-hours news shows on the
+ * Material news on a price series (GET /news/symbol/{symbol} `items`, or feed items through `newsLean`),
+ * one marker per bar. Daily: an item lands on the first close on or after its IST date (weekend / after-hours news shows on the
  * session it could move), news after the last close lands on the last close, news before the first is
- * dropped. Same-day items collapse: `count`, `impact` = the largest, `direction` = sign of the summed
+ * dropped. Intraday (ISO-dated bars): the first bar at or after the item's time. Same-bar items collapse: `count`, `impact` = the largest, `direction` = sign of the summed
  * direction x impact (0 = mixed), `items` newest first. More than `cap` days keeps the most impactful.
  */
 export const newsMarkers = (data, items, cap = NEWS_MARKER_CAP) => {
   if (!data?.length || !items?.length) return [];
   const dates = data.map((d) => d.date);
+  // Daily bars compare by IST calendar day; intraday bars (ISO timestamps) by the moment itself.
+  const intraday = String(dates[0]).length !== 10;
+  const at = (d) => Date.parse(intraday ? d : `${d}T00:00:00Z`);
+  const xs = dates.map(at);
   const byDate = new Map();
   for (const it of items) {
     if (!it.material || !it.published_at) continue;
-    const day = new Date(new Date(it.published_at).getTime() + IST_MS).toISOString().slice(0, 10);
-    if (day < dates[0]) continue;
+    const t = new Date(it.published_at).getTime();
+    const key = intraday ? t : at(new Date(t + IST_MS).toISOString().slice(0, 10));
+    if (!(key >= xs[0])) continue;
     let lo = 0;
-    let hi = dates.length - 1;
-    while (lo < hi) { // first date >= day, else the last one
+    let hi = xs.length - 1;
+    while (lo < hi) { // first bar at or after the item, else the last one
       const mid = (lo + hi) >> 1;
-      if (dates[mid] >= day) hi = mid; else lo = mid + 1;
+      if (xs[mid] >= key) hi = mid; else lo = mid + 1;
     }
     const m = byDate.get(dates[lo]) || { date: dates[lo], price: data[lo].close, items: [], net: 0, impact: 0 };
     m.items.push(it);
@@ -68,6 +73,14 @@ export const newsMarkers = (data, items, cap = NEWS_MARKER_CAP) => {
       items: m.items.sort((a, b) => String(b.published_at).localeCompare(String(a.published_at))),
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
+};
+
+/** A feed item (GET /news/feed) as a chart news item: direction and impact from its strongest impact.
+ *  Symbol-history items already carry their own and are returned unchanged. */
+export const newsLean = (it) => {
+  if (it.impact != null) return it;
+  const top = (it.impacts || []).reduce((a, b) => ((b.impact || 0) > (a?.impact || 0) ? b : a), null);
+  return { ...it, direction: top?.direction ?? 0, impact: top?.impact ?? 0 };
 };
 
 /**
@@ -105,8 +118,8 @@ const num = (v) => (v == null || v === '' ? NaN : Number(v));
  * Any price feed as chart bars `{date, open, high, low, close, volume}`, ascending, one per date (last row
  * wins: yfinance repeats its newest 5-minute bar, and lightweight-charts throws on a repeated time).
  * Reads `date`, PriceCandle `timestamp` or index-intraday `t`; `daily` cuts the key to YYYY-MM-DD. Rows
- * without a finite close are dropped. `ohlc` is false when any bar lacks open/high/low (close-only feeds),
- * then those fall back to the close and the chart draws an area.
+ * without a finite close are dropped. `full[i]` says bar i had its own open/high/low; `ohlc` is all of them.
+ * A bar without them falls back to the close, and a slice with any such bar draws as an area.
  */
 export const toBars = (rows, { daily }) => {
   const byDate = new Map();
@@ -122,8 +135,8 @@ export const toBars = (rows, { daily }) => {
     byDate.set(date, { date, open: full ? open : close, high: full ? high : close, low: full ? low : close, close, volume, full });
   }
   const bars = [...byDate.values()].sort((a, b) => chartTime(a.date) - chartTime(b.date) || (a.date < b.date ? -1 : 1));
-  for (const b of bars) { ohlc = ohlc && b.full; delete b.full; }
-  return { bars, ohlc: bars.length > 0 && ohlc };
+  const full = bars.map((b) => { const f = b.full; delete b.full; ohlc = ohlc && f; return f; });
+  return { bars, ohlc: bars.length > 0 && ohlc, full };
 };
 
 /** Range chips worth showing for `dailyCount` daily bars: a daily chip only when it holds more than the one before. */

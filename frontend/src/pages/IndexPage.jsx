@@ -99,6 +99,8 @@ const Why = ({ ticker }) => {
 const TABS = [{ id: 'chart', label: 'Chart' }, { id: 'news', label: 'News' }, { id: 'details', label: 'Details' }];
 // Indian indices read the market news; the rest the global feed.
 const scopeOf = (ticker) => (/^\^(NSE|BSE|CNX)|INDIA/.test(ticker) ? 'MARKET' : 'GLOBAL');
+/** The chart's news dots: the newest 100 material market (or global) items. */
+const indexNewsUrl = (ticker) => `${endpoints.newsFeed}?scope=${scopeOf(ticker)}&material=true&limit=100`;
 
 /** The news that moves this index: the market (or global) feed, newest first, each with its analysis. */
 const IndexNews = ({ ticker }) => {
@@ -191,7 +193,7 @@ const IndexPage = () => {
           <Tabs tabs={TABS} value={tab} onChange={setTab} label="Index sections" />
           <div className="mt-3">
             {tab === 'chart' && (data.points?.length > 1
-              ? <Card><TradingChart closes={data.points} symbol={ticker} currency="pts" intradayUrl={endpoints.marketIndexIntraday(ticker)} newsUrl={null} /></Card>
+              ? <Card><TradingChart closes={data.points} symbol={ticker} currency="pts" intradayUrl={endpoints.marketIndexIntraday(ticker)} newsUrl={indexNewsUrl(ticker)} /></Card>
               : <Empty title="No price data" body={`Could not load the history for ${data.name}.`} action={<Button variant="secondary" onClick={retry}>Retry</Button>} />)}
             {tab === 'news' && <IndexNews ticker={ticker} />}
             {tab === 'details' && <Details data={data} />}

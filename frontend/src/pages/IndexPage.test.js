@@ -13,7 +13,8 @@ test('level shows on the Hero, not a Stat', () => {
 
 test('laid out like a stock: Chart (the stock TradingChart, intraday to 5Y), News and Details tabs', () => {
   for (const s of ['52-week high', '52-week low', '50-day average', '200-day average', '1 year', '5 years']) assert.ok(src.includes(s), s);
-  assert.match(src, /<TradingChart closes=\{data\.points\} symbol=\{ticker\} currency="pts" intradayUrl=\{endpoints\.marketIndexIntraday\(ticker\)\} newsUrl=\{null\} \/>/);
+  assert.match(src, /<TradingChart closes=\{data\.points\} symbol=\{ticker\} currency="pts" intradayUrl=\{endpoints\.marketIndexIntraday\(ticker\)\} newsUrl=\{indexNewsUrl\(ticker\)\} \/>/);
+  assert.match(src, /material=true&limit=100/); // market or global material news as chart dots
   assert.match(src, /const TABS = \[\{ id: 'chart'[^\n]*'news'[^\n]*'details'/);
   assert.match(src, /<IndexNews ticker=\{ticker\} \/>/);
   assert.doesNotMatch(src, /CloseLine/);

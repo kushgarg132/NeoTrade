@@ -49,7 +49,7 @@ test('stop and target amounts are their own private spans, with no private wrapp
   assert.match(stock, /Stop <span className="private">\{px\(risk\.stop\)\}/);
   assert.match(stock, /target <span className="private">\{px\(risk\.target\)\}/);
   const chart = readFileSync(new URL('../components/stock/TradingChart.jsx', import.meta.url), 'utf8');
-  assert.match(chart, /<span className="private">\{l\.amount\}/);
+  assert.match(chart, /<span className="private">\{fmt\(l\.price\)\}/);
   assert.match(chart, /<PriceCanvas/);
   assert.match(chart, /hidePrices=\{hidden\}/); // the canvas axis cannot blur, so it hides stop/target prices
 });

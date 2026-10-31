@@ -62,3 +62,25 @@ test('news days are reachable by keyboard as buttons under the chart', () => {
 test('a failed intraday poll keeps the rows already on screen', () => {
   assert.match(read('./TradingChart.jsx'), /setLoaded\(\(p\) => \(p\?\.symbol === symbol && p\.days === days \? p : \{ symbol, days, rows: \[\] \}\)\)/);
 });
+
+test('a news tap must also land near the dot vertically, not in the volume pane', () => {
+  assert.match(read('./PriceCanvas.jsx'), /priceToCoordinate\(/);
+});
+
+test('ranges and chart type share one control row', () => {
+  const chart = read('./TradingChart.jsx');
+  assert.match(chart, /role="group" aria-label="Chart range and type"/);
+  assert.doesNotMatch(chart, /aria-label="Chart style"/);
+});
+
+test('news shows on every range, and feed items are leaned for index charts', () => {
+  const chart = read('./TradingChart.jsx');
+  assert.doesNotMatch(chart, /days \|\| news\?\.symbol !== symbol/); // 1D/1W are no longer excluded
+  assert.match(chart, /newsLean/);
+});
+
+test('the readout re-reads the hovered bar from the current bars, and candles follow the shown slice', () => {
+  const chart = read('./TradingChart.jsx');
+  assert.match(chart, /bars\.find\(\(b\) => b\.date === hover\.date\)/);
+  assert.match(chart, /daily\.full\.slice\(-spec\)\.every\(Boolean\)/);
+});

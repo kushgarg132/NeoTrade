@@ -58,7 +58,7 @@ test('newsMarkers: material only, snaps forward to a session, collapses a day, c
 });
 
 // --- price chart helpers (2026-10-31 redesign) ---------------------------------
-import { RANGES, chartTime, prevClose, rangeChange, toBars, visibleRanges } from './stock.js';
+import { RANGES, chartTime, newsLean, prevClose, rangeChange, toBars, visibleRanges } from './stock.js';
 
 const candle = (d, c, extra = {}) => ({ timestamp: `${d}T00:00:00+05:30`, open: c - 1, high: c + 2, low: c - 2, close: c, volume: 10, ...extra });
 
@@ -96,7 +96,7 @@ test('toBars: NaN or null close rows are dropped', () => {
 test('toBars: daily cuts PriceCandle timestamps to YYYY-MM-DD; index rows read t', () => {
   assert.equal(toBars([candle('2026-10-31', 1)], { daily: true }).bars[0].date, '2026-10-31');
   assert.equal(toBars([{ t: '2026-10-31T09:15:00+05:30', close: 1 }], { daily: false }).bars[0].date, '2026-10-31T09:15:00+05:30');
-  assert.deepEqual(toBars(undefined, { daily: true }), { bars: [], ohlc: false });
+  assert.deepEqual(toBars(undefined, { daily: true }), { bars: [], ohlc: false, full: [] });
 });
 
 test('visibleRanges: a daily chip shows only when it has more bars than the one before', () => {
@@ -120,4 +120,32 @@ test('chartTime: dates stay business days; timestamps become IST-shifted UTC sec
   assert.equal(chartTime('2026-10-31'), '2026-10-31');
   const iso = '2026-10-31T09:15:00+05:30';
   assert.equal(chartTime(iso), Math.floor(Date.parse(iso) / 1000) + 19800);
+});
+
+
+test('toBars: `full` flags each bar, so one old close-only bar does not turn candles off for every range', () => {
+  const rows = [{ date: '2026-10-29', close: 5 }, candle('2026-10-30', 6), candle('2026-10-31', 7)];
+  const { full, ohlc } = toBars(rows, { daily: true });
+  assert.deepEqual(full, [false, true, true]);
+  assert.equal(ohlc, false);
+  assert.equal(full.slice(-2).every(Boolean), true);
+});
+
+test('newsMarkers: intraday bars snap an item to the first bar at or after it', () => {
+  const bars = ['09:15', '09:20', '09:25'].map((t, i) => ({ date: `2026-10-30T${t}:00+05:30`, close: 100 + i }));
+  const n = (iso, dir = 1, impact = 6) => ({ material: true, published_at: iso, direction: dir, impact, title: iso });
+  const out = newsMarkers(bars, [
+    n('2026-10-30T03:51:00Z'), // 09:21 IST -> the 09:25 bar
+    n('2026-10-30T03:40:00Z'), // 09:10 IST, before the first bar: dropped
+    n('2026-10-30T09:00:00Z'), // 14:30 IST, after the last bar: lands on it
+  ]);
+  assert.deepEqual(out.map((m) => [m.date, m.count]), [['2026-10-30T09:25:00+05:30', 2]]);
+});
+
+test('newsLean: a feed item gets direction and impact from its strongest impact', () => {
+  const it = newsLean({ title: 'x', impacts: [{ direction: 1, impact: 3 }, { direction: -1, impact: 7 }] });
+  assert.equal(it.direction, -1);
+  assert.equal(it.impact, 7);
+  assert.deepEqual(newsLean({ direction: 1, impact: 4, impacts: [{ direction: -1, impact: 9 }] }).impact, 4); // symbol items keep theirs
+  assert.equal(newsLean({ impacts: [] }).impact, 0);
 });
