@@ -57,3 +57,8 @@ test('news days are reachable by keyboard as buttons under the chart', () => {
   assert.match(chart, /aria-label="News days"/);
   assert.match(chart, /aria-label=\{`\$\{m\.count\} news/);
 });
+
+// One failed 60 s poll (yfinance blip, 502) used to replace a working intraday chart with "No price history".
+test('a failed intraday poll keeps the rows already on screen', () => {
+  assert.match(read('./TradingChart.jsx'), /setLoaded\(\(p\) => \(p\?\.symbol === symbol && p\.days === days \? p : \{ symbol, days, rows: \[\] \}\)\)/);
+});

@@ -73,7 +73,7 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
     let gone = false;
     const load = () => api.get(dayFrom, { params: { days } })
       .then((res) => !gone && setLoaded({ symbol, days, rows: res.data }))
-      .catch(() => !gone && setLoaded({ symbol, days, rows: [] }));
+      .catch(() => !gone && setLoaded((p) => (p?.symbol === symbol && p.days === days ? p : { symbol, days, rows: [] }))); // a failed poll keeps what is shown
     load();
     const timer = setInterval(load, INTRADAY_POLL_MS);
     return () => { gone = true; clearInterval(timer); };
