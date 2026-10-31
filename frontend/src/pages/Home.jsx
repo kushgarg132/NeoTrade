@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { indexPath } from '../utils/routes';
 import { Bot, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
@@ -123,14 +124,15 @@ const Home = () => {
             <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
           </Link>
           {rows.length > 0 && (
-            <Link to="/market" aria-label="Market: the indices" className="tap -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[12px]">
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
               {rows.map((r) => (
-                <span key={r.name} className="shrink-0 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                <Link key={r.name} to={r.symbol ? indexPath(r.symbol) : '/market'} aria-label={`${r.name}: open its page`}
+                      className="tap shrink-0 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
                   <span className="block text-[12px] text-[var(--text-muted)] whitespace-nowrap">{r.name}</span>
                   <span className={`block text-[15px] font-semibold tabular-nums ${toneText(tone(r.percent))}`}>{pct(r.percent / 100, { sign: true })}</span>
-                </span>
+                </Link>
               ))}
-            </Link>
+            </div>
           )}
         </section>
         <WeeklyLink />
