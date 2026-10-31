@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import api, { endpoints } from '../utils/api';
 import { fetchIdeas } from '../hooks/useNeedCount';
 import useSymbolNews, { useSymbolResults } from '../hooks/useSymbolNews';
-import { GRADES, groupByGrade, noPickText } from '../utils/ideas';
+import { GRADES, actNowCount, groupByGrade, noPickText } from '../utils/ideas';
 
 /** Ideas: what needs you on your holdings first, then new ideas (your suggestions, plus Picks for admins). */
 const IDS = ['picks', 'holdings'];
@@ -35,7 +35,8 @@ const Ideas = () => {
   const { news } = useSymbolNews(symbols);
   const results = useSymbolResults(symbols);
   const nPicks = fresh.data?.items.length;
-  const nHold = acts.data?.length;
+  // Act-now rows only, the same count as the nav badge (news, results and dividends are FYI).
+  const nHold = acts.data ? actNowCount(acts.data) : null;
   const waiting = nPicks == null && nHold == null ? null : (nPicks || 0) + (nHold || 0);
   const pill = (text) => (
     <span className="inline-flex items-center min-h-8 px-3 rounded-full bg-[var(--surface-2)] text-[13px] font-semibold text-[var(--text)]">{text}</span>
@@ -73,7 +74,7 @@ const Ideas = () => {
         </Hero>
         <Tabs label="Ideas sections" value={tab} onChange={setTab} tabs={[
           { id: 'picks', label: 'Picks', badge: fresh.data?.items.length || 0 },
-          { id: 'holdings', label: 'Holdings', badge: acts.data?.length || 0 },
+          { id: 'holdings', label: 'Holdings', badge: nHold || 0 },
         ]} />
 
         {tab === 'holdings' && (acts.loading ? <Skeleton rows={2} />
