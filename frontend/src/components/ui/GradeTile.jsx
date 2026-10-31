@@ -6,9 +6,10 @@ const STYLE = {
   C: { background: 'var(--border)', color: 'var(--text-muted)' },
 };
 
-const GradeTile = ({ grade }) => (
+/** The grade letter on its tile; `small` for list rows. */
+const GradeTile = ({ grade, small = false }) => (
   <span aria-label={`Grade ${grade}`} style={STYLE[grade] || STYLE.C}
-        className="inline-flex w-9 h-9 items-center justify-center rounded-[12px] text-[17px] font-bold">{grade}</span>
+        className={`inline-flex shrink-0 items-center justify-center font-bold ${small ? 'w-6 h-6 rounded-[8px] text-[13px]' : 'w-9 h-9 rounded-[12px] text-[17px]'}`}>{grade}</span>
 );
 
 export default GradeTile;

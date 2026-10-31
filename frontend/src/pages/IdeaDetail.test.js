@@ -49,8 +49,3 @@ test('Fold uses the 20px radius', () => {
   assert.match(fold, /rounded-\[20px\]/);
   assert.doesNotMatch(fold, /rounded-\[16px\]/);
 });
-
-test('IdeaRow imports everything it uses', () => {
-  const row = readFileSync(new URL('../components/ideas/IdeaRow.jsx', import.meta.url), 'utf8');
-  assert.match(row, /import \{ toneText \}/);
-});

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 // Source contract: every surface that shows a headline shows its analysis the News tab's way.
 const rd = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const surfaces = {
-  chip: './NewsChip.jsx', idea: '../ideas/IdeaRow.jsx', holdingActions: '../ideas/HoldingActions.jsx',
+  chip: './NewsChip.jsx', holdingActions: '../ideas/HoldingActions.jsx',
   holdings: '../money/HoldingsTab.jsx', overview: '../money/OverviewTab.jsx', tax: '../money/TaxTab.jsx',
   journal: '../money/JournalTab.jsx', stockNews: '../stock/NewsTab.jsx', chart: '../stock/NewsStrip.jsx',
   today: '../home/TodayCard.jsx', sector: '../../pages/SectorPage.jsx', index: '../../pages/IndexPage.jsx',

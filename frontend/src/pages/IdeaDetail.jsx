@@ -11,6 +11,7 @@ import Button from '../components/ui/Button';
 import IdeaBadge from '../components/ideas/IdeaBadge';
 import RangeBar from '../components/ideas/RangeBar';
 import BuyBar from '../components/ideas/BuyBar';
+import PickBar from '../components/ideas/PickBar';
 import { useLoad } from '../components/ideas/useLoad';
 import Badge from '../components/ui/Badge';
 import GradeTile from '../components/ui/GradeTile';
@@ -181,6 +182,7 @@ const IdeaDetail = () => {
       </Card>
 
       {idea.kind === 's' && !idea.decided && <BuyBar idea={idea} id={key} onDone={done} />}
+      {idea.kind === 'p' && <PickBar idea={idea} onDone={done} />}
 
       <Fold title="Why this idea">
         {idea.why && <p className="text-[15px] text-[var(--text)]">{idea.why}</p>}
