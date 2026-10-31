@@ -24,6 +24,7 @@ import EventsTab from '../components/stock/EventsTab';
 import useStockAnalysis from '../components/stock/useStockAnalysis';
 import Fundamentals from '../components/analysis/Fundamentals';
 import { verdictKind, verdictLabel } from '../components/stock/common';
+import { StockIcon } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { bareSymbol, formatQuantity, marketPhase } from '../utils/formatters';
 import { stockTab } from '../utils/stocks';
@@ -146,7 +147,12 @@ const Stock = () => {
 
   return (
     <Layout>
-      <PageHeader title={symbol} back right={verdict && !sold ? <Badge kind={verdictKind(verdict)}>{verdictLabel(verdict)}</Badge> : null} />
+      <PageHeader title={(
+        <span className="flex items-center gap-2.5 min-w-0">
+          <StockIcon symbol={symbol} className="size-8 rounded-[8px] p-0.5" />
+          <span className="truncate">{symbol}</span>
+        </span>
+      )} back right={verdict && !sold ? <Badge kind={verdictKind(verdict)}>{verdictLabel(verdict)}</Badge> : null} />
 
       {quick.loading && price == null ? (
         <Card className="mb-3"><Skeleton rows={2} /></Card>
