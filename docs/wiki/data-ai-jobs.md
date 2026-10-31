@@ -42,8 +42,9 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 ### chat
 | path | role | key symbols |
 |---|---|---|
-| `backend/chat/agent.py` | ReAct agent stream: thinking/content/step/action/answer_end/suggestions | `agent.py::stream_chat`, `::_Trailer`, `::NEXT_MARKER`, `::suggest_followups`, `::TOOL_LABELS` |
+| `backend/chat/agent.py` | ReAct agent stream: thinking/content/step/action/chart/image/answer_end/suggestions (`media=True` from the WS route only, so Telegram never gets chart/image tools) | `agent.py::stream_chat`, `::_Trailer`, `::NEXT_MARKER`, `::suggest_followups`, `::TOOL_LABELS` |
 | `backend/chat/context.py` | day snapshot sent with every message (its `decisions` section, `get_decisions` and the approve action are admin-only: other roles get no engine ideas); profile text | `context.py::build_snapshot`, `::SECTIONS`, `::format_snapshot`, `::format_profile`, `::plan_names` |
+| `backend/chat/media.py` | `make_chart` (validated spec, drawn by `ChatChart.jsx` with recharts; numbers come from other tools) and `generate_image` (OmniRoute `/images/generations`, `OMNIROUTE_IMAGE_MODEL`, charged to the user's daily LLM ceiling, sent as a data URL). Both queue events in a sink the agent drains after each tool, so image bytes never reach the model | `media.py::media_tools`, `::chart_spec`, `::_generate`, `::Series` |
 | `backend/chat/tools.py` | read tools bound to caller's user_id; `query_my_data` allowlist | `tools.py::read_tools`, `::USER_DATA`, `::SHARED_DATA`, `::_safe_filter`, `::MAX_ROWS`, `::MAX_CHARS` |
 | `backend/chat/actions.py` | propose-only action tools + the only executor (`confirm`) | `actions.py::action_tools`, `::ChatActionStore`, `::confirm`, `::_execute`, `::_order_checks`, `::_modify_checks`, `::SETTINGS` (incl. `no_buy_before_results_days`; a BUY is also refused by `mine/events.py::buy_blocked` in `_order_checks`), `::ACTION_TTL`, `::CARD_PREFIX`, `::ActionRefused` |
 | `backend/chat/account_actions.py` | exit / cancel / modify / stop-loss on role `mine` account | `account_actions.py::propose_exit`, `::propose_cancel`, `::propose_modify`, `::propose_stop`, `::execute`, `::mine_adapter` |
@@ -142,7 +143,7 @@ Prompts (`backend/prompts/*.md`, front matter `system:`; caller in parens): `tri
 | `llm:last_ok` (epoch s), `llm:last_error` (`{at,error}`) | 86400s; every `get_completion` success / exception | `llm.py::_note`; r: `data_quality.py::_llm` |
 
 ### Settings
-Env (`backend/configs/settings.py`): `NEWS_LLM_CALLS_PER_DAY=200`, `USER_LLM_CALLS_PER_DAY=150`, `PLAN_LLM_CALLS_PER_DAY=100`, `AI_TOOLS_ENABLED=True`, `OMNIROUTE_BASE_URL/MODEL`, `OMNIROUTE_API_KEY(S)`, `OMNIROUTE_FEATURE_KEYS` {feature: key}. Admin runtime switches (`app_settings.py`, 30 s cache per process): model per tier (`TIERS` fast/standard/deep), `FEATURES` = news, plan, research, chat, portfolio, learning (on/off), `lab_enabled` (default off). Per-user prefs read here: `universe, account_size, max_exposure, per_trade_cap, news_alerts` (held|held+watched|all|off), `autopilot_enabled, autopilot_news, autopilot_live, broker_roles, omniroute_model`.
+Env (`backend/configs/settings.py`): `NEWS_LLM_CALLS_PER_DAY=200`, `USER_LLM_CALLS_PER_DAY=150`, `PLAN_LLM_CALLS_PER_DAY=100`, `AI_TOOLS_ENABLED=True`, `OMNIROUTE_BASE_URL/MODEL`, `OMNIROUTE_IMAGE_MODEL=codex/gpt-5.6-luna-image` (empty disables chat `generate_image`; `agy/gemini-*-image` is refused by OmniRoute's images endpoint), `OMNIROUTE_API_KEY(S)`, `OMNIROUTE_FEATURE_KEYS` {feature: key}. Admin runtime switches (`app_settings.py`, 30 s cache per process): model per tier (`TIERS` fast/standard/deep), `FEATURES` = news, plan, research, chat, portfolio, learning (on/off), `lab_enabled` (default off). Per-user prefs read here: `universe, account_size, max_exposure, per_trade_cap, news_alerts` (held|held+watched|all|off), `autopilot_enabled, autopilot_news, autopilot_live, broker_roles, omniroute_model`.
 
 ## Flows
 

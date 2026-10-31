@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # feature with no key here uses OMNIROUTE_API_KEY(S).
     OMNIROUTE_FEATURE_KEYS: Annotated[Dict[str, str], NoDecode] = {}
     OMNIROUTE_BASE_URL: str = "http://omniroute:20128/v1"
+    # Model behind the chat generate_image tool; empty switches the tool off.
+    OMNIROUTE_IMAGE_MODEL: str = "codex/gpt-5.6-luna-image"  # agy/gemini-*-image is refused by /images/generations
     OMNIROUTE_MODEL: str = "cx/gpt-5.6-luna"  # agy/gemini-3-flash left the agy catalog 2026-10; admin Settings overrides this
 
     FINNHUB_API_KEY: Optional[str] = None

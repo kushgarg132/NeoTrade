@@ -13,6 +13,7 @@ from langgraph.prebuilt import create_react_agent
 
 from backend.chat.actions import CARD_PREFIX, action_tools
 from backend.auth.store import UserStore
+from backend.chat.media import media_tools
 from backend.chat.context import build_snapshot, format_profile, format_snapshot
 from backend.chat.tools import read_tools
 from backend.llm import llm_service
@@ -39,6 +40,7 @@ TOOL_LABELS = {
     "get_built_strategies": "Reading your strategies", "search_news": "Searching the news",
     "get_market_backdrop": "Reading the market backdrop", "fetch_stock_info_tool": "Looking up the company",
     "fetch_price_history_tool": "Reading the price history", "resolve_symbol_tool": "Finding the symbol",
+    "make_chart": "Drawing a chart", "generate_image": "Generating an image",
 }
 
 
@@ -113,7 +115,9 @@ async def _profile(db, user_id: str) -> str:
         return "profile: unavailable"
 
 
-async def stream_chat(db, redis, user_id: str, message: str, history: list, context: dict) -> AsyncIterator[dict]:
+async def stream_chat(db, redis, user_id: str, message: str, history: list, context: dict,
+                      media: bool = False) -> AsyncIterator[dict]:
+    """media=True adds make_chart and generate_image, whose chart/image events only the web widget draws."""
     llm = await llm_service.get_llm(tier="deep", feature="chat")
     if not llm:
         yield {"type": "content", "data": "The AI service is not available right now."}
@@ -135,7 +139,9 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
             messages.append(AIMessage(content=content))
     messages.append(HumanMessage(content=message))
 
-    agent = create_react_agent(llm, read_tools(db, redis, user_id) + action_tools(db, redis, user_id, message))
+    shown: list[dict] = []  # chart/image events the media tools queue
+    tools = read_tools(db, redis, user_id) + action_tools(db, redis, user_id, message)
+    agent = create_react_agent(llm, tools + (media_tools(shown) if media else []))
     answer = ""
     split = _Trailer()
     suggestions: list[str] = []
@@ -157,6 +163,8 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
                 text = getattr(output, "content", output)
                 if isinstance(text, str) and text.startswith(CARD_PREFIX):
                     yield {"type": "action", "data": json.loads(text[len(CARD_PREFIX):])}
+                while shown:
+                    yield shown.pop(0)
             elif kind == "on_chat_model_stream":
                 text = split.feed(_text(event["data"]["chunk"].content))
                 if text:
