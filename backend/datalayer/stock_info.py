@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 _provider = YFinanceProvider()
 
+# Intraday chart windows, days -> (yfinance period, interval): 1D and 1W on the price chart.
+INTRADAY_WINDOWS = {1: ("1d", "5m"), 5: ("5d", "15m")}
+
 
 def _dividend_fraction(info: dict):
     """yfinance 1.x reports dividendYield in percent (ITC.NS: 6.25) while its

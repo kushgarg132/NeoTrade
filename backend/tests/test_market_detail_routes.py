@@ -114,10 +114,29 @@ def test_news_item_unknown_is_404(http):
 def test_index_intraday_returns_points_for_a_tracked_index(http):
     client, _, mp = http
     market_data._intraday_cache.clear()
-    rows = [{"t": f"2026-10-27T09:{15 + i}:00+05:30", "close": 100.0 + i} for i in range(3)]
-    mp.setattr(market_data, "_fetch_index_intraday_sync", lambda t: rows)
+    rows = [{"t": f"2026-10-27T09:{15 + i}:00+05:30", "open": 100.0, "high": 101.0, "low": 99.0,
+             "close": 100.0 + i, "volume": 5.0} for i in range(3)]
+    mp.setattr(market_data, "_fetch_index_intraday_sync", lambda t, days=1: rows)
     r = client.get("/market/index/^NSEI/intraday")
-    assert r.status_code == 200 and len(r.json()) == 3 and set(r.json()[0]) == {"t", "close"}
+    assert r.status_code == 200 and len(r.json()) == 3
+    assert set(r.json()[0]) == {"t", "open", "high", "low", "close", "volume"}
+
+
+def test_index_intraday_days_5_has_its_own_cache_entry(http):
+    client, _, mp = http
+    market_data._intraday_cache.clear()
+    calls = []
+    mp.setattr(market_data, "_fetch_index_intraday_sync",
+               lambda t, days=1: calls.append((t, days)) or [{"t": "x", "close": 1.0}])
+    client.get("/market/index/^NSEI/intraday?days=1")
+    client.get("/market/index/^NSEI/intraday?days=5")
+    client.get("/market/index/^NSEI/intraday?days=5")
+    assert calls == [("^NSEI", 1), ("^NSEI", 5)]
+
+
+def test_index_intraday_bad_days_is_422(http):
+    client, _, _ = http
+    assert client.get("/market/index/^NSEI/intraday?days=2").status_code == 422
 
 
 def test_index_intraday_404_for_an_untracked_ticker(http):
@@ -128,7 +147,7 @@ def test_index_intraday_404_for_an_untracked_ticker(http):
 def test_index_intraday_502_when_no_points(http):
     client, _, mp = http
     market_data._intraday_cache.clear()
-    mp.setattr(market_data, "_fetch_index_intraday_sync", lambda t: [])
+    mp.setattr(market_data, "_fetch_index_intraday_sync", lambda t, days=1: [])
     assert client.get("/market/index/^NSEI/intraday").status_code == 502
 
 
@@ -136,7 +155,7 @@ def test_index_intraday_empty_is_negative_cached(http):
     client, _, mp = http
     market_data._intraday_cache.clear()
     calls = []
-    mp.setattr(market_data, "_fetch_index_intraday_sync", lambda t: calls.append(t) or [])
+    mp.setattr(market_data, "_fetch_index_intraday_sync", lambda t, days=1: calls.append(t) or [])
     assert client.get("/market/index/^NSEI/intraday").status_code == 502
     assert client.get("/market/index/^NSEI/intraday").status_code == 502
     assert len(calls) == 1

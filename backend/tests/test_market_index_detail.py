@@ -12,7 +12,8 @@ from backend.routers import market_data
 class _FakeTicker:
     def __init__(self, closes):
         index = pd.date_range("2025-01-01", periods=len(closes), freq="D")
-        self._hist = pd.DataFrame({"Close": closes}, index=index)
+        self._hist = pd.DataFrame({"Open": closes, "High": [c + 1 for c in closes], "Low": [c - 1 for c in closes],
+                                   "Close": closes, "Volume": [1000.0] * len(closes)}, index=index)
 
     def history(self, period, interval):
         return self._hist
@@ -39,7 +40,8 @@ def test_a_listed_index_returns_its_figures(client):
     assert body["sma_50"] == pytest.approx(sum(range(300, 350)) / 50)
     assert body["sma_200"] == pytest.approx(sum(range(150, 350)) / 200)
     assert len(body["points"]) == 250
-    assert body["points"][0] == {"date": "2025-01-01", "close": 100.0}
+    assert body["points"][0] == {"date": "2025-01-01", "open": 100.0, "high": 101.0, "low": 99.0,
+                                 "close": 100.0, "volume": 1000.0}
 
 
 def test_global_indices_are_listed_too(client):
@@ -66,3 +68,30 @@ def test_the_52_week_range_is_the_last_year_of_five(monkeypatch):
     body = TestClient(app).get("/api/v1/market/index/%5EBSESN").json()
     assert len(body["points"]) == 1260
     assert body["high_52w"] == closes[-1] and body["low_52w"] == closes[-252]
+
+
+def test_nan_rows_are_dropped_so_the_body_stays_valid_json(monkeypatch):
+    """yfinance leaves NaN on half sessions; NaN is not JSON and would break the browser's parse."""
+    closes = [100.0, float("nan"), 102.0]
+    monkeypatch.setattr(market_data.yf, "Ticker", lambda ticker: _FakeTicker(closes))
+    app = FastAPI()
+    app.include_router(market_data.router, prefix="/api/v1")
+    r = TestClient(app).get("/api/v1/market/index/%5ENSEI")
+    assert "NaN" not in r.text
+    assert [p["close"] for p in r.json()["points"]] == [100.0, 102.0]
+
+
+def test_index_intraday_rows_carry_ohlcv_and_days_picks_the_window(monkeypatch):
+    seen = []
+
+    class _T(_FakeTicker):
+        def history(self, period, interval):
+            seen.append((period, interval))
+            return self._hist
+
+    monkeypatch.setattr(market_data.yf, "Ticker", lambda ticker: _T([100.0, 101.0]))
+    rows = market_data._fetch_index_intraday_sync("^NSEI", 5)
+    assert seen == [("5d", "15m")]
+    assert set(rows[0]) == {"t", "open", "high", "low", "close", "volume"}
+    market_data._fetch_index_intraday_sync("^NSEI")
+    assert seen[-1] == ("1d", "5m")

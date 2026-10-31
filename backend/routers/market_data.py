@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict, Any
 import json
+import pandas as pd
 import yfinance as yf
 import logging
 import asyncio
@@ -8,6 +9,7 @@ import time
 
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
+from backend.datalayer.stock_info import INTRADAY_WINDOWS
 from backend.market_cache import cached
 
 router = APIRouter()
@@ -174,15 +176,21 @@ def _mean_of_last(closes: List[float], window: int):
 YEAR_SESSIONS = 252  # trading days in a year: the 52-week range
 
 
+def _ohlcv(row) -> Dict[str, float]:
+    """One yfinance row as chart OHLCV; a missing open/high/low falls back to the close, volume to 0."""
+    close = float(row["Close"])
+    pick = lambda k, d: d if k not in row or pd.isna(row[k]) else float(row[k])  # noqa: E731
+    return {"open": pick("Open", close), "high": pick("High", close), "low": pick("Low", close),
+            "close": close, "volume": pick("Volume", 0.0)}
+
+
 def _fetch_index_detail_sync(ticker: str, name: str) -> Dict[str, Any] | None:
     hist = yf.Ticker(ticker).history(period="5y", interval="1d")  # five years for the chart's 5Y range
     if hist is None or hist.empty:
         return None
 
-    points = [
-        {"date": index.strftime("%Y-%m-%d"), "close": float(row["Close"])}
-        for index, row in hist.iterrows()
-    ]
+    points = [{"date": index.strftime("%Y-%m-%d"), **_ohlcv(row)} for index, row in hist.iterrows()
+              if not pd.isna(row["Close"])]  # NaN is not JSON
     closes = [point["close"] for point in points]
     value = closes[-1]
     previous = closes[-2] if len(closes) > 1 else value
@@ -219,34 +227,39 @@ async def get_index_detail(ticker: str):
     return detail
 
 
-def _fetch_index_intraday_sync(ticker: str) -> List[Dict[str, Any]]:
-    hist = yf.Ticker(ticker).history(period="1d", interval="5m")
+def _fetch_index_intraday_sync(ticker: str, days: int = 1) -> List[Dict[str, Any]]:
+    period, interval = INTRADAY_WINDOWS[days]
+    hist = yf.Ticker(ticker).history(period=period, interval=interval)
     if hist is None or hist.empty:
         return []
-    return [{"t": index.isoformat(), "close": float(row["Close"])} for index, row in hist.iterrows()]
+    return [{"t": index.isoformat(), **_ohlcv(row)} for index, row in hist.iterrows() if not pd.isna(row["Close"])]
 
 
 _INTRADAY_TTL = 60
 _INTRADAY_EMPTY_TTL = 15  # negative cache: a yfinance outage must not be re-hit on every mount
-_intraday_cache: Dict[str, tuple] = {}
+_intraday_cache: Dict[tuple, tuple] = {}  # (ticker, days) -> (monotonic, rows)
 
 
 @router.get("/market/index/{ticker}/intraday")
-async def get_index_intraday(ticker: str):
-    """Today's 5-minute closes for a tracked index, cached 60 s per ticker in-process."""
+async def get_index_intraday(ticker: str, days: int = 1):
+    """Intraday OHLCV for a tracked index: `days=1` the latest session at 5 minutes (1D), `days=5` five
+    sessions at 15 minutes (1W). Cached 60 s per (ticker, days) in-process."""
     if ticker not in _known_index_names():
         raise HTTPException(status_code=404, detail=f"{ticker} is not a tracked index")
-    hit = _intraday_cache.get(ticker)
+    if days not in INTRADAY_WINDOWS:
+        raise HTTPException(status_code=422, detail="days must be 1 or 5")
+    key = (ticker, days)
+    hit = _intraday_cache.get(key)
     if hit and time.monotonic() - hit[0] < (_INTRADAY_TTL if hit[1] else _INTRADAY_EMPTY_TTL):
         if not hit[1]:
             raise HTTPException(status_code=502, detail="No intraday data right now")
         return hit[1]
     try:
-        points = await asyncio.to_thread(_fetch_index_intraday_sync, ticker)
+        points = await asyncio.to_thread(_fetch_index_intraday_sync, ticker, days)
     except Exception as e:
         logger.error(f"Error fetching intraday for {ticker}: {e}")
         points = []
-    _intraday_cache[ticker] = (time.monotonic(), points)
+    _intraday_cache[key] = (time.monotonic(), points)
     if not points:
         raise HTTPException(status_code=502, detail="No intraday data right now")
     return points
