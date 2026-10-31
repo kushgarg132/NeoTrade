@@ -173,7 +173,21 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
 
       {pickedMark && <NewsStrip mark={pickedMark} onClose={() => setPickedDay(null)} />}
       {!pickedMark && newsDots.length > 0 && (
-        <p className="mt-2 text-[12px] text-[var(--text-muted)]">Dots mark news days, bigger means more impact. Tap one for the headlines.</p>
+        // Canvas dots are not focusable: the same news days as buttons, newest first.
+        <ul aria-label="News days" className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+          {[...newsDots].reverse().map((m) => (
+            <li key={m.date} className="shrink-0">
+              <button type="button" onClick={() => pick(m.date)}
+                aria-label={`${m.count} news ${m.count === 1 ? 'item' : 'items'} on ${when(m.date)}: ${m.items[0].title}`}
+                className="min-h-11 px-3 rounded-full bg-[var(--surface-2)] text-[12px] font-medium tabular-nums inline-flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text)]">
+                <span aria-hidden="true" className={m.direction > 0 ? 'text-[var(--gain)]' : m.direction < 0 ? 'text-[var(--loss)]' : ''}>
+                  {m.direction > 0 ? '▲' : m.direction < 0 ? '▼' : '◆'}
+                </span>
+                {when(m.date)}{m.count > 1 ? ` · ${m.count}` : ''}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
 
       {lines.length > 0 && (

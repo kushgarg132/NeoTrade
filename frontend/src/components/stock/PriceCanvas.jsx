@@ -5,17 +5,27 @@ import {
 import { chartTime } from '../../utils/stock';
 
 // lightweight-charts paints a canvas, so CSS variables must become concrete colours: a hidden probe
-// element resolves each token (and color-mix alphas) through the browser's own cascade.
-const resolver = (probe) => (css) => {
-  probe.style.color = '';
-  probe.style.color = css;
-  return getComputedStyle(probe).color;
+// element resolves each token (and color-mix alphas) through the browser's own cascade. The computed
+// value can be `color(srgb …)`, which the library cannot parse, so one canvas pixel turns it into rgba().
+const resolver = (probe) => {
+  const px = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+  return (css) => {
+    probe.style.color = '';
+    probe.style.color = css;
+    px.clearRect(0, 0, 1, 1);
+    px.fillStyle = getComputedStyle(probe).color;
+    px.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = px.getImageData(0, 0, 1, 1).data;
+    return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
+  };
 };
 const soft = (token, pct) => `color-mix(in srgb, var(${token}) ${pct}%, transparent)`;
 
 // A business-day time comes back from the library as {year, month, day}; a timestamp as a number.
 const pad = (n) => String(n).padStart(2, '0');
 const timeKey = (t) => (typeof t === 'object' && t ? `${t.year}-${pad(t.month)}-${pad(t.day)}` : String(t));
+
+const NEWS_HIT_PX = 16;
 
 const axisPrice = (p) => Number(p).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
@@ -54,9 +64,17 @@ const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, on
       return latest.current.bars.find((b) => String(chartTime(b.date)) === key) || null;
     };
     const move = (param) => latest.current.onCrosshair?.(at(param));
+    // A tap opens the nearest news dot within NEWS_HIT_PX: at 1Y on a phone a bar is about 1 px wide.
     const click = (param) => {
-      const bar = at(param);
-      if (bar && latest.current.markers?.some((m) => m.kind === 'news' && m.date === bar.date)) latest.current.onPickDate?.(bar.date);
+      if (!param.point) return;
+      let best = null;
+      for (const m of latest.current.markers || []) {
+        if (m.kind !== 'news') continue;
+        const x = chart.timeScale().timeToCoordinate(chartTime(m.date));
+        const gap = x == null ? Infinity : Math.abs(x - param.point.x);
+        if (gap <= NEWS_HIT_PX && (!best || gap < best.gap)) best = { date: m.date, gap };
+      }
+      if (best) latest.current.onPickDate?.(best.date);
     };
     chart.subscribeCrosshairMove(move);
     chart.subscribeClick(click);
@@ -111,8 +129,8 @@ const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, on
 
     let volume = null;
     if (hasVolume) {
-      const upVol = color(soft('--gain', 35));
-      const downVol = color(soft('--loss', 35));
+      const upVol = color(soft('--gain', 22));
+      const downVol = color(soft('--loss', 22));
       volume = chart.addSeries(HistogramSeries, { priceScaleId: 'vol', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
       chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
       volume.setData(bars.map((b) => ({ time: chartTime(b.date), value: b.volume || 0, color: b.close >= b.open ? upVol : downVol })));
@@ -145,6 +163,7 @@ const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, on
       fitKey.current = key;
     }
     return () => {
+      if (chartRef.current !== chart) return; // unmounting: chart.remove() already took the series with it
       markerApi.detach();
       if (volume) chart.removeSeries(volume);
       chart.removeSeries(main);
