@@ -95,12 +95,12 @@ days). On the stock page 5Y therefore shows what exists, and the chip is hidden 
 
 ## Testing
 
-- vitest:
+- `node --test` (the frontend's test runner; pure-function and source assertions, no jsdom):
   - `toBars` (candle passthrough, `t`/`timestamp`/`date` keys, close-only fallback);
   - range slicing and chip hiding;
   - previous-close pick.
-- `Stock.test` / `IndexPage.test` mock `lightweight-charts` (jsdom has no canvas).
-- `npm run build` runs as a build check alongside vitest.
+- `Stock.test` / `IndexPage.test` and a new `PriceCanvas.test` assert on source (lightweight-charts is never run in tests).
+- `npm run build` runs as a build check alongside `npm test`.
 - pytest:
   - index `points` carry OHLCV;
   - intraday `days=5` uses 5d/15m with its own cache entry, and a bad `days` returns 422;
@@ -121,7 +121,7 @@ The same commits update:
 
 ## Rollout
 
-Two commits: backend first (additive; the old frontend ignores the new fields), then frontend.
+Backend commits land first (additive; the old frontend ignores the new fields), then frontend commits.
 Deploy mode (direct vs CI/CD) is asked once before the first push.
 
 ## Out of scope
