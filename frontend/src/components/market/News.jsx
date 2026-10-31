@@ -12,18 +12,22 @@ import { useReconnect, useTopic } from '../../hooks/useStream';
 import { formatTimeAgo } from '../../utils/formatters';
 import { materialToday } from '../../utils/market';
 import { Impact } from '../common/NewsImpacts';
-import { mergeFront } from '../../utils/news';
+import { byDay, matchLean, mergeFront } from '../../utils/news';
+import ChipRow, { Chip } from '../ui/ChipRow';
 
 /**
  * News: everything the ingest worker stored and scored, newest first, with what each
  * item moves. "My names" (holdings and watchlist) is on first; a material alert on the
- * socket re-fetches, so the list stays current.
+ * socket re-fetches, so the list stays current. Lean (strongest impact's direction) filters the loaded
+ * items in the browser; "Material only" is a server filter. Items sit under IST-day headers.
  */
 const SCOPES = [
   { id: '', label: 'All' }, { id: 'COMPANY', label: 'Company' }, { id: 'SECTOR', label: 'Sector' },
   { id: 'MARKET', label: 'Market' }, { id: 'MACRO', label: 'Macro' }, { id: 'GLOBAL', label: 'Global' },
 ];
 const PAGE = 50;
+const LEANS = [{ id: '', label: 'Any' }, { id: 'up', label: 'Bullish' }, { id: 'down', label: 'Bearish' }];
+const HEAD = 'pt-3 pb-1 text-[13px] font-semibold uppercase tracking-wide text-[var(--text-muted)]';
 
 const BAR = { 1: 'bg-[var(--gain)]', '-1': 'bg-[var(--loss)]' };
 const barClass = (item) => {
@@ -49,7 +53,7 @@ const Item = ({ item }) => (
 
 const Group = ({ label, items }) => items.length > 0 && (
   <section aria-label={label}>
-    <h3 className="pt-2 pb-1 text-[13px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</h3>
+    <h3 className={HEAD}>{label}</h3>
     <ul>{items.map((item) => <Item key={item.id} item={item} />)}</ul>
   </section>
 );
@@ -57,6 +61,8 @@ const Group = ({ label, items }) => items.length > 0 && (
 const News = () => {
   const [scope, setScope] = useState('');
   const [mine, setMine] = useState(true);
+  const [material, setMaterial] = useState(false);
+  const [lean, setLean] = useState('');
   const [items, setItems] = useState(null);
   const [error, setError] = useState(false);
   const [more, setMore] = useState(false);
@@ -66,7 +72,7 @@ const News = () => {
   // before = page older items; refresh = background re-fetch of page 1 merged in front (never replaces or wipes the list).
   const load = useCallback((before, refresh) => {
     const mark = gen.n;
-    const params = { limit: PAGE, ...(scope && { scope }), ...(mine && { mine: true }), ...(before && { before }) };
+    const params = { limit: PAGE, ...(scope && { scope }), ...(mine && { mine: true }), ...(material && { material: true }), ...(before && { before }) };
     return api.get(endpoints.newsFeed, { params })
       .then((res) => {
         if (mark !== gen.n) return;
@@ -75,12 +81,14 @@ const News = () => {
         setError(false);
       })
       .catch(() => { if (mark === gen.n && !refresh) setError(true); });
-  }, [scope, mine, gen]);
+  }, [scope, mine, material, gen]);
 
   useEffect(() => { load(); return () => { gen.n++; }; }, [load, gen]);
   const pickScope = (id) => { setItems(null); setScope(id); };
   const pickMine = (v) => { setItems(null); setMine(v); };
-  const { pinned, rest } = materialToday(items || [], new Date());
+  const pickMaterial = (v) => { setItems(null); setMaterial(v); };
+  const shown = (items || []).filter((it) => matchLean(it, lean));
+  const { pinned, rest } = materialToday(shown, new Date());
   useReconnect(() => load(undefined, true));
   useTopic('news', () => load(undefined, true));
 
@@ -91,14 +99,11 @@ const News = () => {
         My names
       </label>
     }>
-      <div role="group" aria-label="News scope" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-3 pt-1">
-        {SCOPES.map((s) => (
-          <button key={s.id} type="button" aria-pressed={scope === s.id} onClick={() => pickScope(s.id)}
-                  className={`shrink-0 min-h-11 px-3.5 rounded-full text-[14px] font-medium border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] active:opacity-70 ${scope === s.id ? 'bg-[var(--accent)] text-[var(--accent-ink)] border-[var(--accent)]' : 'bg-[var(--surface)] text-[var(--text)] border-[var(--border)]'}`}>
-            {s.label}
-          </button>
-        ))}
-      </div>
+      <ChipRow label="News scope" options={SCOPES} value={scope} onChange={pickScope} />
+      <ChipRow label="News lean" options={LEANS} value={lean} onChange={setLean} className="mt-1 pb-3">
+        <span aria-hidden="true" className="shrink-0 w-px my-2 bg-[var(--border)]" />
+        <Chip on={material} onClick={() => pickMaterial(!material)}>Material only</Chip>
+      </ChipRow>
       {error ? <ErrorLine message="Could not load the news." onRetry={() => { setItems(null); load(); }} />
         : items === null ? <Skeleton rows={6} />
         : items.length === 0 ? (
@@ -108,8 +113,13 @@ const News = () => {
         ) : (
           <>
             <Group label="Material today" items={pinned} />
-            {pinned.length > 0 && rest.length > 0 && <h3 className="pt-3 pb-1 text-[13px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Earlier</h3>}
-            {rest.length > 0 && <ul>{rest.map((item) => <Item key={item.id} item={item} />)}</ul>}
+            {byDay(rest).map((g) => <Group key={g.day} label={g.label} items={g.items} />)}
+            {shown.length === 0 && (
+              <p className="py-4 text-[14px] text-[var(--text-muted)]">
+                Nothing {lean === 'up' ? 'bullish' : 'bearish'} in what has loaded.{' '}
+                <button type="button" onClick={() => setLean('')} className="min-h-11 font-medium text-[var(--accent)] underline">Show all</button>
+              </p>
+            )}
             {more && <Button variant="secondary" className="mt-3 w-full" onClick={() => load(items[items.length - 1].published_at)}>Older</Button>}
           </>
         )}

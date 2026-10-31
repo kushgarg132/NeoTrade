@@ -25,3 +25,11 @@ test('News: stale replies are dropped; socket refresh merges page 1 and never wi
   assert.match(news, /useTopic\('news', \(\) => load\(undefined, true\)\)/);
   assert.match(news, /!refresh\) setError\(true\)/);
 });
+
+test('News: lean and material chips, grouped by IST day under the pinned group', () => {
+  assert.match(news, /import ChipRow, \{ Chip \} from '..\/ui\/ChipRow'/);
+  for (const l of ['Any', 'Bullish', 'Bearish', 'Material only']) assert.match(news, new RegExp(l));
+  assert.match(news, /matchLean\(/);
+  assert.match(news, /byDay\(/);
+  assert.match(news, /material && \{ material: true \}/);
+});
