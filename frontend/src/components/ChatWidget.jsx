@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, matchPath } from 'react-router-dom';
 import { ArrowUp, Check, Loader2, Sparkles, X } from 'lucide-react';
 import Markdown from './common/Markdown';
+import ChatChart from './ChatChart';
 import { stream } from '../lib/ws';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
@@ -24,18 +25,39 @@ const OPENING = {
     "Ask about anything in your account (portfolio and its history, real and paper trades, engine runs, proposals, settings, watchlist) or a stock. I read only your own data, and anything I would change waits for your Confirm.",
 };
 
-/** Questions worth one tap, by the page the user is on. */
+/**
+ * Questions worth one tap, by the page the user is on. First match wins, so
+ * specific routes come before their parents; '/' catches everything else.
+ * A function gets the route params (symbol, ticker, name).
+ */
 const SUGGESTED = [
-  ['/portfolio/holdings', ['What should I trim?', 'Explain my biggest risk', 'What does the plan say to add?']],
-  ['/portfolio', ['How did I do this month?', "What's my costliest habit?"]],
-  ['/ai', ['Is the engine running?', 'Which proposal is strongest?', 'How far is any strategy from going live?']],
-  ['/settings', ['What are my limits?', 'Did any guardrail trip today?']],
-  ['/profile', ['What do you remember about me?', 'Does my portfolio fit my risk appetite?']],
-  ['/', ['How am I doing today?', 'Anything waiting for me?', 'Why did NIFTY move today?']],
+  ['/stock/:symbol', ({ symbol }) => [`Chart ${symbol} over 6 months`, `Is ${symbol} a buy right now?`, `Compare ${symbol} with its peers`]],
+  ['/research/stock/:symbol', ({ symbol }) => [`Summarise the case for ${symbol}`, `Chart ${symbol} against NIFTY`, `What could go wrong with ${symbol}?`]],
+  ['/mine/stock/:symbol', ({ symbol }) => [`Chart my ${symbol} position`, `Should I hold or trim ${symbol}?`, `How have I traded ${symbol}?`]],
+  ['/ideas/history', () => ['Chart how past ideas did', 'Which setups actually worked?']],
+  ['/ideas/:id', () => ['Explain this idea simply', 'Chart the entry, stop and target', 'What would make this fail?']],
+  ['/ideas', () => ['Which idea is strongest today?', 'Chart idea win rate by setup', 'Why are these ideas picked?']],
+  ['/market/index/:ticker', ({ ticker }) => [`Chart ${ticker} this month`, `Why did ${ticker} move today?`]],
+  ['/market/sector/:name', ({ name }) => [`Chart ${name} stocks today`, `What is driving ${name}?`]],
+  ['/market', () => ["Chart today's sector moves", 'Why did NIFTY move today?', 'Any big events this week?']],
+  ['/money/trade/:id', () => ['What went right or wrong here?', 'Did I follow my plan on this?']],
+  ['/money', () => ['Chart my P&L this month', 'Pie chart of my allocation', "What's my costliest habit?"]],
+  ['/news/:id', () => ['How does this affect my holdings?', 'Chart the stock since this news']],
+  ['/reports/weekly', () => ['Chart my week day by day', 'What should I change next week?']],
+  ['/ai/strategy/:name', ({ name }) => [`Chart ${name}'s paper P&L`, `How far is ${name} from going live?`]],
+  ['/ai/trade/:id', () => ['Why did the engine take this?', 'How did this trade end?']],
+  ['/ai', () => ['Is the engine running?', 'Which proposal is strongest?', 'Chart paper P&L by strategy']],
+  ['/settings', () => ['What are my limits?', 'Did any guardrail trip today?']],
+  ['/profile', () => ['What do you remember about me?', 'Does my portfolio fit my risk appetite?']],
+  ['/', () => ['How am I doing today?', 'Chart my portfolio value', 'Anything waiting for me?']],
 ];
-// '/' is last, so it catches every page without its own list.
-const suggestionsFor = (path) =>
-  SUGGESTED.find(([prefix]) => prefix === '/' || path === prefix || path.startsWith(`${prefix}/`))[1];
+const suggestionsFor = (path) => {
+  for (const [pattern, list] of SUGGESTED) {
+    const match = pattern === '/' || matchPath({ path: pattern, end: false }, path);
+    if (match) return list(match.params || {});
+  }
+  return [];
+};
 
 /**
  * A change the assistant prepared. Nothing happens until Confirm; a live
@@ -152,7 +174,7 @@ const ChatWidget = () => {
     if (!text || busy) return;
 
     const history = messages
-      .filter((message) => message !== OPENING && message.role !== 'action')
+      .filter((message) => message !== OPENING && (message.role === 'user' || message.role === 'assistant'))
       .map(({ role, content }) => ({ role, content }));
 
     setMessages((list) => [...list, { role: 'user', content: text }]);
@@ -169,7 +191,13 @@ const ChatWidget = () => {
     const symbol = matchPath('/stock/:symbol', location.pathname)?.params.symbol || location.state?.symbol;
     const context = { page: location.pathname, symbol };
     const request = stream.request('chat', { message: text, history, context }, (event_) => {
-      if (event_.event === 'suggestions') {
+      if (event_.event === 'chart' || event_.event === 'image') {
+        answer = '';
+        setMessages((list) => {
+          const settled = list.map((m) => (m.streaming ? { role: m.role, content: m.content } : m));
+          return [...settled, { role: event_.event, data: event_.data }];
+        });
+      } else if (event_.event === 'suggestions') {
         setFollowups(event_.data);
       } else if (event_.event === 'thinking') {
         setThinking(event_.data.text);
@@ -250,6 +278,10 @@ const ChatWidget = () => {
               </div>
             ) : messages.map((message, index) => {
               if (message === OPENING) return null;
+              if (message.role === 'chart') return <ChatChart key={index} spec={message.data} />;
+              if (message.role === 'image') {
+                return <img key={index} src={message.data.url} alt={message.data.alt} className="w-full rounded-[16px] border border-[var(--border)]" />;
+              }
               if (message.role === 'action') {
                 return <ActionCard key={message.card.id} action={message} onUpdate={(patch) => updateAction(message.card.id, patch)} />;
               }
