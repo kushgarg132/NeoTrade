@@ -8,6 +8,12 @@ import yfinance as yf
 from backend.core.models import PriceCandle
 from backend.instruments.models import Instrument
 
+
+def _or(value, fallback) -> float:
+    """`value` as a float, or `fallback` when it is missing or NaN."""
+    return float(fallback) if value is None or pd.isna(value) else float(value)
+
+
 logger = logging.getLogger(__name__)
 
 _EXCHANGE_SUFFIX = {"NSE": ".NS", "BSE": ".BO"}
@@ -37,6 +43,7 @@ class YFinanceProvider:
         if df.empty:
             raise ValueError(f"No price data found for {ticker_symbol}")
 
+        df = df.dropna(subset=["Close"])  # half-filled yfinance rows: NaN is not JSON
         candles = []
         for index, row in df.iterrows():
             if isinstance(index, datetime):
@@ -49,12 +56,12 @@ class YFinanceProvider:
             candles.append(PriceCandle(
                 symbol=ticker_symbol.upper(),
                 timestamp=ts,
-                open=float(row["Open"]),
-                high=float(row["High"]),
-                low=float(row["Low"]),
+                open=_or(row.get("Open"), row["Close"]),
+                high=_or(row.get("High"), row["Close"]),
+                low=_or(row.get("Low"), row["Close"]),
                 close=float(row["Close"]),
-                adj_close=float(row.get("Adj Close", row["Close"])),
-                volume=int(row.get("Volume", 0)),
+                adj_close=_or(row.get("Adj Close"), row["Close"]),
+                volume=int(_or(row.get("Volume"), 0)),
             ))
 
         logger.info(f"Retrieved {len(candles)} candles for {ticker_symbol}")

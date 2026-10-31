@@ -206,3 +206,24 @@ def test_bars_are_ohlcv_not_closes(setup, monkeypatch):
     assert "closes" not in body
     assert body["bars"][0] == {"date": "2026-10-29", "open": 10.0, "high": 12.0, "low": 9.0, "close": 11.0, "volume": 100.0}
     assert len(body["bars"]) == 2
+
+
+def test_bars_skip_nan_close_and_fill_gaps(setup, monkeypatch):
+    """An old daily_bars doc missing a column reads back as NaN; NaN would 500 the whole mine payload."""
+    import pandas as pd
+    from backend.mine import stock as stock_mod
+
+    async def read(db_, symbols, since, until):
+        idx = pd.DatetimeIndex(["2026-10-28", "2026-10-29", "2026-10-30"])
+        nan = float("nan")
+        return {"INFY": pd.DataFrame({"open": [nan, 11.0, 12.0], "high": [nan, 13.0, 14.0], "low": [nan, 10.0, 11.0],
+                                      "close": [10.0, nan, 13.0], "volume": [nan, 200.0, 300.0]}, index=idx)}
+
+    monkeypatch.setattr(stock_mod.bars, "read", read)
+    client, seed, _ = setup
+    seed("journal_trades", [_trade("BUY", 4, 100, 30)])
+    r = client.get("/api/v1/mine/stock/INFY")
+    assert r.status_code == 200
+    bars = r.json()["bars"]
+    assert [b["date"] for b in bars] == ["2026-10-28", "2026-10-30"]
+    assert bars[0] == {"date": "2026-10-28", "open": 10.0, "high": 10.0, "low": 10.0, "close": 10.0, "volume": 0.0}

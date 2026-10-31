@@ -61,9 +61,14 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
     qty = sum(h["quantity"] for h in raw)
 
     frame = (await bars.read(db, [symbol], today - timedelta(days=365), today)).get(symbol)
-    cols = ("open", "high", "low", "close", "volume")
-    ohlcv = [] if frame is None else [{"date": d.date().isoformat(), **{k: float(row[k]) for k in cols}}
-                                      for d, row in frame[list(cols)].iterrows()]
+    ohlcv = []
+    if frame is not None:
+        # An old daily_bars doc missing a column reads back NaN, and NaN would 500 the whole payload.
+        frame = frame.reindex(columns=["open", "high", "low", "close", "volume"]).dropna(subset=["close"])
+        for k in ("open", "high", "low"):
+            frame[k] = frame[k].fillna(frame["close"])
+        frame["volume"] = frame["volume"].fillna(0.0)
+        ohlcv = [{"date": d.date().isoformat(), **{k: float(v) for k, v in row.items()}} for d, row in frame.iterrows()]
     last = next((h["last_price"] for h in raw if h.get("last_price")), None) or (ohlcv[-1]["close"] if ohlcv else None)
 
     cost = sum(h["quantity"] * h["avg_price"] for h in raw)
