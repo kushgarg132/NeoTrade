@@ -2,7 +2,7 @@ import React, { Children, cloneElement, createContext, isValidElement, useContex
 import { Link } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { formatSigned, formatSignedPercent, bareSymbol } from '../../utils/formatters';
-import { stockPath } from '../../utils/stocks';
+import { stockPath, logoUrl } from '../../utils/stocks';
 
 /**
  * The contract note's building blocks. Everything in the app is assembled from
@@ -30,13 +30,13 @@ export const Sheet = ({ title, meta, actions, children, className, bodyClassName
 const DERIVATIVE = /(\d(CE|PE)|FUT)$/;
 
 // Symbols whose logo 404'd this session, so a re-render or another row does
-// not ask again. ponytail: per tab, in memory; persist it if 404s show up in
-// the network panel across reloads.
+// not ask again. Across reloads the browser keeps the 404 for a day
+// (Nginx's Cache-Control on /logo/).
 const missingLogos = new Set();
 
 /**
- * A company's logo from FMP's free CDN (NSE listing), lazy-loaded at 20px. The
- * browser caches each image; a symbol with no logo prints its first letter.
+ * A company's logo (`utils/stocks.js::logoUrl`), lazy-loaded at 20px. The
+ * browser keeps each image 30 days; a symbol with no logo prints its first letter.
  */
 export const StockIcon = ({ symbol: raw, className }) => {
   const symbol = bareSymbol(raw)?.toUpperCase();
@@ -52,7 +52,7 @@ export const StockIcon = ({ symbol: raw, className }) => {
   }
   return (
     <img
-      src={`https://financialmodelingprep.com/image-stock/${encodeURIComponent(symbol)}.NS.png`}
+      src={logoUrl(symbol)}
       alt=""
       width={20}
       height={20}

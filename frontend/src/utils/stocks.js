@@ -3,6 +3,18 @@ import { bareSymbol } from './formatters.js';
 /** The one URL for a stock's page. */
 export const stockPath = (symbol) => `/stock/${encodeURIComponent(bareSymbol(symbol))}`;
 
+/**
+ * A company's logo (NSE listing). FMP's CDN sits in the US and sends no cache
+ * headers (~1.1 s a logo from India, every load), so production reads the copy
+ * the backend's Nginx caches (`/logo/`, 30 days); dev has no Nginx and goes to FMP.
+ */
+export const logoUrl = (symbol, prod = import.meta.env?.PROD) => {
+  const s = encodeURIComponent(symbol);
+  return prod
+    ? `https://neotrade.161.118.167.148.nip.io/logo/${s}.png`
+    : `https://financialmodelingprep.com/image-stock/${s}.NS.png`;
+};
+
 // Recently opened stocks, per device. Storage can be blocked (private
 // windows, previews): every access is guarded and an empty list is fine.
 const KEY = 'neotrade.recentStocks';
