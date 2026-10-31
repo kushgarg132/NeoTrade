@@ -95,3 +95,64 @@ export const techSummary = (t) => {
   const label = net >= 3 ? 'Mostly bullish' : net >= 1 ? 'Leaning bullish' : net <= -3 ? 'Mostly bearish' : net <= -1 ? 'Leaning bearish' : 'Mixed';
   return { rows, bull, bear, neutral: rows.length - bull - bear, label, tone: net > 0 ? 'gain' : net < 0 ? 'loss' : 'neutral' };
 };
+
+/** Price chart ranges: 1D/1W read the intraday feed (`days`), the rest are the last N daily bars. */
+export const RANGES = [['1D', { days: 1 }], ['1W', { days: 5 }], ['1M', 22], ['6M', 126], ['1Y', 252], ['5Y', 1260]];
+
+const num = (v) => (v == null || v === '' ? NaN : Number(v));
+
+/**
+ * Any price feed as chart bars `{date, open, high, low, close, volume}`, ascending, one per date (last row
+ * wins: yfinance repeats its newest 5-minute bar, and lightweight-charts throws on a repeated time).
+ * Reads `date`, PriceCandle `timestamp` or index-intraday `t`; `daily` cuts the key to YYYY-MM-DD. Rows
+ * without a finite close are dropped. `ohlc` is false when any bar lacks open/high/low (close-only feeds),
+ * then those fall back to the close and the chart draws an area.
+ */
+export const toBars = (rows, { daily }) => {
+  const byDate = new Map();
+  let ohlc = true;
+  for (const r of rows || []) {
+    const close = num(r.close);
+    const key = r.date ?? r.timestamp ?? r.t;
+    if (!Number.isFinite(close) || !key) continue;
+    const [open, high, low] = [num(r.open), num(r.high), num(r.low)];
+    const full = [open, high, low].every(Number.isFinite);
+    const date = daily ? String(key).slice(0, 10) : String(key);
+    const volume = Number.isFinite(num(r.volume)) ? num(r.volume) : null;
+    byDate.set(date, { date, open: full ? open : close, high: full ? high : close, low: full ? low : close, close, volume, full });
+  }
+  const bars = [...byDate.values()].sort((a, b) => chartTime(a.date) - chartTime(b.date) || (a.date < b.date ? -1 : 1));
+  for (const b of bars) { ohlc = ohlc && b.full; delete b.full; }
+  return { bars, ohlc: bars.length > 0 && ohlc };
+};
+
+/** Range chips worth showing for `dailyCount` daily bars: a daily chip only when it holds more than the one before. */
+export const visibleRanges = (dailyCount) => {
+  let prev = 1;
+  return RANGES.filter(([, n]) => {
+    if (typeof n !== 'number') return true;
+    const show = dailyCount > prev;
+    prev = n;
+    return show;
+  }).map(([k]) => k);
+};
+
+/** The 1D previous-close line: close of the last daily bar dated before the session. */
+export const prevClose = (dailyBars, sessionDate) => {
+  let hit = null;
+  for (const b of dailyBars || []) if (b.date < sessionDate) hit = b.close;
+  return hit;
+};
+
+/** Change over the shown bars: last close minus first, and as a percent of the first. */
+export const rangeChange = (bars) => {
+  if (!bars?.length) return null;
+  const first = bars[0].close;
+  const abs = bars.at(-1).close - first;
+  return { abs, pct: first ? (abs / first) * 100 : 0 };
+};
+
+const IST_SECONDS = 19800;
+/** lightweight-charts time: a YYYY-MM-DD stays a business day; a timestamp becomes UTC seconds shifted to
+ *  IST (the library labels its axis in UTC, so the shift makes 09:15 read 09:15). */
+export const chartTime = (date) => (String(date).length === 10 ? date : Math.floor(Date.parse(date) / 1000) + IST_SECONDS);

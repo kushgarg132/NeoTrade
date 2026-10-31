@@ -56,3 +56,68 @@ test('newsMarkers: material only, snaps forward to a session, collapses a day, c
     .map((m) => m.date), ['2026-10-02']);
   assert.deepEqual(newsMarkers([], [n('2026-10-01T04:00:00Z', 1, 8)]), []);
 });
+
+// --- price chart helpers (2026-10-31 redesign) ---------------------------------
+import { RANGES, chartTime, prevClose, rangeChange, toBars, visibleRanges } from './stock.js';
+
+const candle = (d, c, extra = {}) => ({ timestamp: `${d}T00:00:00+05:30`, open: c - 1, high: c + 2, low: c - 2, close: c, volume: 10, ...extra });
+
+test('RANGES: 1D/1W intraday windows, then daily bar counts', () => {
+  assert.deepEqual(RANGES, [['1D', { days: 1 }], ['1W', { days: 5 }], ['1M', 22], ['6M', 126], ['1Y', 252], ['5Y', 1260]]);
+});
+
+test('toBars: candles pass through and ohlc is true', () => {
+  const { bars, ohlc } = toBars([candle('2026-10-30', 100), candle('2026-10-31', 101)], { daily: true });
+  assert.equal(ohlc, true);
+  assert.deepEqual(bars[0], { date: '2026-10-30', open: 99, high: 102, low: 98, close: 100, volume: 10 });
+});
+
+test('toBars: close-only rows give ohlc false, open=high=low=close, volume null', () => {
+  const { bars, ohlc } = toBars([{ date: '2026-10-30', close: 5 }, { date: '2026-10-31', close: 6 }], { daily: true });
+  assert.equal(ohlc, false);
+  assert.deepEqual(bars[1], { date: '2026-10-31', open: 6, high: 6, low: 6, close: 6, volume: null });
+});
+
+test('toBars: unsorted and duplicate intraday times are sorted and deduped, last row wins', () => {
+  const rows = [
+    { t: '2026-10-31T09:20:00+05:30', open: 2, high: 2, low: 2, close: 2, volume: 1 },
+    { t: '2026-10-31T09:15:00+05:30', open: 1, high: 1, low: 1, close: 1, volume: 1 },
+    { t: '2026-10-31T09:20:00+05:30', open: 3, high: 3, low: 3, close: 3, volume: 1 },
+  ];
+  const { bars } = toBars(rows, { daily: false });
+  assert.deepEqual(bars.map((b) => b.close), [1, 3]);
+});
+
+test('toBars: NaN or null close rows are dropped', () => {
+  const { bars } = toBars([{ date: '2026-10-29', close: null }, { date: '2026-10-30', close: NaN }, { date: '2026-10-31', close: 7 }], { daily: true });
+  assert.deepEqual(bars.map((b) => b.date), ['2026-10-31']);
+});
+
+test('toBars: daily cuts PriceCandle timestamps to YYYY-MM-DD; index rows read t', () => {
+  assert.equal(toBars([candle('2026-10-31', 1)], { daily: true }).bars[0].date, '2026-10-31');
+  assert.equal(toBars([{ t: '2026-10-31T09:15:00+05:30', close: 1 }], { daily: false }).bars[0].date, '2026-10-31T09:15:00+05:30');
+  assert.deepEqual(toBars(undefined, { daily: true }), { bars: [], ohlc: false });
+});
+
+test('visibleRanges: a daily chip shows only when it has more bars than the one before', () => {
+  assert.deepEqual(visibleRanges(250), ['1D', '1W', '1M', '6M', '1Y']);
+  assert.ok(visibleRanges(1300).includes('5Y'));
+  assert.deepEqual(visibleRanges(1), ['1D', '1W']);
+});
+
+test('prevClose: the last bar before the session, never the session itself', () => {
+  const daily = [{ date: '2026-10-29', close: 1 }, { date: '2026-10-30', close: 2 }, { date: '2026-10-31', close: 3 }];
+  assert.equal(prevClose(daily, '2026-10-31'), 2);
+  assert.equal(prevClose(daily, '2026-10-29'), null);
+});
+
+test('rangeChange: last close minus first close, and its percent', () => {
+  assert.deepEqual(rangeChange([{ close: 100 }, { close: 105 }, { close: 110 }]), { abs: 10, pct: 10 });
+  assert.equal(rangeChange([]), null);
+});
+
+test('chartTime: dates stay business days; timestamps become IST-shifted UTC seconds', () => {
+  assert.equal(chartTime('2026-10-31'), '2026-10-31');
+  const iso = '2026-10-31T09:15:00+05:30';
+  assert.equal(chartTime(iso), Math.floor(Date.parse(iso) / 1000) + 19800);
+});
