@@ -249,7 +249,7 @@ All behind `get_current_user` (router-level dependency in `backend/server.py`, p
 
 | Method path | handler | response keys the frontend reads |
 |---|---|---|
-| GET `/news/feed?scope&mine&material&before&limit<=100` | `routers/news.py::news_feed` | `items[]`: `id,title,url,source,published_at,scope,themes,event,impacts,symbols,material,status` (`frontend/src/utils/api.js::newsFeed`) |
+| GET `/news/feed?scope&mine&material&q&before&limit<=100` (`q` <= 80 chars: headline regex-escaped, case-insensitive, or a tagged/moved symbol) | `routers/news.py::news_feed` | `items[]`: `id,title,url,source,published_at,scope,themes,event,impacts,symbols,material,status` (`frontend/src/utils/api.js::newsFeed`) |
 | GET `/news/item/{item_id}` | `routers/news.py::news_item` | feed fields plus `outcomes[]` (`type,target,direction,impact`, `ret_/bench_/move_` x `1h,1d,5d`) from `news_outcomes` rows `_id` prefix `{id}:`; `[]` while unscored; 404 `News item not found`; shared news, auth only |
 | GET `/market/sector/{name}` | `routers/market_data.py::get_sector`, `::sector_members` | `sector,change_pct,up,n,sentiment,members[]` (scan `movers` rows), `news[]` (20 newest feed items with a sector impact on `name`), `at`; 404 `Unknown sector`; the `scan` cache entry keeps every row as `movers`; `GET /market/scan` no longer returns it, and its gainers/losers rows carry `news`. `GET /market/index/{ticker}/intraday` is a separate in-process 60 s cache (not market_cache) |
 | GET `/news/accuracy?refresh` (admin, `require_admin`) | `news.py::news_accuracy` | `as_of,rows,cells[]` + `company_scan_ok`; 404 before the first build; `refresh=true` rebuilds now (`frontend/src/utils/api.js::newsAccuracy`) |

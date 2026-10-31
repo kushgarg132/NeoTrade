@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Search, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { newsPath } from '../../utils/routes';
 import Card from '../ui/Card';
@@ -19,7 +20,8 @@ import ChipRow, { Chip } from '../ui/ChipRow';
  * News: everything the ingest worker stored and scored, newest first, with what each
  * item moves. "My names" (holdings and watchlist) is on first; a material alert on the
  * socket re-fetches, so the list stays current. Lean (strongest impact's direction) filters the loaded
- * items in the browser; "Material only" is a server filter. Items sit under IST-day headers.
+ * items in the browser; "Material only" is a server filter, and so is the search box
+ * (headline text or a symbol, `q`, 300 ms after typing stops). Items sit under IST-day headers.
  */
 const SCOPES = [
   { id: '', label: 'All' }, { id: 'COMPANY', label: 'Company' }, { id: 'SECTOR', label: 'Sector' },
@@ -63,6 +65,8 @@ const News = () => {
   const [mine, setMine] = useState(true);
   const [material, setMaterial] = useState(false);
   const [lean, setLean] = useState('');
+  const [text, setText] = useState(''); // what is typed
+  const [query, setQuery] = useState(''); // what was searched, 300 ms after typing stops
   const [items, setItems] = useState(null);
   const [error, setError] = useState(false);
   const [more, setMore] = useState(false);
@@ -72,7 +76,7 @@ const News = () => {
   // before = page older items; refresh = background re-fetch of page 1 merged in front (never replaces or wipes the list).
   const load = useCallback((before, refresh) => {
     const mark = gen.n;
-    const params = { limit: PAGE, ...(scope && { scope }), ...(mine && { mine: true }), ...(material && { material: true }), ...(before && { before }) };
+    const params = { limit: PAGE, ...(scope && { scope }), ...(mine && { mine: true }), ...(material && { material: true }), ...(query && { q: query }), ...(before && { before }) };
     return api.get(endpoints.newsFeed, { params })
       .then((res) => {
         if (mark !== gen.n) return;
@@ -81,9 +85,14 @@ const News = () => {
         setError(false);
       })
       .catch(() => { if (mark === gen.n && !refresh) setError(true); });
-  }, [scope, mine, material, gen]);
+  }, [scope, mine, material, query, gen]);
 
   useEffect(() => { load(); return () => { gen.n++; }; }, [load, gen]);
+  useEffect(() => {
+    if (text.trim() === query) return undefined;
+    const t = setTimeout(() => { setItems(null); setQuery(text.trim()); }, 300);
+    return () => clearTimeout(t);
+  }, [text, query]);
   const pickScope = (id) => { setItems(null); setScope(id); };
   const pickMine = (v) => { setItems(null); setMine(v); };
   const pickMaterial = (v) => { setItems(null); setMaterial(v); };
@@ -99,6 +108,18 @@ const News = () => {
         My names
       </label>
     }>
+      <div className="relative mb-2">
+        <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+        <input type="search" value={text} onChange={(e) => setText(e.target.value)} maxLength={80}
+               aria-label="Search news" placeholder="Search headlines or a symbol" enterKeyHint="search"
+               className="w-full min-h-11 rounded-full border border-[var(--border)] bg-[var(--surface)] pl-9 pr-11 text-[15px] text-[var(--text)] placeholder:text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] [&::-webkit-search-cancel-button]:hidden" />
+        {text && (
+          <button type="button" aria-label="Clear search" onClick={() => setText('')}
+                  className="absolute right-0 top-0 inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+            <X aria-hidden="true" className="h-4 w-4" />
+          </button>
+        )}
+      </div>
       <ChipRow label="News scope" options={SCOPES} value={scope} onChange={pickScope} />
       <ChipRow label="News lean" options={LEANS} value={lean} onChange={setLean} className="mt-1 pb-3">
         <span aria-hidden="true" className="shrink-0 w-px my-2 bg-[var(--border)]" />
@@ -106,7 +127,10 @@ const News = () => {
       </ChipRow>
       {error ? <ErrorLine message="Could not load the news." onRetry={() => { setItems(null); load(); }} />
         : items === null ? <Skeleton rows={6} />
-        : items.length === 0 ? (
+        : items.length === 0 && query ? (
+          <Empty title={`No news matches “${query}”`} body="Try a shorter word, a stock symbol, or another filter."
+                 action={<Button variant="secondary" onClick={() => setText('')}>Clear search</Button>} />
+        ) : items.length === 0 ? (
           <Empty title="Nothing here yet"
                  body={mine ? 'No recent news on the names you hold or watch.' : 'No stored news for this filter.'}
                  action={mine && <Button variant="secondary" onClick={() => pickMine(false)}>Show all news</Button>} />

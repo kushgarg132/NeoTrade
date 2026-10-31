@@ -33,3 +33,12 @@ test('News: lean and material chips, grouped by IST day under the pinned group',
   assert.match(news, /byDay\(/);
   assert.match(news, /material && \{ material: true \}/);
 });
+
+test('News: a search box queries the server (debounced, q param) with a clear button and a no-match state', () => {
+  assert.match(news, /type="search"/);
+  assert.match(news, /aria-label="Search news"/);
+  assert.match(news, /\.\.\.\(query && \{ q: query \}\)/);
+  assert.match(news, /setTimeout\(\(\) => \{ setItems\(null\); setQuery\(/);
+  assert.match(news, /No news matches/);
+  assert.match(news, /maxLength=\{80\}/);
+});
