@@ -28,7 +28,7 @@ import { StockIcon } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { bareSymbol, formatQuantity, marketPhase } from '../utils/formatters';
 import { stockTab } from '../utils/stocks';
-import { positionSummary } from '../utils/stock';
+import { positionSummary, toBars } from '../utils/stock';
 import { px } from '../components/ideas/levels';
 
 const TABS = [
@@ -107,9 +107,11 @@ const Stock = () => {
   const m = mine.data;
   const company = quick.data?.company_info;
   const currency = company?.currency || 'INR';
+  // Daily OHLCV for the chart: quick-analyze candles or your mine.bars, the longer history wins.
   const closes = useMemo(() => {
-    const fromQuick = (quick.data?.price_data || []).map((c) => ({ date: String(c.timestamp).slice(0, 10), close: Number(c.close) }));
-    return (m?.closes?.length || 0) > fromQuick.length ? m.closes : fromQuick; // the longer history wins (5Y)
+    const fromQuick = quick.data?.price_data || [];
+    const fromMine = m?.bars || [];
+    return toBars(fromMine, { daily: true }).bars.length > toBars(fromQuick, { daily: true }).bars.length ? fromMine : fromQuick;
   }, [quick.data, m]);
 
   const price = live?.price ?? company?.current_price ?? closes.at(-1)?.close;

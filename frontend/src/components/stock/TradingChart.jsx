@@ -1,66 +1,66 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ImpactChips, NewsLink } from '../common/NewsImpacts';
-import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceDot, ReferenceLine } from 'recharts';
 import api, { endpoints } from '../../utils/api';
-import { formatClock, formatCurrency, formatDateTime } from '../../utils/formatters';
-import { newsMarkers, tradeMarkers } from '../../utils/stock';
-import { AXIS, GRID, TOOLTIP_STYLE } from '../ui/chartTheme';
+import { formatCurrency } from '../../utils/formatters';
+import {
+  RANGES, newsMarkers, prevClose, rangeChange, toBars, tradeMarkers, visibleRanges,
+} from '../../utils/stock';
+import { usePrivacy } from '../../hooks/usePrivacy';
+import { toneText } from '../ui/tone';
+import PriceCanvas from './PriceCanvas';
+import NewsStrip from './NewsStrip';
 
 const INTRADAY_POLL_MS = 60_000;
-const RANGES = [['1D', 1], ['1M', 22], ['1Y', 252], ['5Y', 1260]]; // trading days; 1D is the intraday feed
+const IST = 'Asia/Kolkata';
 
-const short = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+// A daily bar is a calendar day (no zone shift); an intraday bar is a moment, read in IST.
+const when = (date, withDay) => (String(date).length === 10
+  ? new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  : new Date(date).toLocaleString('en-IN', {
+    ...(withDay ? { weekday: 'short', day: 'numeric', month: 'short' } : {}), hour: 'numeric', minute: '2-digit', timeZone: IST,
+  }));
+const compact = (v) => (v == null ? '—' : Intl.NumberFormat('en-IN', { notation: 'compact', maximumFractionDigits: 1 }).format(v));
 
-// Buys are filled circles, sells hollow squares: identity is never colour alone.
-const Buy = ({ cx, cy }) => <circle cx={cx} cy={cy} r={5} fill="var(--gain)" stroke="var(--surface)" strokeWidth={2} />;
-const Sell = ({ cx, cy }) => <rect x={cx - 4.5} y={cy - 4.5} width={9} height={9} fill="var(--surface)" stroke="var(--loss)" strokeWidth={2} />;
-
-// News: a triangle pointing the way the news leans (diamond = mixed), sized by impact, drawn above the price.
-const NEWS_LIFT = 14;
-const newsColor = (d) => (d > 0 ? 'var(--gain)' : d < 0 ? 'var(--loss)' : 'var(--text-muted)');
-const NewsGlyph = ({ cx, cy, direction, impact = 6 }) => {
-  const s = 3 + impact * 0.5;
-  const d = direction > 0 ? `M${cx},${cy - s}L${cx + s},${cy + s * 0.8}L${cx - s},${cy + s * 0.8}Z`
-    : direction < 0 ? `M${cx},${cy + s}L${cx + s},${cy - s * 0.8}L${cx - s},${cy - s * 0.8}Z`
-      : `M${cx},${cy - s}L${cx + s},${cy}L${cx},${cy + s}L${cx - s},${cy}Z`;
-  return <path d={d} fill={newsColor(direction)} stroke="var(--surface)" strokeWidth={1.5} />;
-};
-const NewsMark = ({ cx, cy, m, onPick }) => {
-  if (cx == null || cy == null) return null;
-  const y = cy - NEWS_LIFT;
-  const label = `${m.count} news ${m.count === 1 ? 'item' : 'items'} on ${short(m.date)}: ${m.items[0].title}`;
-  return (
-    <g role="button" tabIndex={0} aria-label={label} style={{ cursor: 'pointer' }} onClick={() => onPick(m.date)}
-       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onPick(m.date)}>
-      <title>{m.items.map((i) => i.title).join('\n')}</title>
-      <circle cx={cx} cy={y} r={14} fill="transparent" />
-      <NewsGlyph cx={cx} cy={y} direction={m.direction} impact={m.impact} />
-      {m.count > 1 && <text x={cx + 8} y={y - 6} fontSize={12} fontWeight={600} fill="var(--text)">{m.count}</text>}
-    </g>
-  );
-};
+const Chip = ({ on, disabled, onClick, children, label }) => (
+  <button type="button" aria-pressed={on} aria-label={label} disabled={disabled} onClick={onClick}
+    className={`min-h-11 min-w-11 px-3 rounded-full text-[13px] font-medium tabular-nums transition-colors disabled:opacity-40 ${
+      on ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+    }`}>
+    {children}
+  </button>
+);
+const Group = ({ label, children }) => (
+  <div role="group" aria-label={label} className="inline-flex items-center rounded-full bg-[var(--surface-2)] p-1">{children}</div>
+);
 
 /**
- * Price chart with range chips. `closes`: [{date:'YYYY-MM-DD', close}] daily series; `trades` your fills;
- * `thesis` draws target / stop lines. 1D swaps in the latest session's 5-minute candles. `initialRange`
- * defaults to today (1D); a trade page passes a longer one so its fills are on screen.
+ * Price chart (lightweight-charts via PriceCanvas): candles or area, volume, a readout that follows the
+ * crosshair, ranges 1D/1W (intraday feed, `days=1|5`) and 1M-5Y (daily bars). `closes` is any daily feed
+ * utils/stock.js::toBars reads (candles, OHLCV bars, or close-only); `trades` your fills as B/S arrows;
+ * `thesis` stop/target lines; news days as dots that open a NewsStrip. An index passes `currency="pts"`,
+ * its own `intradayUrl` and `newsUrl={null}`.
  */
 const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initialRange = '1D', intradayUrl, newsUrl }) => {
-  // An index charts in points, with its own intraday feed (rows carry `t`) and no per-symbol news markers.
   const fmt = (v) => (currency === 'pts' ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : formatCurrency(v, currency));
   const newsFrom = newsUrl === undefined ? (symbol && endpoints.newsHistory(symbol)) : newsUrl;
   const dayFrom = intradayUrl || (symbol && endpoints.intraday(symbol));
-  const [range, setRange] = useState(initialRange);
-  const [loaded, setLoaded] = useState(null); // keyed by symbol so another stock's candles never show
-  const isDay = range === '1D';
-  const intraday = loaded?.symbol === symbol ? loaded.rows : null;
+  const hidden = usePrivacy();
+
+  const daily = useMemo(() => toBars(closes, { daily: true }), [closes]);
+  const chips = visibleRanges(daily.bars.length);
+  const [picked, setRange] = useState(initialRange);
+  const range = chips.includes(picked) ? picked : chips.at(-1);
+  const spec = RANGES.find(([k]) => k === range)[1];
+  const days = typeof spec === 'object' ? spec.days : null;
+
+  const [loaded, setLoaded] = useState(null); // {symbol, days, rows}: another stock's or range's rows never show
+  const [mode, setMode] = useState('candle');
   const [showNews, setShowNews] = useState(true);
-  const [news, setNews] = useState(null); // {symbol, items}, keyed like `loaded`
-  const [picked, setPicked] = useState(null); // {symbol, date} of the tapped news marker
+  const [news, setNews] = useState(null); // {symbol, items}
+  const [pickedDay, setPickedDay] = useState(null); // {symbol, date}
+  const [hover, setHover] = useState(null);
 
   useEffect(() => {
-    if (!symbol) return undefined;
-    if (!newsFrom) return undefined; // no markers: `news` stays null, so none are drawn
+    if (!symbol || !newsFrom) return undefined; // no markers: `news` stays null
     let gone = false;
     api.get(newsFrom)
       .then((res) => !gone && setNews({ symbol, items: res.data.items || [] }))
@@ -69,134 +69,118 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
   }, [symbol, newsFrom]);
 
   useEffect(() => {
-    if (!isDay || !symbol || !dayFrom) return undefined;
+    if (!days || !symbol || !dayFrom) return undefined;
     let gone = false;
-    const load = () =>
-      api.get(dayFrom)
-        .then((res) => !gone && setLoaded({ symbol, rows: res.data }))
-        .catch(() => !gone && setLoaded({ symbol, rows: [] }));
+    const load = () => api.get(dayFrom, { params: { days } })
+      .then((res) => !gone && setLoaded({ symbol, days, rows: res.data }))
+      .catch(() => !gone && setLoaded({ symbol, days, rows: [] }));
     load();
     const timer = setInterval(load, INTRADAY_POLL_MS);
-    return () => {
-      gone = true;
-      clearInterval(timer);
-    };
-  }, [isDay, symbol, dayFrom]);
+    return () => { gone = true; clearInterval(timer); };
+  }, [days, symbol, dayFrom]);
 
-  const data = useMemo(() => {
-    if (isDay) return (intraday || []).map((r) => ({ date: formatClock(r.timestamp ?? r.t), close: Number(r.close) }));
-    return (closes || []).slice(-RANGES.find(([k]) => k === range)[1]);
-  }, [closes, range, isDay, intraday]);
-
-  const dots = useMemo(() => {
-    if (isDay) return [];
-    const have = new Set(data.map((d) => d.date));
-    return tradeMarkers(closes, trades).filter((m) => have.has(m.date));
-  }, [closes, trades, data, isDay]);
-
-  // Only the visible range, at most NEWS_MARKER_CAP days (newsMarkers keeps the most impactful).
-  const allNews = useMemo(
-    () => (isDay || news?.symbol !== symbol ? [] : newsMarkers(data, news.items)),
-    [data, news, symbol, isDay],
+  const intra = useMemo(
+    () => (loaded?.symbol === symbol && loaded.days === days ? toBars(loaded.rows, { daily: false }) : null),
+    [loaded, symbol, days],
   );
-  const newsDots = showNews ? allNews : [];
-  const pickedMark = picked?.symbol === symbol ? newsDots.find((m) => m.date === picked.date) : null;
-  const pick = (date) => setPicked((p) => (p?.symbol === symbol && p.date === date ? null : { symbol, date }));
+  const shown = useMemo(
+    () => (days ? intra || { bars: [], ohlc: false } : { bars: daily.bars.slice(-spec), ohlc: daily.ohlc }),
+    [days, intra, daily, spec],
+  );
+  const bars = shown.bars;
+  const view = shown.ohlc ? mode : 'area';
 
-  const lines = [
-    thesis?.target != null && { y: thesis.target, color: 'var(--gain)', name: 'Target', amount: fmt(thesis.target) },
-    thesis?.stop != null && { y: thesis.stop, color: 'var(--loss)', name: 'Stop', amount: fmt(thesis.stop) },
-  ].filter(Boolean);
-  const first = data[0]?.close;
-  const last = data.at(-1)?.close;
-  const up = last == null || first == null || last >= first;
+  const tradeDots = useMemo(() => {
+    if (days) return [];
+    const have = new Set(bars.map((b) => b.date));
+    return tradeMarkers(daily.bars, trades).filter((m) => have.has(m.date)).map((m) => ({ date: m.date, kind: m.side === 'SELL' ? 'sell' : 'buy' }));
+  }, [days, bars, daily, trades]);
+  const allNews = useMemo(() => (days || news?.symbol !== symbol ? [] : newsMarkers(bars, news.items)), [days, news, symbol, bars]);
+  const newsDots = useMemo(() => (showNews ? allNews : []), [showNews, allNews]); // stable: markers feed the canvas
+  const markers = useMemo(
+    () => [...tradeDots, ...newsDots.map((m) => ({ date: m.date, kind: 'news', direction: m.direction, impact: m.impact }))],
+    [tradeDots, newsDots],
+  );
+  const pickedMark = pickedDay?.symbol === symbol ? newsDots.find((m) => m.date === pickedDay.date) : null;
+  const pick = (date) => setPickedDay((p) => (p?.symbol === symbol && p.date === date ? null : { symbol, date }));
+
+  const lines = useMemo(() => (days ? [] : [
+    thesis?.target != null && { price: thesis.target, tone: 'gain', title: 'Target', name: 'Target', amount: fmt(thesis.target) },
+    thesis?.stop != null && { price: thesis.stop, tone: 'loss', title: 'Stop', name: 'Stop', amount: fmt(thesis.stop) },
+  ].filter(Boolean)), [days, thesis?.target, thesis?.stop, currency]); // eslint-disable-line react-hooks/exhaustive-deps
+  const baseline = days === 1 && bars.length ? prevClose(daily.bars, String(bars[0].date).slice(0, 10)) : null;
+
+  // Readout: the hovered bar, else the latest; change is from the range's first bar (1D: the previous close).
+  const last = bars.at(-1);
+  const focus = hover || last;
+  const from = baseline ?? bars[0]?.close;
+  const change = focus && from != null ? { abs: focus.close - from, pct: from ? ((focus.close - from) / from) * 100 : 0 } : rangeChange(bars);
+  const tone = !change || change.abs === 0 ? 'neutral' : change.abs > 0 ? 'gain' : 'loss';
+  const sign = change?.abs > 0 ? '+' : '';
+  const span = range === '1D' ? 'today' : `in ${range}`;
 
   return (
     <div>
-      <div role="group" aria-label="Chart range" className="flex gap-1 mb-3">
-        {RANGES.map(([k]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setRange(k)}
-            aria-pressed={range === k}
-            className={`min-h-11 flex-1 rounded-[12px] text-[14px] font-medium ${
-              range === k ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'
-            }`}
-          >
-            {k}
-          </button>
-        ))}
+      <div className="min-h-[60px]" aria-live="off">
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className="text-[24px] font-semibold tabular-nums tracking-tight">{focus ? fmt(focus.close) : '—'}</span>
+          {change && (
+            <span className={`text-[14px] font-medium tabular-nums ${toneText(tone)}`}>
+              {sign}{fmt(change.abs)} ({sign}{change.pct.toFixed(2)}%)
+            </span>
+          )}
+          <span className="text-[13px] text-[var(--text-muted)]">{hover ? when(hover.date, range === '1W') : span}</span>
+        </div>
+        <div className="text-[12px] text-[var(--text-muted)] tabular-nums h-5">
+          {hover && shown.ohlc && <>O {fmt(hover.open)} · H {fmt(hover.high)} · L {fmt(hover.low)}{hover.volume ? ` · Vol ${compact(hover.volume)}` : ''}</>}
+        </div>
       </div>
-      {data.length < 2 ? (
-        <div className="h-56 flex items-center justify-center text-[14px] text-[var(--text-muted)]">
-          {isDay && intraday === null ? 'Loading…' : 'No price history for this range.'}
+
+      {bars.length < 2 ? (
+        <div className="h-[320px] sm:h-[420px] flex items-center justify-center text-[14px] text-[var(--text-muted)]">
+          {days && !intra ? 'Loading…' : 'No price history for this range.'}
         </div>
       ) : (
-        <div className="h-56 sm:h-72" role="img" aria-label={`Price, last ${fmt(last)}, ${dots.length} of your trades and ${newsDots.length} news days marked`}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid {...GRID} />
-              <XAxis dataKey="date" tickFormatter={isDay ? undefined : short} {...AXIS} minTickGap={48} />
-              <YAxis {...AXIS} width={52} axisLine={false} domain={['auto', 'auto']} tickFormatter={(v) => Math.round(v).toLocaleString('en-IN')} />
-              <Tooltip
-                formatter={(v) => [fmt(v), currency === 'pts' ? 'Level' : 'Price']}
-                labelFormatter={isDay ? undefined : short}
-                contentStyle={TOOLTIP_STYLE}
-              />
-              <Line type="monotone" dataKey="close" stroke={up ? 'var(--gain)' : 'var(--loss)'} strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-              {!isDay && lines.map((l) => (
-                <ReferenceLine key={l.name} y={l.y} stroke={l.color} strokeWidth={1.5} strokeDasharray="5 4" ifOverflow="extendDomain" />
-              ))}
-              {dots.map((t, i) => (
-                <ReferenceDot key={i} x={t.date} y={t.price} shape={t.side === 'SELL' ? Sell : Buy} ifOverflow="extendDomain" />
-              ))}
-              {newsDots.map((m) => (
-                <ReferenceDot key={`n${m.date}`} x={m.date} y={m.price} ifOverflow="extendDomain"
-                  shape={(p) => <NewsMark cx={p.cx} cy={p.cy} m={m} onPick={pick} />} />
-              ))}
-            </ComposedChart>
-          </ResponsiveContainer>
+        <div className="h-[320px] sm:h-[420px] -mx-1" role="img"
+          aria-label={`Price, last ${fmt(last.close)}, ${change ? `${sign}${change.pct.toFixed(2)}%` : ''} ${span}; ${tradeDots.length} of your trades and ${newsDots.length} news days marked`}>
+          <PriceCanvas bars={bars} mode={view} markers={markers} priceLines={lines} baseline={baseline} hidePrices={hidden}
+            onCrosshair={setHover} onPickDate={pick} />
         </div>
       )}
-      {pickedMark && (
-        <ul className="mt-2 rounded-[12px] bg-[var(--surface-2)] px-3 py-1" aria-label={`News on ${short(pickedMark.date)}`}>
-          {pickedMark.items.map((i) => (
-            <li key={i.id ?? i.url ?? i.title} className="flex items-start gap-2 py-2 text-[14px]">
-              <svg width="12" height="12" className="mt-1 shrink-0" aria-hidden="true"><NewsGlyph cx={6} cy={6} direction={Math.sign(i.direction || 0)} impact={4} /></svg>
-              <span className="min-w-0">
-                {i.id || i.url ? <NewsLink id={i.id} url={i.url} className="text-[var(--accent)] underline-offset-2 hover:underline">{i.title}</NewsLink> : i.title}
-                <span className="block text-[12px] text-[var(--text-muted)] tabular-nums">
-                  {i.direction > 0 ? 'Good' : i.direction < 0 ? 'Bad' : 'Mixed'} news · impact {i.impact}/10 · {formatDateTime(i.published_at)}
-                </span>
-                <ImpactChips impacts={i.impacts} className="mt-0.5" />
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {!isDay && allNews.length > 0 && (
-        <button type="button" aria-pressed={showNews} onClick={() => setShowNews((v) => !v)}
-          className={`mt-2 min-h-11 rounded-[12px] px-3 text-[14px] font-medium inline-flex items-center gap-2 ${
-            showNews ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'
-          }`}>
-          News
-          <span className="tabular-nums text-[12px]">{allNews.length} {allNews.length === 1 ? 'day' : 'days'}</span>
-        </button>
-      )}
-      {!isDay && (dots.length > 0 || lines.length > 0 || newsDots.length > 0) && (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px] text-[var(--text-muted)]">
-          {dots.some((d) => d.side !== 'SELL') && <li className="inline-flex items-center gap-1.5"><svg width="10" height="10" aria-hidden="true"><Buy cx={5} cy={5} /></svg>Your buys</li>}
-          {dots.some((d) => d.side === 'SELL') && <li className="inline-flex items-center gap-1.5"><svg width="10" height="10" aria-hidden="true"><Sell cx={5} cy={5} /></svg>Your sells</li>}
-          {newsDots.length > 0 && (
-            <li className="inline-flex items-center gap-1.5">
-              <svg width="20" height="10" aria-hidden="true"><NewsGlyph cx={5} cy={5} direction={1} impact={2} /><NewsGlyph cx={15} cy={5} direction={-1} impact={2} /></svg>
-              Material news, bigger = more impact; tap for headlines
-            </li>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <Group label="Chart range">
+          {chips.map((k) => <Chip key={k} on={range === k} onClick={() => { setRange(k); setHover(null); }}>{k}</Chip>)}
+        </Group>
+        <div className="flex items-center gap-2">
+          <Group label="Chart style">
+            <Chip on={view === 'candle'} disabled={!shown.ohlc} onClick={() => setMode('candle')} label="Candles">
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="currentColor"><rect x="2" y="4" width="3" height="6" /><rect x="3" y="1" width="1" height="12" /><rect x="9" y="3" width="3" height="5" /><rect x="10" y="1" width="1" height="11" /></svg>
+            </Chip>
+            <Chip on={view === 'area'} onClick={() => setMode('area')} label="Area">
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M1 11 L5 6 L8 8 L13 2" /></svg>
+            </Chip>
+          </Group>
+          {!days && allNews.length > 0 && (
+            <Group label="News on chart">
+              <Chip on={showNews} onClick={() => setShowNews((v) => !v)}>
+                News <span className="text-[12px] opacity-70">{allNews.length}</span>
+              </Chip>
+            </Group>
           )}
+        </div>
+      </div>
+
+      {pickedMark && <NewsStrip mark={pickedMark} onClose={() => setPickedDay(null)} />}
+      {!pickedMark && newsDots.length > 0 && (
+        <p className="mt-2 text-[12px] text-[var(--text-muted)]">Dots mark news days, bigger means more impact. Tap one for the headlines.</p>
+      )}
+
+      {lines.length > 0 && (
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px] text-[var(--text-muted)]">
           {lines.map((l) => (
             <li key={l.name} className="inline-flex items-center gap-1.5">
-              <svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke={l.color} strokeWidth="2" strokeDasharray="5 4" /></svg>
+              <svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke={`var(--${l.tone})`} strokeWidth="2" strokeDasharray="5 4" /></svg>
               {l.name} <span className="private">{l.amount}</span>
             </li>
           ))}

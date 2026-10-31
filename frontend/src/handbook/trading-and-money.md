@@ -329,7 +329,7 @@ Frontend: `frontend/src/pages/MineOverview.jsx::MineOverview` (headline with XIR
 `frontend/src/components/mine/ValueCurve.jsx`, Needs you `frontend/src/components/mine/NeedsYou.jsx`,
 drivers, mix), `frontend/src/pages/MineHoldings.jsx::MineHoldings` (one line per holding, sort and filter
 chips, "Plan new money" opens `frontend/src/components/portfolio/Rebalance.jsx`),
-`frontend/src/pages/Stock.jsx::Stock` (header, chart with trade markers via `frontend/src/components/stock/TradingChart.jsx`; the thesis
+`frontend/src/pages/Stock.jsx::Stock` (header, candle/area price chart with volume, a crosshair readout, 1D/1W/1M/6M/1Y/5Y ranges, your trades as B/S arrows and news days as dots via `frontend/src/components/stock/TradingChart.jsx::TradingChart` (lightweight-charts in `stock/PriceCanvas.jsx`, OHLCV normalised by `frontend/src/utils/stock.js::toBars`); the thesis
 editor card was removed 2026-10-28, so a stored thesis only shows as chart and position stop lines), `frontend/src/pages/MineTax.jsx::MineTax` and
 `frontend/src/pages/Journal.jsx` (Trades and Habits as inner tabs). Where an action opens is decided in
 `frontend/src/utils/mine.js::actionTarget`.

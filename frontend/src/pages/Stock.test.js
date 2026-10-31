@@ -50,8 +50,14 @@ test('stop and target amounts are their own private spans, with no private wrapp
   assert.match(stock, /target <span className="private">\{px\(risk\.target\)\}/);
   const chart = readFileSync(new URL('../components/stock/TradingChart.jsx', import.meta.url), 'utf8');
   assert.match(chart, /<span className="private">\{l\.amount\}/);
-  assert.match(chart, /\{\.\.\.AXIS\}/);
-  assert.match(chart, /TOOLTIP_STYLE/);
+  assert.match(chart, /<PriceCanvas/);
+  assert.match(chart, /hidePrices=\{hidden\}/); // the canvas axis cannot blur, so it hides stop/target prices
+});
+
+test('the chart reads OHLCV: Stock.jsx passes candles and mine.bars, never closes', () => {
+  assert.match(page, /m\?\.bars/);
+  assert.match(page, /toBars\(/);
+  assert.doesNotMatch(page, /m\?\.closes/);
 });
 
 test('price sits on the Hero, not a Card, and stays public', () => {

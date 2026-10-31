@@ -7,7 +7,7 @@ const rd = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const surfaces = {
   chip: './NewsChip.jsx', idea: '../ideas/IdeaRow.jsx', holdingActions: '../ideas/HoldingActions.jsx',
   holdings: '../money/HoldingsTab.jsx', overview: '../money/OverviewTab.jsx', tax: '../money/TaxTab.jsx',
-  journal: '../money/JournalTab.jsx', stockNews: '../stock/NewsTab.jsx', chart: '../stock/TradingChart.jsx',
+  journal: '../money/JournalTab.jsx', stockNews: '../stock/NewsTab.jsx', chart: '../stock/NewsStrip.jsx',
   today: '../home/TodayCard.jsx', sector: '../../pages/SectorPage.jsx', index: '../../pages/IndexPage.jsx',
 };
 
