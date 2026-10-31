@@ -32,12 +32,15 @@ async def quick_analyze_stock(symbol: str, user: User = Depends(get_current_user
         raise HTTPException(status_code=500, detail="The analysis failed; try again in a minute.")
 
 @router.get("/intraday/{symbol}")
-async def intraday_candles(symbol: str):
-    """The latest session's 5-minute candles (today's while the market is
-    open, else the last trading day's): the stock page's 1D chart."""
-    from backend.datalayer.stock_info import fetch_price_history_logic
+async def intraday_candles(symbol: str, days: int = 1):
+    """Intraday candles for the stock chart: `days=1` the latest session at 5 minutes (today's while
+    the market is open, else the last trading day's; 1D), `days=5` five sessions at 15 minutes (1W)."""
+    from backend.datalayer import stock_info
 
-    candles, _ = await fetch_price_history_logic(symbol, period="1d", interval="5m")
+    if days not in stock_info.INTRADAY_WINDOWS:
+        raise HTTPException(status_code=422, detail="days must be 1 or 5")
+    period, interval = stock_info.INTRADAY_WINDOWS[days]
+    candles, _ = await stock_info.fetch_price_history_logic(symbol, period=period, interval=interval)
     return [c.model_dump(mode="json") for c in candles]
 
 class AnalyzeRequest(BaseModel):

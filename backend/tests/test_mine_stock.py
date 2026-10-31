@@ -187,3 +187,22 @@ def test_past_events_newest_first(setup):
     past = client.get("/api/v1/mine/stock/INFY").json()["past_events"]
     assert past["dividends"] == [{"date": "2026-02-13", "per_share": 1.0}, {"date": "2025-09-18", "per_share": 1.46}]
     assert past["results"] == ["2026-07-31", "2026-05-12", "2026-01-29"]
+
+
+def test_bars_are_ohlcv_not_closes(setup, monkeypatch):
+    """The stock chart draws candles: mine.stock sends daily_bars as OHLCV `bars`."""
+    import pandas as pd
+    from backend.mine import stock as stock_mod
+
+    async def read(db_, symbols, since, until):
+        idx = pd.DatetimeIndex(["2026-10-29", "2026-10-30"])
+        return {"INFY": pd.DataFrame({"open": [10.0, 11.0], "high": [12.0, 13.0], "low": [9.0, 10.0],
+                                      "close": [11.0, 12.0], "volume": [100.0, 200.0]}, index=idx)}
+
+    monkeypatch.setattr(stock_mod.bars, "read", read)
+    client, seed, _ = setup
+    seed("journal_trades", [_trade("BUY", 4, 100, 30)])
+    body = client.get("/api/v1/mine/stock/INFY").json()
+    assert "closes" not in body
+    assert body["bars"][0] == {"date": "2026-10-29", "open": 10.0, "high": 12.0, "low": 9.0, "close": 11.0, "volume": 100.0}
+    assert len(body["bars"]) == 2

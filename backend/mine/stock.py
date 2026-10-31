@@ -61,8 +61,10 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
     qty = sum(h["quantity"] for h in raw)
 
     frame = (await bars.read(db, [symbol], today - timedelta(days=365), today)).get(symbol)
-    closes = [] if frame is None else [{"date": d.date().isoformat(), "close": float(c)} for d, c in frame["close"].items()]
-    last = next((h["last_price"] for h in raw if h.get("last_price")), None) or (closes[-1]["close"] if closes else None)
+    cols = ("open", "high", "low", "close", "volume")
+    ohlcv = [] if frame is None else [{"date": d.date().isoformat(), **{k: float(row[k]) for k in cols}}
+                                      for d, row in frame[list(cols)].iterrows()]
+    last = next((h["last_price"] for h in raw if h.get("last_price")), None) or (ohlcv[-1]["close"] if ohlcv else None)
 
     cost = sum(h["quantity"] * h["avg_price"] for h in raw)
     broker_avg = cost / qty if qty else None
@@ -109,7 +111,7 @@ async def detail(db, user_id: str, symbol: str, now: datetime, show_verdicts: bo
         "past_events": await events.past(db, symbol, today),
         "dividends": divs,
         "news": await _news(db, symbol),
-        "closes": closes,
+        "bars": ohlcv,
         "trades": [{"date": t["traded_at"].astimezone(IST).date().isoformat(), "side": t["side"],
                     "qty": float(t["quantity"]) * ratio, "price": float(t["price"]) / ratio}
                    for t in sorted(trades, key=lambda t: t["traded_at"])],

@@ -159,7 +159,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/news/symbol/{symbol}?days<=365` | `backend/routers/news.py::symbol_history` | user |
 | GET | `/api/v1/news/results` | `backend/routers/news.py::symbol_results` | user |
 | POST | `/api/v1/agents/quick-analyze/{symbol}` | `backend/routers/agents.py::quick_analyze_stock` | user |
-| GET | `/api/v1/agents/intraday/{symbol}` | `backend/routers/agents.py::intraday_candles` | user |
+| GET | `/api/v1/agents/intraday/{symbol}` | `backend/routers/agents.py::intraday_candles` (`?days=1|5` per `stock_info.py::INTRADAY_WINDOWS`, else 422; PriceCandle list) | user |
 | POST | `/api/v1/agents/analyze/{symbol}` | `backend/routers/agents.py::analyze_stock` | user |
 | GET | `/api/v1/chat/actions/pending` | `backend/routers/chat_actions.py::pending_actions` | user |
 | POST | `/api/v1/chat/actions/{action_id}/confirm` | `backend/routers/chat_actions.py::confirm_action` | user |
