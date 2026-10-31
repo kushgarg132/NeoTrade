@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/useTheme';
 import Badge from '../components/ui/Badge';
+import { LogoMark } from '../components/layout/Logo';
 
 /** Sign-in: one line on what NeoTrade is, then Google sign-in. */
 const Login = () => {
@@ -37,6 +38,7 @@ const Login = () => {
         className="w-full max-w-sm rounded-[28px] border border-[var(--border)] p-6"
         style={{ background: 'var(--glow)' }}
       >
+        <LogoMark size={56} className="text-[var(--text)] mb-4" />
         <h1 className="text-[44px] font-extrabold tracking-[-0.04em] leading-none text-[var(--text)]">NeoTrade</h1>
         <p className="text-[15px] text-[var(--text)] mt-3">
           Your broker account, reviewed daily. Plus an AI account that trades on paper until a

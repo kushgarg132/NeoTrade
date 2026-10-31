@@ -8,8 +8,11 @@ const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
 const tabs = read('./BottomTabs.jsx');
 const rail = read('./SideRail.jsx');
 
-test('logo is 18px bold on header and rail', () => {
-  for (const s of [src, rail]) assert.match(s, /text-\[18px\] font-bold[^"]*">NeoTrade/);
+test('header and rail show the shared Logo; mark stays emerald, wordmark 18px bold', () => {
+  for (const s of [src, rail]) assert.match(s, /<Logo \/>/);
+  const logo = read('./Logo.jsx');
+  assert.match(logo, /text-\[18px\] font-bold/);
+  assert.match(logo, /fill="#10b981"/);
 });
 
 test('nav: accent active, muted inactive, surface bar with border, tap links', () => {

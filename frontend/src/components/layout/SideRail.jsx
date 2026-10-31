@@ -5,6 +5,7 @@ import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../common/Avatar';
 import { tabsFor, tabActive } from './tabs';
+import Logo from './Logo';
 
 /** Desktop navigation: the bottom tabs as a left rail. */
 const SideRail = ({ counts = {} }) => {
@@ -12,7 +13,7 @@ const SideRail = ({ counts = {} }) => {
   const { pathname } = useLocation();
   return (
     <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-56 flex-col border-r border-[var(--border)] bg-[var(--surface)] z-30">
-      <Link to="/" className="px-5 h-14 flex items-center text-[18px] font-bold text-[var(--text)]">NeoTrade</Link>
+      <Link to="/" className="px-5 h-14 flex items-center" aria-label="NeoTrade home"><Logo /></Link>
       <nav className="flex-1 px-2 py-2 space-y-1" aria-label="Main">
         {tabsFor(user?.role === 'admin').map((item) => {
           const on = tabActive(item, pathname);

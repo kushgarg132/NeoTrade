@@ -8,6 +8,7 @@ import { useStreamStatus } from '../../hooks/useStream';
 import { useTheme } from '../../context/useTheme';
 import { marketPhase } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import Logo from './Logo';
 
 const PHASE = { open: 'Market open', pre: 'Pre-open', closed: 'Market closed' };
 // Phones get a word too: the dot's colour never carries the state alone.
@@ -41,7 +42,7 @@ const Header = () => {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--surface)]" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="mx-auto max-w-5xl px-4 h-14 flex items-center justify-between gap-2">
-        <Link to="/" className="lg:hidden text-[18px] font-bold text-[var(--text)]">NeoTrade</Link>
+        <Link to="/" className="lg:hidden shrink-0" aria-label="NeoTrade home"><Logo /></Link>
         <SmartSearch compact className="hidden sm:block w-full max-w-xs lg:max-w-sm" onSearch={openStock} />
         <div className="flex items-center gap-0.5 shrink-0 ml-auto">
           <button type="button" onClick={() => setSearching((v) => !v)} className={cn(BTN, 'sm:hidden', searching && 'text-[var(--accent)]')} aria-expanded={searching} aria-label="Find a stock">

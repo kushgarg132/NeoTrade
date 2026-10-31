@@ -74,7 +74,7 @@ Radius: 12 controls, 20 cards, 28 hero, 999 pills. 1 px `--border`; no box shado
 - `GradeTile({ grade })`: 40 px, radius 12; A = `--accent` + `--accent-ink`, B = `--surface-2` + `--text`,
   C = transparent + `--border` + `--text-muted`; `aria-label="Grade A"`.
 
-Chrome: `layout/Header` (logo "NeoTrade" 18 px 700, `MarketDot`), `BottomTabs` and `SideRail` (active = `--accent`,
+Chrome: `layout/Header` (`layout/Logo`: the Interlock mark, two halves of an N, left in `--text` for your account and right always #10b981 for the AI account, never the section accent, beside "NeoTrade" 18 px 700; same geometry as `public/icon.svg`; `MarketDot`), `BottomTabs` and `SideRail` (active = `--accent`,
 inactive = `--text-muted`, `--surface` bar with `--border` line).
 
 ## Motion (CSS, no library)
