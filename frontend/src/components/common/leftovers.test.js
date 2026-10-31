@@ -100,7 +100,7 @@ test('opening a stock loads the stored AI read only; a run needs the Generate or
   assert.match(hook, /api\.get\(endpoints\.stockNote\(symbol\)\)/);
   assert.match(hook, /aiRun\.symbol === symbol \? aiRun\.n : 0/); // another stock's run count never carries over
   const card = f('../stock/AiRead.jsx');
-  assert.match(card, /Generate AI read/);
+  assert.match(card, />Generate</);
   assert.match(card, /read && stale && !busy && !error/);
 });
 

@@ -128,7 +128,7 @@ the last stored text; a figure the facts do not contain drops its sentence (`ai/
 
 Opening `/stock/:symbol` loads only the stored AI read (`components/stock/AiRead.jsx::AiRead`,
 `useStockAnalysis`, `GET /research/{symbol}/note`); it never calls a model. A run starts only from the
-card's "Generate AI read" button (no read yet) or "Refresh" (the read is stale). The last read shows at once. It counts as fresh for an hour in session
+card's "Generate" button (no read yet) or "Refresh" (the read is stale). The last read shows at once. It counts as fresh for an hour in session
 (`backend/ai/analyst.py::FRESH_IN_SESSION`), and outside the session for as long as the 4 h cache
 holds; fresh, a run sends it back and nothing is spent. Stale, a run keeps the old read on the page, shows
 "Updating…", and streams the new note as the model writes it (`llm.py::LLMService.stream_completion`,

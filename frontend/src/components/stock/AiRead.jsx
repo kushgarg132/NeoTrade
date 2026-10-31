@@ -30,32 +30,44 @@ const AiRead = ({ aiRead, retryAi }) => {
   const copy = stageCopy(stage);
   const busy = loading || streaming;
   const refresh = read && stale && !busy && !error
-    ? <Button variant="secondary" onClick={retryAi}>Refresh</Button> : null;
+    ? <Button variant="secondary" onClick={retryAi} className="-my-2.5">Refresh</Button> : null;
+  const sentiment = read && !live && score != null && (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className={`text-[15px] font-bold ${tone}`}>{word}</span>
+      <span className="tabular-nums text-[13px] font-semibold text-[var(--text-muted)]">{Number(score).toFixed(2)}</span>
+    </span>
+  );
+
+  // No read yet: one row, title and the button that makes one.
+  if (!summary && !error && !busy) {
+    return (
+      <section id="ai-read" className="mb-3 flex items-center justify-between gap-3 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold text-[var(--text)]">AI read</h2>
+          <p className="text-[13px] text-[var(--text-muted)]">No read on this stock yet.</p>
+        </div>
+        <Button variant="secondary" onClick={retryAi}>Generate</Button>
+      </section>
+    );
+  }
 
   return (
-    <Card title="AI read" className="mb-3" action={updating && read ? <Badge>Updating…</Badge> : refresh}>
+    <Card title="AI read" className="mb-3" action={(
+      <span className="inline-flex items-center gap-3">
+        {summary && sentiment}
+        {updating && read ? <Badge>Updating…</Badge> : refresh}
+      </span>
+    )}>
       <div id="ai-read" />
       {!summary && error && <ErrorLine message={`Could not load the AI read: ${error}`} onRetry={retryAi} />}
-      {!summary && !error && !busy && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[14px] text-[var(--text-muted)]">No AI read on this stock yet.</p>
-          <Button onClick={retryAi}>Generate AI read</Button>
-        </div>
-      )}
       {!summary && !error && busy && (
         <>
           <p className="mb-2 text-[13px] text-[var(--text-muted)]" role="status">{copy || 'Loading the AI read…'}</p>
-          <Skeleton rows={3} />
+          <Skeleton rows={2} />
         </>
       )}
       {summary && (
         <>
-          {read && !live && score != null && (
-            <p className="mb-2 flex items-baseline justify-between gap-3">
-              <span className={`text-[17px] font-bold ${tone}`}>{word}</span>
-              <span className="tabular-nums text-[15px] font-semibold">{Number(score).toFixed(2)}</span>
-            </p>
-          )}
           {copy && <p className="mb-2 text-[13px] text-[var(--text-muted)]" role="status">{copy}</p>}
           <div className={open ? '' : 'line-clamp-3'}><AiMarkdown text={summary} collapse={false} /></div>
           {open && thesis && (
@@ -64,16 +76,18 @@ const AiRead = ({ aiRead, retryAi }) => {
               <AiMarkdown text={thesis} collapse={false} />
             </div>
           )}
-          <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-            className="block min-h-11 text-[14px] font-semibold text-[var(--accent)]">
-            {open ? 'Show less' : 'Read more'}
-          </button>
-          {read && (
-            <p className="text-[13px] text-[var(--text-muted)]">
-              {relevant != null && `Based on ${relevant} articles · `}
-              {at ? `as of ${formatDateTime(at)}` : ''}
-            </p>
-          )}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 -mb-2">
+            <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+              className="min-h-11 text-[14px] font-semibold text-[var(--accent)]">
+              {open ? 'Show less' : 'Read more'}
+            </button>
+            {read && (
+              <p className="text-[12px] text-[var(--text-muted)]">
+                {relevant != null && `${relevant} articles · `}
+                {at ? formatDateTime(at) : ''}
+              </p>
+            )}
+          </div>
           {error && (
             <div className="text-[var(--text-muted)]">
               <ErrorLine message={`Couldn't refresh: ${error}`} onRetry={retryAi} />
