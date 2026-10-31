@@ -68,7 +68,7 @@ test('holdings triage into Act now (one card per stock, its own labels), Keep an
 test('Ideas splits into Picks (default) and Holdings sub-tabs', () => {
   assert.match(page, /const IDS = \['picks', 'holdings'\]/);
   assert.match(page, /tab === 'picks' && <div className="space-y-3">/);
-  assert.match(page, />New ideas<\/h2>/);
+  assert.match(page, /<Hero\b[\s\S]*label="Waiting for you"/);
   assert.match(page, /tab === 'holdings' && \(acts\.loading/);
 });
 

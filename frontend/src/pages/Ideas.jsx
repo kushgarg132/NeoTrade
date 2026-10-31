@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
+import Hero from '../components/ui/Hero';
 import Tabs, { useTabParam } from '../components/ui/Tabs';
 import Empty from '../components/ui/Empty';
 import Skeleton from '../components/ui/Skeleton';
@@ -33,6 +34,12 @@ const Ideas = () => {
   const symbols = (fresh.data?.items || []).map((i) => i.symbol);
   const { news } = useSymbolNews(symbols);
   const results = useSymbolResults(symbols);
+  const nPicks = fresh.data?.items.length;
+  const nHold = acts.data?.length;
+  const waiting = nPicks == null && nHold == null ? null : (nPicks || 0) + (nHold || 0);
+  const pill = (text) => (
+    <span className="inline-flex items-center min-h-8 px-3 rounded-full bg-[var(--surface-2)] text-[13px] font-semibold text-[var(--text)]">{text}</span>
+  );
   const row = (i) => <IdeaRow key={i.id} idea={i} onDone={fresh.reload} news={news} results={results} />;
 
   const group = (title, rows) => rows.length > 0 && (
@@ -44,8 +51,26 @@ const Ideas = () => {
 
   return (
     <Layout>
-      <PageHeader title="Ideas" right={<Link to="/ideas/history" className="inline-flex items-center min-h-11 px-2 text-[14px] font-semibold text-[var(--accent)]">History</Link>} />
+      <PageHeader title="Ideas" />
       <div className="space-y-4">
+        <Hero
+          label="Waiting for you"
+          value={waiting}
+          format={(n) => (n == null ? '–' : String(Math.round(n)))}
+          privateValue={false}
+          action={<Link to="/ideas/history" className="-my-3 -mr-2 inline-flex items-center min-h-11 px-2 text-[14px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[10px]">History ›</Link>}
+          change={waiting != null && (
+            <div className="flex flex-wrap gap-2">
+              {nHold != null && pill(`${nHold} on holdings`)}
+              {nPicks != null && pill(`${nPicks} new idea${nPicks === 1 ? '' : 's'}`)}
+            </div>
+          )}
+        >
+          <p className="mt-4 pt-3 border-t border-[var(--border)] flex items-center gap-2 text-[13px] text-[var(--text-muted)]">
+            <Badge kind="paper">Paper</Badge>
+            <span>Paper record · not advice</span>
+          </p>
+        </Hero>
         <Tabs label="Ideas sections" value={tab} onChange={setTab} tabs={[
           { id: 'picks', label: 'Picks', badge: fresh.data?.items.length || 0 },
           { id: 'holdings', label: 'Holdings', badge: acts.data?.length || 0 },
@@ -61,22 +86,11 @@ const Ideas = () => {
 
         {/* Each idea is its own card, so the list sits on the page, not inside a Card (no nested cards). */}
         {tab === 'picks' && <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-[15px] font-semibold text-[var(--text)]">New ideas</h2>
-              <p className="text-[13px] text-[var(--text-muted)]">
-                {fresh.data?.items?.length ? `${fresh.data.items.length} shown` : 'Trades the engine would take'}
-                {fresh.data?.hiddenCount > 0 && <> · <span title={fresh.data.hiddenReason}>{fresh.data.hiddenCount} more kept back (top 3 per grade)</span></>}
-                {' · '}Paper record · not advice.
-              </p>
-            </div>
-            <span className="shrink-0"><Badge kind="paper">Paper</Badge></span>
-          </div>
           {fresh.loading ? <Card><Skeleton rows={4} /></Card>
             : fresh.error ? <Card><ErrorLine message="Could not load ideas." onRetry={fresh.reload} /></Card>
             : fresh.data.items.length === 0 ? (
-              <Card><Empty title={noPickText(fresh.data.hiddenReason).title} body={noPickText(fresh.data.hiddenReason).body}
-                action={<Link to="/ideas/history"><Button variant="secondary">Open history</Button></Link>} /></Card>
+              <Empty title={noPickText(fresh.data.hiddenReason).title} body={noPickText(fresh.data.hiddenReason).body}
+                action={<Link to="/ideas/history"><Button variant="secondary">Open history</Button></Link>} />
             ) : (
               <>
                 {engine.length === 0 && A.length === 0 && B.length === 0 && C.length > 0 && <p className="text-[14px] text-[var(--text-muted)]">No proven setup has fired right now. The ones below have no edge over the average stock so far.</p>}
@@ -91,6 +105,11 @@ const Ideas = () => {
                     </button>
                     {showUnproven && <div className="space-y-3 opacity-80">{C.map(row)}</div>}
                   </>
+                )}
+                {fresh.data.hiddenCount > 0 && (
+                  <p className="px-1 text-[13px] text-[var(--text-muted)]" title={fresh.data.hiddenReason}>
+                    {fresh.data.hiddenCount} more kept back (top 3 per grade).
+                  </p>
                 )}
               </>
             )}
