@@ -81,13 +81,16 @@ async def alert(db, user_id, kind, title, lines=(), *, symbol=None, link=None, b
 
 async def _stale_line(db, user_id, until) -> str:
     """"N pending, M expire before close": the long-term ideas waiting on the user. Admins only."""
-    query = {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}
-    n = await db["suggestions"].count_documents(query)
-    if not n:
+    from backend.risk.paper_gate import for_mine
+
+    rows = await db["suggestions"].find({"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(None)
+    rows = await for_mine(db, user_id, rows)  # the same ideas the user sees
+    if not rows:
         return ""
+    n = len(rows)
     if until is None:
         return f"{n} pending"
-    m = await db["suggestions"].count_documents({**query, "expires_at": {"$lt": until}})
+    m = sum(1 for r in rows if r.get("expires_at") and r["expires_at"].replace(tzinfo=r["expires_at"].tzinfo or timezone.utc) < until)
     return f"{n} pending, {m} expire before {'close' if until.astimezone(IST).hour == 15 else 'the open'}"
 
 

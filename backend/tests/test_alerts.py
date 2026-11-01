@@ -151,3 +151,15 @@ async def test_drain_stale_ideas_admin_only(db):
     await _ideas(db, 1)
     await db["suggestions"].update_many({}, {"$set": {"user_id": "bob"}})
     assert await alerts.drain(db, "bob", NOW, NOW + timedelta(hours=5)) == ("", [])
+
+
+async def test_drain_stale_ideas_only_counts_what_the_user_sees(db, monkeypatch):
+    from datetime import timedelta
+    from backend.risk import paper_gate
+
+    async def none(db_, user_id, rows):
+        return []
+
+    monkeypatch.setattr(paper_gate, "for_mine", none)
+    await _ideas(db, 1)
+    assert await alerts.drain(db, "boss", NOW, NOW + timedelta(hours=5)) == ("", [])
