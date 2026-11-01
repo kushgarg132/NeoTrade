@@ -88,9 +88,7 @@ async def test_check_user_alerts_once_and_trips_the_kill_switch(monkeypatch):
     publish = AsyncMock()
     monkeypatch.setattr(monitor.hub, "publish", publish)
     send = AsyncMock(return_value=True)
-    monkeypatch.setattr(monitor.telegram, "send", send)
-    monkeypatch.setattr(monitor.telegram, "configured", lambda: True)  # the server bot
-    await GuardrailStore(db).set_telegram_chat("alice", 42)
+    monkeypatch.setattr("backend.alerts.alert", send)
 
     prefs = {**PREFS, "user_id": "alice", "max_trades_per_day": 0}
     now = _ist(10, 31)
@@ -100,7 +98,7 @@ async def test_check_user_alerts_once_and_trips_the_kill_switch(monkeypatch):
     assert await KillSwitchStore(db).is_tripped("alice", now.astimezone(monitor.IST).date())
     publish.assert_awaited_once()
     send.assert_awaited_once()
-    assert send.await_args.args[0] == 42
+    assert send.await_args.args[1:3] == ("alice", "money")
 
     assert await monitor.check_user(db, None, None, prefs, now) == []  # no repeat alert
     events = await GuardrailStore(db).events_for("alice", now.astimezone(monitor.IST).date())

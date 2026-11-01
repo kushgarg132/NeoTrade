@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: dbbceb5
+verified_at: cb61d68
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -45,7 +45,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/journal/accounts.py | Splits by account; monthly AI-vs-me | `accounts.py::filter_trades`, `::brokers_of`, `::ai_vs_me` |
 | backend/journal/beta.py | `journal_opens` tracking; Phase 12 metrics | `beta.py::record_open`, `::beta_metrics` |
 | backend/guardrails/rules.py | Breach evaluation (pure); the buy-before-results rule | `guardrails/rules.py::evaluate` (`results` and `today` args feed the `results_buy` breach), `::results_days` (0 when off or guardrails off), `::results_block`, `::_option_breaches`, `::_is_hedged` |
-| backend/guardrails/monitor.py | 60s in-session loop; kill-switch trip; square-off | `guardrails/monitor.py::run_tick`, `::check_user`, `::square_off`, `::monitor_loop`, `::start`, `LOCK_KEY` |
+| backend/guardrails/monitor.py | 60s in-session loop; kill-switch trip; square-off; breaches alert as `money` via `alerts.alert` (`::_alert(db, user_id, event)`) | `guardrails/monitor.py::run_tick`, `::check_user`, `::square_off`, `::monitor_loop`, `::start`, `LOCK_KEY` |
 | backend/guardrails/square_off.py | Position book to MIS exit orders (pure) | `guardrails/square_off.py::exit_orders`, `::describe` |
 | backend/guardrails/store.py | Breach dedupe; alert channel and encrypted user bot token | `guardrails/store.py::GuardrailStore.record`, `.events_for`, `.telegram_channel`, `.telegram_routes`, `.set_telegram_bot` |
 | backend/guardrails/telegram.py | Bot API client over aiogram 3.31 (one `Bot` per token per event loop; dicts in and out): send, HTML, drafts, `alert` | `telegram.py::alert`, `::_bot`, `::_call`, `::send`, `::send_html`, `::to_html`, `::find_chat`, `::updates` |

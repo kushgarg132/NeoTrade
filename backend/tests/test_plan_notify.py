@@ -19,14 +19,26 @@ def _doc(**kw):
 
 def test_pre_open_text():
     text = notify.plan_text(_doc())
-    assert text.startswith("📋 Today's plan")
+    assert text.startswith("Today's plan")
     assert "Neutral tape." in text and "Risk 0.85× · up to 5 positions" in text
     assert "S0, S1, S2, S3, S4, S5, S6, S7 +2 more" in text and "Added: IDEA" in text
 
 
 def test_revision_text_lists_exits():
     text = notify.plan_text(_doc(trigger="regime_flip", version=2, exits=[{"symbol": "TCS", "reason": "guidance cut"}]))
-    assert text.startswith("🔁 Plan updated (Regime change)") and "Exit TCS: guidance cut" in text
+    assert text.startswith("Plan updated (Regime change)") and "Exit TCS: guidance cut" in text
+
+
+async def test_plan_goes_out_as_money_card_with_stop_button(monkeypatch):
+    from backend.autopilot.service import STOP_BUTTON
+    calls = []
+
+    async def fake(db, user_id, kind, title, lines=(), **kw):
+        calls.append((user_id, kind, title, kw))
+        return True
+    monkeypatch.setattr("backend.alerts.alert", fake)
+    assert await notify.notify_plan(None, "alice", _doc()) is True
+    assert calls == [("alice", "money", "Today's plan", {"buttons": STOP_BUTTON})]
 
 
 async def test_notify_without_telegram_is_a_quiet_false():
