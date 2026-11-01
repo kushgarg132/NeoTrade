@@ -1,24 +1,10 @@
-"""Telegram messages about the long-term engine: new proposals, the morning
-digest, and automatic exits. Same bot and chat as the guardrail alerts
-(backend/guardrails/telegram.py:alert); best effort, and a no-op for a user
-who never linked Telegram."""
-
-from backend.guardrails import telegram
-
-
-class IdeaText(str):
-    """A message listing engine ideas: notify() sends it to admins only."""
+"""Text builders for engine proposals and exits, plus `is_admin`. Sending is
+`backend/alerts.py`'s job."""
 
 
 async def is_admin(db, user_id: str) -> bool:
     user = await db["users"].find_one({"id": user_id}, {"role": 1})
     return bool(user) and user.get("role") == "admin"
-
-
-async def notify(db, user_id: str, text: str, html: bool = False) -> bool:
-    if isinstance(text, IdeaText) and not await is_admin(db, user_id):
-        return False
-    return await telegram.alert(db, user_id, text, html=html)
 
 
 def _money(value) -> str:
@@ -34,7 +20,7 @@ def proposals_text(suggestions: list[dict], heading: str) -> str:
         )
     if len(suggestions) > 15:
         lines.append(f"…and {len(suggestions) - 15} more")
-    return IdeaText("\n".join(lines))
+    return "\n".join(lines)
 
 
 def exit_line(c: dict) -> str:
