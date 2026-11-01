@@ -1,18 +1,13 @@
-import React, { useState } from 'react';
-import { GoogleLogin } from '@react-oauth/google';
+import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/useTheme';
+import { GoogleButton } from '../components/SignInCard';
 import Badge from '../components/ui/Badge';
 import { LogoMark } from '../components/layout/Logo';
 
 /** Sign-in: one line on what NeoTrade is, then Google sign-in. */
 const Login = () => {
-  const { login } = useAuth();
-  const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const [error, setError] = useState('');
 
   // Where RequireAuth sent us from, query string included.
   const from = location.state?.from;
@@ -22,15 +17,6 @@ const Login = () => {
   const returnTo = from ? `${from.pathname}${from.search || ''}` : safeNext || '/';
   const params = new URLSearchParams(from?.search || '');
   const brokerCode = params.get('code') || params.get('request_token');
-
-  const onSuccess = async (credentialResponse) => {
-    try {
-      await login(credentialResponse.credential);
-      navigate(returnTo, { replace: true });
-    } catch {
-      setError('Sign-in failed. Try again.');
-    }
-  };
 
   return (
     <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-4">
@@ -51,30 +37,12 @@ const Login = () => {
           Works with Zerodha, Upstox and Angel One.
         </p>
 
-          {/* Google's iframe is light; under the page's dark color-scheme the browser paints it an opaque white backdrop. */}
-          <div className="flex justify-center [color-scheme:light]">
-            <GoogleLogin
-              onSuccess={onSuccess}
-              onError={() => setError('Sign-in failed. Try again.')}
-              theme={theme === 'dark' ? 'filled_black' : 'outline'}
-              shape="square"
-              width="280"
-            />
-          </div>
+          <GoogleButton onDone={() => navigate(returnTo, { replace: true })} />
 
           {brokerCode && (
             <p className="mt-5 text-sm text-[var(--text-muted)] text-center">
               Sign in to finish connecting your broker. Your login code:{' '}
               <span className="select-all break-all text-[var(--text)]">{brokerCode}</span>
-            </p>
-          )}
-
-          {error && (
-            <p
-              role="alert"
-              className="mt-4 text-sm text-center text-[var(--loss)] rounded-[12px] bg-[var(--loss-soft)] px-3 py-2"
-            >
-              {error}
             </p>
           )}
 
