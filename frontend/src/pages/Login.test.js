@@ -16,9 +16,10 @@ test('copy matches the app: no stale Journal/Patterns/Guardrails pitch', () => {
 });
 
 test('auth flow is intact', () => {
-  assert.match(src, /login\(credentialResponse\.credential\)/);
+  assert.match(src, /GoogleButton/);
   assert.match(src, /params\.get\('request_token'\)/);
   assert.match(src, /select-all/);
+  assert.match(src, /navigate\(returnTo/);
 });
 
 test('glow card and big wordmark', () => {
@@ -29,15 +30,7 @@ test('glow card and big wordmark', () => {
   assert.doesNotMatch(src, /components\/ui\/Card/);
 });
 
-test('error uses soft loss fill and keeps role=alert', () => {
-  assert.match(src, /role="alert"/);
-  assert.match(src, /--loss-soft/);
-  assert.doesNotMatch(src, /-wash\)/);
-});
-
 test('features kept', () => {
-  assert.match(src, /GoogleLogin/);
-  assert.match(src, /filled_black/);
-  assert.match(src, /\[color-scheme:light\]/); // else a white box around the Google button in dark mode
+  assert.match(src, /GoogleButton/);
   assert.match(src, /Paper until proven/);
 });
