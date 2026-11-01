@@ -533,9 +533,12 @@ async def _login_reminders(db, redis, now: datetime, get_adapter=None) -> None:
                 continue
             name = f"{broker.replace('_', ' ').title()} ({LABELS.get(role, role)})"
             lines.append(name)
-            buttons.append([{"text": name, "url": url}] if url else alerts.open_button("/settings"))
+            if url:
+                buttons.append([{"text": name, "url": url}])
         if lines:
-            await alerts.alert(db, user_id, "action", "Log in before 9:15", lines, buttons=[b for b in buttons if b] or None)
+            if len(buttons) < len(lines) and (row := alerts.open_button("/settings")):
+                buttons.append(row)  # one Open row for the brokers without a login link
+            await alerts.alert(db, user_id, "action", "Log in before 9:15", lines, buttons=buttons or None)
 
 
 async def autorun_loop(db, redis) -> None:

@@ -604,3 +604,27 @@ async def test_recent_losers_judges_net_pnl():
         {**base, "symbol": "NETWIN", "realized_pnl": 50.0, "costs": 5.0},
     ])
     assert await _recent_losers(db, "u", now) == {"GROSSWIN"}
+
+
+@pytest.mark.asyncio
+async def test_level_pass_one_exit_alert_per_level_and_frees_only_the_unsent_key(world, monkeypatch):
+    from backend.mine import actions
+
+    async def level_alerts(db, redis, user_id, now):
+        out = []
+        for sym, kind in (("A", "stop_hit"), ("B", "target_hit")):
+            await redis.set(f"mine:alert:{user_id}:{sym}", "1", nx=True)
+            out.append({"id": sym, "kind": kind, "symbol": sym, "title": "t", "detail": f"d{sym}", "action": {"quantity": 2}})
+        return out
+
+    sent = []
+
+    async def send(db, user_id, kind, title, lines=(), **kw):
+        sent.append((kind, title))
+        return title != "Target · B"
+
+    monkeypatch.setattr(actions, "level_alerts", level_alerts)
+    monkeypatch.setattr("backend.alerts.alert", send)
+    await autorun._level_pass(world.db, world.redis, "carol", MONDAY_10AM)
+    assert sent == [("exit", "Sell · A"), ("exit", "Target · B")]
+    assert "mine:alert:carol:A" in world.redis.data and "mine:alert:carol:B" not in world.redis.data
