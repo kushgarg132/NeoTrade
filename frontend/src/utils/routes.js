@@ -7,6 +7,9 @@ export const ROUTES = [
   '/settings', '/settings/brokers', '/settings/guardrails', '/settings/portfolio', '/settings/notifications', '/settings/goal', '/settings/ai', '/settings/autopilot', '/settings/lab', ...LAB_PAGES.map((p) => `/settings/lab/${p}`), '/reports/weekly', '/login', '/profile',
 ];
 
+/** Readable signed out (App.jsx `open`); everything else shows the sign-in card. */
+export const PUBLIC_ROUTES = ['/', '/market', '/stock/:symbol', '/market/index/:ticker', '/market/sector/:name', '/news/:id'];
+
 /** The Lab is admin only (RequireAdmin in App.jsx). */
 export const ADMIN_ROUTES = ['/settings/autopilot', '/settings/lab', ...LAB_PAGES.map((p) => `/settings/lab/${p}`)];
 

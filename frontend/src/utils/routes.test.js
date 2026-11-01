@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { ROUTES, ADMIN_ROUTES, MOVED, withSearch, movedTarget, strategyPath, aiTradePath, roundTripPath, indexPath, sectorPath, newsPath } from './routes.js';
 import { MAIN_TABS, tabActive } from '../components/layout/tabs.js';
 import { stockPath } from './stocks.js';
+import { readFileSync } from 'node:fs';
+import { PUBLIC_ROUTES } from './routes.js';
 
 test('every redirect lands on a real route in one hop', () => {
   const real = new Set(ROUTES);
@@ -84,4 +86,19 @@ test('back: history when there is an earlier entry, else the parent path, else h
   assert.equal(backStep(0, '/market'), '/market');
   assert.equal(backStep(0, true), '/');
   assert.equal(backStep(1, true), -1);
+});
+
+test('public routes are real, non-admin, non-personal', () => {
+  for (const p of PUBLIC_ROUTES) {
+    assert.ok(ROUTES.includes(p), p);
+    assert.ok(!ADMIN_ROUTES.includes(p), p);
+  }
+  for (const p of ['/money', '/ai', '/ideas', '/settings', '/profile']) assert.ok(!PUBLIC_ROUTES.includes(p), p);
+});
+
+test('App opens public routes without RequireAuth and the assistant to everyone', () => {
+  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  for (const p of PUBLIC_ROUTES) assert.ok(app.includes(`path="${p}" element={open(`), p);
+  assert.match(app, /path="\/money" element=\{gated\(/);
+  assert.ok(!app.includes('{user && <ChatWidget />}'));
 });

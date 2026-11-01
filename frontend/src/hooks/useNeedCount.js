@@ -29,10 +29,12 @@ export const fetchIdeas = async (isAdmin) => {
  * (a failure used to read as 0).
  */
 export const useNeedCount = () => {
-  const isAdmin = useAuth().user?.role === 'admin';
-  const [s, setS] = useState(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [state, setS] = useState(null);
   const [error, setError] = useState(false);
   const load = useCallback(() => {
+    if (!user) return; // a guest has nothing waiting
     Promise.all([
       api.get(endpoints.mine.actions).then((r) => r.data).catch(() => null),
       fetchIdeas(isAdmin).then((r) => r.items).catch(() => null),
@@ -41,10 +43,11 @@ export const useNeedCount = () => {
       setS({ actions, ideas });
       setError(false);
     });
-  }, [isAdmin]);
+  }, [user, isAdmin]);
   useEffect(() => { load(); }, [load]);
   useReconnect(load);
-  useTopic('suggestions', load);
+  useTopic(user ? 'suggestions' : null, load);
+  const s = user ? state : null; // signing out drops the last account's numbers
   return {
     actions: s?.actions || [], ideas: s?.ideas || [], count: s ? needCount(s.actions, s.ideas) : null,
     loaded: s !== null, error, reload: load,

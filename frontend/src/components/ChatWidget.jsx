@@ -9,6 +9,8 @@ import { cn } from '../utils/cn';
 import Countdown from './common/Countdown';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
+import SignInCard from './SignInCard';
+import { useAuth } from '../context/AuthContext';
 import { tokenRefusal, deadlineFrom, EXPIRED_NOTE } from '../utils/liveConfirm';
 
 /**
@@ -128,6 +130,7 @@ const ActionCard = ({ action, onUpdate }) => {
 
 const ChatWidget = () => {
   const location = useLocation();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
 
   // On a phone the masthead opens it; the floating button is desktop only.
@@ -175,13 +178,27 @@ const ChatWidget = () => {
     setInput('');
   };
 
+  // Signing out drops the conversation: the next reader must not see it. Reset during render, not in an
+  // effect; the reply still streaming dies with the socket (stream.disconnect clears its handlers).
+  const [reader, setReader] = useState(user);
+  if (reader !== user) {
+    setReader(user);
+    if (!user) {
+      setMessages([OPENING]);
+      setFollowups([]);
+      setBusy(false);
+      setThinking('');
+      setInput('');
+    }
+  }
+
   const submit = (event) => {
     event.preventDefault();
     send(input.trim());
   };
 
   const send = (text) => {
-    if (!text || busy) return;
+    if (!text || busy || !user) return;
 
     const history = messages
       .filter((message) => message !== OPENING && (message.role === 'user' || message.role === 'assistant'))
@@ -286,6 +303,11 @@ const ChatWidget = () => {
             </button>
           </header>
 
+          {!user ? (
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+              <SignInCard title="Sign in to use this" body="Your accounts, money and AI live behind sign-in." />
+            </div>
+          ) : (<>
           <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4" aria-live="polite">
             {fresh ? (
               <div className="pt-4">
@@ -352,6 +374,7 @@ const ChatWidget = () => {
               </button>
             </div>
           </form>
+          </>)}
         </aside>
       )}
 
