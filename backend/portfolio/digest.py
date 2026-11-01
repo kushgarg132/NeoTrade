@@ -351,7 +351,7 @@ async def premarket_for(db, user_id: str, now: datetime, claimed: Optional[list]
     ai = await _ai_line(db, user_id, prefs)
     since = ""
     if claimed is not None:  # last, so a failure above strands no claimed rows
-        since, ids = await alerts.drain(db, user_id, now, datetime.combine(local.date(), time(15, 30), tzinfo=IST))
+        since, ids = await alerts.drain(db, user_id, now, datetime.combine(local.date(), time(15, 30), tzinfo=IST), "close")
         claimed.extend(ids)
     return premarket_text(p, overnight, ideas, ai, moved, acts, since)
 
@@ -375,9 +375,15 @@ async def postclose_for(db, user_id: str, now: datetime, events: Optional[list[d
     since = ""
     if claimed is not None:
         nxt = next_trading_day(now.astimezone(IST).date())
-        since, ids = await alerts.drain(db, user_id, now, datetime.combine(nxt, time(8, 45), tzinfo=IST))
+        since, ids = await alerts.drain(db, user_id, now, datetime.combine(nxt, time(8, 45), tzinfo=IST), "the open")
         claimed.extend(ids)
     return postclose_text(p, today, events, acts, recon, since)
+
+
+async def _linked(db, user_id: str) -> bool:
+    from backend.guardrails.store import GuardrailStore
+
+    return await GuardrailStore(db).telegram_channel(user_id) is not None
 
 
 def _buttons() -> list[list[dict]]:
@@ -394,16 +400,16 @@ async def send_premarket(db, redis, now: datetime) -> int:
     for user_id in await _users(db):
         if not await redis.set(f"digest:pre:{user_id}:{local.date()}", "1", nx=True, px=86_400_000):
             continue
-        claimed: list = []
+        claimed: Optional[list] = [] if await _linked(db, user_id) else None  # unlinked: build, never drain or send
         try:
             text = await premarket_for(db, user_id, now, claimed)
-            if not await telegram.alert(db, user_id, text, html=True, buttons=_buttons()):
+            if claimed is not None and not await telegram.alert(db, user_id, text, html=True, buttons=_buttons()):
                 raise RuntimeError("telegram send failed")
             sent += 1
             await _day_summary(db, redis, user_id, "pre", now, text)
         except Exception as exc:
             logger.exception("pre-market digest failed for %s: %s", user_id, exc)
-            await alerts.requeue(db, claimed)
+            await alerts.requeue(db, claimed or [])
             await redis.delete(f"digest:pre:{user_id}:{local.date()}")  # let the next tick retry
     return sent
 
@@ -428,14 +434,14 @@ async def send_postclose(db, now: datetime, redis=None) -> int:
     events = await market.upcoming(db, hours=24, now=now)
     sent = 0
     for user_id in await _users(db):
-        claimed: list = []
+        claimed: Optional[list] = [] if await _linked(db, user_id) else None  # unlinked: build, never drain or send
         try:
             text = await postclose_for(db, user_id, now, events, claimed=claimed)
-            if not await telegram.alert(db, user_id, text, html=True, buttons=_buttons()):
+            if claimed is not None and not await telegram.alert(db, user_id, text, html=True, buttons=_buttons()):
                 raise RuntimeError("telegram send failed")
             sent += 1
             await _day_summary(db, redis, user_id, "post", now, text)
         except Exception as exc:
             logger.exception("post-close digest failed for %s: %s", user_id, exc)
-            await alerts.requeue(db, claimed)
+            await alerts.requeue(db, claimed or [])
     return sent

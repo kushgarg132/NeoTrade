@@ -35,6 +35,10 @@ async def db(monkeypatch):
         "status": "SCORED", "material": True, "impacts": [{"type": "symbol", "target": "DOWN", "direction": -0.8, "impact": 8.0}]})
     monkeypatch.setattr(service, "mark_prices", AsyncMock(return_value={"UP": 105.0, "DOWN": 90.0, "FLAT": 100.0, "AIONLY": 200.0}))
     monkeypatch.setattr(service.bars, "prev_closes", AsyncMock(return_value={"UP": 100.0, "DOWN": 100.0, "FLAT": 100.0}))
+    async def linked(self, user_id):
+        return ("tok", "1")
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", linked)
     return db
 
 
@@ -203,5 +207,29 @@ async def test_failed_send_requeues_drained_rows(db, monkeypatch):
     assert await digest.send_premarket(db, redis, at) == 0
     assert (await db["alerts"].find_one({}))["state"] == "queued"
     assert not redis.keys  # released for the next tick
-    assert await digest.send_postclose(db, NOW.replace(hour=11), redis) == 0  # 16:30 IST
+    assert await digest.send_postclose(db, NOW.replace(hour=16), redis) == 0  # 16:30 IST
+    assert (await db["alerts"].find_one({}))["state"] == "queued"
+
+
+async def test_unlinked_user_is_not_drained_but_still_gets_the_day_summary(db, monkeypatch):
+    async def unlinked(self, user_id):
+        return None
+
+    async def no_send(*a, **k):
+        raise AssertionError("must not send")
+
+    summaries = []
+
+    async def summary(db_, redis, user_id, phase, now, text):
+        summaries.append(phase)
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", unlinked)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", no_send)
+    monkeypatch.setattr(digest, "_day_summary", summary)
+    await _queue(db)
+    redis, at = _Redis(), NOW.replace(hour=8, minute=46)
+    assert await digest.send_premarket(db, redis, at) == 1
+    assert await digest.send_premarket(db, redis, at.replace(minute=50)) == 0  # key stays set
+    assert await digest.send_postclose(db, NOW.replace(hour=16), redis) == 1
+    assert summaries == ["pre", "post"]
     assert (await db["alerts"].find_one({}))["state"] == "queued"

@@ -142,7 +142,7 @@ async def _ideas(db, expiring):
 async def test_drain_stale_ideas_line(db):
     from datetime import timedelta
     await _ideas(db, 1)
-    block, ids = await alerts.drain(db, "boss", NOW, NOW + timedelta(hours=5))
+    block, ids = await alerts.drain(db, "boss", NOW, NOW + timedelta(hours=5), "the open")
     assert "<b>Expiring ideas</b>" in block and "3 pending, 1 expire before the open" in block and ids == []
 
 

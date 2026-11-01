@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from typing import Sequence
 
 from backend.configs.settings import settings
-from backend.engine.session import IST
 from backend.guardrails import telegram
 from backend.prefs import PrefsStore
 from backend.suggestions.notify import is_admin
@@ -79,7 +78,7 @@ async def alert(db, user_id, kind, title, lines=(), *, symbol=None, link=None, b
     return ok
 
 
-async def _stale_line(db, user_id, until) -> str:
+async def _stale_line(db, user_id, until, before) -> str:
     """"N pending, M expire before close": the long-term ideas waiting on the user. Admins only."""
     from backend.risk.paper_gate import for_mine
 
@@ -91,14 +90,14 @@ async def _stale_line(db, user_id, until) -> str:
     if until is None:
         return f"{n} pending"
     m = sum(1 for r in rows if r.get("expires_at") and r["expires_at"].replace(tzinfo=r["expires_at"].tzinfo or timezone.utc) < until)
-    return f"{n} pending, {m} expire before {'close' if until.astimezone(IST).hour == 15 else 'the open'}"
+    return f"{n} pending, {m} expire before {before}"
 
 
-async def drain(db, user_id, now: datetime, until: datetime | None = None) -> tuple[str, list]:
+async def drain(db, user_id, now: datetime, until: datetime | None = None, before: str = "close") -> tuple[str, list]:
     """Claim this user's queued, unmuted alerts and render them as one digest block, plus the
-    "Expiring ideas" line (admins, unless muted). `until`: the next digest's time."""
+    "Expiring ideas" line (admins, unless muted). `until`: the next digest's time, `before`: how to say it."""
     muted = (await PrefsStore(db).get(user_id))["alert_mute"]
-    stale = "" if muted.get("stale_ideas") or not await is_admin(db, user_id) else await _stale_line(db, user_id, until)
+    stale = "" if muted.get("stale_ideas") or not await is_admin(db, user_id) else await _stale_line(db, user_id, until, before)
     rows = await db["alerts"].find({"user_id": user_id, "state": "queued"}).sort("created_at", 1).to_list(None)
     ids = [r["_id"] for r in rows if not muted.get(r["kind"])]
     claimed = []
