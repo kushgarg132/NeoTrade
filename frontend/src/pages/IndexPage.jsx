@@ -23,6 +23,8 @@ import { newsPath } from '../utils/routes';
 import { formatTimeAgo, marketPhase } from '../utils/formatters';
 import { rangeAt } from '../utils/market';
 import { sourceName } from '../utils/newsItem';
+import SignInCard from '../components/SignInCard';
+import { useAuth } from '../context/AuthContext';
 
 const num = (n) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
@@ -64,7 +66,12 @@ const useIndexWhy = (ticker) => {
 };
 
 const Why = ({ ticker }) => {
-  const { data, status, code, text, generate } = useIndexWhy(ticker);
+  const { data, status, code, text, generate: run } = useIndexWhy(ticker);
+  const { user } = useAuth();
+  // Signed out only the stored story reads: writing one (socket or uncached GET) asks to sign in instead.
+  const [ask, setAsk] = useState(false);
+  const generate = user ? run : () => setAsk(true);
+  if (ask && !user) return <SignInCard title="Sign in for an explanation" body="Stored explanations are free to read; writing a new one needs an account." />;
   return (
     <AiCard title="Why it moved" asOf={data?.session?.date}>
       {status === 'loading' && (text ? <AiText text={text} /> : <Skeleton rows={4} />)}

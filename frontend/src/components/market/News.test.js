@@ -22,6 +22,6 @@ test('Watchlist Empty renders the SmartSearch', () => {
 test('News: stale replies are dropped; socket refresh merges page 1 and never wipes the list', () => {
   assert.match(news, /mark !== gen\.n/);
   assert.match(news, /mergeFront\(cur, res\.data\.items\)/);
-  assert.match(news, /useTopic\('news', \(\) => load\(undefined, true\)\)/);
+  assert.match(news, /useTopic\(user \? 'news' : null, \(\) => load\(undefined, true\)\)/);
   assert.match(news, /!refresh\) setError\(true\)/);
 });

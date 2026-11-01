@@ -39,7 +39,7 @@ const IndexPage = lazy(() => import('./pages/IndexPage'));
 const SectorPage = lazy(() => import('./pages/SectorPage'));
 const NewsItem = lazy(() => import('./pages/NewsItem'));
 import Login from './pages/Login';
-import RequireAuth from './components/RequireAuth';
+import RequireAuth, { AuthLoading } from './components/RequireAuth';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 import ChatWidget from './components/ChatWidget';
@@ -81,7 +81,7 @@ const LAB = {
 };
 
 const App = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { pathname, search } = useLocation();
   const navigationType = useNavigationType();
   const navigate = useNavigate();
@@ -125,11 +125,12 @@ const App = () => {
   // user can navigate away. This outer one is the fallback for a crash in a
   // page's own hooks/logic, before it ever reaches its `return <Layout>` --
   // Layout never mounts in that case, so the inner boundary can't help.
-  const open = (element) => (
+  // A public page waits for the session check too, so a signed-in reader never sees the guest view first.
+  const open = (element) => (loading ? <AuthLoading /> : (
     <ErrorBoundary>
       <Suspense fallback={null}>{element}</Suspense>
     </ErrorBoundary>
-  );
+  ));
   // Signed out, a gated page shows the sign-in card in place (copy: title/body).
   const gated = (element, copy) => <RequireAuth {...copy}>{open(element)}</RequireAuth>;
   const MONEY = { title: 'Your money', body: 'Connect a broker to see holdings, P&L and your trade journal.' };

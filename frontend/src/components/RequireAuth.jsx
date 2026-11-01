@@ -3,18 +3,19 @@ import { useAuth } from '../context/AuthContext';
 import Layout from './Layout';
 import SignInCard from './SignInCard';
 
+/** While the session check runs: no page, so nothing renders signed-out first and then signed-in. */
+export const AuthLoading = () => (
+  <div className="min-h-screen flex items-center justify-center bg-[var(--surface)]">
+    <p className="field-label" role="status">
+      Retrieving note…
+    </p>
+  </div>
+);
+
 const RequireAuth = ({ children, title, body }) => {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--surface)]">
-        <p className="field-label" role="status">
-          Retrieving note…
-        </p>
-      </div>
-    );
-  }
+  if (loading) return <AuthLoading />;
 
   // Signed out: the card in place, URL untouched, so a broker's ?code= survives
   // sign-in and the page renders where the reader already is.

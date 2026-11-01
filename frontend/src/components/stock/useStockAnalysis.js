@@ -3,6 +3,9 @@ import api, { endpoints } from '../../utils/api';
 import { stream } from '../../lib/ws';
 import { rememberStock } from '../../utils/stocks';
 import { AI_EMPTY, aiReducer } from '../../utils/aiRead';
+import { useAuth } from '../../context/AuthContext';
+
+const NO_SOCKET = { ok: false, cancel: () => {} };
 
 /**
  * The instant snapshot (quote, fundamentals, technicals: no LLM call) and the AI read. On open only the stored
@@ -11,6 +14,7 @@ import { AI_EMPTY, aiReducer } from '../../utils/aiRead';
  * (pages that only need the snapshot).
  */
 const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
+  const { user } = useAuth(); // guests have no socket: a stream request would try a token refresh
   // Each state remembers its symbol: another stock's answer reads as the initial state, no reset effect needed.
   const QUICK0 = { data: null, loading: true, error: null };
   const [quickRaw, setQuick] = useState({ ...QUICK0, symbol });
@@ -28,11 +32,11 @@ const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
     let current = true;
     rememberStock(symbol);
 
-    const request = stream.request('quick_analyze', { symbol }, (message) => {
+    const request = user ? stream.request('quick_analyze', { symbol }, (message) => {
       if (!current) return;
       if (message.event === 'report') setQuick({ data: message.data, loading: false, error: null, symbol });
       else if (message.event === 'error') setQuick({ data: null, loading: false, error: message.data.detail, symbol });
-    });
+    }) : NO_SOCKET;
     if (!request.ok) {
       api
         .post(endpoints.quickAnalyze(symbol))
@@ -43,7 +47,7 @@ const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
       current = false;
       request.cancel();
     };
-  }, [symbol, retry]);
+  }, [symbol, retry, user]);
 
   useEffect(() => {
     if (!symbol || !wantAi) return undefined;
@@ -57,10 +61,10 @@ const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
         .finally(() => send('done'));
       return () => { current = false; };
     }
-    const request = stream.request('analyze', { symbol }, (m) => {
+    const request = user ? stream.request('analyze', { symbol }, (m) => {
       send(m.event, m.data);
       if (m.event === 'error') send('done');
-    });
+    }) : NO_SOCKET;
     if (!request.ok) {
       (async () => {
         let stale = true;
@@ -82,7 +86,7 @@ const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
       })();
     }
     return () => { current = false; request.cancel(); };
-  }, [symbol, aiTry, wantAi]);
+  }, [symbol, aiTry, wantAi, user]);
 
   return { quick, ai, aiRead, retryAi: () => setAiRun((r) => ({ symbol, n: (r.symbol === symbol ? r.n : 0) + 1 })), reloadQuick: () => { setQuick({ ...QUICK0, symbol }); setRetry((n) => n + 1); } };
 };
