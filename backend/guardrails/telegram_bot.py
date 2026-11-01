@@ -21,7 +21,7 @@ from aiogram.filters.callback_data import CallbackData
 
 from backend.auth.broker_credentials import get_credential_store
 from backend.chat import agent
-from backend.chat.actions import ActionRefused, ChatActionStore, confirm
+from backend.chat.actions import CARD_PREFIX, ActionRefused, ChatActionStore, action_tools, confirm
 from backend.risk.live_confirm import TokenRefused
 from backend.guardrails import telegram
 from backend.guardrails.store import GuardrailStore
@@ -80,7 +80,8 @@ class Tap(CallbackData, prefix="nt"):
     """Every NeoTrade button's callback data, "nt:<command>:<id>": confirm or
     cancel and an action id; confirm2 (the real-money second tap) and
     "<action id>.<confirm token>" from the first tap; ask and a
-    suggestion index; autopilot and "off" (autopilot/service.STOP_BUTTON)."""
+    suggestion index; autopilot and "off" (autopilot/service.STOP_BUTTON); sell
+    and "<SYMBOL>|<qty>" from an exit alert (opens a Confirm/Cancel card)."""
     command: str
     id: str
 
@@ -360,6 +361,24 @@ async def _render(chat_id: int, token: Optional[str], state: dict, stop: asyncio
             pass
 
 
+async def _sell(db, redis, user_id: str, chat_id: int, token: Optional[str], callback_id: str, spec: str) -> None:
+    """Exit-alert "Sell xN": propose a SELL on the user's own account. Only a card
+    is created; the usual Confirm tap places the order."""
+    symbol, _, qty = spec.rpartition("|")
+    if not symbol or not qty.isdigit() or int(qty) <= 0:
+        await telegram.answer_callback(callback_id, "That button is no longer valid.", token)
+        return
+    tools = {t.name: t for t in action_tools(db, redis, user_id, f"Sell {qty} {symbol}")}
+    out = await tools["propose_order"].coroutine(symbol=symbol, side="SELL", quantity=int(qty),
+                                                 product="CNC", account="mine")
+    if out.startswith(CARD_PREFIX):
+        card = json.loads(out[len(CARD_PREFIX):])
+        await telegram.answer_callback(callback_id, "", token)
+        await telegram.send_buttons(chat_id, card["summary"], _buttons(card), token)
+    else:
+        await telegram.answer_callback(callback_id, out[:180], token)
+
+
 async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str], callback: dict) -> None:
     try:
         tap = Tap.unpack(callback.get("data") or "")
@@ -379,6 +398,9 @@ async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str],
         if stopped and card.get("message_id"):
             await telegram.edit_html(chat_id, card["message_id"],
                                      f"{html.escape(card.get('text') or '', quote=False)}\n\n{text}", token)
+        return
+    if command == "sell":
+        await _sell(db, redis, user_id, chat_id, token, callback_id, action_id)
         return
     if command not in {"confirm", "confirm2", "cancel"} or not action_id:
         return

@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: dbbceb5
+verified_at: cb61d68
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -49,7 +49,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/guardrails/square_off.py | Position book to MIS exit orders (pure) | `guardrails/square_off.py::exit_orders`, `::describe` |
 | backend/guardrails/store.py | Breach dedupe; alert channel and encrypted user bot token | `guardrails/store.py::GuardrailStore.record`, `.events_for`, `.telegram_channel`, `.telegram_routes`, `.set_telegram_bot` |
 | backend/guardrails/telegram.py | Bot API client over aiogram 3.31 (one `Bot` per token per event loop; dicts in and out): send, HTML, drafts, `alert` | `telegram.py::alert`, `::_bot`, `::_call`, `::send`, `::send_html`, `::to_html`, `::find_chat`, `::updates` |
-| backend/guardrails/telegram_bot.py | Inbound long-poll bridge to the chat agent and action cards | `telegram_bot.py::poll_loop`, `::poll_once`, `::_poll_bot`, `::_reply`, `::_callback`, `::_ask`, `::Tap`, `SHORTCUTS` |
+| backend/guardrails/telegram_bot.py | Inbound long-poll bridge to the chat agent and action cards | `telegram_bot.py::poll_loop`, `::poll_once`, `::_poll_bot`, `::_reply`, `::_callback`, `::_sell`, `::_ask`, `::Tap`, `SHORTCUTS` |
 | backend/routers/mine.py | `/mine/*` | `mine.py::overview`, `::mine_history`, `::tax`, `::stock_detail`, `::get_thesis`, `::put_thesis`, `::mine_actions`, `::dismiss_action`, `::snooze_action`, `::_month_contributions`, `TAX_FIRST_FY` |
 | backend/routers/portfolio.py | `/portfolio*`; verdict masking | `portfolio.py::get_portfolio`, `::refresh`, `::rebalance`, `::rebalance_candidates`, `::present`, `::mask_row`, `::_results_dates`, `::_with_results`, `::verdicts_visible_to`, `::with_suggestions`, `::_candidate_symbols` |
 | backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::ai_vs_me`, `::get_learning`, `::get_beta_metrics` |
@@ -269,6 +269,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
   and never returned. Redis keys hash the token. Storing a token without `CREDENTIAL_ENCRYPTION_KEY` raises
   (`guardrails/store.py::set_telegram_bot`). Real-money cards need a second tap (`confirm2`) carrying the server's one-time token; a refused token
   re-arms the card with Confirm/Cancel and sends nothing.
+  The exit-alert `Sell xN` button (`nt:sell:<SYMBOL>|<qty>`, `_sell`) only calls `propose_order` (SELL, CNC, own account) and sends the usual Confirm/Cancel card; a refusal is shown as the callback toast.
 - **Tax rates live only in `mine/tax.py`** (STCG 20%, LTCG 12.5% above Rs 1.25 lakh). `/mine/tax` rejects
   `fy < 2025` (`routers/mine.py::TAX_FIRST_FY`). Long-term means held more than 12 calendar months
   (`tax.py::long_from`).
