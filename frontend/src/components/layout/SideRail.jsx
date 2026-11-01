@@ -10,7 +10,8 @@ import Logo from './Logo';
 /** Desktop navigation: the bottom tabs as a left rail. */
 const SideRail = ({ counts = {} }) => {
   const { user, logout } = useAuth();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   return (
     <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-56 flex-col border-r border-[var(--border)] bg-[var(--surface)] z-30">
       <Link to="/" className="px-5 h-14 flex items-center" aria-label="NeoTrade home"><Logo /></Link>
@@ -35,6 +36,11 @@ const SideRail = ({ counts = {} }) => {
           );
         })}
       </nav>
+      {!user ? (
+        <div className="border-t border-[var(--border)] px-4 py-3">
+          <Link to="/login" state={{ from: location }} className="tap flex items-center justify-center min-h-11 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold">Sign in</Link>
+        </div>
+      ) : (
       <div className="border-t border-[var(--border)] px-4 py-3 flex items-center gap-3">
         <Link to="/profile" className="flex-1 min-w-0 flex items-center gap-2.5" aria-label="Your profile">
           <Avatar src={user?.picture} name={user?.name} size={32} />
@@ -44,6 +50,7 @@ const SideRail = ({ counts = {} }) => {
           <LogOut className="w-4 h-4" />
         </button>
       </div>
+      )}
     </aside>
   );
 };

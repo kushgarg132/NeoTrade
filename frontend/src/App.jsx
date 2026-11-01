@@ -105,11 +105,10 @@ const App = () => {
   }, [pathname, navigationType]);
 
   useEffect(() => {
-    if (!user) return undefined;
     const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1500));
     const id = idle(() => TAB_PAGES.forEach((load) => load().catch(() => {})));
     return () => (window.cancelIdleCallback || clearTimeout)(id);
-  }, [user]);
+  }, []);
 
   // One socket for the whole session, opened once signed in and closed on the
   // way out so a logged-out tab never holds an authenticated connection.
@@ -126,32 +125,34 @@ const App = () => {
   // user can navigate away. This outer one is the fallback for a crash in a
   // page's own hooks/logic, before it ever reaches its `return <Layout>` --
   // Layout never mounts in that case, so the inner boundary can't help.
-  const gated = (element) => (
-    <RequireAuth>
-      <ErrorBoundary>
-        <Suspense fallback={null}>{element}</Suspense>
-      </ErrorBoundary>
-    </RequireAuth>
+  const open = (element) => (
+    <ErrorBoundary>
+      <Suspense fallback={null}>{element}</Suspense>
+    </ErrorBoundary>
   );
+  // Signed out, a gated page shows the sign-in card in place (copy: title/body).
+  const gated = (element, copy) => <RequireAuth {...copy}>{open(element)}</RequireAuth>;
+  const MONEY = { title: 'Your money', body: 'Connect a broker to see holdings, P&L and your trade journal.' };
+  const AI = { title: 'The AI account', body: 'See what the AI account trades on paper.' };
 
   return (
     <>
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/" element={gated(<Home />)} />
-      <Route path="/money" element={gated(<Money />)} />
+      <Route path="/" element={open(<Home />)} />
+      <Route path="/money" element={gated(<Money />, MONEY)} />
       <Route path="/ideas" element={gated(<RequireAdmin><Ideas /></RequireAdmin>)} />
       <Route path="/ideas/history" element={gated(<RequireAdmin><IdeasHistory /></RequireAdmin>)} />
       <Route path="/ideas/:id" element={gated(<RequireAdmin><IdeaDetail /></RequireAdmin>)} />
-      <Route path="/ai" element={gated(<Ai />)} />
-      <Route path="/market" element={gated(<Market />)} />
-      <Route path="/stock/:symbol" element={gated(<Stock />)} />
-      <Route path="/ai/strategy/:name" element={gated(<AiStrategy />)} />
-      <Route path="/ai/trade/:id" element={gated(<AiTrade />)} />
-      <Route path="/money/trade/:id" element={gated(<RoundTrip />)} />
-      <Route path="/market/index/:ticker" element={gated(<IndexPage />)} />
-      <Route path="/market/sector/:name" element={gated(<SectorPage />)} />
-      <Route path="/news/:id" element={gated(<NewsItem />)} />
+      <Route path="/ai" element={gated(<Ai />, AI)} />
+      <Route path="/market" element={open(<Market />)} />
+      <Route path="/stock/:symbol" element={open(<Stock />)} />
+      <Route path="/ai/strategy/:name" element={gated(<AiStrategy />, AI)} />
+      <Route path="/ai/trade/:id" element={gated(<AiTrade />, AI)} />
+      <Route path="/money/trade/:id" element={gated(<RoundTrip />, MONEY)} />
+      <Route path="/market/index/:ticker" element={open(<IndexPage />)} />
+      <Route path="/market/sector/:name" element={open(<SectorPage />)} />
+      <Route path="/news/:id" element={open(<NewsItem />)} />
       <Route path="/reports/weekly" element={gated(<WeeklyReport />)} />
       <Route path="/settings" element={gated(<SettingsHome />)} />
       <Route path="/settings/brokers" element={gated(<SettingsPage title="Brokers"><SAccounts /></SettingsPage>)} />
@@ -171,10 +172,10 @@ const App = () => {
       <Route path="/mine/stock/:symbol" element={<StockMoved />} />
       <Route path="/research/stock/:symbol" element={<StockMoved />} />
       {MOVED.map(([from, to]) => <Route key={from} path={from} element={<Moved from={from} to={to} />} />)}
-      <Route path="*" element={gated(<NotFound />)} />
+      <Route path="*" element={open(<NotFound />)} />
     </Routes>
-    {/* One assistant for the whole signed-in session, so its conversation survives navigation. */}
-    {user && <ChatWidget />}
+    {/* One assistant for the whole session, so its conversation survives navigation; guests get the sign-in card in it. */}
+    <ChatWidget />
     </>
   );
 };

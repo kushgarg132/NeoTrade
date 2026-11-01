@@ -1,10 +1,10 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Layout from './Layout';
+import SignInCard from './SignInCard';
 
-const RequireAuth = ({ children }) => {
+const RequireAuth = ({ children, title, body }) => {
   const { user, loading } = useAuth();
-  const location = useLocation();
 
   if (loading) {
     return (
@@ -16,9 +16,15 @@ const RequireAuth = ({ children }) => {
     );
   }
 
-  // Carry the full location through sign-in: a broker redirect lands on
-  // /settings?code=... and the code must survive the detour to /login.
-  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
+  // Signed out: the card in place, URL untouched, so a broker's ?code= survives
+  // sign-in and the page renders where the reader already is.
+  if (!user) {
+    return (
+      <Layout>
+        <SignInCard title={title ?? 'Sign in to use this'} body={body ?? 'Your accounts, money and AI live behind sign-in.'} />
+      </Layout>
+    );
+  }
 
   return children;
 };

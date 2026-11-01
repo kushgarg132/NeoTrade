@@ -10,6 +10,7 @@ import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import { useNeedCount } from '../hooks/useNeedCount';
 import { PendingContext } from '../context/pendingContext';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * The shell every page prints inside. The pending count lives here rather than
@@ -17,6 +18,7 @@ import { PendingContext } from '../context/pendingContext';
  * visible from wherever you are.
  */
 const Layout = ({ children }) => {
+  const { user } = useAuth();
   const pending = useNeedCount().count; // the one "needs you" number, shared with Home
 
   // Each section's colour (index.css `[data-section]`), on <html> so the theme class and it meet.
@@ -29,14 +31,17 @@ const Layout = ({ children }) => {
 
   // The nav badge: what needs the user outside practice (GET /today/attention).
   const [attention, setAttention] = useState(0);
-  const loadAttention = () =>
-    api.get(endpoints.todayAttention).then((res) => setAttention(res.data.count)).catch(() => setAttention(0));
+  // Guests have no account (and no socket): no badge, no personal topics.
+  const loadAttention = () => {
+    if (!user) return undefined;
+    return api.get(endpoints.todayAttention).then((res) => setAttention(res.data.count)).catch(() => setAttention(0));
+  };
   useEffect(() => {
     loadAttention();
-  }, []);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
   useReconnect(loadAttention);
 
-  useTopic('suggestions', () => {
+  useTopic(user ? 'suggestions' : null, () => {
     loadAttention(); // an interrupted approval lands as NEEDS_REVIEW
   });
 
@@ -44,14 +49,14 @@ const Layout = ({ children }) => {
   // a toast for a while, wherever they are, just under the header. The News page keeps the full list.
   const [alerts, setAlerts] = useState([]);
   const dismiss = (id) => setAlerts((list) => list.filter((a) => a.id !== id));
-  useTopic('news', (message) => {
+  useTopic(user ? 'news' : null, (message) => {
     const alert = message.data;
     if (!alert?.id) return;
     setAlerts((list) => [alert, ...list.filter((a) => a.id !== alert.id)].slice(0, 3));
     setTimeout(() => dismiss(alert.id), 15_000);
   });
 
-  const counts = { attention, pending };
+  const counts = { attention: user ? attention : 0, pending };
 
   return (
     <PendingContext.Provider value={pending}>

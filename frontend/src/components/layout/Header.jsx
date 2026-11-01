@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Sun, Moon, MessageSquare, Eye, EyeOff, Search, User } from 'lucide-react';
 import SmartSearch from '../dashboard/SmartSearch';
 import { stockPath } from '../../utils/stocks';
@@ -8,6 +8,7 @@ import { useStreamStatus } from '../../hooks/useStream';
 import { useTheme } from '../../context/useTheme';
 import { marketPhase } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import { useAuth } from '../../context/AuthContext';
 import Logo from './Logo';
 
 const PHASE = { open: 'Market open', pre: 'Pre-open', closed: 'Market closed' };
@@ -32,6 +33,8 @@ const MarketDot = () => {
 /** Every screen: logo, stock search, market dot, privacy, theme, profile/settings. */
 const Header = () => {
   const { theme, toggle } = useTheme();
+  const { user } = useAuth();
+  const location = useLocation(); // Sign in comes back here
   const hidden = usePrivacy();
   const navigate = useNavigate();
   const [searching, setSearching] = useState(false);
@@ -59,9 +62,13 @@ const Header = () => {
           <button type="button" onClick={toggle} className={cn(BTN, 'hidden sm:inline-flex')} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
-          <Link to="/settings" className={BTN} aria-label="Profile and settings">
-            <User className="w-5 h-5" />
-          </Link>
+          {user ? (
+            <Link to="/settings" className={BTN} aria-label="Profile and settings">
+              <User className="w-5 h-5" />
+            </Link>
+          ) : (
+            <Link to="/login" state={{ from: location }} className={cn(BTN, 'px-3 text-[14px] font-semibold text-[var(--accent)]')}>Sign in</Link>
+          )}
         </div>
       </div>
       {searching && (
