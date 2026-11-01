@@ -72,7 +72,7 @@ test('every unfinished setup step can be skipped, saved to the account, and undo
 });
 
 test('Home order: status and alerts, hero with the goal, setup, needs you, today card, AI and indices, weekly', () => {
-  const at = ['phaseLabel(today.phase)', 'alerts(today)', '<HeroRow', '<GoalTile compact', '<SetupChecklist', '<NeedsYou', '<TodayCard', 'AI account', 'r.percent', '<WeeklyLink'].map((s) => page.indexOf(s));
+  const at = ['phaseLabel(today.phase)', 'alerts(today)', '<HeroRow', '<GoalTile compact', '<SetupChecklist', '<NeedsYou', '<TodayCard', 'AI account', '<IndexStrip rows={rows}', '<WeeklyLink'].map((s) => page.indexOf(s));
   assert.ok(at.every((i) => i >= 0), at.join());
   assert.deepEqual([...at].sort((a, b) => a - b), at);
   assert.doesNotMatch(page, /NewsMoves|BriefCard/);

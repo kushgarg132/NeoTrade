@@ -13,6 +13,7 @@ import { formatTimeAgo } from '../../utils/formatters';
 import { materialToday } from '../../utils/market';
 import { Impact } from '../common/NewsImpacts';
 import { mergeFront } from '../../utils/news';
+import { useAuth } from '../../context/AuthContext';
 
 /**
  * News: everything the ingest worker stored and scored, newest first, with what each
@@ -55,8 +56,9 @@ const Group = ({ label, items }) => items.length > 0 && (
 );
 
 const News = () => {
+  const { user } = useAuth();
   const [scope, setScope] = useState('');
-  const [mine, setMine] = useState(true);
+  const [mine, setMine] = useState(!!user); // "My names" needs holdings and a watchlist: an account
   const [items, setItems] = useState(null);
   const [error, setError] = useState(false);
   const [more, setMore] = useState(false);
@@ -82,15 +84,15 @@ const News = () => {
   const pickMine = (v) => { setItems(null); setMine(v); };
   const { pinned, rest } = materialToday(items || [], new Date());
   useReconnect(() => load(undefined, true));
-  useTopic('news', () => load(undefined, true));
+  useTopic(user ? 'news' : null, () => load(undefined, true)); // guests have no socket
 
   return (
-    <Card title="News" action={
+    <Card title="News" action={user && (
       <label className="inline-flex items-center gap-2 min-h-11 text-[14px] text-[var(--text)] cursor-pointer">
         <input type="checkbox" checked={mine} onChange={(e) => pickMine(e.target.checked)} className="w-4 h-4 accent-[var(--accent)]" />
         My names
       </label>
-    }>
+    )}>
       <div role="group" aria-label="News scope" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-3 pt-1">
         {SCOPES.map((s) => (
           <button key={s.id} type="button" aria-pressed={scope === s.id} onClick={() => pickScope(s.id)}

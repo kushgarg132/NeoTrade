@@ -30,6 +30,8 @@ import { bareSymbol, formatQuantity, marketPhase } from '../utils/formatters';
 import { stockTab } from '../utils/stocks';
 import { positionSummary, toBars } from '../utils/stock';
 import { px } from '../components/ideas/levels';
+import SignInCard from '../components/SignInCard';
+import { useAuth } from '../context/AuthContext';
 
 const TABS = [
   { id: 'chart', label: 'Chart' },
@@ -37,6 +39,10 @@ const TABS = [
   { id: 'details', label: 'Details' },
   { id: 'events', label: 'Events' },
 ];
+
+// Signed out: what a tap on a personal action shows in place of doing it.
+const WATCH_OR_TRADE = { title: 'Sign in to watch or trade', body: 'Sign in to keep a watchlist and place orders through your broker.' };
+const FRESH_READ = { title: 'Sign in for a fresh AI read', body: 'The stored read is free to everyone; a new one runs for signed-in accounts.' };
 
 const cause = (e) => (e && e !== 'Could not load' ? `: ${e}` : '');
 
@@ -52,34 +58,43 @@ const Stock = () => {
   const symbol = bareSymbol(useParams().symbol)?.toUpperCase();
   const [tab, setTab] = useTabParam(TABS.map((t) => t.id), 'chart', 'tab', (t) => (t === 'analysis' ? stockTab(t) : t));
   const [params] = useSearchParams();
+  const { user } = useAuth();
   const { quick, ai, aiRead, retryAi, reloadQuick } = useStockAnalysis(symbol);
+  const [ask, setAsk] = useState(null); // guest: the sign-in copy for the action just tapped
+  const askSignIn = (copy) => {
+    setAsk(copy);
+    requestAnimationFrame(() => document.getElementById('sign-in')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  };
   // Old ?tab=analysis links land on Details.
   const legacy = params.get('tab') === 'analysis';
   useEffect(() => { if (legacy) setTab(stockTab('analysis')); }, [legacy, setTab]);
 
   // Your side of the stock: 404 means you have never held it, which is not an error.
   const [mineRaw, setMine] = useState({ data: null, status: 'loading', symbol }); // loading | ok | missing | error
-  const mine = mineRaw.symbol === symbol ? mineRaw : { data: null, status: 'loading' }; // another stock's answer is not ours
+  // Signed out there is no position to load: read as never held.
+  const mine = !user ? { data: null, status: 'missing' } : mineRaw.symbol === symbol ? mineRaw : { data: null, status: 'loading' }; // another stock's answer is not ours
   const [portfolio, setPortfolio] = useState(null);
   const [ticket, setTicket] = useState(null);
   const loadMine = useCallback(() => {
+    if (!user) return;
     api
       .get(endpoints.mine.stock(symbol))
       .then((res) => setMine({ data: res.data, status: 'ok', symbol }))
       .catch((err) => setMine({ data: null, status: err?.response?.status === 404 ? 'missing' : 'error', symbol }));
-  }, [symbol]);
+  }, [symbol, user]);
   useEffect(loadMine, [loadMine]);
 
   // Watch / Watching: GET /watchlist once, then add or remove (the Watchlist page had no way to add).
   const [watchRaw, setWatch] = useState(null); // { symbol, on } | null while unknown
-  const watching = watchRaw?.symbol === symbol ? watchRaw.on : null;
+  const watching = !user ? false : watchRaw?.symbol === symbol ? watchRaw.on : null;
   useEffect(() => {
-    if (!symbol) return;
+    if (!symbol || !user) return;
     api.get(endpoints.watchlist.list)
       .then((r) => setWatch({ symbol, on: (r.data.symbols || []).some((s) => bareSymbol(s).toUpperCase() === symbol) }))
       .catch(() => {});
-  }, [symbol]);
+  }, [symbol, user]);
   const toggleWatch = () => {
+    if (!user) { askSignIn(WATCH_OR_TRADE); return; }
     const on = !watching;
     setWatch({ symbol, on });
     (on ? api.post(endpoints.watchlist.add(symbol)) : api.delete(endpoints.watchlist.remove(symbol)))
@@ -101,8 +116,9 @@ const Stock = () => {
     return () => { current = false; clearInterval(timer); };
   }, [symbol]);
   useEffect(() => {
+    if (!user) return;
     api.get(endpoints.mine.overview).then((res) => setPortfolio(res.data?.headline?.value ?? null)).catch(() => setPortfolio(null));
-  }, []);
+  }, [user]);
 
   const m = mine.data;
   const company = quick.data?.company_info;
@@ -223,7 +239,8 @@ const Stock = () => {
         </Card>
       )}
 
-      <AiRead aiRead={aiRead} retryAi={retryAi} />
+      {ask && <div id="sign-in" className="mb-3"><SignInCard {...ask} /></div>}
+      <AiRead aiRead={aiRead} retryAi={user ? retryAi : () => askSignIn(FRESH_READ)} />
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} label="Stock sections" />
       <div className="mt-3">
@@ -233,8 +250,8 @@ const Stock = () => {
       <div className="h-28 lg:h-20" aria-hidden="true" />
       <div className="fixed z-30 inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-0 lg:left-56 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-2">
         <div className="mx-auto max-w-5xl flex gap-3">
-          {pos && <Button variant="secondary" className="flex-1" onClick={() => setTicket({ symbol, side: 'SELL', lastPrice: price })}>Sell</Button>}
-          <Button className="flex-1" disabled={price == null} onClick={() => setTicket({ symbol, side: 'BUY', lastPrice: price })}>{pos ? 'Buy more' : 'Buy'}</Button>
+          {pos && <Button variant="secondary" className="flex-1" onClick={() => (user ? setTicket({ symbol, side: 'SELL', lastPrice: price }) : askSignIn(WATCH_OR_TRADE))}>Sell</Button>}
+          <Button className="flex-1" disabled={price == null} onClick={() => (user ? setTicket({ symbol, side: 'BUY', lastPrice: price }) : askSignIn(WATCH_OR_TRADE))}>{pos ? 'Buy more' : 'Buy'}</Button>
         </div>
         {price == null && <p className="mx-auto max-w-5xl mt-1 text-[13px] text-[var(--text-muted)]">Buy is off until a price loads for {symbol}.</p>}
       </div>

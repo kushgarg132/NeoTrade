@@ -21,6 +21,7 @@ import { breadthWord, isClosed } from '../../utils/market';
 import { formatDateTime } from '../../utils/formatters';
 import { stockPath } from '../../utils/stocks';
 import { indexPath } from '../../utils/routes';
+import { useAuth } from '../../context/AuthContext';
 
 const REGIME = {
   risk_off: { label: 'Risk off', kind: 'alert' },
@@ -207,6 +208,7 @@ const Events = () => {
 };
 
 const Today = () => {
+  const { user } = useAuth(); // events come from the signed-in /today backdrop
   const [{ data, error }, retry] = useSection(loadIndices);
   const nifty = (data || []).find((i) => i.symbol === '^NSEI'); // no row (feed gap): no Hero
   return (
@@ -216,7 +218,7 @@ const Today = () => {
       <Story />
       <Indices data={data} error={error} retry={retry} />
       <Scan />
-      <Events />
+      {user && <Events />}
     </div>
   );
 };

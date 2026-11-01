@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { indexPath } from '../utils/routes';
+import { indexPath, newsPath } from '../utils/routes';
 import { Bot, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
@@ -16,13 +16,18 @@ import NeedsYou from '../components/home/NeedsYou';
 import { pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import SetupChecklist from '../components/home/SetupChecklist';
+import SignInCard from '../components/SignInCard';
+import ListRow from '../components/ui/ListRow';
+import { AiMarkdown } from '../components/ai/AiSummary';
+import useStored from '../hooks/useStored';
+import { sourceName } from '../utils/newsItem';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useRefetchOn } from '../hooks/useStream';
 import { useAuth } from '../context/AuthContext';
 import { useNeedCount } from '../hooks/useNeedCount';
 import { aiBook } from '../utils/ai';
 import { tileHeadlines, phaseLabel, briefKind, alerts, todayTitle, nextOpenLabel } from '../utils/home';
-import { REFRESH_FAILED } from '../utils/formatters';
+import { REFRESH_FAILED, formatTimeAgo } from '../utils/formatters';
 
 /** An expired-login alert goes straight to that broker's login, in this tab: iOS blocks a pop-up opened
  * after an await, and the broker's redirect lands on Settings -> Accounts, which finishes the connect.
@@ -34,9 +39,55 @@ const openBrokerLogin = (e, a) => {
     .catch(() => window.location.assign(a.to));
 };
 
+/** The indices as a row of chips, each opening its page. */
+const IndexStrip = ({ rows }) => rows.length > 0 && (
+  <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+    {rows.map((r) => (
+      <Link key={r.name} to={r.symbol ? indexPath(r.symbol) : '/market'} aria-label={`${r.name}: open its page`}
+            className="tap shrink-0 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+        <span className="block text-[12px] text-[var(--text-muted)] whitespace-nowrap">{r.name}</span>
+        <span className={`block text-[15px] font-semibold tabular-nums ${toneText(tone(r.percent))}`}>{pct(r.percent / 100, { sign: true })}</span>
+      </Link>
+    ))}
+  </div>
+);
+
+/** Signed out: public market reads only (indices, the brief, five headlines) and one sign-in card. No socket. */
+const GuestHome = () => {
+  const brief = useStored(endpoints.marketBrief);
+  const [indices, setIndices] = useState(null);
+  const [news, setNews] = useState(null);
+  useEffect(() => {
+    api.get(endpoints.marketIndices).then((r) => setIndices(r.data)).catch(() => setIndices([]));
+    api.get(endpoints.newsFeed, { params: { limit: 5 } }).then((r) => setNews(r.data.items || [])).catch(() => setNews([]));
+  }, []);
+  return (
+    <Layout>
+      <PageHeader title="Today" />
+      <div className="space-y-5">
+        {indices ? <IndexStrip rows={Array.isArray(indices) ? indices : []} /> : <Skeleton rows={1} />}
+        <Card title="Market today">
+          {brief.status === 'loading' ? <Skeleton rows={3} />
+            : brief.status === 'ok' ? <AiMarkdown text={brief.data.text} collapse={false} />
+            : <p className="text-[14px] text-[var(--text-muted)]">No market brief yet.</p>}
+        </Card>
+        <Card title="News" action={<Link to="/market?tab=news" className="text-[14px] font-semibold text-[var(--accent)]">All news</Link>}>
+          {!news ? <Skeleton rows={5} />
+            : !news.length ? <p className="text-[14px] text-[var(--text-muted)]">No news yet.</p>
+            : news.map((n) => (
+              <ListRow privateValue={false} key={n.id} dense title={n.title} to={newsPath(n.id)}
+                sub={[sourceName(n.source), formatTimeAgo(n.published_at)].filter(Boolean).join(' · ')} />
+            ))}
+        </Card>
+        <SignInCard title="Track your money" body="Sign in to connect Zerodha, Upstox or Angel One and see your holdings and P&L." />
+      </div>
+    </Layout>
+  );
+};
+
 // Home: a hub. One call each for today, the account overview and the indices.
 // A failing call keeps its tile's last figure and marks it "Couldn't refresh".
-const Home = () => {
+const MemberHome = () => {
   const [today, setToday] = useState(null);
   const [overview, setOverview] = useState(null);
   const [indices, setIndices] = useState(null);
@@ -123,17 +174,7 @@ const Home = () => {
             </div>
             <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
           </Link>
-          {rows.length > 0 && (
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-              {rows.map((r) => (
-                <Link key={r.name} to={r.symbol ? indexPath(r.symbol) : '/market'} aria-label={`${r.name}: open its page`}
-                      className="tap shrink-0 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-                  <span className="block text-[12px] text-[var(--text-muted)] whitespace-nowrap">{r.name}</span>
-                  <span className={`block text-[15px] font-semibold tabular-nums ${toneText(tone(r.percent))}`}>{pct(r.percent / 100, { sign: true })}</span>
-                </Link>
-              ))}
-            </div>
-          )}
+          <IndexStrip rows={rows} />
         </section>
         <WeeklyLink />
       </div>
@@ -147,5 +188,7 @@ const Home = () => {
     </Layout>
   );
 };
+
+const Home = () => (useAuth().user ? <MemberHome /> : <GuestHome />);
 
 export default Home;
