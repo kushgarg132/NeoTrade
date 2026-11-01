@@ -130,3 +130,36 @@ async def test_drain_with_microsecond_now(db):
     block, ids = await alerts.drain(db, "boss", datetime(2026, 11, 1, 9, 0, 0, 123456, tzinfo=timezone.utc))
     assert "• x" in block and len(ids) == 1
     assert await alerts.drain(db, "boss", NOW) == ("", [])
+
+
+async def _ideas(db, expiring):
+    from datetime import timedelta
+    for i in range(3):
+        await db["suggestions"].insert_one({"user_id": "boss", "status": "PENDING", "mode": "LONGTERM",
+                                            "expires_at": NOW + timedelta(hours=1 if i < expiring else 99)})
+
+
+async def test_drain_stale_ideas_line(db):
+    from datetime import timedelta
+    await _ideas(db, 1)
+    block, ids = await alerts.drain(db, "boss", NOW, NOW + timedelta(hours=5), "the open")
+    assert "<b>Expiring ideas</b>" in block and "3 pending, 1 expire before the open" in block and ids == []
+
+
+async def test_drain_stale_ideas_admin_only(db):
+    from datetime import timedelta
+    await _ideas(db, 1)
+    await db["suggestions"].update_many({}, {"$set": {"user_id": "bob"}})
+    assert await alerts.drain(db, "bob", NOW, NOW + timedelta(hours=5)) == ("", [])
+
+
+async def test_drain_stale_ideas_only_counts_what_the_user_sees(db, monkeypatch):
+    from datetime import timedelta
+    from backend.risk import paper_gate
+
+    async def none(db_, user_id, rows):
+        return []
+
+    monkeypatch.setattr(paper_gate, "for_mine", none)
+    await _ideas(db, 1)
+    assert await alerts.drain(db, "boss", NOW, NOW + timedelta(hours=5)) == ("", [])

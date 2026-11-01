@@ -78,23 +78,43 @@ async def alert(db, user_id, kind, title, lines=(), *, symbol=None, link=None, b
     return ok
 
 
-async def drain(db, user_id, now: datetime) -> tuple[str, list]:
-    """Claim this user's queued, unmuted alerts and render them as one digest block."""
+async def _stale_line(db, user_id, until, before) -> str:
+    """"N pending, M expire before close": the long-term ideas waiting on the user. Admins only."""
+    from backend.risk.paper_gate import for_mine
+
+    rows = await db["suggestions"].find({"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(None)
+    rows = await for_mine(db, user_id, rows)  # the same ideas the user sees
+    if not rows:
+        return ""
+    n = len(rows)
+    if until is None:
+        return f"{n} pending"
+    m = sum(1 for r in rows if r.get("expires_at") and r["expires_at"].replace(tzinfo=r["expires_at"].tzinfo or timezone.utc) < until)
+    return f"{n} pending, {m} expire before {before}"
+
+
+async def drain(db, user_id, now: datetime, until: datetime | None = None, before: str = "close") -> tuple[str, list]:
+    """Claim this user's queued, unmuted alerts and render them as one digest block, plus the
+    "Expiring ideas" line (admins, unless muted). `until`: the next digest's time, `before`: how to say it."""
     muted = (await PrefsStore(db).get(user_id))["alert_mute"]
+    stale = "" if muted.get("stale_ideas") or not await is_admin(db, user_id) else await _stale_line(db, user_id, until, before)
     rows = await db["alerts"].find({"user_id": user_id, "state": "queued"}).sort("created_at", 1).to_list(None)
     ids = [r["_id"] for r in rows if not muted.get(r["kind"])]
-    if not ids:
-        return "", []
-    claim = uuid.uuid4().hex
-    await db["alerts"].update_many({"_id": {"$in": ids}, "state": "queued"},
-                                   {"$set": {"state": "digested", "digested_at": now, "claim": claim}})
-    # another drain may have won some rows: keep only the ones this call claimed
-    claimed = await db["alerts"].find({"claim": claim}).to_list(None)
-    if not claimed:
+    claimed = []
+    if ids:
+        claim = uuid.uuid4().hex
+        await db["alerts"].update_many({"_id": {"$in": ids}, "state": "queued"},
+                                       {"$set": {"state": "digested", "digested_at": now, "claim": claim}})
+        # another drain may have won some rows: keep only the ones this call claimed
+        claimed = await db["alerts"].find({"claim": claim}).to_list(None)
+    if not claimed and not stale:
         return "", []
     out = ["<b>Since last update</b>"]
     for kind in ORDER:
         items = [r for r in claimed if r["kind"] == kind]
+        if kind == "stale_ideas" and stale:
+            out += [f"<b>{LABELS[kind]}</b>", f"• {stale}"]
+            continue
         if not items:
             continue
         out.append(f"<b>{LABELS[kind]}</b>")
