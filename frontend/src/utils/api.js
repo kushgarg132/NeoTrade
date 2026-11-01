@@ -74,13 +74,12 @@ export const refreshAccessToken = async () => {
   return refreshPromise;
 };
 
+export const LOGOUT_EVENT = 'neotrade:logout';
+
+// Session is dead: drop the token and tell AuthProvider, which falls back to the guest view (no redirect).
 const hardLogout = () => {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
-  if (window.location.pathname !== '/login') {
-    // Back to this page after signing in again (Login reads ?next=).
-    const here = `${window.location.pathname}${window.location.search}`;
-    window.location.assign(`/login?next=${encodeURIComponent(here)}`);
-  }
+  window.dispatchEvent(new Event(LOGOUT_EVENT));
 };
 
 api.interceptors.response.use(
