@@ -266,13 +266,11 @@ def _key(failure: str) -> str:
 
 
 async def _send_admins(db, text: str) -> None:
-    from backend.guardrails import telegram
-    from backend.guardrails.store import GuardrailStore
+    from backend import alerts
 
+    title, lines = alerts.split(text.removeprefix("⚠️ ").removeprefix("✅ "))  # the card brings its own icon
     async for admin in db["users"].find({"role": "admin"}, {"id": 1}):
-        channel = await GuardrailStore(db).telegram_channel(admin["id"])
-        if channel:
-            await telegram.send(channel[1], text, channel[0])
+        await alerts.alert(db, admin["id"], "action", title, lines)
 
 
 async def watch_tick(db, redis, now: Optional[datetime] = None, send=_send_admins) -> None:

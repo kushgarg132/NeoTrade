@@ -1,6 +1,7 @@
 """Guardrails: the user's own limits checked against their real broker
 activity, alerted once per breach, and a daily-loss breach halting the engine."""
 
+import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
@@ -88,9 +89,7 @@ async def test_check_user_alerts_once_and_trips_the_kill_switch(monkeypatch):
     publish = AsyncMock()
     monkeypatch.setattr(monitor.hub, "publish", publish)
     send = AsyncMock(return_value=True)
-    monkeypatch.setattr(monitor.telegram, "send", send)
-    monkeypatch.setattr(monitor.telegram, "configured", lambda: True)  # the server bot
-    await GuardrailStore(db).set_telegram_chat("alice", 42)
+    monkeypatch.setattr("backend.alerts.alert", send)
 
     prefs = {**PREFS, "user_id": "alice", "max_trades_per_day": 0}
     now = _ist(10, 31)
@@ -100,7 +99,7 @@ async def test_check_user_alerts_once_and_trips_the_kill_switch(monkeypatch):
     assert await KillSwitchStore(db).is_tripped("alice", now.astimezone(monitor.IST).date())
     publish.assert_awaited_once()
     send.assert_awaited_once()
-    assert send.await_args.args[0] == 42
+    assert send.await_args.args[1:3] == ("alice", "money")
 
     assert await monitor.check_user(db, None, None, prefs, now) == []  # no repeat alert
     events = await GuardrailStore(db).events_for("alice", now.astimezone(monitor.IST).date())
@@ -135,6 +134,20 @@ async def test_a_failed_kill_switch_trip_is_retried_next_tick(monkeypatch):
     assert _rules(await monitor.check_user(db, None, None, prefs, now)) == ["daily_loss"]
     assert await KillSwitchStore(db).is_tripped("alice", day)
     publish.assert_awaited_once()
+
+
+@pytest.mark.parametrize("mode", ["preview", "live"])
+async def test_a_failing_alert_does_not_stop_the_square_off(monkeypatch, mode):
+    db = AsyncMongoMockClient()["test_db"]
+    monkeypatch.setattr(monitor, "sync_user_trades", AsyncMock(return_value={
+        "imported": 0, "brokers": ["kite"], "failed": [], "day_pnl": -11_000.0}))
+    monkeypatch.setattr(monitor.hub, "publish", AsyncMock())
+    monkeypatch.setattr("backend.alerts.alert", AsyncMock(side_effect=RuntimeError("mongo down")))
+    square = AsyncMock(return_value=[{"title": "kite: square-off", "detail": "x"}])
+    monkeypatch.setattr(monitor, "square_off", square)
+    prefs = {**PREFS, "user_id": "alice", "auto_square_off": mode}
+    assert _rules(await monitor.check_user(db, None, None, prefs, _ist(10, 31))) == ["daily_loss"]
+    square.assert_awaited_once()
 
 
 async def test_check_user_does_nothing_without_a_connected_broker(monkeypatch):

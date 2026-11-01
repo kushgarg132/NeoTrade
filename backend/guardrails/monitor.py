@@ -27,12 +27,12 @@ import logging
 from datetime import datetime, time, timezone
 
 from backend.core.market_calendar import is_trading_day
+from backend import alerts
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
 from backend.brokers.protocol import BrokerSessionState
 from backend.brokers.roles import brokers_for
 from backend.brokers.registry import BROKERS, get_broker_adapter
 from backend.engine.session import IST
-from backend.guardrails import telegram
 from backend.guardrails.rules import evaluate, results_days
 from backend.guardrails.square_off import describe, exit_orders
 from backend.guardrails.store import GuardrailStore
@@ -73,7 +73,6 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
     trips = [t for t in build_round_trips(trades) if t["opened_at"] >= start_of_day]
 
     store = GuardrailStore(db)
-    channel = await store.telegram_channel(user_id)
     fresh = []
     # Lot sizes for today's options trades, from the broker's NFO dump.
     master = InstrumentMaster(db)
@@ -100,20 +99,22 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
         if not await store.record(user_id, day, breach):
             continue
         fresh.append(breach)
-        await _alert(user_id, channel, breach)
+        await _alert(db, user_id, breach)
         if breach["rule"] == "daily_loss" and prefs.get("auto_square_off", "off") in ("preview", "live"):
             for i, alert in enumerate(await square_off(redis, credentials, prefs)):
                 event = {"key": f"square_off:{i}", "rule": "square_off", **alert}
                 await store.record(user_id, day, event)
-                await _alert(user_id, channel, event)
+                await _alert(db, user_id, event)
     return fresh
 
 
-async def _alert(user_id: str, channel, event: dict) -> None:
+async def _alert(db, user_id: str, event: dict) -> None:
     await hub.publish(user_id, "guardrails", "breach", event)
-    if channel:
-        token, chat_id = channel
-        await telegram.send(chat_id, f"NeoTrade: {event['title']}\n{event['detail']}", token)
+    button = alerts.open_button("/settings/guardrails")
+    try:  # an alert must never stop the kill-switch / square-off path that calls this
+        await alerts.alert(db, user_id, "money", event["title"], [event["detail"]], buttons=[button] if button else None)
+    except Exception as exc:
+        logger.warning("guardrail alert failed for %s: %s", user_id, exc)
 
 
 async def square_off(redis, credentials, prefs: dict) -> list[dict]:
@@ -123,7 +124,7 @@ async def square_off(redis, credentials, prefs: dict) -> list[dict]:
     live = prefs.get("auto_square_off") == "live"
     user_id = prefs["user_id"]
     ai = brokers_for(prefs.get("broker_roles"), "ai")
-    alerts = []
+    out = []
     for broker in BROKERS:
         if broker in ai:
             continue
@@ -134,7 +135,7 @@ async def square_off(redis, credentials, prefs: dict) -> list[dict]:
             orders, left = exit_orders(await adapter.get_positions())
         except Exception as exc:
             logger.warning("square-off: %s positions failed for %s: %s", broker, user_id, exc)
-            alerts.append({"title": f"{broker}: could not read positions to square off",
+            out.append({"title": f"{broker}: could not read positions to square off",
                            "detail": "Close your intraday positions yourself."})
             continue
         if not orders and not left:
@@ -158,9 +159,9 @@ async def square_off(redis, credentials, prefs: dict) -> list[dict]:
                 lines.append(f"Failed, close these yourself: {describe(failed)}.")
         if left:
             lines.append(f"Not touched: {', '.join(left)}.")
-        alerts.append({"title": f"{broker}: square-off {'sent' if live else 'preview'}",
+        out.append({"title": f"{broker}: square-off {'sent' if live else 'preview'}",
                        "detail": " ".join(lines)})
-    return alerts
+    return out
 
 
 async def run_tick(db, redis, now: datetime | None = None) -> int | None:

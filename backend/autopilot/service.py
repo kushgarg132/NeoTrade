@@ -79,16 +79,11 @@ def _aware(value: Optional[datetime]) -> Optional[datetime]:
 
 
 async def _notify(db, user_id: str, text: str, stop_button: bool = True) -> bool:
-    from backend.guardrails import telegram
-    from backend.guardrails.store import GuardrailStore
+    from backend import alerts
 
-    channel = await GuardrailStore(db).telegram_channel(user_id)
-    if channel is None:
-        return False
-    token, chat_id = channel
-    if stop_button:
-        return await telegram.send_buttons(chat_id, text, STOP_BUTTON, token)
-    return await telegram.send(chat_id, text, token)
+    # Fills go out at once with the stop button; refusals wait for the digest.
+    kind, buttons = ("money", STOP_BUTTON) if stop_button else ("autopilot_refused", None)
+    return await alerts.alert(db, user_id, kind, *alerts.split(text), buttons=buttons)
 
 
 async def regime_now(redis) -> dict:
@@ -172,12 +167,12 @@ async def _record(db, user_id: str, order: AutopilotOrder, status: str, now: dat
     await hub.publish(user_id, "autopilot", "logged", row)
     verb = "bought" if order.side == Side.BUY else "sold"
     if status == "FILLED":
-        text = (f"🤖 AI {verb} {order.quantity} {order.symbol} on the AI account"
+        text = (f"AI {verb} {order.quantity} {order.symbol} on the AI account"
                 f"{' (paper)' if extra.get('mode') == 'paper' else ''} at ₹{extra.get('price', 0):,.2f}.\n{order.reason}")
     else:
-        text = f"🤖 Autopilot refused {order.side.value} {order.quantity} {order.symbol}: {extra.get('reason')}"
+        text = f"Autopilot refused {order.side.value} {order.quantity} {order.symbol}: {extra.get('reason')}"
     if not quiet:
-        await _notify(db, user_id, text)
+        await _notify(db, user_id, text, stop_button=status == "FILLED")
     return {"status": status, **extra}
 
 
