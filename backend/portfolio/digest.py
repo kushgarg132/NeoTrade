@@ -400,12 +400,14 @@ async def send_premarket(db, redis, now: datetime) -> int:
     for user_id in await _users(db):
         if not await redis.set(f"digest:pre:{user_id}:{local.date()}", "1", nx=True, px=86_400_000):
             continue
-        claimed: Optional[list] = [] if await _linked(db, user_id) else None  # unlinked: build, never drain or send
+        claimed: Optional[list] = None  # stays None for an unlinked user: build, never drain or send
         try:
+            if await _linked(db, user_id):
+                claimed = []
             text = await premarket_for(db, user_id, now, claimed)
             if claimed is not None and not await telegram.alert(db, user_id, text, html=True, buttons=_buttons()):
                 raise RuntimeError("telegram send failed")
-            sent += 1
+            sent += claimed is not None
             await _day_summary(db, redis, user_id, "pre", now, text)
         except Exception as exc:
             logger.exception("pre-market digest failed for %s: %s", user_id, exc)
@@ -434,12 +436,14 @@ async def send_postclose(db, now: datetime, redis=None) -> int:
     events = await market.upcoming(db, hours=24, now=now)
     sent = 0
     for user_id in await _users(db):
-        claimed: Optional[list] = [] if await _linked(db, user_id) else None  # unlinked: build, never drain or send
+        claimed: Optional[list] = None  # stays None for an unlinked user: build, never drain or send
         try:
+            if await _linked(db, user_id):
+                claimed = []
             text = await postclose_for(db, user_id, now, events, claimed=claimed)
             if claimed is not None and not await telegram.alert(db, user_id, text, html=True, buttons=_buttons()):
                 raise RuntimeError("telegram send failed")
-            sent += 1
+            sent += claimed is not None
             await _day_summary(db, redis, user_id, "post", now, text)
         except Exception as exc:
             logger.exception("post-close digest failed for %s: %s", user_id, exc)

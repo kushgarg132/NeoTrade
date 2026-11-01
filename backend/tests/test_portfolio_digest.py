@@ -228,8 +228,30 @@ async def test_unlinked_user_is_not_drained_but_still_gets_the_day_summary(db, m
     monkeypatch.setattr(digest, "_day_summary", summary)
     await _queue(db)
     redis, at = _Redis(), NOW.replace(hour=8, minute=46)
-    assert await digest.send_premarket(db, redis, at) == 1
+    assert await digest.send_premarket(db, redis, at) == 0
     assert await digest.send_premarket(db, redis, at.replace(minute=50)) == 0  # key stays set
-    assert await digest.send_postclose(db, NOW.replace(hour=16), redis) == 1
+    assert await digest.send_postclose(db, NOW.replace(hour=16), redis) == 0
     assert summaries == ["pre", "post"]
     assert (await db["alerts"].find_one({}))["state"] == "queued"
+
+
+async def test_channel_lookup_error_spares_other_users(db, monkeypatch):
+    await db["users"].insert_one({"id": "zed", "role": "admin"})
+    await db["user_prefs"].insert_one({"user_id": "zed", "broker_roles": {"upstox": "mine"}})
+    sent = []
+
+    async def channel(self, user_id):
+        if user_id == "alice":
+            raise RuntimeError("decrypt")
+        return ("tok", "1")
+
+    async def capture(db_, user_id, text, html=False, buttons=None):
+        sent.append(user_id)
+        return True
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", channel)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", capture)
+    redis = _Redis()
+    assert await digest.send_premarket(db, redis, NOW.replace(hour=8, minute=46)) == 1
+    assert sent == ["zed"]
+    assert not any("alice" in k for k in redis.keys)  # released for the next tick
