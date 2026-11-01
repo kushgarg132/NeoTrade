@@ -104,7 +104,6 @@ async def test_friday_mirror_is_sent_to_each_trader(monkeypatch):
     from mongomock_motor import AsyncMongoMockClient
 
     import backend.portfolio.service as service
-    import backend.suggestions.notify as notify_module
     from backend import scheduler
 
     db = AsyncMongoMockClient()["test_db"]
@@ -114,12 +113,12 @@ async def test_friday_mirror_is_sent_to_each_trader(monkeypatch):
     async def nifty():
         return [(date(2026, 9, 1), 25000.0), (date(2026, 9, 30), 25500.0)]
 
-    async def notify(db, user_id, text):
-        sent.append((user_id, text))
+    async def notify(db, user_id, kind, title, lines=(), **kw):
+        sent.append((user_id, "\n".join([title, *lines])))
         return True
 
     monkeypatch.setattr(service, "_nifty", nifty)
-    monkeypatch.setattr(notify_module, "notify", notify)
+    monkeypatch.setattr("backend.alerts.alert", notify)
 
     assert await scheduler._weekly_mirrors(db) == 1
     assert sent[0][0] == "alice" and "after" in sent[0][1] and "Nifty +2.0%" in sent[0][1]

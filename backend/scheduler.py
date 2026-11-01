@@ -25,7 +25,8 @@ from backend.options.resolver import FO_UNDERLYINGS
 from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
 from backend.journal.sync import sync_user_trades
 from backend.prefs import PrefsStore
-from backend.suggestions.notify import notify, proposals_text
+from backend import alerts
+from backend.suggestions.notify import proposals_text
 from backend.suggestions.scan import scan_universe
 from backend.suggestions.store import SuggestionStore
 from backend.suggestions.thesis import attach_theses
@@ -106,7 +107,8 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
             from backend.risk.paper_gate import for_mine
             mine = await for_mine(db, user_id, created)
             if mine:
-                await notify(db, user_id, proposals_text(mine, f"{len(mine)} new idea(s) for your account from today's close:"))
+                title, lines = alerts.split(proposals_text(mine, f"{len(mine)} new idea(s) for your account from today's close"))
+                await alerts.alert(db, user_id, "ideas", title, lines)
 
     journal_imported = await _sync_journals(db, redis)
     reconcile_mismatches = await _reconcile_brokers(db, redis, now, pass_day)
@@ -377,7 +379,6 @@ async def _learn(db, now: datetime, pass_day: Optional[date] = None) -> int:
     from backend.learning.adapt import learn
     from backend.learning.report import pause_text, weekly_text
     from backend.portfolio.service import _nifty
-    from backend.suggestions.notify import notify
     from backend import app_settings
 
     pass_day = pass_day or now.astimezone(IST).date()
@@ -391,9 +392,11 @@ async def _learn(db, now: datetime, pass_day: Optional[date] = None) -> int:
             total += len(changes)
             for change in changes:
                 if change["rule"] == "pause":
-                    await notify(db, user_id, pause_text(change))
+                    title, lines = alerts.split(pause_text(change))
+                    await alerts.alert(db, user_id, "learning", title, lines)
             if lab and is_last_trading_day_of_week(pass_day) and (text := await weekly_text(db, user_id, nifty, now)):
-                await notify(db, user_id, text)
+                title, lines = alerts.split(text)
+                await alerts.alert(db, user_id, "learning", title, lines)
         except Exception as exc:
             logger.warning("learning pass failed for %s: %s", user_id, exc)
     return total
@@ -406,7 +409,6 @@ async def _weekly_mirrors(db) -> int:
     from backend.journal.roundtrips import build_round_trips
     from backend.journal.store import JournalStore
     from backend.portfolio.service import _nifty
-    from backend.suggestions.notify import notify
 
     sent = 0
     nifty = await _nifty()
@@ -430,7 +432,7 @@ async def _weekly_mirrors(db) -> int:
                     last = month[-1]
                     text += (f"\nThis month — AI account ₹{last['ai']['net_pnl']:+,.0f}, "
                              f"your account ₹{last['mine']['net_pnl']:+,.0f} (after charges).")
-            sent += bool(await notify(db, user_id, text))
+            sent += bool(await alerts.alert(db, user_id, "review", "Your week", text.splitlines()))
         except Exception as exc:
             logger.warning("weekly mirror failed for %s: %s", user_id, exc)
     return sent

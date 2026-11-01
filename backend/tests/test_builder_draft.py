@@ -78,14 +78,14 @@ def env(monkeypatch):
     set_active([])
     sent = []
 
-    async def notify(db, user_id, text):
-        sent.append((user_id, text))
+    async def notify(db, user_id, kind, title, lines=(), **kw):
+        sent.append((user_id, "\n".join([title, *lines])))
         return True
 
     async def nifty():
         return []
 
-    monkeypatch.setattr(draft, "notify", notify)
+    monkeypatch.setattr("backend.alerts.alert", notify)
     monkeypatch.setattr("backend.portfolio.service._nifty", nifty)
     db = AsyncMongoMockClient()["t"]
     yield db, FakeRedis(), sent
@@ -114,7 +114,7 @@ async def test_pass_becomes_active_and_records_the_gate_row(env):
     run = await db["lab_runs"].find_one({"name": f"builder:{slug}"})
     assert run["metrics"]["summary"]["cagr"] is not None and run["metrics"]["summary"]["max_drawdown"] is not None
     assert sent == [("admin", sent[0][1])]
-    assert sent[0][1].startswith(f"🧪 Strategy builder: 1 drafted, 1 passed: built:{slug} (PF 1.50, 300 trades, "
+    assert sent[0][1].startswith(f"Strategy builder: 1 drafted, 1 passed\nbuilt:{slug} (PF 1.50, 300 trades, "
                                  "last 90 days +₹")
     assert redis.data["job:last:strategy_builder"]["ok"] == "1"
     assert "builder:lock" not in redis.data

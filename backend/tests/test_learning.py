@@ -207,13 +207,13 @@ async def test_the_daily_pass_learns_for_every_user_with_paper_trades(db, monkey
     await _insert(db, [_trade(-100.0)] * 30, user_id="bob")
     sent = []
 
-    async def notify(db, user_id, text):
-        sent.append((user_id, text))
+    async def notify(db, user_id, kind, title, lines=(), **kw):
+        sent.append((user_id, "\n".join([title, *lines])))
 
-    monkeypatch.setattr("backend.suggestions.notify.notify", notify)
+    monkeypatch.setattr("backend.alerts.alert", notify)
     assert await scheduler._learn(db, NOW) == 2
     assert sorted(u for u, _ in sent) == ["alice", "bob"]
-    assert sent[0][1].startswith("⏸ Paused vwap on paper: 30 trades, net ₹-3,000")
+    assert sent[0][1].startswith("Paused vwap on paper\n30 trades, net ₹-3,000")
 
 
 @pytest.mark.asyncio

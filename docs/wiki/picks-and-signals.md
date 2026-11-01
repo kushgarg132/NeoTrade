@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/ml/**, backend/rl/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 4897bba
+verified_at: cb61d68
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -53,7 +53,7 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 | backend/suggestions/service.py | Fill an order on paper, or place live and poll | `service.py::execute_suggestion`, `::fill_on_paper`, `::_book`, `::execute_option_suggestion_live`, `::execute_live_order`, `::LIVE_FILL_CHECKS`=5 |
 | backend/suggestions/exits.py | Stop/target/trailing/max-hold exit reasons (max-hold counts NSE trading days, `core/market_calendar.py::HOLIDAYS`); alerts for own account | `exits.py::exit_reasons`, `::check_exits`, `::breach`, `::anchored`, `::max_hold_due`, `::held_too_long`, `::trail_level`, `::_trail_from_bars` |
 | backend/suggestions/thesis.py | LLM thesis + AI-half rescore after save | `thesis.py::attach_theses`, `::_thesis_text`, `::_rescored`, `::MAX_PER_SCAN`=10 |
-| backend/suggestions/notify.py | Telegram text for proposals/exits | `notify.py::notify`, `::proposals_text`, `::exits_text` |
+| backend/suggestions/notify.py | Telegram text for proposals/exits | `notify.py::notify`, `::proposals_text`, `::exit_line` |
 | backend/routers/suggestions.py | `/suggestions` inbox API | `routers/suggestions.py::scan_now`, `::list_suggestions`, `::reject_suggestion`, `::approve_suggestion_live`, `::_approve_equity_live`, `::_require_strategy` |
 | backend/learning/attribution.py | Pure: closed trades grouped by all/regime/reason/strength, shrunk expectancy | `attribution.py::attribute`, `::regime_on`, `::shrunk`, `::net`, `::MIN_TRADES`=10, `::PRIOR_TRADES`=10, `::STRENGTH_BUCKETS` |
 | backend/learning/adapt.py | Nightly bounded rules (pause/floor/regime) + `LearnedRules` read by the runner | `adapt.py::learn`, `::decide`, `::load_rules`, `::LearnedRules.blocks`, `::_closed_trades`, `::PAUSE_AFTER`=30, `::FLOOR_STEP`=0.05, `::FLOOR_CAP`=0.8 |
@@ -132,7 +132,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 1. `engine/autorun.py::_longterm_pass` runs every 15-min bucket (Redis NX `longterm:{user}:{day}:{bucket}`) → `check_exits(db, user)`.
 2. It takes OPEN LONGTERM BUY trades with `suggestion_id` in book `mine_book(user)`. If a later-day holdings snapshot lacks the symbol, the trade is closed `sold`.
 3. `exit_reasons`: trailing stop (ATR from `daily_bars`, raised only, saved as `trail_stop`), then `breach` stop/target (stop wins ties; both moved from the proposal's `entry_ref` to the trade's `entry_price` at the same distance by `::anchored`, P2.4 2026-10-26; no `entry_ref` = stored levels), then `max_hold_due` (weekdays after entry IST date, from 15:15 IST on the due day).
-4. Each reason alerts once (`alerted` $addToSet). `notify.py::exits_text` sends to Telegram. Nothing is sold. `autopilot/service.py::check_exits` reuses `exit_reasons` for the AI book.
+4. Each reason alerts once (`alerted` $addToSet). `engine/autorun.py::_longterm_pass` sends one `exit` alert per closed idea through `alerts.alert` (line from `notify.py::exit_line`). Nothing is sold. `autopilot/service.py::check_exits` reuses `exit_reasons` for the AI book.
 
 **5. Factor paper rebalance**
 1. `_longterm_pass` morning (≥09:20 IST, once/day) → `factor/paper.py::due` (no book or not this calendar month) → `rebalance`.

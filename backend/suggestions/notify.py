@@ -34,16 +34,8 @@ def proposals_text(suggestions: list[dict], heading: str) -> str:
         )
     if len(suggestions) > 15:
         lines.append(f"…and {len(suggestions) - 15} more")
-    lines.append("Decide under Portfolio → Overview.")
     return IdeaText("\n".join(lines))
 
 
-def exits_text(alerts: list[dict]) -> str:
-    lines = ["Your account: time to sell, by the idea's own exit rule:"]
-    for c in alerts:
-        lines.append(
-            f"• {c['symbol']} x{c['quantity']:g} at {_money(c['price'])} ({c['reason']}),"
-            f" bought {_money(c['entry_price'])}, gross {_money(c['gross_pnl'])}"
-        )
-    lines.append("Sell in your broker app or from Portfolio → Holdings.")
-    return "\n".join(lines)
+def exit_line(c: dict) -> str:
+    return f"{c['reason']} at {_money(c['price'])} · bought {_money(c['entry_price'])} · gross {_money(c['gross_pnl'])}"

@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: dbbceb5
+verified_at: cb61d68
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -17,7 +17,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 
 | path | role | key symbols |
 |---|---|---|
-| backend/mine/actions.py | Builds the ranked "Needs you" list, handles dismiss and snooze, and sends stop/target alerts | `mine/actions.py::RANK`, `::build`, `::ideas` (admin-only: empty for other roles), `::_levels`, `::dismiss`, `::snooze`, `::level_alerts`, `::levels_text` |
+| backend/mine/actions.py | Builds the ranked "Needs you" list, handles dismiss and snooze, and sends stop/target alerts | `mine/actions.py::RANK`, `::build`, `::ideas` (admin-only: empty for other roles), `::_levels`, `::dismiss`, `::snooze`, `::level_alerts` (each level becomes one `exit` alert via `engine/autorun.py::_level_pass` and `alerts.alert`) |
 | backend/mine/events.py | Results and ex-dividend dates from yfinance, plus dividends received | `events.py::refresh`, `::loop`, `::upcoming`, `::dividends_received`, `::_fetch_sync`, `::next_results` (one symbol's date within N days, fetched on demand since a buy is rarely of a held stock), `::buy_blocked` (the results rule for a buy about to be sent) |
 | backend/mine/history.py | Daily value curve `mine_daily`, replayed from journal trades; XIRR | `history.py::xirr`, `::_inputs`, `::_compute`, `::_store`, `::backfill`, `::write_all`, `::series`, `::returns` |
 | backend/mine/lots.py | FIFO lots, realised matches, broker reconciliation, split detection | `lots.py::_fifo`, `::open_lots`, `::realised`, `::unmatched`, `::split_ratio`, `::reconcile`, `::mine_trades` |

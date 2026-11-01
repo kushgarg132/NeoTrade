@@ -595,11 +595,11 @@ async def test_the_autopilot_quietly_leaves_ideas_outside_its_universe_to_the_us
     async def marks(db_, symbols, **_):
         return {s: 1000.0 for s in symbols}
 
-    async def notify(db_, user_id, text, *a, **kw):
-        sent.append(text)
+    async def notify(db_, user_id, kind, title, lines=(), **kw):
+        sent.append("\n".join([title, *lines]))
 
     monkeypatch.setattr("backend.marks.mark_prices", marks)
-    monkeypatch.setattr("backend.suggestions.notify.notify", notify)
+    monkeypatch.setattr("backend.alerts.alert", notify)
     base = {"user_id": "alice", "side": "BUY", "mode": "LONGTERM", "quantity": 4, "status": "PENDING",
             "strategy": "orb_breakout", "score": {"final": 0.6}, "entry_ref": 990.0, "stop": 950.0}
     await db["suggestions"].insert_many([{**base, "id": "out", "symbol": "NOTANIFTY"},
