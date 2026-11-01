@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 import pandas as pd
 import yfinance as yf
@@ -7,7 +7,7 @@ import logging
 import asyncio
 import time
 
-from backend.auth.dependency import get_current_user
+from backend.auth.dependency import get_optional_user
 from backend.auth.models import User
 from backend.datalayer.stock_info import INTRADAY_WINDOWS
 from backend.market_cache import cached
@@ -293,11 +293,14 @@ async def get_cached_note(symbol: str):
 
 
 @router.get("/market/index/{ticker}/analysis")
-async def get_index_analysis(ticker: str, cached: bool = False):
+async def get_index_analysis(ticker: str, cached: bool = False, user: Optional[User] = Depends(get_optional_user)):
     """AI-written explanation of why this index moved in its latest session,
     with the session figures and headlines it was written from. Explains the
     past only -- no forecasts, no calls. `cached=true` returns only a stored
-    one, never calling the model: 404 when there is none."""
+    one, never calling the model: 404 when there is none. Guests get only
+    the stored one: generating calls the model."""
+    if not cached and user is None:
+        raise HTTPException(status_code=401, detail="Sign in to generate an explanation")
     from backend.research.index_move import ExplanationUnavailable, cached_index_move, explain_index_move
 
     name = _known_index_names().get(ticker)
@@ -470,7 +473,7 @@ def sector_members(scan: Dict[str, Any], name: str) -> List[Dict[str, Any]]:
 
 
 @router.get("/market/sector/{name}")
-async def get_sector(name: str, user: User = Depends(get_current_user)):
+async def get_sector(name: str, user: Optional[User] = Depends(get_optional_user)):
     """One sector: its day move and sentiment, its Nifty 200 members, and the 20 newest news items that move
     it. 404 for a sector not in the scan."""
     from backend.database import db

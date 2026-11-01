@@ -48,7 +48,7 @@ async def test_fresh_headlines_are_newest_first_deduped_and_recent(searches):
 def test_news_feed_filters_to_the_users_names(monkeypatch):
     import asyncio
     from mongomock_motor import AsyncMongoMockClient
-    from backend.auth.dependency import get_current_user
+    from backend.auth.dependency import get_optional_user
     from backend.auth.models import User
     from backend.database import db as database
 
@@ -73,7 +73,7 @@ def test_news_feed_filters_to_the_users_names(monkeypatch):
 
     app = FastAPI()
     app.include_router(news.router)
-    app.dependency_overrides[get_current_user] = lambda: User(id="alice", google_sub="g", email="a@x.io", name="A",
+    app.dependency_overrides[get_optional_user] = lambda: User(id="alice", google_sub="g", email="a@x.io", name="A",
                                                              created_at=now)
     client = TestClient(app)
     ids = lambda **params: [i["id"] for i in client.get("/news/feed", params=params).json()["items"]]
@@ -90,7 +90,7 @@ def _symbols_client(monkeypatch, items, sentiments):
 
     from mongomock_motor import AsyncMongoMockClient
 
-    from backend.auth.dependency import get_current_user
+    from backend.auth.dependency import get_optional_user
     from backend.auth.models import User
     from backend.database import db as database
     from backend.tests.test_datalayer_news import FakeRedis
@@ -104,7 +104,7 @@ def _symbols_client(monkeypatch, items, sentiments):
         asyncio.run(mongo["news_items"].insert_many(items))
     app = FastAPI()
     app.include_router(news.router)
-    app.dependency_overrides[get_current_user] = lambda: User(id="alice", google_sub="g", email="a@x.io", name="A",
+    app.dependency_overrides[get_optional_user] = lambda: User(id="alice", google_sub="g", email="a@x.io", name="A",
                                                              created_at=datetime.now(timezone.utc))
     return TestClient(app)
 

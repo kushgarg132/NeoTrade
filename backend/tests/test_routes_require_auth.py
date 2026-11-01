@@ -13,7 +13,7 @@ client = TestClient(app)
 # One representative path per router mounted in server.py, excluding
 # /auth/*, /docs, /redoc, /openapi.json, and the root "/" health message.
 PROTECTED_SAMPLE_PATHS = [
-    ("GET", "/api/v1/market/indices"),
+    ("GET", "/api/v1/mine/overview"),
     ("GET", "/api/v1/watchlist"),
     ("GET", "/api/v1/trading/positions"),
     ("GET", "/api/v1/settings/omniroute-model"),

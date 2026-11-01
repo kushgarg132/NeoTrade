@@ -211,12 +211,13 @@ async def shutdown_db_client():
     logger.info("Database disconnected.")
 
 # Include Routers
-app.include_router(news.router, prefix=settings.API_PREFIX, tags=["News"], dependencies=[Depends(get_current_user)])
+# news, agents and market_data hold the public guest reads; their other routes gate themselves.
+app.include_router(news.router, prefix=settings.API_PREFIX, tags=["News"])
 
 # Agents Router
 from backend.routers import agents
 
-app.include_router(agents.router, prefix=f"{settings.API_PREFIX}/agents", tags=["Agents"], dependencies=[Depends(get_current_user)])
+app.include_router(agents.router, prefix=f"{settings.API_PREFIX}/agents", tags=["Agents"])
 from backend.routers import chat_actions
 app.include_router(chat_actions.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
 from backend.routers import orders
@@ -258,7 +259,7 @@ from backend.routers import journal
 from backend.routers import guardrails as guardrails_router
 from backend.routers import portfolio as portfolio_router
 
-app.include_router(market_data.router, prefix=settings.API_PREFIX, tags=["Market Data"], dependencies=[Depends(get_current_user)])
+app.include_router(market_data.router, prefix=settings.API_PREFIX, tags=["Market Data"])
 app.include_router(options_router.router, prefix=settings.API_PREFIX, dependencies=[Depends(get_current_user)])
 app.include_router(watchlist.router, prefix=settings.API_PREFIX, tags=["Watchlist"], dependencies=[Depends(get_current_user)])
 app.include_router(trading.router, prefix=settings.API_PREFIX, tags=["Trading"], dependencies=[Depends(get_current_user)])
