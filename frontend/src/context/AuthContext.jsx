@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import api, { endpoints, AUTH_TOKEN_STORAGE_KEY } from '../utils/api';
+import api, { endpoints, AUTH_TOKEN_STORAGE_KEY, LOGOUT_EVENT } from '../utils/api';
 
 const AuthContext = createContext(null);
 
@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
             // mechanism that keeps a returning user from seeing the Google
             // button again.
             // Only a 401 (the interceptor already tried the refresh cookie) ends the session. A network blip or
-            // a 5xx keeps the token: retry once, and if it still fails the user lands on /login with the token
+            // a 5xx keeps the token: retry once, and if it still fails the user sees the guest view with the token
             // intact, so a reload signs them back in.
             for (let attempt = 0; attempt < 2 && !cancelled; attempt += 1) {
                 try {
@@ -38,6 +38,12 @@ export const AuthProvider = ({ children }) => {
             if (!cancelled) setLoading(false);
         })();
         return () => { cancelled = true; };
+    }, []);
+
+    useEffect(() => {
+        const onLogout = () => setUser(null);
+        window.addEventListener(LOGOUT_EVENT, onLogout);
+        return () => window.removeEventListener(LOGOUT_EVENT, onLogout);
     }, []);
 
     const login = async (idToken) => {
