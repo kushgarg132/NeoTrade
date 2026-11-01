@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/alerts.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: f3b74bd
+verified_at: cb61d68
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -144,7 +144,7 @@ All times IST. Background loops start in `jobs.py::start_loops`, called by the `
 
 ## Alerts
 
-`backend/alerts.py::alert(db, user_id, kind, title, lines, symbol=, link=, buttons=)` is the single entry point for Telegram alerts (it calls `guardrails/telegram.py::alert`, which takes `buttons` as an inline keyboard). Instant kinds (`exit`, `money`, `news_breaking`, `action`) send a card at once: icon + `<b>title</b>` + at most 3 escaped lines. Batched kinds (`ideas`, `news`, `learning`, `review`, `autopilot_refused`, `stale_ideas`) are queued and `drain(db, user_id, now)` renders them as a "Since last update" block (5 a kind, then "…and N more"), claiming rows `queued -> digested` (`requeue` undoes it). `ideas` and `stale_ideas` reach admins only. Unknown kind raises `ValueError`; a muted kind (pref `alert_mute`) is logged `muted` and not sent; send and log failures are swallowed. `open_button` / `sell_buttons` build URL buttons only when `APP_URL` is set.
+`backend/alerts.py::alert(db, user_id, kind, title, lines, symbol=, link=, buttons=)` is the single entry point for Telegram alerts (it calls `guardrails/telegram.py::alert`, which takes `buttons` as an inline keyboard). Instant kinds (`exit`, `money`, `news_breaking`, `action`) send a card at once: icon + `<b>title</b>` + at most 3 escaped lines. Batched kinds (`ideas`, `news`, `learning`, `review`, `autopilot_refused`, `stale_ideas`) are queued and `drain(db, user_id, now)` renders them as a "Since last update" block (5 a kind, then "…and N more"), claiming rows `queued -> digested` (`requeue` undoes it). `drain(..., until=None)` also adds an "Expiring ideas" line (`N pending, M expire before close|the open`) for admins unless `stale_ideas` is muted. `portfolio/digest.py::send_premarket` / `send_postclose` call `premarket_for` / `postclose_for(..., claimed=[])`, which drain last (until = today 15:30 IST / next trading day 08:45 IST), send via `telegram.alert(html=True, buttons=)` and `requeue` on a False return or raise; `reports/weekly.py::send` also uses `telegram.alert` directly. `ideas` and `stale_ideas` reach admins only. Unknown kind raises `ValueError`; a muted kind (pref `alert_mute`) is logged `muted` and not sent; send and log failures are swallowed. `open_button` / `sell_buttons` build URL buttons only when `APP_URL` is set.
 
 Collection `alerts`: `user_id, kind, title, lines, symbol, link, state (queued|digested|sent|muted|failed), created_at, digested_at`; TTL 30 days on `created_at`, index `(user_id, state)` (created in `server.py` startup). Prefs `alert_mute` ({kind: bool}, keys validated against `alerts.KINDS`) and `breaking_news_min` (int 1-10, default 7) are editable via `PreferencesPatch`. Tests: `tests/test_alerts.py`.
 

@@ -12,7 +12,9 @@ from datetime import datetime, time, timedelta, timezone
 from html import escape
 from typing import Optional
 
-from backend.core.market_calendar import is_trading_day, last_trading_day
+from backend import alerts
+from backend.core.market_calendar import is_trading_day, last_trading_day, next_trading_day
+from backend.guardrails import telegram
 from backend.engine.session import IST
 
 logger = logging.getLogger(__name__)
@@ -242,7 +244,7 @@ def _action_lines(actions: list[dict]) -> list[str]:
 
 
 def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: Optional[int], ai: dict,
-                   yesterday: Optional[dict] = None, actions: Optional[list[dict]] = None) -> str:
+                   yesterday: Optional[dict] = None, actions: Optional[list[dict]] = None, since: str = "") -> str:
     lines = ["☀️ <b>Before the open</b>"]
     if p:
         moved = f", yesterday {_rupees(yesterday['change'], True)}{_pct(yesterday['pct'])}" if yesterday else ""
@@ -254,11 +256,13 @@ def premarket_text(p: Optional[dict], overnight: dict[str, dict], ideas: Optiona
     else:
         lines.append("No material news on your holdings since the close.")
     if ideas is not None:  # None: not an admin, engine ideas are admin-only
-        lines.append(f"Ideas for your account: {ideas}" if ideas else
-                     "No ideas for your account: no strategy has earned it yet.")
+        if not ideas:
+            lines.append("No ideas for your account: no strategy has earned it yet.")
+        elif "Expiring ideas" not in since:  # the digest's "Since last update" block carries it there
+            lines.append(f"Ideas for your account: {ideas}")
     mode = "off" if not ai.get("enabled") else ("live" if ai.get("live") else "paper")
     lines.append(f"AI account: autopilot {mode}, {_rupees(ai.get('deployed'))} deployed.")
-    return "\n".join(lines)
+    return "\n".join(lines + ([since] if since else []))
 
 
 def news_why(m: dict) -> str:
@@ -272,7 +276,7 @@ def news_why(m: dict) -> str:
 
 
 def postclose_text(p: Optional[dict], today: dict, events: list[dict], actions: Optional[list[dict]] = None,
-                   recon: Optional[str] = None) -> str:
+                   recon: Optional[str] = None, since: str = "") -> str:
     actions = actions or []
     # A worsened verdict already listed as an action is not repeated below.
     listed = {a["symbol"] for a in actions[:TOP_ACTIONS] if a["kind"] == "verdict_worse"}
@@ -298,7 +302,7 @@ def postclose_text(p: Optional[dict], today: dict, events: list[dict], actions: 
         lines.append(f"⚠️ Reconciliation: {escape(recon)}")
     if events:
         lines.append("Tomorrow: " + "; ".join(escape(e.get("event") or e.get("title") or "") for e in events[:3]))
-    return "\n".join(lines)
+    return "\n".join(lines + ([since] if since else []))
 
 
 async def _ai_line(db, user_id: str, prefs: dict) -> dict:
@@ -324,7 +328,8 @@ async def _users(db) -> list[str]:
         await db["user_prefs"].distinct("user_id", {"broker_roles": {"$exists": True, "$ne": {}}})))
 
 
-async def premarket_for(db, user_id: str, now: datetime) -> str:
+async def premarket_for(db, user_id: str, now: datetime, claimed: Optional[list] = None) -> str:
+    """`claimed`: when given, the queued alerts are drained into the text and their ids appended here."""
     from backend.core.market_calendar import previous_trading_day
     from backend.portfolio.service import mine_holdings
     from backend.prefs import PrefsStore
@@ -343,11 +348,16 @@ async def premarket_for(db, user_id: str, now: datetime) -> str:
         {"user_id": user_id, "status": "PENDING", "mode": "LONGTERM"}).to_list(length=200))) if await is_admin(db, user_id) else None
     moved = await last_session_move(db, await mine_holdings(db, user_id), local.date())
     acts = await _actions(db, user_id, now)
-    return premarket_text(p, overnight, ideas, await _ai_line(db, user_id, prefs), moved, acts)
+    ai = await _ai_line(db, user_id, prefs)
+    since = ""
+    if claimed is not None:  # last, so a failure above strands no claimed rows
+        since, ids = await alerts.drain(db, user_id, now, datetime.combine(local.date(), time(15, 30), tzinfo=IST))
+        claimed.extend(ids)
+    return premarket_text(p, overnight, ideas, ai, moved, acts, since)
 
 
 async def postclose_for(db, user_id: str, now: datetime, events: Optional[list[dict]] = None,
-                        actions: Optional[list[dict]] = None) -> str:
+                        actions: Optional[list[dict]] = None, claimed: Optional[list] = None) -> str:
     """`actions`: Mine's list when the caller already built it (Today does)."""
     from backend.datalayer import market
     from backend.engine import broker_recon
@@ -359,15 +369,24 @@ async def postclose_for(db, user_id: str, now: datetime, events: Optional[list[d
     # weekend/holiday ("closed" phase): the last session's day, not today's empty one
     day = last_trading_day(now.astimezone(IST).date())
     recon = broker_recon.summary(await broker_recon.latest(db, user_id, day))
-    return postclose_text(await cached_pulse(db, user_id, now),
-                          await pnl_since(db, user_id, roles, datetime.combine(day, time(0, 0), tzinfo=IST)),
-                          events, actions if actions is not None else await _actions(db, user_id, now), recon)
+    p = await cached_pulse(db, user_id, now)
+    today = await pnl_since(db, user_id, roles, datetime.combine(day, time(0, 0), tzinfo=IST))
+    acts = actions if actions is not None else await _actions(db, user_id, now)
+    since = ""
+    if claimed is not None:
+        nxt = next_trading_day(now.astimezone(IST).date())
+        since, ids = await alerts.drain(db, user_id, now, datetime.combine(nxt, time(8, 45), tzinfo=IST))
+        claimed.extend(ids)
+    return postclose_text(p, today, events, acts, recon, since)
+
+
+def _buttons() -> list[list[dict]]:
+    row = [*alerts.open_button("/ideas", "Review ideas"), *alerts.open_button("/", "Open Today")]
+    return [row] if row else []
 
 
 async def send_premarket(db, redis, now: datetime) -> int:
     """Weekdays 08:45-09:15 IST, once a day per user."""
-    from backend.suggestions.notify import notify
-
     local = now.astimezone(IST)
     if not is_trading_day(local.date()) or not (PREMARKET <= local.time() < PREMARKET_END):
         return 0
@@ -375,13 +394,16 @@ async def send_premarket(db, redis, now: datetime) -> int:
     for user_id in await _users(db):
         if not await redis.set(f"digest:pre:{user_id}:{local.date()}", "1", nx=True, px=86_400_000):
             continue
+        claimed: list = []
         try:
-            text = await premarket_for(db, user_id, now)
-            await notify(db, user_id, text, html=True)
+            text = await premarket_for(db, user_id, now, claimed)
+            if not await telegram.alert(db, user_id, text, html=True, buttons=_buttons()):
+                raise RuntimeError("telegram send failed")
             sent += 1
             await _day_summary(db, redis, user_id, "pre", now, text)
         except Exception as exc:
             logger.exception("pre-market digest failed for %s: %s", user_id, exc)
+            await alerts.requeue(db, claimed)
             await redis.delete(f"digest:pre:{user_id}:{local.date()}")  # let the next tick retry
     return sent
 
@@ -400,18 +422,20 @@ async def send_postclose(db, now: datetime, redis=None) -> int:
     """After the 16:00 pass's review (backend/scheduler.py). Skipped when the
     pass runs as the next morning's catch-up: an evening message at 9 AM is noise."""
     from backend.datalayer import market
-    from backend.suggestions.notify import notify
 
     if now.astimezone(IST).time() < time(15, 30):
         return 0
     events = await market.upcoming(db, hours=24, now=now)
     sent = 0
     for user_id in await _users(db):
+        claimed: list = []
         try:
-            text = await postclose_for(db, user_id, now, events)
-            await notify(db, user_id, text, html=True)
+            text = await postclose_for(db, user_id, now, events, claimed=claimed)
+            if not await telegram.alert(db, user_id, text, html=True, buttons=_buttons()):
+                raise RuntimeError("telegram send failed")
             sent += 1
             await _day_summary(db, redis, user_id, "post", now, text)
         except Exception as exc:
             logger.exception("post-close digest failed for %s: %s", user_id, exc)
+            await alerts.requeue(db, claimed)
     return sent

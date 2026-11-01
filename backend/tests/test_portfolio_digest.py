@@ -83,15 +83,13 @@ class _Redis:
 
 
 async def test_premarket_goes_once_in_its_window(db, monkeypatch):
-    from backend.suggestions import notify
-
     sent = []
 
-    async def capture(db_, user_id, text, html=False):
+    async def capture(db_, user_id, text, html=False, buttons=None):
         sent.append(text)
         return True
 
-    monkeypatch.setattr(notify, "notify", capture)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", capture)
     redis = _Redis()
     morning = NOW.replace(hour=8, minute=40)
     assert await digest.send_premarket(db, redis, morning) == 0          # 08:40: too early
@@ -162,17 +160,48 @@ async def test_chat_portfolio_fact_hides_verdicts_from_non_admins(db):
 
 
 async def test_premarket_failure_is_retried_next_tick(db, monkeypatch):
-    from backend.suggestions import notify
-
     calls = []
 
-    async def flaky(db_, user_id, text, html=False):
+    async def flaky(db_, user_id, text, html=False, buttons=None):
         calls.append(text)
         if len(calls) == 1:
             raise RuntimeError("telegram down")
         return True
 
-    monkeypatch.setattr(notify, "notify", flaky)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", flaky)
     redis, at = _Redis(), NOW.replace(hour=8, minute=46)
     assert await digest.send_premarket(db, redis, at) == 0
     assert await digest.send_premarket(db, redis, at.replace(minute=47)) == 1
+
+
+async def _queue(db):
+    await db["alerts"].insert_one({"user_id": "alice", "kind": "news", "title": "ACME fell", "lines": [],
+                                   "state": "queued", "created_at": NOW})
+
+
+async def test_premarket_includes_since_block(db, monkeypatch):
+    sent = []
+
+    async def capture(db_, user_id, text, html=False, buttons=None):
+        sent.append(text)
+        return True
+
+    monkeypatch.setattr("backend.guardrails.telegram.alert", capture)
+    await _queue(db)
+    assert await digest.send_premarket(db, _Redis(), NOW.replace(hour=8, minute=46)) == 1
+    assert sent[0].rstrip().endswith("• ACME fell") and "Since last update" in sent[0]
+    assert (await db["alerts"].find_one({}))["state"] == "digested"
+
+
+async def test_failed_send_requeues_drained_rows(db, monkeypatch):
+    async def fail(db_, user_id, text, html=False, buttons=None):
+        return False
+
+    monkeypatch.setattr("backend.guardrails.telegram.alert", fail)
+    await _queue(db)
+    redis, at = _Redis(), NOW.replace(hour=8, minute=46)
+    assert await digest.send_premarket(db, redis, at) == 0
+    assert (await db["alerts"].find_one({}))["state"] == "queued"
+    assert not redis.keys  # released for the next tick
+    assert await digest.send_postclose(db, NOW.replace(hour=11), redis) == 0  # 16:30 IST
+    assert (await db["alerts"].find_one({}))["state"] == "queued"

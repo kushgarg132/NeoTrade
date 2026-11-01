@@ -367,10 +367,10 @@ def test_telegram_text_ends_with_the_escaped_paragraph_only_when_there_is_one():
 async def test_sunday_job_sends_the_paragraph_and_survives_a_missing_one(db, redis, llm, journal_facts, monkeypatch):
     sent = []
 
-    async def notify(db_, uid, text, html=False):
+    async def notify(db_, uid, text, html=False, buttons=None):
         sent.append(text)
 
-    monkeypatch.setattr("backend.suggestions.notify.notify", notify)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", notify)
     monkeypatch.setattr("backend.portfolio.digest._users", AsyncMock(return_value=["alice"]))
     monkeypatch.setattr(report, "build", AsyncMock(return_value=REPORT))
     llm.reply = "A steady week."

@@ -132,10 +132,10 @@ class _Redis:
 async def test_send_once_per_user_per_week(db, monkeypatch):
     sent = []
 
-    async def notify(db_, uid, text, html=False):
+    async def notify(db_, uid, text, html=False, buttons=None):
         sent.append((uid, text))
 
-    monkeypatch.setattr("backend.suggestions.notify.notify", notify)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", notify)
     redis = _Redis()
     assert await weekly.send(db, redis, at(18, 17)) == 0                 # Sunday 17:00: too early
     assert await weekly.send(db, redis, at(17, 19)) == 0                 # Saturday
@@ -150,7 +150,7 @@ async def test_a_failed_send_is_retried(db, monkeypatch):
     async def boom(*a, **k):
         raise RuntimeError("telegram down")
 
-    monkeypatch.setattr("backend.suggestions.notify.notify", boom)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", boom)
     redis = _Redis()
     assert await weekly.send(db, redis, at(18, 18)) == 0
     assert not redis.keys

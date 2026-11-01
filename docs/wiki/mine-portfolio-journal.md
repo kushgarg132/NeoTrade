@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: dbbceb5
+verified_at: cb61d68
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -95,7 +95,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 
 **Redis**
 - `mine:alert:{user}:{action_id}` NX, TTL 30 days (`mine/actions.py::ALERT_TTL`): one stop/target Telegram per level. `engine/autorun.py::_level_pass` deletes it when the send fails, so the next 15-minute pass retries.
-- `digest:pre:{user}:{IST date}` NX, 24h: one pre-market digest a day (`digest.py::send_premarket`).
+- `digest:pre:{user}:{IST date}` NX, 24h: one pre-market digest a day (`digest.py::send_premarket`).  Both digests drain queued alerts (`alerts.drain`) last and `requeue` them if the send fails.
 - `guardrails:tick` NX, 55s: one worker per guardrail tick (`guardrails/monitor.py::run_tick`).
 - `levels:{user}:{date}:{bucket}` NX, 30 min (`engine/autorun.py::_level_pass`).
 - `rebalance:{user}` rate limit, 10/min (`routers/portfolio.py::rebalance`).
