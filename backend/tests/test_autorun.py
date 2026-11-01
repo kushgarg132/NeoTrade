@@ -189,10 +189,9 @@ async def test_the_run_stops_at_the_close_and_when_turned_off(world, monkeypatch
 def longterm(world, monkeypatch):
     """The long-term switch on, with exits, scan and Telegram recorded."""
     import backend.suggestions.exits as exits
-    import backend.suggestions.notify as notify
     import backend.suggestions.scan as scan
 
-    calls = {"exits": [], "scans": [], "sent": [], "passes": []}
+    calls = {"exits": [], "scans": [], "sent": [], "alerts": [], "passes": []}
 
     async def check_exits(db, user_id, now=None):
         calls["exits"].append(now)
@@ -203,8 +202,9 @@ def longterm(world, monkeypatch):
         calls["scans"].append(kwargs["source"])
         return []
 
-    async def send(db, user_id, text, html=False):
-        calls["sent"].append(text)
+    async def send(db, user_id, kind, title, lines=(), **kw):
+        calls["sent"].append("\n".join([title, *lines]))
+        calls["alerts"].append((kind, title, list(lines), kw))
         return True
 
     async def not_due(db, user_id, now):
@@ -219,7 +219,7 @@ def longterm(world, monkeypatch):
     monkeypatch.setattr(scheduler, "run_daily_jobs", daily_pass)
     monkeypatch.setattr(exits, "check_exits", check_exits)
     monkeypatch.setattr(scan, "scan_universe", scan_universe)
-    monkeypatch.setattr(notify, "notify", send)
+    monkeypatch.setattr("backend.alerts.alert", send)
     monkeypatch.setattr(paper, "due", not_due)
     return calls
 
@@ -253,7 +253,8 @@ async def test_a_thesis_level_gets_its_own_alert_step_not_the_long_term_pass(wor
 
     async def level_alerts(db, redis, user_id, now):
         alerted.append(user_id)
-        return [{"title": "A hit your stop ₹90.00", "detail": "d"}]
+        return [{"id": "L1", "kind": "stop_hit", "symbol": "A", "title": "A hit your stop ₹90.00", "detail": "d",
+                 "action": {"quantity": 7}}]
 
     async def due(db, user_id, now):
         books.append(user_id)
@@ -267,25 +268,25 @@ async def test_a_thesis_level_gets_its_own_alert_step_not_the_long_term_pass(wor
     await _tick(world, MONDAY_10AM + timedelta(minutes=5))  # same bucket: not again
     assert "carol" not in result.get("longterm", [])
     assert alerted == ["carol"] and books == [] and longterm["scans"] == [] and longterm["exits"] == []
-    assert any("A hit your stop" in text for text in longterm["sent"])
+    assert [(k, t, l) for k, t, l, _ in longterm["alerts"]] == [("exit", "Sell · A", ["d"])]
+    assert longterm["alerts"][0][3]["buttons"][0][0]["text"] == "Sell ×7"
 
 
 @pytest.mark.asyncio
 async def test_an_unsent_level_alert_frees_its_key_for_the_next_pass(world, monkeypatch):
     """The once-per-level key is set before Telegram; a failed send used to
     silence that stop or target for 30 days."""
-    import backend.suggestions.notify as notify_mod
     from backend.mine import actions
 
     async def level_alerts(db, redis, user_id, now):
         await redis.set(f"mine:alert:{user_id}:L1", "1", nx=True)
-        return [{"id": "L1", "title": "A hit your stop ₹90.00", "detail": "d"}]
+        return [{"id": "L1", "kind": "stop_hit", "symbol": "A", "title": "t", "detail": "d", "action": {"quantity": 1}}]
 
-    async def notify(db, user_id, text, html=False):
+    async def send(*a, **kw):
         return False
 
     monkeypatch.setattr(actions, "level_alerts", level_alerts)
-    monkeypatch.setattr(notify_mod, "notify", notify)
+    monkeypatch.setattr("backend.alerts.alert", send)
     await autorun._level_pass(world.db, world.redis, "carol", MONDAY_10AM)
     assert "mine:alert:carol:L1" not in world.redis.data
 
@@ -485,7 +486,9 @@ async def test_login_reminder_lists_only_logged_out_brokers_twice_a_morning(worl
 
     reminders = [t for t in longterm["sent"] if "Log in before 9:15" in t]
     assert len(reminders) == 2
-    assert 'href="https://kite.example/login?a=1&amp;b=2"' in reminders[0] and "upstox" not in reminders[0].lower()
+    assert "upstox" not in reminders[0].lower()
+    assert longterm["alerts"][0][0] == "action"
+    assert longterm["alerts"][0][3]["buttons"] == [[{"text": "Kite (The AI account)", "url": "https://kite.example/login?a=1&b=2"}]]
 
 
 @pytest.mark.asyncio

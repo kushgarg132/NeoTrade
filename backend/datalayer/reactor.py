@@ -116,7 +116,7 @@ def alert_text(item: dict, hits: list[dict]) -> str:
         f"{'Market' if h['target'] == MARKET_TARGET else h['target']} {'↑' if h['direction'] > 0 else '↓'} {h['impact']:g}/10"
         for h in hits
     )
-    return "\n".join(filter(None, [f"📰 {item.get('event') or item['title']}", moves, item.get("url")]))
+    return "\n".join([item.get("event") or item["title"], moves])
 
 
 async def _audience(db) -> dict[str, tuple[str, set[str], set[str]]]:
@@ -137,8 +137,9 @@ async def _audience(db) -> dict[str, tuple[str, set[str], set[str]]]:
     return {u: (prefs.get(u, "held"), held[u], watched[u]) for u in users}
 
 
-async def _deliver(db, redis, user_id: str, item: dict, hits: list[dict]) -> None:
-    from backend.suggestions.notify import notify
+async def _deliver(db, redis, user_id: str, item: dict, hits: list[dict], held: frozenset = frozenset()) -> None:
+    from backend import alerts
+    from backend.prefs import PrefsStore
     from backend.ws.hub import hub
 
     hub.attach_redis(redis)  # this process has no API startup to do it
@@ -146,7 +147,15 @@ async def _deliver(db, redis, user_id: str, item: dict, hits: list[dict]) -> Non
         "id": item["_id"], "title": item["title"], "event": item.get("event"), "url": item.get("url"),
         "source": item.get("source"), "published_at": item.get("published_at"), "hits": hits})
     try:
-        await notify(db, user_id, alert_text(item, hits))
+        floor = (await PrefsStore(db).get(user_id))["breaking_news_min"]
+        top = next((h for h in hits if h["target"] in held and h["impact"] >= floor), None)
+        symbol = (top or hits[0])["target"]
+        symbol = None if symbol == MARKET_TARGET else symbol
+        title, lines = alerts.split(alert_text(item, hits))
+        row = [*(alerts.open_button(f"/stock/{symbol}", "Open stock") if symbol else []),
+               *([{"text": "Article", "url": item["url"]}] if item.get("url") else [])]
+        await alerts.alert(db, user_id, "news_breaking" if top else "news", title, lines, symbol=symbol,
+                           link=item.get("url"), buttons=[row] if row else None)
     except Exception as exc:
         logger.warning("news alert telegram for %s failed: %s", user_id, exc)
 
@@ -183,7 +192,7 @@ async def react(db, redis, now: Optional[datetime] = None) -> int:
                     if await redis.set(ALERT_KEY.format(user_id, h["target"]), "1", ex=ALERT_TTL_SECONDS, nx=True)]
             if hits:
                 try:  # items are claimed already: one failure must not drop the rest
-                    await _deliver(db, redis, user_id, item, hits)
+                    await _deliver(db, redis, user_id, item, hits, held)
                     sent += 1
                 except Exception:
                     logger.exception("news alert for %s failed", user_id)
@@ -196,7 +205,8 @@ async def react(db, redis, now: Optional[datetime] = None) -> int:
 
 async def _scan_user(db, redis, prefs: dict, symbols: list[str], now: datetime,
                      ai_symbols: frozenset = frozenset()) -> list[dict]:
-    from backend.suggestions.notify import notify, proposals_text
+    from backend import alerts
+    from backend.suggestions.notify import proposals_text
     from backend.suggestions.scan import scan_universe
     from backend.suggestions.thesis import attach_theses
 
@@ -218,7 +228,8 @@ async def _scan_user(db, redis, prefs: dict, symbols: list[str], now: datetime,
     from backend.risk.paper_gate import for_mine
     left = await for_mine(db, prefs["user_id"], left)
     if left:
-        await notify(db, prefs["user_id"], proposals_text(left, f"{len(left)} new idea(s) for your account after news:"))
+        title, lines = alerts.split(proposals_text(left, f"{len(left)} new idea(s) for your account after news"))
+        await alerts.alert(db, prefs["user_id"], "ideas", title, lines)
     return created
 
 

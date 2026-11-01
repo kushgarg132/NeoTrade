@@ -302,17 +302,19 @@ async def tick(db, redis, now: Optional[datetime] = None, launch=None) -> dict:
 async def _level_pass(db, redis, user_id: str, now: datetime) -> None:
     """Stop / target hits on the owner's holdings, once per EXIT_CHECK_MINUTES
     bucket on one worker; Telegram once per level (`actions.level_alerts`)."""
+    from backend import alerts
     from backend.mine import actions
-    from backend.suggestions.notify import notify
 
     local = now.astimezone(IST)
     bucket = (local.hour * 60 + local.minute) // EXIT_CHECK_MINUTES
     if await redis.set(f"levels:{user_id}:{local.date().isoformat()}:{bucket}", _TOKEN, nx=True,
                        px=EXIT_CHECK_MINUTES * 60_000 * 2):
-        alerts = await actions.level_alerts(db, redis, user_id, now)
-        if alerts and not await notify(db, user_id, actions.levels_text(alerts)):
-            for a in alerts:  # unsent: free the once-per-level key so the next pass retries
-                await redis.delete(f"mine:alert:{user_id}:{a['id']}")
+        for a in await actions.level_alerts(db, redis, user_id, now):
+            s = a["symbol"]
+            title = f"{'Sell' if a['kind'] == 'stop_hit' else 'Target'} · {s}"
+            if not await alerts.alert(db, user_id, "exit", title, [a["detail"]], symbol=s, buttons=alerts.sell_buttons(
+                    s, a["action"]["quantity"], f"/mine/stock/{s}")):
+                await redis.delete(f"mine:alert:{user_id}:{a['id']}")  # unsent: free the once-per-level key so the next pass retries
 
 
 async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
@@ -322,7 +324,8 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
     from backend import scheduler
     from backend.scheduler import LAST_PASS_KEY
     from backend.suggestions.exits import check_exits
-    from backend.suggestions.notify import exits_text, notify, proposals_text
+    from backend import alerts
+    from backend.suggestions.notify import exit_line, proposals_text
     from backend.suggestions.store import SuggestionStore
 
     local = now.astimezone(IST)
@@ -333,8 +336,9 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
     if await redis.set(f"longterm:{user_id}:{day}:{bucket}", _TOKEN, nx=True, px=EXIT_CHECK_MINUTES * 60_000 * 2):
         did = True
         closed = await check_exits(db, user_id, now=now)
-        if closed:
-            await notify(db, user_id, exits_text(closed))
+        for c in closed:
+            await alerts.alert(db, user_id, "exit", f"Sell · {c['symbol']}", [exit_line(c)], symbol=c["symbol"],
+                               buttons=alerts.sell_buttons(c["symbol"], int(c["quantity"]), f"/mine/stock/{c['symbol']}"))
         # Off or on, the autopilot's open positions keep their exits.
         from backend.autopilot.service import check_exits as autopilot_exits
         await autopilot_exits(db, redis, user_id, now=now)
@@ -363,7 +367,8 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         if await factor_paper.due(db, user_id, now):
             try:
                 summary = await factor_paper.rebalance(db, user_id, now=now)
-                await notify(db, user_id, factor_paper.summary_text(summary))
+                await alerts.alert(db, user_id, "learning", "Factor portfolio rebalanced (paper)",
+                                   factor_paper.summary_text(summary).splitlines())
             except Exception as exc:
                 logger.exception("factor rebalance failed for %s: %s", user_id, exc)
         # Yesterday's Picks, bought on the AI account at this first pass after the open.
@@ -383,7 +388,8 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
         pending = await for_mine(db, user_id, pending)
         if pending:
             pending.sort(key=lambda s: s["expires_at"])
-            await notify(db, user_id, proposals_text(pending, f"Good morning: {len(pending)} idea(s) for your account, from strategies proven on the AI account."))
+            title, lines = alerts.split(proposals_text(pending, f"Good morning: {len(pending)} idea(s) for your account, from strategies proven on the AI account"))
+            await alerts.alert(db, user_id, "ideas", title, lines)
     return did
 
 
@@ -423,8 +429,9 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
     proposals from strategies that cleared both gates (backtest and paper
     record); the rest stay for the user."""
     from backend.autopilot import fence, service
+    from backend import alerts
+    from backend.autopilot.service import STOP_BUTTON
     from backend.core.models import Side
-    from backend.suggestions.notify import notify
 
     prefs = await PrefsStore(db).get(user_id)
     regime = (await service.regime_now(redis)).get("label")
@@ -482,12 +489,16 @@ async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dic
         else:
             refused.append(f"{s['symbol']} ({result.get('reason')})")
     if bought or refused:
-        lines = [f"🤖 Autopilot, {heading} on the AI account:"]
+        lines = []
         if bought:
             lines.append("Bought: " + ", ".join(bought))
         if refused:
             lines.append("Refused: " + "; ".join(refused[:5]) + (" …" if len(refused) > 5 else ""))
-        await notify(db, user_id, "\n".join(lines))
+        title = f"Autopilot, {heading} on the AI account"
+        if bought:
+            await alerts.alert(db, user_id, "money", title, lines, buttons=STOP_BUTTON + ([row] if (row := alerts.open_button("/settings/autopilot")) else []))
+        else:
+            await alerts.alert(db, user_id, "autopilot_refused", title, lines)
     # All of them: one the AI took is still the user's to take (for_mine decides).
     return pending
 
@@ -496,12 +507,10 @@ async def _login_reminders(db, redis, now: datetime, get_adapter=None) -> None:
     """Weekdays 08:30 and again 09:05 IST: one Telegram message listing each
     broker not logged in today, with its login link. Without a session
     nothing runs that day: no holdings prices, journal, plan or AI trading."""
-    from html import escape
-
+    from backend import alerts
     from backend.auth.broker_credentials import get_credential_store
     from backend.brokers.registry import get_broker_adapter
     from backend.brokers.roles import LABELS
-    from backend.suggestions.notify import notify
 
     local = now.astimezone(IST)
     if not is_trading_day(local.date()) or not (LOGIN_REMIND <= local.time() < SESSION_OPEN):
@@ -512,7 +521,7 @@ async def _login_reminders(db, redis, now: datetime, get_adapter=None) -> None:
         user_id = doc["user_id"]
         if not await redis.set(f"login:remind:{user_id}:{local.date()}:{slot}", _TOKEN, nx=True, px=86_400_000):
             continue
-        lines = []
+        lines, buttons = [], []
         for broker, role in sorted(doc["broker_roles"].items()):
             try:
                 adapter = await get_adapter(broker, user_id, get_credential_store(), redis)
@@ -523,10 +532,10 @@ async def _login_reminders(db, redis, now: datetime, get_adapter=None) -> None:
                 logger.warning("login reminder: %s for %s failed: %s", broker, user_id, exc)
                 continue
             name = f"{broker.replace('_', ' ').title()} ({LABELS.get(role, role)})"
-            lines.append(f'• <a href="{escape(url)}">{escape(name)}</a>' if url else f"• {escape(name)}: log in under Settings")
+            lines.append(name)
+            buttons.append([{"text": name, "url": url}] if url else alerts.open_button("/settings"))
         if lines:
-            await notify(db, user_id, "🔑 Log in before 9:15 so today's prices, analysis and AI trading can run:\n"
-                         + "\n".join(lines), html=True)
+            await alerts.alert(db, user_id, "action", "Log in before 9:15", lines, buttons=[b for b in buttons if b] or None)
 
 
 async def autorun_loop(db, redis) -> None:
