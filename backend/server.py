@@ -94,6 +94,8 @@ async def ensure_collection_indexes(d) -> None:
         await LabRunStore(d).ensure_indexes()
         await d["mine_action_state"].create_index([("user_id", 1), ("action_id", 1)], unique=True)
         await d["picks_dismissed"].create_index([("user_id", 1), ("pick_id", 1)], unique=True)
+        await d["alerts"].create_index("created_at", expireAfterSeconds=30 * 86400)
+        await d["alerts"].create_index([("user_id", 1), ("state", 1)])
         await d["corporate_events"].create_index([("symbol", 1), ("kind", 1), ("date", 1)], unique=True)
         await d["corporate_events_meta"].create_index("symbol", unique=True)
         await d["watchlist"].create_index("user_id", unique=True)

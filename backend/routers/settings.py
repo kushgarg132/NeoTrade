@@ -110,6 +110,16 @@ class PreferencesPatch(BaseModel):
     news_alerts: Optional[Literal["held", "held+watched", "all", "off"]] = None
     goal: Optional[GoalIn] = None
     setup_skipped: Optional[list[Literal[SETUP_STEP_IDS]]] = None
+    alert_mute: Optional[dict[str, bool]] = None
+    breaking_news_min: Optional[int] = Field(default=None, ge=1, le=10)
+
+    @field_validator("alert_mute")
+    @classmethod
+    def _mute(cls, value):
+        from backend.alerts import KINDS
+        if value is not None and set(value) - KINDS:
+            raise ValueError("unknown alert kind")
+        return value
 
     @field_validator("broker_roles")
     @classmethod

@@ -1,7 +1,7 @@
 ---
 page: platform
-covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: e83120c
+covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/alerts.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
+verified_at: f3b74bd
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -141,6 +141,12 @@ All times IST. Background loops start in `jobs.py::start_loops`, called by the `
 - Engine code uses `Clock`, never `datetime.now` (grep test `test_no_datetime_now.py`); compare `Side` by enum identity, not string (`core/models.py::Side` docstring: a past P0).
 - Every per-account record carries `user_id` (CLAUDE.md invariant); `mine_book(user_id)` = `<uid>:mine`, autopilot book `<uid>:autopilot` keep real-money books apart from the AI paper book (`engine/persistence.py`).
 - Rate limits fail open when Redis is down (`rate_limit.py::allow`); `mark` never raises (`system/jobs.py`).
+
+## Alerts
+
+`backend/alerts.py::alert(db, user_id, kind, title, lines, symbol=, link=, buttons=)` is the single entry point for Telegram alerts (it calls `guardrails/telegram.py::alert`, which takes `buttons` as an inline keyboard). Instant kinds (`exit`, `money`, `news_breaking`, `action`) send a card at once: icon + `<b>title</b>` + at most 3 escaped lines. Batched kinds (`ideas`, `news`, `learning`, `review`, `autopilot_refused`, `stale_ideas`) are queued and `drain(db, user_id, now)` renders them as a "Since last update" block (5 a kind, then "…and N more"), claiming rows `queued -> digested` (`requeue` undoes it). `ideas` and `stale_ideas` reach admins only. Unknown kind raises `ValueError`; a muted kind (pref `alert_mute`) is logged `muted` and not sent; send and log failures are swallowed. `open_button` / `sell_buttons` build URL buttons only when `APP_URL` is set.
+
+Collection `alerts`: `user_id, kind, title, lines, symbol, link, state (queued|digested|sent|muted|failed), created_at, digested_at`; TTL 30 days on `created_at`, index `(user_id, state)` (created in `server.py` startup). Prefs `alert_mute` ({kind: bool}, keys validated against `alerts.KINDS`) and `breaking_news_min` (int 1-10, default 7) are editable via `PreferencesPatch`. Tests: `tests/test_alerts.py`.
 
 ## Endpoints
 

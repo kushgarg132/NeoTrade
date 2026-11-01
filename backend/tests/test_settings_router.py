@@ -523,3 +523,11 @@ def test_daily_loss_limit_rejects_infinity_and_nan():
 ])
 def test_broker_credentials_reject_unknown_brokers_and_oversized_fields(client, body):
     assert client.post("/api/v1/settings/broker-credentials", json=body).status_code == 422
+
+
+def test_alert_prefs_validate(client):
+    url = "/api/v1/settings/preferences"
+    assert client.put(url, json={"alert_mute": {"exit": True}}).json()["alert_mute"] == {"exit": True}
+    assert client.put(url, json={"alert_mute": {"bogus": True}}).status_code == 422
+    assert client.put(url, json={"breaking_news_min": 0}).status_code == 422
+    assert client.put(url, json={"breaking_news_min": 11}).status_code == 422

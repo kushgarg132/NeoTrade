@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     # Guardrail alerts (backend/guardrails/telegram.py). One bot for the whole
     # deployment, created with @BotFather; unset means in-app alerts only.
     TELEGRAM_BOT_TOKEN: Optional[str] = None
+    # Public frontend URL; alert buttons that open the app need it (unset: no URL buttons).
+    APP_URL: Optional[str] = None
 
     # Emails allowed to change deployment-wide settings. Role is re-derived
     # from this list on every login.

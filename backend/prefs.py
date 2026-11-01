@@ -73,6 +73,10 @@ DEFAULTS = {
     # The owner's goal (routers/settings.py validates it; start/start_value are
     # stamped server-side): {kind: "value"|"beat_nifty", target, by, start, start_value}.
     "goal": None,
+    # Telegram alert router (backend/alerts.py): {kind: True} mutes a kind; a news
+    # item at or above breaking_news_min (1-10) is sent at once.
+    "alert_mute": {},
+    "breaking_news_min": 7,
     "setup_skipped": [],  # Home setup checklist steps the user chose to skip (routers/today.py::_setup)
 }
 
