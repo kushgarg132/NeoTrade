@@ -54,3 +54,8 @@ test('controls wait for the GET and for an in-flight save', () => {
   assert.match(notif, /\.finally\(\(\) => setBusy\(false\)\)/);
   assert.match(notif, /detailToText\(/);
 });
+
+test('the News alerts picker is behind the load gate and waits for a save', () => {
+  assert.match(notif, /gate\('news', \(\s*<Segmented label="News alerts"[^>]*disabled=\{\(\) => busy\}/);
+  assert.doesNotMatch(notif, /value === null \?/);
+});

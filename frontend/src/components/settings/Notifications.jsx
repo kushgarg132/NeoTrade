@@ -85,9 +85,9 @@ const Notifications = () => {
         <p className="text-[13px] text-[var(--text-muted)] mb-2">
           Material news, as a toast here and on Telegram when linked. A market-wide shock reaches anyone holding something.
         </p>
-        {value === null ? <Ruling rows={1} /> : (
-          <Segmented label="News alerts" options={NEWS_ALERTS} value={value} onChange={pick} />
-        )}
+        {gate('news', (
+          <Segmented label="News alerts" options={NEWS_ALERTS} value={value} onChange={pick} disabled={() => busy} />
+        ))}
         {noteAt('news')}
       </div>
     </Sheet>
