@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Dict, Any, Optional
 import json
 import pandas as pd
@@ -9,7 +9,9 @@ import time
 
 from backend.auth.dependency import get_optional_user
 from backend.auth.models import User
+from backend.database import db
 from backend.datalayer.stock_info import INTRADAY_WINDOWS
+from backend.instruments.master import InstrumentMaster
 from backend.market_cache import cached
 
 router = APIRouter()
@@ -533,3 +535,11 @@ async def get_quotes(symbols: str):
             _quote_cache[key] = (time.monotonic(), quotes)
         by_symbol.update({q["symbol"]: q for q in quotes})
     return [by_symbol[s] for s in wanted if s in by_symbol]
+
+
+@router.get("/trading/instruments")
+async def search_instruments(q: str, limit: int = Query(10, ge=1, le=50)):
+    """Header search over the shared instrument master; public, so guests can
+    find a stock. Kept at its old /trading path, off the user-gated trading router."""
+    instruments = await InstrumentMaster(db.db).search(q, limit=limit)
+    return [i.model_dump() for i in instruments]

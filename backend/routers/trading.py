@@ -610,13 +610,6 @@ async def get_equity(venue: Optional[Venue] = None, ledger: LedgerStore = Depend
     return {"equity": equity}
 
 
-@router.get("/instruments")
-async def search_instruments(q: str, limit: int = Query(10, ge=1, le=50)):
-    master = InstrumentMaster(db.db)
-    instruments = await master.search(q, limit=limit)
-    return [i.model_dump() for i in instruments]
-
-
 @router.post("/backtests/{strategy_name}", status_code=202)
 async def run_gate_backtest(strategy_name: str, admin: User = Depends(require_admin)):
     """Backtests one strategy over the last year and records the result

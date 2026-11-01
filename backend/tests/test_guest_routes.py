@@ -4,6 +4,7 @@ guest can reach calls a model."""
 
 from datetime import datetime, timezone
 
+import pytest
 from fastapi.routing import _iter_routes_with_context
 from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
@@ -31,6 +32,7 @@ PUBLIC = {
     ("GET", "/api/v1/news/results"),
     ("GET", "/api/v1/agents/intraday/{symbol}"),
     ("POST", "/api/v1/agents/quick-analyze/{symbol}"),
+    ("GET", "/api/v1/trading/instruments"),
 }
 OPENED = ("/api/v1/market", "/api/v1/research", "/api/v1/news", "/api/v1/agents")
 
@@ -64,9 +66,12 @@ def test_public_routes_do_not_require_user():
 
 
 def test_every_other_route_on_opened_routers_requires_user():
+    seen = set()
     for key, route in _routes():
         if key[1].startswith(OPENED) and key not in PUBLIC:
+            seen.add(key)
             assert get_current_user in _needs(route.dependant), key
+    assert {("GET", "/api/v1/news/accuracy"), ("POST", "/api/v1/agents/analyze/{symbol}")} <= seen
 
 
 def test_guest_uncached_index_analysis_is_401(monkeypatch):
@@ -96,7 +101,11 @@ async def test_guest_news_feed_mine_ignores_mine(monkeypatch):
     assert [i["id"] for i in out["items"]] == ["n1"]
 
 
-def test_guest_quick_analyze_uses_ip_key(monkeypatch):
+@pytest.mark.parametrize("headers, key", [
+    ({"X-Forwarded-For": "9.9.9.9, 13.207.196.111", "X-Real-IP": "13.207.196.111"}, "quick_analyze:ip:9.9.9.9"),
+    ({"X-Real-IP": "1.2.3.4"}, "quick_analyze:ip:1.2.3.4"),
+])
+def test_guest_quick_analyze_uses_ip_key(monkeypatch, headers, key):
     from backend import rate_limit
     from backend.research.quick import QuickAnalysis
     from backend.routers import agents
@@ -112,6 +121,6 @@ def test_guest_quick_analyze_uses_ip_key(monkeypatch):
 
     monkeypatch.setattr(rate_limit, "allow", allow)
     monkeypatch.setattr(agents, "quick_analysis", stub)
-    resp = TestClient(app).post("/api/v1/agents/quick-analyze/TCS", headers={"X-Real-IP": "1.2.3.4"})
+    resp = TestClient(app).post("/api/v1/agents/quick-analyze/TCS", headers=headers)
     assert resp.status_code == 200
-    assert calls == [("quick_analyze:ip:1.2.3.4", 30, 60)]
+    assert calls == [(key, 30, 60)]

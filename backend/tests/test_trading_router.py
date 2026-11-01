@@ -26,7 +26,7 @@ from backend.core.models import Fill, Position, Side
 from backend.engine.persistence import LedgerStore
 from backend.instruments.master import InstrumentMaster
 from backend.instruments.models import Instrument
-from backend.routers import trading
+from backend.routers import market_data, trading
 from backend.runs import RunStore
 
 _USER = User(
@@ -271,13 +271,13 @@ class _FakeDb:
 
 
 # ---------------------------------------------------------------------------
-# GET /trading/instruments (wraps InstrumentMaster.search)
+# GET /trading/instruments (wraps InstrumentMaster.search; lives on market_data, public)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
 def instruments_client(monkeypatch):
     fake_db = AsyncMongoMockClient()["test_db"]
-    monkeypatch.setattr(trading, "db", type("_Db", (), {"db": fake_db})())
+    monkeypatch.setattr(market_data, "db", type("_Db", (), {"db": fake_db})())
 
     async def _seed():
         master = InstrumentMaster(fake_db)
@@ -296,7 +296,7 @@ def instruments_client(monkeypatch):
     asyncio.run(_seed())
 
     app = FastAPI()
-    app.include_router(trading.router, prefix="/api/v1")
+    app.include_router(market_data.router, prefix="/api/v1")
     return TestClient(app)
 
 

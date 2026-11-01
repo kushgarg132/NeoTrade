@@ -25,11 +25,14 @@ async def quick_analyze_stock(symbol: str, request: Request, user: Optional[User
     from backend.rate_limit import allow
 
     # Same per-user budget as the socket's quick_analyze action; a guest is
-    # budgeted per client IP (Nginx sets X-Real-IP), at half the rate.
+    # budgeted per client IP, at half the rate.
     if user:
         key, limit = f"quick_analyze:{user.id}", 60
     else:
-        ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "unknown")
+        # Vercel's rewrite overwrites X-Forwarded-For with the visitor's IP and Nginx appends
+        # Vercel's egress IP (which is X-Real-IP), so the leftmost XFF entry is the visitor.
+        xff = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        ip = xff or request.headers.get("x-real-ip") or (request.client.host if request.client else "unknown")
         key, limit = f"quick_analyze:ip:{ip}", 30
     if not await allow(db.redis, key, limit, 60):
         raise HTTPException(status_code=429, detail="Too many requests in a minute; wait a moment and try again.")
