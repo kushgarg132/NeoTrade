@@ -452,7 +452,6 @@ async def test_malformed_or_foreign_callback_data_does_nothing(monkeypatch, data
 
 
 def _stub_propose(monkeypatch, out):
-    import json  # noqa: F401
     propose = SimpleNamespace(name="propose_order", coroutine=AsyncMock(return_value=out))
     monkeypatch.setattr(telegram_bot, "action_tools", lambda *a, **k: [propose])
     answer, send = AsyncMock(), AsyncMock()
@@ -468,7 +467,7 @@ async def test_sell_tap_sends_confirm_card(monkeypatch):
     data = telegram_bot.Tap(command="sell", id="TCS|10").pack()
     await telegram_bot._callback(None, None, "alice", 42, "tok", {"id": "cb", "data": data})
     send.assert_awaited_once_with(42, "Sell 10 TCS", telegram_bot._buttons({"id": "a1"}), "tok")
-    answer.assert_awaited_once()
+    answer.assert_awaited_once_with("cb", "", "tok")
     propose.coroutine.assert_awaited_once_with(symbol="TCS", side="SELL", quantity=10, product="CNC", account="mine")
 
 
@@ -480,7 +479,7 @@ async def test_sell_tap_refusal_is_answered_not_carded(monkeypatch):
     send.assert_not_awaited()
 
 
-@pytest.mark.parametrize("spec", ["TCS", "TCS|x", "TCS|0", "TCS|-3"])
+@pytest.mark.parametrize("spec", ["TCS", "TCS|x", "TCS|0", "TCS|-3", "TCS|²"])
 async def test_sell_tap_malformed_is_refused(monkeypatch, spec):
     propose, answer, send = _stub_propose(monkeypatch, "unused")
     await telegram_bot._callback(None, None, "alice", 42, "tok",
@@ -494,3 +493,12 @@ def test_sell_callback_data_roundtrips_and_fits_telegram_limit():
     tap = telegram_bot.Tap.unpack("nt:sell:M&M|5")
     assert (tap.command, tap.id) == ("sell", "M&M|5")
     assert len(telegram_bot.Tap(command="sell", id="BAJAJ-AUTO|100000").pack().encode()) <= 64
+
+
+async def test_sell_tap_error_still_answers_the_callback(monkeypatch):
+    propose, answer, send = _stub_propose(monkeypatch, "unused")
+    propose.coroutine.side_effect = RuntimeError("broker down")
+    data = telegram_bot.Tap(command="sell", id="TCS|10").pack()
+    await telegram_bot._callback(None, None, "alice", 42, "tok", {"id": "cb", "data": data})
+    answer.assert_awaited_once()
+    send.assert_not_awaited()

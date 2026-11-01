@@ -365,18 +365,22 @@ async def _sell(db, redis, user_id: str, chat_id: int, token: Optional[str], cal
     """Exit-alert "Sell xN": propose a SELL on the user's own account. Only a card
     is created; the usual Confirm tap places the order."""
     symbol, _, qty = spec.rpartition("|")
-    if not symbol or not qty.isdigit() or int(qty) <= 0:
+    if not symbol or not (qty.isascii() and qty.isdigit()) or int(qty) <= 0:
         await telegram.answer_callback(callback_id, "That button is no longer valid.", token)
         return
-    tools = {t.name: t for t in action_tools(db, redis, user_id, f"Sell {qty} {symbol}")}
-    out = await tools["propose_order"].coroutine(symbol=symbol, side="SELL", quantity=int(qty),
-                                                 product="CNC", account="mine")
-    if out.startswith(CARD_PREFIX):
-        card = json.loads(out[len(CARD_PREFIX):])
-        await telegram.answer_callback(callback_id, "", token)
-        await telegram.send_buttons(chat_id, card["summary"], _buttons(card), token)
-    else:
-        await telegram.answer_callback(callback_id, out[:180], token)
+    try:
+        tools = {t.name: t for t in action_tools(db, redis, user_id, f"Sell {qty} {symbol}")}
+        out = await tools["propose_order"].coroutine(symbol=symbol, side="SELL", quantity=int(qty),
+                                                     product="CNC", account="mine")
+        if out.startswith(CARD_PREFIX):
+            card = json.loads(out[len(CARD_PREFIX):])
+            await telegram.answer_callback(callback_id, "", token)
+            await telegram.send_buttons(chat_id, card["summary"], _buttons(card), token)
+            return
+    except Exception:
+        logger.exception("telegram sell tap failed for user %s", user_id)
+        out = "NeoTrade could not prepare that sale. Please check the app and try again."
+    await telegram.answer_callback(callback_id, out[:180], token)
 
 
 async def _callback(db, redis, user_id: str, chat_id: int, token: Optional[str], callback: dict) -> None:
