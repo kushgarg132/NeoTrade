@@ -67,8 +67,14 @@ def world(monkeypatch):
 
 @pytest.fixture
 def client():
+    from backend.auth.dependency import get_optional_user
+    from backend.auth.models import User
+
     app = FastAPI()
     app.include_router(market_data.router, prefix="/api/v1")
+    # Signed in: a guest may only read a stored explanation (test_guest_routes.py).
+    app.dependency_overrides[get_optional_user] = lambda: User(id="u1", google_sub="g", email="a@b.c", name="A",
+                                                              created_at=datetime.now(timezone.utc))
     return TestClient(app)
 
 

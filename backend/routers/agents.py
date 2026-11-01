@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 import logging
 
-from backend.auth.dependency import get_current_user
+from backend.auth.dependency import get_current_user, get_optional_user
 from backend.auth.models import User
 
 from backend.research.graph import ResearchAgent, ResearchReport
@@ -15,15 +17,21 @@ research_agent = ResearchAgent()
 
 
 @router.post("/quick-analyze/{symbol}", response_model=QuickAnalysis)
-async def quick_analyze_stock(symbol: str, user: User = Depends(get_current_user)):
+async def quick_analyze_stock(symbol: str, request: Request, user: Optional[User] = Depends(get_optional_user)):
     """Non-AI counterpart to /analyze/{symbol}: quote, fundamentals, and
     price-based technicals only, no LLM call. HTTP fallback for the `quick_analyze`
     websocket action (see backend/ws/routes.py) when the socket isn't up yet."""
     from backend.database import db
     from backend.rate_limit import allow
 
-    # Same per-user budget as the socket's quick_analyze action.
-    if not await allow(db.redis, f"quick_analyze:{user.id}", 60, 60):
+    # Same per-user budget as the socket's quick_analyze action; a guest is
+    # budgeted per client IP (Nginx sets X-Real-IP), at half the rate.
+    if user:
+        key, limit = f"quick_analyze:{user.id}", 60
+    else:
+        ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "unknown")
+        key, limit = f"quick_analyze:ip:{ip}", 30
+    if not await allow(db.redis, key, limit, 60):
         raise HTTPException(status_code=429, detail="Too many requests in a minute; wait a moment and try again.")
     try:
         return await quick_analysis(symbol)

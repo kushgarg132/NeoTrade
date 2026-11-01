@@ -7,7 +7,7 @@ import logging
 import time
 from backend.configs.settings import settings
 
-from backend.auth.dependency import get_current_user, require_admin
+from backend.auth.dependency import get_optional_user, require_admin
 from backend.auth.models import User
 from backend.core.models import NewsArticle
 import random
@@ -147,7 +147,7 @@ async def news_feed(
     material: bool = False,
     before: Optional[datetime] = None,
     limit: int = Query(50, ge=1, le=100),
-    user: User = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
 ):
     """The ingest worker's news store (backend/datalayer/news.py), newest
     first: relevant items, scored or still waiting to be. An NSE filing the
@@ -167,7 +167,7 @@ async def news_feed(
         query["scope"] = scope
     if before:
         query["published_at"] = {"$lt": before}
-    if mine:
+    if mine and user:  # a guest has no holdings: `mine` is ignored
         held = await db.db["paper_positions"].distinct("symbol", {"user_id": user.id, "quantity": {"$ne": 0}})
         watched = await db.db["watchlist"].distinct("symbols", {"user_id": user.id})
         snapshot = await latest_snapshot(db.db, user.id)
@@ -191,7 +191,7 @@ OUTCOME_FIELDS = {"type": 1, "target": 1, "direction": 1, "impact": 1,
 
 
 @router.get("/news/item/{item_id}")
-async def news_item(item_id: str, user: User = Depends(get_current_user)):
+async def news_item(item_id: str, user: Optional[User] = Depends(get_optional_user)):
     """One news item with what the scorer predicted and what the market then did (news_outcomes rows; none
     while unscored). News is shared across users."""
     import re
@@ -231,7 +231,7 @@ HEADLINE_HOURS = 72
 
 
 @router.get("/news/symbols")
-async def symbol_news(symbols: str = "", user: User = Depends(get_current_user)):
+async def symbol_news(symbols: str = "", user: Optional[User] = Depends(get_optional_user)):
     """What the news layer says about each listed stock, for list pages:
     its blended sentiment and its latest scored headline (72h). Quiet names
     are left out."""
@@ -289,7 +289,7 @@ HISTORY_LIMIT = 500
 
 
 @router.get("/news/symbol/{symbol}")
-async def symbol_history(symbol: str, days: int = Query(180, ge=1, le=365), user: User = Depends(get_current_user)):
+async def symbol_history(symbol: str, days: int = Query(180, ge=1, le=365), user: Optional[User] = Depends(get_optional_user)):
     """Scored news on one stock over `days`, newest first (at most 500), for
     the chart's news markers: each item with THIS symbol's direction and
     impact, material judged on that impact (an item only tagged with the
@@ -321,7 +321,7 @@ RESULTS_DAYS = 120
 
 
 @router.get("/news/results")
-async def symbol_results(symbols: str = "", user: User = Depends(get_current_user)):
+async def symbol_results(symbols: str = "", user: Optional[User] = Depends(get_optional_user)):
     """Each listed stock's next results date within RESULTS_DAYS, read from the
     stored corporate-events calendar (mine/events.py fills it for held symbols
     only; nothing is fetched here). Names without a known date are left out."""
