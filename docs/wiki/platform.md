@@ -80,7 +80,7 @@ Redis keys owned or written by files on this page:
 
 | key | TTL | owner |
 |---|---|---|
-| `rate:<name>` (names: `analyze:<uid>` 10/60 s (checked in `_stream_analysis` only when a run is needed, not in `_BUDGETS`), `quick_analyze:<uid>` 60/60 s (guest HTTP quick-analyze: `quick_analyze:ip:{ip}` 30/60 s, ip from `X-Real-IP`, else the socket peer), `chat:<uid>` 20/60 s, `index_why:<uid>` 20/60 s on the socket; `scan:<uid>` 5/600 s; `rebalance:<uid>` 10/60 s; `strategies:submit:<uid>:<IST day>` 3/2 days) | window | `rate_limit.py::allow` |
+| `rate:<name>` (names: `analyze:<uid>` 10/60 s (checked in `_stream_analysis` only when a run is needed, not in `_BUDGETS`), `quick_analyze:<uid>` 60/60 s (guest HTTP quick-analyze: `quick_analyze:ip:{ip}` 30/60 s, ip = the leftmost `X-Forwarded-For` entry (Vercel's rewrite sets it to the visitor and Nginx appends Vercel's egress IP, which is what `X-Real-IP` holds), else `X-Real-IP`, else the socket peer), `chat:<uid>` 20/60 s, `index_why:<uid>` 20/60 s on the socket; `scan:<uid>` 5/600 s; `rebalance:<uid>` 10/60 s; `strategies:submit:<uid>:<IST day>` 3/2 days) | window | `rate_limit.py::allow` |
 | `worker:alive:<BOOT_ID>` | 90 s, refreshed every 30 s | `runs.py::keep_alive`, `runs.py::ALIVE_KEY` |
 | `launch:<uid>:<mode>` | 30 s | `trading.py::launch_run` (one run per mode) |
 | `broker:<uid>:kite:access_token` | until next 06:00 IST | `kite_session.py::KiteSessionManager` (other brokers: brokers/ pages) |
@@ -144,7 +144,7 @@ All times IST. Background loops start in `jobs.py::start_loops`, called by the `
 
 ## Endpoints
 
-Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix and dependencies) at a51584a; 124 rows. Auth: `user` = bearer JWT via `get_current_user`; `admin` = also `require_admin` (403 otherwise); `none` = no bearer. Missing/invalid bearer returns 401/403 (HTTPBearer; the smoke test accepts either). **Guest-readable (since guest browsing):** every `/market/*` route and `/research/{symbol}/note` (no auth at all, except `/market/index/{ticker}/analysis` and `/market/sector/{name}` which use `get_optional_user`), `GET /news/feed|item/{id}|symbols|symbol/{symbol}|results` and `POST /agents/quick-analyze/{symbol}` (`get_optional_user`). Rows below say `user` for the old behaviour; read these as `guest` where listed here. A guest `GET /market/index/{ticker}/analysis` without `?cached=true` returns 401 (generating calls the model); `/news/feed?mine=true` ignores `mine` for a guest; `/news/accuracy` stays admin. `/news/results` (the events calendar) reflects symbols some platform user holds (aggregate, no identity) and is visible to guests. `get_optional_user` in `auth/dependency.py`. `/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json` are also public (Starlette routes, not in the table). Paths with `:path` take the rest including `:`.
+Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix and dependencies) at a51584a; 124 rows. Auth: `user` = bearer JWT via `get_current_user`; `admin` = also `require_admin` (403 otherwise); `none` = no bearer. Missing/invalid bearer returns 401/403 (HTTPBearer; the smoke test accepts either). **Guest-readable (since guest browsing):** every `/market/*` route and `/research/{symbol}/note` (no auth at all, except `/market/index/{ticker}/analysis` and `/market/sector/{name}` which use `get_optional_user`), `GET /news/feed|item/{id}|symbols|symbol/{symbol}|results` and `POST /agents/quick-analyze/{symbol}` (`get_optional_user`), and `GET /trading/instruments` (header search; served by `market_data`, no auth). Rows below say `user` for the old behaviour; read these as `guest` where listed here. A guest `GET /market/index/{ticker}/analysis` without `?cached=true` returns 401 (generating calls the model); `/news/feed?mine=true` ignores `mine` for a guest; `/news/accuracy` stays admin. `/news/results` (the events calendar) reflects symbols some platform user holds (aggregate, no identity) and is visible to guests. `get_optional_user` in `auth/dependency.py`. `/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json` are also public (Starlette routes, not in the table). Paths with `:path` take the rest including `:`.
 
 | Method | Path | Handler | Auth |
 |---|---|---|---|
@@ -259,7 +259,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/trading/trades` (`status`, `limit`, `venue`, `mode`, `strategy`) | `backend/routers/trading.py::get_trades` | user |
 | GET | `/api/v1/trading/trades/{trade_id}` | `backend/routers/trading.py::get_trade` | user (404 `Trade not found` incl. another user's id) |
 | GET | `/api/v1/trading/equity` | `backend/routers/trading.py::get_equity` | user |
-| GET | `/api/v1/trading/instruments` | `backend/routers/trading.py::search_instruments` | user |
+| GET | `/api/v1/trading/instruments` | `backend/routers/market_data.py::search_instruments` | none (guest header search; kept at the `/trading` path, off the gated trading router) |
 | POST | `/api/v1/trading/backtests/{strategy_name}` | `backend/routers/trading.py::run_gate_backtest` | admin |
 | GET | `/api/v1/trading/backtests/{strategy_name}` | `backend/routers/trading.py::latest_gate_backtest` | user |
 | POST | `/api/v1/suggestions/scan` | `backend/routers/suggestions.py::scan_now` | admin |

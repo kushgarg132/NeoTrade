@@ -217,7 +217,7 @@ All behind `get_current_user` at include time (`server.py`: trading, broker, opt
 | `GET /trading/positions?venue=` | `::get_positions` | user | position dicts marked at read time via `marks.mark_prices` (stored `unrealized_pnl` is 0) |
 | `GET /trading/kill-switch` | `::get_kill_switch` | user | `{tripped, reason, equity, tripped_at}` |
 | `GET /trading/fills`, `/trades`, `/equity` | `::get_fills/get_trades/get_equity` | user | `venue=live` reads the `user:mine` book; `/trades` params `status`, `limit<=1000`, `venue`, `mode`, `strategy`; `GET /trading/trades/{trade_id}` -> the user's trade (`LedgerStore.get_trade`, unindexed) or 404 `Trade not found`; `/equity` -> `{equity}` realized only (no marks) |
-| `GET /trading/instruments?q=&limit=` | `::search_instruments` | user | `InstrumentMaster.search` |
+| `GET /trading/instruments?q=&limit=` | `routers/market_data.py::search_instruments` (moved off this router so guests can search) | none | `InstrumentMaster.search` |
 | `POST /trading/backtests/{name}` | `::run_gate_backtest` | admin | 202 `{started, history}` |
 | `GET /trading/backtests/{name}` | `::latest_gate_backtest` | user | `{strategy, passed, run_at, ...result minus trades}`; 404 none |
 | `GET /broker/list` | `broker.py::list_brokers` | user | `{brokers}` |
