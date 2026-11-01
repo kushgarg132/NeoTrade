@@ -5,6 +5,7 @@ into the caller."""
 
 import html
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Sequence
 
@@ -84,10 +85,11 @@ async def drain(db, user_id, now: datetime) -> tuple[str, list]:
     ids = [r["_id"] for r in rows if not muted.get(r["kind"])]
     if not ids:
         return "", []
+    claim = uuid.uuid4().hex
     await db["alerts"].update_many({"_id": {"$in": ids}, "state": "queued"},
-                                   {"$set": {"state": "digested", "digested_at": now}})
+                                   {"$set": {"state": "digested", "digested_at": now, "claim": claim}})
     # another drain may have won some rows: keep only the ones this call claimed
-    claimed = await db["alerts"].find({"_id": {"$in": ids}, "state": "digested", "digested_at": now}).to_list(None)
+    claimed = await db["alerts"].find({"claim": claim}).to_list(None)
     if not claimed:
         return "", []
     out = ["<b>Since last update</b>"]
@@ -103,4 +105,4 @@ async def drain(db, user_id, now: datetime) -> tuple[str, list]:
 
 
 async def requeue(db, ids: list) -> None:
-    await db["alerts"].update_many({"_id": {"$in": ids}}, {"$set": {"state": "queued", "digested_at": None}})
+    await db["alerts"].update_many({"_id": {"$in": ids}}, {"$set": {"state": "queued", "digested_at": None}, "$unset": {"claim": ""}})

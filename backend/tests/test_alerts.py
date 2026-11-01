@@ -123,3 +123,10 @@ def test_sell_buttons_without_app_url_has_only_sell(monkeypatch):
 
 def test_split():
     assert alerts.split("Title\nA\n\nB") == ("Title", ["A", "B"])
+
+
+async def test_drain_with_microsecond_now(db):
+    await alerts.alert(db, "boss", "news", "x")
+    block, ids = await alerts.drain(db, "boss", datetime(2026, 11, 1, 9, 0, 0, 123456, tzinfo=timezone.utc))
+    assert "• x" in block and len(ids) == 1
+    assert await alerts.drain(db, "boss", NOW) == ("", [])
