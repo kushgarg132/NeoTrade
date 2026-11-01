@@ -255,3 +255,16 @@ async def test_admin_alert_is_action_kind(monkeypatch):
     monkeypatch.setattr("backend.alerts.alert", fake)
     await data_quality._send_admins(db, "⚠️ NeoTrade data problem\n• Quotes loop failing")
     assert calls == [("a1", "action", "NeoTrade data problem", ["• Quotes loop failing"])]
+
+
+async def test_recovery_title_has_no_check_mark(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    await db["users"].insert_one({"id": "a1", "role": "admin"})
+    calls = []
+
+    async def fake(db_, user_id, kind, title, lines=(), **kw):
+        calls.append(title)
+        return True
+    monkeypatch.setattr("backend.alerts.alert", fake)
+    await data_quality._send_admins(db, "✅ NeoTrade recovered\n• Quotes loop failing")
+    assert calls == ["NeoTrade recovered"]

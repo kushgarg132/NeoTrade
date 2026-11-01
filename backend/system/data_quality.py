@@ -268,7 +268,7 @@ def _key(failure: str) -> str:
 async def _send_admins(db, text: str) -> None:
     from backend import alerts
 
-    title, lines = alerts.split(text.removeprefix("⚠️ "))  # the action card brings its own ⚠️
+    title, lines = alerts.split(text.removeprefix("⚠️ ").removeprefix("✅ "))  # the card brings its own icon
     async for admin in db["users"].find({"role": "admin"}, {"id": 1}):
         await alerts.alert(db, admin["id"], "action", title, lines)
 

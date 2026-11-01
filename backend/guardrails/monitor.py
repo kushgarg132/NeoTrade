@@ -111,7 +111,10 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
 async def _alert(db, user_id: str, event: dict) -> None:
     await hub.publish(user_id, "guardrails", "breach", event)
     button = alerts.open_button("/settings/guardrails")
-    await alerts.alert(db, user_id, "money", event["title"], [event["detail"]], buttons=[button] if button else None)
+    try:  # an alert must never stop the kill-switch / square-off path that calls this
+        await alerts.alert(db, user_id, "money", event["title"], [event["detail"]], buttons=[button] if button else None)
+    except Exception as exc:
+        logger.warning("guardrail alert failed for %s: %s", user_id, exc)
 
 
 async def square_off(redis, credentials, prefs: dict) -> list[dict]:
@@ -121,7 +124,7 @@ async def square_off(redis, credentials, prefs: dict) -> list[dict]:
     live = prefs.get("auto_square_off") == "live"
     user_id = prefs["user_id"]
     ai = brokers_for(prefs.get("broker_roles"), "ai")
-    alerts = []
+    out = []
     for broker in BROKERS:
         if broker in ai:
             continue
@@ -132,7 +135,7 @@ async def square_off(redis, credentials, prefs: dict) -> list[dict]:
             orders, left = exit_orders(await adapter.get_positions())
         except Exception as exc:
             logger.warning("square-off: %s positions failed for %s: %s", broker, user_id, exc)
-            alerts.append({"title": f"{broker}: could not read positions to square off",
+            out.append({"title": f"{broker}: could not read positions to square off",
                            "detail": "Close your intraday positions yourself."})
             continue
         if not orders and not left:
@@ -156,9 +159,9 @@ async def square_off(redis, credentials, prefs: dict) -> list[dict]:
                 lines.append(f"Failed, close these yourself: {describe(failed)}.")
         if left:
             lines.append(f"Not touched: {', '.join(left)}.")
-        alerts.append({"title": f"{broker}: square-off {'sent' if live else 'preview'}",
+        out.append({"title": f"{broker}: square-off {'sent' if live else 'preview'}",
                        "detail": " ".join(lines)})
-    return alerts
+    return out
 
 
 async def run_tick(db, redis, now: datetime | None = None) -> int | None:
