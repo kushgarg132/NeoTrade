@@ -111,7 +111,7 @@ reports their ages.
 | Users, unique on `google_sub`; role `user` / `admin` | `backend/auth/store.py`, `backend/auth/models.py` |
 | Session JWT, 30 minutes | `backend/auth/jwt.py` |
 | Refresh token: opaque, SHA-256 hashed, rotated, replay-detecting, httpOnly cookie on `/api/v1/auth` | `backend/auth/refresh_store.py`, `backend/routers/auth.py` |
-| Every router behind `get_current_user`; admin routes behind `require_admin` | `backend/auth/dependency.py`, `backend/server.py` |
+| Every router behind `get_current_user` except the public guest reads (news, market, quick-analyze; `get_optional_user`); admin routes behind `require_admin` | `backend/auth/dependency.py`, `backend/server.py` |
 | WebSocket auth as `?token=` (browsers can't set WS headers) | `backend/ws/routes.py` |
 | Per-user rate limits and input bounds on write routes | the routers |
 
