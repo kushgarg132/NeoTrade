@@ -343,17 +343,14 @@ async def latest_snapshot(db, user_id: str) -> dict | None:
 
 async def daily_reviews(db, redis) -> int:
     """Re-reviews the portfolio of every user with a broker account set or a
-    portfolio analysed before, and alerts its owner (socket + Telegram)
+    portfolio analysed before, and tells its owner's socket
     about holdings whose verdict got worse. Run from the daily post-close
     pass (backend/scheduler.py), when the day's broker sessions are valid."""
-    from backend.app_settings import AppSettingsStore
     from backend.auth.broker_credentials import BrokerCredentialStore, fernet_from_settings
-    from backend.guardrails import telegram
     from backend.portfolio.rules import worsened
     from backend.ws.hub import hub
 
     credentials = BrokerCredentialStore(db, fernet_from_settings())
-    audience = await AppSettingsStore(db).get_portfolio_verdicts()
     reviewed = 0
     users = set(await db["portfolio_snapshots"].distinct("user_id")) | set(
         await db["user_prefs"].distinct("user_id", {"broker_roles": {"$exists": True, "$ne": {}}}))
@@ -367,14 +364,5 @@ async def daily_reviews(db, redis) -> int:
         worse = [r for r in snapshot["holdings"] if worsened(r.get("previous_verdict"), r.get("verdict", ""))]
         if not worse:
             continue
-        user = await db["users"].find_one({"id": user_id}) or {}
-        show = user.get("role") == "admin" or audience == "all"
-        lines = []
-        for r in worse:
-            label = f"{r['verdict']} (was {r['previous_verdict']})" if show else "worth a closer look"
-            reasons = ", ".join(r["reason_codes"]).replace("_", " ")
-            lines.append(f"{r['symbol']}: {label} -- {reasons}")
-        text = "NeoTrade daily portfolio review\n" + "\n".join(lines)
         await hub.publish(user_id, "portfolio", "worsened", {"symbols": [r["symbol"] for r in worse]})
-        await telegram.alert(db, user_id, text)
     return reviewed

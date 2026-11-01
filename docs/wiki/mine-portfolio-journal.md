@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: a761aa7
+verified_at: f8b3c20
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -224,7 +224,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | what | when (IST) | trigger | lock |
 |---|---|---|---|
 | `journal/sync.py::sync_user_trades` for all users | daily pass, 16:00 | `scheduler.py::_sync_journals` | `scheduler:daily_lock` |
-| `portfolio/service.py::daily_reviews`, then a Telegram alert plus `hub` "worsened" when `rules.worsened` | daily pass, after the journal sync | `scheduler.py::run_daily_jobs` | daily lock |
+| `portfolio/service.py::daily_reviews`, then a `hub` "worsened" socket event when `rules.worsened` (no Telegram: the post-close digest lists the worse verdicts) | daily pass, after the journal sync | `scheduler.py::run_daily_jobs` | daily lock |
 | `mine/history.py::write_all` | daily pass, after reviews | `scheduler.py::run_daily_jobs` | daily lock |
 | Weekly mirror Telegram (`mirror.text`, `accounts.ai_vs_me`) | Fridays, in the daily pass | `scheduler.py::_weekly_mirrors` | daily lock |
 | `digest.py::send_postclose` | end of the daily pass; skipped if local time < 15:30 (09:20 catch-up); adds a "⚠️ Reconciliation" line only when today's `broker_reconciliation` has a mismatch | `scheduler.py::run_daily_jobs` | daily lock |
@@ -241,7 +241,6 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
   - Non-visible users get `mask_row`: SELL/REVIEW become "REVIEW", everything else None, and `score`, `suggested`
     and `verdict_since` are nulled. `present` also nulls `plan`.
   - Needs-you drops `verdict_worse` and `add` when the gate is closed (`mine/actions.py::VERDICT_KINDS`).
-  - `daily_reviews` sends "worth a closer look" instead of the verdict.
   - The `conviction` rebalance rule returns 403 when the gate is closed. AI candidates are listed only when it is
     open.
   - `scoreboard` (You vs the AI: `digest.py::scoreboard` = `pnl_since` over the whole AI book, closed and net of charges; it was Picks-only until 2026-10-24) is admin-only in `today.py::today`.
