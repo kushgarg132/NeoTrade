@@ -60,3 +60,22 @@ test('IndexPage: guests read the cached story only; explain asks to sign in', ()
   assert.match(index, /import SignInCard from '..\/components\/SignInCard'/);
   assert.match(index, /const generate = user \? run :/);
 });
+
+test('Stock: the sign-in card belongs to one symbol and goes away once signed in', () => {
+  assert.match(stock, /setAsk\(\{ symbol, \.\.\.copy \}\)/);
+  assert.match(stock, /\{!user && ask\?\.symbol === symbol && <div id="sign-in"/);
+});
+
+test('Header: the hide-amounts eye is for signed-in users only (guests have no amounts; Sign in fits at 390px)', () => {
+  const header = read('../components/layout/Header.jsx');
+  assert.match(header, /\{user && \(\s*<button type="button" onClick=\{togglePrivacy\}/);
+});
+
+test('useStockAnalysis: a sign-in or sign-out resets the run count, and guests never run a fresh read', () => {
+  assert.match(analysis, /if \(aiRun\.uid !== uid\) setAiRun\(\{ symbol, uid, n: 0 \}\)/);
+  assert.match(analysis, /const aiTry = uid && aiRun\.symbol === symbol && aiRun\.uid === uid \? aiRun\.n : 0/);
+});
+
+test('Market: News remounts on sign-in/out so "My names" re-initialises', () => {
+  assert.match(market, /<News key=\{user\?\.id \?\? 'guest'\} \/>/);
+});

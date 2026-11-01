@@ -55,9 +55,12 @@ const Header = () => {
           <button type="button" onClick={() => window.dispatchEvent(new Event('margin-note:toggle'))} className={cn(BTN, 'lg:hidden')} aria-label="Open the assistant">
             <MessageSquare className="w-5 h-5" />
           </button>
-          <button type="button" onClick={togglePrivacy} className={cn(BTN, hidden && 'text-[var(--accent)]')} aria-pressed={hidden} aria-label={hidden ? 'Show amounts' : 'Hide amounts'}>
-            {hidden ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-          </button>
+          {/* Guests have no amounts to hide, and the room goes to Sign in on phones. */}
+          {user && (
+            <button type="button" onClick={togglePrivacy} className={cn(BTN, hidden && 'text-[var(--accent)]')} aria-pressed={hidden} aria-label={hidden ? 'Show amounts' : 'Hide amounts'}>
+              {hidden ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+          )}
           {/* Phones: theme lives in Settings, freeing room for the market word. */}
           <button type="button" onClick={toggle} className={cn(BTN, 'hidden sm:inline-flex')} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}

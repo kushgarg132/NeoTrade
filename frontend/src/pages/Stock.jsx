@@ -60,9 +60,9 @@ const Stock = () => {
   const [params] = useSearchParams();
   const { user } = useAuth();
   const { quick, ai, aiRead, retryAi, reloadQuick } = useStockAnalysis(symbol);
-  const [ask, setAsk] = useState(null); // guest: the sign-in copy for the action just tapped
+  const [ask, setAsk] = useState(null); // guest: the sign-in copy for the action just tapped, on this symbol
   const askSignIn = (copy) => {
-    setAsk(copy);
+    setAsk({ symbol, ...copy });
     requestAnimationFrame(() => document.getElementById('sign-in')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   };
   // Old ?tab=analysis links land on Details.
@@ -239,7 +239,7 @@ const Stock = () => {
         </Card>
       )}
 
-      {ask && <div id="sign-in" className="mb-3"><SignInCard {...ask} /></div>}
+      {!user && ask?.symbol === symbol && <div id="sign-in" className="mb-3"><SignInCard {...ask} /></div>}
       <AiRead aiRead={aiRead} retryAi={user ? retryAi : () => askSignIn(FRESH_READ)} />
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} label="Stock sections" />

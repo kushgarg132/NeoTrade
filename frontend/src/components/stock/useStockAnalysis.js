@@ -19,9 +19,12 @@ const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
   const QUICK0 = { data: null, loading: true, error: null };
   const [quickRaw, setQuick] = useState({ ...QUICK0, symbol });
   const [aiState, dispatch] = useReducer(aiReducer, AI_EMPTY);
-  // Runs asked for on this symbol; another symbol's count reads as 0, so opening a stock never runs one.
-  const [aiRun, setAiRun] = useState({ symbol, n: 0 });
-  const aiTry = aiRun.symbol === symbol ? aiRun.n : 0;
+  // Runs asked for on this symbol by this user; another symbol's count reads as 0, so opening a stock never runs
+  // one. A sign-in or sign-out resets it, so it never starts a run either; guests only read the stored note.
+  const uid = user?.id;
+  const [aiRun, setAiRun] = useState({ symbol, uid, n: 0 });
+  if (aiRun.uid !== uid) setAiRun({ symbol, uid, n: 0 });
+  const aiTry = uid && aiRun.symbol === symbol && aiRun.uid === uid ? aiRun.n : 0;
   const quick = quickRaw.symbol === symbol ? quickRaw : QUICK0;
   const aiRead = aiState.symbol === symbol ? aiState : { ...AI_EMPTY, symbol };
   const ai = { data: aiRead.read, loading: aiRead.loading && !aiRead.read, error: aiRead.error };
@@ -88,7 +91,7 @@ const useStockAnalysis = (symbol, { ai: wantAi = true } = {}) => {
     return () => { current = false; request.cancel(); };
   }, [symbol, aiTry, wantAi, user]);
 
-  return { quick, ai, aiRead, retryAi: () => setAiRun((r) => ({ symbol, n: (r.symbol === symbol ? r.n : 0) + 1 })), reloadQuick: () => { setQuick({ ...QUICK0, symbol }); setRetry((n) => n + 1); } };
+  return { quick, ai, aiRead, retryAi: () => setAiRun((r) => ({ symbol, uid, n: (r.symbol === symbol && r.uid === uid ? r.n : 0) + 1 })), reloadQuick: () => { setQuick({ ...QUICK0, symbol }); setRetry((n) => n + 1); } };
 };
 
 export default useStockAnalysis;

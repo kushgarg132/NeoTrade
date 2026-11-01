@@ -27,7 +27,7 @@ const Market = () => {
       <div className="pt-3">
         {tab === 'today' && <Today />}
         {tab === 'sectors' && <Sectors />}
-        {tab === 'news' && <News />}
+        {tab === 'news' && <News key={user?.id ?? 'guest'} />}
         {tab === 'watchlist' && (user ? <Watchlist /> : <SignInCard title="Your watchlist" body="Sign in to keep a list of the stocks you follow, with their news." />)}
       </div>
     </Layout>
