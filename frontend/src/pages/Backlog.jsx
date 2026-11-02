@@ -24,9 +24,9 @@ const BOARD = ['idea', 'next', 'doing'];
 const STAGE_LABEL = Object.fromEntries(STAGES);
 
 /** A row of single-choice chips (status, effort, area); `allowNone` adds a clear chip. */
-const Chips = ({ options, value, onPick, label, allowNone = false }) => (
+const Chips = ({ options, value, onPick, label, allowNone = false, noneLabel = 'Any' }) => (
   <div role="group" aria-label={label} className="flex gap-1.5 overflow-x-auto">
-    {[...(allowNone ? [['', 'Any']] : []), ...options].map(([v, text]) => (
+    {[...(allowNone ? [['', noneLabel]] : []), ...options].map(([v, text]) => (
       <button key={v || 'none'} type="button" aria-pressed={value === v} onClick={() => onPick(v)}
               className={cn('tap shrink-0 min-h-9 px-3 rounded-full text-[13px] font-medium',
                 value === v ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]')}>
@@ -202,18 +202,6 @@ const Backlog = () => {
   return (
     <SettingsPage title="Backlog" back="/settings/lab" backLabel="Lab" right={items && <span className="text-[14px] text-[var(--text-muted)]">{total.idea + total.next + total.doing} open</span>}>
       <div className="space-y-3 sm:space-y-4 max-w-6xl">
-        {items && items.length > 0 && (
-          <div className="grid grid-cols-4 gap-2">
-            {[['doing', 'Doing', 'now'], ['next', 'Next', 'now'], ['idea', 'Ideas', 'idea'], ['done', 'Done', 'done']].map(([s, label, v]) => (
-              <button key={s} type="button" onClick={() => setView(v)}
-                      className={cn('tap rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-2.5 text-left', view === v && 'lg:border-[var(--border)] border-[var(--accent)]')}>
-                <span className="block text-[22px] font-bold tabular-nums leading-7 text-[var(--text)]">{total[s]}</span>
-                <span className="text-[12px] text-[var(--text-muted)]">{label}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
         <Card>
           <form onSubmit={add} className="space-y-2.5">
             <div className="flex items-end gap-2">
@@ -238,8 +226,8 @@ const Backlog = () => {
                    onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
                    className="min-h-11 w-full bg-transparent text-[15px] focus:outline-none" />
           </label>
-          <Chips label="Filter by area" options={pairs(AREAS)} value={filters.area} allowNone onPick={(area) => setFilters((f) => ({ ...f, area }))} />
-          <Chips label="Filter by effort" options={EFFORTS.map((e) => [e, `Effort ${e}`])} value={filters.effort} allowNone onPick={(effort) => setFilters((f) => ({ ...f, effort }))} />
+          <Chips label="Filter by area" options={pairs(AREAS)} value={filters.area} allowNone noneLabel="All areas" onPick={(area) => setFilters((f) => ({ ...f, area }))} />
+          <Chips label="Filter by effort" options={EFFORTS.map((e) => [e, `Effort ${e}`])} value={filters.effort} allowNone noneLabel="Any effort" onPick={(effort) => setFilters((f) => ({ ...f, effort }))} />
         </div>
 
         {note && <p role="alert" className="text-[14px] text-[var(--loss)]">{note}</p>}
@@ -254,7 +242,7 @@ const Backlog = () => {
             <>
               {/* Phone: one tab at a time. */}
               <div className="space-y-3 lg:hidden">
-                <Tabs tabs={VIEWS.map((v) => ({ id: v.id, label: v.label }))} value={view} onChange={setView} label="Backlog stage" />
+                <Tabs tabs={VIEWS.map((v) => ({ id: v.id, label: `${v.label} ${v.statuses.reduce((n, s) => n + total[s], 0)}` }))} value={view} onChange={setView} label="Backlog stage" />
                 {tabStatuses.map((s) => (tabStatuses.length > 1 ? column(s) : <div key={s}>{list(s)}</div>))}
                 {tabStatuses.every((s) => byStatus(shown, s).length === 0) && (
                   <p className="text-[14px] text-[var(--text-muted)]">This stage is empty{filtering ? ' with these filters' : ''}.</p>

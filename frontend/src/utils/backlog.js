@@ -38,7 +38,7 @@ const stageAt = (item) => ({
 export const byStatus = (items, status) => items.filter((i) => i.status === status)
   .sort((a, b) => new Date(stageAt(b) || 0) - new Date(stageAt(a) || 0));
 
-/** Count per status over all items (the summary strip ignores filters). */
+/** Count per status over all items (the tab counts ignore filters). */
 export const counts = (items) => Object.fromEntries(STAGES.map(([s]) => [s, (items || []).filter((i) => i.status === s).length]));
 
 /** The one time a collapsed row shows, by stage: "started 2h ago"; '' when the item has none. */
