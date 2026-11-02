@@ -61,9 +61,13 @@ def performance(equity: pd.Series) -> dict:
 
 
 def rebalance_days(index: pd.DatetimeIndex, how: str) -> set:
-    """Last trading day of each month (or quarter)."""
+    """Last trading day of each week, month or quarter."""
     frame = pd.Series(index, index=index)
-    key = [index.year, index.month] if how == "monthly" else [index.year, index.quarter]
+    if how == "weekly":
+        iso = index.isocalendar()
+        key = [iso.year.values, iso.week.values]
+    else:
+        key = [index.year, index.month] if how == "monthly" else [index.year, index.quarter]
     return set(frame.groupby(key).max())
 
 
@@ -77,20 +81,33 @@ def simulate(closes: pd.DataFrame, market: pd.Series, params: Params, start, end
     shares: dict[str, int] = {}
     cash = capital
     pending = None
+    exits: set = set()   # stopped out at today's close, sold at the next close
+    peaks: dict[str, float] = {}
+    atrs = prices.diff().abs().rolling(14).mean() if params.stop_atr else None
     result = Result(equity=pd.Series(dtype=float))
     values = []
 
     for day in days:
         row = prices.loc[day]
         cash *= 1 + daily_yield
+        if exits:
+            cash = _trade(shares, cash, row, pd.Series(dtype=float), ex, result, only=exits)
+            exits = set()
         if pending is not None:
             cash = _trade(shares, cash, row, pending, ex, result)
             pending = None
         equity = cash + sum(n * row[s] for s, n in shares.items() if np.isfinite(row[s]))
         values.append(equity)
+        stopped = set()
+        if atrs is not None:
+            peaks = {s: max(peaks.get(s, row[s]), row[s]) for s in shares if np.isfinite(row[s])}
+            stopped = {s for s in shares if s in peaks and np.isfinite(atrs.at[day, s])
+                       and row[s] < peaks[s] - params.stop_atr * atrs.at[day, s]}
+            exits = stopped
         if day in decide_on:
-            book, level = model.target_book(closes, market, day, set(shares), params)
+            book, level = model.target_book(closes, market, day, set(shares) - stopped, params, avoid=stopped)
             pending = book
+            exits = set()  # the rebalance sells them anyway
             result.rebalances += 1
             result.books.append((day, book.round(4).to_dict(), level))
 
@@ -99,11 +116,15 @@ def simulate(closes: pd.DataFrame, market: pd.Series, params: Params, start, end
 
 
 def _trade(shares: dict, cash: float, row: pd.Series, book: pd.Series, ex: Execution,
-           result: Result) -> float:
-    equity = cash + sum(n * row[s] for s, n in shares.items() if np.isfinite(row[s]))
-    targets = {s: int(w * equity // row[s]) for s, w in book.items() if np.isfinite(row[s]) and row[s] > 0}
-    orders = {s: targets.get(s, 0) - n for s, n in shares.items()}
-    orders.update({s: q for s, q in targets.items() if s not in shares})
+           result: Result, only: set | None = None) -> float:
+    """Trade to `book`; with `only`, sell just those names in full."""
+    if only is not None:
+        orders = {s: -shares[s] for s in only if s in shares}
+    else:
+        equity = cash + sum(n * row[s] for s, n in shares.items() if np.isfinite(row[s]))
+        targets = {s: int(w * equity // row[s]) for s, w in book.items() if np.isfinite(row[s]) and row[s] > 0}
+        orders = {s: targets.get(s, 0) - n for s, n in shares.items()}
+        orders.update({s: q for s, q in targets.items() if s not in shares})
     # Sells first so their cash funds the buys.
     for symbol, delta in sorted(orders.items(), key=lambda kv: kv[1]):
         if delta == 0 or not np.isfinite(row[symbol]):

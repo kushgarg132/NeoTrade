@@ -23,7 +23,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-YEAR, HALF, MONTH = 252, 126, 21
+YEAR, HALF, QUARTER, MONTH, WEEK = 252, 126, 63, 21, 5
 
 
 @dataclass(frozen=True)
@@ -34,8 +34,19 @@ class Params:
     weight_cap: float = 0.10
     target_vol: Optional[float] = 0.15  # annualised; None = always fully invested when risk-on
     trend_days: int = 200
-    rebalance: str = "monthly"     # or "quarterly"
+    rebalance: str = "monthly"     # or "quarterly" / "weekly"
     avoid: frozenset = field(default_factory=frozenset)
+    score: str = "factor"          # "factor" (6/12m skip-1m + low vol) or "rotation"
+    weighting: str = "inverse_vol"  # or "equal"
+    breadth_min: Optional[float] = None  # risk-off when fewer members than this sit above their 50-DMA
+    stop_atr: Optional[float] = None     # trailing stop: peak close minus this many ATRs (close-to-close)
+
+
+# The autopilot's weekly relative-strength rotation (docs/superpowers/specs/2026-11-02-rotation-autopilot-design.md).
+# Walk-forward 2013-2026 (8 variants, DSR 0.999): the ATR stop and the breadth filter cut net
+# returns in every variant (turnover 10x -> 25x a year), so neither runs live.
+ROTATION = Params(momentum_weight=1.0, top_n=8, buffer=25, weight_cap=0.15, target_vol=None,
+                  rebalance="weekly", score="rotation", weighting="equal")
 
 
 def _zscore(values: pd.Series) -> pd.Series:
@@ -61,6 +72,8 @@ def scores(closes: pd.DataFrame, t, params: Params, avoid: Optional[set] = None)
         return pd.Series(dtype=float)
     p = past[symbols]
     vol = volatility(p, t).replace(0, np.nan)
+    if params.score == "rotation":
+        return rotation_scores(p, vol)
     skip = p.iloc[-1 - MONTH]
     r6 = skip / p.iloc[-1 - MONTH - HALF] - 1
     r12 = skip / p.iloc[-1 - MONTH - YEAR] - 1
@@ -68,6 +81,34 @@ def scores(closes: pd.DataFrame, t, params: Params, avoid: Optional[set] = None)
     low_vol = _zscore(-vol)
     blended = params.momentum_weight * momentum + (1 - params.momentum_weight) * low_vol
     return blended.dropna().sort_values(ascending=False)
+
+
+def rotation_scores(p: pd.DataFrame, vol: pd.Series) -> pd.Series:
+    """3- and 6-month return skipping the latest week, each per unit of
+    volatility, plus nearness to the 52-week high (leaders, not laggards
+    bouncing): 0.4 / 0.4 / 0.2 of their z-scores, best first."""
+    skip = p.iloc[-1 - WEEK]
+    r3 = skip / p.iloc[-1 - WEEK - QUARTER] - 1
+    r6 = skip / p.iloc[-1 - WEEK - HALF] - 1
+    near_high = p.iloc[-1] / p.iloc[-YEAR:].max()
+    blended = 0.4 * _zscore(r3 / vol) + 0.4 * _zscore(r6 / vol) + 0.2 * _zscore(near_high)
+    return blended.dropna().sort_values(ascending=False)
+
+
+def breadth(closes: pd.DataFrame, t, days: int = 50) -> float:
+    """Share of members with a close above their own `days`-day mean at t."""
+    past = closes.loc[:t].iloc[-days:]
+    if len(past) < days:
+        return 1.0
+    last, mean = past.iloc[-1], past.mean()
+    ok = last.notna() & mean.notna()
+    return float((last[ok] > mean[ok]).mean()) if ok.any() else 1.0
+
+
+def atr(closes: pd.DataFrame, t, days: int = 14) -> pd.Series:
+    """Average absolute close-to-close move over `days` -- an ATR proxy, as
+    the close table has no highs and lows."""
+    return closes.loc[:t].iloc[-(days + 1):].diff().abs().mean()
 
 
 def select(ranked: pd.Series, held: set, top_n: int, buffer: int) -> list[str]:
@@ -104,11 +145,15 @@ def weights(vols: pd.Series, cap: float) -> pd.Series:
     return w
 
 
-def exposure(market: pd.Series, book_returns: pd.Series, t, params: Params) -> float:
+def exposure(market: pd.Series, book_returns: pd.Series, t, params: Params,
+             closes: Optional[pd.DataFrame] = None) -> float:
     """Fraction of capital in stocks: 0 when the market is below its trend
-    SMA, else min(1, target_vol / the book's recent volatility)."""
+    SMA (or breadth is under `breadth_min`), else min(1, target_vol / the
+    book's recent volatility)."""
     past = market.loc[:t].dropna()
     if len(past) >= params.trend_days and past.iloc[-1] < past.iloc[-params.trend_days:].mean():
+        return 0.0
+    if params.breadth_min is not None and closes is not None and breadth(closes, t) < params.breadth_min:
         return 0.0
     if params.target_vol is None:
         return 1.0
@@ -128,7 +173,8 @@ def target_book(closes: pd.DataFrame, market: pd.Series, t, held: set, params: P
     if not chosen:
         return pd.Series(dtype=float), 0.0
     vols = volatility(closes[chosen], t)
-    w = weights(vols, params.weight_cap)
+    w = (pd.Series(1 / len(chosen), index=chosen) if params.weighting == "equal"
+         else weights(vols, params.weight_cap))
     book = closes[chosen].loc[:t].pct_change(fill_method=None).iloc[-64:].fillna(0) @ w
-    level = exposure(market, book, t, params)
+    level = exposure(market, book, t, params, closes)
     return w * level, level
