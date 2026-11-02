@@ -95,3 +95,21 @@ def test_index_intraday_rows_carry_ohlcv_and_days_picks_the_window(monkeypatch):
     assert set(rows[0]) == {"t", "open", "high", "low", "close", "volume"}
     market_data._fetch_index_intraday_sync("^NSEI")
     assert seen[-1] == ("1d", "5m")
+
+
+def test_a_lagging_daily_bar_gets_the_newest_session_from_intraday(monkeypatch):
+    daily = pd.DataFrame({"Open": [100.0, 110.0], "High": [100.0, 110.0], "Low": [100.0, 110.0], "Close": [100.0, 110.0], "Volume": [0, 0]},
+                         index=pd.to_datetime(["2026-10-29", "2026-10-30"]))
+    bars = pd.DataFrame({"Open": [110.0, 120.0, 121.0], "High": [111.0, 125.0, 126.0], "Low": [109.0, 119.0, 120.0],
+                         "Close": [110.0, 121.0, 123.0], "Volume": [1, 2, 3]},
+                        index=pd.to_datetime(["2026-10-30 15:25", "2026-11-02 09:15", "2026-11-02 15:25"]))
+
+    class Ticker:
+        def history(self, period, interval):
+            return bars if interval == "5m" else daily
+    monkeypatch.setattr(market_data.yf, "Ticker", lambda ticker: Ticker())
+    detail = market_data._fetch_index_detail_sync("^NSEI", "NIFTY 50")
+    assert detail["value"] == 123.0 and detail["change"] == 13.0
+    last = detail["points"][-1]
+    assert last["date"] == "2026-11-02" and last["open"] == 120.0 and last["high"] == 126.0 and last["low"] == 119.0
+    assert len(detail["points"]) == 3

@@ -215,6 +215,25 @@ def _ohlcv(row) -> Dict[str, float]:
             "close": close, "volume": pick("Volume", 0.0)}
 
 
+def _session_after(ticker: str, last_day: str) -> List[Dict[str, Any]]:
+    """The newest session as one daily point when Yahoo's daily bars have not reached it yet (they can lag an
+    index by a session, its intraday bars do not); [] otherwise."""
+    try:
+        bars = yf.Ticker(ticker).history(period="5d", interval="5m")
+        bars = bars[bars["Close"].notna()]
+        if bars.empty:
+            return []
+        day = bars.index[-1].strftime("%Y-%m-%d")
+        if day <= last_day:
+            return []
+        session = bars[bars.index.strftime("%Y-%m-%d") == day]
+        return [{"date": day, **_ohlcv({"Open": session["Open"].iloc[0], "High": session["High"].max(), "Low": session["Low"].min(),
+                                        "Close": session["Close"].iloc[-1], "Volume": session["Volume"].sum()})}]
+    except Exception as exc:
+        logger.warning("index session for %s failed: %s", ticker, exc)
+        return []
+
+
 def _fetch_index_detail_sync(ticker: str, name: str) -> Dict[str, Any] | None:
     hist = yf.Ticker(ticker).history(period="5y", interval="1d")  # five years for the chart's 5Y range
     if hist is None or hist.empty:
@@ -222,6 +241,7 @@ def _fetch_index_detail_sync(ticker: str, name: str) -> Dict[str, Any] | None:
 
     points = [{"date": index.strftime("%Y-%m-%d"), **_ohlcv(row)} for index, row in hist.iterrows()
               if not pd.isna(row["Close"])]  # NaN is not JSON
+    points += _session_after(ticker, points[-1]["date"] if points else "")
     closes = [point["close"] for point in points]
     value = closes[-1]
     previous = closes[-2] if len(closes) > 1 else value

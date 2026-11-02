@@ -65,6 +65,13 @@ async def store_quotes(redis, quotes: dict[str, tuple[float, Optional[float]]], 
         return
     at = time.time()
     try:
+        # A price-only write (mark_prices) must not wipe the previous close: every day change is read from it.
+        blank = [s for s, (_, prev) in quotes.items() if prev is None]
+        kept = {}
+        if blank:
+            for symbol, raw in zip(blank, await redis.mget([QUOTE_KEY.format(s) for s in blank])):
+                kept[symbol] = json.loads(raw).get("prev_close") if raw else None
+        quotes = {s: (ltp, prev if prev is not None else kept.get(s)) for s, (ltp, prev) in quotes.items()}
         async with redis.pipeline(transaction=False) as pipe:
             for symbol, (ltp, prev_close) in quotes.items():
                 pipe.set(QUOTE_KEY.format(symbol), json.dumps({"ltp": ltp, "prev_close": prev_close, "at": at}),

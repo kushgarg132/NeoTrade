@@ -136,3 +136,41 @@ async def test_a_failed_universe_download_backs_off_until_the_next_cadence(mongo
         await prices.quotes(mongo, FakeRedis())
     await prices.quotes(mongo, FakeRedis())  # inside the cadence: no second download
     assert len(calls) == 1
+
+
+async def test_a_price_only_write_keeps_the_previous_close():
+    from backend.tests.test_datalayer_news import FakeRedis
+
+    redis = FakeRedis()
+    await marks.store_quotes(redis, {"TCS": (100.0, 99.0)}, 60)
+    await marks.store_quotes(redis, {"TCS": (101.0, None), "NEW": (5.0, None)}, 60)
+    assert json.loads(redis.data["quote:TCS"])["ltp"] == 101.0
+    assert json.loads(redis.data["quote:TCS"])["prev_close"] == 99.0
+    assert json.loads(redis.data["quote:NEW"])["prev_close"] is None
+    await marks.store_quotes(redis, {"TCS": (102.0, 101.0)}, 60)
+    assert json.loads(redis.data["quote:TCS"])["prev_close"] == 101.0  # a real close still wins
+
+
+def test_fresher_indices_read_past_a_lagging_daily_bar(monkeypatch):
+    import pandas as pd
+
+    frames = {
+        "5m": pd.DataFrame({("Close", "^NSEI"): [23050.0, 23400.0, 23440.8], ("Close", "^NOBARS"): [None, None, None]},
+                           index=pd.to_datetime(["2026-10-30 15:25", "2026-11-02 09:15", "2026-11-02 15:25"])),
+        "1d": pd.DataFrame({("Close", "^NSEI"): [22936.8, 23053.1], ("Close", "^NOBARS"): [10.0, 11.0]},
+                           index=pd.to_datetime(["2026-10-29", "2026-10-30"])),
+    }
+    monkeypatch.setattr(prices.yf, "download", lambda tickers, interval, **kw: frames[interval])
+    assert prices.fresher_indices(["^NSEI", "^NOBARS"]) == {"^NSEI": (23440.8, 23053.1)}
+    assert prices.fresher_indices([]) == {}
+
+
+def test_fresher_indices_use_the_day_before_when_the_daily_bar_is_current(monkeypatch):
+    import pandas as pd
+
+    frames = {
+        "5m": pd.DataFrame({("Close", "^NSEI"): [23400.0]}, index=pd.to_datetime(["2026-11-02 15:25"])),
+        "1d": pd.DataFrame({("Close", "^NSEI"): [23053.1, 23399.0]}, index=pd.to_datetime(["2026-10-30", "2026-11-02"])),
+    }
+    monkeypatch.setattr(prices.yf, "download", lambda tickers, interval, **kw: frames[interval])
+    assert prices.fresher_indices(["^NSEI"]) == {"^NSEI": (23400.0, 23053.1)}
