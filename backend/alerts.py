@@ -25,6 +25,13 @@ LABELS = {"ideas": "Ideas", "stale_ideas": "Expiring ideas", "news": "News", "le
           "review": "Your week", "autopilot_refused": "Autopilot"}
 ADMIN_ONLY = frozenset({"ideas", "stale_ideas"})
 PER_KIND = 5
+CLIP = 120
+DIGEST_MAX = 2500
+
+
+def _clip(text: str) -> str:
+    text = str(text)
+    return text if len(text) <= CLIP else text[:CLIP - 1] + "…"
 
 
 def split(text: str) -> tuple[str, list[str]]:
@@ -61,14 +68,28 @@ async def _log(db, user_id, kind, title, lines, symbol, link, state, now=None) -
 async def alert(db, user_id, kind, title, lines=(), *, symbol=None, link=None, buttons=None) -> bool:
     if kind not in KINDS:
         raise ValueError(f"unknown alert kind {kind!r}")
-    if kind in ADMIN_ONLY and not await is_admin(db, user_id):
-        return False
-    if (await PrefsStore(db).get(user_id))["alert_mute"].get(kind):
+    try:
+        if kind in ADMIN_ONLY and not await is_admin(db, user_id):
+            return False
+        muted = (await PrefsStore(db).get(user_id))["alert_mute"].get(kind)
+    except Exception:
+        logger.warning("alert prefs lookup failed", exc_info=True)
+        if kind in BATCHED:
+            return False
+        muted = False  # an instant alert (exit, money) still goes out
+    if muted:  # handled on purpose: True, so callers do not retry it
         await _log(db, user_id, kind, title, lines, symbol, link, "muted")
-        return False
+        return True
     if kind in BATCHED:
         await _log(db, user_id, kind, title, lines, symbol, link, "queued")
         return True
+    try:
+        from backend.guardrails.store import GuardrailStore
+
+        if await GuardrailStore(db).telegram_channel(user_id) is None:
+            return True  # nowhere to send: not a failure, nothing to retry
+    except Exception:
+        logger.warning("alert channel lookup failed", exc_info=True)
     try:
         ok = bool(await telegram.alert(db, user_id, card(kind, title, lines), html=True, buttons=buttons))
     except Exception:
@@ -106,7 +127,7 @@ async def drain(db, user_id, now: datetime, until: datetime | None = None, befor
         await db["alerts"].update_many({"_id": {"$in": ids}, "state": "queued"},
                                        {"$set": {"state": "digested", "digested_at": now, "claim": claim}})
         # another drain may have won some rows: keep only the ones this call claimed
-        claimed = await db["alerts"].find({"claim": claim}).to_list(None)
+        claimed = await db["alerts"].find({"user_id": user_id, "state": "digested", "claim": claim}).to_list(None)
     if not claimed and not stale:
         return "", []
     out = ["<b>Since last update</b>"]
@@ -118,10 +139,15 @@ async def drain(db, user_id, now: datetime, until: datetime | None = None, befor
         if not items:
             continue
         out.append(f"<b>{LABELS[kind]}</b>")
-        out += [f"• {html.escape(r['title'])}" for r in items[:PER_KIND]]
+        for r in items[:PER_KIND]:
+            out.append(f"• {html.escape(_clip(r['title']))}")
+            out += [f"   {html.escape(_clip(x))}" for x in (r.get("lines") or [])[:3]]
         if len(items) > PER_KIND:
             out.append(f"…and {len(items) - PER_KIND} more")
-    return "\n".join(out), [r["_id"] for r in claimed]
+    text = "\n".join(out)
+    if len(text) > DIGEST_MAX:  # Telegram caps a message at 4096 and send_html does not split
+        text = text[:DIGEST_MAX].rsplit("\n", 1)[0] + "\n…and more in the app"
+    return text, [r["_id"] for r in claimed]
 
 
 async def requeue(db, ids: list) -> None:

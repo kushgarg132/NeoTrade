@@ -28,6 +28,10 @@ def sent(monkeypatch):
         return rec.result
 
     rec.result = True
+    async def linked(self, user_id):
+        return ("tok", "1")
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", linked)
     monkeypatch.setattr("backend.guardrails.telegram.alert", rec)
     out.rec = rec
     return out
@@ -58,6 +62,10 @@ async def test_telegram_raising_is_swallowed(db, monkeypatch):
     async def boom(*a, **k):
         raise RuntimeError("down")
 
+    async def linked(self, user_id):
+        return ("tok", "1")
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", linked)
     monkeypatch.setattr("backend.guardrails.telegram.alert", boom)
     assert await alerts.alert(db, "boss", "exit", "x") is False
     assert (await db["alerts"].find_one())["state"] == "failed"
@@ -74,8 +82,41 @@ async def test_log_write_failure_does_not_block_send(db, sent, monkeypatch):
 
 async def test_muted_kind_logs_muted_and_does_not_send(db, sent):
     await db["user_prefs"].insert_one({"user_id": "boss", "alert_mute": {"exit": True}})
-    assert await alerts.alert(db, "boss", "exit", "x") is False
+    assert await alerts.alert(db, "boss", "exit", "x") is True  # handled on purpose: no retry
     assert not sent and (await db["alerts"].find_one())["state"] == "muted"
+
+
+async def test_unlinked_user_is_handled_without_send_or_log(db, monkeypatch):
+    async def unlinked(self, user_id):
+        return None
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", unlinked)
+    assert await alerts.alert(db, "boss", "exit", "x") is True
+    assert await db["alerts"].count_documents({}) == 0
+
+
+async def test_prefs_lookup_failure_instant_still_sends_batched_returns_false(db, sent, monkeypatch):
+    async def boom(self, user_id):
+        raise RuntimeError("mongo")
+
+    monkeypatch.setattr("backend.prefs.PrefsStore.get", boom)
+    assert await alerts.alert(db, "boss", "exit", "x") is True and len(sent) == 1
+    assert await alerts.alert(db, "boss", "news", "x") is False
+
+
+async def test_drain_renders_first_three_lines_of_each_item(db):
+    await alerts.alert(db, "boss", "review", "Charges", ["a<", "b", "c", "d"])
+    block, _ = await alerts.drain(db, "boss", NOW)
+    assert "• Charges\n   a&lt;\n   b\n   c" in block and "d" not in block.split("c")[-1]
+
+
+async def test_drain_huge_queue_stays_under_telegram_limit(db):
+    for i in range(30):
+        for kind in ("news", "learning", "review", "autopilot_refused"):
+            await alerts.alert(db, "boss", kind, "T" * 500, ["L" * 500] * 3)
+    block, _ = await alerts.drain(db, "boss", NOW)
+    assert len(block) <= 2500 + len("\n…and more in the app") and block.endswith("…and more in the app")
+    assert "T" * 121 not in block
 
 
 async def test_ideas_admin_only(db, sent):
