@@ -53,13 +53,12 @@ const Fundamentals = ({ company: c, currency }) => {
   ].filter(([, rows]) => rows.some(([, value]) => value !== null));
 
   if (!groups.length) return null;
-  const wide = typeof window !== 'undefined' && window.matchMedia?.('(min-width: 768px)').matches;
   return (
     <Card title="Fundamentals">
       <div className="grid gap-4 md:grid-cols-3">
-        {groups.map(([title, rows], i) => (
-          // Phone: the first group open, the rest folded. Desktop has the room: all open.
-          <details key={title} className="min-w-0 group" open={i === 0 || wide}>
+        {groups.map(([title, rows]) => (
+          // Every group starts open (owner, 2026-11-02); each still folds on tap.
+          <details key={title} className="min-w-0 group" open>
             <summary className="text-[14px] font-semibold text-[var(--text)] cursor-pointer list-none flex items-center justify-between min-h-11 md:min-h-0">
               {title}
               <span className="text-[13px] font-normal text-[var(--text-muted)] inline-flex items-center gap-1" aria-hidden="true">
