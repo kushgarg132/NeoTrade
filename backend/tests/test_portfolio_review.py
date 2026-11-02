@@ -155,7 +155,7 @@ async def test_without_a_session_the_last_holdings_are_reused_and_repriced(monke
     assert second["totals"]["value"] == 820 and second["totals"]["day_change"] == 20
 
 
-async def test_weekly_review_alerts_only_on_a_worse_verdict(monkeypatch):
+async def test_daily_review_publishes_only_on_a_worse_verdict(monkeypatch):
     from backend.guardrails.store import GuardrailStore
     from backend.ws.hub import hub
 
@@ -171,16 +171,14 @@ async def test_weekly_review_alerts_only_on_a_worse_verdict(monkeypatch):
     kite.holdings = [_h("A", 100, 70)]  # now 30% down and below its 200-day average
     monkeypatch.setattr(service, "stock_health", AsyncMock(
         side_effect=lambda db, rows, closes, now: {r["symbol"]: _health(close=90, sma200=100) for r in rows}))
-    sent = []
-    monkeypatch.setattr("backend.guardrails.telegram.send", AsyncMock(side_effect=lambda chat, text, token=None: sent.append((chat, text))))
-    monkeypatch.setattr("backend.guardrails.telegram.configured", lambda: True)  # the server bot
-    monkeypatch.setattr(hub, "publish", AsyncMock())
+    publish = AsyncMock()
+    monkeypatch.setattr(hub, "publish", publish)
     monkeypatch.setattr("backend.auth.broker_credentials.fernet_from_settings", lambda: None)
 
     assert await service.daily_reviews(db, None) == 1
-    ((chat, text),) = sent
-    assert chat == 42 and "A: worth a closer look" in text and "SELL" not in text  # not an admin
-    assert await service.daily_reviews(db, None) == 1 and len(sent) == 1  # still SELL: no repeat alert
+    worsened = lambda: [c.args for c in publish.await_args_list if c.args[2] == "worsened"]
+    assert worsened() == [("alice", "portfolio", "worsened", {"symbols": ["A"]})]
+    assert await service.daily_reviews(db, None) == 1 and len(worsened()) == 1  # still SELL: no repeat
 
 
 def test_non_admins_do_not_see_the_action_plan():

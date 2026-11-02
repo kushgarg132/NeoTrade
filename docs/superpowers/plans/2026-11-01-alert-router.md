@@ -16,7 +16,7 @@
 - Icons: exit 🔴, money 🤖, news_breaking 📰, action ⚠️. Card = icon + `<b>title</b>` + at most 3 lines, all data `html.escape`d.
 - Digest block heading "Since last update"; at most 5 items a kind, then "…and N more".
 - `alerts` collection fields `{user_id, kind, title, lines, symbol, link, state, created_at, digested_at}`; `state ∈ queued|digested|sent|muted|failed`; TTL 30 days on `created_at`.
-- Prefs defaults `alert_mute: {}`, `breaking_news_min: 7` (int 1–10).
+- Prefs defaults `alert_mute: {}`, `breaking_news_min: 7` (int 5–9).
 - New setting `APP_URL` (`https://neotrade-trading.vercel.app` in the deploy `.env`); unset → no URL buttons.
 - `ideas` and `stale_ideas` reach admins only.
 - No AI order to the `mine` account: the Sell button only proposes; the user's Confirm tap executes through `chat/actions.confirm`.
@@ -180,7 +180,7 @@ Stale ideas in `drain` (admins only, unless `alert_mute["stale_ideas"]`): count 
 **Files:**
 - Modify: `frontend/src/components/settings/Notifications.jsx`, `frontend/src/components/settings/Notifications.test.js`
 
-**Interfaces:** Consumes `GET/PUT endpoints.settings.preferences` fields `alert_mute` (object kind→bool) and `breaking_news_min` (1–10).
+**Interfaces:** Consumes `GET/PUT endpoints.settings.preferences` fields `alert_mute` (object kind→bool) and `breaking_news_min` (5–9).
 
 Copy (exact): group "Instant" — Exit and sell signals (`exit`), Money moved (`money`), Breaking news on holdings (`news_breaking`), Needs your action (`action`); group "In the digest" — New ideas (`ideas`), Expiring ideas (`stale_ideas`), Other news (`news`), Strategy learning (`learning`), Weekly review (`review`), Autopilot refusals (`autopilot_refused`). A toggle on = not muted. Threshold control label "Breaking news from impact", options 5–9 shown as "5/10" … "9/10", via the existing `Segmented` component. Each change PUTs only the changed field, reverts and shows the existing note on error.
 

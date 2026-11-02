@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: b7ecbc1
+verified_at: a761aa7
 ---
 # Trading engine
 
@@ -46,7 +46,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/risk/kill_switch.py` | Daily loss trip, persisted | `kill_switch.py::should_trip`, `::KillSwitchStore` |
 | `backend/risk/live_confirm.py` | Server-checked second tap for real money on `mine`: one-time 60 s token bound to user, subject, terms hash | `live_confirm.py::issue`, `::redeem`, `::TokenRefused` (`.code` confirm_missing/expired/spent/mismatch/other_user, `.response()`; Telegram logs the code) |
 | `backend/autopilot/fence.py` | Pure order fence (every autopilot order) | `fence.py::check`, `::FenceState`, `::trade_cap`, `::round_trip_cost` |
-| `backend/autopilot/service.py` | Fence -> fill (paper/live) -> log -> Telegram | `service.py::submit`, `::_submit`, `::_state`, `::check_exits`, `::ledger_user`, `::book`, `::ai_book_query` |
+| `backend/autopilot/service.py` | Fence -> fill (paper/live) -> log -> `alerts.alert` (`_notify`: fills `money` + stop button, refusals `autopilot_refused` digest) | `service.py::submit`, `::_submit`, `::_state`, `::check_exits`, `::ledger_user`, `::book`, `::ai_book_query` |
 | `backend/autopilot/picks.py` | AI account trades stored Picks (the latest pass only, never `backfilled` ones; grade-A setups only, ranked by adjusted excess). Entry stores the pick's `forecast/picks.py::levels` stop/target + `entry_ref` on the trade context (`::_levels`) only for setups whose study `levels_exit.better` (`::_levels_tested`); `exit_due` sells at the fill-anchored stop/target (`suggestions/exits.py::anchored`, `::breach`) only for those setups (also for trades opened earlier), else at the horizon close. Result rows carry `why` (stop/target/horizon) | `picks.py::enter`, `::_levels`, `::_levels_tested`, `::exit_due`, `::live_allowed` |
 | `backend/brokers/protocol.py` | The `BrokerAdapter` interface; `get_positions` keys one entry per broker row (symbol, then `SYMBOL:PRODUCT` for a second product), callers read `Position.symbol` | `protocol.py::BrokerAdapter`, `::BrokerSessionState`, `::keyed_positions` |
 | `backend/brokers/registry.py` | Only place that lists brokers | `registry.py::BROKERS`, `::get_broker_adapter`, `::UnknownBroker` |

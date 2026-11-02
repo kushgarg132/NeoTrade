@@ -101,7 +101,7 @@ async def test_submit_paper_fills_logs_and_notifies(world):
     trades = await db["paper_trades"].find({"user_id": "alice"}).to_list(None)  # the Practice book
     assert len(trades) == 1 and trades[0]["strategy"] == "autopilot:chat"
     assert await db["autopilot_log"].count_documents({"user_id": "alice", "status": "FILLED"}) == 1
-    assert sent and sent[0].startswith("🤖 AI bought 2 INFY")
+    assert sent and sent[0].startswith("AI bought 2 INFY")
 
 
 async def test_submit_refusal_is_logged_not_retried(world):
@@ -111,6 +111,16 @@ async def test_submit_refusal_is_logged_not_retried(world):
     assert result["status"] == "REFUSED" and "per-trade cap" in result["reason"]
     assert await db["paper_trades"].count_documents({}) == 0
     assert await db["autopilot_log"].count_documents({"status": "REFUSED"}) == 1 and len(sent) == 1
+
+
+async def test_refused_order_is_queued_not_sent(world, monkeypatch):
+    db, _ = world
+    monkeypatch.undo()  # the real _notify, through the router
+    monkeypatch.setattr(service, "mark_prices", AsyncMock(return_value={"INFY": 1000.0}))
+    await _prefs(db)
+    await service.submit(db, None, "alice", _order(qty=6), now=OPEN)
+    row = await db["alerts"].find_one({"user_id": "alice"})
+    assert row["state"] == "queued" and row["kind"] == "autopilot_refused"
 
 
 async def test_ai_session_missing_in_live_mode_refuses_without_fallback(world, monkeypatch):
@@ -155,7 +165,7 @@ async def test_telegram_stop_callback(monkeypatch):
     answer, edit = AsyncMock(), AsyncMock()
     monkeypatch.setattr(telegram_bot.telegram, "answer_callback", answer)
     monkeypatch.setattr(telegram_bot.telegram, "edit_html", edit)
-    cb = {"id": "c", "data": "nt:autopilot:off", "message": {"message_id": 9, "text": "🤖 AI bought 2 INFY"}}
+    cb = {"id": "c", "data": "nt:autopilot:off", "message": {"message_id": 9, "text": "AI bought 2 INFY"}}
     await telegram_bot._callback(db, None, "alice", 42, "tok", cb)
     assert "stopped" in edit.await_args.args[2].lower()
     await telegram_bot._callback(db, None, "alice", 42, "tok", cb)
@@ -212,7 +222,7 @@ async def test_live_mode_places_on_the_ai_adapter_only(world, monkeypatch):
     result = await service.submit(db, None, "alice", _order(qty=2), now=OPEN)
     assert result["status"] == "FILLED" and result["mode"] == "live"
     assert calls == [(kite, "CNC", "autopilot:chat")]
-    assert sent[0].startswith("🤖 AI bought 2 INFY on the AI account at")
+    assert sent[0].startswith("AI bought 2 INFY on the AI account at")
 
 
 
@@ -236,7 +246,7 @@ async def test_live_order_the_broker_rejects_is_failed_not_sent(world, monkeypat
     assert await db["autopilot_log"].count_documents({"status": "SENT"}) == 0
     state = await service._state(db, "alice", {**PREFS, "autopilot_live": True}, "live", OPEN)
     assert state.held == {} and state.deployed == 0 and state.entries_today == 0
-    assert not sent[0].startswith("🤖 AI bought")
+    assert not sent[0].startswith("AI bought")
 
 
 async def test_parallel_orders_cannot_exceed_capital_or_trades(world, monkeypatch):
@@ -595,11 +605,11 @@ async def test_the_autopilot_quietly_leaves_ideas_outside_its_universe_to_the_us
     async def marks(db_, symbols, **_):
         return {s: 1000.0 for s in symbols}
 
-    async def notify(db_, user_id, text, *a, **kw):
-        sent.append(text)
+    async def notify(db_, user_id, kind, title, lines=(), **kw):
+        sent.append("\n".join([title, *lines]))
 
     monkeypatch.setattr("backend.marks.mark_prices", marks)
-    monkeypatch.setattr("backend.suggestions.notify.notify", notify)
+    monkeypatch.setattr("backend.alerts.alert", notify)
     base = {"user_id": "alice", "side": "BUY", "mode": "LONGTERM", "quantity": 4, "status": "PENDING",
             "strategy": "orb_breakout", "score": {"final": 0.6}, "entry_ref": 990.0, "stop": 950.0}
     await db["suggestions"].insert_many([{**base, "id": "out", "symbol": "NOTANIFTY"},

@@ -49,14 +49,14 @@ async def test_intraday_trades_and_missing_marks_are_left_alone():
 
 
 def test_alert_texts_name_the_trade():
-    from backend.suggestions.notify import exits_text, proposals_text
+    from backend.suggestions.notify import exit_line, proposals_text
 
     text = proposals_text([{"side": "BUY", "symbol": "SJVN", "quantity": 21.0, "entry_ref": 57.91,
                             "stop": 55.01, "target": 60.81}], "1 new:")
     assert "BUY SJVN x21 @ ~₹57.91 · stop ₹55.01 · target ₹60.81" in text
     assert proposals_text([{"id": "bare"}], "x")  # sparse rows never raise
-    assert "SJVN x10 at ₹60.00 (target)" in exits_text([{"symbol": "SJVN", "reason": "target", "price": 60.0,
-                                                         "quantity": 10.0, "entry_price": 55.0, "gross_pnl": 50.0}])
+    assert exit_line({"symbol": "SJVN", "reason": "target", "price": 60.0, "quantity": 10.0,
+                      "entry_price": 55.0, "gross_pnl": 50.0}) == "target at ₹60.00 · bought ₹55.00 · gross ₹50.00"
 
 
 def test_max_hold_counts_trading_days():

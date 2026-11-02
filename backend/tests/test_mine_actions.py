@@ -141,7 +141,7 @@ async def test_level_alert_once(db):
     await _seed(db)
     redis = _Redis()
     first = await actions.level_alerts(db, redis, "alice", NOW)
-    assert [a["id"] for a in first] == ["stop_hit:A:90"] and "A hit your stop" in actions.levels_text(first)
+    assert [a["id"] for a in first] == ["stop_hit:A:90"] and first[0]["kind"] == "stop_hit" and first[0]["action"]["quantity"]
     assert await actions.level_alerts(db, redis, "alice", NOW + timedelta(minutes=15)) == []
 
 

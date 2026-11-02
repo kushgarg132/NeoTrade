@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: dbbceb5
+verified_at: a726270
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -17,7 +17,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 
 | path | role | key symbols |
 |---|---|---|
-| backend/mine/actions.py | Builds the ranked "Needs you" list, handles dismiss and snooze, and sends stop/target alerts | `mine/actions.py::RANK`, `::build`, `::ideas` (admin-only: empty for other roles), `::_levels`, `::dismiss`, `::snooze`, `::level_alerts`, `::levels_text` |
+| backend/mine/actions.py | Builds the ranked "Needs you" list, handles dismiss and snooze, and sends stop/target alerts | `mine/actions.py::RANK`, `::build`, `::ideas` (admin-only: empty for other roles), `::_levels`, `::dismiss`, `::snooze`, `::level_alerts` (each level becomes one `exit` alert via `engine/autorun.py::_level_pass` and `alerts.alert`) |
 | backend/mine/events.py | Results and ex-dividend dates from yfinance, plus dividends received | `events.py::refresh`, `::loop`, `::upcoming`, `::dividends_received`, `::_fetch_sync`, `::next_results` (one symbol's date within N days, fetched on demand since a buy is rarely of a held stock), `::buy_blocked` (the results rule for a buy about to be sent) |
 | backend/mine/history.py | Daily value curve `mine_daily`, replayed from journal trades; XIRR | `history.py::xirr`, `::_inputs`, `::_compute`, `::_store`, `::backfill`, `::write_all`, `::series`, `::returns` |
 | backend/mine/lots.py | FIFO lots, realised matches, broker reconciliation, split detection | `lots.py::_fifo`, `::open_lots`, `::realised`, `::unmatched`, `::split_ratio`, `::reconcile`, `::mine_trades` |
@@ -45,11 +45,11 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/journal/accounts.py | Splits by account; monthly AI-vs-me | `accounts.py::filter_trades`, `::brokers_of`, `::ai_vs_me` |
 | backend/journal/beta.py | `journal_opens` tracking; Phase 12 metrics | `beta.py::record_open`, `::beta_metrics` |
 | backend/guardrails/rules.py | Breach evaluation (pure); the buy-before-results rule | `guardrails/rules.py::evaluate` (`results` and `today` args feed the `results_buy` breach), `::results_days` (0 when off or guardrails off), `::results_block`, `::_option_breaches`, `::_is_hedged` |
-| backend/guardrails/monitor.py | 60s in-session loop; kill-switch trip; square-off | `guardrails/monitor.py::run_tick`, `::check_user`, `::square_off`, `::monitor_loop`, `::start`, `LOCK_KEY` |
+| backend/guardrails/monitor.py | 60s in-session loop; kill-switch trip; square-off; breaches alert as `money` via `alerts.alert` (`::_alert(db, user_id, event)`) | `guardrails/monitor.py::run_tick`, `::check_user`, `::square_off`, `::monitor_loop`, `::start`, `LOCK_KEY` |
 | backend/guardrails/square_off.py | Position book to MIS exit orders (pure) | `guardrails/square_off.py::exit_orders`, `::describe` |
 | backend/guardrails/store.py | Breach dedupe; alert channel and encrypted user bot token | `guardrails/store.py::GuardrailStore.record`, `.events_for`, `.telegram_channel`, `.telegram_routes`, `.set_telegram_bot` |
 | backend/guardrails/telegram.py | Bot API client over aiogram 3.31 (one `Bot` per token per event loop; dicts in and out): send, HTML, drafts, `alert` | `telegram.py::alert`, `::_bot`, `::_call`, `::send`, `::send_html`, `::to_html`, `::find_chat`, `::updates` |
-| backend/guardrails/telegram_bot.py | Inbound long-poll bridge to the chat agent and action cards | `telegram_bot.py::poll_loop`, `::poll_once`, `::_poll_bot`, `::_reply`, `::_callback`, `::_ask`, `::Tap`, `SHORTCUTS` |
+| backend/guardrails/telegram_bot.py | Inbound long-poll bridge to the chat agent and action cards | `telegram_bot.py::poll_loop`, `::poll_once`, `::_poll_bot`, `::_reply`, `::_callback`, `::_sell`, `::_ask`, `::Tap`, `SHORTCUTS` |
 | backend/routers/mine.py | `/mine/*` | `mine.py::overview`, `::mine_history`, `::tax`, `::stock_detail`, `::get_thesis`, `::put_thesis`, `::mine_actions`, `::dismiss_action`, `::snooze_action`, `::_month_contributions`, `TAX_FIRST_FY` |
 | backend/routers/portfolio.py | `/portfolio*`; verdict masking | `portfolio.py::get_portfolio`, `::refresh`, `::rebalance`, `::rebalance_candidates`, `::present`, `::mask_row`, `::_results_dates`, `::_with_results`, `::verdicts_visible_to`, `::with_suggestions`, `::_candidate_symbols` |
 | backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::ai_vs_me`, `::get_learning`, `::get_beta_metrics` |
@@ -95,7 +95,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 
 **Redis**
 - `mine:alert:{user}:{action_id}` NX, TTL 30 days (`mine/actions.py::ALERT_TTL`): one stop/target Telegram per level. `engine/autorun.py::_level_pass` deletes it when the send fails, so the next 15-minute pass retries.
-- `digest:pre:{user}:{IST date}` NX, 24h: one pre-market digest a day (`digest.py::send_premarket`).
+- `digest:pre:{user}:{IST date}` NX, 24h: one pre-market digest a day (`digest.py::send_premarket`). Both digests drain queued alerts (`alerts.drain`) last and `requeue` them if the send fails.
 - `guardrails:tick` NX, 55s: one worker per guardrail tick (`guardrails/monitor.py::run_tick`).
 - `levels:{user}:{date}:{bucket}` NX, 30 min (`engine/autorun.py::_level_pass`).
 - `rebalance:{user}` rate limit, 10/min (`routers/portfolio.py::rebalance`).
@@ -193,7 +193,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
        (chat and the order ticket) and `routers/suggestions.py::_approve_equity_live`. Unknown date (fetch failed) = allowed.
     3. A `daily_loss` breach calls `KillSwitchStore.trip` (idempotent) first, then each breach is deduped with
        `GuardrailStore.record`. A failed trip raises before the record, so the next tick retries trip, alert and square-off.
-    4. `_alert` publishes to the socket and Telegram.
+    4. `_alert` publishes to the socket and Telegram; each is wrapped on its own, so a failed publish or alert never skips the square-off. `digest._users` also includes users with queued alert rows (watchlist-only).
     5. On `daily_loss` with `auto_square_off` set to preview or live, `guardrails/monitor.py::square_off` runs `exit_orders` per non-AI
        ACTIVE broker and places orders only in `live`.
 14. **Telegram inbound**: `telegram_bot.py::poll_loop` calls `::poll_once`, which runs `::_poll_bot` per bot route
@@ -224,7 +224,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | what | when (IST) | trigger | lock |
 |---|---|---|---|
 | `journal/sync.py::sync_user_trades` for all users | daily pass, 16:00 | `scheduler.py::_sync_journals` | `scheduler:daily_lock` |
-| `portfolio/service.py::daily_reviews`, then a Telegram alert plus `hub` "worsened" when `rules.worsened` | daily pass, after the journal sync | `scheduler.py::run_daily_jobs` | daily lock |
+| `portfolio/service.py::daily_reviews`, then a `hub` "worsened" socket event when `rules.worsened` (no Telegram: the post-close digest lists the worse verdicts) | daily pass, after the journal sync | `scheduler.py::run_daily_jobs` | daily lock |
 | `mine/history.py::write_all` | daily pass, after reviews | `scheduler.py::run_daily_jobs` | daily lock |
 | Weekly mirror Telegram (`mirror.text`, `accounts.ai_vs_me`) | Fridays, in the daily pass | `scheduler.py::_weekly_mirrors` | daily lock |
 | `digest.py::send_postclose` | end of the daily pass; skipped if local time < 15:30 (09:20 catch-up); adds a "⚠️ Reconciliation" line only when today's `broker_reconciliation` has a mismatch | `scheduler.py::run_daily_jobs` | daily lock |
@@ -241,7 +241,6 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
   - Non-visible users get `mask_row`: SELL/REVIEW become "REVIEW", everything else None, and `score`, `suggested`
     and `verdict_since` are nulled. `present` also nulls `plan`.
   - Needs-you drops `verdict_worse` and `add` when the gate is closed (`mine/actions.py::VERDICT_KINDS`).
-  - `daily_reviews` sends "worth a closer look" instead of the verdict.
   - The `conviction` rebalance rule returns 403 when the gate is closed. AI candidates are listed only when it is
     open.
   - `scoreboard` (You vs the AI: `digest.py::scoreboard` = `pnl_since` over the whole AI book, closed and net of charges; it was Picks-only until 2026-10-24) is admin-only in `today.py::today`.
@@ -269,6 +268,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
   and never returned. Redis keys hash the token. Storing a token without `CREDENTIAL_ENCRYPTION_KEY` raises
   (`guardrails/store.py::set_telegram_bot`). Real-money cards need a second tap (`confirm2`) carrying the server's one-time token; a refused token
   re-arms the card with Confirm/Cancel and sends nothing.
+  The exit-alert `Sell xN` button (`nt:sell:<SYMBOL>|<qty>`, `_sell`) only calls `propose_order` (SELL, CNC, own account) and sends the usual Confirm/Cancel card; a refusal is shown as the callback toast.
 - **Tax rates live only in `mine/tax.py`** (STCG 20%, LTCG 12.5% above Rs 1.25 lakh). `/mine/tax` rejects
   `fy < 2025` (`routers/mine.py::TAX_FIRST_FY`). Long-term means held more than 12 calendar months
   (`tax.py::long_from`).

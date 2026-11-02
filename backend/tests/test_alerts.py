@@ -1,0 +1,206 @@
+from datetime import datetime, timezone
+
+import pytest
+from mongomock_motor import AsyncMongoMockClient
+
+from backend import alerts
+from backend.configs.settings import settings
+
+NOW = datetime(2026, 11, 1, 9, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture
+async def db():
+    d = AsyncMongoMockClient()["t"]
+    await d["users"].insert_many([{"id": "boss", "role": "admin"}, {"id": "bob"}])
+    return d
+
+
+@pytest.fixture
+def sent(monkeypatch):
+    class Out(list):
+        pass
+
+    out = Out()
+
+    async def rec(db, user_id, text, html=False, buttons=None):
+        out.append({"text": text, "html": html, "buttons": buttons})
+        return rec.result
+
+    rec.result = True
+    async def linked(self, user_id):
+        return ("tok", "1")
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", linked)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", rec)
+    out.rec = rec
+    return out
+
+
+async def test_unknown_kind_raises(db):
+    with pytest.raises(ValueError):
+        await alerts.alert(db, "boss", "nope", "x")
+
+
+async def test_instant_sends_card_and_logs_sent(db, sent):
+    assert await alerts.alert(db, "boss", "exit", "Sell · TCS", ["Stop hit"]) is True
+    assert sent[0]["text"] == "🔴 <b>Sell · TCS</b>\nStop hit" and sent[0]["html"] is True
+    assert (await db["alerts"].find_one())["state"] == "sent"
+
+
+def test_card_escapes_and_caps_three_lines():
+    assert alerts.card("exit", "A<B", ["1", "2", "3", "4"]) == "🔴 <b>A&lt;B</b>\n1\n2\n3"
+
+
+async def test_failed_send_logs_failed_and_returns_false(db, sent):
+    sent.rec.result = False
+    assert await alerts.alert(db, "boss", "exit", "x") is False
+    assert (await db["alerts"].find_one())["state"] == "failed"
+
+
+async def test_telegram_raising_is_swallowed(db, monkeypatch):
+    async def boom(*a, **k):
+        raise RuntimeError("down")
+
+    async def linked(self, user_id):
+        return ("tok", "1")
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", linked)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", boom)
+    assert await alerts.alert(db, "boss", "exit", "x") is False
+    assert (await db["alerts"].find_one())["state"] == "failed"
+
+
+async def test_log_write_failure_does_not_block_send(db, sent, monkeypatch):
+    async def boom(*a, **k):
+        raise RuntimeError("db")
+
+    monkeypatch.setattr(type(db["alerts"]), "insert_one", boom)
+    assert await alerts.alert(db, "boss", "exit", "x") is True
+    assert len(sent) == 1
+
+
+async def test_muted_kind_logs_muted_and_does_not_send(db, sent):
+    await db["user_prefs"].insert_one({"user_id": "boss", "alert_mute": {"exit": True}})
+    assert await alerts.alert(db, "boss", "exit", "x") is True  # handled on purpose: no retry
+    assert not sent and (await db["alerts"].find_one())["state"] == "muted"
+
+
+async def test_unlinked_user_is_handled_without_send_or_log(db, monkeypatch):
+    async def unlinked(self, user_id):
+        return None
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", unlinked)
+    assert await alerts.alert(db, "boss", "exit", "x") is True
+    assert await db["alerts"].count_documents({}) == 0
+
+
+async def test_prefs_lookup_failure_instant_still_sends_batched_returns_false(db, sent, monkeypatch):
+    async def boom(self, user_id):
+        raise RuntimeError("mongo")
+
+    monkeypatch.setattr("backend.prefs.PrefsStore.get", boom)
+    assert await alerts.alert(db, "boss", "exit", "x") is True and len(sent) == 1
+    assert await alerts.alert(db, "boss", "news", "x") is False
+
+
+async def test_drain_renders_first_three_lines_of_each_item(db):
+    await alerts.alert(db, "boss", "review", "Charges", ["a<", "b", "c", "d"])
+    block, _ = await alerts.drain(db, "boss", NOW)
+    assert "• Charges\n   a&lt;\n   b\n   c" in block and "d" not in block.split("c")[-1]
+
+
+async def test_drain_huge_queue_stays_under_telegram_limit(db):
+    for i in range(30):
+        for kind in ("news", "learning", "review", "autopilot_refused"):
+            await alerts.alert(db, "boss", kind, "T" * 500, ["L" * 500] * 3)
+    block, _ = await alerts.drain(db, "boss", NOW)
+    assert len(block) <= 2500 + len("\n…and more in the app") and block.endswith("…and more in the app")
+    assert "T" * 121 not in block
+
+
+async def test_ideas_admin_only(db, sent):
+    assert await alerts.alert(db, "bob", "ideas", "x") is False
+    assert await db["alerts"].count_documents({}) == 0
+
+
+async def test_batched_kind_queues(db, sent):
+    assert await alerts.alert(db, "boss", "news", "x") is True
+    assert (await db["alerts"].find_one())["state"] == "queued" and not sent
+
+
+async def test_drain_groups_caps_and_claims(db):
+    for i in range(7):
+        await alerts.alert(db, "boss", "news", f"n{i}")
+    await alerts.alert(db, "boss", "learning", "l")
+    block, ids = await alerts.drain(db, "boss", NOW)
+    assert block.startswith("<b>Since last update</b>") and "…and 2 more" in block and len(ids) == 8
+    assert await db["alerts"].count_documents({"state": "queued"}) == 0
+    assert (await alerts.drain(db, "boss", NOW)) == ("", [])
+
+
+async def test_drain_skips_kind_muted_after_queueing(db):
+    await alerts.alert(db, "boss", "news", "x")
+    await db["user_prefs"].insert_one({"user_id": "boss", "alert_mute": {"news": True}})
+    assert await alerts.drain(db, "boss", NOW) == ("", [])
+    assert await db["alerts"].count_documents({"state": "queued"}) == 1
+
+
+async def test_requeue_restores(db):
+    await alerts.alert(db, "boss", "news", "x")
+    _, ids = await alerts.drain(db, "boss", NOW)
+    await alerts.requeue(db, ids)
+    row = await db["alerts"].find_one()
+    assert row["state"] == "queued" and row["digested_at"] is None
+
+
+def test_sell_buttons_without_app_url_has_only_sell(monkeypatch):
+    monkeypatch.setattr(settings, "APP_URL", None)
+    rows = alerts.sell_buttons("TCS", 3, "/x")
+    assert len(rows) == 1 and len(rows[0]) == 1 and rows[0][0]["text"] == "Sell ×3"
+    monkeypatch.setattr(settings, "APP_URL", "https://a")
+    assert alerts.sell_buttons("TCS", 3, "/x")[0][1] == {"text": "Open", "url": "https://a/x"}
+
+
+def test_split():
+    assert alerts.split("Title\nA\n\nB") == ("Title", ["A", "B"])
+
+
+async def test_drain_with_microsecond_now(db):
+    await alerts.alert(db, "boss", "news", "x")
+    block, ids = await alerts.drain(db, "boss", datetime(2026, 11, 1, 9, 0, 0, 123456, tzinfo=timezone.utc))
+    assert "• x" in block and len(ids) == 1
+    assert await alerts.drain(db, "boss", NOW) == ("", [])
+
+
+async def _ideas(db, expiring):
+    from datetime import timedelta
+    for i in range(3):
+        await db["suggestions"].insert_one({"user_id": "boss", "status": "PENDING", "mode": "LONGTERM",
+                                            "expires_at": NOW + timedelta(hours=1 if i < expiring else 99)})
+
+
+async def test_drain_stale_ideas_line(db):
+    from datetime import timedelta
+    await _ideas(db, 1)
+    block, ids = await alerts.drain(db, "boss", NOW, NOW + timedelta(hours=5), "the open")
+    assert "<b>Expiring ideas</b>" in block and "3 pending, 1 expire before the open" in block and ids == []
+
+
+async def test_drain_stale_ideas_admin_only(db):
+    from datetime import timedelta
+    await _ideas(db, 1)
+    await db["suggestions"].update_many({}, {"$set": {"user_id": "bob"}})
+    assert await alerts.drain(db, "bob", NOW, NOW + timedelta(hours=5)) == ("", [])
+
+
+async def test_drain_stale_ideas_only_counts_what_the_user_sees(db, monkeypatch):
+    from datetime import timedelta
+    from backend.risk import paper_gate
+
+    async def none(db_, user_id, rows):
+        return []
+
+    monkeypatch.setattr(paper_gate, "for_mine", none)
+    await _ideas(db, 1)
+    assert await alerts.drain(db, "boss", NOW, NOW + timedelta(hours=5)) == ("", [])
