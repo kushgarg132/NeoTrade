@@ -27,7 +27,7 @@ import useStored from '../hooks/useStored';
 import { oneLine } from '../utils/aiText';
 import { inr, pct } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
-import { AiLabel, AiText } from '../components/ai/AiSummary';
+import { AiLabel, AiMarkdown, AiText } from '../components/ai/AiSummary';
 import { px, rewardRisk } from '../components/ideas/levels';
 import { splitThesis } from '../utils/aiText';
 import { stockPath } from '../utils/stocks';
@@ -102,11 +102,11 @@ const Thesis = ({ text, at }) => {
   return (
     <div>
       <AiLabel at={at} />
-      {why && <AiText text={why} />}
+      {why && <AiText text={why} title="Why this idea" />}
       {risk && (
         <div className="mt-3">
           <div className="text-[13px] font-semibold text-[var(--warn)]">What could go wrong</div>
-          <AiText text={risk} className="text-[var(--text-muted)]" />
+          <AiMarkdown text={risk} className="text-[var(--text-muted)]" ask={false} />
         </div>
       )}
     </div>
@@ -125,7 +125,7 @@ const PickContext = ({ symbol }) => {
       {text && (
         <div>
           <span className="block text-[12px] text-[var(--text-muted)]">AI note{note.data?.as_of ? ` · ${formatDateTime(note.data.as_of)}` : ''}</span>
-          <AiText text={text} />
+          <AiText text={text} title="Idea review" />
         </div>
       )}
       <NewsChip entry={news[sym]} />

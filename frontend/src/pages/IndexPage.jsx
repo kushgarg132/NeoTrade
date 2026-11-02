@@ -10,7 +10,7 @@ import Skeleton from '../components/ui/Skeleton';
 import Hero from '../components/ui/Hero';
 import DeltaChip from '../components/ui/DeltaChip';
 import Button from '../components/ui/Button';
-import { AiCard, AiText } from '../components/ai/AiSummary';
+import { AiCard, AiMarkdown, AiText } from '../components/ai/AiSummary';
 import useStored from '../hooks/useStored';
 import api, { endpoints } from '../utils/api';
 import { stream } from '../lib/ws';
@@ -74,7 +74,7 @@ const Why = ({ ticker }) => {
   if (ask && !user) return <SignInCard title="Sign in for an explanation" body="Stored explanations are free to read; writing a new one needs an account." />;
   return (
     <AiCard title="Why it moved" asOf={data?.session?.date}>
-      {status === 'loading' && (text ? <AiText text={text} /> : <Skeleton rows={4} />)}
+      {status === 'loading' && (text ? <AiMarkdown text={text} ask={false} /> : <Skeleton rows={4} />)}
       {status === 'none' && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-[14px] text-[var(--text-muted)]">No explanation for the last session yet.</p>
@@ -86,7 +86,7 @@ const Why = ({ ticker }) => {
       )}
       {status === 'ok' && (
         <>
-          <AiText text={data.analysis} />
+          <AiText text={data.analysis} title="Index analysis" />
           {data.headlines?.length > 0 && (
             <ul className="mt-3 space-y-2 text-[13px] text-[var(--text-muted)]">
               {data.headlines.slice(0, 3).map((h) => (

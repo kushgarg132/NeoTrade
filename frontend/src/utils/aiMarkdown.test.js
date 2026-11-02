@@ -45,3 +45,38 @@ test('collapseBlocks keeps 5 paragraphs/items, cuts a long list part-way', async
   assert.deepEqual(c.map((x) => x.type), ['heading', 'p', 'heading', 'ul']);
   assert.equal(c[3].items.length, 4);
 });
+
+test('inline: signed percents and amounts take a tone; known tickers become symbols', async () => {
+  const { parseInline: p } = await import('./aiMarkdown.js');
+  const segs = p('INFY rose +2.4% while TCS fell −1.1% and NIFTY lost -₹500; RSI 60%', new Set(['INFY', 'TCS']));
+  assert.deepEqual(segs.filter((s) => s.symbol).map((s) => s.symbol), ['INFY', 'TCS']);
+  assert.deepEqual(segs.filter((s) => s.pct).map((s) => [s.text, s.tone]), [['+2.4%', 'gain'], ['−1.1%', 'loss']]);
+  assert.deepEqual(segs.filter((s) => s.amount).map((s) => [s.text, s.tone]), [['-₹500', 'loss']]);
+  assert.equal(segs.map((s) => s.text).join(''), 'INFY rose +2.4% while TCS fell −1.1% and NIFTY lost -₹500; RSI 60%');
+  assert.ok(!p('INFY up', undefined).some((s) => s.symbol), 'no symbols without a known set');
+});
+
+test('tickerCandidates skips market words and keeps order', async () => {
+  const { tickerCandidates } = await import('./aiMarkdown.js');
+  assert.deepEqual(tickerCandidates('NIFTY fell; HDFCBANK and M&M led, RSI high, HDFCBANK again, FIIs sold'), ['HDFCBANK']);
+  assert.deepEqual(tickerCandidates('BAJAJ-AUTO and TATAMOTORS'), ['BAJAJ-AUTO', 'TATAMOTORS']);
+});
+
+test('outline: key points first, headings become sections', async () => {
+  const { outline } = await import('./aiMarkdown.js');
+  const o = outline(parseBlocks('- a\n- b\n- c\n- d\n\nMore.\n\n## Risks\nOne.\n\n## Empty\n\n## Next\n- x'));
+  assert.deepEqual(o.lead.items, ['a', 'b', 'c']);
+  assert.deepEqual(o.intro.map((b) => b.type), ['ul', 'p']);
+  assert.deepEqual(o.sections.map((s) => s.title), ['Risks', 'Next']);
+  const h = outline(parseBlocks('## Snapshot\nNifty fell.\nMore.\n\n## Why\nRates.'));
+  assert.equal(h.leadTitle, 'Snapshot');
+  assert.equal(h.lead.text, 'Nifty fell. More.');
+  assert.deepEqual(h.sections.map((s) => s.title), ['Why']);
+  assert.equal(outline([]).lead, null);
+});
+
+test('followUps: tickers first, then an action or meaning question', async () => {
+  const { followUps } = await import('./aiMarkdown.js');
+  assert.deepEqual(followUps('Trim INFY.', ['INFY', 'TCS', 'SBIN']), ['Why INFY?', 'Why TCS?', 'What should I do now?']);
+  assert.deepEqual(followUps('Markets were calm.', []), ['What does this mean for me?', 'Explain this simply']);
+});

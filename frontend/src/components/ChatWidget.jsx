@@ -139,6 +139,17 @@ const ChatWidget = () => {
     window.addEventListener('margin-note:toggle', onToggle);
     return () => window.removeEventListener('margin-note:toggle', onToggle);
   }, []);
+  // An AI card's follow-up chip (components/ai/AiSummary.jsx): open and ask, with the card's text as
+  // what the assistant said before (the server only takes slug-shaped context, so it rides in history).
+  const sendRef = useRef(null);
+  useEffect(() => {
+    const onAsk = (e) => {
+      setOpen(true);
+      sendRef.current?.(e.detail?.question, e.detail);
+    };
+    window.addEventListener('margin-note:ask', onAsk);
+    return () => window.removeEventListener('margin-note:ask', onAsk);
+  }, []);
   const [messages, setMessages] = useState([OPENING]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -197,12 +208,13 @@ const ChatWidget = () => {
     send(input.trim());
   };
 
-  const send = (text) => {
+  const send = (text, card = null) => {
     if (!text || busy || !user) return;
 
     const history = messages
       .filter((message) => message !== OPENING && (message.role === 'user' || message.role === 'assistant'))
       .map(({ role, content }) => ({ role, content }));
+    if (card?.text) history.push({ role: 'assistant', content: `${card.title || 'Summary'}:\n${String(card.text).slice(0, 4000)}` });
 
     setMessages((list) => [...list, { role: 'user', content: text }]);
     setInput('');
@@ -270,6 +282,7 @@ const ChatWidget = () => {
     }
   };
 
+  useEffect(() => { sendRef.current = send; });
   const fresh = messages.length === 1;
   const chips = !busy && (fresh ? suggestionsFor(location.pathname) : followups);
 

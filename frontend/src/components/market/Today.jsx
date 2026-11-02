@@ -49,7 +49,7 @@ const Story = () => {
         : (
           <div className="space-y-2">
             {shown && <Badge kind={shown.kind}>{shown.label}</Badge>}
-            <div className={open ? '' : 'line-clamp-2'}><AiMarkdown text={data.text} collapse={false} /></div>
+            <div className={open ? '' : 'line-clamp-2'}><AiMarkdown text={data.text} collapse={false} title="Market today" ask={open} /></div>
             {data.text.length > 140 && (
               <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
                 className="min-h-11 rounded-[8px] text-[14px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">

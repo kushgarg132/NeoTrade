@@ -30,7 +30,7 @@ const WhyMoved = () => {
       {status === 'ok' && (
         <>
           <div className={open ? '' : 'max-h-36 overflow-hidden [mask-image:linear-gradient(to_bottom,black_60%,transparent)]'}>
-            <AiText text={data.text} collapse={false} />
+            <AiText text={data.text} collapse={false} title="Your money" />
           </div>
           <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}
             className="mt-1 inline-flex min-h-11 items-center text-[14px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px]">

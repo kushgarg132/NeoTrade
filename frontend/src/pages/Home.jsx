@@ -69,7 +69,7 @@ const GuestHome = () => {
         {indices ? <IndexStrip rows={Array.isArray(indices) ? indices : []} /> : <Skeleton rows={1} />}
         <Card title="Market today">
           {brief.status === 'loading' ? <Skeleton rows={3} />
-            : brief.status === 'ok' ? <AiMarkdown text={brief.data.text} collapse={false} />
+            : brief.status === 'ok' ? <AiMarkdown text={brief.data.text} collapse={false} title="Market brief" />
             : <p className="text-[14px] text-[var(--text-muted)]">No market brief yet.</p>}
         </Card>
         <Card title="News" action={<Link to="/market?tab=news" className="text-[14px] font-semibold text-[var(--accent)]">All news</Link>}>

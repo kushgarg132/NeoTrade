@@ -69,11 +69,11 @@ const AiRead = ({ aiRead, retryAi }) => {
       {summary && (
         <>
           {copy && <p className="mb-2 text-[13px] text-[var(--text-muted)]" role="status">{copy}</p>}
-          <div className={open ? '' : 'line-clamp-3'}><AiMarkdown text={summary} collapse={false} /></div>
+          <div className={open ? '' : 'line-clamp-3'}><AiMarkdown text={summary} collapse={false} title="AI read" ask={open} /></div>
           {open && thesis && (
             <div className="mt-3 pt-3 border-t border-[var(--border)]">
               <p className="text-[13px] text-[var(--text-muted)] mb-1.5">Thesis</p>
-              <AiMarkdown text={thesis} collapse={false} />
+              <AiMarkdown text={thesis} collapse={false} title="AI thesis" ask={false} />
             </div>
           )}
           <div className="flex flex-wrap items-center justify-between gap-x-3 -mb-2">
