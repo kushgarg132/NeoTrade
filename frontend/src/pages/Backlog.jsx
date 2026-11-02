@@ -1,74 +1,49 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, Search, Trash2 } from 'lucide-react';
 import SettingsPage from './SettingsPage';
 import Card from '../components/ui/Card';
 import Empty from '../components/ui/Empty';
 import ErrorLine from '../components/ui/ErrorLine';
 import Skeleton from '../components/ui/Skeleton';
-import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
+import Tabs from '../components/ui/Tabs';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
 import { formatTimeAgo } from '../utils/formatters';
+import { AREAS, AREA_COLOR, EFFORTS, STAGES, VIEWS, advance, byStatus, counts, filterItems } from '../utils/backlog';
 
 /**
- * The operator's backlog of future enhancements (admin-only, /system/future):
- * one app-wide list in Mongo, edited in place. Writes are optimistic and roll
- * back with the API's message when refused.
+ * The operator's backlog of future enhancements (admin-only, /system/future): one app-wide list in Mongo,
+ * edited in place. Phone: tabs (Now, Ideas, Done, Dropped). Desktop: a board (Ideas | Next | Doing) with
+ * Done and Dropped folded below. Writes are optimistic and roll back with the API's message when refused.
  */
 
-const AREAS = ['System', 'Data', 'Trading', 'AI', 'News', 'Journal', 'UI', 'Ops', 'Product'];
-const OPEN = [['doing', 'Doing'], ['next', 'Next'], ['idea', 'Ideas']];
-const CLOSED = [['done', 'Done'], ['dropped', 'Dropped']];
-const STATUSES = ['idea', 'next', 'doing', 'done', 'dropped'];
 const FIELD = 'w-full bg-transparent border-b border-[var(--border)] py-1 text-[15px] min-h-11 focus:outline-none focus:border-[var(--accent)]';
-const SMALL_BUTTON = 'min-h-11 min-w-11 px-2 rounded-[8px] border border-[var(--border)] text-[15px] disabled:opacity-40 inline-flex items-center justify-center';
+const ICON_BUTTON = 'min-h-11 min-w-11 px-2 rounded-[10px] border border-[var(--border)] text-[14px] disabled:opacity-40 inline-flex items-center justify-center gap-1.5';
+const LABEL = 'text-[12px] font-medium uppercase tracking-wide text-[var(--text-muted)]';
+const BOARD = ['idea', 'next', 'doing'];
+const STAGE_LABEL = Object.fromEntries(STAGES);
 
-const Editor = ({ item, onSave }) => {
+/** A row of single-choice chips (status, effort, area); `allowNone` adds a clear chip. */
+const Chips = ({ options, value, onPick, label, allowNone = false }) => (
+  <div role="group" aria-label={label} className="flex gap-1.5 overflow-x-auto">
+    {[...(allowNone ? [['', 'Any']] : []), ...options].map(([v, text]) => (
+      <button key={v || 'none'} type="button" aria-pressed={value === v} onClick={() => onPick(v)}
+              className={cn('tap shrink-0 min-h-9 px-3 rounded-full text-[13px] font-medium',
+                value === v ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]')}>
+        {text}
+      </button>
+    ))}
+  </div>
+);
+const pairs = (list) => list.map((x) => [x, x]);
+
+const Editor = ({ item, onSave, onMove, onDelete, first, last }) => {
   const [draft, setDraft] = useState({ why: item.why, notes: item.notes });
-  const blur = (key) => () => draft[key] !== item[key] && onSave({ [key]: draft[key] });
-  return (
-    <div className="mt-2 space-y-2">
-      <label className="block">
-        <span className="text-[13px] text-[var(--text-muted)]">Why</span>
-        <textarea rows={2} maxLength={2000} className={FIELD} value={draft.why}
-                  onChange={(e) => setDraft((d) => ({ ...d, why: e.target.value }))} onBlur={blur('why')} />
-      </label>
-      <label className="block">
-        <span className="text-[13px] text-[var(--text-muted)]">Notes</span>
-        <textarea rows={3} maxLength={4000} className={FIELD} value={draft.notes}
-                  onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} onBlur={blur('notes')} />
-      </label>
-      <div className="flex flex-wrap gap-3">
-        <label className="flex items-center gap-2 text-[15px]">
-          <span className="text-[13px] text-[var(--text-muted)]">Status</span>
-          <select className={FIELD} value={item.status} onChange={(e) => onSave({ status: e.target.value })}>
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
-        <label className="flex items-center gap-2 text-[15px]">
-          <span className="text-[13px] text-[var(--text-muted)]">Effort</span>
-          <select className={FIELD} value={item.effort || ''} onChange={(e) => onSave({ effort: e.target.value || null })}>
-            <option value="">—</option>
-            {['S', 'M', 'L'].map((e) => <option key={e} value={e}>{e}</option>)}
-          </select>
-        </label>
-        <label className="flex items-center gap-2 text-[15px]">
-          <span className="text-[13px] text-[var(--text-muted)]">Area</span>
-          <select className={FIELD} value={item.area} onChange={(e) => onSave({ area: e.target.value })}>
-            {AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-        </label>
-      </div>
-      {item.source && <p className="text-[12px] text-[var(--text-muted)]">From {item.source} · updated {formatTimeAgo(item.updated_at)}</p>}
-    </div>
-  );
-};
-
-const Item = ({ item, open, onToggle, onSave, onMove, onDelete, first, last }) => {
   const [arming, setArming] = useState(false);
   const timer = useRef(null);
   useEffect(() => () => clearTimeout(timer.current), []);
+  const blur = (key) => () => draft[key] !== item[key] && onSave({ [key]: draft[key] });
   const remove = () => {
     if (arming) return onDelete();
     setArming(true);
@@ -76,30 +51,60 @@ const Item = ({ item, open, onToggle, onSave, onMove, onDelete, first, last }) =
     return undefined;
   };
   return (
-    <li className="py-2.5">
-      <div className="flex items-start gap-2">
-        <button type="button" onClick={onToggle} aria-expanded={open} className="min-w-0 flex-1 text-left min-h-11">
-          <span className="block text-[15px] font-semibold">{item.title}</span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
-            <Badge>{item.area}</Badge>
-            {item.effort && <Badge>{`Effort ${item.effort}`}</Badge>}
-            {!open && item.why && <span className="min-w-0 truncate text-[13px] text-[var(--text-muted)]">{item.why}</span>}
-          </span>
+    <div className="mt-3 space-y-3 border-t border-[var(--border)] pt-3 fade-in">
+      <div className="space-y-1.5"><p className={LABEL}>Status</p>
+        <Chips label="Status" options={STAGES} value={item.status} onPick={(status) => onSave({ status })} /></div>
+      <div className="space-y-1.5"><p className={LABEL}>Effort</p>
+        <Chips label="Effort" options={pairs(EFFORTS)} value={item.effort || ''} allowNone onPick={(effort) => onSave({ effort: effort || null })} /></div>
+      <div className="space-y-1.5"><p className={LABEL}>Area</p>
+        <Chips label="Area" options={pairs(AREAS)} value={item.area} onPick={(area) => onSave({ area })} /></div>
+      <label className="block">
+        <span className={LABEL}>Why</span>
+        <textarea rows={2} maxLength={2000} className={FIELD} value={draft.why}
+                  onChange={(e) => setDraft((d) => ({ ...d, why: e.target.value }))} onBlur={blur('why')} />
+      </label>
+      <label className="block">
+        <span className={LABEL}>Notes</span>
+        <textarea rows={3} maxLength={4000} className={FIELD} value={draft.notes}
+                  onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} onBlur={blur('notes')} />
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" aria-label="Move up" className={ICON_BUTTON} disabled={first} onClick={() => onMove(-1)}><ArrowUp className="w-4 h-4" /></button>
+        <button type="button" aria-label="Move down" className={ICON_BUTTON} disabled={last} onClick={() => onMove(1)}><ArrowDown className="w-4 h-4" /></button>
+        <button type="button" onClick={remove} aria-label={arming ? 'Tap again to delete' : 'Delete item'}
+                className={cn(ICON_BUTTON, 'ml-auto px-3', arming && 'border-[var(--loss)] text-[var(--loss)]')}>
+          <Trash2 className="w-4 h-4" />{arming ? 'Tap again to delete' : 'Delete'}
         </button>
-        <div className="flex shrink-0 gap-1">
-          <button type="button" aria-label="Move up" className={SMALL_BUTTON} disabled={first} onClick={() => onMove(-1)}>
-            <ArrowUp className="w-4 h-4" />
-          </button>
-          <button type="button" aria-label="Move down" className={SMALL_BUTTON} disabled={last} onClick={() => onMove(1)}>
-            <ArrowDown className="w-4 h-4" />
-          </button>
-          <button type="button" onClick={remove} aria-label={arming ? 'Tap again to delete' : 'Delete item'}
-                  className={cn(SMALL_BUTTON, arming && 'border-[var(--loss)] text-[var(--loss)] px-3')}>
-            {arming ? 'Delete?' : '×'}
-          </button>
-        </div>
       </div>
-      {open && <Editor item={item} onSave={onSave} />}
+      {(item.source || item.updated_at) && (
+        <p className="text-[12px] text-[var(--text-muted)]">{item.source ? `From ${item.source} · ` : ''}updated {formatTimeAgo(item.updated_at)}</p>
+      )}
+    </div>
+  );
+};
+
+const Item = ({ item, open, onToggle, onSave, ...editor }) => {
+  const next = advance(item.status);
+  return (
+    <li className={cn('rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-3', open && 'ring-1 ring-[var(--accent)]')}>
+      <div className="flex items-start gap-2.5">
+        <span aria-hidden="true" className="mt-2 w-2.5 h-2.5 shrink-0 rounded-full" style={{ background: AREA_COLOR[item.area] }} />
+        <button type="button" onClick={onToggle} aria-expanded={open} className="min-w-0 flex-1 text-left min-h-11">
+          <span className="block text-[15px] font-semibold leading-5 text-[var(--text)]">{item.title}</span>
+          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[var(--text-muted)]">
+            <span>{item.area}</span>
+            {item.effort && <span className="rounded-full bg-[var(--surface-2)] px-1.5 font-semibold">{item.effort}</span>}
+          </span>
+          {!open && item.why && <span className="mt-1 block line-clamp-1 text-[13px] text-[var(--text-muted)]">{item.why}</span>}
+        </button>
+        {next && (
+          <button type="button" onClick={() => onSave({ status: next.to })} aria-label={`Move to ${STAGE_LABEL[next.to]}`}
+                  className="tap shrink-0 min-h-11 min-w-11 px-3 rounded-[10px] bg-[var(--accent-soft)] text-[var(--accent)] text-[13px] font-semibold inline-flex items-center gap-1">
+            {next.label}<ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {open && <Editor item={item} onSave={onSave} {...editor} />}
     </li>
   );
 };
@@ -108,10 +113,10 @@ const Backlog = () => {
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
   const [note, setNote] = useState(null);
-  const [area, setArea] = useState('');
+  const [view, setView] = useState('now');
+  const [filters, setFilters] = useState({ q: '', area: '', effort: '' });
   const [openId, setOpenId] = useState(null);
-  const [title, setTitle] = useState('');
-  const [newArea, setNewArea] = useState('Product');
+  const [draft, setDraft] = useState({ title: '', area: 'Product', status: 'idea', effort: '' });
 
   const load = useCallback(() => {
     api.get(endpoints.system.backlog)
@@ -158,22 +163,25 @@ const Backlog = () => {
 
   const add = (event) => {
     event.preventDefault();
-    if (!title.trim()) return;
+    if (!draft.title.trim()) return;
     setNote(null);
-    api.post(endpoints.system.backlog, { title: title.trim(), area: newArea })
+    const body = { title: draft.title.trim(), area: draft.area, status: draft.status, ...(draft.effort ? { effort: draft.effort } : {}) };
+    api.post(endpoints.system.backlog, body)
       .then((res) => {
         setItems((list) => [...list, res.data]);
-        setTitle('');
+        setDraft((d) => ({ ...d, title: '' }));
       })
       .catch((err) => setNote(err?.response?.data?.detail?.[0]?.msg || err?.response?.data?.detail || 'Could not add it.'));
   };
 
-  const group = (status) =>
-    (items || []).filter((i) => i.status === status && (!area || i.area === area)).sort((a, b) => a.rank - b.rank);
+  const shown = filterItems(items, filters);
+  const total = counts(items);
+  const filtering = filters.q || filters.area || filters.effort;
 
-  const list = (rows) => {
+  const list = (status) => {
+    const rows = byStatus(shown, status);
     return (
-      <ul className="divide-y divide-[var(--border)]">
+      <ul className="space-y-2">
         {rows.map((item, index) => (
           <Item key={item.id} item={item} open={openId === item.id}
                 onToggle={() => setOpenId((id) => (id === item.id ? null : item.id))}
@@ -183,62 +191,95 @@ const Backlog = () => {
       </ul>
     );
   };
-
-  const shown = [...OPEN, ...CLOSED].reduce((n, [status]) => n + group(status).length, 0);
-  const openCount = (items || []).filter((i) => !['done', 'dropped'].includes(i.status)).length;
+  const column = (status, title = STAGE_LABEL[status]) => {
+    const n = byStatus(shown, status).length;
+    return (
+      <section key={status} className="min-w-0 space-y-2">
+        <h2 className="flex items-center gap-2 text-[14px] font-semibold text-[var(--text)]">
+          {title}<span className="rounded-full bg-[var(--surface-2)] px-2 text-[12px] text-[var(--text-muted)]">{n}</span>
+        </h2>
+        {n ? list(status) : <p className="rounded-[14px] border border-dashed border-[var(--border)] p-3 text-[13px] text-[var(--text-muted)]">Empty</p>}
+      </section>
+    );
+  };
+  const folded = (status) => {
+    const n = byStatus(shown, status).length;
+    return n > 0 && (
+      <details key={status} className="group">
+        <summary className="min-h-11 flex cursor-pointer items-center text-[14px] font-medium text-[var(--text-muted)]">{STAGE_LABEL[status]} · {n}</summary>
+        {list(status)}
+      </details>
+    );
+  };
+  const tabStatuses = VIEWS.find((v) => v.id === view).statuses;
 
   return (
-    <SettingsPage title="Backlog" back="/settings/lab" backLabel="Lab" right={items && <span className="text-[14px] text-[var(--text-muted)]">{openCount} open</span>}>
-      <div className="space-y-3 sm:space-y-4 max-w-3xl">
-        <p className="text-[14px] text-[var(--text-muted)]">Your list of future changes to NeoTrade. Idea, then Next, then Doing; Done and Dropped fold away.</p>
+    <SettingsPage title="Backlog" back="/settings/lab" backLabel="Lab" right={items && <span className="text-[14px] text-[var(--text-muted)]">{total.idea + total.next + total.doing} open</span>}>
+      <div className="space-y-3 sm:space-y-4 max-w-6xl">
+        {items && items.length > 0 && (
+          <div className="grid grid-cols-4 gap-2">
+            {[['doing', 'Doing', 'now'], ['next', 'Next', 'now'], ['idea', 'Ideas', 'idea'], ['done', 'Done', 'done']].map(([s, label, v]) => (
+              <button key={s} type="button" onClick={() => setView(v)}
+                      className={cn('tap rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-2.5 text-left', view === v && 'lg:border-[var(--border)] border-[var(--accent)]')}>
+                <span className="block text-[22px] font-bold tabular-nums leading-7 text-[var(--text)]">{total[s]}</span>
+                <span className="text-[12px] text-[var(--text-muted)]">{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <Card>
-          <form onSubmit={add} className="flex items-end gap-2">
-            <input ref={input} aria-label="New item" placeholder="Add an idea…" maxLength={140} value={title}
-                   onChange={(e) => setTitle(e.target.value)} className={cn(FIELD, 'flex-1 min-w-0')} />
-            <select aria-label="Area" value={newArea} onChange={(e) => setNewArea(e.target.value)} className={cn(FIELD, 'w-auto shrink-0')}>
-              {AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
-            <Button type="submit" className="shrink-0">Add</Button>
+          <form onSubmit={add} className="space-y-2.5">
+            <div className="flex items-end gap-2">
+              <input ref={input} aria-label="New item" placeholder="Add an idea…" maxLength={140} value={draft.title}
+                     onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} className={cn(FIELD, 'flex-1 min-w-0')} />
+              <Button type="submit" className="shrink-0">Add</Button>
+            </div>
+            {draft.title && (
+              <div className="space-y-2 fade-in">
+                <Chips label="New item stage" options={[['idea', 'Idea'], ['next', 'Next']]} value={draft.status} onPick={(status) => setDraft((d) => ({ ...d, status }))} />
+                <Chips label="New item effort" options={pairs(EFFORTS)} value={draft.effort} allowNone onPick={(effort) => setDraft((d) => ({ ...d, effort }))} />
+                <Chips label="New item area" options={pairs(AREAS)} value={draft.area} onPick={(area) => setDraft((d) => ({ ...d, area }))} />
+              </div>
+            )}
           </form>
         </Card>
-        <div className="flex gap-1.5 overflow-x-auto" role="group" aria-label="Filter by area">
-          {['', ...AREAS].map((a) => (
-            <button key={a || 'all'} type="button" aria-pressed={area === a} onClick={() => setArea(a)}
-                    className={cn('shrink-0 min-h-11 px-3.5 rounded-full text-[14px] font-medium',
-                      area === a ? 'bg-[var(--accent)] text-[var(--surface)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]')}>
-              {a || 'All'}
-            </button>
-          ))}
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 rounded-[12px] bg-[var(--surface-2)] px-3">
+            <Search className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+            <input type="search" aria-label="Search the backlog" placeholder="Search title, why, notes" value={filters.q}
+                   onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+                   className="min-h-11 w-full bg-transparent text-[15px] focus:outline-none" />
+          </label>
+          <Chips label="Filter by area" options={pairs(AREAS)} value={filters.area} allowNone onPick={(area) => setFilters((f) => ({ ...f, area }))} />
+          <Chips label="Filter by effort" options={EFFORTS.map((e) => [e, `Effort ${e}`])} value={filters.effort} allowNone onPick={(effort) => setFilters((f) => ({ ...f, effort }))} />
         </div>
+
         {note && <p role="alert" className="text-[14px] text-[var(--loss)]">{note}</p>}
         {error ? <ErrorLine message={`Could not load the backlog: ${error}.`} onRetry={retry} />
           : items === null ? <Skeleton rows={6} />
           : items.length === 0 ? (
             <Empty title="The backlog is empty" body="Type an idea above and tap Add. It starts under Ideas."
                    action={<Button onClick={() => input.current?.focus()}>Add the first item</Button>} />
-          ) : shown === 0 ? (
-            <Empty title={`Nothing filed under ${area}`} action={<Button variant="secondary" onClick={() => setArea('')}>Show all areas</Button>} />
+          ) : filtering && shown.length === 0 ? (
+            <Empty title="No item matches" action={<Button variant="secondary" onClick={() => setFilters({ q: '', area: '', effort: '' })}>Clear filters</Button>} />
           ) : (
-            <Card>
-              {OPEN.map(([status, label]) => {
-                const rows = group(status);
-                return rows.length > 0 && (
-                  <section key={status} className="mb-3 last:mb-0">
-                    <h2 className="text-[15px] font-semibold">{label} · {rows.length}</h2>
-                    {list(rows)}
-                  </section>
-                );
-              })}
-              {CLOSED.map(([status, label]) => {
-                const rows = group(status);
-                return rows.length > 0 && (
-                  <details key={status} className="mt-1">
-                    <summary className="text-[14px] text-[var(--text-muted)] cursor-pointer min-h-11 flex items-center">{label} · {rows.length}</summary>
-                    {list(rows)}
-                  </details>
-                );
-              })}
-            </Card>
+            <>
+              {/* Phone: one tab at a time. */}
+              <div className="space-y-3 lg:hidden">
+                <Tabs tabs={VIEWS.map((v) => ({ id: v.id, label: v.label }))} value={view} onChange={setView} label="Backlog stage" />
+                {tabStatuses.map((s) => (tabStatuses.length > 1 ? column(s) : <div key={s}>{list(s)}</div>))}
+                {tabStatuses.every((s) => byStatus(shown, s).length === 0) && (
+                  <p className="text-[14px] text-[var(--text-muted)]">This stage is empty{filtering ? ' with these filters' : ''}.</p>
+                )}
+              </div>
+              {/* Desktop: the board, closed stages folded below. */}
+              <div className="hidden lg:block space-y-4">
+                <div className="grid grid-cols-3 gap-4">{BOARD.map((s) => column(s))}</div>
+                <div className="space-y-1">{folded('done')}{folded('dropped')}</div>
+              </div>
+            </>
           )}
       </div>
     </SettingsPage>

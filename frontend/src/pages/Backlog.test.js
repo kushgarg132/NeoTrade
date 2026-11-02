@@ -16,8 +16,15 @@ test('load failure has a Retry; an empty backlog names the action', () => {
   assert.match(src, /<Empty[\s\S]*Add the first item/);
 });
 
-test('add row: area select inside the row, 44px primary Add', () => {
+test('add row: 44px primary Add, stage/effort/area chips once a title is typed', () => {
   assert.match(src, /<Button type="submit"/);
+  assert.match(src, /label="New item stage"/);
+});
+
+test('phone tabs and a desktop board; one-tap advance on every open row', () => {
+  assert.match(src, /<Tabs[\s\S]*?label="Backlog stage"/);
+  assert.match(src, /grid-cols-3/);
+  assert.match(src, /advance\(item.status\)/);
 });
 
 test('row controls are 44px on phones and area chips scroll in one row', () => {
