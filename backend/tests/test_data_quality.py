@@ -242,3 +242,29 @@ async def test_a_collapsed_news_triage_rate_is_named_and_a_steady_one_is_not():
     await db["news_items"].delete_many({"triaged_at": {"$gte": WEDNESDAY_11 - timedelta(hours=3)}})
     await db["news_items"].insert_one({"triaged_at": WEDNESDAY_11 - timedelta(hours=1)})
     assert (await _failures(db))[0].startswith("News triage stalled")
+
+
+async def test_admin_alert_is_action_kind(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    await db["users"].insert_many([{"id": "a1", "role": "admin"}, {"id": "u1", "role": "user"}])
+    calls = []
+
+    async def fake(db_, user_id, kind, title, lines=(), **kw):
+        calls.append((user_id, kind, title, list(lines)))
+        return True
+    monkeypatch.setattr("backend.alerts.alert", fake)
+    await data_quality._send_admins(db, "⚠️ NeoTrade data problem\n• Quotes loop failing")
+    assert calls == [("a1", "action", "NeoTrade data problem", ["• Quotes loop failing"])]
+
+
+async def test_recovery_title_has_no_check_mark(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    await db["users"].insert_one({"id": "a1", "role": "admin"})
+    calls = []
+
+    async def fake(db_, user_id, kind, title, lines=(), **kw):
+        calls.append(title)
+        return True
+    monkeypatch.setattr("backend.alerts.alert", fake)
+    await data_quality._send_admins(db, "✅ NeoTrade recovered\n• Quotes loop failing")
+    assert calls == ["NeoTrade recovered"]

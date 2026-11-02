@@ -37,6 +37,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       JWT_SECRET: ${JWT_SECRET:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      APP_URL: ${APP_URL:-}  # alert Open buttons; unset = no URL buttons
       # Broker credentials are per-user and encrypted with this key; without
       # it the app refuses to store them rather than writing plaintext.
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}

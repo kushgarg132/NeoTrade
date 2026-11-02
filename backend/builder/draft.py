@@ -35,7 +35,7 @@ from backend.learning.retune import ACCOUNT, MIN_DSR, _at, _sharpe
 from backend.risk.backtest_gate import (LOOKBACK_DAYS, MAX_DRAWDOWN, MIN_PROFIT_FACTOR, MIN_TRADES, MIN_WINDOW_DAYS,
                                         BacktestGateStore, passes_gate)
 from backend.strategies.blocks.vocab import EXITS, FILTERS, SETUPS, SWING_EXITS, SWING_FILTERS, SWING_SETUPS
-from backend.suggestions.notify import notify
+from backend import alerts
 from backend.system import jobs
 
 logger = logging.getLogger(__name__)
@@ -383,7 +383,8 @@ async def _run(db, redis, now, llm, backtest) -> dict:
                                 admin_id, out, lines) for horizon in HORIZONS]
     notes = [n for n in notes if n]
 
-    text = f"🧪 Strategy builder: {out['drafted']} drafted, {len(out['passed'])} passed"
+    head = f"Strategy builder: {out['drafted']} drafted, {len(out['passed'])} passed"
+    text = head
     text += (": " + "; ".join(lines) + ".") if lines else "."
     if out["retired"]:
         text += " Retired: " + ", ".join(f"built:{s}" for s in out["retired"]) + "."
@@ -391,7 +392,8 @@ async def _run(db, redis, now, llm, backtest) -> dict:
         text += f" ({'; '.join(notes)})"
     await jobs.mark(redis, jobs.BUILDER, ok=True, note=text)
     if admin_id:
-        await notify(db, admin_id, text)
+        rest = text[len(head):].lstrip(".: ").strip()
+        await alerts.alert(db, admin_id, "learning", head, [rest] if rest.strip(".") else [])
     return out
 
 

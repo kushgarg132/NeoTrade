@@ -59,8 +59,7 @@ def pause_text(change: dict) -> str:
     ev = change["evidence"]
     pf = "—" if ev["profit_factor"] is None else f"{ev['profit_factor']:.2f}"
     vs = f" vs ₹{ev['nifty']:,.0f} for the same money in NIFTY" if ev.get("nifty") is not None else ""
-    return (f"⏸ Paused {change['strategy']} on paper: {ev['trades']} trades, net ₹{ev['net']:,.0f}{vs}, PF {pf}. "
-            "No new entries until a newer backtest passes; open positions keep their exits.")
+    return f"Paused {change['strategy']} on paper\n{ev['trades']} trades, net ₹{ev['net']:,.0f}{vs}, PF {pf}"
 
 
 def facts(snap: dict) -> dict:
@@ -92,5 +91,5 @@ async def weekly_text(db, user_id: str, nifty: list, now: datetime):
         text = ""
     if text == "LLM_DISABLED" or text.startswith("Error generating response"):
         text = ""  # switched off or failed: the plain facts below, never the error text
-    head = "🧠 What the paper engine learned this week"
+    head = "What the paper engine learned this week"
     return f"{head}\n\n{text}" if text else f"{head}\n\n{f['rules']}\n\nChanges:\n{f['changes']}\n\nWorst setups:\n{f['groups']}"

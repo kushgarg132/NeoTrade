@@ -498,11 +498,10 @@ async def test_weekly_mirror_benchmarks_closed_trips_only(mongo, monkeypatch):
     monkeypatch.setattr(service, "_nifty", fake_nifty)
     sent = []
 
-    async def fake_notify(db, user_id, text):
-        sent.append(text)
+    async def fake_notify(db, user_id, kind, title, lines=(), **kw):
+        sent.append("\n".join([title, *lines]))
         return True
-    import backend.suggestions.notify as notify_mod
-    monkeypatch.setattr(notify_mod, "notify", fake_notify)
+    monkeypatch.setattr("backend.alerts.alert", fake_notify)
 
     trades = await JournalStore(mongo).list_trades("alice")
     trips = build_round_trips(trades)

@@ -145,7 +145,7 @@ When it is unset, cards have no URL buttons.
 
 `backend/prefs.py` defaults gain `alert_mute: {}` and `breaking_news_min: 7`.
 `backend/routers/settings.py` validates them: `alert_mute` keys must be known
-kinds with boolean values; `breaking_news_min` is an integer 1–10.
+kinds with boolean values; `breaking_news_min` is an integer 5–9.
 
 `frontend/src/components/settings/Notifications.jsx` adds one toggle per kind,
 in an "Instant" group and a "In the digest" group, plus a breaking-news

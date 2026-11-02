@@ -18,7 +18,7 @@ from typing import Literal, Optional
 import httpx
 from pymongo.errors import DuplicateKeyError
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator
 
 from backend.app_settings import AppSettingsStore
 from backend.auth.broker_credentials import (
@@ -110,6 +110,16 @@ class PreferencesPatch(BaseModel):
     news_alerts: Optional[Literal["held", "held+watched", "all", "off"]] = None
     goal: Optional[GoalIn] = None
     setup_skipped: Optional[list[Literal[SETUP_STEP_IDS]]] = None
+    alert_mute: Optional[dict[str, StrictBool]] = None
+    breaking_news_min: Optional[int] = Field(default=None, ge=5, le=9)
+
+    @field_validator("alert_mute")
+    @classmethod
+    def _mute(cls, value):
+        from backend.alerts import KINDS
+        if value is not None and set(value) - KINDS:
+            raise ValueError("unknown alert kind")
+        return value
 
     @field_validator("broker_roles")
     @classmethod

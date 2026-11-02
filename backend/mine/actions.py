@@ -229,6 +229,3 @@ async def level_alerts(db, redis, user_id: str, now: datetime) -> list[dict]:
             out.append(a)
     return out
 
-
-def levels_text(alerts: list[dict]) -> str:
-    return "\n".join(["Your levels:"] + [f"• {a['title']}. {a['detail']}" for a in alerts])

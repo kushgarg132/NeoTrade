@@ -47,7 +47,7 @@ async def test_react_alerts_once(monkeypatch):
     redis = FakeRedis()
     sent = []
 
-    async def deliver(db, redis, user_id, item, hits):
+    async def deliver(db, redis, user_id, item, hits, held=frozenset()):
         sent.append((user_id, item["_id"], [h["target"] for h in hits]))
 
     async def followed(db):
@@ -80,7 +80,7 @@ async def test_failed_delivery_releases_the_hourly_throttle(monkeypatch):
     db = AsyncMongoMockClient()["test_db"]
     redis = FakeRedis()
 
-    async def deliver(db, redis, user_id, item, hits):
+    async def deliver(db, redis, user_id, item, hits, held=frozenset()):
         raise RuntimeError("hub down")
 
     async def followed(db):
@@ -99,7 +99,7 @@ async def test_failed_delivery_releases_the_hourly_throttle(monkeypatch):
 def test_alert_text():
     text = reactor.alert_text({"title": "T", "event": "TCS cuts guidance", "url": "https://x"},
                               [{"target": "TCS", "direction": -0.8, "impact": 8.0}, {"target": "INDIA", "direction": -0.5, "impact": 7.0}])
-    assert text == "📰 TCS cuts guidance\nTCS ↓ 8/10, Market ↓ 7/10\nhttps://x"
+    assert text == "TCS cuts guidance\nTCS ↓ 8/10, Market ↓ 7/10"
 
 
 def test_scan_targets_direct_hits_first_then_the_sector():
@@ -140,7 +140,7 @@ async def test_scan_once_per_user_and_symbol_a_day(monkeypatch):
 @pytest.mark.asyncio
 async def test_news_proposals_go_to_the_autopilot_only_when_asked(monkeypatch):
     from backend.engine import autorun
-    from backend.suggestions import notify as notify_module, scan as scan_module, thesis
+    from backend.suggestions import scan as scan_module, thesis
 
     handed, told = [], []
 
@@ -151,13 +151,13 @@ async def test_news_proposals_go_to_the_autopilot_only_when_asked(monkeypatch):
         handed.append((user_id, source))
         return []
 
-    async def notify(db, user_id, text):
-        told.append(text)
+    async def notify(db, user_id, kind, title, lines=(), **kw):
+        told.append(title)
 
     monkeypatch.setattr(scan_module, "scan_universe", scan_universe)
     monkeypatch.setattr(thesis, "attach_theses", AsyncMock())
     monkeypatch.setattr(autorun, "_autopilot_proposals", proposals)
-    monkeypatch.setattr(notify_module, "notify", notify)
+    monkeypatch.setattr("backend.alerts.alert", notify)
     prefs = {"user_id": "u1", "account_size": 1.0, "max_exposure": 1.0, "autopilot_enabled": True}
 
     await reactor._scan_user(AsyncMongoMockClient()["t"], None, prefs, ["TCS"], NOW)
@@ -220,3 +220,33 @@ def test_company_news_proposes_nothing_while_paused():
     assert reactor.ai_targets(item, SECTORS, {"TCS", "INFY"}, {"COMPANY|earnings|1": 1.5}) == set()
     sector_item = {**item, "scope": "SECTOR"}
     assert reactor.scan_targets(sector_item, SECTORS, {"TCS", "INFY"}) == ["TCS", "INFY"]
+
+
+async def _delivered(monkeypatch, held, *impacts):
+    sent = []
+
+    async def rec(db, user_id, kind, title, lines=(), **kw):
+        sent.append((kind, kw.get("symbol")))
+        return True
+
+    class Hub:
+        def attach_redis(self, r): pass
+        async def publish(self, *a): pass
+
+    monkeypatch.setattr("backend.alerts.alert", rec)
+    monkeypatch.setattr("backend.ws.hub.hub", Hub())
+    item = _item(*impacts)
+    hits = [{"target": t, "direction": -0.8, "impact": i} for _, t, _, i in impacts]
+    await reactor._deliver(AsyncMongoMockClient()["t"], None, "u1", item, hits, frozenset(held))
+    return sent
+
+
+@pytest.mark.asyncio
+async def test_held_high_impact_is_breaking(monkeypatch):
+    assert await _delivered(monkeypatch, {"TCS"}, ("symbol", "TCS", -0.8, 8)) == [("news_breaking", "TCS")]
+
+
+@pytest.mark.asyncio
+async def test_watched_or_low_impact_is_news(monkeypatch):
+    assert await _delivered(monkeypatch, {"TCS"}, ("symbol", "TCS", -0.8, 6)) == [("news", "TCS")]
+    assert await _delivered(monkeypatch, set(), ("symbol", "TCS", -0.8, 9)) == [("news", "TCS")]

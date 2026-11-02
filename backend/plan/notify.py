@@ -12,10 +12,10 @@ LABELS = {"regime_flip": "Regime change", "event_passed": "Event passed"}
 def plan_text(doc: dict) -> str:
     trigger = doc.get("trigger") or ""
     if trigger == "pre_open":
-        lines = ["📋 Today's plan"]
+        lines = ["Today's plan"]
     else:
         label = "News" if trigger.startswith("news:") else LABELS.get(trigger, trigger)
-        lines = [f"🔁 Plan updated ({label})"]
+        lines = [f"Plan updated ({label})"]
     lines += [f"• {line}" for line in doc.get("rationale") or []]
     if doc.get("skip_day"):
         lines.append("Sitting today out: no new intraday entries.")
@@ -32,15 +32,10 @@ def plan_text(doc: dict) -> str:
 
 async def notify_plan(db, user_id: str, doc: dict) -> bool:
     from backend.autopilot.service import STOP_BUTTON
-    from backend.guardrails import telegram
-    from backend.guardrails.store import GuardrailStore
+    from backend import alerts
 
     try:
-        channel = await GuardrailStore(db).telegram_channel(user_id)
-        if channel is None:
-            return False
-        token, chat_id = channel
-        return await telegram.send_buttons(chat_id, plan_text(doc), STOP_BUTTON, token)
+        return await alerts.alert(db, user_id, "money", *alerts.split(plan_text(doc)), buttons=STOP_BUTTON)
     except Exception as exc:
         logger.warning("could not send the game plan to %s: %s", user_id, exc)
         return False

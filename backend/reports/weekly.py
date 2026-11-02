@@ -211,7 +211,7 @@ def text(r: dict, narrative: Optional[str] = None) -> str:
 async def send(db, redis, now: datetime) -> int:
     """Sundays from 18:00 IST, once per user per ISO week (Redis NX, 8 days)."""
     from backend.portfolio.digest import _users
-    from backend.suggestions.notify import notify
+    from backend.guardrails import telegram
 
     local = now.astimezone(IST)
     if local.weekday() != 6 or local.time() < SEND_AT:
@@ -226,7 +226,7 @@ async def send(db, redis, now: datetime) -> int:
             from backend.summaries import weekly as narrative
 
             written = await narrative.generate(db, redis, user_id, report)  # None: keep the numbers-only text
-            await notify(db, user_id, text(report, written and written["text"]), html=True)
+            await telegram.alert(db, user_id, text(report, written and written["text"]), html=True)
             sent += 1
         except Exception as exc:
             logger.exception("weekly report failed for %s: %s", user_id, exc)

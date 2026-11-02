@@ -259,7 +259,7 @@ async def draft(chat_id: int, draft_id: int, text: str, token: Optional[str] = N
     return await _html_or_plain(SendMessageDraft, {"chat_id": chat_id, "draft_id": draft_id}, text, token) is not None
 
 
-async def alert(db, user_id: str, text: str, html: bool = False) -> bool:
+async def alert(db, user_id: str, text: str, html: bool = False, buttons: Optional[list] = None) -> bool:
     """The one way to message a user: their own bot if they added one, else
     the server's, to the chat they linked. A no-op for an unlinked user.
     `html`: the text is Telegram HTML (tags, escaped data); plain `send`
@@ -270,6 +270,7 @@ async def alert(db, user_id: str, text: str, html: bool = False) -> bool:
     if channel is None:
         return False
     token, chat_id = channel
+    extra = {"reply_markup": {"inline_keyboard": buttons}} if buttons else {}
     if html:
-        return await send_html(chat_id, text, token) is not None
-    return await send(chat_id, text, token)
+        return await send_html(chat_id, text, token, **extra) is not None
+    return await send(chat_id, text, token, **extra)

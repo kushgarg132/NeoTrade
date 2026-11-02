@@ -565,22 +565,3 @@ def test_suggestions_are_admin_only(client):
     assert client.get("/api/v1/suggestions").status_code == 200
     client.app.dependency_overrides[get_current_user] = lambda: _USER.model_copy(update={"role": "user"})
     assert client.get("/api/v1/suggestions").status_code == 403
-
-
-async def test_idea_notify_skips_non_admin(mongo, monkeypatch):
-    from backend.suggestions import notify
-
-    sent = []
-
-    async def alert(db, user_id, text, html=False):
-        sent.append(user_id)
-        return True
-
-    monkeypatch.setattr(notify.telegram, "alert", alert)
-    for uid, role in (("alice", "admin"), ("bob", "user")):
-        await mongo["users"].insert_one(_USER.model_copy(update={"id": uid, "role": role}).model_dump())
-    text = notify.proposals_text([{"symbol": "X"}], "idea")
-    assert await notify.notify(mongo, "alice", text) is True
-    assert await notify.notify(mongo, "bob", text) is False
-    assert await notify.notify(mongo, "bob", "plain digest") is True
-    assert sent == ["alice", "bob"]

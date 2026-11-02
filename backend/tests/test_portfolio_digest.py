@@ -35,6 +35,10 @@ async def db(monkeypatch):
         "status": "SCORED", "material": True, "impacts": [{"type": "symbol", "target": "DOWN", "direction": -0.8, "impact": 8.0}]})
     monkeypatch.setattr(service, "mark_prices", AsyncMock(return_value={"UP": 105.0, "DOWN": 90.0, "FLAT": 100.0, "AIONLY": 200.0}))
     monkeypatch.setattr(service.bars, "prev_closes", AsyncMock(return_value={"UP": 100.0, "DOWN": 100.0, "FLAT": 100.0}))
+    async def linked(self, user_id):
+        return ("tok", "1")
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", linked)
     return db
 
 
@@ -83,15 +87,13 @@ class _Redis:
 
 
 async def test_premarket_goes_once_in_its_window(db, monkeypatch):
-    from backend.suggestions import notify
-
     sent = []
 
-    async def capture(db_, user_id, text, html=False):
+    async def capture(db_, user_id, text, html=False, buttons=None):
         sent.append(text)
         return True
 
-    monkeypatch.setattr(notify, "notify", capture)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", capture)
     redis = _Redis()
     morning = NOW.replace(hour=8, minute=40)
     assert await digest.send_premarket(db, redis, morning) == 0          # 08:40: too early
@@ -162,17 +164,109 @@ async def test_chat_portfolio_fact_hides_verdicts_from_non_admins(db):
 
 
 async def test_premarket_failure_is_retried_next_tick(db, monkeypatch):
-    from backend.suggestions import notify
-
     calls = []
 
-    async def flaky(db_, user_id, text, html=False):
+    async def flaky(db_, user_id, text, html=False, buttons=None):
         calls.append(text)
         if len(calls) == 1:
             raise RuntimeError("telegram down")
         return True
 
-    monkeypatch.setattr(notify, "notify", flaky)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", flaky)
     redis, at = _Redis(), NOW.replace(hour=8, minute=46)
     assert await digest.send_premarket(db, redis, at) == 0
     assert await digest.send_premarket(db, redis, at.replace(minute=47)) == 1
+
+
+async def _queue(db):
+    await db["alerts"].insert_one({"user_id": "alice", "kind": "news", "title": "ACME fell", "lines": [],
+                                   "state": "queued", "created_at": NOW})
+
+
+async def test_premarket_includes_since_block(db, monkeypatch):
+    sent = []
+
+    async def capture(db_, user_id, text, html=False, buttons=None):
+        sent.append(text)
+        return True
+
+    monkeypatch.setattr("backend.guardrails.telegram.alert", capture)
+    await _queue(db)
+    assert await digest.send_premarket(db, _Redis(), NOW.replace(hour=8, minute=46)) == 1
+    assert sent[0].rstrip().endswith("• ACME fell") and "Since last update" in sent[0]
+    assert (await db["alerts"].find_one({}))["state"] == "digested"
+
+
+async def test_watchlist_only_user_with_queued_rows_is_drained(db, monkeypatch):
+    sent = []
+
+    async def capture(db_, user_id, text, html=False, buttons=None):
+        sent.append((user_id, text))
+        return True
+
+    monkeypatch.setattr("backend.guardrails.telegram.alert", capture)
+    await db["alerts"].insert_one({"user_id": "wanda", "kind": "news", "title": "WL news", "lines": [],
+                                   "state": "queued", "created_at": NOW})
+    await digest.send_premarket(db, _Redis(), NOW.replace(hour=8, minute=46))
+    assert any(u == "wanda" and "WL news" in t for u, t in sent)
+    assert (await db["alerts"].find_one({"user_id": "wanda"}))["state"] == "digested"
+
+
+async def test_failed_send_requeues_drained_rows(db, monkeypatch):
+    async def fail(db_, user_id, text, html=False, buttons=None):
+        return False
+
+    monkeypatch.setattr("backend.guardrails.telegram.alert", fail)
+    await _queue(db)
+    redis, at = _Redis(), NOW.replace(hour=8, minute=46)
+    assert await digest.send_premarket(db, redis, at) == 0
+    assert (await db["alerts"].find_one({}))["state"] == "queued"
+    assert not redis.keys  # released for the next tick
+    assert await digest.send_postclose(db, NOW.replace(hour=16), redis) == 0  # 16:30 IST
+    assert (await db["alerts"].find_one({}))["state"] == "queued"
+
+
+async def test_unlinked_user_is_not_drained_but_still_gets_the_day_summary(db, monkeypatch):
+    async def unlinked(self, user_id):
+        return None
+
+    async def no_send(*a, **k):
+        raise AssertionError("must not send")
+
+    summaries = []
+
+    async def summary(db_, redis, user_id, phase, now, text):
+        summaries.append(phase)
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", unlinked)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", no_send)
+    monkeypatch.setattr(digest, "_day_summary", summary)
+    await _queue(db)
+    redis, at = _Redis(), NOW.replace(hour=8, minute=46)
+    assert await digest.send_premarket(db, redis, at) == 0
+    assert await digest.send_premarket(db, redis, at.replace(minute=50)) == 0  # key stays set
+    assert await digest.send_postclose(db, NOW.replace(hour=16), redis) == 0
+    assert summaries == ["pre", "post"]
+    assert (await db["alerts"].find_one({}))["state"] == "queued"
+
+
+async def test_channel_lookup_error_spares_other_users(db, monkeypatch):
+    await db["users"].insert_one({"id": "zed", "role": "admin"})
+    await db["user_prefs"].insert_one({"user_id": "zed", "broker_roles": {"upstox": "mine"}})
+    sent = []
+
+    async def channel(self, user_id):
+        if user_id == "alice":
+            raise RuntimeError("decrypt")
+        return ("tok", "1")
+
+    async def capture(db_, user_id, text, html=False, buttons=None):
+        sent.append(user_id)
+        return True
+
+    monkeypatch.setattr("backend.guardrails.store.GuardrailStore.telegram_channel", channel)
+    monkeypatch.setattr("backend.guardrails.telegram.alert", capture)
+    redis = _Redis()
+    assert await digest.send_premarket(db, redis, NOW.replace(hour=8, minute=46)) == 1
+    assert sent == ["zed"]
+    assert not any("alice" in k for k in redis.keys)  # released for the next tick

@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -448,6 +449,59 @@ async def test_malformed_or_foreign_callback_data_does_nothing(monkeypatch, data
     await telegram_bot._callback(db, None, "alice", 42, "tok", {"id": "cb", "data": data, "message": {"message_id": 7}})
     confirmed.assert_not_awaited()
     telegram_bot.telegram.edit_html.assert_not_awaited()
+
+
+def _stub_propose(monkeypatch, out):
+    propose = SimpleNamespace(name="propose_order", coroutine=AsyncMock(return_value=out))
+    monkeypatch.setattr(telegram_bot, "action_tools", lambda *a, **k: [propose])
+    answer, send = AsyncMock(), AsyncMock()
+    monkeypatch.setattr(telegram_bot.telegram, "answer_callback", answer)
+    monkeypatch.setattr(telegram_bot.telegram, "send_buttons", send)
+    return propose, answer, send
+
+
+async def test_sell_tap_sends_confirm_card(monkeypatch):
+    import json
+    from backend.chat.actions import CARD_PREFIX
+    propose, answer, send = _stub_propose(monkeypatch, CARD_PREFIX + json.dumps({"id": "a1", "summary": "Sell 10 TCS"}))
+    data = telegram_bot.Tap(command="sell", id="TCS|10").pack()
+    await telegram_bot._callback(None, None, "alice", 42, "tok", {"id": "cb", "data": data})
+    send.assert_awaited_once_with(42, "Sell 10 TCS", telegram_bot._buttons({"id": "a1"}), "tok")
+    answer.assert_awaited_once_with("cb", "", "tok")
+    propose.coroutine.assert_awaited_once_with(symbol="TCS", side="SELL", quantity=10, product="CNC", account="mine")
+
+
+async def test_sell_tap_refusal_is_answered_not_carded(monkeypatch):
+    _, answer, send = _stub_propose(monkeypatch, "You hold 0 TCS")
+    data = telegram_bot.Tap(command="sell", id="TCS|10").pack()
+    await telegram_bot._callback(None, None, "alice", 42, "tok", {"id": "cb", "data": data})
+    answer.assert_awaited_once_with("cb", "You hold 0 TCS", "tok")
+    send.assert_not_awaited()
+
+
+@pytest.mark.parametrize("spec", ["TCS", "TCS|x", "TCS|0", "TCS|-3", "TCS|²"])
+async def test_sell_tap_malformed_is_refused(monkeypatch, spec):
+    propose, answer, send = _stub_propose(monkeypatch, "unused")
+    await telegram_bot._callback(None, None, "alice", 42, "tok",
+                                 {"id": "cb", "data": telegram_bot.Tap(command="sell", id=spec).pack()})
+    answer.assert_awaited_once()
+    propose.coroutine.assert_not_awaited()
+    send.assert_not_awaited()
+
+
+def test_sell_callback_data_roundtrips_and_fits_telegram_limit():
+    tap = telegram_bot.Tap.unpack("nt:sell:M&M|5")
+    assert (tap.command, tap.id) == ("sell", "M&M|5")
+    assert len(telegram_bot.Tap(command="sell", id="BAJAJ-AUTO|100000").pack().encode()) <= 64
+
+
+async def test_sell_tap_error_still_answers_the_callback(monkeypatch):
+    propose, answer, send = _stub_propose(monkeypatch, "unused")
+    propose.coroutine.side_effect = RuntimeError("broker down")
+    data = telegram_bot.Tap(command="sell", id="TCS|10").pack()
+    await telegram_bot._callback(None, None, "alice", 42, "tok", {"id": "cb", "data": data})
+    answer.assert_awaited_once()
+    send.assert_not_awaited()
 
 
 async def test_charts_and_images_go_out_as_photos_before_the_answer(monkeypatch):

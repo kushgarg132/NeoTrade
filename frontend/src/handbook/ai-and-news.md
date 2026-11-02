@@ -188,7 +188,9 @@ Ingest loops in `backend/datalayer/`:
    composite caps at 30%), plus sector and market sentiment and `analyst_verdict:<SYM>`.
 5. **React** — `news_react` (60 s): each new material item alerts users by their `news_alerts`
    pref (held / held+watched / all / off; held = the own account's real holdings, `mine_holdings`), one alert per user and target an hour, by
-   Telegram and an in-app toast. `news_scan` (120 s) re-scans the names it moves for new
+   Telegram (`reactor.py::_deliver` through `alerts.alert`: instant `news_breaking` when a held name's
+   impact reaches `breaking_news_min`, default 7, otherwise a batched `news` line in the digest)
+   and an in-app toast. `news_scan` (120 s) re-scans the names it moves for new
    long-term proposals — the autopilot takes only those moved by a proven theme (below),
    the rest stay yours to decide; `news_exits` only shadow-logs what the autopilot would sell.
 6. **Learn** — `news_outcomes` (5 min): each material item's move at +1 h, +1 d, +5 d against
