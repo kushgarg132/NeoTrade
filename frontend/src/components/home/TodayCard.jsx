@@ -26,7 +26,7 @@ const TodayCard = ({ moves, kind, text, summary }) => {
         <ul>
           {moves.map((m) => (
             <li key={m.symbol}>
-              <ListRow dense title={`${bareSymbol(m.symbol)} ${pct(m.move_pct / 100, { sign: true, dp: 1 })}`}
+              <ListRow dense symbol={m.symbol} title={`${bareSymbol(m.symbol)} ${pct(m.move_pct / 100, { sign: true, dp: 1 })}`}
                 sub={newsWhy(m)} extra={m.cause && <ImpactChips impacts={m.cause.impacts} />} right={inr(m.rupees, { sign: true })} rightTone={tone(m.rupees)}
                 to={m.cause?.id ? newsPath(m.cause.id) : undefined}
                 onClick={!m.cause?.id && m.cause?.url ? () => window.open(m.cause.url, '_blank', 'noopener,noreferrer') : undefined} />

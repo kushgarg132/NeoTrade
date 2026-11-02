@@ -1,8 +1,11 @@
-import React, { Children, cloneElement, createContext, isValidElement, useContext, useState } from 'react';
+import React, { Children, cloneElement, createContext, isValidElement, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { formatSigned, formatSignedPercent, bareSymbol } from '../../utils/formatters';
-import { stockPath, logoUrl } from '../../utils/stocks';
+import { isDerivative, stockPath } from '../../utils/stocks';
+import StockIcon from '../ui/StockIcon';
+
+export { StockIcon };
 
 /**
  * The contract note's building blocks. Everything in the app is assembled from
@@ -25,48 +28,6 @@ export const Sheet = ({ title, meta, actions, children, className, bodyClassName
   </section>
 );
 
-// F&O contracts (NIFTY24OCT25000CE, RELIANCE24OCTFUT) are not in the equity
-// instrument master the enquiry reads, so they print but do not link.
-const DERIVATIVE = /(\d(CE|PE)|FUT)$/;
-
-// Symbols whose logo 404'd this session, so a re-render or another row does
-// not ask again. Across reloads the browser keeps the 404 for a day
-// (Nginx's Cache-Control on /logo/).
-const missingLogos = new Set();
-
-/**
- * A company's logo (`utils/stocks.js::logoUrl`), lazy-loaded at 20px. The
- * browser keeps each image 30 days; a symbol with no logo prints its first letter.
- */
-export const StockIcon = ({ symbol: raw, className }) => {
-  const symbol = bareSymbol(raw)?.toUpperCase();
-  const [failed, setFailed] = useState(null);
-  if (!symbol) return null;
-  const box = 'inline-flex size-5 shrink-0 items-center justify-center border border-[var(--border)]';
-  if (failed === symbol || missingLogos.has(symbol)) {
-    return (
-      <span aria-hidden="true" className={cn(box, 'bg-[var(--surface-2)] text-[12px] font-semibold text-[var(--text-muted)]', className)}>
-        {symbol[0]}
-      </span>
-    );
-  }
-  return (
-    <img
-      src={logoUrl(symbol)}
-      alt=""
-      width={20}
-      height={20}
-      loading="lazy"
-      decoding="async"
-      onError={() => {
-        missingLogos.add(symbol);
-        setFailed(symbol);
-      }}
-      className={cn(box, 'bg-white object-contain p-px', className)}
-    />
-  );
-};
-
 /**
  * A scrip name, wherever it is printed: one tap opens its enquiry on the
  * statement. Stops the click there so a row that is itself clickable (or that
@@ -76,7 +37,7 @@ export const StockIcon = ({ symbol: raw, className }) => {
 export const Scrip = ({ symbol: raw, children, className, icon = true }) => {
   const symbol = bareSymbol(raw);
   const label = children ?? symbol;
-  if (!symbol || DERIVATIVE.test(symbol)) {
+  if (!symbol || isDerivative(symbol)) {
     return <span className={cn('figure-md', className)}>{label}</span>;
   }
   return (

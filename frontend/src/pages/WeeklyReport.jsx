@@ -37,7 +37,7 @@ const NewsWeek = ({ news }) => {
         : (
           <ul>
             {news.movers.map((m) => (
-              <ListRow key={m.symbol} dense privateValue={false} title={bareSymbol(m.symbol)}
+              <ListRow key={m.symbol} dense symbol={m.symbol} privateValue={false} title={bareSymbol(m.symbol)}
                 sub={m.items[0]?.title || 'No news found before the move'}
                 right={`${pct(m.vs_nifty == null ? m.move_pct / 100 : m.vs_nifty / 100, { sign: true, dp: 1 })}${m.vs_nifty == null ? '' : ' vs NIFTY'}`}
                 rightTone={tone(m.vs_nifty ?? m.move_pct)} onClick={m.items[0]?.url ? openUrl(m.items[0].url) : undefined} />
@@ -142,7 +142,7 @@ const WeeklyReport = () => {
                       <div className="text-[13px] font-semibold text-[var(--text-muted)] mt-1">{label}</div>
                       <ul>
                         {list.map((x) => (
-                          <ListRow key={x.symbol} dense to={stockPath(x.symbol)} title={bareSymbol(x.symbol)} right={inr(x.pnl, { sign: true })} rightTone={tone(x.pnl)} />
+                          <ListRow key={x.symbol} dense symbol={x.symbol} to={stockPath(x.symbol)} title={bareSymbol(x.symbol)} right={inr(x.pnl, { sign: true })} rightTone={tone(x.pnl)} />
                         ))}
                       </ul>
                     </div>

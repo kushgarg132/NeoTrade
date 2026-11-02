@@ -170,7 +170,7 @@ const BreadthBar = ({ b }) => {
 };
 
 const MoverRows = ({ rows }) => rows.map((m) => (
-  <ListRow privateValue={false} key={m.symbol} dense to={stockPath(m.symbol)}
+  <ListRow privateValue={false} key={m.symbol} dense symbol={m.symbol} to={stockPath(m.symbol)}
     title={<span className="inline-flex items-center gap-1.5">{m.symbol}{m.news && <span role="img" aria-label="Has news today" className="inline-block size-2 shrink-0 rounded-full bg-[var(--accent)]" />}</span>}
     sub={m.sector}
     right={<><span className="text-[var(--text)]">{num(m.price)}</span>{'  '}<span className={toneText(tone(m.change_pct))}>{pct(m.change_pct / 100, { sign: true })}</span></>} />

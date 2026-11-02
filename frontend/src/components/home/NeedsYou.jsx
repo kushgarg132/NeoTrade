@@ -8,6 +8,7 @@ import { actionTarget } from '../../utils/mine';
 import { stockPath } from '../../utils/stocks';
 import { bareSymbol } from '../../utils/formatters';
 import { actNowCount, holdingButtons, holdingActions, signalText, triageHoldings } from '../../utils/ideas';
+import StockIcon from '../ui/StockIcon';
 
 const SHOWN = 3;
 const DOT = { verdict_worse: 'bg-[var(--loss)]', stop_hit: 'bg-[var(--loss)]', idea_exit: 'bg-[var(--loss)]', target_hit: 'bg-[var(--gain)]', add: 'bg-[var(--gain)]' };
@@ -48,7 +49,8 @@ const NeedsYou = ({ need, isAdmin, onDone }) => {
           const stamp = b.primary?.ticket && t;
           return (
             <div key={s.symbol || lead.id} className="flex items-center gap-3 py-3 border-b border-[var(--border)] last:border-b-0">
-              {!stamp && <span aria-hidden="true" className={`w-2 h-2 shrink-0 rounded-full ${DOT[lead.kind] || 'bg-[var(--warn)]'}`} />}
+              {!stamp && !s.symbol && <span aria-hidden="true" className={`w-2 h-2 shrink-0 rounded-full ${DOT[lead.kind] || 'bg-[var(--warn)]'}`} />}
+              {s.symbol && <StockIcon symbol={s.symbol} className="size-8" />}
               <Link to={s.symbol ? stockPath(s.symbol) : all} className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px]">
                 <div className="text-[15px] font-bold text-[var(--text)] truncate">{bareSymbol(s.symbol) || lead.title}</div>
                 <div className="text-[13px] text-[var(--text-muted)] line-clamp-2">

@@ -20,6 +20,7 @@ import { strategyName } from '../utils/library';
 import { formatDateTime } from '../utils/formatters';
 import { inr } from '../components/ui/format';
 import { px } from '../components/ideas/levels';
+import StockIcon from '../components/ui/StockIcon';
 
 const day = (v) => String(v).slice(0, 10);
 
@@ -71,7 +72,7 @@ const AiTrade = () => {
   return (
     <Layout>
       <PageHeader
-        title={`${t.symbol} · ${t.side}`}
+        title={<span className="flex min-w-0 items-center gap-2.5"><StockIcon symbol={t.symbol} className="size-8 rounded-[8px] p-0.5" /><span className="truncate">{t.symbol} · {t.side}</span></span>}
         back={t.strategy ? strategyPath(t.strategy) : '/ai'}
         backLabel={t.strategy ? strategyName(t.strategy) : 'AI'}
         right={t.venue === 'live' ? <Badge kind="live">Live</Badge> : <Badge kind="paper">Paper</Badge>}

@@ -16,13 +16,15 @@ import { pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import { countdown } from '../utils/events';
 import { firstDue, waiting } from '../utils/ideasHistory';
+import StockIcon from '../components/ui/StockIcon';
 
 const nice = (n) => String(n || '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 const day = (d) => new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
 /** One scored idea: result after costs, and the plain verdict against NIFTY (word plus sign, never colour alone). */
-const Line = ({ title, sub, net, excess }) => (
+const Line = ({ symbol, title, sub, net, excess }) => (
   <li className="flex items-center gap-3 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0">
+    <StockIcon symbol={symbol} className="size-8" />
     <div className="min-w-0 flex-1">
       <div className="text-[15px] font-medium text-[var(--text)] truncate">{title}</div>
       <div className="text-[13px] text-[var(--text-muted)] truncate">{sub}</div>
@@ -79,13 +81,13 @@ const IdeasHistory = () => {
         <p className="text-[13px] text-[var(--text-muted)]">Paper results, not your own trades. Net = after costs. NIFTY is the benchmark each idea is judged against.</p>
         <Section title="Picks" state={picks} rows={(picks.data || []).map((p) => ({ net: p.outcome.net, excess: p.outcome.net - p.outcome.nifty }))} empty={emptyLine('No scored picks yet', 'Pick')}>
           {picks.data?.map((p) => (
-            <Line key={p._id} title={`${bareSymbol(p.symbol)} · ${p.label}`} sub={`${day(p.date)} · ${p.horizon}d hold`}
+            <Line key={p._id} symbol={p.symbol} title={`${bareSymbol(p.symbol)} · ${p.label}`} sub={`${day(p.date)} · ${p.horizon}d hold`}
               net={p.outcome.net} excess={p.outcome.net - p.outcome.nifty} />
           ))}
         </Section>
         <Section title="Forward records" state={records} rows={(records.data || []).map((r) => ({ net: r.outcome.net, excess: r.outcome.excess }))} empty={emptyLine('Nothing scored yet', 'Forward')}>
           {records.data?.map((r) => (
-            <Line key={r.id} title={`${bareSymbol(r.symbol)} · ${r.side}`} sub={`${day(r.decided_at)} · ${nice(r.name)}`}
+            <Line key={r.id} symbol={r.symbol} title={`${bareSymbol(r.symbol)} · ${r.side}`} sub={`${day(r.decided_at)} · ${nice(r.name)}`}
               net={r.outcome.net} excess={r.outcome.excess} />
           ))}
         </Section>
@@ -94,6 +96,7 @@ const IdeasHistory = () => {
             <ul>
               {pending.map((w) => (
                 <li key={w.key} className="flex items-center gap-3 min-h-14 py-2 border-b border-[var(--border)] last:border-b-0">
+                  <StockIcon symbol={w.symbol} className="size-8" />
                   <div className="min-w-0 flex-1">
                     <div className="text-[15px] font-medium text-[var(--text)] truncate">{bareSymbol(w.symbol)}{w.what ? ` · ${w.what}` : ''}</div>
                     <div className="text-[13px] text-[var(--text-muted)]">{w.kind}</div>

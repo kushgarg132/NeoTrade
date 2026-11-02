@@ -22,6 +22,7 @@ import { formatDateTime, formatQuantity } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 import Badge from '../ui/Badge';
 import { hasNews, newsToday, tone as newsTone } from '../../utils/news';
+import StockIcon from '../ui/StockIcon';
 
 // Sentiment dot beside the symbol: colour plus a screen-reader word (the "News" badge and why-line carry the text).
 const DOT = { pos: ['bg-[var(--gain)]', 'news positive'], neg: ['bg-[var(--loss)]', 'news negative'] };
@@ -93,6 +94,7 @@ const Row = ({ h, news }) => {
     <>
       <div className="flex items-baseline justify-between gap-3">
         <span className="flex min-w-0 items-center gap-1.5">
+          {!mf && <StockIcon symbol={h.symbol} className="size-6" />}
           <span className="min-w-0 break-words text-[15px] font-bold text-[var(--text)]">{mf ? h.name || h.symbol : h.symbol}</span>
           {!mf && <NewsDot entry={news} />}
           {!mf && newsToday(news) && <Badge kind={newsTone(news) === 'neg' ? 'alert' : 'neutral'}>News</Badge>}

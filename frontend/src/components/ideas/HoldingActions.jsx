@@ -15,6 +15,7 @@ import { actionTarget } from '../../utils/mine';
 import { stockPath } from '../../utils/stocks';
 import { bareSymbol } from '../../utils/formatters';
 import { eventDay, holdingButtons, signalText, triageHoldings } from '../../utils/ideas';
+import StockIcon from '../ui/StockIcon';
 
 /** Where a row's own link leads: its page when it has one, else the stock's page. */
 const rowLink = (a) => actionTarget(a).to || (a.symbol ? stockPath(a.symbol) : null);
@@ -51,6 +52,7 @@ const Note = ({ note }) => note ? (
 
 const SymbolLink = ({ symbol, className = '' }) => (
   <Link to={stockPath(symbol)} className={`inline-flex items-center gap-0.5 min-w-0 font-bold tracking-[-0.01em] text-[var(--text)] hover:underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[6px] ${className}`}>
+    <StockIcon symbol={symbol} className="mr-1.5 size-6" />
     <span className="truncate">{bareSymbol(symbol)}</span>
     <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
   </Link>

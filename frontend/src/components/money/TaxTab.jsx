@@ -123,7 +123,7 @@ const TaxTab = ({ onImport }) => {
         <Card title="Unrealised by lot">
           {unrealised.length === 0 ? <None text="No open lots." /> : unrealised.map((u, i) => (
             <ListRow
-              key={i} to={stockPath(u.symbol)} title={u.symbol}
+              key={i} symbol={u.symbol} to={stockPath(u.symbol)} title={u.symbol}
               sub={`${formatQuantity(u.qty)} @ ${inr(u.price)} · bought ${day(u.buy_date)} · ${u.term}-term`}
               right={inr(u.gain, { sign: true })} rightTone={tone(u.gain)}
             />
@@ -137,7 +137,7 @@ const TaxTab = ({ onImport }) => {
         <Card title="Turning long-term soon">
           {turning.length === 0 ? <None text="Nothing crosses 365 days in the next 60 days." /> : turning.map((t, i) => (
             <ListRow
-              key={i} to={stockPath(t.symbol)} title={t.symbol}
+              key={i} symbol={t.symbol} to={stockPath(t.symbol)} title={t.symbol}
               sub={`${formatQuantity(t.qty)} · gain ${inr(t.gain)}`}
               right={`Wait ${t.days} ${t.days === 1 ? 'day' : 'days'}, save ${inr(t.saving)}`}
             />
@@ -148,14 +148,14 @@ const TaxTab = ({ onImport }) => {
           <p className="text-[13px] font-semibold text-[var(--text-muted)] mb-1">Loss harvest</p>
           {harvest.loss.length === 0 ? <None text="No holdings at a loss." /> : harvest.loss.map((h) => (
             <ListRow
-              key={h.symbol} to={stockPath(h.symbol)} title={h.symbol} right={`saves ${inr(h.saving)}`} rightTone="gain"
+              key={h.symbol} symbol={h.symbol} to={stockPath(h.symbol)} title={h.symbol} right={`saves ${inr(h.saving)}`} rightTone="gain"
               sub={<LossSub h={h} entry={news[h.symbol.toUpperCase()]} />}
             />
           ))}
           {harvest.loss.length > 0 && <Note>Whether material bad news in the last 72 hours is behind the loss. Context only.</Note>}
           <p className="text-[13px] font-semibold text-[var(--text-muted)] mt-4 mb-1">Gain harvest</p>
           {harvest.gain.length === 0 ? <None text="No long-term gains fit the unused exemption." /> : harvest.gain.map((h) => (
-            <ListRow key={h.symbol} to={stockPath(h.symbol)} title={h.symbol} sub={`sell ${formatQuantity(h.qty)} to book ${inr(h.gain)} tax-free, then rebuy`} />
+            <ListRow key={h.symbol} symbol={h.symbol} to={stockPath(h.symbol)} title={h.symbol} sub={`sell ${formatQuantity(h.qty)} to book ${inr(h.gain)} tax-free, then rebuy`} />
           ))}
         </Card>
       </>

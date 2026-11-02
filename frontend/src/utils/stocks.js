@@ -48,3 +48,6 @@ export const clearRecentStocks = () => {
 
 const STOCK_TABS = ["chart", "news", "details", "events"];
 export const stockTab = (id) => (id === "analysis" ? "details" : STOCK_TABS.includes(id) ? id : "chart");
+
+// F&O contracts (NIFTY24OCT25000CE, RELIANCE24OCTFUT) are not in the equity instrument master and have no logo.
+export const isDerivative = (symbol) => /(\d(CE|PE)|FUT)$/.test(symbol || '');

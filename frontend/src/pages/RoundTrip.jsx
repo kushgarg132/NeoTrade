@@ -17,6 +17,7 @@ import { holdTime } from '../utils/roundTrip';
 import { inr } from '../components/ui/format';
 import { formatQuantity, formatDateTime } from '../utils/formatters';
 import { px } from '../components/ideas/levels';
+import StockIcon from '../components/ui/StockIcon';
 
 const BACK = '/money?tab=journal';
 
@@ -35,7 +36,7 @@ const Body = ({ trip, reload }) => {
   return (
     <div className="space-y-4">
       {!open && <Hero label="P&L" value={trip.pnl} format={(v) => inr(v, { sign: true })} />}
-      <Card title={`${trip.symbol} · ${long ? 'Long' : 'Short'}`} action={<Link to={stockPath(trip.symbol)} className="inline-flex items-center min-h-11 text-[14px] font-semibold text-[var(--accent)]">View stock</Link>}>
+      <Card title={<span className="flex min-w-0 items-center gap-2"><StockIcon symbol={trip.symbol} className="size-6" /><span className="truncate">{trip.symbol} · {long ? 'Long' : 'Short'}</span></span>} action={<Link to={stockPath(trip.symbol)} className="inline-flex items-center min-h-11 text-[14px] font-semibold text-[var(--accent)]">View stock</Link>}>
         <div className="grid grid-cols-2 gap-4">
           {open && <div className="private"><Stat label="P&L" value="Open" /></div>}
           <Stat label="Held" value={holdTime(trip.opened_at, trip.closed_at)} />

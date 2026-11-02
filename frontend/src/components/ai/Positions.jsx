@@ -38,6 +38,7 @@ const OpenPositions = ({ state }) => {
           key={p.symbol}
           to={ids[p.symbol] != null ? aiTradePath(ids[p.symbol]) : stockPath(p.symbol)}
           title={p.symbol}
+          symbol={p.symbol}
           dense
           sub={<>{p.quantity} @ <span className="private">{px(p.avg_price)}</span></>}
           right={`${inr(p.unrealized_pnl, { sign: true })} (${pct(p.unrealized_pnl / (p.quantity * p.avg_price || 1), { sign: true })})`}

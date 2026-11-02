@@ -7,6 +7,7 @@ import { GRADES, pickStatus, rankPicks } from '../../utils/ideas';
 import { bareSymbol } from '../../utils/formatters';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
+import StockIcon from '../ui/StockIcon';
 
 // Status colour by pickStatus kind: a dot and the words, no pill (one quiet line per row).
 const STATUS = {
@@ -41,6 +42,7 @@ const Row = ({ idea, rank, news, results }) => {
         <span className="text-[13px] font-semibold tabular-nums text-[var(--text-muted)]">{rank}</span>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
+            <StockIcon symbol={idea.symbol} className="size-6" />
             {GRADES[idea.grade] && <GradeTile grade={idea.grade} small />}
             {idea.side !== 'BUY' && <span className="text-[12px] font-semibold text-[var(--loss)]">{idea.side}</span>}
             <span className="truncate text-[16px] font-bold tracking-[-0.01em] text-[var(--text)]">{bareSymbol(idea.symbol)}</span>

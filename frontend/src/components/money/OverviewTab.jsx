@@ -18,6 +18,7 @@ import { stockPath } from '../../utils/stocks';
 import { AiCard, AiText, AiState } from '../ai/AiSummary';
 import useStored from '../../hooks/useStored';
 import { endpoints } from '../../utils/api';
+import StockIcon from '../ui/StockIcon';
 
 /** The AI's daily review, first on the tab and folded to its opening lines. */
 const WhyMoved = () => {
@@ -64,7 +65,7 @@ const Drivers = ({ drivers }) => {
           {rows.map((r) => (
             <li key={r.symbol}>
               <Link to={stockPath(r.symbol)} className="tap -mx-2 grid min-h-10 grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_5.5rem] items-center gap-3 rounded-[10px] px-2 hover:bg-[var(--surface-2)]">
-                <span className="truncate text-[14px] font-medium text-[var(--text)]">{r.symbol}</span>
+                <span className="flex min-w-0 items-center gap-1.5"><StockIcon symbol={r.symbol} /><span className="truncate text-[14px] font-medium text-[var(--text)]">{r.symbol}</span></span>
                 <span className="relative h-2 rounded-full bg-[var(--surface-2)]" aria-hidden="true">
                   <span className="absolute inset-y-[-3px] left-1/2 w-px bg-[var(--border)]" />
                   <span className={`absolute inset-y-0 rounded-full ${r.contribution >= 0 ? 'left-1/2 bg-[var(--gain)]' : 'right-1/2 bg-[var(--loss)]'}`} style={{ width: `${r.share * 50}%` }} />
@@ -148,6 +149,7 @@ const OverviewTab = ({ headline, overview }) => {
               key={m.symbol}
               to={stockPath(m.symbol)}
               dense
+              symbol={m.symbol}
               title={m.symbol}
               sub={whyLine({ ...m, news: news?.[m.symbol] })}
               extra={news?.[m.symbol]?.headline && <ImpactChips impacts={news[m.symbol].impacts} />}

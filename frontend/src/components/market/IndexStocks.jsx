@@ -35,7 +35,7 @@ const IndexStocks = ({ ticker }) => {
         <Segmented label="Sort stocks" options={SORTS} value={sort} onChange={setSort} />
       </div>
       {(all ? rows : rows.slice(0, SHOWN)).map((s) => (
-        <ListRow privateValue={false} key={s.symbol} dense to={stockPath(s.symbol)} title={s.symbol} sub={s.name}
+        <ListRow privateValue={false} key={s.symbol} dense symbol={s.symbol} to={stockPath(s.symbol)} title={s.symbol} sub={s.name}
           right={s.price == null ? 'No quote' : <><span className="text-[var(--text)]">{num(s.price)}</span>{'  '}<span className={toneText(tone(s.change_pct))}>{s.change_pct == null ? '—' : pct(s.change_pct / 100, { sign: true })}</span></>} />
       ))}
       {!all && rows.length > SHOWN && (

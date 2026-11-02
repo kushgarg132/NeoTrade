@@ -15,6 +15,7 @@ import ChipRow from '../ui/ChipRow';
 import { stockPath } from '../../utils/stocks';
 import { sectorPath, breadthPath } from '../../utils/routes';
 import useSection from '../../hooks/useSection';
+import StockIcon from '../ui/StockIcon';
 
 const SORTS = [
   { id: 'move', label: 'Move' },
@@ -141,7 +142,7 @@ const Extreme = ({ m, high }) => {
     <li>
       <Link to={stockPath(m.symbol)}
         className="tap flex items-center gap-3 rounded-[12px] px-2 py-2.5 -mx-2 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-        <span className={`inline-flex w-8 h-8 shrink-0 items-center justify-center rounded-full text-[13px] ${high ? 'bg-[var(--gain-soft)] text-[var(--gain)]' : 'bg-[var(--loss-soft)] text-[var(--loss)]'}`} aria-hidden="true">{high ? '▲' : '▼'}</span>
+        <StockIcon symbol={m.symbol} className="size-8" />
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-semibold text-[var(--text)]">{m.symbol}</div>
           <div className="text-[13px] text-[var(--text-muted)] truncate">

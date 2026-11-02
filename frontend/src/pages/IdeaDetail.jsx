@@ -31,6 +31,7 @@ import { AiLabel, AiMarkdown, AiText } from '../components/ai/AiSummary';
 import { px, rewardRisk } from '../components/ideas/levels';
 import { splitThesis } from '../utils/aiText';
 import { stockPath } from '../utils/stocks';
+import StockIcon from '../components/ui/StockIcon';
 
 const STATUS = { APPROVED: 'You bought this', REJECTED: 'You skipped this', EXPIRED: 'Expired', FILLED: 'Filled', CANCELLED: 'Cancelled' };
 const PAPER = { 'live-ready': 'Paper record clears the live gate', paper: 'Paper record still building', untested: 'Not backtested yet', paused: 'Paused by the AI' };
@@ -248,7 +249,7 @@ const IdeaDetail = () => {
 
   return (
     <Layout>
-      <PageHeader title={idea ? bareSymbol(idea.symbol) : 'Idea'} back="/ideas"
+      <PageHeader title={idea ? <span className="flex min-w-0 items-center gap-2.5"><StockIcon symbol={idea.symbol} className="size-8 rounded-[8px] p-0.5" /><span className="truncate">{bareSymbol(idea.symbol)}</span></span> : 'Idea'} back="/ideas"
         right={idea && <Link to={stockPath(idea.symbol)} className="inline-flex items-center min-h-11 px-2 text-[14px] font-semibold text-[var(--accent)]">View stock</Link>} />
       {body}
     </Layout>

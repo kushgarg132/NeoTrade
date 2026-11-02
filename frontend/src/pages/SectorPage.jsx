@@ -37,7 +37,7 @@ const SectorPage = () => {
           </Card>
           <Card title="Stocks">
             {members.length === 0 ? <Empty title="No quotes yet" body="Members show once the market feed has prices." /> : members.map((m) => (
-              <ListRow privateValue={false} key={m.symbol} dense title={m.symbol} sub={m.name} to={stockPath(m.symbol)}
+              <ListRow privateValue={false} key={m.symbol} dense symbol={m.symbol} title={m.symbol} sub={m.name} to={stockPath(m.symbol)}
                        right={pct(m.change_pct / 100, { sign: true })} rightTone={tone(m.change_pct)} />
             ))}
           </Card>

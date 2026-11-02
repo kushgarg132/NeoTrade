@@ -2,14 +2,17 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { toneText } from './tone';
+import StockIcon from './StockIcon';
 
 /** One list line: title + sub-line on the left, a value on the right. `to` links, `onClick` acts.
  *  `dense` is the 36 px trader-list row: more rows per glance, for lists only.
  *  `extra` sits under the sub-line, untruncated (a news item's impact chips).
- *  `privateValue={false}` for public figures (market quotes) that hide-amounts must not blur. */
-const ListRow = ({ title, sub, extra, right, rightTone = 'neutral', to, onClick, chevron = true, dense = false, privateValue = true }) => {
+ *  `privateValue={false}` for public figures (market quotes) that hide-amounts must not blur.
+ *  `symbol` leads the row with that stock's logo. */
+const ListRow = ({ title, sub, extra, right, rightTone = 'neutral', to, onClick, chevron = true, dense = false, privateValue = true, symbol }) => {
   const body = (
     <>
+      {symbol && <StockIcon symbol={symbol} className={dense ? 'size-7' : 'size-8'} />}
       <div className="min-w-0 flex-1">
         <div className={`${dense ? 'text-[14px]' : 'text-[15px]'} font-medium text-[var(--text)] truncate`}>{title}</div>
         {sub && <div className={`${dense ? 'text-[12px]' : 'text-[13px]'} text-[var(--text-muted)] truncate`}>{sub}</div>}

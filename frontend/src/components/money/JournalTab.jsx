@@ -24,6 +24,7 @@ import { monthKey, shiftMonth, monthLabel, todayIst } from '../../utils/months';
 import api, { endpoints } from '../../utils/api';
 import { roundTripPath } from '../../utils/routes';
 import { formatQuantity, formatPercent, formatSigned, formatDateTime } from '../../utils/formatters';
+import StockIcon from '../ui/StockIcon';
 
 /**
  * The journal for the user's own account: every fill from their broker, grouped into round trips.
@@ -332,6 +333,7 @@ const JournalTab = ({ onImport }) => {
               <div className="private">
                 {trips.map((t) => (
                   <Link key={t.id} to={roundTripPath(t.id)} className="flex w-full items-center gap-3 min-h-14 py-2 text-left border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+                    <StockIcon symbol={t.symbol} className="size-8" />
                     <span className="min-w-0 flex-1">
                       <span className="block text-[15px] font-medium text-[var(--text)] truncate">
                         {t.symbol} <span className="text-[13px] font-normal text-[var(--text-muted)]">{t.direction === 'SHORT' ? 'Short' : 'Long'}{t.kind && t.kind !== 'STOCK' ? ` · ${t.kind === 'FUTURE' ? 'FUT' : t.kind}` : ''}</span>

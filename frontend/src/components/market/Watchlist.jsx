@@ -16,6 +16,7 @@ import SmartSearch from '../dashboard/SmartSearch';
 import { px } from '../ideas/levels';
 import NewsChip from '../common/NewsChip';
 import useSymbolNews from '../../hooks/useSymbolNews';
+import StockIcon from '../ui/StockIcon';
 
 const Panel = ({ children, className = '' }) => (
   <section className={`rounded-[20px] border border-[var(--border)] bg-[var(--surface)] ${className}`}>{children}</section>
@@ -48,7 +49,7 @@ const Row = ({ s, entry, editing, onRemove }) => {
       <div className="min-w-0 flex-1">
         <Link to={stockPath(s.symbol)} className="tap -mx-2 block rounded-[12px] px-2 py-1 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="min-w-0 truncate text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">{bareSymbol(s.symbol)}</span>
+            <span className="flex min-w-0 items-center gap-2"><StockIcon symbol={s.symbol} className="size-6" /><span className="min-w-0 truncate text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">{bareSymbol(s.symbol)}</span></span>
             <span className="shrink-0 text-[17px] font-semibold tabular-nums text-[var(--text)]">{s.error ? '—' : price(s.current_price)}</span>
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-3">
