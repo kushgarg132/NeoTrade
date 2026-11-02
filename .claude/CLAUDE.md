@@ -24,11 +24,35 @@ and `verified_at` in the same commit.
 | Where is X, what calls Y, what runs when? | `docs/wiki/` (agent wiki, see above) |
 | What is this product, who uses it, what are the states that matter? | `PRODUCT.md` |
 | How does the code actually work? | `frontend/src/handbook/*.md` — the handbook, also in the app at `/system` |
-| **What should I work on right now?** | `docs/ROADMAP.md` — check the Status column |
+| **What should I work on right now?** | The backlog (see below): `doing`, then `next`. `docs/ROADMAP.md` keeps the long-term phases |
 | What should this look like? | `DESIGN.md` (tokens are real, in `frontend/src/index.css`) |
 
 The handbook (`frontend/src/handbook/`) is verified against the code with `file::symbol` anchors. If it and
 the code disagree, the code is right — fix the handbook in the same commit.
+
+## Backlog: update it first, keep it current (mandatory)
+
+The backlog (`backlog` collection, shown at `/lab/backlog`) is the record of what is being worked
+on. Any session that will change this repo updates it **before the first edit**, not at the end.
+Read-only questions and investigation with no change need no item.
+
+```bash
+B="docker exec neotrade-backend python -m backend.system.backlog_cli"
+$B list                                   # open items; --all adds done and dropped
+$B show <id>                              # one item in full
+$B add "Title" --area UI --status doing --why "what the owner asked for" --source "session 2026-11-02"
+$B set <id> --status done --notes "..."   # --notes replaces: show first, then keep what still matters
+```
+
+1. **Before editing:** run `list`. Set the matching item to `doing`, or `add` one as `doing`. An
+   item already `doing` may be another session's: read its notes before touching that work.
+2. **While working:** update `notes` when the scope or plan changes. Add follow-ups you find but
+   will not do now as `idea`, instead of leaving them in chat.
+3. **When it lands:** set `done` with the commit in `notes`. If you stop before that, leave it
+   `doing` with notes saying what is finished and what is left.
+
+The session that talks to the owner keeps the backlog. Subagents do not touch it. Areas:
+System, Data, Trading, AI, News, Journal, UI, Ops, Product.
 
 ## Invariants — never break these silently
 

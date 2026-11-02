@@ -4,8 +4,8 @@ One phase per working session. Each phase states its goal, why it sits where it 
 files it touches, and **done-when** criteria you can check yourself against before claiming
 it finished.
 
-Update the Status column when a phase lands. That column is how a future session knows
-where to start — nothing else in this repo tracks it.
+Update the Status column when a phase lands. Day-to-day work is tracked in the backlog
+(`/lab/backlog`, rule in `.claude/CLAUDE.md`), not here.
 
 | Phase | Goal | Blocked by | Status |
 |---|---|---|---|

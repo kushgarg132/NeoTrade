@@ -106,3 +106,28 @@ def test_patch_null_on_required_field_is_422(mongo):
         assert client.patch(f"{URL}/{item['id']}", json={field: None}).status_code == 422
     assert client.patch(f"{URL}/{item['id']}", json={"effort": None}).status_code == 200  # effort may be cleared
     assert client.get(URL).status_code == 200
+
+
+def test_cli_add_list_set_show(mongo):
+    import asyncio
+    import json
+
+    from backend.system.backlog_cli import run
+
+    line = asyncio.run(run(mongo, ["add", "Agent rule", "--area", "Ops", "--status", "doing", "--why", "track work"]))
+    item_id = line.split()[0]
+    assert "doing" in line and "Agent rule" in line
+
+    asyncio.run(run(mongo, ["set", item_id, "--notes", "wip"]))
+    assert json.loads(asyncio.run(run(mongo, ["show", item_id])))["notes"] == "wip"
+
+    asyncio.run(run(mongo, ["set", item_id, "--status", "done"]))
+    assert asyncio.run(run(mongo, ["list"])) == ""  # done hides from the default list
+    assert item_id in asyncio.run(run(mongo, ["list", "--all"]))
+
+    with pytest.raises(SystemExit):
+        asyncio.run(run(mongo, ["set", item_id]))
+    with pytest.raises(SystemExit):
+        asyncio.run(run(mongo, ["set", "000000000000000000000000", "--status", "done"]))
+    with pytest.raises(SystemExit):
+        asyncio.run(run(mongo, ["show", "nope"]))

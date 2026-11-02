@@ -4,6 +4,11 @@ NeoTrade is the personal trading assistant at `/home/ubuntu/projects/NeoTrade`.
 Its FastAPI backend is deployed on the host at `https://neotrade.161.118.167.148.nip.io`; the
 Vercel frontend is `https://neotrade-trading.vercel.app`. The old `ai-stock` host is retired.
 
+## Backlog first
+
+Before changing this repo, update the backlog, and keep it current while you work. The rule and
+the commands are in `.claude/CLAUDE.md`, "Backlog: update it first, keep it current".
+
 ## Current user goal
 
 The user wants to use their Telegram bot as an AI interface for NeoTrade. Treat Telegram as an
