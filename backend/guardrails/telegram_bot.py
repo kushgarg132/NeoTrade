@@ -7,6 +7,7 @@ or less-restricted trading path.
 """
 
 import asyncio
+import base64
 import hashlib
 import html
 import json
@@ -21,6 +22,7 @@ from aiogram.filters.callback_data import CallbackData
 
 from backend.auth.broker_credentials import get_credential_store
 from backend.chat import agent
+from backend.chat.media import render_png
 from backend.chat.actions import ActionRefused, ChatActionStore, confirm
 from backend.risk.live_confirm import TokenRefused
 from backend.guardrails import telegram
@@ -240,7 +242,8 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
     try:
         prefs = await PrefsStore(db).get(user_id)
         with use_model(prefs.get("omniroute_model"), user_id=user_id):
-            async for event in agent.stream_chat(db, redis, user_id, text, history, TELEGRAM_CONTEXT):
+            async for event in agent.stream_chat(db, redis, user_id, text, history, TELEGRAM_CONTEXT,
+                                                    media=True):
                 kind, data = event["type"], event["data"]
                 if kind == "step" and data["phase"] == "start":
                     if state["text"].strip():
@@ -256,6 +259,8 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
                     state["text"] += data
                 elif kind == "action":
                     cards.append(data)
+                elif kind in ("chart", "image"):
+                    await _send_media(chat_id, token, kind, data)
                 elif kind == "answer_end":
                     await finish()  # don't make the user wait for the follow-up call
                 elif kind == "suggestions" and sent.get("message_id") is not None:
@@ -271,6 +276,23 @@ async def _reply(db, redis, user_id: str, chat_id: int, token: Optional[str], te
             await finish(failed=True)
     finally:
         await finish()
+
+
+async def _send_media(chat_id: int, token: Optional[str], kind: str, data: dict) -> None:
+    """A chart (drawn here) or a generated image as a photo; on failure one line says so."""
+    try:
+        if kind == "chart":
+            photo, caption = await asyncio.to_thread(render_png, data), data.get("title", "")
+        else:
+            url = data["url"]
+            photo = base64.b64decode(url.split(",", 1)[1]) if url.startswith("data:") else url
+            caption = data.get("alt", "")
+        if await telegram.send_photo(chat_id, photo, caption, token):
+            return
+    except Exception:
+        logger.exception("telegram %s failed", kind)
+    what = f"the chart “{data.get('title', '')}”" if kind == "chart" else "the image"
+    await telegram.send_html(chat_id, html.escape(f"Could not draw {what}." if kind == "chart" else f"Could not send {what}."), token)
 
 
 PAIR_MAX_CHARS = 20  # two buttons share a row only if both labels fit half a phone's width

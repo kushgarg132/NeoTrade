@@ -55,6 +55,7 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
   const [news, setNews] = useState(null); // {symbol, items}
   const [pickedDay, setPickedDay] = useState(null); // {symbol, date}
   const [hover, setHover] = useState(null);
+  const [pinned, setPinned] = useState(null); // {symbol, date} of the tapped bar
 
   useEffect(() => {
     if (!symbol || !newsFrom) return undefined; // no markers: `news` stays null
@@ -100,6 +101,7 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
     [tradeDots, newsDots],
   );
   const pickedMark = pickedDay?.symbol === symbol ? newsDots.find((m) => m.date === pickedDay.date) : null;
+  const pickBar = (bar) => setPinned((p) => (!bar || p?.date === bar.date ? null : { symbol, date: bar.date }));
   const pick = (date) => setPickedDay((p) => (p?.symbol === symbol && p.date === date ? null : { symbol, date }));
 
   const target = thesis?.target;
@@ -114,7 +116,9 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
   const last = bars.at(-1);
   // Re-read the hovered bar from the current bars: a poll may have replaced it.
   const hoverBar = hover ? bars.find((b) => b.date === hover.date) || null : null;
-  const focus = hoverBar || last;
+  const pinnedBar = pinned?.symbol === symbol ? bars.find((b) => b.date === pinned.date) || null : null;
+  const shownBar = hoverBar || pinnedBar;
+  const focus = hoverBar || pinnedBar || last;
   const from = baseline ?? bars[0]?.close;
   const change = focus && from != null ? { abs: focus.close - from, pct: from ? ((focus.close - from) / from) * 100 : 0 } : rangeChange(bars);
   const tone = !change || change.abs === 0 ? 'neutral' : change.abs > 0 ? 'gain' : 'loss';
@@ -131,10 +135,10 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
               {sign}{fmt(change.abs)} ({sign}{change.pct.toFixed(2)}%)
             </span>
           )}
-          <span className="text-[13px] text-[var(--text-muted)]">{hoverBar ? when(hoverBar.date, range === '1W') : span}</span>
+          <span className="text-[13px] text-[var(--text-muted)]">{shownBar ? when(shownBar.date, range === '1W') : span}</span>
         </div>
         <div className="text-[12px] text-[var(--text-muted)] tabular-nums h-5">
-          {hoverBar && shown.ohlc && <>O {fmt(hoverBar.open)} · H {fmt(hoverBar.high)} · L {fmt(hoverBar.low)}{hoverBar.volume ? ` · Vol ${compact(hoverBar.volume)}` : ''}</>}
+          {shownBar && shown.ohlc && <>O {fmt(shownBar.open)} · H {fmt(shownBar.high)} · L {fmt(shownBar.low)}{shownBar.volume ? ` · Vol ${compact(shownBar.volume)}` : ''}</>}
         </div>
       </div>
 
@@ -146,7 +150,7 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
         <div className="h-[320px] sm:h-[420px] -mx-1" role="img"
           aria-label={`Price, last ${fmt(last.close)}, ${change ? `${sign}${change.pct.toFixed(2)}%` : ''} ${span}; ${tradeDots.length} of your trades and ${newsDots.length} news days marked`}>
           <PriceCanvas bars={bars} mode={view} markers={markers} priceLines={lines} baseline={baseline} hidePrices={hidden}
-            onCrosshair={setHover} onPickDate={pick} />
+            onCrosshair={setHover} onPickBar={pickBar} onPickDate={pick} />
         </div>
       )}
 

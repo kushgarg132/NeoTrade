@@ -190,10 +190,6 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
             raise ActionRefused(
                 f"Limit ₹{limit or 0:,.2f} is more than 20% from the price ₹{price:,.2f}; check the number."
             )
-    basis = limit or price
-    cap = (await PrefsStore(db).get(user_id))["per_trade_cap"]
-    if basis * quantity > cap:
-        raise ActionRefused(f"₹{basis * quantity:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
     delivery_sell = params["side"] == "SELL" and params.get("product", "CNC") == "CNC"
     if params["venue"] != "live":
         raise ActionRefused(PAPER_ORDERS_GONE)
@@ -224,7 +220,7 @@ async def _order_checks(db, user_id: str, params: dict, credentials) -> tuple[fl
 
 async def _modify_checks(db, user_id: str, adapter, params: dict) -> None:
     """A modify is held to the same limits as a new order: whole quantity and
-    price above 0, the per-trade cap on the new notional, and no extra shares
+    price above 0, and no extra shares
     on a day the kill switch tripped. It used to check only that the order
     was still open."""
     from backend.chat.account_actions import _open_order
@@ -238,10 +234,6 @@ async def _modify_checks(db, user_id: str, adapter, params: dict) -> None:
     if order is None:
         raise ActionRefused(f"There is no open order {params['order_id']} in your account.")
     new_qty = quantity if quantity is not None else float(order["quantity"])
-    unit = price or float(order.get("price") or 0) or await _mark_price(order["symbol"])
-    cap = (await PrefsStore(db).get(user_id))["per_trade_cap"]
-    if new_qty * unit > cap:
-        raise ActionRefused(f"₹{new_qty * unit:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
     if new_qty > float(order["quantity"]) and await KillSwitchStore(db).is_tripped(
         user_id, _now().astimezone(IST).date()
     ):

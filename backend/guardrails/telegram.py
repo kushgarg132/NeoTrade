@@ -21,9 +21,10 @@ import re
 from typing import Optional
 
 from aiogram import Bot
+from aiogram.types import BufferedInputFile
 from aiogram.exceptions import TelegramAPIError, TelegramConflictError
 from aiogram.methods import (
-    AnswerCallbackQuery, DeleteMyCommands, EditMessageReplyMarkup, EditMessageText, SendChatAction, SendMessage,
+    AnswerCallbackQuery, DeleteMyCommands, EditMessageReplyMarkup, EditMessageText, SendChatAction, SendMessage, SendPhoto,
     SendMessageDraft, SetMyCommands, TelegramMethod,
 )
 
@@ -234,6 +235,21 @@ async def edit_html(chat_id: int, message_id: int, text: str, token: Optional[st
 async def send_rich(chat_id: int, md: str, token: Optional[str] = None,
                     reply_markup: Optional[dict] = None) -> Optional[int]:
     return await send_html(chat_id, to_html(md), token, reply_markup)
+
+
+PHOTO_TIMEOUT = 60  # an upload takes longer than a text call
+
+
+async def send_photo(chat_id: int, photo, caption: str = "", token: Optional[str] = None) -> bool:
+    """Send a picture: PNG `bytes` (uploaded) or an https URL (Telegram fetches it); caption as plain text."""
+    media = BufferedInputFile(photo, filename="neotrade.png") if isinstance(photo, bytes) else photo
+    try:
+        await _bot(token)(SendPhoto(chat_id=chat_id, photo=media, caption=caption[:1024] or None),
+                          request_timeout=PHOTO_TIMEOUT)
+        return True
+    except Exception as exc:
+        logger.warning("telegram sendPhoto failed: %s", getattr(exc, "message", type(exc).__name__))
+        return False
 
 
 async def draft(chat_id: int, draft_id: int, text: str, token: Optional[str] = None) -> bool:

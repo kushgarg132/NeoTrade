@@ -9,7 +9,8 @@ import AsOf from '../ui/AsOf';
 import Badge from '../ui/Badge';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
-import { breadthWord, divergence, isClosed, newsMood, sortSectors } from '../../utils/market';
+import { breadthWord, divergence, filterSectors, isClosed, newsMood, sortSectors } from '../../utils/market';
+import ChipRow from '../ui/ChipRow';
 import { stockPath } from '../../utils/stocks';
 import { sectorPath } from '../../utils/routes';
 import useSection from '../../hooks/useSection';
@@ -19,6 +20,26 @@ const SORTS = [
   { id: 'news', label: 'News' },
   { id: 'breadth', label: 'Breadth' },
 ];
+
+const SHOWS = [
+  { id: 'all', label: 'All' },
+  { id: 'up', label: 'Rising' },
+  { id: 'down', label: 'Falling' },
+  { id: 'flagged', label: 'Flagged' },
+];
+const EXTREMES = [
+  { id: 'both', label: 'Both' },
+  { id: 'high', label: 'Highs' },
+  { id: 'low', label: 'Lows' },
+];
+
+/** A filter that left nothing: say so, one tap back to everything. */
+const NoMatch = ({ onClear }) => (
+  <p className="py-4 text-[14px] text-[var(--text-muted)]">
+    Nothing matches.{' '}
+    <button type="button" onClick={onClear} className="min-h-11 font-medium text-[var(--accent)] underline">Clear</button>
+  </p>
+);
 
 const loadScan = () => api.get(endpoints.marketScan).then((r) => r.data);
 
@@ -134,12 +155,15 @@ const Extreme = ({ m, high }) => {
 const Sectors = () => {
   const [{ data, error }, retry] = useSection(loadScan);
   const [by, setBy] = useState('move');
+  const [show, setShow] = useState('all');
+  const [ext, setExt] = useState('both');
   if (error) return <Panel><ErrorLine message="Could not load the sectors." onRetry={retry} /></Panel>;
   if (!data) return <Panel><Skeleton rows={6} /></Panel>;
   if (!data.sectors?.length) return <Panel><Empty title="No sector data yet" body="Sectors fill in once the market feed has prices." action={<Button variant="secondary" onClick={retry}>Refresh</Button>} /></Panel>;
   const maxAbs = Math.max(0.5, ...data.sectors.map((s) => Math.abs(s.change_pct)));
-  const high = (data.near_high || []).slice(0, 5);
-  const low = (data.near_low || []).slice(0, 5);
+  const high = ext === 'low' ? [] : (data.near_high || []).slice(0, 5);
+  const low = ext === 'high' ? [] : (data.near_low || []).slice(0, 5);
+  const rows = sortSectors(filterSectors(data.sectors, show), by);
   return (
     <div className="space-y-4">
       {data.breadth?.n > 0 && <Breadth b={data.breadth} />}
@@ -149,12 +173,12 @@ const Sectors = () => {
           <h2 className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">{isClosed() ? 'Sectors · last session' : 'Sectors today'}</h2>
           <SortControl value={by} onChange={setBy} />
         </div>
+        <ChipRow label="Show sectors" options={SHOWS} value={show} onChange={setShow} className="mt-2" />
         <div className="mt-3 -mx-0 grid grid-cols-[minmax(0,1fr)_minmax(48px,20%)_52px_36px] sm:grid-cols-[220px_minmax(0,1fr)_64px_56px] gap-x-2.5 sm:gap-x-3 pb-1 text-[12px] text-[var(--text-muted)]" aria-hidden="true">
           <span>Sector</span><span className="text-center">Day move</span><span className="text-right">Avg</span><span className="text-right">Up</span>
         </div>
-        <ul>
-          {sortSectors(data.sectors, by).map((s) => <Row key={s.sector} s={s} maxAbs={maxAbs} by={by} />)}
-        </ul>
+        {rows.length ? <ul>{rows.map((s) => <Row key={s.sector} s={s} maxAbs={maxAbs} by={by} />)}</ul>
+          : <NoMatch onClear={() => setShow('all')} />}
         <p className="mt-2 text-[12px] leading-snug text-[var(--text-muted)]">
           Avg: the average day move of the sector's Nifty 200 stocks; bars share one scale. Up: how many of them rose. A flag means the sector's news mood points the other way.
         </p>
@@ -164,7 +188,10 @@ const Sectors = () => {
       <Panel>
         <h2 className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">Near 52-week highs and lows</h2>
         <p className="mt-0.5 text-[13px] text-[var(--text-muted)]">Within 2% of the highest price in the past year, or of the lowest.</p>
-        {!high.length && !low.length
+        <ChipRow label="Show highs or lows" options={EXTREMES} value={ext} onChange={setExt} className="mt-2" />
+        {!high.length && !low.length && ext !== 'both'
+          ? <NoMatch onClear={() => setExt('both')} />
+          : !high.length && !low.length
           ? <Empty title="Nothing at an extreme" body="No Nifty 200 name is within 2% of its 52-week high or low." action={<Button variant="secondary" onClick={retry}>Refresh</Button>} />
           : <ul className="mt-2">{high.map((m) => <Extreme key={m.symbol} m={m} high />)}{low.map((m) => <Extreme key={m.symbol} m={m} />)}</ul>}
       </Panel>

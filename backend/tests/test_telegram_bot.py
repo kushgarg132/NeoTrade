@@ -58,7 +58,7 @@ async def test_telegram_reply_shows_work_then_answer_cards_and_suggestions(monke
     redis.get.return_value = None
     monkeypatch.setattr(telegram_bot, "DRAFT_SECONDS", 0.01)
 
-    async def stream(*_args):
+    async def stream(*_args, **_kw):
         yield {"type": "content", "data": "Let me check the engine."}
         yield {"type": "step", "data": {"id": "r1", "phase": "start", "label": "Checking the paper engine",
                                         "input": {"mode": "intraday"}}}
@@ -100,7 +100,7 @@ async def test_telegram_reply_shows_work_then_answer_cards_and_suggestions(monke
 async def test_long_answer_continues_in_a_new_message(monkeypatch):
     db = AsyncMongoMockClient()["test_db"]
 
-    async def stream(*_args):
+    async def stream(*_args, **_kw):
         for _ in range(40):  # 4000 chars, over MESSAGE_LIMIT
             yield {"type": "content", "data": "x" * 99 + "\n"}
 
@@ -214,7 +214,7 @@ async def test_reply_passes_and_saves_conversation_history(monkeypatch):
     redis.get.side_effect = lambda key: json.dumps(earlier) if key.startswith(telegram_bot.HISTORY_PREFIX) else None
     seen = {}
 
-    async def stream(_db, _redis, _user, _text, history, _context):
+    async def stream(_db, _redis, _user, _text, history, _context, **_kw):
         seen["history"] = history
         yield {"type": "content", "data": "Prepared."}
 
@@ -247,7 +247,7 @@ async def test_shortcut_command_asks_the_ai_and_new_clears_memory(monkeypatch):
     redis.get.return_value = None
     asked = []
 
-    async def stream(_db, _redis, _user, text, *_rest):
+    async def stream(_db, _redis, _user, text, *_rest, **_kw):
         asked.append(text)
         yield {"type": "content", "data": "Up 2%."}
 
@@ -271,7 +271,7 @@ async def test_new_message_removes_the_previous_suggestions(monkeypatch):
     redis = AsyncMock()
     redis.get.side_effect = lambda key: "101" if key == telegram_bot.SUGGEST_LAST_PREFIX + "alice" else None
 
-    async def stream(*_args):
+    async def stream(*_args, **_kw):
         yield {"type": "content", "data": "Sure."}
         yield {"type": "answer_end", "data": None}
         yield {"type": "suggestions", "data": ["And INFY?"]}
@@ -341,7 +341,7 @@ async def test_typing_is_sent_even_when_drafts_are_accepted(monkeypatch):
 
     db = AsyncMongoMockClient()["test_db"]
 
-    async def stream(*_args):
+    async def stream(*_args, **_kw):
         await asyncio.sleep(0.05)
         yield {"type": "content", "data": "Hi."}
 
@@ -448,3 +448,61 @@ async def test_malformed_or_foreign_callback_data_does_nothing(monkeypatch, data
     await telegram_bot._callback(db, None, "alice", 42, "tok", {"id": "cb", "data": data, "message": {"message_id": 7}})
     confirmed.assert_not_awaited()
     telegram_bot.telegram.edit_html.assert_not_awaited()
+
+
+async def test_charts_and_images_go_out_as_photos_before_the_answer(monkeypatch):
+    import base64
+
+    db = AsyncMongoMockClient()["test_db"]
+    asked = {}
+
+    async def stream(*_args, **kwargs):
+        asked.update(kwargs)
+        yield {"type": "chart", "data": {"title": "P&L", "kind": "bar", "unit": "₹", "labels": ["a", "b"],
+                                         "series": [{"name": "x", "values": [1, 2]}]}}
+        yield {"type": "image", "data": {"url": "data:image/png;base64," + base64.b64encode(b"img").decode(), "alt": "a bull"}}
+        yield {"type": "image", "data": {"url": "https://x.test/i.png", "alt": "a bear"}}
+        yield {"type": "content", "data": "Here you go."}
+        yield {"type": "answer_end", "data": None}
+
+    order, photos = [], []
+
+    async def send_photo(chat_id, photo, caption="", token=None):
+        photos.append((photo, caption))
+        order.append("photo")
+        return True
+
+    monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
+    monkeypatch.setattr(telegram_bot, "render_png", lambda spec: b"png:" + spec["title"].encode())
+    sent, _ = _fake_bot(monkeypatch)
+    monkeypatch.setattr(telegram_bot.telegram, "send_photo", send_photo)
+
+    await telegram_bot._reply(db, None, "alice", 42, "token", "Chart my P&L and draw a bull")
+
+    assert asked.get("media") is True
+    assert photos == [(b"png:P&L", "P&L"), (b"img", "a bull"), ("https://x.test/i.png", "a bear")]
+    assert len(sent) == 1 and sent[0][0].endswith("Here you go.")
+
+
+async def test_a_failed_chart_says_so_and_the_answer_still_arrives(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+
+    async def stream(*_args, **_kw):
+        yield {"type": "chart", "data": {"title": "P&L", "kind": "bar", "unit": "", "labels": ["a"],
+                                         "series": [{"name": "x", "values": [1]}]}}
+        yield {"type": "content", "data": "Done."}
+        yield {"type": "answer_end", "data": None}
+
+    def boom(spec):
+        raise RuntimeError("no fonts")
+
+    monkeypatch.setattr(telegram_bot.agent, "stream_chat", stream)
+    monkeypatch.setattr(telegram_bot, "render_png", boom)
+    sent, _ = _fake_bot(monkeypatch)
+    monkeypatch.setattr(telegram_bot.telegram, "send_photo", AsyncMock(return_value=True))
+
+    await telegram_bot._reply(db, None, "alice", 42, "token", "Chart it")
+
+    telegram_bot.telegram.send_photo.assert_not_awaited()
+    assert sent[0][0] == "Could not draw the chart “P&amp;L”."
+    assert sent[-1][0].endswith("Done.")

@@ -224,8 +224,9 @@ async def place_live_approval(suggestion_id: str, user, store, ledger, options_b
     the kill-switch tripped, and claimed before the order goes out so a
     double tap cannot send two. An option goes as a NRML order on a broker
     that trades options; an equity goes as a MARKET order (CNC for a
-    long-term proposal, MIS for intraday) in market hours, within the
-    per-trade cap."""
+    long-term proposal, MIS for intraday) in market hours. The per-trade
+    cap is the AI account's rail (autopilot/fence.py), so it does not apply
+    here: the user's own account trades what the user approves."""
     suggestion = await store.get(user.id, suggestion_id)
     if suggestion is None:
         raise HTTPException(status_code=404, detail="No such suggestion")
@@ -243,17 +244,11 @@ async def place_live_approval(suggestion_id: str, user, store, ledger, options_b
         raise HTTPException(status_code=409, detail="Daily loss limit hit today: no new live orders")
     if not suggestion.get("option_contract"):
         return await _approve_equity_live(suggestion, user.id, store, ledger, mine_broker, mark_price, now)
-    # Same rails as an equity approval: market hours, and the per-trade cap on
-    # what the order ties up (margin for a sold option, else premium x qty).
+    # Same rails as an equity approval: market hours.
     from backend.engine.autorun import in_session
 
     if not in_session(now):
         raise HTTPException(status_code=409, detail="The market is closed; live orders go only between 9:15 AM and 3:30 PM IST on weekdays.")
-    terms = suggestion["option_contract"]
-    exposure = terms.get("margin_estimate") or (terms.get("premium_estimate") or 0) * suggestion["quantity"]
-    cap = (await PrefsStore(db.db).get(user.id))["per_trade_cap"]
-    if exposure > cap:
-        raise HTTPException(status_code=409, detail=f"₹{exposure:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
     contract = await InstrumentMaster(db.db).get("NFO", suggestion["symbol"])
     if contract is None:
         raise HTTPException(status_code=400, detail=f"Unknown option contract {suggestion['symbol']!r}")
@@ -297,11 +292,7 @@ async def _approve_equity_live(suggestion, user_id, store, ledger, mine_broker, 
     adapter = await mine_broker(user_id)
     if adapter is None:
         raise HTTPException(status_code=409, detail="Connect your broker and set it as My account in Settings to approve with real money.")
-    value = await mark_price(suggestion["symbol"]) * suggestion["quantity"]
     prefs = await PrefsStore(db.db).get(user_id)
-    cap = prefs["per_trade_cap"]
-    if value > cap:
-        raise HTTPException(status_code=409, detail=f"₹{value:,.0f} is over your per-trade cap of ₹{cap:,.0f}.")
     from backend.mine.events import buy_blocked
 
     why = await buy_blocked(db.db, prefs, suggestion["symbol"], now.astimezone(IST).date())

@@ -33,10 +33,11 @@ const axisPrice = (p) => Number(p).toLocaleString('en-IN', { maximumFractionDigi
  * The price canvas behind TradingChart. `bars` from utils/stock.js::toBars; `mode` 'candle' | 'area';
  * `markers` [{date, kind: 'buy'|'sell'|'news', direction?, impact?}]; `priceLines` [{price, tone, title}]
  * (stop/target, their axis labels hidden under hide-amounts via `hidePrices`); `baseline` a dotted
- * previous-close line. `onCrosshair(bar|null)` drives the readout; `onPickDate(date)` fires on a click
+ * previous-close line. `onCrosshair(bar|null)` drives the readout; a tap on any bar calls `onPickBar(bar)` and
+ * keeps the crosshair on it (a second tap on it calls `onPickBar(null)`); `onPickDate(date)` fires on a tap
  * on a day that carries a news marker. Drag pans, pinch/wheel zooms, double-click fits everything.
  */
-const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, onCrosshair, onPickDate }) => {
+const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, onCrosshair, onPickBar, onPickDate }) => {
   const box = useRef(null);
   const probe = useRef(null);
   const chartRef = useRef(null);
@@ -45,7 +46,7 @@ const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, on
   const fitKey = useRef('');
   const [theme, setTheme] = useState(0);
   // The chart's handlers read the latest props through this ref (refreshed after each render).
-  useLayoutEffect(() => { latest.current = { bars, markers, onCrosshair, onPickDate }; });
+  useLayoutEffect(() => { latest.current = { bars, markers, onCrosshair, onPickBar, onPickDate }; });
 
   // The chart lives as long as the component; data changes below reuse it.
   useEffect(() => {
@@ -66,9 +67,17 @@ const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, on
       return latest.current.bars.find((b) => String(chartTime(b.date)) === key) || null;
     };
     const move = (param) => latest.current.onCrosshair?.(at(param));
-    // A tap opens the nearest news dot within NEWS_HIT_PX: at 1Y on a phone a bar is about 1 px wide.
+    // A tap selects its bar: the crosshair stays on it (touch shows none otherwise) and the readout pins to it;
+    // a second tap on the same bar lets go. It also opens the nearest news dot within NEWS_HIT_PX: at 1Y on a
+    // phone a bar is about 1 px wide.
+    let tapped = null;
     const click = (param) => {
       if (!param.point) return;
+      let bar = at(param);
+      if (bar && tapped === bar.date) { bar = null; chart.clearCrosshairPosition(); }
+      else if (bar && mainRef.current) chart.setCrosshairPosition(bar.close, param.time, mainRef.current);
+      tapped = bar?.date ?? null;
+      latest.current.onPickBar?.(bar);
       let best = null;
       for (const m of latest.current.markers || []) {
         if (m.kind !== 'news') continue;
@@ -77,10 +86,13 @@ const PriceCanvas = ({ bars, mode, markers, priceLines, baseline, hidePrices, on
         if (gap <= NEWS_HIT_PX && (!best || gap < best.gap)) best = { date: m.date, gap };
       }
       if (!best) return;
-      // The dot sits just above its bar's high: a tap far below it (the volume pane, another bar) is not for it.
-      const bar = latest.current.bars.find((b) => b.date === best.date);
-      const y = bar && mainRef.current ? mainRef.current.priceToCoordinate(bar.high) : null;
-      if (y != null && (param.point.y < y - 48 || param.point.y > y + 24)) return;
+      // A tap on the news day's own bar opens it. Otherwise the dot sits just above its bar's high: a tap far
+      // below it (the volume pane, a neighbouring bar) is not for it.
+      if (best.date !== at(param)?.date) {
+        const near = latest.current.bars.find((b) => b.date === best.date);
+        const y = near && mainRef.current ? mainRef.current.priceToCoordinate(near.high) : null;
+        if (y != null && (param.point.y < y - 48 || param.point.y > y + 24)) return;
+      }
       latest.current.onPickDate?.(best.date);
     };
     chart.subscribeCrosshairMove(move);

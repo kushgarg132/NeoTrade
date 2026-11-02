@@ -1,4 +1,5 @@
 // What the news layer says about a stock, for list pages (GET /news/symbols).
+import { newsLean } from './stock.js';
 
 const finite = (x) => typeof x === 'number' && Number.isFinite(x);
 const BAND = 0.2;
@@ -68,4 +69,29 @@ export const lossCause = (entry) => (badNews(entry)
 export const mergeFront = (cur, fresh) => {
   const ids = new Set(fresh.map((n) => n.id));
   return [...fresh, ...(cur || []).filter((n) => !ids.has(n.id))];
+};
+
+/** A feed item whose strongest impact points `lean` ('up' | 'down'); '' keeps every item. */
+export const matchLean = (item, lean) => {
+  if (!lean) return true;
+  const d = newsLean(item).direction;
+  return lean === 'up' ? d > 0 : d < 0;
+};
+
+/** Feed items (newest first) under IST-day headers: [{ day, label, items }], label 'Today' / 'Yesterday' / 'Thu 29 Oct'. */
+export const byDay = (items = [], now = Date.now()) => {
+  const today = istDay(now);
+  const yesterday = istDay(Date.parse(`${today}T12:00:00Z`) - 864e5);
+  const groups = new Map();
+  for (const it of items) {
+    const day = istDay(it.published_at);
+    if (!day) continue;
+    if (!groups.has(day)) {
+      const label = day === today ? 'Today' : day === yesterday ? 'Yesterday'
+        : new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+      groups.set(day, { day, label, items: [] });
+    }
+    groups.get(day).items.push(it);
+  }
+  return [...groups.values()].sort((a, b) => (a.day < b.day ? 1 : -1));
 };

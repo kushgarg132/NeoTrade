@@ -30,3 +30,10 @@ test('52-week extremes are kept', () => {
 test('Sectors heading says last session via isClosed()', () => {
   assert.match(src, /isClosed\(\) \? 'Sectors · last session'/);
 });
+
+test('filter chips: sectors by All / Rising / Falling / Flagged, extremes by Both / Highs / Lows', () => {
+  for (const l of ['All', 'Rising', 'Falling', 'Flagged', 'Both', 'Highs', 'Lows']) assert.match(src, new RegExp(`label: '${l}'`));
+  assert.match(src, /filterSectors\(data\.sectors, show\)/);
+  assert.match(src, /<ChipRow /);
+  assert.match(src, /Nothing matches/);
+});

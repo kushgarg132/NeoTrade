@@ -93,3 +93,7 @@ export const companyName = (name, symbol) => {
 /** Where `price` sits in [low, high] as 0..1 (clamped: a live price can leave the stored range); null without a range. */
 export const rangeAt = (price, low, high) => (price == null || low == null || high == null || !(high > low)
   ? null : Math.min(1, Math.max(0, (price - low) / (high - low))));
+
+/** `/market/scan` sector rows kept by filter: 'up' / 'down' (day move sign), 'flagged' (news and price disagree), else all. */
+export const filterSectors = (rows = [], f = 'all') => rows.filter((r) => (f === 'up' ? r.change_pct > 0
+  : f === 'down' ? r.change_pct < 0 : f === 'flagged' ? !!divergence(r) : true));
