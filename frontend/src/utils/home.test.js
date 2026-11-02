@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tileHeadlines, briefKind, showWeekly, alerts, newsWhy } from './home.js';
+import { tileHeadlines, briefKind, showWeekly, alerts, newsWhy, changeRows, sinceWord } from './home.js';
 
 test('newsWhy names the headline, else the market, else no news', () => {
   assert.equal(newsWhy({ cause: { title: 'Q2 miss' }, vs_nifty: -6 }), 'Q2 miss');
@@ -102,4 +102,38 @@ test('the digest brief drops its account line: the hero already says it', () => 
   const text = 'After the close\nYour account: ₹390,135, today −₹5,818 (-1.5%)\nWhat moved your money:\n• CPPLUS -3.5% — no news found';
   assert.ok(!briefLines(text, null).lines.some((l) => l.startsWith('Your account:')));
   assert.ok(briefLines(text, null).lines.includes('What moved your money:'));
+});
+
+test('changeRows: nothing new means no card, even when the value moved', () => {
+  assert.deepEqual(changeRows(null, { day_change: 10 }, 'post'), []);
+  assert.deepEqual(changeRows({ ai_trades: [], plan: { risk_off: false, buys: [], sells: [] }, alerts: { count: 0 } }, { day_change: 10 }, 'post'), []);
+});
+
+test('changeRows: value first, then trades, plan and alerts', () => {
+  const rows = changeRows({
+    ai_trades: [{ symbol: 'INFY.NS', side: 'BUY', mode: 'paper' }, { symbol: 'TCS', side: 'SELL', mode: 'paper' }],
+    plan: { risk_off: false, buys: ['TRENT'], sells: ['SBIN', 'ITC'] },
+    alerts: { count: 1, latest: 'Stop hit' },
+  }, { day_change: -500 }, 'session');
+  assert.deepEqual(rows.map((r) => r.id), ['value', 'trades', 'plan', 'alerts']);
+  assert.equal(rows[0].sub, 'Today');
+  assert.equal(rows[0].rightTone, 'loss');
+  assert.equal(rows[1].title, '2 AI trades');
+  assert.equal(rows[1].sub, 'Paper: bought INFY, sold TCS');
+  assert.equal(rows[2].sub, 'Buy TRENT, sell SBIN, ITC');
+  assert.equal(rows[3].title, '1 alert sent');
+});
+
+test('changeRows: risk-off, a live trade and no value', () => {
+  const rows = changeRows({ ai_trades: [{ symbol: 'INFY', side: 'SELL', mode: null }], plan: { risk_off: true, buys: [], sells: ['SBIN'] }, alerts: { count: 0 } }, null, 'post');
+  assert.deepEqual(rows.map((r) => r.id), ['trades', 'plan']);
+  assert.equal(rows[0].sub, 'Sold INFY');
+  assert.equal(rows[1].sub, 'Risk-off: the book sits in cash');
+});
+
+test('sinceWord: yesterday in IST, else the weekday', () => {
+  const tue = Date.parse('2026-11-03T10:00:00+05:30');
+  assert.equal(sinceWord('2026-11-02', tue), 'yesterday');
+  assert.equal(sinceWord('2026-10-30', Date.parse('2026-11-02T10:00:00+05:30')), 'Friday');
+  assert.equal(sinceWord('2026-11-02', Date.parse('2026-11-03T00:30:00+05:30')), 'yesterday');
 });

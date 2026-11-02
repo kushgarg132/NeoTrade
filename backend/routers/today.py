@@ -210,6 +210,29 @@ async def _picks_top(user_id: str) -> list[dict]:
             for p in shown]
 
 
+async def _changes(user_id: str, now: datetime) -> dict:
+    """What moved since the start of the last trading day (Friday on a Monday): AI trades that
+    filled, the newest plan's moves and the alerts that went out (not queued, muted or failed)."""
+    from backend.autopilot.rotation import PLANS
+
+    day = market_calendar.previous_trading_day(now.astimezone(IST).date())
+    since = datetime.combine(day, time.min, tzinfo=IST)
+    trades = await db.db["autopilot_log"].find(
+        {"user_id": user_id, "status": {"$in": ["FILLED", "SENT"]}, "at": {"$gte": since}},
+        {"_id": 0, "symbol": 1, "side": 1, "mode": 1}).sort("at", -1).to_list(length=None)
+    plan = await db.db[PLANS].find_one({"user_id": user_id, "date": {"$gte": day.isoformat()}}, sort=[("date", -1)])
+    sent = {"user_id": user_id, "state": {"$in": ["sent", "digested"]}, "created_at": {"$gte": since}}
+    latest = await db.db["alerts"].find_one(sent, {"title": 1}, sort=[("created_at", -1)])
+    return {
+        "since": day.isoformat(),
+        "ai_trades": trades,
+        "plan": plan and {"date": plan["date"], "risk_off": plan["risk_off"],
+                          "buys": [b["symbol"] for b in plan["buys"] if not b.get("blocked")],
+                          "sells": [s["symbol"] for s in plan["sells"]]},
+        "alerts": {"count": await db.db["alerts"].count_documents(sent), "latest": latest and latest["title"]},
+    }
+
+
 @router.get("")
 async def today(user: User = Depends(get_current_user), broker_states=Depends(get_broker_states)):
     from backend.engine.autorun import in_session
@@ -262,6 +285,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
         if user.role == "admin" else None,
         "proposals_total": None if (ideas := await part("proposals_total", _ideas(user.id))) is None else len(ideas),
         "ai_activity": log,
+        "changes": await part("changes", _changes(user.id, now)),
         "autopilot": await part("autopilot", _autopilot(user.id, prefs)),
         "setup": await part("setup", _setup(user.id, prefs)),
         "backdrop": await part("backdrop", _backdrop(now)),

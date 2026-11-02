@@ -12,6 +12,7 @@ import HeroRow from '../components/home/HeroRow';
 import TodayCard from '../components/home/TodayCard';
 import GoalTile from '../components/home/GoalTile';
 import WeeklyLink from '../components/home/WeeklyLink';
+import SinceCard from '../components/home/SinceCard';
 import NeedsYou from '../components/home/NeedsYou';
 import { pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
@@ -163,6 +164,7 @@ const MemberHome = () => {
         {day !== undefined && (overview || failed.money)
           ? <TodayCard moves={headline?.news_moves} kind={kind} text={kind ? today[kind] : undefined} summary={day} />
           : <Card title={todayTitle(kind)}><Skeleton rows={3} /></Card>}
+        <SinceCard changes={today.changes} headline={headline} phase={today.phase} />
         <section aria-label="You, the AI and the market" className="space-y-2">
           <Link to="/ai" className="tap flex items-center gap-3 min-h-14 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
             <Bot className="w-5 h-5 shrink-0 text-[var(--accent)]" aria-hidden="true" />

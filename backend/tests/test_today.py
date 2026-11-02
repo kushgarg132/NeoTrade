@@ -344,3 +344,42 @@ def test_a_failing_part_does_not_leak_the_exception_text(monkeypatch):
     _seed(db, user_prefs=[{"user_id": "alice", "broker_roles": {"kite": "ai"}}])
     errors = client.get("/api/v1/today").json()["errors"]
     assert "broker API down" not in str(errors) and errors["accounts"]
+
+
+def test_changes_since_the_last_trading_day(monkeypatch):
+    from backend.core.market_calendar import previous_trading_day
+
+    client, db = _client(monkeypatch)
+    day = previous_trading_day(NOW.astimezone(IST).date())
+    start = datetime.combine(day, datetime.min.time(), tzinfo=IST)
+    old = start - timedelta(hours=1)
+    _seed(db,
+          autopilot_log=[
+              {"user_id": "alice", "status": "FILLED", "symbol": "INFY", "side": "BUY", "mode": "paper", "at": NOW},
+              {"user_id": "alice", "status": "REFUSED", "symbol": "TCS", "side": "BUY", "at": NOW},
+              {"user_id": "alice", "status": "FILLED", "symbol": "OLD", "side": "BUY", "at": old},
+              {"user_id": "bob", "status": "FILLED", "symbol": "BOB", "side": "BUY", "at": NOW}],
+          rotation_plans=[
+              {"user_id": "alice", "date": (day - timedelta(days=1)).isoformat(), "risk_off": True, "buys": [], "sells": []},
+              {"user_id": "alice", "date": day.isoformat(), "risk_off": False, "sells": [{"symbol": "SBIN", "why": "rank"}],
+               "buys": [{"symbol": "TRENT", "weight": 0.1, "blocked": None}, {"symbol": "VETOED", "weight": 0.1, "blocked": {"why": "news"}}]}],
+          alerts=[
+              {"user_id": "alice", "state": "sent", "title": "Stop hit", "created_at": NOW},
+              {"user_id": "alice", "state": "digested", "title": "News", "created_at": NOW - timedelta(minutes=5)},
+              {"user_id": "alice", "state": "queued", "title": "Not out yet", "created_at": NOW},
+              {"user_id": "alice", "state": "muted", "title": "Muted", "created_at": NOW},
+              {"user_id": "alice", "state": "sent", "title": "Old", "created_at": old}])
+    body = client.get("/api/v1/today").json()
+    assert "changes" not in body["errors"]
+    assert body["changes"] == {
+        "since": day.isoformat(),
+        "ai_trades": [{"symbol": "INFY", "side": "BUY", "mode": "paper"}],
+        "plan": {"date": day.isoformat(), "risk_off": False, "buys": ["TRENT"], "sells": ["SBIN"]},
+        "alerts": {"count": 2, "latest": "Stop hit"},
+    }
+
+
+def test_changes_are_empty_for_a_quiet_user(monkeypatch):
+    client, _ = _client(monkeypatch)
+    changes = client.get("/api/v1/today").json()["changes"]
+    assert changes["ai_trades"] == [] and changes["plan"] is None and changes["alerts"] == {"count": 0, "latest": None}

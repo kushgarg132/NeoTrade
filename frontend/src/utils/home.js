@@ -1,6 +1,6 @@
 import { inr, pct, tone } from '../components/ui/format.js';
 import { holdingActions } from './ideas.js';
-import { asOf } from './formatters.js';
+import { asOf, bareSymbol } from './formatters.js';
 import { digestLines } from './todayLayout.js';
 import { summaryLines } from './summaries.js';
 
@@ -113,4 +113,43 @@ export const nextOpenLabel = (iso) => {
   if (Number.isNaN(d.getTime())) return null;
   const f = (o) => d.toLocaleString('en-IN', { ...o, timeZone: 'Asia/Kolkata' });
   return `opens ${f({ weekday: 'short' })} ${f({ hour: '2-digit', minute: '2-digit', hour12: false })}`;
+};
+
+const names = (list) => list.map(bareSymbol).join(', ');
+const sentence = (s) => `${s[0].toUpperCase()}${s.slice(1)}`;
+
+/** "yesterday", else the weekday: on a Monday the last trading day is Friday. */
+export const sinceWord = (since, now = Date.now()) => {
+  const ist = (ms) => new Date(ms + 5.5 * 3600e3).toISOString().slice(0, 10);
+  if (since === ist(now - 86400e3)) return 'yesterday';
+  return new Date(`${since}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
+};
+
+/**
+ * The "since yesterday" card's rows from GET /today `changes` and the account's day change. Empty when only the
+ * value moved: the hero above already says that.
+ */
+export const changeRows = (changes, headline, phase) => {
+  if (!changes) return [];
+  const rows = [];
+  const trades = changes.ai_trades || [];
+  if (trades.length) {
+    const side = (s) => names(trades.filter((t) => t.side === s).map((t) => t.symbol));
+    const moves = [side('BUY') && `bought ${side('BUY')}`, side('SELL') && `sold ${side('SELL')}`].filter(Boolean).join(', ');
+    rows.push({ id: 'trades', title: `${trades.length} AI trade${trades.length === 1 ? '' : 's'}`, to: '/ai',
+      sub: trades.every((t) => t.mode === 'paper') ? `Paper: ${moves}` : sentence(moves) });
+  }
+  const plan = changes.plan;
+  if (plan?.risk_off) rows.push({ id: 'plan', title: 'Daily plan', to: '/ai', sub: 'Risk-off: the book sits in cash' });
+  else if (plan?.buys?.length || plan?.sells?.length) {
+    const moves = [plan.buys.length && `buy ${names(plan.buys)}`, plan.sells.length && `sell ${names(plan.sells)}`].filter(Boolean).join(', ');
+    rows.push({ id: 'plan', title: 'Daily plan', to: '/ai', sub: sentence(moves) });
+  }
+  if (changes.alerts?.count) {
+    rows.push({ id: 'alerts', title: `${changes.alerts.count} alert${changes.alerts.count === 1 ? '' : 's'} sent`, sub: changes.alerts.latest });
+  }
+  if (!rows.length) return [];
+  if (typeof headline?.day_change !== 'number') return rows;
+  return [{ id: 'value', title: 'Your account', sub: phase === 'session' ? 'Today' : 'Last session', to: '/money',
+    right: inr(headline.day_change, { sign: true }), rightTone: tone(headline.day_change) }, ...rows];
 };
