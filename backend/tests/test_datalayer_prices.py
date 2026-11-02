@@ -151,26 +151,34 @@ async def test_a_price_only_write_keeps_the_previous_close():
     assert json.loads(redis.data["quote:TCS"])["prev_close"] == 101.0  # a real close still wins
 
 
-def test_fresher_indices_read_past_a_lagging_daily_bar(monkeypatch):
-    import pandas as pd
-
-    frames = {
-        "5m": pd.DataFrame({("Close", "^NSEI"): [23050.0, 23400.0, 23440.8], ("Close", "^NOBARS"): [None, None, None]},
-                           index=pd.to_datetime(["2026-10-30 15:25", "2026-11-02 09:15", "2026-11-02 15:25"])),
-        "1d": pd.DataFrame({("Close", "^NSEI"): [22936.8, 23053.1], ("Close", "^NOBARS"): [10.0, 11.0]},
-                           index=pd.to_datetime(["2026-10-29", "2026-10-30"])),
-    }
+def _by_interval(monkeypatch, frames):
     monkeypatch.setattr(prices.yf, "download", lambda tickers, interval, **kw: frames[interval])
-    assert prices.fresher_indices(["^NSEI", "^NOBARS"]) == {"^NSEI": (23440.8, 23053.1)}
-    assert prices.fresher_indices([]) == {}
 
 
-def test_fresher_indices_use_the_day_before_when_the_daily_bar_is_current(monkeypatch):
-    import pandas as pd
+def test_last_two_reads_past_a_missing_daily_session(monkeypatch):
+    _by_interval(monkeypatch, {
+        "5m": pd.DataFrame({("Close", "^NSEI"): [23400.0, 23440.8], ("Close", "A.NS"): [1290.0, 1300.0], ("Close", "NOBARS.NS"): [None, None]},
+                           index=pd.to_datetime(["2026-11-02 09:15", "2026-11-02 15:25"])),
+        "1d": pd.DataFrame({("Close", "^NSEI"): [22936.8, 23053.1, None], ("Close", "A.NS"): [1167.4, 1164.9, None], ("Close", "NOBARS.NS"): [10.0, 11.0, None]},
+                           index=pd.to_datetime(["2026-10-29", "2026-10-30", "2026-11-02"])),
+    })
+    assert prices.last_two(["^NSEI", "A.NS", "NOBARS.NS"]) == {"^NSEI": (23440.8, 23053.1), "A.NS": (1300.0, 1164.9), "NOBARS.NS": (11.0, 10.0)}
 
-    frames = {
+
+def test_last_two_uses_the_day_before_when_the_daily_bar_is_current(monkeypatch):
+    _by_interval(monkeypatch, {
         "5m": pd.DataFrame({("Close", "^NSEI"): [23400.0]}, index=pd.to_datetime(["2026-11-02 15:25"])),
         "1d": pd.DataFrame({("Close", "^NSEI"): [23053.1, 23399.0]}, index=pd.to_datetime(["2026-10-30", "2026-11-02"])),
-    }
-    monkeypatch.setattr(prices.yf, "download", lambda tickers, interval, **kw: frames[interval])
-    assert prices.fresher_indices(["^NSEI"]) == {"^NSEI": (23400.0, 23053.1)}
+    })
+    assert prices.last_two(["^NSEI"]) == {"^NSEI": (23400.0, 23053.1)}
+
+
+def test_last_two_keeps_the_daily_figures_when_intraday_fails(monkeypatch):
+    daily = pd.DataFrame({("Close", "A.NS"): [10.0, 11.0]}, index=pd.to_datetime(["2026-10-29", "2026-10-30"]))
+
+    def download(tickers, interval, **kw):
+        if interval == "5m":
+            raise RuntimeError("no intraday")
+        return daily
+    monkeypatch.setattr(prices.yf, "download", download)
+    assert prices.last_two(["A.NS"]) == {"A.NS": (11.0, 10.0)}

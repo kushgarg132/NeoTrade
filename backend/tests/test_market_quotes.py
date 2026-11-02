@@ -27,8 +27,9 @@ def client(monkeypatch):
 
     def use(frame):
         def download(*args, **kwargs):
-            calls.append(args)
-            return frame
+            if kwargs.get("interval") == "1d":  # one fetch = one daily plus one intraday download
+                calls.append(args)
+            return frame.swaplevel(axis=1) if isinstance(frame.columns, pd.MultiIndex) else frame
         monkeypatch.setattr(market_data.yf, "download", download)
 
     return TestClient(app), use, calls

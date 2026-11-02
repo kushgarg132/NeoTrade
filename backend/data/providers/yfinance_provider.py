@@ -19,6 +19,25 @@ logger = logging.getLogger(__name__)
 _EXCHANGE_SUFFIX = {"NSE": ".NS", "BSE": ".BO"}
 
 
+def newer_session(ticker_symbol: str, last_day: str) -> dict | None:
+    """The newest session as one OHLCV row when Yahoo's daily bars have not reached it (they can miss a finished
+    session, its 5-minute bars do not); None when the daily bars are current or the bars fail."""
+    try:
+        bars = yf.Ticker(ticker_symbol).history(period="5d", interval="5m")
+        bars = bars[bars["Close"].notna()]
+        if bars.empty:
+            return None
+        day = bars.index[-1].strftime("%Y-%m-%d")
+        if day <= last_day:
+            return None
+        session = bars[bars.index.strftime("%Y-%m-%d") == day]
+        return {"date": day, "Open": session["Open"].iloc[0], "High": session["High"].max(), "Low": session["Low"].min(),
+                "Close": session["Close"].iloc[-1], "Volume": session["Volume"].sum()}
+    except Exception as exc:
+        logger.warning("newer session for %s failed: %s", ticker_symbol, exc)
+        return None
+
+
 class YFinanceProvider:
     """MarketDataProvider backed by yfinance. Takes an already-resolved
     Instrument and derives the yfinance ticker deterministically -- no more
@@ -80,6 +99,9 @@ class YFinanceProvider:
             raise ValueError(f"No quote data found for {ticker_symbol}")
 
         last = df.iloc[-1]
+        session = await asyncio.to_thread(newer_session, ticker_symbol, df.index[-1].strftime("%Y-%m-%d"))
+        if session:
+            last = session
         return {
             "symbol": ticker_symbol.upper(),
             "last_price": float(last["Close"]),

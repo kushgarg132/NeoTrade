@@ -47,23 +47,51 @@ MACRO = {
 _last_universe = 0.0
 
 
+def _closes(frame, tickers: list[str]):
+    frame = frame["Close"]
+    return frame.to_frame(tickers[0]) if isinstance(frame, pd.Series) else frame
+
+
+def _latest_bars(tickers: list[str]) -> dict:
+    """ticker -> (session date, last price) from 5-minute bars; {} when they fail, so the daily figures stand."""
+    try:
+        frame = yf.download(tickers, period="2d", interval="5m", progress=False, threads=True, ignore_tz=True)
+        if "Close" not in frame:
+            return {}
+        bars = _closes(frame, tickers)
+        out = {}
+        for ticker in tickers:
+            series = bars[ticker].dropna() if ticker in bars else []
+            if len(series):
+                out[ticker] = (series.index[-1].date(), float(series.iloc[-1]))
+        return out
+    except Exception as exc:
+        logger.warning("intraday quotes failed: %s", exc)
+        return {}
+
+
 def last_two(tickers: list[str]) -> dict[str, tuple[float, float]]:
-    """ticker -> (last close, previous close) from one batched 5-day daily
-    download. Today's daily bar moves with the session, so its close is the
-    current price. Tickers with no data are left out."""
+    """ticker -> (last price, previous session's close). Yahoo's daily bar can miss a whole finished session, for
+    stocks and indices alike (Monday evening its last close was Friday's), so the price comes from 5-minute bars
+    and the previous close from the last daily bar before that session. Tickers with no data are left out."""
     if not tickers:
         return {}
     frame = yf.download(tickers, period="5d", interval="1d", progress=False, threads=True)
     if "Close" not in frame:  # an outage returns an empty frame
         return {}
-    frame = frame["Close"]
-    if isinstance(frame, pd.Series):
-        frame = frame.to_frame(tickers[0])
+    daily = _closes(frame, tickers)
+    latest = _latest_bars(tickers)
     out = {}
     for ticker in tickers:
-        if ticker not in frame:
+        if ticker not in daily:
             continue
-        series = frame[ticker].dropna()
+        series = daily[ticker].dropna()
+        if ticker in latest:
+            day, price = latest[ticker]
+            before = series[series.index.date < day]
+            if len(before):
+                out[ticker] = (price, float(before.iloc[-1]))
+                continue
         if len(series):
             last = float(series.iloc[-1])
             out[ticker] = (last, float(series.iloc[-2]) if len(series) > 1 else last)
@@ -114,40 +142,8 @@ async def quotes(db, redis) -> None:
         await _quote(redis, priority, PRIORITY_TTL_SECONDS)
 
 
-def fresher_indices(tickers: list[str]) -> dict[str, tuple[float, float]]:
-    """ticker -> (last price, previous session's close) from 5-minute bars. Yahoo's daily bar for an index can
-    lag a whole session behind its stocks (^NSEI's daily stopped at Friday all Monday evening); the intraday
-    bars do not. Tickers with no intraday data are left out, so they keep their daily figures."""
-    if not tickers:
-        return {}
-    bars = yf.download(tickers, period="5d", interval="5m", progress=False, threads=True, ignore_tz=True)
-    daily = yf.download(tickers, period="5d", interval="1d", progress=False, threads=True, ignore_tz=True)
-    if "Close" not in bars or "Close" not in daily:
-        return {}
-    bars, daily = bars["Close"], daily["Close"]
-    if isinstance(bars, pd.Series):
-        bars = bars.to_frame(tickers[0])
-    if isinstance(daily, pd.Series):
-        daily = daily.to_frame(tickers[0])
-    out = {}
-    for ticker in tickers:
-        if ticker not in bars or ticker not in daily:
-            continue
-        series, closes = bars[ticker].dropna(), daily[ticker].dropna()
-        if not len(series):
-            continue
-        before = closes[closes.index.date < series.index[-1].date()]
-        if len(before):
-            out[ticker] = (float(series.iloc[-1]), float(before.iloc[-1]))
-    return out
-
-
 async def macro(db, redis) -> None:
     rows = await asyncio.to_thread(last_two, list(MACRO.values()))
-    try:
-        rows.update(await asyncio.to_thread(fresher_indices, [t for t in MACRO.values() if t.startswith("^")]))
-    except Exception as exc:  # the daily figures above still stand
-        logger.warning("fresher index quotes failed: %s", exc)
     now = datetime.now(timezone.utc)
     day = now.astimezone(IST).date().isoformat()
     async with redis.pipeline(transaction=False) as pipe:

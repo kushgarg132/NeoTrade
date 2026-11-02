@@ -111,3 +111,21 @@ async def test_quote_with_only_placeholder_rows_raises():
         mock_ticker_cls.return_value.history.return_value = df
         with pytest.raises(ValueError):
             await YFinanceProvider().quote(_instrument())
+
+
+def test_newer_session_reads_past_a_lagging_daily_bar(monkeypatch):
+    import pandas as pd
+
+    from backend.data.providers import yfinance_provider as module
+
+    bars = pd.DataFrame({"Open": [110.0, 120.0, 121.0], "High": [111.0, 125.0, 126.0], "Low": [109.0, 119.0, 120.0],
+                         "Close": [110.0, 121.0, 123.0], "Volume": [1, 2, 3]},
+                        index=pd.to_datetime(["2026-10-30 15:25", "2026-11-02 09:15", "2026-11-02 15:25"]))
+
+    class Ticker:
+        def history(self, period, interval):
+            return bars
+    monkeypatch.setattr(module.yf, "Ticker", lambda symbol: Ticker())
+    row = module.newer_session("A.NS", "2026-10-30")
+    assert (row["date"], row["Open"], row["High"], row["Low"], row["Close"], row["Volume"]) == ("2026-11-02", 120.0, 126.0, 119.0, 123.0, 5)
+    assert module.newer_session("A.NS", "2026-11-02") is None

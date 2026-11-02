@@ -88,7 +88,7 @@ def test_movers_come_from_one_batched_download(monkeypatch):
     monkeypatch.setattr(market_data.yf, "download", lambda tickers, **kw: calls.append(tickers) or frame)
 
     movers = market_data._movers_sync()
-    assert calls == [symbols]
+    assert calls and all(c == symbols for c in calls)  # the batch, never one per symbol
     # Gainers first (best first), then losers (worst first).
     assert [(m["symbol"], round(m["percent"], 1)) for m in movers] == [("A.NS", 1.0), ("B.NS", -10.0)]
 

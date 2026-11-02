@@ -10,6 +10,7 @@ import time
 from backend.auth.dependency import get_optional_user
 from backend.auth.models import User
 from backend.database import db
+from backend.data.providers.yfinance_provider import newer_session
 from backend.datalayer import index_members
 from backend.datalayer.stock_info import INTRADAY_WINDOWS
 from backend.instruments.master import InstrumentMaster
@@ -120,15 +121,13 @@ def _movers_sync() -> List[Dict[str, Any]]:
     """The NIFTY 50's top five gainers then top five losers today, from one batched
     download of every constituent's last few daily closes -- 49 separate
     quote calls took most of the home page's load time."""
-    closes = yf.download(NIFTY_50_SYMBOLS, period="5d", interval="1d", progress=False, threads=True)["Close"]
+    from backend.datalayer.prices import last_two
+
+    rows = last_two(NIFTY_50_SYMBOLS)
     movers = []
-    for symbol in NIFTY_50_SYMBOLS:
-        if symbol not in closes:
+    for symbol, (price, prev) in rows.items():
+        if price == prev:  # one close only: no move to report
             continue
-        series = closes[symbol].dropna()
-        if len(series) < 2:
-            continue
-        price, prev = float(series.iloc[-1]), float(series.iloc[-2])
         movers.append({"name": symbol, "symbol": symbol, "value": price, "change": price - prev,
                        "percent": (price - prev) / prev * 100 if prev else 0.0})
     now = time.time()
@@ -215,25 +214,6 @@ def _ohlcv(row) -> Dict[str, float]:
             "close": close, "volume": pick("Volume", 0.0)}
 
 
-def _session_after(ticker: str, last_day: str) -> List[Dict[str, Any]]:
-    """The newest session as one daily point when Yahoo's daily bars have not reached it yet (they can lag an
-    index by a session, its intraday bars do not); [] otherwise."""
-    try:
-        bars = yf.Ticker(ticker).history(period="5d", interval="5m")
-        bars = bars[bars["Close"].notna()]
-        if bars.empty:
-            return []
-        day = bars.index[-1].strftime("%Y-%m-%d")
-        if day <= last_day:
-            return []
-        session = bars[bars.index.strftime("%Y-%m-%d") == day]
-        return [{"date": day, **_ohlcv({"Open": session["Open"].iloc[0], "High": session["High"].max(), "Low": session["Low"].min(),
-                                        "Close": session["Close"].iloc[-1], "Volume": session["Volume"].sum()})}]
-    except Exception as exc:
-        logger.warning("index session for %s failed: %s", ticker, exc)
-        return []
-
-
 def _fetch_index_detail_sync(ticker: str, name: str) -> Dict[str, Any] | None:
     hist = yf.Ticker(ticker).history(period="5y", interval="1d")  # five years for the chart's 5Y range
     if hist is None or hist.empty:
@@ -241,7 +221,9 @@ def _fetch_index_detail_sync(ticker: str, name: str) -> Dict[str, Any] | None:
 
     points = [{"date": index.strftime("%Y-%m-%d"), **_ohlcv(row)} for index, row in hist.iterrows()
               if not pd.isna(row["Close"])]  # NaN is not JSON
-    points += _session_after(ticker, points[-1]["date"] if points else "")
+    session = newer_session(ticker, points[-1]["date"] if points else "")
+    if session:
+        points.append({"date": session["date"], **_ohlcv(session)})
     closes = [point["close"] for point in points]
     value = closes[-1]
     previous = closes[-2] if len(closes) > 1 else value
@@ -376,25 +358,15 @@ _QUOTE_CACHE_MAX = 500
 
 
 def _quotes_sync(symbols: List[str]) -> List[Dict[str, Any]]:
-    """Last price and day change for a few NSE symbols, one batched download."""
-    import pandas as pd
+    """Last price and day change for NSE symbols, from one batch."""
+    from backend.datalayer.prices import last_two
 
-    raw = yf.download([f"{s}.NS" for s in symbols], period="5d", interval="1d", group_by="ticker",
-                      progress=False, threads=True)
+    rows = last_two([f"{s}.NS" for s in symbols])
     quotes = []
     for symbol in symbols:
-        if isinstance(raw.columns, pd.MultiIndex):
-            if f"{symbol}.NS" not in raw.columns.get_level_values(0):
-                continue
-            frame = raw[f"{symbol}.NS"]
-        elif len(symbols) == 1 and "Close" in raw.columns:
-            frame = raw
-        else:
+        if f"{symbol}.NS" not in rows:
             continue
-        closes = frame["Close"].dropna()
-        if len(closes) < 2:
-            continue
-        price, prev = float(closes.iloc[-1]), float(closes.iloc[-2])
+        price, prev = rows[f"{symbol}.NS"]
         quotes.append({"symbol": symbol, "price": round(price, 2),
                        "change_pct": round((price - prev) / prev * 100, 2) if prev else 0.0, "at": time.time()})
     return quotes
