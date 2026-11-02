@@ -531,3 +531,6 @@ def test_alert_prefs_validate(client):
     assert client.put(url, json={"alert_mute": {"bogus": True}}).status_code == 422
     assert client.put(url, json={"breaking_news_min": 0}).status_code == 422
     assert client.put(url, json={"breaking_news_min": 11}).status_code == 422
+    assert client.put(url, json={"breaking_news_min": 4}).status_code == 422
+    assert client.put(url, json={"alert_mute": {"exit": "yes"}}).status_code == 422
+    assert client.put(url, json={"alert_mute": {"exit": 1}}).status_code == 422

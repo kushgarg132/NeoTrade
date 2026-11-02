@@ -392,7 +392,7 @@ async def _run(db, redis, now, llm, backtest) -> dict:
         text += f" ({'; '.join(notes)})"
     await jobs.mark(redis, jobs.BUILDER, ok=True, note=text)
     if admin_id:
-        rest = text[len(head):].lstrip(": ").strip()
+        rest = text[len(head):].lstrip(".: ").strip()
         await alerts.alert(db, admin_id, "learning", head, [rest] if rest.strip(".") else [])
     return out
 

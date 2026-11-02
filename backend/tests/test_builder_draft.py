@@ -191,6 +191,21 @@ async def test_sixth_pass_retires_the_weakest_active(env):
     assert sum(d["status"] == "active" for d in docs.values()) == 5
 
 
+async def test_retire_only_alert_has_no_leading_dot(env, monkeypatch):
+    db, redis, _ = env
+    await _admin(db)
+    await store.insert(db, {"slug": "old", "spec": ORB, "status": "active", "drafted_at": NOW})
+    await db["learning_state"].insert_one({"user_id": "admin", "paused": {"built:old": NOW - timedelta(days=31)}})
+    seen = []
+
+    async def rec(db_, uid, kind, title, lines=(), **kw):
+        seen.append(list(lines))
+
+    monkeypatch.setattr("backend.alerts.alert", rec)
+    await draft.run(db, redis, NOW, llm=llm_of(), backtest=backtest_of(result()))
+    assert seen and seen[0][0].startswith("Retired: built:old")
+
+
 async def test_paused_30_days_is_retired(env):
     db, redis, _ = env
     await _admin(db)
