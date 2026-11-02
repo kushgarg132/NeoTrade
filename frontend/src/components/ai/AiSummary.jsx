@@ -146,7 +146,7 @@ export const AiCard = ({ title, asOf, children, className = '' }) => (
   <Card
     title={title}
     className={`ai-card ${className}`}
-    action={<span className="inline-flex items-center gap-1 text-[12px] text-[var(--text-muted)]"><Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" aria-hidden="true" />AI summary{asOf ? ` · ${asOf.includes('T') ? formatDateTime(asOf) : asOf}` : ''}</span>}
+    action={<span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[12px] text-[var(--text-muted)]"><Sparkles className="w-3.5 h-3.5 shrink-0 text-[var(--accent)]" aria-hidden="true" />{`AI summary${asOf ? ` · ${asOf.includes('T') ? formatDateTime(asOf) : asOf}` : ''}`}</span>}
   >
     {children}
   </Card>
@@ -164,9 +164,9 @@ export const AmountText = AiInline;
 
 /** "AI summary" with when it was written: the label every generated summary carries. */
 export const AiLabel = ({ at }) => (
-  <p className="inline-flex items-center gap-1 text-[12px] font-medium text-[var(--text-muted)]">
-    <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" aria-hidden="true" />
-    AI summary{at ? ` · ${formatDateTime(at)}` : ''}
+  <p className="flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-[var(--text-muted)]">
+    <Sparkles className="w-3.5 h-3.5 shrink-0 text-[var(--accent)]" aria-hidden="true" />
+    {`AI summary${at ? ` · ${formatDateTime(at)}` : ''}`}
   </p>
 );
 
