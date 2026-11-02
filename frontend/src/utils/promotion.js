@@ -41,3 +41,12 @@ export function shortStatus(row) {
   }
   return parts.join(' · ');
 }
+
+// The live gate as a meter: backtest pass/fail/none, then paper days and trades as have/need bars.
+export function gateMeter(row) {
+  if (!row) return null;
+  const backtest = row.backtest_passed ? 'pass' : row.backtest ? 'fail' : 'none';
+  const bars = ['days', 'trades'].map((rule) => row.paper?.checks?.find((c) => c.rule === rule)).filter(Boolean)
+    .map((c) => ({ rule: c.rule, have: c.have ?? 0, need: c.need, pct: c.need ? Math.min(1, (c.have ?? 0) / c.need) : 1 }));
+  return { backtest, bars };
+}

@@ -69,3 +69,13 @@ test('shortStatus: backtest never run, failed or passed, then days and trades', 
   assert.equal(shortStatus(pending({ backtest: { trades: 5 } })), 'backtest ✗ · 3/20 days · 12/30 trades');
   assert.equal(shortStatus(pending({ backtest_passed: true })), 'backtest ✓ · 3/20 days · 12/30 trades');
 });
+
+test('gateMeter: backtest mark and capped have/need bars', async () => {
+  const { gateMeter } = await import('./promotion.js');
+  assert.equal(gateMeter(undefined), null);
+  const m = gateMeter({ backtest: { trades: 10 }, backtest_passed: false, eligible: false,
+    paper: { checks: [{ rule: 'days', have: 5, need: 20, ok: false }, { rule: 'trades', have: 40, need: 30, ok: true }, { rule: 'net', ok: true }] } });
+  assert.equal(m.backtest, 'fail');
+  assert.deepEqual(m.bars, [{ rule: 'days', have: 5, need: 20, pct: 0.25 }, { rule: 'trades', have: 40, need: 30, pct: 1 }]);
+  assert.equal(gateMeter({ backtest_passed: true, eligible: true, paper: { checks: [] } }).backtest, 'pass');
+});
