@@ -97,7 +97,7 @@ async def test_guest_news_feed_mine_ignores_mine(monkeypatch):
                                         "symbols": [], "impacts": [], "published_at": datetime.now(timezone.utc)})
     await mongo["paper_positions"].insert_one({"user_id": "someone", "symbol": "TCS", "quantity": 5})
     monkeypatch.setattr(db, "db", mongo)
-    out = await news_feed(scope=None, mine=True, material=False, before=None, limit=50, user=None)
+    out = await news_feed(scope=None, mine=True, material=False, before=None, q=None, limit=50, user=None)
     assert [i["id"] for i in out["items"]] == ["n1"]
 
 
