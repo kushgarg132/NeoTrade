@@ -182,3 +182,30 @@ def test_last_two_keeps_the_daily_figures_when_intraday_fails(monkeypatch):
         return daily
     monkeypatch.setattr(prices.yf, "download", download)
     assert prices.last_two(["A.NS"]) == {"A.NS": (11.0, 10.0)}
+
+
+async def test_a_price_only_write_does_not_shorten_the_life_of_the_close():
+    calls = []
+
+    class Pipe:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        def set(self, key, value, **kw):
+            calls.append((key, kw))
+
+        async def execute(self):
+            return []
+
+    class Redis:
+        async def mget(self, keys):
+            return [json.dumps({"ltp": 1.0, "prev_close": 99.0, "at": 1}) if "TCS" in k else None for k in keys]
+
+        def pipeline(self, transaction=False):
+            return Pipe()
+
+    await marks.store_quotes(Redis(), {"TCS": (100.0, None), "NEW": (5.0, None), "REAL": (7.0, 6.0)}, 60)
+    assert dict(calls) == {"quote:TCS": {"keepttl": True}, "quote:NEW": {"ex": 60}, "quote:REAL": {"ex": 60}}

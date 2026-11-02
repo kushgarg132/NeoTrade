@@ -64,16 +64,16 @@ const NewsAccuracy = () => {
           {report && rows.length === 0 && <p className="py-2 text-[14px] text-[var(--text-muted)]">No measured items for {scope} at {horizon} yet.</p>}
           {report && rows.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full text-[14px] tabular-nums" aria-label="Hit rate by group">
+              <table className="w-full table-fixed text-[14px] tabular-nums" aria-label="Hit rate by group">
                 <thead className="text-[12px] text-[var(--text-muted)] text-left">
-                  <tr><th className="py-1 pr-2">Group</th><th className="pr-2 text-right">n</th><th className="pr-2 text-right">Hit</th>
-                    <th className="pr-2 text-right">Mean</th><th className="text-right">t</th></tr>
+                  <tr><th className="py-1 pr-2">Group</th><th className="w-12 pr-2 text-right">n</th><th className="w-11 pr-2 text-right">Hit</th>
+                    <th className="w-16 pr-2 text-right">Mean</th><th className="w-9 text-right">t</th></tr>
                 </thead>
                 <tbody>
                   {rows.map((c) => (
                     <tr key={`${c.group}|${c.key}|${c.impact}|${c.measure}`}
                         className={`border-t border-[var(--border)] ${c.thin ? 'opacity-50' : ''}`}>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 break-words">
                         {c.key === 'all' ? 'All' : `${c.group} · ${c.key}`}
                         <span className="block text-[12px] text-[var(--text-muted)]">{c.impact} · {MEASURES[c.measure] || c.measure}</span>
                       </td>

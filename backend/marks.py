@@ -74,8 +74,11 @@ async def store_quotes(redis, quotes: dict[str, tuple[float, Optional[float]]], 
         quotes = {s: (ltp, prev if prev is not None else kept.get(s)) for s, (ltp, prev) in quotes.items()}
         async with redis.pipeline(transaction=False) as pipe:
             for symbol, (ltp, prev_close) in quotes.items():
-                pipe.set(QUOTE_KEY.format(symbol), json.dumps({"ltp": ltp, "prev_close": prev_close, "at": at}),
-                         ex=ttl_seconds)
+                value = json.dumps({"ltp": ltp, "prev_close": prev_close, "at": at})
+                if kept.get(symbol) is not None:  # a short price write must not expire the close along with it
+                    pipe.set(QUOTE_KEY.format(symbol), value, keepttl=True)
+                else:
+                    pipe.set(QUOTE_KEY.format(symbol), value, ex=ttl_seconds)
             await pipe.execute()
     except Exception as exc:
         logger.warning("quote cache write failed: %s", exc)
