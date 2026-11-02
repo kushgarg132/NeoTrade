@@ -537,6 +537,31 @@ async def get_quotes(symbols: str):
     return [by_symbol[s] for s in wanted if s in by_symbol]
 
 
+EVENTS_FETCH_WAIT = 8  # seconds; past it the page gets what is stored and the next open tries again
+
+
+@router.get("/market/stock/{symbol}/events")
+async def stock_events(symbol: str):
+    """Upcoming events, past dividends and results dates of any stock: public facts, nothing about the
+    viewer. The ingest job only covers held names, so a real NSE name is fetched on open, at most once a
+    day for events and once in results.STALE_DAYS for results dates."""
+    from backend.datalayer import results
+    from backend.datalayer.bars import today_ist
+    from backend.datalayer.prices import _bare
+    from backend.mine import events
+    from backend.mine.stock import EVENT_DAYS
+
+    sym = _bare(symbol.strip()).upper()
+    today = today_ist()
+    if await InstrumentMaster(db.db).known("NSE", sym):
+        try:
+            await asyncio.wait_for(asyncio.gather(events.refresh(db.db, {sym}, today), results.refresh(db.db, [sym], cap=1)),
+                                   EVENTS_FETCH_WAIT)
+        except TimeoutError:
+            logger.warning("stock events: %s fetch took over %ss", sym, EVENTS_FETCH_WAIT)
+    return {"events": await events.upcoming(db.db, [sym], today, EVENT_DAYS), "past_events": await events.past(db.db, sym, today)}
+
+
 @router.get("/trading/instruments")
 async def search_instruments(q: str, limit: int = Query(10, ge=1, le=50)):
     """Header search over the shared instrument master; public, so guests can

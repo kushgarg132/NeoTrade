@@ -297,14 +297,37 @@ async def symbol_news(symbols: str = "", user: Optional[User] = Depends(get_opti
 
 
 HISTORY_LIMIT = 500
+LIVE_NEWS_TTL = 900
+
+
+async def _live_headlines(symbol: str, since: datetime) -> list[dict]:
+    """Google News for a stock with nothing stored, no model call and so no direction or impact. Only
+    real NSE names reach Google, each at most once per TTL, because guests can ask for any symbol."""
+    from backend.database import db
+    from backend.instruments.master import InstrumentMaster
+    from backend.market_cache import cached
+
+    if not await InstrumentMaster(db.db).known("NSE", symbol):
+        return []
+
+    async def fetch() -> list[dict]:
+        return [{"id": None, "title": a.title, "url": a.url, "source": a.source,
+                 "published_at": a.published_at.replace(tzinfo=timezone.utc).isoformat(),
+                 "direction": None, "impact": None, "material": False, "impacts": []}
+                for a in await fetch_news_logic([symbol])]
+
+    rows = await cached(f"symbol_news:{symbol}", LIVE_NEWS_TTL, fetch) or []
+    return [r for r in rows if datetime.fromisoformat(r["published_at"]) >= since]
 
 
 @router.get("/news/symbol/{symbol}")
-async def symbol_history(symbol: str, days: int = Query(180, ge=1, le=365), user: Optional[User] = Depends(get_optional_user)):
+async def symbol_history(symbol: str, days: int = Query(180, ge=1, le=365), live: bool = False,
+                         user: Optional[User] = Depends(get_optional_user)):
     """Scored news on one stock over `days`, newest first (at most 500), for
     the chart's news markers: each item with THIS symbol's direction and
     impact, material judged on that impact (an item only tagged with the
-    symbol has direction/impact None and is not material)."""
+    symbol has direction/impact None and is not material). `live`: when none are
+    stored, the latest unscored headlines instead (the chart's markers leave it off)."""
     from backend.database import db
     from backend.datalayer.news import COLLECTION, SCORED, ref
     from backend.datalayer.prices import _bare
@@ -325,7 +348,7 @@ async def symbol_history(symbol: str, days: int = Query(180, ge=1, le=365), user
                       "published_at": published if published.tzinfo else published.replace(tzinfo=timezone.utc),
                       "direction": own.get("direction"), "impact": own.get("impact"),
                       "material": (own.get("impact") or 0) >= MATERIALITY_THRESHOLD, "impacts": ref(doc)["impacts"]})
-    return {"symbol": sym, "items": items}
+    return {"symbol": sym, "items": items or (await _live_headlines(sym, since) if live else [])}
 
 
 RESULTS_DAYS = 120

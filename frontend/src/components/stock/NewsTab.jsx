@@ -13,17 +13,17 @@ import { formatClock } from '../../utils/formatters';
 import { FILTERS, groupNews } from './newsGroups';
 
 const SHOWN = 30;
-/** This stock's scored news (last 30 days, opens the news page), headlines from your own data, plus the
- *  AI read's articles once that has run, grouped by day with a filter and a sort. Needs no AI analysis
- *  to show anything. Only scored items carry a direction and impact, so the filters other than All
+/** This stock's scored news (last 30 days, opens the news page), else the server's live unscored headlines,
+ *  headlines from your own data, plus the AI read's articles once that has run, grouped by day with a filter
+ *  and a sort. Needs no AI analysis to show anything. Only scored items carry a direction and impact, so the filters other than All
  *  show those alone. */
 const NewsTab = ({ symbol, mine, ai, onAnalysis }) => {
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('newest');
-  const scored = useStored(endpoints.newsHistory(symbol, 30));
+  const scored = useStored(endpoints.newsHistory(symbol, 30, true));
   const rows = [
     ...(scored.data?.items || []).slice(0, SHOWN).map((n) => ({
-      key: n.id, title: n.title, to: newsPath(n.id), at: n.published_at,
+      key: n.id || n.url, title: n.title, ...(n.id ? { to: newsPath(n.id) } : { url: n.url }), at: n.published_at, source: n.source,
       direction: n.direction, impact: n.impact, material: n.material, impacts: n.impacts,
     })),
     ...(mine?.news || []).map((n) => ({ key: n.id || n.url || n.headline, title: n.headline || n.title, url: n.url, at: n.published_at || n.published,
@@ -32,7 +32,7 @@ const NewsTab = ({ symbol, mine, ai, onAnalysis }) => {
   ].filter((r, i, all) => r.title && all.findIndex((x) => x.title === r.title) === i);
   if (!rows.length && scored.status === 'loading') return <Skeleton rows={4} />;
   if (!rows.length)
-    return <Empty title="No headlines yet" body="No scored news on this stock in the last 30 days. The AI analysis also reads the latest press." action={<Button variant="secondary" onClick={onAnalysis}>Open analysis</Button>} />;
+    return <Empty title="No headlines yet" body="No news found on this stock in the last 30 days. The AI analysis also reads the latest press." action={<Button variant="secondary" onClick={onAnalysis}>Open analysis</Button>} />;
   const groups = groupNews(rows, filter, sort);
   return (
     <div className="space-y-3">

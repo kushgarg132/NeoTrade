@@ -160,7 +160,7 @@ const Stock = () => {
     ),
     news: <NewsTab symbol={symbol} mine={m} ai={ai} onAnalysis={() => document.getElementById('ai-read')?.scrollIntoView({ behavior: 'smooth' })} />,
     details: <DetailsTab mine={m} quick={quick} reloadQuick={reloadQuick} />,
-    events: <EventsTab mine={m} ai={ai} />,
+    events: <EventsTab symbol={symbol} mine={m} ai={ai} />,
   }[tab];
 
   return (

@@ -84,6 +84,10 @@ class InstrumentMaster:
         )
         return _to_instrument(doc) if doc else None
 
+    async def known(self, exchange: str, tradingsymbol: str) -> bool:
+        return await self.collection.count_documents(
+            {"exchange": exchange, "tradingsymbol": tradingsymbol.upper()}, limit=1) > 0
+
     async def option_contracts(self, underlying: str, option_type: str) -> list[Instrument]:
         """Every listed NFO contract of `option_type` (CE/PE) on `underlying`,
         as the connected broker's own instrument dump reported it, soonest

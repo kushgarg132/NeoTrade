@@ -2,6 +2,9 @@ import React from 'react';
 import Card from '../ui/Card';
 import Empty from '../ui/Empty';
 import Badge from '../ui/Badge';
+import Skeleton from '../ui/Skeleton';
+import useStored from '../../hooks/useStored';
+import { endpoints } from '../../utils/api';
 import { inr } from '../ui/format';
 import { formatCurrency, formatTimeAgo } from '../../utils/formatters';
 import { countdown, daysUntil, dividendRows, eventTitle, sourceOf, todayIst } from '../../utils/events';
@@ -30,15 +33,19 @@ const DateLeaf = ({ date }) => {
 
 /** Coming up (with a countdown and, for a dividend, your payout), news events from the AI read, the
  *  dividend history with what you got, and recent results dates. */
-const EventsTab = ({ mine, ai }) => {
+const EventsTab = ({ symbol, mine, ai }) => {
+  const facts = useStored(endpoints.stockEvents(symbol)); // any stock, held or not
   const today = todayIst();
   const qty = mine?.position?.qty || 0;
-  const upcoming = mine?.events || [];
+  const past = facts.data?.past_events ?? mine?.past_events;
+  const upcoming = facts.data?.events ?? mine?.events ?? [];
   const notable = [...(ai?.data?.events || [])].sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  const { rows: divs, total } = dividendRows(mine?.past_events?.dividends, mine?.dividends);
-  const results = mine?.past_events?.results || [];
-  if (!upcoming.length && !notable.length && !divs.length && !results.length)
+  const { rows: divs, total } = dividendRows(past?.dividends, mine?.dividends);
+  const results = past?.results || [];
+  if (!upcoming.length && !notable.length && !divs.length && !results.length) {
+    if (facts.status === 'loading') return <Skeleton rows={4} />;
     return <Empty title="Nothing scheduled" body="Results, dividends and board meetings show here when they are announced." />;
+  }
   return (
     <div className="space-y-3">
       {upcoming.length > 0 && (

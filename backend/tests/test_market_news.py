@@ -223,3 +223,104 @@ def test_symbol_results_gives_the_next_results_date(monkeypatch):
     ]))
     assert client.get("/news/results", params={"symbols": "tcs.NS,INFY,WIPRO"}).json() == {"results": {"TCS": day(10)}}
     assert client.get("/news/results").json() == {"results": {}}
+
+
+def _stock_client(monkeypatch, known=("KPITTECH",)):
+    import asyncio
+
+    from mongomock_motor import AsyncMongoMockClient
+
+    from backend.auth.dependency import get_optional_user
+    from backend.database import db as database
+    from backend.routers import market_data
+
+    mongo = AsyncMongoMockClient()["test_db"]
+    monkeypatch.setattr(database, "db", mongo)
+    monkeypatch.setattr(database, "redis", None)
+    market_cache._local.clear()
+    for symbol in known:
+        asyncio.run(mongo["instruments"].insert_one({"exchange": "NSE", "tradingsymbol": symbol}))
+    app = FastAPI()
+    app.include_router(news.router)
+    app.include_router(market_data.router)
+    app.dependency_overrides[get_optional_user] = lambda: None
+    return TestClient(app), mongo
+
+
+def test_live_headlines_only_when_asked_nothing_stored_and_the_name_is_real(monkeypatch):
+    client, mongo = _stock_client(monkeypatch)
+    calls = []
+
+    async def fake(symbols, limit=10):
+        calls.append(symbols)
+        return [_article("KPIT wins a deal", 2), _article("KPIT last quarter", 24 * 40)]
+    monkeypatch.setattr(news, "fetch_news_logic", fake)
+
+    assert client.get("/news/symbol/KPITTECH?days=30").json()["items"] == []  # the chart's markers
+    assert calls == []
+    items = client.get("/news/symbol/KPITTECH.NS?days=30&live=true").json()["items"]
+    assert [i["title"] for i in items] == ["KPIT wins a deal"]  # older than `days` is dropped
+    assert items[0]["id"] is None and items[0]["impact"] is None and items[0]["published_at"].endswith("+00:00")
+    client.get("/news/symbol/KPITTECH?days=30&live=true")
+    assert calls == [["KPITTECH"]]  # cached
+
+    assert client.get("/news/symbol/NOTREAL?days=30&live=true").json()["items"] == []
+    assert calls == [["KPITTECH"]]  # an unknown symbol never reaches Google
+
+
+def test_stored_news_wins_over_live_headlines(monkeypatch):
+    import asyncio
+
+    client, mongo = _stock_client(monkeypatch)
+
+    async def boom(symbols, limit=10):
+        raise AssertionError("no live fetch when news is stored")
+    monkeypatch.setattr(news, "fetch_news_logic", boom)
+    asyncio.run(mongo["news_items"].insert_one({
+        "_id": "a", "status": "SCORED", "title": "Stored", "symbols": ["KPITTECH"], "impacts": [],
+        "published_at": datetime.now(timezone.utc) - timedelta(hours=1)}))
+    assert [i["title"] for i in client.get("/news/symbol/KPITTECH?days=30&live=true").json()["items"]] == ["Stored"]
+
+
+def test_stock_events_fetch_real_names_once_and_are_public(monkeypatch):
+    from backend.datalayer import results
+    from backend.mine import events
+
+    client, _ = _stock_client(monkeypatch)
+    today = datetime.now(timezone.utc) + timedelta(hours=6)
+    soon = (today + timedelta(days=9)).date().isoformat()
+    calls = []
+
+    def fetch(tkr):
+        calls.append(tkr)
+        return [{"kind": "results", "date": soon, "amount": None},
+                {"kind": "ex_dividend", "date": "2026-01-05", "amount": 3.5}]
+    monkeypatch.setattr(events, "_fetch_sync", fetch)
+    monkeypatch.setattr(results, "_fetch_sync", lambda tkr, limit: [datetime(2026, 8, 1, 15, 0)])
+    monkeypatch.setattr(results, "PAUSE", 0)
+
+    body = client.get("/market/stock/KPITTECH.NS/events").json()
+    assert [(e["kind"], e["date"]) for e in body["events"]] == [("results", soon)]
+    assert body["past_events"] == {"dividends": [{"date": "2026-01-05", "per_share": 3.5}], "results": ["2026-08-01"]}
+    client.get("/market/stock/KPITTECH/events")
+    assert len(calls) == 1  # once a day
+
+    assert client.get("/market/stock/NOTREAL/events").json() == {"events": [], "past_events": {"dividends": [], "results": []}}
+    assert len(calls) == 1  # an unknown symbol never reaches Yahoo
+
+
+def test_stock_events_answer_with_what_is_stored_when_the_fetch_hangs(monkeypatch):
+    import asyncio
+
+    from backend.datalayer import results
+    from backend.mine import events
+    from backend.routers import market_data
+
+    client, _ = _stock_client(monkeypatch)
+    monkeypatch.setattr(market_data, "EVENTS_FETCH_WAIT", 0.01)
+
+    async def slow(*args, **kwargs):
+        await asyncio.sleep(5)
+    monkeypatch.setattr(events, "refresh", slow)
+    monkeypatch.setattr(results, "refresh", slow)
+    assert client.get("/market/stock/KPITTECH/events").json()["events"] == []
