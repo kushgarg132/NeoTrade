@@ -44,4 +44,4 @@ export const builtLine = (metrics, horizon) => {
 
 /** A strategy or rule code as a trader reads it: "orb_breakout" -> "Opening-range breakout". */
 export const strategyName = (code) =>
-  code ? STRATEGY_NAMES[code] || `${code.charAt(0).toUpperCase()}${code.slice(1).replace(/_/g, ' ')}` : code;
+  code ? STRATEGY_NAMES[code] || `${code.charAt(0).toUpperCase()}${code.slice(1).replace(/_/g, ' ').replace(/:/g, ': ')}` : code;

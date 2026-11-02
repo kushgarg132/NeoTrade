@@ -27,3 +27,9 @@ test('strategy codes read as names', async () => {
   assert.equal(strategyName('oversold_rsi_below_lower_band'), 'Oversold rsi below lower band');
   assert.equal(strategyName(undefined), undefined);
 });
+
+test('strategyName spaces a family prefix', async () => {
+  const { strategyName } = await import('./library.js');
+  assert.equal(strategyName('picks:pullback'), 'Picks: pullback');
+  assert.equal(strategyName('orb_breakout'), 'Opening-range breakout');
+});

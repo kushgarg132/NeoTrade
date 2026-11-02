@@ -64,19 +64,19 @@ const NewsAccuracy = () => {
           {report && rows.length === 0 && <p className="py-2 text-[14px] text-[var(--text-muted)]">No measured items for {scope} at {horizon} yet.</p>}
           {report && rows.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full text-[14px] tabular-nums">
+              <table className="w-full text-[14px] tabular-nums" aria-label="Hit rate by group">
                 <thead className="text-[12px] text-[var(--text-muted)] text-left">
-                  <tr><th className="py-1 pr-2">Group</th><th className="pr-2">Impact</th><th className="pr-2">Measure</th>
-                    <th className="pr-2 text-right">n</th><th className="pr-2 text-right">Hit rate</th>
+                  <tr><th className="py-1 pr-2">Group</th><th className="pr-2 text-right">n</th><th className="pr-2 text-right">Hit</th>
                     <th className="pr-2 text-right">Mean</th><th className="text-right">t</th></tr>
                 </thead>
                 <tbody>
                   {rows.map((c) => (
                     <tr key={`${c.group}|${c.key}|${c.impact}|${c.measure}`}
                         className={`border-t border-[var(--border)] ${c.thin ? 'opacity-50' : ''}`}>
-                      <td className="py-1 pr-2 whitespace-nowrap">{c.key === 'all' ? 'All' : `${c.group} · ${c.key}`}</td>
-                      <td className="pr-2">{c.impact}</td>
-                      <td className="pr-2 whitespace-nowrap text-[var(--text-muted)]">{MEASURES[c.measure] || c.measure}</td>
+                      <td className="py-1.5 pr-2">
+                        {c.key === 'all' ? 'All' : `${c.group} · ${c.key}`}
+                        <span className="block text-[12px] text-[var(--text-muted)]">{c.impact} · {MEASURES[c.measure] || c.measure}</span>
+                      </td>
                       <td className="pr-2 text-right">{c.n}</td>
                       <td className={`pr-2 text-right ${toneText(hitTone(c))}`}>{pct(c.hit, { dp: 0 })}</td>
                       <td className={`pr-2 text-right ${toneText(c.thin ? 'neutral' : tone(c.mean))}`}>{pct(c.mean, { sign: true })}</td>

@@ -87,13 +87,13 @@ const LabRuns = () => {
                         <Badge>{r.kind}</Badge>
                       </div>
                       <div className="text-[12px] text-[var(--text-muted)]">
-                        {r.window?.join(' → ')} · {formatTimeAgo(r.created_at)}{r.code_sha ? <> · <span className="font-mono">{r.code_sha.slice(0, 7)}</span></> : null}
+                        {r.window?.join(' → ')} · {formatTimeAgo(r.created_at)}{r.code_sha && r.code_sha !== 'unknown' ? <> · <span className="font-mono">{r.code_sha.slice(0, 7)}</span></> : null}
                       </div>
-                      <div className="mt-1 grid grid-cols-3 gap-2">
+                      {(m.cagr != null || m.sharpe != null || m.max_drawdown != null) && <div className="mt-1 grid grid-cols-3 gap-2">
                         <Metric label="CAGR" value={fm('cagr', m.cagr)} valueTone={tone(m.cagr)} />
                         <Metric label="Sharpe" value={fm('sharpe', m.sharpe)} />
                         <Metric label="Max DD" value={fm('max_drawdown', m.max_drawdown)} />
-                      </div>
+                      </div>}
                     </div>
                   </label>
                 );
