@@ -20,7 +20,9 @@ import JournalTab from '../components/money/JournalTab';
 import api, { endpoints } from '../utils/api';
 import { useReconnect } from '../hooks/useStream';
 import { formatXirr, holdingsStale } from '../utils/mine';
-import { formatDateTime } from '../utils/formatters';
+import { formatDateTime, marketPhase } from '../utils/formatters';
+
+const LIVE_POLL_MS = 30_000;
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -36,13 +38,18 @@ const Money = () => {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(null);
 
-  const load = useCallback(() => {
+  const load = useCallback((fresh = false) => {
     api
-      .get(endpoints.mine.overview)
+      .get(endpoints.mine.overview, { cache: !fresh })
       .then((res) => (setOverview(res.data), setError(null)))
       .catch((err) => setError(err?.response?.data?.detail || 'Could not load your account.'));
   }, []);
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    // The hero is the live account value: re-read it while NSE trades (the server's pulse is shared for 30 s).
+    const timer = setInterval(() => !document.hidden && marketPhase() !== 'closed' && load(true), LIVE_POLL_MS);
+    return () => clearInterval(timer);
+  }, [load]);
   useReconnect(load);
 
   const h = overview?.headline;
