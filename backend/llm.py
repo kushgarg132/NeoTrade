@@ -18,6 +18,30 @@ _billed_user: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar("
 # Features a user's own request spends; the rest (news, plan, learning,
 # portfolio's weekly review) is shared or scheduled work.
 USER_FEATURES = {"chat", "research"}
+# Every feature that names itself in get_llm; anything else counts as "other" (system status, per day).
+COUNTED_FEATURES = ("chat", "research", "news", "plan", "portfolio", "learning", "other")
+
+
+def calls_key(feature: Optional[str], day: str) -> str:
+    return f"llm:calls:{feature if feature in COUNTED_FEATURES else 'other'}:{day}"
+
+
+async def _count_call(feature: Optional[str]) -> None:
+    """One more model call today for this feature (Redis, kept 2 days). Fails open.
+    ponytail: counts get_llm hand-outs, so a tool loop on one handle counts once."""
+    try:
+        from datetime import datetime, timezone
+
+        from backend.database import db
+        from backend.engine.session import IST
+
+        if db.redis is None:
+            return
+        key = calls_key(feature, datetime.now(timezone.utc).astimezone(IST).date().isoformat())
+        await db.redis.incr(key)
+        await db.redis.expire(key, 2 * 86400)
+    except Exception as exc:
+        logger.debug("llm call count skipped: %s", exc)
 
 
 class DailyLimitReached(Exception):
@@ -239,6 +263,7 @@ class LLMService:
         keys = self.keys_for(feature)
         if not keys:
             return None
+        await _count_call(feature)
 
         model = await model_for(tier)
         llms = []

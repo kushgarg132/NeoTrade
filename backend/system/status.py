@@ -108,6 +108,7 @@ async def _data(db, redis) -> dict:
 async def _ai(db, redis) -> dict:
     from backend.routers.settings import UsageUnavailable, fetch_feature_usage, fetch_usage
     from backend.app_settings import AppSettingsStore
+    from backend.llm import COUNTED_FEATURES, calls_key
 
     day = datetime.now(timezone.utc).astimezone(IST).date().isoformat()
     try:
@@ -119,6 +120,8 @@ async def _ai(db, redis) -> dict:
         "news_calls_limit": settings.NEWS_LLM_CALLS_PER_DAY,
         "plan_calls_today": int(await redis.get(f"plan:calls:{day}") or 0),
         "plan_calls_limit": settings.PLAN_LLM_CALLS_PER_DAY,
+        "calls_today": {f: int(n or 0) for f, n in zip(
+            COUNTED_FEATURES, await redis.mget([calls_key(f, day) for f in COUNTED_FEATURES]))},
         "usage": usage,
         "features": await fetch_feature_usage(),
         "features_off": await AppSettingsStore(db).get_features_off(),

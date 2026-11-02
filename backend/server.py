@@ -118,6 +118,15 @@ async def ensure_collection_indexes(d) -> None:
         logger.error("collection indexes not created: %s", exc)
 
 
+async def _warm_gateway_usage() -> None:
+    from backend.routers.settings import _refresh_usage_quietly, fetch_feature_usage
+
+    try:
+        await asyncio.gather(_refresh_usage_quietly(), fetch_feature_usage())
+    except Exception as exc:
+        logger.warning("gateway usage warm-up failed: %s", exc)
+
+
 @app.on_event("startup")
 async def startup_db_client():
     require_jwt_secret()
@@ -176,6 +185,9 @@ async def startup_db_client():
 
     # Live prices and P&L for whoever has a socket open (needs the socket hub, so it stays here).
     ws_pump.start(db.db)
+    # The gateway polls every provider's quota live (3-5 s): read it now, so the first
+    # Settings / System visit after a deploy is served from the cache instead of waiting.
+    _BACKGROUND.add(asyncio.create_task(_warm_gateway_usage()))
 
     # An asyncio.Task cannot outlive the process that created it, so any run
     # still marked RUNNING belongs to a previous life of this container.

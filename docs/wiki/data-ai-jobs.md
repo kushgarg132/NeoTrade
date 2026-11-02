@@ -143,6 +143,8 @@ Prompts (`backend/prompts/*.md`, front matter `system:`; caller in parens): `tri
 | `llm:last_ok` (epoch s), `llm:last_error` (`{at,error}`) | 86400s; every `get_completion` success / exception | `llm.py::_note`; r: `data_quality.py::_llm` |
 
 ### Settings
+Call counts: `llm.py::LLMService.get_llm` counts each hand-out per feature per IST day in Redis `llm:calls:{feature}:{day}` (`::_count_call`, `::COUNTED_FEATURES`, unknown = `other`, 2-day TTL, fails open), shown as `calls_today` in `system/status.py::_ai`. `server.py::_warm_gateway_usage` reads the OmniRoute usage and per-feature usage at startup so the first Settings/System visit is cached.
+
 Env (`backend/configs/settings.py`): `NEWS_LLM_CALLS_PER_DAY=200`, `USER_LLM_CALLS_PER_DAY=150`, `PLAN_LLM_CALLS_PER_DAY=100`, `AI_TOOLS_ENABLED=True`, `OMNIROUTE_BASE_URL/MODEL`, `OMNIROUTE_IMAGE_MODEL=codex/gpt-5.6-luna-image` (empty disables chat `generate_image`; `agy/gemini-*-image` is refused by OmniRoute's images endpoint), `OMNIROUTE_API_KEY(S)`, `OMNIROUTE_FEATURE_KEYS` {feature: key}. Admin runtime switches (`app_settings.py`, 30 s cache per process): model per tier (`TIERS` fast/standard/deep), `FEATURES` = news, plan, research, chat, portfolio, learning (on/off), `lab_enabled` (default off). Per-user prefs read here: `universe, account_size, max_exposure, per_trade_cap, news_alerts` (held|held+watched|all|off), `autopilot_enabled, autopilot_news, autopilot_live, broker_roles, omniroute_model`.
 
 ## Flows
