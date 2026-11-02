@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 7a14d95
+verified_at: a726270
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -193,7 +193,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
        (chat and the order ticket) and `routers/suggestions.py::_approve_equity_live`. Unknown date (fetch failed) = allowed.
     3. A `daily_loss` breach calls `KillSwitchStore.trip` (idempotent) first, then each breach is deduped with
        `GuardrailStore.record`. A failed trip raises before the record, so the next tick retries trip, alert and square-off.
-    4. `_alert` publishes to the socket and Telegram.
+    4. `_alert` publishes to the socket and Telegram; each is wrapped on its own, so a failed publish or alert never skips the square-off. `digest._users` also includes users with queued alert rows (watchlist-only).
     5. On `daily_loss` with `auto_square_off` set to preview or live, `guardrails/monitor.py::square_off` runs `exit_orders` per non-AI
        ACTIVE broker and places orders only in `live`.
 14. **Telegram inbound**: `telegram_bot.py::poll_loop` calls `::poll_once`, which runs `::_poll_bot` per bot route

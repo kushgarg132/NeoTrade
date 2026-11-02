@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/alerts.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: a761aa7
+verified_at: a726270
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -369,3 +369,5 @@ Two supported paths, chosen once per session (host `/home/ubuntu/CLAUDE.md`, "De
 | `test_today.py`, `test_mine_router.py`, `test_plan_router.py`, `test_orders_router.py`, `test_suggestions_router.py`, `test_portfolio_rebalance_router.py`, `test_market_quotes.py`, `test_market_index_detail.py`, `test_option_chain.py` | the matching routers |
 | `test_core_models.py`, `test_no_datetime_now.py` | engine types, no direct `datetime.now` in core/engine |
 | none | `routers/watchlist.py`, `routers/agents.py`, `routers/guardrails.py` handlers other than `telegram_set_bot` (a rejected token is a 400, `test_telegram_transport.py`), `routers/picks.py` (only auth smoke / forecast tests) |
+
+Alert router notes (`backend/alerts.py`): `alert()` never raises; if the admin or prefs lookup fails, instant kinds still send and batched kinds return False. A muted kind and an unlinked user both return True (handled; muted logs `state="muted"`, unlinked logs nothing); only a real send failure returns False. `drain` renders up to 3 `lines` under each item, clips each to 120 chars and the block to 2500 chars ("…and more in the app"). Prefs: `alert_mute` values must be real booleans, `breaking_news_min` is 5-9.
