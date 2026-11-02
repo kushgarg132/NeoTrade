@@ -36,7 +36,7 @@ const Tip = ({ active, payload, label }) =>
 
 /** Your value against NIFTY on the same rupees, with what went in. GET /mine/history. */
 const ValueChart = () => {
-  const [range, setRange] = useState('1Y');
+  const [range, setRange] = useState('1M');
   const [data, setData] = useState(null);
   const [failed, setFailed] = useState(false);
 
