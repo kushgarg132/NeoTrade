@@ -64,7 +64,7 @@ class AutopilotOrder:
     side: Side
     quantity: int
     product: Literal["CNC", "MIS"]
-    source: Literal["chat", "engine", "factor", "news", "picks"]
+    source: Literal["chat", "engine", "factor", "news", "picks", "rotation"]
     reason: str
     suggestion_id: Optional[str] = None
     strategy: Optional[str] = None  # whose idea it was; None = the autopilot's own (chat)

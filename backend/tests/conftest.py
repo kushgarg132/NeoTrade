@@ -79,6 +79,16 @@ def _reset_forward_scorecard_cache():
     scorecard._cache = (0.0, None)
 
 
+@pytest.fixture(autouse=True)
+def _no_rotation_market_data(monkeypatch):
+    """The rotation downloads a year of closes; tests that want it pass `load=`."""
+    from backend.autopilot import rotation
+
+    def offline():
+        raise RuntimeError("no market data in tests")
+    monkeypatch.setattr(rotation, "_load", offline)
+
+
 @pytest.fixture
 def lenient_fence(monkeypatch):
     """Turns off the autopilot's backtest allowlist and minimum trade size, for

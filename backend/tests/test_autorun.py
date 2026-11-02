@@ -380,79 +380,6 @@ async def test_the_catch_up_after_a_holiday_counts_the_previous_trading_day(worl
 
 
 @pytest.mark.asyncio
-async def test_with_the_autopilot_on_engine_proposals_go_to_it(world, longterm, monkeypatch):
-    from backend.autopilot import service
-    from backend.suggestions.store import SuggestionStore
-
-    submitted = []
-
-    async def submit(db, redis, user_id, order, now=None, suggestion_id=None, quiet=False):
-        submitted.append((order.symbol, order.source))
-        assert quiet and suggestion_id == order.symbol  # one summary note; exits can find the proposal
-        assert order.quantity == 100_000 // 55  # sized to the full per-trade cap (the default), not the idea's 10 (charges per sell)
-        return {"status": "FILLED", "price": 55.0} if order.symbol == "INFY" else {"status": "REFUSED", "reason": "cap"}
-
-    monkeypatch.setattr(service, "submit", submit)
-    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True, "autopilot_enabled": True})
-    world.redis.data["scheduler:last_pass"] = "2026-09-25"
-    store = SuggestionStore(world.db)
-    now = datetime(2026, 9, 28, 9, 21, tzinfo=IST)
-    for symbol in ("INFY", "NHPC"):
-        await store.collection.insert_one({
-            "id": symbol, "user_id": "alice", "mode": "LONGTERM", "symbol": symbol, "side": "BUY",
-            "quantity": 10, "entry_ref": 55.0, "stop": 50.0, "target": 65.0, "option_contract": None,
-            "strategy": "test", "status": "PENDING", "created_at": now, "expires_at": datetime(2026, 10, 9, tzinfo=IST),
-        })
-
-    await _tick(world, now)
-
-    assert sorted(submitted) == [("INFY", "engine"), ("NHPC", "engine")]
-    by = {s["symbol"]: (s["status"], s.get("ai_order")) for s in await store.list("alice", limit=10)}
-    # The AI took INFY; the idea stays pending, the user's to take on their own account.
-    assert by == {"INFY": ("PENDING", "FILLED"), "NHPC": ("PENDING", None)}
-
-
-@pytest.mark.asyncio
-@pytest.mark.real_gate
-async def test_live_autopilot_takes_only_proposals_from_proven_strategies(world, longterm, monkeypatch):
-    """Live, a proposal goes to the autopilot only if its strategy passed
-    both gates; the rest wait for the user. 2026-10-07: paper autopilot
-    bought TRENT on macd_crossover, whose backtest fails (PF 0.87)."""
-    from backend.autopilot import service
-    from backend.suggestions.store import SuggestionStore
-
-    submitted = []
-
-    async def submit(db, redis, user_id, order, now=None, suggestion_id=None, quiet=False):
-        submitted.append(order.symbol)
-        return {"status": "SENT"}
-
-    async def proven(db, user_id, names, account_size):
-        assert names == {"good", "bad"}
-        return {"good"}
-
-    monkeypatch.setattr(service, "submit", submit)
-    monkeypatch.setattr("backend.risk.paper_gate.proven_strategies", proven)
-    await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True,
-                                             "autopilot_enabled": True, "autopilot_live": True})
-    world.redis.data["scheduler:last_pass"] = "2026-09-25"
-    store = SuggestionStore(world.db)
-    now = datetime(2026, 9, 28, 9, 21, tzinfo=IST)
-    for symbol, strategy in (("INFY", "good"), ("NHPC", "bad")):
-        await store.collection.insert_one({
-            "id": symbol, "user_id": "alice", "mode": "LONGTERM", "symbol": symbol, "side": "BUY",
-            "quantity": 10, "entry_ref": 55.0, "stop": 50.0, "target": 65.0, "option_contract": None,
-            "strategy": strategy, "status": "PENDING", "created_at": now, "expires_at": datetime(2026, 10, 9, tzinfo=IST),
-        })
-
-    await _tick(world, now)
-
-    assert submitted == ["INFY"]
-    by = {s["symbol"]: (s["status"], s.get("ai_order")) for s in await store.list("alice", limit=10)}
-    assert by == {"INFY": ("PENDING", "SENT"), "NHPC": ("PENDING", None)}
-
-
-@pytest.mark.asyncio
 @pytest.mark.real_gate
 async def test_proven_strategies_need_both_gates():
     from backend.risk.paper_gate import proven_strategies
@@ -589,21 +516,6 @@ async def test_the_auto_intraday_run_waits_for_a_live_broker_feed(world):
     assert done["started"] == [] and "no live feed" in done["idle"]  # the heartbeat note says why
     world.live["ready"] = True
     assert (await _tick(world, MONDAY_10AM + timedelta(minutes=1)))["started"] == ["alice"]
-
-
-async def test_recent_losers_judges_net_pnl():
-    from datetime import datetime, timezone
-    from mongomock_motor import AsyncMongoMockClient
-    from backend.engine.autorun import _recent_losers
-
-    db = AsyncMongoMockClient()["test_db"]
-    now = datetime.now(timezone.utc)
-    base = {"user_id": "u", "venue": "paper", "status": "CLOSED", "exit_at": now}
-    await db["paper_trades"].insert_many([
-        {**base, "symbol": "GROSSWIN", "realized_pnl": 10.0, "costs": 25.0},
-        {**base, "symbol": "NETWIN", "realized_pnl": 50.0, "costs": 5.0},
-    ])
-    assert await _recent_losers(db, "u", now) == {"GROSSWIN"}
 
 
 @pytest.mark.asyncio

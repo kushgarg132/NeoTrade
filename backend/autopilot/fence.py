@@ -27,7 +27,7 @@ COST_MULTIPLE = 1.5  # an entry's expected gain must clear this many times its r
 # allowlist; PARKED was a denylist that let any new strategy through), and no automated buy may
 # pay more than MAX_COST_SHARE of its size in round-trip charges (2026-10-28: ~₹1,500 lots paid 1.56%).
 BACKTESTED_SOURCES = {"engine", "news"}
-AUTO_SOURCES = {"engine", "news", "picks"}
+AUTO_SOURCES = {"engine", "news", "picks", "rotation"}
 MAX_COST_SHARE = 0.01
 
 

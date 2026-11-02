@@ -509,31 +509,6 @@ async def test_a_paper_fill_reaches_the_live_socket(world, monkeypatch):
     assert ("alice", "autopilot", "logged") in published
 
 
-async def test_the_autopilot_skips_ideas_the_open_has_already_broken(world, monkeypatch):
-    from backend.engine import autorun
-    from backend.suggestions.store import SuggestionStore
-
-    db, _ = world
-    await _prefs(db)
-
-    async def marks(db_, symbols, **_):
-        return {s: 1000.0 for s in symbols}
-
-    monkeypatch.setattr("backend.marks.mark_prices", marks)
-    base = {"user_id": "alice", "side": "BUY", "mode": "LONGTERM", "quantity": 4, "status": "PENDING",
-            "strategy": "orb_breakout", "score": {"final": 0.6}}
-    await db["suggestions"].insert_many([
-        {**base, "id": "gap", "symbol": "INFY", "entry_ref": 1050.0, "stop": 1010.0},   # opened under its stop
-        {**base, "id": "chase", "symbol": "TCS", "entry_ref": 900.0, "stop": 850.0},    # 11% past its entry
-        {**base, "id": "ok", "symbol": "HDFCBANK", "entry_ref": 990.0, "stop": 950.0},
-    ])
-    pending = await SuggestionStore(db).list("alice", status="PENDING")
-    await autorun._autopilot_proposals(db, None, SuggestionStore(db), "alice", pending, OPEN)
-
-    taken = {d["id"]: d.get("ai_order") for d in await db["suggestions"].find({}).to_list(None)}
-    assert taken == {"gap": None, "chase": None, "ok": "FILLED"}
-
-
 def test_an_entry_whose_expected_gain_cannot_pay_its_round_trip_is_refused():
     """2026-10-23: ₹3,000 lots cost ~0.8% a round trip; a pullback pick expected ~0%."""
     small = AutopilotOrder(symbol="INFY", side=Side.BUY, quantity=2, product="CNC", source="picks", reason="t",
@@ -561,66 +536,6 @@ def test_a_paused_strategy_cannot_enter_but_can_exit():
                          strategy="picks:pullback")
     assert "paused" in fence.check(buy, 100.0, paused, PREFS)
     assert fence.check(replace(buy, side=Side.SELL), 100.0, paused, PREFS) is None
-
-
-async def test_the_autopilot_refuses_a_dip_and_a_re_entry_after_a_stop(world, monkeypatch):
-    """BHEL: entry_ref 427.35, stop 384.6, stopped 21 Oct at 417.55, bought again 22 Oct at 407.20."""
-    from backend.engine import autorun
-    from backend.suggestions.store import SuggestionStore
-
-    db, _ = world
-    await _prefs(db)
-    prices = {"BHEL": 407.20, "INFY": 990.0, "WIPRO": 940.0, "TCS": 990.0}
-
-    async def marks(db_, symbols, **_):
-        return {s: prices[s] for s in symbols}
-
-    monkeypatch.setattr("backend.marks.mark_prices", marks)
-    base = {"user_id": "alice", "side": "BUY", "mode": "LONGTERM", "quantity": 4, "status": "PENDING",
-            "strategy": "orb_breakout", "score": {"final": 0.6}}
-    await db["suggestions"].insert_many([
-        {**base, "id": "bhel", "symbol": "BHEL", "entry_ref": 427.35, "stop": 384.6},
-        {**base, "id": "stopped", "symbol": "INFY", "entry_ref": 1000.0, "stop": 900.0},
-        {**base, "id": "dip", "symbol": "WIPRO", "entry_ref": 1000.0, "stop": 900.0},  # 6% under, limit is 5%
-        {**base, "id": "ok", "symbol": "TCS", "entry_ref": 1000.0, "stop": 900.0},
-    ])
-    for sym in ("BHEL", "INFY"):
-        await db["paper_trades"].insert_one({"user_id": "alice", "symbol": sym, "status": "CLOSED",
-                                             "realized_pnl": -50.0, "exit_at": OPEN - timedelta(days=1)})
-    pending = await SuggestionStore(db).list("alice", status="PENDING")
-    await autorun._autopilot_proposals(db, None, SuggestionStore(db), "alice", pending, OPEN)
-    taken = {d["id"]: d.get("ai_order") for d in await db["suggestions"].find({}).to_list(None)}
-    assert taken == {"bhel": None, "stopped": None, "dip": None, "ok": "FILLED"}
-
-
-async def test_the_autopilot_quietly_leaves_ideas_outside_its_universe_to_the_user(world, monkeypatch):
-    """SJVN, 16 refusals to 2026-10-23: a scan idea outside the Nifty 200 is the user's, not a fence refusal."""
-    from backend.engine import autorun
-    from backend.suggestions.store import SuggestionStore
-
-    db, _ = world
-    await _prefs(db)
-    sent = []
-
-    async def marks(db_, symbols, **_):
-        return {s: 1000.0 for s in symbols}
-
-    async def notify(db_, user_id, kind, title, lines=(), **kw):
-        sent.append("\n".join([title, *lines]))
-
-    monkeypatch.setattr("backend.marks.mark_prices", marks)
-    monkeypatch.setattr("backend.alerts.alert", notify)
-    base = {"user_id": "alice", "side": "BUY", "mode": "LONGTERM", "quantity": 4, "status": "PENDING",
-            "strategy": "orb_breakout", "score": {"final": 0.6}, "entry_ref": 990.0, "stop": 950.0}
-    await db["suggestions"].insert_many([{**base, "id": "out", "symbol": "NOTANIFTY"},
-                                         {**base, "id": "in", "symbol": "INFY"}])
-    pending = await SuggestionStore(db).list("alice", status="PENDING")
-    await autorun._autopilot_proposals(db, None, SuggestionStore(db), "alice", pending, OPEN)
-    docs = {d["id"]: d for d in await db["suggestions"].find({}).to_list(None)}
-    assert docs["in"]["ai_order"] == "FILLED"
-    assert docs["out"].get("ai_order") is None and docs["out"]["status"] == "PENDING"  # still the user's idea
-    assert sent and all("NOTANIFTY" not in t for t in sent)
-    assert await db["autopilot_log"].count_documents({"symbol": "NOTANIFTY"}) == 0
 
 
 def test_engine_and_news_entries_need_a_passed_backtest():

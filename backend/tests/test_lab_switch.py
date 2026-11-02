@@ -64,26 +64,6 @@ async def test_lab_off_revises_no_plan(lab_off):
     assert lab_off == ["AI game plan revisions"]
 
 
-async def test_lab_off_keeps_news_away_from_the_autopilot(lab_off, monkeypatch):
-    from backend.datalayer import reactor
-    from backend.engine import autorun
-    from backend.suggestions import scan as scan_module, thesis
-
-    async def scan_universe(db, **kw):
-        return [{"id": "s1", "symbol": "TCS"}]
-
-    handed = AsyncMock()
-    monkeypatch.setattr(scan_module, "scan_universe", scan_universe)
-    monkeypatch.setattr(thesis, "attach_theses", AsyncMock())
-    monkeypatch.setattr(autorun, "_autopilot_proposals", handed)
-    monkeypatch.setattr("backend.alerts.alert", AsyncMock())
-    prefs = {"user_id": "u1", "account_size": 1.0, "max_exposure": 1.0, "autopilot_enabled": True,
-             "autopilot_news": True}
-    await reactor._scan_user(AsyncMongoMockClient()["t"], None, prefs, ["TCS"], MONDAY_10AM,
-                             ai_symbols=frozenset({"TCS"}))
-    handed.assert_not_called()
-
-
 async def test_lab_off_skips_the_builder_retune_and_learning(lab_off, monkeypatch):
     from backend import scheduler
     from backend.builder import draft

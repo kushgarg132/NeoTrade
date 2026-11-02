@@ -1,26 +1,15 @@
-// Today's AI game plan (GET /plan/today), for the plan card.
+// The AI account's daily plan (GET /plan/today), for the plan card.
 
-const LABELS = {
-  pre_open: 'Pre-open plan', regime_flip: 'Regime change', event_passed: 'Event passed',
-  fallback: 'Fallback (AI unavailable)',
+export const pct = (value, digits = 1) => {
+  const n = Number(value || 0) * 100;
+  return `${n < 0 ? '−' : '+'}${Math.abs(n).toFixed(digits)}%`;
 };
 
-export const triggerLabel = (trigger) => {
-  if (!trigger) return '';
-  if (trigger.startsWith('news:')) return 'News';
-  return LABELS[trigger] || trigger;
+/** One-line headline: risk-on/off and how many trades today. */
+export const headline = (plan) => {
+  if (!plan) return '';
+  if (plan.risk_off) return 'Risk-off: the book sits in cash';
+  const moves = (plan.buys?.length || 0) + (plan.sells?.length || 0);
+  return moves ? `${moves} trade${moves === 1 ? '' : 's'} today · ${plan.holdings?.length || 0} held`
+    : `Holding ${plan.holdings?.length || 0} · no trades today`;
 };
-
-const rupees = (value) => {
-  const n = Math.round(value || 0);
-  return `₹${n < 0 ? '−' : '+'}${Math.abs(n).toLocaleString('en-IN')}`;
-};
-
-/** "Plan ₹+1,240 vs no plan ₹+310 over 5 days" from nightly replay scorecards. */
-export const scoreLine = (cards) => {
-  if (!cards?.length) return '';
-  const sum = (side) => cards.reduce((total, c) => total + (c[side]?.net || 0), 0);
-  return `Plan ${rupees(sum('a'))} vs no plan ${rupees(sum('b'))} over ${cards.length} day${cards.length === 1 ? '' : 's'}`;
-};
-
-export const allowSummary = (plan) => (plan?.allow || []).map(({ symbol, strategies }) => ({ symbol, strategies }));

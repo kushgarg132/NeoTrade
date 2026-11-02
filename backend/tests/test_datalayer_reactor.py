@@ -115,7 +115,7 @@ async def test_scan_once_per_user_and_symbol_a_day(monkeypatch):
     redis = FakeRedis()
     scans = []
 
-    async def scan_user(db, redis, prefs, symbols, now, ai_symbols=frozenset()):
+    async def scan_user(db, redis, prefs, symbols, now):
         scans.append((prefs["user_id"], symbols))
         return [{"id": "s1"}]
 
@@ -135,54 +135,6 @@ async def test_scan_once_per_user_and_symbol_a_day(monkeypatch):
     assert scans == [("u1", ["INFY"])]  # capped at MAX_SCAN_SYMBOLS, direct hit first
     await db["news_items"].insert_one(_item(("symbol", "INFY", 0.8, 8), _id="a2"))
     assert await reactor.scan(db, redis, NOW) == 0  # INFY already scanned today
-
-
-@pytest.mark.asyncio
-async def test_news_proposals_go_to_the_autopilot_only_when_asked(monkeypatch):
-    from backend.engine import autorun
-    from backend.suggestions import scan as scan_module, thesis
-
-    handed, told = [], []
-
-    async def scan_universe(db, **kw):
-        return [{"id": "s1", "symbol": "TCS"}]
-
-    async def proposals(db, redis, store, user_id, pending, now, source="engine", heading=""):
-        handed.append((user_id, source))
-        return []
-
-    async def notify(db, user_id, kind, title, lines=(), **kw):
-        told.append(title)
-
-    monkeypatch.setattr(scan_module, "scan_universe", scan_universe)
-    monkeypatch.setattr(thesis, "attach_theses", AsyncMock())
-    monkeypatch.setattr(autorun, "_autopilot_proposals", proposals)
-    monkeypatch.setattr("backend.alerts.alert", notify)
-    prefs = {"user_id": "u1", "account_size": 1.0, "max_exposure": 1.0, "autopilot_enabled": True}
-
-    await reactor._scan_user(AsyncMongoMockClient()["t"], None, prefs, ["TCS"], NOW)
-    assert handed == [] and len(told) == 1  # autopilot_news off: a proposal to decide
-    await reactor._scan_user(AsyncMongoMockClient()["t"], None, {**prefs, "autopilot_news": True}, ["TCS"], NOW)
-    assert handed == [] and len(told) == 2  # unproven news: still a proposal to decide
-    await reactor._scan_user(AsyncMongoMockClient()["t"], None, {**prefs, "autopilot_news": True}, ["TCS"], NOW,
-                             ai_symbols=frozenset({"TCS"}))
-    assert handed == [("u1", "news")] and len(told) == 3  # taken by the AI, still the user's idea
-
-
-def test_ai_targets_only_through_proven_themes(monkeypatch):
-    monkeypatch.setattr(reactor, "COMPANY_SCAN_PAUSED", False)  # the proven-theme rule itself, company scope included
-    weights = {"COMPANY|earnings|1": 1.4, "COMPANY|deal|1": 0.9, "SECTOR|growth|1": 1.2}
-    universe = {"INFY", "TCS", "SBIN"}
-
-    def item(themes, scope="COMPANY", direction=0.6):
-        return {"scope": scope, "themes": themes,
-                "impacts": [{"type": "symbol", "target": "INFY", "direction": direction, "impact": 8}]}
-
-    assert reactor.ai_targets(item(["earnings"]), SECTORS, universe, weights) == {"INFY"}
-    assert reactor.ai_targets(item(["deal"]), SECTORS, universe, weights) == set()  # hit rate under 50%
-    assert reactor.ai_targets(item(["legal"]), SECTORS, universe, weights) == set()  # unmeasured
-    assert reactor.ai_targets(item(["earnings"], direction=-0.6), SECTORS, universe, weights) == set()
-    assert reactor.ai_targets(item(["earnings", "deal"]), SECTORS, universe, weights) == {"INFY"}  # mean 1.15
 
 
 @pytest.mark.asyncio
@@ -217,7 +169,6 @@ def test_company_news_proposes_nothing_while_paused():
     item = {"scope": "COMPANY", "impacts": [{"type": "symbol", "target": "TCS", "impact": 9, "direction": 1.0},
                                             {"type": "sector", "target": "Information Technology", "impact": 9, "direction": 1.0}]}
     assert reactor.scan_targets(item, SECTORS, {"TCS", "INFY"}) == []
-    assert reactor.ai_targets(item, SECTORS, {"TCS", "INFY"}, {"COMPANY|earnings|1": 1.5}) == set()
     sector_item = {**item, "scope": "SECTOR"}
     assert reactor.scan_targets(sector_item, SECTORS, {"TCS", "INFY"}) == ["TCS", "INFY"]
 

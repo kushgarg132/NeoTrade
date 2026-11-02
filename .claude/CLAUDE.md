@@ -52,11 +52,11 @@ the code disagree, the code is right — fix the handbook in the same commit.
   on the broker whose role is `ai` (`backend/brokers/roles.py`) only, after `autopilot/fence.check`
   passes; the kill switch still applies, and nothing may route an AI order to the user's own
   (`mine`) account. See `docs/superpowers/specs/2026-10-04-dual-broker-accounts-design.md`.
-  Extended (user-approved 2026-10-05): with pref `autopilot_news` on, a `source="news"`
-  proposal may go to the autopilot at once (≤3 a day); news exits are shadow-logged only.
-  The fence's regime rule (risk-off halves the cap and blocks news entries; a high-impact
-  event within 30 min blocks all entries) only ever tightens. See
-  `docs/superpowers/specs/2026-10-05-autopilot-news-design.md`.
+  Since 2026-11-02 (owner-approved) the autopilot's only entry source is the weekly rotation
+  (`backend/autopilot/rotation.py`); engine, news and Picks proposals no longer reach it.
+  News only vetoes rotation buys (bad sentiment, results due); news exits are shadow-logged only.
+  The fence's regime rule (risk-off halves the cap; a high-impact event within 30 min blocks
+  all entries) only ever tightens. See `docs/superpowers/specs/2026-11-02-rotation-autopilot-design.md`.
 - **The AI game plan only tightens.** `backend/plan/` (built from 08:45 IST per auto-intraday user with a live feed)
   may drop opening intraday intents, shrink their risk (`risk_multiplier` 0.25–1.0), cap new
   positions or skip the auto run; it never blocks or shrinks an exit, never touches

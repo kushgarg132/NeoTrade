@@ -48,7 +48,6 @@ KEY_TTL_MS = 150_000
 MAX_STARTS_PER_DAY = 5
 SESSION_OPEN, SESSION_CLOSE = time(9, 15), time(15, 30)
 LOGIN_REMIND, LOGIN_REMIND_AGAIN = time(8, 30), time(9, 5)
-MAX_ENTRY_DRIFT = 0.02  # how far over a proposal's entry the autopilot still buys it
 POLL_SECONDS = 60.0
 
 # Which pref turns each mode's daily run on.
@@ -347,6 +346,8 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
             await picks_trading.exit_due(db, redis, user_id, now)
         except Exception as exc:
             logger.exception("picks exits failed for %s: %s", user_id, exc)
+        if local.time() >= MORNING:  # the rotation book trades toward this week's target; retries refused buys
+            await _rotation(db, redis, user_id, now, morning=False)
 
     if local.time() >= MORNING and await redis.set(f"longterm:{user_id}:{day}:morning", _TOKEN, nx=True, px=86_400_000):
         did = True
@@ -371,19 +372,12 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
                                    factor_paper.summary_text(summary).splitlines())
             except Exception as exc:
                 logger.exception("factor rebalance failed for %s: %s", user_id, exc)
-        # Yesterday's Picks, bought on the AI account at this first pass after the open.
-        from backend.autopilot import picks as picks_trading
-        try:
-            await picks_trading.enter(db, redis, user_id, now)
-        except Exception as exc:
-            logger.exception("picks entries failed for %s: %s", user_id, exc)
-        # Per-symbol proposals have no backtest evidence: they wait for the
-        # user -- unless the user turned the autopilot on for its AI account.
+        # The AI account's only entries: the weekly rotation (backend/autopilot/rotation.py).
+        await _rotation(db, redis, user_id, now, morning=True)
+        # Per-symbol proposals have no backtest evidence: they wait for the user.
         store = SuggestionStore(db)
         await store.expire_stale(now=now)
         pending = await store.list(user_id, mode="LONGTERM", status="PENDING", limit=100)
-        if (await PrefsStore(db).get(user_id)).get("autopilot_enabled"):
-            pending = await _autopilot_proposals(db, redis, store, user_id, pending, now)
         from backend.risk.paper_gate import for_mine
         pending = await for_mine(db, user_id, pending)
         if pending:
@@ -393,6 +387,24 @@ async def _longterm_pass(db, redis, user_id: str, now: datetime) -> bool:
     return did
 
 
+async def _rotation(db, redis, user_id: str, now: datetime, morning: bool) -> None:
+    """Morning: today's plan (Telegram), then trades. Later passes: trades only.
+    Runs for a user with the autopilot on, or with rotation positions still open."""
+    from backend import alerts
+    from backend.autopilot import rotation
+
+    try:
+        enabled = (await PrefsStore(db).get(user_id)).get("autopilot_enabled")
+        if not enabled and not await rotation.rotation_trades(db, user_id):
+            return
+        if morning:
+            plan = await rotation.plan(db, redis, user_id, now)
+            await alerts.alert(db, user_id, "money", f"AI plan · {plan['date']}", rotation.plan_text(plan))
+        await rotation.rebalance(db, redis, user_id, now, buy=enabled)
+    except Exception as exc:
+        logger.exception("rotation failed for %s: %s", user_id, exc)
+
+
 async def _catch_up(db, redis, day) -> None:
     from backend import scheduler
 
@@ -400,107 +412,6 @@ async def _catch_up(db, redis, day) -> None:
         await scheduler._run_locked(db, redis, pass_day=day)
     except Exception as exc:
         logger.exception("catch-up daily pass for %s failed: %s", day, exc)
-
-
-REENTRY_COOLDOWN_SESSIONS = 3
-
-
-async def _recent_losers(db, user_id: str, now: datetime) -> set[str]:
-    """AI-book symbols closed at a loss within the last 3 sessions (BHEL, 21-22 Oct:
-    stopped at 417.55, bought again at 407.20). paper_trades keeps no exit reason, so
-    a losing close stands in for 'stopped out'."""
-    from backend.autopilot.service import ai_book_query
-    from backend.engine.persistence import trade_net
-
-    start = now.astimezone(IST).date()
-    for _ in range(REENTRY_COOLDOWN_SESSIONS):
-        start = previous_trading_day(start)
-    since = datetime.combine(start, time(0, 0), tzinfo=IST)
-    rows = await db["paper_trades"].find({"$and": [ai_book_query(user_id), {
-        "status": "CLOSED", "exit_at": {"$gte": since}}]}).to_list(length=None)
-    return {r["symbol"] for r in rows if trade_net(r) < 0}  # net: a gross win the charges turned into a loss counts
-
-
-async def _autopilot_proposals(db, redis, store, user_id: str, pending: list[dict], now: datetime,
-                               source: str = "engine", heading: str = "morning pass") -> list[dict]:
-    """Hands pending stock proposals to the autopilot (backend/autopilot/),
-    best score first, resized to the per-trade cap in force, with one
-    summary note; returns the ones it did not take. Live, it takes only
-    proposals from strategies that cleared both gates (backtest and paper
-    record); the rest stay for the user."""
-    from backend.autopilot import fence, service
-    from backend import alerts
-    from backend.autopilot.service import STOP_BUTTON
-    from backend.core.models import Side
-
-    prefs = await PrefsStore(db).get(user_id)
-    regime = (await service.regime_now(redis)).get("label")
-    cap = fence.trade_cap(prefs, regime)
-    proven = None
-    if prefs.get("autopilot_live"):
-        from backend.risk.paper_gate import proven_strategies
-        proven = await proven_strategies(db, user_id, {s.get("strategy") for s in pending} - {None},
-                                         prefs["account_size"])
-    from backend.marks import ORDER_MAX_AGE_SECONDS, mark_prices
-
-    marks = await mark_prices(db, {s["symbol"] for s in pending if not s.get("ai_order")},
-                              max_age_seconds=ORDER_MAX_AGE_SECONDS)
-    bought, refused = [], []
-    for s in sorted(pending, key=lambda s: (s.get("score") or {}).get("final") or 0.0, reverse=True):
-        # Outside the fence's universe (Nifty 200) the idea is the user's alone: skipped, not refused.
-        if s.get("ai_order") or s.get("option_contract") or s["symbol"] not in fence.universe() or (
-                proven is not None and s.get("strategy") not in proven):
-            continue
-        entry, price = s.get("entry_ref") or 0, marks.get(s["symbol"])
-        if s["side"] == "BUY" and price and entry > 0:
-            # The idea was priced at yesterday's close: a gap through its stop
-            # (CANBK, 15 Oct: bought under the stop, stopped out ten minutes
-            # later) or a run past its entry is a different trade.
-            if s.get("stop") and price <= s["stop"]:
-                refused.append(f"{s['symbol']} (opened at ₹{price:,.2f}, under its stop ₹{s['stop']:,.2f})")
-                continue
-            if price > entry * (1 + MAX_ENTRY_DRIFT):
-                refused.append(f"{s['symbol']} (₹{price:,.2f}, more than {MAX_ENTRY_DRIFT:.0%} over its entry ₹{entry:,.2f})")
-                continue
-            if s.get("stop") and s["stop"] < entry and price < entry * (1 - (entry - s["stop"]) / entry / 2):
-                refused.append(f"{s['symbol']} (₹{price:,.2f}, past halfway to its stop ₹{s['stop']:,.2f})")
-                continue
-            if s["symbol"] in await _recent_losers(db, user_id, now):
-                refused.append(f"{s['symbol']} (stopped out in the last {REENTRY_COOLDOWN_SESSIONS} sessions)")
-                continue
-        unit = price or entry
-        # The full cap, not the idea's own size: the DP charge is per sell, so small lots pay ~1.5% (fence.MAX_COST_SHARE).
-        quantity = int(cap // unit) if unit > 0 else 0
-        if quantity < 1:
-            continue
-        result = await service.submit(db, redis, user_id, service.AutopilotOrder(
-            symbol=s["symbol"], side=Side(s["side"]), quantity=quantity, product="CNC",
-            source=source, reason=f"{'News' if source == 'news' else 'Engine'} proposal ({s.get('strategy') or 'scan'}): {', '.join(s.get('reason_codes') or [])}",
-            strategy=s.get("strategy"),
-            # The whole way to target: generous, so the fence only drops ideas whose target cannot pay the charges.
-            context={"expected_return": s["target"] / unit - 1} if s.get("target") and s["side"] == "BUY" else None),
-            now=now, suggestion_id=s["id"], quiet=True)
-        if result["status"] in ("FILLED", "SENT"):
-            # Still PENDING: the same idea is the user's to take on their own
-            # account if its strategy is proven (risk/paper_gate.py::for_mine).
-            await db["suggestions"].update_one({"id": s["id"], "user_id": user_id},
-                                               {"$set": {"ai_order": result["status"]}})
-            bought.append(f"{s['symbol']} ×{quantity}")
-        else:
-            refused.append(f"{s['symbol']} ({result.get('reason')})")
-    if bought or refused:
-        lines = []
-        if bought:
-            lines.append("Bought: " + ", ".join(bought))
-        if refused:
-            lines.append("Refused: " + "; ".join(refused[:5]) + (" …" if len(refused) > 5 else ""))
-        title = f"Autopilot, {heading} on the AI account"
-        if bought:
-            await alerts.alert(db, user_id, "money", title, lines, buttons=STOP_BUTTON + ([row] if (row := alerts.open_button("/settings/autopilot")) else []))
-        else:
-            await alerts.alert(db, user_id, "autopilot_refused", title, lines)
-    # All of them: one the AI took is still the user's to take (for_mine decides).
-    return pending
 
 
 async def _login_reminders(db, redis, now: datetime, get_adapter=None) -> None:

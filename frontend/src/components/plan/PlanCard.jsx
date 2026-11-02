@@ -1,48 +1,50 @@
 import React from 'react';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
-import { formatClock } from '../../utils/formatters';
-import { allowSummary, scoreLine, triggerLabel } from '../../utils/plan';
-import { strategyName } from '../../utils/library';
+import { headline, pct } from '../../utils/plan';
 
-/** AI > Activity: today's game plan (GET /plan/today) as a collapsed card. Renders nothing without a plan. */
+const Row = ({ left, right, warn }) => (
+  <li className="py-2 border-b border-[var(--border)] last:border-b-0 flex justify-between gap-3">
+    <span className="font-medium">{left}</span>
+    <span className={`text-[13px] ${warn ? 'text-[var(--warn)]' : 'text-[var(--text-muted)]'}`}>{right}</span>
+  </li>
+);
+
+/** AI > Activity: the daily rotation plan (GET /plan/today) as a collapsed card. Renders nothing without a plan. */
 const PlanCard = ({ data }) => {
   const plan = data?.plan;
   if (!plan) return null;
-  const allow = allowSummary(plan);
-  const score = scoreLine(data.scorecards);
   return (
-    <Card title="Today's game plan" action={<Badge kind="neutral">{triggerLabel(plan.trigger)}{plan.version > 1 ? ` · revised ${plan.version - 1}×` : ''}</Badge>}>
+    <Card title={`AI plan · ${plan.date}`} action={<Badge kind="neutral">{plan.live ? 'Live' : 'Paper'} · week {plan.week}</Badge>}>
       <details>
         <summary className="min-h-11 inline-flex items-center cursor-pointer text-[14px] font-semibold text-[var(--accent)]">
-          {plan.skip_day ? 'Sitting today out' : `Up to ${plan.max_positions} new positions`}
+          {headline(plan)}
         </summary>
         <div className="space-y-3 text-[15px] text-[var(--text)]">
-          {plan.skip_day && <p className="text-[var(--warn)]">Sitting today out: no new intraday entries.</p>}
-          {(plan.rationale || []).length > 0 && <ul className="space-y-1">{plan.rationale.map((line) => <li key={line}>{line}</li>)}</ul>}
-          <p className="text-[13px] text-[var(--text-muted)]">Sizes at {Math.round(Number(plan.risk_multiplier ?? 1) * 100)}% of normal.</p>
-          {allow.length > 0 && (
+          <p className="text-[13px] text-[var(--text-muted)]">
+            Nifty {pct(plan.nifty_vs_200dma)} vs its 200-day average · {Math.round((plan.breadth || 0) * 100)}% of stocks above their 50-day.
+            {!plan.enabled && ' Autopilot off: no new buys.'}
+          </p>
+          {(plan.sells?.length > 0 || plan.buys?.length > 0) && (
             <ul>
-              {allow.map(({ symbol, strategies }) => (
-                <li key={symbol} className="py-2 border-b border-[var(--border)] last:border-b-0">
-                  <span className="font-medium">{symbol}</span>
-                  <span className="ml-2 text-[13px] text-[var(--text-muted)]">{strategies.map(strategyName).join(' · ')}</span>
-                </li>
+              {plan.sells.map((s) => <Row key={`s${s.symbol}`} left={`Sell ${s.symbol}`} right={s.why === 'risk_off' ? 'risk-off, to cash' : 'out of the top ranks'} />)}
+              {plan.buys.map((b) => <Row key={`b${b.symbol}`} left={`Buy ${b.symbol}`} right={b.blocked ? `blocked: ${b.blocked}` : `${Math.round(b.weight * 100)}% of the book`} warn={!!b.blocked} />)}
+            </ul>
+          )}
+          {plan.holdings?.length > 0 && (
+            <ul>
+              {plan.holdings.map((h) => (
+                <Row key={h.symbol} left={h.symbol} warn={!!h.news}
+                  right={`${pct(h.pnl_pct)}${h.rank ? ` · rank ${h.rank}` : ''}${h.news ? ` · ${h.news}` : ''}`} />
               ))}
             </ul>
           )}
-          {data.versions?.length > 1 && (
-            <ul className="space-y-1 text-[13px] text-[var(--text-muted)]">
-              {data.versions.map((v) => (
-                <li key={v.version}>{formatClock(v.at)} · {triggerLabel(v.trigger)}{v.rationale?.[0] ? ` — ${v.rationale[0]}` : ''}</li>
-              ))}
-            </ul>
-          )}
-          {score && (
+          {Object.keys(plan.news_vetoed || {}).length > 0 && (
             <p className="text-[13px] text-[var(--text-muted)]">
-              {score}{data.weeks_beating > 0 && ` · plan ahead ${data.weeks_beating} week${data.weeks_beating === 1 ? '' : 's'} in a row`}
+              Skipped on news: {Object.entries(plan.news_vetoed).map(([s, why]) => `${s} (${why})`).join(', ')}
             </p>
           )}
+          <p className="text-[13px] text-[var(--text-muted)]">Next rebalance {plan.next_rebalance}.</p>
         </div>
       </details>
     </Card>

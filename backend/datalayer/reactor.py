@@ -22,12 +22,9 @@ for the names a material item moves, directly or via their sector, within
 each scan-enabled user's universe: at most once per user and symbol a day
 and MAX_SCAN_SYMBOLS per user a pass. Proposals land PENDING with
 source="news", get a thesis and a Telegram message like the 16:00 scan's.
-Market-wide items trigger no scan: they move every name, not some. With
-the autopilot and `autopilot_news` on, the new stock proposals go to the
-autopilot at once, source="news", through its fence (at most 3 a day; none
-while risk-off) -- but only names moved by an impact whose themes have a
-measured hit rate over 50% (outcomes.proven, ROADMAP 17.3.4); the rest stay
-proposals for the user.
+Market-wide items trigger no scan: they move every name, not some. News
+never buys on the AI account (2026-11-02): it only vetoes the weekly
+rotation's buys (backend/autopilot/rotation.py::news_flags).
 
 `shadow_exits` records, in `autopilot_shadow`, the SELL the autopilot would
 place when a material negative item (impact >= EXIT_IMPACT, direction <=
@@ -100,15 +97,6 @@ def scan_targets(item: dict, sector_of: dict[str, str], universe: set[str]) -> l
     direct = [i["target"] for i in material if i["type"] == "symbol" and i["target"] in universe]
     sectors = {i["target"] for i in material if i["type"] == "sector"}
     return direct + sorted(s for s in universe if sector_of.get(s) in sectors and s not in direct)
-
-
-def ai_targets(item: dict, sector_of: dict[str, str], universe: set[str], weights: dict[str, float]) -> set[str]:
-    """The scan targets the autopilot may act on: those moved by a proven impact."""
-    from backend.datalayer.outcomes import proven
-
-    impacts = [i for i in item.get("impacts", [])
-               if proven(weights, item.get("scope"), item.get("themes"), i["direction"])]
-    return set(scan_targets({**item, "impacts": impacts}, sector_of, universe))
 
 
 def alert_text(item: dict, hits: list[dict]) -> str:
@@ -203,8 +191,7 @@ async def react(db, redis, now: Optional[datetime] = None) -> int:
     return sent
 
 
-async def _scan_user(db, redis, prefs: dict, symbols: list[str], now: datetime,
-                     ai_symbols: frozenset = frozenset()) -> list[dict]:
+async def _scan_user(db, redis, prefs: dict, symbols: list[str], now: datetime) -> list[dict]:
     from backend import alerts
     from backend.suggestions.notify import proposals_text
     from backend.suggestions.scan import scan_universe
@@ -215,18 +202,10 @@ async def _scan_user(db, redis, prefs: dict, symbols: list[str], now: datetime,
     if not created:
         return created
     await attach_theses(db, prefs["user_id"], created)
-    left = created
-    for_ai = [p for p in created if p["symbol"] in ai_symbols]
-    from backend import app_settings
-    if (for_ai and prefs.get("autopilot_enabled") and prefs.get("autopilot_news")
-            and await app_settings.lab_on("news-triggered autopilot entries", db)):
-        from backend.engine.autorun import _autopilot_proposals
-        from backend.suggestions.store import SuggestionStore
-
-        await _autopilot_proposals(db, redis, SuggestionStore(db), prefs["user_id"], for_ai, now,
-                                   source="news", heading="news trade")
+    # News no longer buys on the AI account (2026-11-02): it vetoes rotation buys instead
+    # (backend/autopilot/rotation.py::news_flags).
     from backend.risk.paper_gate import for_mine
-    left = await for_mine(db, prefs["user_id"], left)
+    left = await for_mine(db, prefs["user_id"], created)
     if left:
         title, lines = alerts.split(proposals_text(left, f"{len(left)} new idea(s) for your account after news"))
         await alerts.alert(db, prefs["user_id"], "ideas", title, lines)
@@ -237,7 +216,6 @@ async def scan(db, redis, now: Optional[datetime] = None) -> int:
     """Re-scans the names newly scored material news moves; returns how many
     proposals it made."""
     from backend.datalayer.news import followed
-    from backend.datalayer.outcomes import load_weights
     from backend.prefs import PrefsStore
 
     now = now or datetime.now(timezone.utc)
@@ -245,7 +223,6 @@ async def scan(db, redis, now: Optional[datetime] = None) -> int:
     if not items:
         return 0
     _, sector_of = await followed(db)
-    weights = await load_weights(redis)
     made = 0
     for prefs in await PrefsStore(db).scan_enabled_users():
         universe = {_bare(s) for s in prefs["universe"]}
@@ -259,8 +236,7 @@ async def scan(db, redis, now: Optional[datetime] = None) -> int:
         if not symbols:
             continue
         try:
-            ai = frozenset(s for item in items for s in ai_targets(item, sector_of, universe, weights))
-            made += len(await _scan_user(db, redis, prefs, symbols, now, ai_symbols=ai))
+            made += len(await _scan_user(db, redis, prefs, symbols, now))
         except Exception as exc:
             logger.exception("news scan failed for %s: %s", prefs["user_id"], exc)
     if made:
