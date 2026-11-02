@@ -16,12 +16,16 @@ const KEYS = {
   pnl: (h) => h.pnl_pct,
 };
 
-/** Biggest first by `day` | `value` | `weight` | `pnl`; rows missing the figure sink to the bottom. */
-export const sortHoldings = (rows, key = 'value') => {
+/** By `day` | `value` | `weight` | `pnl`, biggest first or (`asc`) smallest first; rows missing the figure sink to the bottom either way. */
+export const sortHoldings = (rows, key = 'value', dir = 'desc') => {
   const get = KEYS[key] || KEYS.value;
-  const v = (h) => (fin(get(h)) ? get(h) : -Infinity);
+  const sign = dir === 'asc' ? -1 : 1;
+  const v = (h) => (fin(get(h)) ? sign * get(h) : -Infinity);
   return [...rows].sort((a, b) => v(b) - v(a));
 };
+
+/** A tap on a sort header: another column starts biggest first, the same column reverses. */
+export const nextSort = (sort, key) => (sort.key === key ? { key, dir: sort.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
 
 /** The `n` holdings that moved most today in rupees, as {...holding, day_pct, day_rupees}. Funds and unpriced rows are skipped. */
 export const topMovers = (rows, n = 3) =>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Card from '../ui/Card';
 import Stat from '../ui/Stat';
 import Button from '../ui/Button';
@@ -60,13 +61,22 @@ const TaxTab = ({ onImport }) => {
       .finally(() => setBusy(false));
   };
 
-  const select = (
-    <select
-      aria-label="Financial year" value={fy} onChange={(e) => { setData(null); setFy(Number(e.target.value)); }}
-      className="min-h-11 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[15px] text-[var(--text)]"
-    >
-      {taxYears(currentFy()).map((y) => <option key={y} value={y}>{fyLabel(y)}</option>)}
-    </select>
+  // Newest first, so "older" is the next one along. Same stepper as the weekly report's week.
+  const years = taxYears(currentFy());
+  const at = years.indexOf(fy);
+  const go = (next) => { setData(null); setFy(next); };
+  const stepper = (
+    <div className="flex items-center justify-between">
+      <button type="button" aria-label="Earlier year" disabled={at >= years.length - 1} onClick={() => go(years[at + 1])}
+              className="inline-flex items-center justify-center min-h-11 min-w-11 text-[var(--text-muted)] disabled:opacity-40">
+        <ChevronLeft className="w-5 h-5" aria-hidden="true" />
+      </button>
+      <div aria-live="polite" className="text-[15px] font-semibold text-[var(--text)]">{fyLabel(fy)}</div>
+      <button type="button" aria-label="Later year" disabled={at <= 0} onClick={() => go(years[at - 1])}
+              className="inline-flex items-center justify-center min-h-11 min-w-11 text-[var(--text-muted)] disabled:opacity-40">
+        <ChevronRight className="w-5 h-5" aria-hidden="true" />
+      </button>
+    </div>
   );
 
   let body;
@@ -154,7 +164,7 @@ const TaxTab = ({ onImport }) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">{select}</div>
+      {stepper}
       {body}
       <p className="text-[13px] text-[var(--text-muted)]">Estimate, not tax advice. Not covered: pre-2018 grandfathered cost, F&amp;O and intraday income, set-off against other income.</p>
     </div>

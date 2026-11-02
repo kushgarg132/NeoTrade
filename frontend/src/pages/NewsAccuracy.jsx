@@ -9,12 +9,12 @@ import Skeleton from '../components/ui/Skeleton';
 import { pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import api, { endpoints } from '../utils/api';
+import { Segmented } from '../components/settings/Fields';
 import { SCOPES, HORIZONS, MEASURES, rowsFor, hitTone } from '../utils/newsAccuracy';
 
 /** Lab › News accuracy (admin-only): did scored news point the way prices then went?
  *  Built weekly by the ingest worker (backend/datalayer/accuracy.py). */
 
-const SELECT = 'min-h-11 px-3 rounded-[12px] bg-[var(--surface-2)] border border-[var(--border)] text-[15px] text-[var(--text)]';
 
 const NewsAccuracy = () => {
   const [report, setReport] = useState(null);
@@ -52,12 +52,8 @@ const NewsAccuracy = () => {
             rows under 30 items are faded. Company news makes ideas again at a 52% hit over 300 items (5 days).
           </p>
           <div className="mb-2 flex flex-wrap gap-2">
-            <select aria-label="Scope" className={SELECT} value={scope} onChange={(e) => setScope(e.target.value)}>
-              {SCOPES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select aria-label="Horizon" className={SELECT} value={horizon} onChange={(e) => setHorizon(e.target.value)}>
-              {HORIZONS.map((h) => <option key={h} value={h}>{h}</option>)}
-            </select>
+            <Segmented label="Scope" options={SCOPES.map((v) => [v, `${v[0]}${v.slice(1).toLowerCase()}`])} value={scope} onChange={setScope} />
+            <Segmented label="Horizon" options={HORIZONS.map((v) => [v, v])} value={horizon} onChange={setHorizon} />
           </div>
           {error && <ErrorLine message={error} onRetry={() => load()} />}
           {!error && report === null && <Skeleton rows={6} />}

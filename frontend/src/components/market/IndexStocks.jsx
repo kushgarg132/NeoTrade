@@ -5,6 +5,7 @@ import ErrorLine from '../ui/ErrorLine';
 import ListRow from '../ui/ListRow';
 import Skeleton from '../ui/Skeleton';
 import AsOf from '../ui/AsOf';
+import { Segmented } from '../settings/Fields';
 import useStored from '../../hooks/useStored';
 import { endpoints } from '../../utils/api';
 import { pct, tone } from '../ui/format';
@@ -31,10 +32,7 @@ const IndexStocks = ({ ticker }) => {
         <p className="text-[14px] font-semibold tabular-nums">
           <span className="text-[var(--gain)]">{up} up</span><span className="text-[var(--text-muted)]"> · {rows.length} stocks · </span><span className="text-[var(--loss)]">{down} down</span>
         </p>
-        <select aria-label="Sort stocks" value={sort} onChange={(e) => setSort(e.target.value)}
-                className="min-h-11 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[14px] text-[var(--text)]">
-          {SORTS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-        </select>
+        <Segmented label="Sort stocks" options={SORTS} value={sort} onChange={setSort} />
       </div>
       {(all ? rows : rows.slice(0, SHOWN)).map((s) => (
         <ListRow privateValue={false} key={s.symbol} dense to={stockPath(s.symbol)} title={s.symbol} sub={s.name}

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Row } from '../settings/Fields';
+import { Plus } from 'lucide-react';
+import { Row, Segmented } from '../settings/Fields';
+import ChipRow, { Chip } from '../ui/ChipRow';
 import api, { endpoints } from '../../utils/api';
 import { cn } from '../../utils/cn';
 
@@ -11,6 +13,7 @@ import { cn } from '../../utils/cn';
  */
 
 const MAX_FILTERS = 3;
+const SEGMENT_MAX = 4; // more choices than this scroll as chips
 const FIELD = 'bg-transparent border-b border-[var(--border)] py-1 text-sm focus:outline-none focus:border-[var(--accent)] min-h-11 sm:min-h-0';
 const label = (code) => code.replace(/_/g, ' ');
 
@@ -40,11 +43,9 @@ const Param = ({ name, spec, value, onChange, required }) => {
     );
   }
   if (spec.choices) {
-    return (
-      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label(name)} className={FIELD}>
-        {spec.choices.map((c) => <option key={c} value={c}>{label(c)}</option>)}
-      </select>
-    );
+    return spec.choices.length <= SEGMENT_MAX
+      ? <Segmented label={label(name)} options={spec.choices.map((c) => [c, label(c)])} value={value} onChange={onChange} />
+      : <ChipRow label={label(name)} options={spec.choices.map((c) => ({ id: c, label: label(c) }))} value={value} onChange={onChange} />;
   }
   if (spec.time) {
     return <input type="time" value={value} min={spec.time[0]} max={spec.time[1]} step={300}
@@ -121,21 +122,28 @@ const HorizonForm = ({ horizon, vocab, onSubmitted }) => {
 
   return (
     <form onSubmit={submit} className="space-y-1 mb-3">
-      <Row label="Setup">
-        <select value={setup} onChange={(e) => pickSetup(e.target.value)} aria-label="Setup" className={FIELD}>
-          {Object.keys(vocab.setups).map((b) => <option key={b} value={b}>{label(b)}</option>)}
-        </select>
-      </Row>
+      <div className="py-2">
+        <p className="field-label mb-1.5">Setup</p>
+        <div role="radiogroup" aria-label="Setup" className="grid grid-cols-2 gap-2">
+          {Object.keys(vocab.setups).map((b) => (
+            <button key={b} type="button" role="radio" aria-checked={setup === b} onClick={() => pickSetup(b)}
+                    className={cn('tap min-h-11 rounded-[12px] border px-3 py-2 text-left text-[14px] font-medium first-letter:uppercase',
+                      setup === b ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)]')}>
+              {label(b)}
+            </button>
+          ))}
+        </div>
+      </div>
       <Params block={vocab.setups[setup]} params={setupParams} onChange={setSetupParams} />
 
-      <Row label={`Filters (up to ${MAX_FILTERS})`}>
+      <div className="py-2">
+        <p className="field-label">Filters (up to {MAX_FILTERS})</p>
         {Object.keys(filters).length < MAX_FILTERS && free.length > 0 && (
-          <select value="" onChange={(e) => addFilter(e.target.value)} aria-label="Add a filter" className={FIELD}>
-            <option value="">Add…</option>
-            {free.map((b) => <option key={b} value={b}>{label(b)}</option>)}
-          </select>
+          <div role="group" aria-label="Add a filter" className="-mx-1 flex gap-2 overflow-x-auto px-1 pt-1">
+            {free.map((b) => <Chip key={b} on={false} onClick={() => addFilter(b)}><span className="inline-flex items-center gap-1 whitespace-nowrap"><Plus className="w-3.5 h-3.5" aria-hidden="true" />{label(b)}</span></Chip>)}
+          </div>
         )}
-      </Row>
+      </div>
       {Object.entries(filters).map(([block, params]) => (
         <div key={block} className="pl-3 border-l border-[var(--border)]">
           <div className="flex items-center justify-between pt-2">

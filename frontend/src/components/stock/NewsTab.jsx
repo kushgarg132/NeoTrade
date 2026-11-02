@@ -5,6 +5,7 @@ import Button from '../ui/Button';
 import ListRow from '../ui/ListRow';
 import Skeleton from '../ui/Skeleton';
 import { Segmented } from '../settings/Fields';
+import ChipRow from '../ui/ChipRow';
 import useStored from '../../hooks/useStored';
 import { endpoints } from '../../utils/api';
 import { newsPath } from '../../utils/routes';
@@ -13,6 +14,7 @@ import { formatClock } from '../../utils/formatters';
 import { FILTERS, groupNews } from './newsGroups';
 
 const SHOWN = 30;
+const SORTS = [{ id: 'newest', label: 'Newest' }, { id: 'oldest', label: 'Oldest' }, { id: 'impact', label: 'Biggest impact' }];
 /** This stock's scored news (last 30 days, opens the news page), else the server's live unscored headlines,
  *  headlines from your own data, plus the AI read's articles once that has run, grouped by day with a filter
  *  and a sort. Needs no AI analysis to show anything. Only scored items carry a direction and impact, so the filters other than All
@@ -36,15 +38,8 @@ const NewsTab = ({ symbol, mine, ai, onAnalysis }) => {
   const groups = groupNews(rows, filter, sort);
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Segmented label="Filter news" options={FILTERS} value={filter} onChange={setFilter} />
-        <select aria-label="Sort news" value={sort} onChange={(e) => setSort(e.target.value)}
-                className="min-h-11 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[14px] text-[var(--text)]">
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="impact">Biggest impact</option>
-        </select>
-      </div>
+      <Segmented label="Filter news" options={FILTERS} value={filter} onChange={setFilter} />
+      <ChipRow label="Sort news" options={SORTS} value={sort} onChange={setSort} />
       {!groups.length && <Empty title="Nothing matches" body="No headline here fits this filter. Scored news alone carries a direction and impact." />}
       {groups.map(([label, list]) => (
         <section key={label} aria-label={label}>

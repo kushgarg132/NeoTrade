@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import ChipRow from '../components/ui/ChipRow';
+import { expiryLabel, todayIst } from '../utils/events';
 import { Link, useSearchParams } from 'react-router-dom';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import SettingsPage from './SettingsPage';
@@ -133,21 +135,8 @@ const OptionChain = () => {
           <Tabs tabs={UNDERLYINGS.map((u) => ({ id: u.id, label: u.label }))} value={underlying} onChange={pickUnderlying} label="Underlying" />
 
           {expiries && expiries.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
-              <label className="flex items-center gap-2 text-[14px] text-[var(--text-muted)]">
-                Expiry
-                <select
-                  value={expiry || ''}
-                  onChange={(event) => setExpiry(event.target.value)}
-                  className="min-h-11 rounded-[8px] bg-[var(--surface)] border border-[var(--border)] px-2 figure-md text-[14px]"
-                >
-                  {expiries.map((date) => (
-                    <option key={date} value={date}>
-                      {formatNoteDate(new Date(`${date}T00:00:00+05:30`))}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="mt-3">
+              <ChipRow label="Expiry" options={expiries.map((date) => ({ id: date, label: expiryLabel(date, todayIst()) }))} value={expiry} onChange={setExpiry} />
               <button
                 type="button"
                 onClick={() => setAll((value) => !value)}

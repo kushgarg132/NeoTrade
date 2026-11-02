@@ -26,3 +26,9 @@ test('dividendRows: history with what you got, newest first, and the total', () 
   assert.equal(Math.round(total * 100) / 100, 74.12);
   assert.deepEqual(dividendRows(), { rows: [], total: 0 });
 });
+
+test('expiryLabel: date and days left, today on the day', async () => {
+  const { expiryLabel } = await import('./events.js');
+  assert.equal(expiryLabel('2026-11-28', '2026-11-02'), '28 Nov · 26d');
+  assert.equal(expiryLabel('2026-11-02', '2026-11-02'), '2 Nov · today');
+});

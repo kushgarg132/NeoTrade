@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ArrowDownUp, ChevronRight } from 'lucide-react';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import Skeleton from '../ui/Skeleton';
@@ -12,6 +12,7 @@ import { useLoad } from '../ideas/useLoad';
 import api, { endpoints } from '../../utils/api';
 import { formatClock } from '../../utils/formatters';
 import { Segmented } from '../settings/Fields';
+import ChipRow from '../ui/ChipRow';
 import { STATUSES, foldRefusals, groupActivity, sourceLabel, sources, tally } from '../../utils/activity';
 
 /** AI -> Activity: the autopilot's orders and refusals (last 200) with their reasons, grouped by day, with a
@@ -64,7 +65,6 @@ const Day = ({ label, list, fold }) => {
   );
 };
 
-const SELECT = 'min-h-11 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[14px] text-[var(--text)]';
 
 const Activity = ({ state, plan }) => {
   const [status, setStatus] = useState('all');
@@ -84,16 +84,12 @@ const Activity = ({ state, plan }) => {
     <PlanCard data={plan} />
     <div className="flex flex-wrap items-center justify-between gap-2">
       <Segmented label="Filter by result" options={STATUSES} value={status} onChange={setStatus} />
-      <div className="flex gap-2">
-        <select aria-label="Filter by source" value={source} onChange={(e) => setSource(e.target.value)} className={SELECT}>
-          {sources(rows).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-        <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)} className={SELECT}>
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-        </select>
-      </div>
+      <button type="button" onClick={() => setSort((v) => (v === 'newest' ? 'oldest' : 'newest'))} aria-label={`Sorted ${sort} first. Tap to reverse.`}
+              className="tap inline-flex min-h-11 items-center gap-1.5 rounded-[12px] px-2 text-[14px] font-medium text-[var(--text-muted)]">
+        <ArrowDownUp className="w-4 h-4" aria-hidden="true" />{sort === 'newest' ? 'Newest first' : 'Oldest first'}
+      </button>
     </div>
+    {sources(rows).length > 2 && <ChipRow label="Filter by source" options={sources(rows).map(([id, label]) => ({ id, label }))} value={source} onChange={setSource} />}
     {!groups.length && <Empty title="Nothing matches" body="No order or refusal fits these filters." />}
     {groups.map(([label, list]) => <Day key={label} label={label} list={list} fold={status === 'all'} />)}
     </div>

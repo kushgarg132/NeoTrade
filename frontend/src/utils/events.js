@@ -28,3 +28,10 @@ export const dividendRows = (past = [], received = []) => {
   rows.sort((a, b) => b.date.localeCompare(a.date));
   return { rows, total: received.reduce((s, d) => s + (d.amount || 0), 0) };
 };
+
+/** An option expiry as a chip: "28 Nov · 26d", "today" on the day. */
+export const expiryLabel = (date, today) => {
+  const left = daysUntil(date, today);
+  const day = new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return `${day} · ${left === 0 ? 'today' : `${left}d`}`;
+};

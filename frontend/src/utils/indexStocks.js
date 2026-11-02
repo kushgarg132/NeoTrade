@@ -1,6 +1,6 @@
 // The index page's Stocks tab: sorting and the up/down count. Pure.
 
-export const SORTS = [['gain', 'Biggest gain'], ['fall', 'Biggest fall'], ['name', 'A to Z']];
+export const SORTS = [['gain', 'Gainers'], ['fall', 'Losers'], ['name', 'A–Z']];
 
 /** A stock with no quote always sorts last, whichever way the moves run. */
 export const sortStocks = (rows, sort) => [...(rows || [])].sort((a, b) => {

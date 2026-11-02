@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sortHoldings, topMovers, whyLine, MARKET_WHY } from './money.js';
+import { nextSort, sortHoldings, topMovers, whyLine, MARKET_WHY } from './money.js';
 
 const rows = [
   { symbol: 'A', last_price: 110, close_price: 100, quantity: 10, value: 1100, weight_pct: 20, pnl_pct: 0.1 },
@@ -44,4 +44,15 @@ test('driverRows lists gainers then losers, scaled to the biggest', () => {
   assert.equal(r[1].share, 1);
   assert.ok(Math.abs(r[0].share - 1910 / 3982) < 1e-9);
   assert.deepEqual(driverRows(undefined), []);
+});
+
+test('sortHoldings asc: smallest first, missing figures still last', () => {
+  const known = sortHoldings(rows, 'value').filter((r) => typeof r.value === 'number').map((r) => r.symbol);
+  assert.deepEqual(sortHoldings(rows, 'value', 'asc').slice(0, known.length).map((r) => r.symbol), [...known].reverse());
+});
+
+test('nextSort reverses the same column and starts another biggest first', () => {
+  assert.deepEqual(nextSort({ key: 'value', dir: 'desc' }, 'value'), { key: 'value', dir: 'asc' });
+  assert.deepEqual(nextSort({ key: 'value', dir: 'asc' }, 'value'), { key: 'value', dir: 'desc' });
+  assert.deepEqual(nextSort({ key: 'value', dir: 'asc' }, 'pnl'), { key: 'pnl', dir: 'desc' });
 });

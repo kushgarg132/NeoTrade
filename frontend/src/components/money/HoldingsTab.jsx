@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { X, ArrowDown, Plus, Pause, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Pause, Plus, X } from 'lucide-react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Empty from '../ui/Empty';
@@ -16,7 +16,7 @@ import OrderTicket from '../trading/OrderTicket';
 import useSymbolNews from '../../hooks/useSymbolNews';
 import { ImpactChips } from '../common/NewsImpacts';
 import api, { endpoints } from '../../utils/api';
-import { sortHoldings, whyLine, dayFraction, allocation, MARKET_WHY } from '../../utils/money';
+import { nextSort, sortHoldings, whyLine, dayFraction, allocation, MARKET_WHY } from '../../utils/money';
 import { stockPath } from '../../utils/stocks';
 import { formatDateTime, formatQuantity } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
@@ -64,6 +64,23 @@ const Chip = ({ on, onClick, children, onCls = 'bg-[var(--accent)]', offCls = 't
   >
     {children}
   </button>
+);
+
+/** The list's header: tap a figure to sort by it, tap it again to reverse. */
+const SortHead = ({ sort, onTap }) => (
+  <div role="group" aria-label="Sort holdings by" className="grid grid-cols-4 border-b border-[var(--border)]">
+    {SORTS.map(([id, label]) => {
+      const on = sort.key === id;
+      const Arrow = sort.dir === 'asc' ? ArrowUp : ArrowDown;
+      return (
+        <button key={id} type="button" aria-pressed={on} onClick={() => onTap(id)}
+                aria-label={`Sort by ${label}${on ? (sort.dir === 'asc' ? ', smallest first' : ', biggest first') : ''}`}
+                className={cn('tap inline-flex min-h-11 items-center justify-center gap-1 text-[13px] font-medium', on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]')}>
+          {label}{on && <Arrow className="w-3.5 h-3.5" aria-hidden="true" />}
+        </button>
+      );
+    })}
+  </div>
 );
 
 /** One holding in two lines: name and value, then quantity and weight beside its gain and today's move; then its
@@ -130,7 +147,7 @@ const Allocation = ({ rows }) => {
 const HoldingsTab = () => {
   const [params, setParams] = useSearchParams();
   const { snapshot, loading, error, reload } = useHoldings({ poll: true });
-  const [sort, setSort] = useState('value');
+  const [sort, setSort] = useState({ key: 'value', dir: 'desc' });
   const [ticket, setTicket] = useState(null);
   const [importing, setImporting] = useState(false);
   const [reading, setReading] = useState(null);
@@ -148,7 +165,7 @@ const HoldingsTab = () => {
   const { news } = useSymbolNews(all.filter((r) => r.kind === 'STOCK').map((r) => r.symbol));
   const counts = useMemo(() => all.reduce((m, r) => (r.verdict ? { ...m, [r.verdict]: (m[r.verdict] || 0) + 1 } : m), {}), [all]);
   const rows = useMemo(
-    () => sortHoldings(all.filter((r) => (!needsOnly || needs.has(r.symbol)) && (!newsOnly || hasNews(news[r.symbol])) && (!verdict || r.verdict === verdict)).map((r) => ({ ...r, day_pct: dayFraction(r) })), sort),
+    () => sortHoldings(all.filter((r) => (!needsOnly || needs.has(r.symbol)) && (!newsOnly || hasNews(news[r.symbol])) && (!verdict || r.verdict === verdict)).map((r) => ({ ...r, day_pct: dayFraction(r) })), sort.key, sort.dir),
     [all, needs, needsOnly, news, newsOnly, sort, verdict]
   );
 
@@ -191,14 +208,7 @@ const HoldingsTab = () => {
               {asOf ? `Holdings as of ${formatDateTime(asOf)}. Broker logged out: priced from market quotes.` : `${all.length} holdings · ${formatDateTime(snapshot.at)}`}
             </p>
             <Allocation rows={all} />
-            <div className="mb-2 flex items-center gap-2">
-              <label className="shrink-0 inline-flex items-center gap-1.5 text-[13px] text-[var(--text-muted)]">
-                Sort
-                <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort holdings by"
-                  className="min-h-11 rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 text-[14px] font-medium text-[var(--text)]">
-                  {SORTS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-                </select>
-              </label>
+            <div className="mb-2">
               <div className="-mr-4 flex min-w-0 flex-1 gap-2 overflow-x-auto pr-4" role="group" aria-label="Show">
                 <Chip on={needsOnly} onClick={() => setNeedsOnly((v) => !v)}>Needs you</Chip>
                 <Chip on={newsOnly} onClick={() => setNewsOnly((v) => !v)}>Has news</Chip>
@@ -215,7 +225,7 @@ const HoldingsTab = () => {
             {rows.length === 0 ? (
               <Empty title="Nothing matches" body="Clear the filter to see the rest." />
             ) : (
-              <div>{rows.map((h) => <Row key={h.isin || h.symbol} h={h} news={news?.[h.symbol]} />)}</div>
+              <div><SortHead sort={sort} onTap={(key) => setSort((cur) => nextSort(cur, key))} />{rows.map((h) => <Row key={h.isin || h.symbol} h={h} news={news?.[h.symbol]} />)}</div>
             )}
           </>
         )}
