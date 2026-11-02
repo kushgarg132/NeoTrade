@@ -22,8 +22,27 @@ test('filter by words across title, why and notes, area and effort', () => {
   assert.equal(filterItems(ITEMS).length, 3);
 });
 
-test('groups in rank order and counts per status', () => {
-  assert.deepEqual(byStatus(ITEMS, 'next').map((i) => i.id), [2, 1]);
+test('byStatus: newest first by the time that fits the stage', () => {
+  const day = (d) => `2026-11-0${d}T10:00:00Z`;
+  const rows = [
+    { id: 1, status: 'doing', created_at: day(9), started_at: day(1) },
+    { id: 2, status: 'doing', created_at: day(2), started_at: day(3) },
+    { id: 3, status: 'doing', created_at: day(4), started_at: null }, // an older item without a start: when it was added
+    { id: 4, status: 'done', created_at: day(9), done_at: day(1) },
+    { id: 5, status: 'done', created_at: day(1), done_at: day(2) },
+    { id: 6, status: 'dropped', created_at: day(9), updated_at: day(1) },
+    { id: 7, status: 'dropped', created_at: day(1), updated_at: day(2) },
+    { id: 8, status: 'idea', created_at: day(1), updated_at: day(9) },
+    { id: 9, status: 'idea', created_at: day(2), updated_at: day(1) },
+  ];
+  assert.deepEqual(byStatus(rows, 'doing').map((i) => i.id), [3, 2, 1]);
+  assert.deepEqual(byStatus(rows, 'done').map((i) => i.id), [5, 4]);
+  assert.deepEqual(byStatus(rows, 'dropped').map((i) => i.id), [7, 6]);
+  assert.deepEqual(byStatus(rows, 'idea').map((i) => i.id), [9, 8]);
+});
+
+test('groups and counts per status', () => {
+  assert.equal(byStatus(ITEMS, 'next').length, 2);
   assert.deepEqual(counts(ITEMS), { idea: 1, next: 2, doing: 0, done: 0, dropped: 0 });
 });
 

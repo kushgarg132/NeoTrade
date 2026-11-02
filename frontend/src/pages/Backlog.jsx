@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowRight, ArrowUp, Search, Trash2 } from 'lucide-react';
+import { ArrowRight, Search, Trash2 } from 'lucide-react';
 import SettingsPage from './SettingsPage';
 import Card from '../components/ui/Card';
 import Empty from '../components/ui/Empty';
@@ -14,7 +14,7 @@ import { AREAS, AREA_COLOR, EFFORTS, STAGES, VIEWS, advance, byStatus, counts, f
 /**
  * The operator's backlog of future enhancements (admin-only, /system/future): one app-wide list in Mongo,
  * edited in place. Phone: tabs (Now, Ideas, Done, Dropped). Desktop: a board (Ideas | Next | Doing) with
- * Done and Dropped folded below. Writes are optimistic and roll back with the API's message when refused.
+ * Done and Dropped folded below. Each stage reads newest first. Writes are optimistic and roll back with the API's message when refused.
  */
 
 const FIELD = 'w-full bg-transparent border-b border-[var(--border)] py-1 text-[15px] min-h-11 focus:outline-none focus:border-[var(--accent)]';
@@ -37,7 +37,7 @@ const Chips = ({ options, value, onPick, label, allowNone = false }) => (
 );
 const pairs = (list) => list.map((x) => [x, x]);
 
-const Editor = ({ item, onSave, onMove, onDelete, first, last }) => {
+const Editor = ({ item, onSave, onDelete }) => {
   const [draft, setDraft] = useState({ why: item.why, notes: item.notes });
   const [arming, setArming] = useState(false);
   const timer = useRef(null);
@@ -67,11 +67,9 @@ const Editor = ({ item, onSave, onMove, onDelete, first, last }) => {
         <textarea rows={3} maxLength={4000} className={FIELD} value={draft.notes}
                   onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} onBlur={blur('notes')} />
       </label>
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" aria-label="Move up" className={ICON_BUTTON} disabled={first} onClick={() => onMove(-1)}><ArrowUp className="w-4 h-4" /></button>
-        <button type="button" aria-label="Move down" className={ICON_BUTTON} disabled={last} onClick={() => onMove(1)}><ArrowDown className="w-4 h-4" /></button>
+      <div className="flex justify-end">
         <button type="button" onClick={remove} aria-label={arming ? 'Tap again to delete' : 'Delete item'}
-                className={cn(ICON_BUTTON, 'ml-auto px-3', arming && 'border-[var(--loss)] text-[var(--loss)]')}>
+                className={cn(ICON_BUTTON, 'px-3', arming && 'border-[var(--loss)] text-[var(--loss)]')}>
           <Trash2 className="w-4 h-4" />{arming ? 'Tap again to delete' : 'Delete'}
         </button>
       </div>
@@ -149,19 +147,6 @@ const Backlog = () => {
       () => api.patch(endpoints.system.item(item.id), patch)
         .then((res) => setItems((list) => list.map((i) => (i.id === item.id ? res.data : i)))));
 
-  const move = (group, index, step) => {
-    const a = group[index];
-    const b = group[index + step];
-    // An item that changed status keeps its old rank, so two can tie: nudge past the neighbour.
-    const rankA = a.rank === b.rank ? b.rank + step / 2 : b.rank;
-    const rankB = a.rank;
-    const next = items.map((i) => (i.id === a.id ? { ...i, rank: rankA } : i.id === b.id ? { ...i, rank: rankB } : i));
-    write(next, () => Promise.all([
-      api.patch(endpoints.system.item(a.id), { rank: rankA }),
-      api.patch(endpoints.system.item(b.id), { rank: rankB }),
-    ]));
-  };
-
   const remove = (item) => write(items.filter((i) => i.id !== item.id), () => api.delete(endpoints.system.item(item.id)));
 
   const add = (event) => {
@@ -182,14 +167,12 @@ const Backlog = () => {
   const filtering = filters.q || filters.area || filters.effort;
 
   const list = (status) => {
-    const rows = byStatus(shown, status);
     return (
       <ul className="space-y-2">
-        {rows.map((item, index) => (
+        {byStatus(shown, status).map((item) => (
           <Item key={item.id} item={item} open={openId === item.id}
                 onToggle={() => setOpenId((id) => (id === item.id ? null : item.id))}
-                onSave={(patch) => save(item, patch)} onMove={(step) => move(rows, index, step)}
-                onDelete={() => remove(item)} first={index === 0} last={index === rows.length - 1} />
+                onSave={(patch) => save(item, patch)} onDelete={() => remove(item)} />
         ))}
       </ul>
     );

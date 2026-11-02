@@ -29,19 +29,22 @@ export const filterItems = (items, { q = '', area = '', effort = '' } = {}) => {
     && words.every((w) => `${i.title} ${i.why || ''} ${i.notes || ''}`.toLowerCase().includes(w)));
 };
 
-/** One status's items in rank order. */
-export const byStatus = (items, status) => items.filter((i) => i.status === status).sort((a, b) => a.rank - b.rank);
+/** The time that fits an item's stage: when it started, finished or was dropped, else when it was added. */
+const stageAt = (item) => ({
+  doing: item.started_at, done: item.done_at, dropped: item.updated_at,
+}[item.status]) || item.created_at;
+
+/** One status's items, newest first by the time that fits the stage. */
+export const byStatus = (items, status) => items.filter((i) => i.status === status)
+  .sort((a, b) => new Date(stageAt(b) || 0) - new Date(stageAt(a) || 0));
 
 /** Count per status over all items (the summary strip ignores filters). */
 export const counts = (items) => Object.fromEntries(STAGES.map(([s]) => [s, (items || []).filter((i) => i.status === s).length]));
 
 /** The one time a collapsed row shows, by stage: "started 2h ago"; '' when the item has none. */
 export const stageTime = (item) => {
-  const [word, at] = {
-    doing: item.started_at ? ['started', item.started_at] : ['added', item.created_at],
-    done: ['done', item.done_at],
-    dropped: ['dropped', item.updated_at],
-  }[item.status] || ['added', item.created_at];
+  const word = { doing: item.started_at && 'started', done: 'done', dropped: 'dropped' }[item.status] || 'added';
+  const at = item.status === 'done' ? item.done_at : stageAt(item);
   return at ? `${word} ${formatTimeAgo(at)}` : '';
 };
 
