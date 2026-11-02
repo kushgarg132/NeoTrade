@@ -18,7 +18,7 @@ import { strategyPath } from '../../utils/routes';
 const SHORT = { 'Max drawdown (peak to trough)': 'Max drawdown', 'vs same money in NIFTY': 'vs NIFTY' };
 
 /** AI, You and NIFTY this month as bars from a zero line on one scale, the figure beside each. */
-const Versus = ({ rows }) => {
+export const Versus = ({ rows }) => {
   const max = Math.max(0.5, ...rows.map((r) => Math.abs(r.pct ?? 0)));
   return (
     <ul className="space-y-2.5">

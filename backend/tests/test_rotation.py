@@ -17,6 +17,7 @@ from backend.factor.backtest import rebalance_days, simulate
 from backend.factor.model import ROTATION, breadth
 
 MONDAY = datetime(2026, 11, 9, 9, 21, tzinfo=IST)
+BENCH = lambda: {"nifty": 26_000.0, "mom30": 50.0}
 SYMBOLS = data.universe()[:40]
 PREFS = {"user_id": "alice", "autopilot_enabled": True, "autopilot_live": False, "account_size": 200_000.0,
          "max_exposure": 200_000.0, "per_trade_cap": 30_000.0, "max_trades_per_day": 0, "daily_loss_limit": 0.0}
@@ -120,7 +121,7 @@ async def test_risk_off_holds_cash_and_autopilot_off_buys_nothing(world):
     await _prefs(db)
     frame["closes"] = _closes(market_down=True)
     assert await rotation.rebalance(db, FakeRedis(), "alice", MONDAY, load=lambda: frame["closes"]) == []
-    p = await rotation.plan(db, FakeRedis(), "alice", MONDAY, load=lambda: frame["closes"])
+    p = await rotation.plan(db, FakeRedis(), "alice", MONDAY, load=lambda: frame["closes"], bench=BENCH)
     assert p["risk_off"] and "Risk-off" in rotation.plan_text(p)[0]
 
     frame["closes"] = _closes()
@@ -133,10 +134,10 @@ async def test_daily_plan_lists_buys_holdings_and_next_rebalance(world):
     db, frame = world
     await _prefs(db)
     load = lambda: frame["closes"]
-    p = await rotation.plan(db, FakeRedis(), "alice", MONDAY, load=load)
+    p = await rotation.plan(db, FakeRedis(), "alice", MONDAY, load=load, bench=BENCH)
     assert len(p["buys"]) == 8 and p["holdings"] == [] and p["next_rebalance"] == "2026-11-16"
     await rotation.rebalance(db, FakeRedis(), "alice", MONDAY, load=load)
-    p = await rotation.plan(db, FakeRedis(), "alice", MONDAY, load=load)
+    p = await rotation.plan(db, FakeRedis(), "alice", MONDAY, load=load, bench=BENCH)
     assert len(p["holdings"]) == 8 and p["buys"] == []
     assert all(h["rank"] for h in p["holdings"])
     assert rotation.plan_text(p)[-1].startswith("Next rebalance 2026-11-16. Paper")
@@ -155,3 +156,40 @@ def test_backtest_runs_weekly_with_and_without_the_research_stop():
     for params in (ROTATION, replace(ROTATION, stop_atr=3.0, breadth_min=0.4)):
         result = simulate(closes, market, params, closes.index[300], closes.index[-1], capital=200_000)
         assert result.rebalances >= 15 and np.isfinite(result.equity.iloc[-1])
+
+
+def test_veto_outcome_compares_each_vetoed_name_with_the_book():
+    closes, _ = _closes()
+    start = closes.index[-6]
+    a, b = SYMBOLS[0], SYMBOLS[1]
+    prev = {"decided_on": str(start.date()), "news_vetoed": {a: "news sentiment -0.80", "NOPE": "results"},
+            "weights": {b: 1.0}}
+    out = rotation.veto_outcome(closes, prev)
+    assert set(out["vetoed"]) == {a}  # a name with no prices is left out
+    assert out["vetoed"][a] == round(float(closes[a].iloc[-1] / closes[a].loc[start] - 1), 4)
+    assert out["book_avg"] == round(float(closes[b].iloc[-1] / closes[b].loc[start] - 1), 4)
+    assert rotation.veto_outcome(closes, {**prev, "news_vetoed": {}}) is None
+
+
+async def test_scorecard_from_daily_plans_and_veto_outcomes(world):
+    from datetime import date
+
+    db, _ = world
+    rows = [("2026-11-02", 200_000, 26_000, 50), ("2026-11-03", 190_000, 25_800, 49), ("2026-11-04", 210_000, 26_260, 51)]
+    await db[rotation.PLANS].insert_many([{"_id": f"alice:{d}", "user_id": "alice", "date": d, "book_value": v,
+                                           "nifty": n, "mom30": m} for d, v, n, m in rows])
+    await db[rotation.TARGETS].insert_one({"_id": "alice:2026-W45", "user_id": "alice",
+                                           "veto_outcome": {"vetoed": {"X": -0.05, "Y": 0.04}, "book_avg": 0.01}})
+    card = await rotation.scorecard(db, "alice", date(2026, 11, 4))
+    assert card["book"] == 0.05 and card["nifty"] == 0.01 and card["mom30"] == 0.02
+    assert card["max_drawdown"] == -0.05 and card["ahead"] and card["unlock_on"] == "2027-02-01"
+    assert not card["live_ready"]  # ahead, but not three months yet
+    assert card["vetoes"] == {"n": 2, "vetoed_avg": -0.005, "book_avg": 0.01, "helped": 1}
+    assert await rotation.scorecard(db, "bob", date(2026, 11, 4)) is None
+
+
+async def test_plan_snapshots_book_value_and_benchmarks(world):
+    db, frame = world
+    await _prefs(db)
+    p = await rotation.plan(db, FakeRedis(), "alice", MONDAY, load=lambda: frame["closes"], bench=BENCH)
+    assert p["book_value"] == 200_000 and p["nifty"] == 26_000.0 and p["mom30"] == 50.0

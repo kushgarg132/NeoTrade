@@ -22,6 +22,8 @@ import asyncio
 import logging
 from datetime import date, datetime, timedelta
 
+from typing import Optional
+
 import pandas as pd
 
 from backend.autopilot import service
@@ -41,6 +43,8 @@ PLANS = "rotation_plans"
 # re-tune once rotation_plans holds a few months of vetoes and their outcomes.
 NEWS_VETO = -0.5
 RESULTS_DAYS = 3
+MOM30_ETF = "MOMENTUM.NS"   # ABSL Nifty 200 Momentum 30 ETF: the survivorship-free yardstick
+LIVE_AFTER_DAYS = 91        # the live gate: three months of paper ahead of the Nifty (spec)
 
 
 def week_of(day: date) -> str:
@@ -94,6 +98,34 @@ async def book_value(db, user_id: str, capital: float, marks: dict) -> float:
     return capital + sum(trade_net(t) for t in closed) + unreal
 
 
+def veto_outcome(closes: pd.DataFrame, prev: dict) -> Optional[dict]:
+    """Each name news kept out of `prev`'s week: its return from that week's decision close to the
+    latest close, against the average of the names the book held instead (0 when it sat in cash)."""
+    vetoed = prev.get("news_vetoed") or {}
+    start = pd.Timestamp(prev["decided_on"])
+    if not vetoed or start not in closes.index or closes.index[-1] <= start:
+        return None
+    a, b = closes.loc[start], closes.iloc[-1]
+
+    def ret(s):
+        ok = s in closes and pd.notna(a.get(s)) and pd.notna(b.get(s)) and a[s]
+        return round(float(b[s] / a[s] - 1), 4) if ok else None
+    vet = {s: r for s in vetoed if (r := ret(s)) is not None}
+    book = [r for s in prev.get("weights") or {} if (r := ret(s)) is not None]
+    if not vet:
+        return None
+    return {"vetoed": vet, "book_avg": round(sum(book) / len(book), 4) if book else 0.0,
+            "until": str(closes.index[-1].date())}
+
+
+async def _score_last_vetoes(db, user_id: str, key: str, closes: pd.DataFrame) -> None:
+    prev = await db[TARGETS].find_one({"user_id": user_id, "_id": {"$ne": key}, "veto_outcome": {"$exists": False}},
+                                      sort=[("decided_on", -1)])
+    outcome = prev and veto_outcome(closes, prev)
+    if outcome:
+        await db[TARGETS].update_one({"_id": prev["_id"]}, {"$set": {"veto_outcome": outcome}})
+
+
 async def target(db, redis, user_id: str, now: datetime, load=None) -> dict:
     """This week's target, decided once from the last session's closes."""
     today = now.astimezone(IST).date()
@@ -104,6 +136,10 @@ async def target(db, redis, user_id: str, now: datetime, load=None) -> dict:
     closes, market = await asyncio.to_thread(load or _load)
     closes, market = _settled(closes, today), market.loc[:pd.Timestamp(today) - pd.Timedelta(days=1)]
     t = closes.index[-1]
+    try:
+        await _score_last_vetoes(db, user_id, key, closes)
+    except Exception as exc:  # the record is a nice-to-have; the week's target is not
+        logger.warning("veto scoring failed for %s: %s", user_id, exc)
     prefs = await PrefsStore(db).get(user_id)
     held = {tr["symbol"] for tr in await rotation_trades(db, user_id)}
     from backend.profile.store import ProfileStore
@@ -179,7 +215,19 @@ def next_rebalance(today: date) -> date:
     return day
 
 
-async def plan(db, redis, user_id: str, now: datetime, load=None) -> dict:
+def _benchmarks() -> dict:
+    """Latest Nifty 50 and Momentum 30 ETF prices for the scorecard; None when Yahoo fails."""
+    out = {}
+    for name, ticker in (("nifty", data.MARKET), ("mom30", MOM30_ETF)):
+        try:
+            out[name] = round(float(data.series(ticker, start=str(date.today() - timedelta(days=14))).iloc[-1]), 2)
+        except Exception as exc:
+            logger.warning("benchmark %s unavailable: %s", ticker, exc)
+            out[name] = None
+    return out
+
+
+async def plan(db, redis, user_id: str, now: datetime, load=None, bench=None) -> dict:
     """Today's plan for the AI account: regime, holdings,
     what the book will do today, news flags. Stored in `rotation_plans`."""
     today = now.astimezone(IST).date()
@@ -200,7 +248,10 @@ async def plan(db, redis, user_id: str, now: datetime, load=None) -> dict:
     buys = [{"symbol": s, "weight": w, "blocked": news.get(s)} for s, w in doc["weights"].items()
             if s not in held]
     prefs = await PrefsStore(db).get(user_id)
+    levels = await asyncio.to_thread(bench or _benchmarks)
+    value = await book_value(db, user_id, float(prefs["max_exposure"]), marks)
     out = {"_id": f"{user_id}:{today.isoformat()}", "user_id": user_id, "date": today.isoformat(),
+           "book_value": round(value, 2), "nifty": levels.get("nifty"), "mom30": levels.get("mom30"),
            "week": doc["week"], "decided_on": doc["decided_on"], "exposure": doc["exposure"],
            "risk_off": doc["exposure"] == 0, "breadth": doc["breadth"], "nifty_vs_200dma": doc["nifty_vs_200dma"],
            "holdings": holdings, "sells": sells, "buys": buys, "news_vetoed": doc.get("news_vetoed") or {},
@@ -209,6 +260,39 @@ async def plan(db, redis, user_id: str, now: datetime, load=None) -> dict:
            "made_at": now}
     await db[PLANS].replace_one({"_id": out["_id"]}, out, upsert=True)
     return out
+
+
+async def scorecard(db, user_id: str, today: date) -> Optional[dict]:
+    """The rotation's paper record from its daily plans: book vs Nifty vs the Momentum 30 ETF since the
+    first plan, max drawdown, when the live gate can open, and how the news vetoes did."""
+    plans = await db[PLANS].find({"user_id": user_id, "book_value": {"$gt": 0}},
+                                 {"date": 1, "book_value": 1, "nifty": 1, "mom30": 1}).sort("date", 1).to_list(None)
+    if not plans:
+        return None
+    first, last = plans[0], plans[-1]
+
+    def ret(field):
+        base = next((p[field] for p in plans if p.get(field)), None)
+        end = next((p[field] for p in reversed(plans) if p.get(field)), None)
+        return round(end / base - 1, 4) if base and end else None
+    peak, drawdown = 0.0, 0.0
+    for p in plans:
+        peak = max(peak, p["book_value"])
+        drawdown = min(drawdown, p["book_value"] / peak - 1)
+    book, nifty = ret("book_value"), ret("nifty")
+    unlock = date.fromisoformat(first["date"]) + timedelta(days=LIVE_AFTER_DAYS)
+    ahead = book is not None and nifty is not None and book > nifty
+    outcomes = [d["veto_outcome"] async for d in db[TARGETS].find(
+        {"user_id": user_id, "veto_outcome": {"$exists": True}}, {"veto_outcome": 1})]
+    pairs = [(r, o["book_avg"]) for o in outcomes for r in o["vetoed"].values()]
+    vetoes = {"n": len(pairs),
+              "vetoed_avg": round(sum(r for r, _ in pairs) / len(pairs), 4) if pairs else None,
+              "book_avg": round(sum(b for _, b in pairs) / len(pairs), 4) if pairs else None,
+              "helped": sum(r < b for r, b in pairs)}
+    return {"since": first["date"], "as_of": last["date"], "days": (date.fromisoformat(last["date"]) - date.fromisoformat(first["date"])).days,
+            "book_value": last["book_value"], "book": book, "nifty": nifty, "mom30": ret("mom30"),
+            "max_drawdown": round(drawdown, 4), "ahead": ahead, "unlock_on": unlock.isoformat(),
+            "live_ready": ahead and today >= unlock, "vetoes": vetoes}
 
 
 def plan_text(p: dict) -> list[str]:

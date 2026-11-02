@@ -9,6 +9,7 @@ import Hero from '../components/ui/Hero';
 import DeltaChip from '../components/ui/DeltaChip';
 import Skeleton from '../components/ui/Skeleton';
 import Scoreboard from '../components/ai/Scoreboard';
+import RotationScorecard from '../components/ai/RotationScorecard';
 import Positions from '../components/ai/Positions';
 import Activity from '../components/ai/Activity';
 import StopAi from '../components/ai/StopAi';
@@ -90,7 +91,7 @@ const Ai = () => {
                 ) : <div className="mt-2 text-[12px] text-[var(--text-muted)]">No exposure cap set</div>}
                 {(ap.lab === false || ap.paused?.length > 0) && (
                   <p className="mt-2 text-[12px] text-[var(--text-muted)]">
-                    {ap.lab === false && 'Lab off: no intraday auto-run, news entries or game plan.'}
+                    {ap.lab === false && 'Lab off: no intraday auto-run.'}
                     {ap.paused?.length > 0 && ` Paused on paper (losing over 30+ trades): ${ap.paused.join(', ')}.`}
                   </p>
                 )}
@@ -100,6 +101,7 @@ const Ai = () => {
         )}
       </div>
       <div className="mb-3"><Tabs tabs={TABS} value={tab} onChange={setTab} label="AI sections" /></div>
+      {tab === 'scoreboard' && <div className="mb-3"><RotationScorecard /></div>}
       {tab === 'scoreboard' && <Scoreboard board={{ ...today, data: today.data?.scoreboard }} card={card} forward={forward} capital={ap?.capital} mineValue={overview.data?.headline?.value} />}
       {tab === 'positions' && <Positions state={positions} />}
       {tab === 'activity' && <Activity state={log} plan={plan.data} />}
