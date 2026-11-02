@@ -83,8 +83,8 @@ test('Connect link text sits on the accent fill via --accent-ink', () => {
   assert.doesNotMatch(page, /text-\[var\(--surface\)\]/);
 });
 
-test('overview: chart first, then what drove it, the mix, movers, and the AI review folded', () => {
-  const at = ['<ValueChart', '<Drivers', '<Mix', 'Biggest movers today', '<WhyMoved'].map((x) => overview.indexOf(x, overview.indexOf('const OverviewTab')));
+test('overview: the AI review folded first, then chart, what drove it, the mix and movers', () => {
+  const at = ['<WhyMoved', '<ValueChart', '<Drivers', '<Mix', 'Biggest movers today'].map((x) => overview.indexOf(x, overview.indexOf('const OverviewTab')));
   assert.ok(at.every((i) => i > 0), at.join());
   assert.deepEqual([...at].sort((a, b) => a - b), at);
   assert.match(overview, /driverRows\(drivers\?\.\[period\]\)/);

@@ -19,7 +19,7 @@ import { AiCard, AiText, AiState } from '../ai/AiSummary';
 import useStored from '../../hooks/useStored';
 import { endpoints } from '../../utils/api';
 
-/** The AI's daily review, folded to its opening lines (the figures above already say most of it). */
+/** The AI's daily review, first on the tab and folded to its opening lines. */
 const WhyMoved = () => {
   const { data, status, retry } = useStored(endpoints.mine.reviewLatest);
   const [open, setOpen] = useState(false);
@@ -118,7 +118,7 @@ const Mix = ({ mix }) => {
   );
 };
 
-/** Value vs NIFTY, what drove it, the mix, today's three biggest movers with a one-line why, then the AI review.
+/** The AI review, then value vs NIFTY, what drove it, the mix and today's three biggest movers with a one-line why.
  *  `headline` and `overview` come from /mine/overview. */
 const OverviewTab = ({ headline, overview }) => {
   const { snapshot, loading, error, reload } = useHoldings();
@@ -130,6 +130,7 @@ const OverviewTab = ({ headline, overview }) => {
 
   return (
     <div className="space-y-4">
+      <WhyMoved />
       <ValueChart />
       <Drivers drivers={overview?.drivers} />
       <Mix mix={overview?.mix} />
@@ -156,8 +157,6 @@ const OverviewTab = ({ headline, overview }) => {
           ))
         )}
       </Card>
-
-      <WhyMoved />
     </div>
   );
 };
