@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import api, { endpoints } from '../../utils/api';
 import Skeleton from '../ui/Skeleton';
 import ErrorLine from '../ui/ErrorLine';
@@ -12,7 +13,7 @@ import { toneText } from '../ui/tone';
 import { breadthWord, divergence, filterSectors, isClosed, newsMood, sortSectors } from '../../utils/market';
 import ChipRow from '../ui/ChipRow';
 import { stockPath } from '../../utils/stocks';
-import { sectorPath } from '../../utils/routes';
+import { sectorPath, breadthPath } from '../../utils/routes';
 import useSection from '../../hooks/useSection';
 
 const SORTS = [
@@ -52,8 +53,11 @@ const Breadth = ({ b }) => {
   const flat = b.n - b.up - b.down;
   return (
     <Panel>
+      <Link to={breadthPath()} aria-label={`${breadthWord(b) || 'Breadth'}: see the Nifty 200 stocks`} className="tap block">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">{breadthWord(b) || 'Breadth'}</h2>
+        <h2 className="inline-flex items-center gap-1 text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">
+          {breadthWord(b) || 'Breadth'}<ChevronRight className="w-4 h-4 text-[var(--text-muted)]" aria-hidden="true" />
+        </h2>
         <span className="text-[13px] text-[var(--text-muted)]">Nifty 200 · {isClosed() ? 'last session' : 'today'}</span>
       </div>
       <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-[var(--surface-2)]" role="img"
@@ -66,6 +70,7 @@ const Breadth = ({ b }) => {
         {flat > 0 && <span className="text-[var(--text-muted)]">{flat} flat</span>}
         <span className="text-[var(--loss)] font-semibold">▼ {b.down} falling</span>
       </div>
+      </Link>
     </Panel>
   );
 };

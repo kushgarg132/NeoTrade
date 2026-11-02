@@ -20,7 +20,7 @@ import useSection from '../../hooks/useSection';
 import { breadthWord, isClosed } from '../../utils/market';
 import { formatDateTime } from '../../utils/formatters';
 import { stockPath } from '../../utils/stocks';
-import { indexPath } from '../../utils/routes';
+import { indexPath, breadthPath } from '../../utils/routes';
 import { useAuth } from '../../context/AuthContext';
 
 const REGIME = {
@@ -191,7 +191,7 @@ const Scan = () => {
   const word = breadthWord(data.breadth);
   return (
     <>
-      <Card title={bTitle}>
+      <Card title={bTitle} to={breadthPath()}>
         {word && <p className="mb-2 text-[17px] font-bold text-[var(--text)]">{word}</p>}
         <BreadthBar b={data.breadth} />
         <AsOf at={data.at} />

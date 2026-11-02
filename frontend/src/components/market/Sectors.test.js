@@ -37,3 +37,12 @@ test('filter chips: sectors by All / Rising / Falling / Flagged, extremes by Bot
   assert.match(src, /<ChipRow /);
   assert.match(src, /Nothing matches/);
 });
+
+test('the breadth headline opens the Nifty 200 stocks it counts, here and on Today', async () => {
+  const { readFileSync } = await import('node:fs');
+  const today = readFileSync(new URL('./Today.jsx', import.meta.url), 'utf8');
+  assert.match(src, /<Link to=\{breadthPath\(\)\}/);
+  assert.match(today, /<Card title=\{bTitle\} to=\{breadthPath\(\)\}>/);
+  const { breadthPath } = await import('../../utils/routes.js');
+  assert.equal(breadthPath(), '/market/index/%5ECNX200?tab=stocks');
+});

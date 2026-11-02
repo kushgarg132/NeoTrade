@@ -78,6 +78,8 @@ export const strategyPath = (name) => `/ai/strategy/${seg(name)}`;
 export const aiTradePath = (id) => `/ai/trade/${seg(id)}`;
 export const roundTripPath = (id) => `/money/trade/${seg(id)}`;
 export const indexPath = (ticker) => `/market/index/${seg(ticker)}`;
+/** Where the market breadth headline leads: the Nifty 200 it counts, on the index's Stocks tab. */
+export const breadthPath = () => `${indexPath('^CNX200')}?tab=stocks`;
 export const sectorPath = (name) => `/market/sector/${seg(name)}`;
 export const newsPath = (id) => `/news/${seg(id)}`;
 
