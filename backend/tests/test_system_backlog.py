@@ -72,6 +72,25 @@ def test_done_at_stamped_and_cleared(mongo):
     assert reopened["done_at"] is None
 
 
+def test_started_at_stamped_once(mongo, monkeypatch):
+    client = _client()
+    item = client.post(URL, json={"title": "Ship it", "area": "Ops"}).json()
+    assert item["started_at"] is None
+    assert client.post(URL, json={"title": "Now", "area": "Ops", "status": "doing"}).json()["started_at"]
+    started = client.patch(f"{URL}/{item['id']}", json={"status": "doing"}).json()["started_at"]
+    assert started
+    client.patch(f"{URL}/{item['id']}", json={"status": "next"})
+    later = datetime(2099, 1, 1, tzinfo=timezone.utc)
+    class Later(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return later
+    monkeypatch.setattr("backend.system.backlog.datetime", Later)
+    again = client.patch(f"{URL}/{item['id']}", json={"status": "doing"}).json()
+    assert again["updated_at"].startswith("2099")  # the clock did move
+    assert again["started_at"][:19] == started[:19]  # Mongo keeps milliseconds only
+
+
 def test_patch_unknown_or_bad_id_is_404(mongo):
     client = _client()
     assert client.patch(f"{URL}/0123456789abcdef01234567", json={"why": "x"}).status_code == 404

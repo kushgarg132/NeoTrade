@@ -9,8 +9,7 @@ import Button from '../components/ui/Button';
 import Tabs from '../components/ui/Tabs';
 import api, { endpoints } from '../utils/api';
 import { cn } from '../utils/cn';
-import { formatTimeAgo } from '../utils/formatters';
-import { AREAS, AREA_COLOR, EFFORTS, STAGES, VIEWS, advance, byStatus, counts, filterItems } from '../utils/backlog';
+import { AREAS, AREA_COLOR, EFFORTS, STAGES, VIEWS, advance, byStatus, counts, filterItems, stageTime, timeline } from '../utils/backlog';
 
 /**
  * The operator's backlog of future enhancements (admin-only, /system/future): one app-wide list in Mongo,
@@ -76,9 +75,12 @@ const Editor = ({ item, onSave, onMove, onDelete, first, last }) => {
           <Trash2 className="w-4 h-4" />{arming ? 'Tap again to delete' : 'Delete'}
         </button>
       </div>
-      {(item.source || item.updated_at) && (
-        <p className="text-[12px] text-[var(--text-muted)]">{item.source ? `From ${item.source} · ` : ''}updated {formatTimeAgo(item.updated_at)}</p>
-      )}
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[12px] text-[var(--text-muted)]">
+        {timeline(item).map(({ label, at }) => (
+          <React.Fragment key={label}><dt>{label}</dt><dd className="tabular-nums">{at}</dd></React.Fragment>
+        ))}
+        {item.source && <><dt>From</dt><dd>{item.source}</dd></>}
+      </dl>
     </div>
   );
 };
@@ -94,6 +96,7 @@ const Item = ({ item, open, onToggle, onSave, ...editor }) => {
           <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[var(--text-muted)]">
             <span>{item.area}</span>
             {item.effort && <span className="rounded-full bg-[var(--surface-2)] px-1.5 font-semibold">{item.effort}</span>}
+            {stageTime(item) && <span className="tabular-nums">{stageTime(item)}</span>}
           </span>
           {!open && item.why && <span className="mt-1 block line-clamp-1 text-[13px] text-[var(--text-muted)]">{item.why}</span>}
         </button>

@@ -54,6 +54,7 @@ def _oid(item_id: str) -> Optional[ObjectId]:
 def _out(doc: dict) -> dict:
     doc = dict(doc)
     doc["id"] = str(doc.pop("_id"))
+    doc.setdefault("started_at", None)
     doc.setdefault("done_at", None)
     return doc
 
@@ -68,7 +69,8 @@ async def create(db, item: ItemIn) -> dict:
     last = await db[COLLECTION].find_one({"status": item.status}, sort=[("rank", -1)])
     now = datetime.now(timezone.utc)
     doc = {**item.model_dump(), "rank": (last["rank"] + 1) if last else 0,
-           "created_at": now, "updated_at": now, "done_at": now if item.status == "done" else None}
+           "created_at": now, "updated_at": now, "started_at": now if item.status == "doing" else None,
+           "done_at": now if item.status == "done" else None}
     result = await db[COLLECTION].insert_one(doc)
     doc["_id"] = result.inserted_id
     return _out(doc)
@@ -83,6 +85,8 @@ async def update(db, item_id: str, patch: ItemPatch) -> Optional[dict]:
     now = datetime.now(timezone.utc)
     if "status" in changes and changes["status"] != current["status"]:
         changes["done_at"] = now if changes["status"] == "done" else None
+        if changes["status"] == "doing" and not current.get("started_at"):
+            changes["started_at"] = now  # the first start: going back to doing keeps it
     changes["updated_at"] = now
     await db[COLLECTION].update_one({"_id": oid}, {"$set": changes})
     return _out({**current, **changes})

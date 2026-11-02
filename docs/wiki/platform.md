@@ -66,7 +66,7 @@ Mongo (db `DATABASE_NAME`, default `stock_investor_db`; datetimes come back tz-a
 | `user_profiles` | `_id`=user id, `display_name`, `experience`, `risk_appetite`, `styles`, `horizon`, `goals`, `favour`, `avoid`, `constraints`, `about_me`, `answer_style`, `memories[{id,text,source,created_at}]` | none | `ProfileStore`; chat/AI read |
 | `app_settings` | one doc `_id:"singleton"`: `llm_model`, `llm_tiers.{fast,standard,deep}`, `llm_features_off[]`, `portfolio_verdicts` ("admin"/"all"), `lab_enabled` | none | admin routes write; `_refresh` reads (30 s) |
 | `trading_runs` | `run_id`, `user_id`, `mode`, `universe`, `params`, `status` (RUNNING/STOPPED/ERROR), `boot_id`, `progress`, `started_at`, `stopped_at`, `error` | unique `run_id`; `(user_id, status)` | `RunStore` (trading router, autorun) |
-| `backlog` | `title`, `area`, `status`, `rank`, `why`, `notes`, `effort`, `source`, `done_at` | none | admin routes; `seed_backlog` upserts by title |
+| `backlog` | `title`, `area`, `status`, `rank`, `why`, `notes`, `effort`, `source`, `created_at`, `updated_at`, `started_at` (first move to doing, kept after), `done_at` | none | admin routes; `seed_backlog` upserts by title |
 | `watchlist` | `user_id`, `symbols[]`, `updated_at` | none (see Gotchas) | `routers/watchlist.py`; ingest, plan, news read |
 | `portfolio_snapshots` | index `(user_id, at desc)` created at startup (`server.py:161`) | | written by portfolio service (other page) |
 
