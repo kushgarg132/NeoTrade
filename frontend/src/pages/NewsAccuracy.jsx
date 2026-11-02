@@ -52,7 +52,7 @@ const NewsAccuracy = () => {
             rows under 30 items are faded. Company news makes ideas again at a 52% hit over 300 items (5 days).
           </p>
           <div className="mb-2 flex flex-wrap gap-2">
-            <Segmented label="Scope" options={SCOPES.map((v) => [v, `${v[0]}${v.slice(1).toLowerCase()}`])} value={scope} onChange={setScope} />
+            <Segmented fill label="Scope" options={SCOPES.map((v) => [v, `${v[0]}${v.slice(1).toLowerCase()}`])} value={scope} onChange={setScope} />
             <Segmented label="Horizon" options={HORIZONS.map((v) => [v, v])} value={horizon} onChange={setHorizon} />
           </div>
           {error && <ErrorLine message={error} onRetry={() => load()} />}

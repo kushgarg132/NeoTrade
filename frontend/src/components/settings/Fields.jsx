@@ -76,11 +76,12 @@ export const Toggle = ({ on, onClick, label, danger = false, disabled = false })
 );
 
 /** One choice out of a few, on a segmented track. `options: [[value, label]]`; `dangerValue` reads red when chosen. */
-export const Segmented = ({ options, value, onChange, label, dangerValue, disabled = () => false }) => (
-  <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
+/** `fill` shares one full-width track instead of wrapping: for filters that sit above a list. */
+export const Segmented = ({ options, value, onChange, label, dangerValue, disabled = () => false, fill = false }) => (
+  <div role="radiogroup" aria-label={label} className={cn('gap-1 rounded-[12px] bg-[var(--surface-2)] p-1', fill ? 'flex w-full' : 'inline-flex flex-wrap')}>
     {options.map(([v, text]) => (
       <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onChange(v)} disabled={disabled(v)}
-              className={cn('min-h-11 px-4 rounded-[8px] text-[14px] font-medium transition-colors disabled:opacity-40', FOCUS,
+              className={cn('min-h-11 rounded-[8px] text-[14px] font-medium transition-colors disabled:opacity-40', fill ? 'flex-1 whitespace-nowrap px-1' : 'px-4', FOCUS,
                 value === v ? (v === dangerValue ? 'bg-[var(--loss)] text-[var(--accent-ink)]' : 'bg-[var(--surface)] text-[var(--text)]') : 'text-[var(--text-muted)]')}>
         {text}
       </button>

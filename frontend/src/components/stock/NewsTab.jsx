@@ -38,7 +38,7 @@ const NewsTab = ({ symbol, mine, ai, onAnalysis }) => {
   const groups = groupNews(rows, filter, sort);
   return (
     <div className="space-y-3">
-      <Segmented label="Filter news" options={FILTERS} value={filter} onChange={setFilter} />
+      <Segmented fill label="Filter news" options={FILTERS} value={filter} onChange={setFilter} />
       <ChipRow label="Sort news" options={SORTS} value={sort} onChange={setSort} />
       {!groups.length && <Empty title="Nothing matches" body="No headline here fits this filter. Scored news alone carries a direction and impact." />}
       {groups.map(([label, list]) => (

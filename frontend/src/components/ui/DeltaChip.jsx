@@ -3,6 +3,7 @@ import { inr, pct } from './format';
 
 /** Today's change as a pill: rupees, percent (1.65 = 1.65%), optional suffix. */
 const DeltaChip = ({ value, pct: p, suffix, format = inr, privateValue = true }) => {
+  if (typeof value !== 'number' && typeof p !== 'number') return null; // a suffix alone says nothing
   const dir = typeof value !== 'number' ? p : value;
   const up = dir > 0;
   const down = dir < 0;

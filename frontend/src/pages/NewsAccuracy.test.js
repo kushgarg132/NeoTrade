@@ -11,7 +11,7 @@ test('uses the ui kit with loading, retry and an empty state that names the acti
   assert.match(src, /<Empty[^>]*action=/);
 });
 test('filters by scope and horizon, fades thin cells, glosses the jargon', () => {
-  assert.match(src, /<Segmented label="Scope"/);
+  assert.match(src, /<Segmented fill label="Scope"/);
   assert.match(src, /<Segmented label="Horizon"/);
   assert.match(src, /c\.thin \? 'opacity-50'/);
   assert.match(src, /Hit rate = /);

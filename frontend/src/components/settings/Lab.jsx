@@ -25,7 +25,7 @@ const Lab = () => {
     return () => { live = false; };
   }, []);
 
-  const row = (page, title, state) => <ListRow to={`/settings/lab/${page}`} title={title} right={state} privateValue={false} />;
+  const row = (page, title, state) => <ListRow to={`/settings/lab/${page}`} title={title} sub={state} privateValue={false} />;
   return (
     <div className="space-y-4">
       <Group title="Evidence">

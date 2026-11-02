@@ -89,7 +89,7 @@ const FollowUps = ({ text, title, symbols }) => {
       <MessageCircle className="w-4 h-4 text-[var(--text-muted)]" aria-hidden="true" />
       {questions.map((q) => (
         <button key={q} type="button" onClick={() => ask(q)}
-          className="tap min-h-9 rounded-full border border-[var(--border)] px-3 text-[13px] font-medium text-[var(--accent)] hover:bg-[var(--accent-soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
+          className="tap min-h-11 rounded-full border border-[var(--border)] px-3 text-[13px] font-medium text-[var(--accent)] hover:bg-[var(--accent-soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
           {q}
         </button>
       ))}

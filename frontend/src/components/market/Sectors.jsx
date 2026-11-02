@@ -74,7 +74,7 @@ const SortControl = ({ value, onChange }) => (
   <div role="group" aria-label="Sort sectors by" className="flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
     {SORTS.map((s) => (
       <button key={s.id} type="button" aria-pressed={s.id === value} onClick={() => onChange(s.id)}
-        className={`tap min-h-9 rounded-[9px] px-3 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+        className={`tap min-h-11 rounded-[9px] px-3 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
           s.id === value ? 'bg-[var(--surface)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
         {s.label}
       </button>

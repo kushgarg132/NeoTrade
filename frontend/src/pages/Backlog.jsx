@@ -28,7 +28,7 @@ const Chips = ({ options, value, onPick, label, allowNone = false, noneLabel = '
   <div role="group" aria-label={label} className="flex gap-1.5 overflow-x-auto">
     {[...(allowNone ? [['', noneLabel]] : []), ...options].map(([v, text]) => (
       <button key={v || 'none'} type="button" aria-pressed={value === v} onClick={() => onPick(v)}
-              className={cn('tap shrink-0 min-h-9 px-3 rounded-full text-[13px] font-medium',
+              className={cn('tap shrink-0 min-h-11 px-3 rounded-full text-[13px] font-medium',
                 value === v ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]')}>
         {text}
       </button>

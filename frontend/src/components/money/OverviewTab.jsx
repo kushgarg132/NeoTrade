@@ -55,7 +55,7 @@ const Drivers = ({ drivers }) => {
       <div role="group" aria-label="Period" className="flex gap-1 rounded-[12px] bg-[var(--surface-2)] p-1">
         {PERIODS.map(([id, label]) => (
           <button key={id} type="button" aria-pressed={period === id} onClick={() => setPeriod(id)}
-            className={`tap min-h-8 rounded-[9px] px-2.5 text-[13px] font-semibold ${period === id ? 'bg-[var(--surface)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{label}</button>
+            className={`tap min-h-11 rounded-[9px] px-2.5 text-[13px] font-semibold ${period === id ? 'bg-[var(--surface)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{label}</button>
         ))}
       </div>
     )}>

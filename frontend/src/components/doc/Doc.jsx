@@ -11,7 +11,7 @@ import { stockPath, logoUrl } from '../../utils/stocks';
 
 /** A titled sheet: ruled band, printed title, optional right-hand furniture. */
 export const Sheet = ({ title, meta, actions, children, className, bodyClassName }) => (
-  <section className={cn('sheet min-w-0', className)}>
+  <section className={cn('ui-card sheet min-w-0', className)}>
     {(title || actions || meta) && (
       <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pt-4">
         <div className="flex items-baseline gap-3 min-w-0">
@@ -237,7 +237,7 @@ export const Stamp = ({ label, tone = 'stamp', className }) => {
 export const Empty = ({ title, detail, action, className }) => (
   <div
     className={cn(
-      'py-8 px-4 text-center rounded-[20px] border border-[var(--border)]',
+      'py-8 px-4 text-center rounded-[20px] border border-[var(--border)] in-[.ui-card]:border-0 in-[.ui-card]:py-4',
       className
     )}
   >

@@ -103,8 +103,8 @@ const WeeklyReport = () => {
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="text-center">
-          <div className="text-[15px] font-semibold text-[var(--text)]">{shown || '…'}</div>
-          {shown && <div className="text-[13px] text-[var(--text-muted)]">{weekRange(shown)}</div>}
+          <div className="text-[15px] font-semibold text-[var(--text)]">{shown ? weekRange(shown) : '…'}</div>
+          {shown && <div className="text-[13px] text-[var(--text-muted)]">Week {Number(shown.split('-W')[1])}</div>}
         </div>
         <button type="button" aria-label="Next week" className={navCls} disabled={!shown} onClick={() => go(1)}>
           <ChevronRight className="w-5 h-5" />

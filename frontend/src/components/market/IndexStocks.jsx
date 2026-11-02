@@ -36,7 +36,7 @@ const IndexStocks = ({ ticker }) => {
       </div>
       {(all ? rows : rows.slice(0, SHOWN)).map((s) => (
         <ListRow privateValue={false} key={s.symbol} dense to={stockPath(s.symbol)} title={s.symbol} sub={s.name}
-          right={s.price == null ? 'No quote' : <><span className="text-[var(--text)]">{num(s.price)}</span>{'  '}<span className={toneText(tone(s.change_pct))}>{pct(s.change_pct / 100, { sign: true })}</span></>} />
+          right={s.price == null ? 'No quote' : <><span className="text-[var(--text)]">{num(s.price)}</span>{'  '}<span className={toneText(tone(s.change_pct))}>{s.change_pct == null ? '—' : pct(s.change_pct / 100, { sign: true })}</span></>} />
       ))}
       {!all && rows.length > SHOWN && (
         <button type="button" onClick={() => setAll(true)} className="mt-1 min-h-11 text-[14px] font-semibold text-[var(--accent)]">Show all {rows.length}</button>
