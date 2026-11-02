@@ -34,7 +34,7 @@ test('opening shows only the stored explanation; Generate writes one', () => {
 });
 
 test('the explanation sits where a stock AI read does: under the hero, above the tabs', () => {
-  const at = ['<Hero label={data.name}', '<Why ticker', '<Tabs tabs={TABS}'].map((x) => src.indexOf(x, src.indexOf('const IndexPage')));
+  const at = ['<Hero label={data.name}', '<Why ticker', '<Tabs tabs='].map((x) => src.indexOf(x, src.indexOf('const IndexPage')));
   assert.ok(at.every((i) => i > 0), at.join());
   assert.deepEqual([...at].sort((a, b) => a - b), at);
 });

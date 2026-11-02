@@ -120,6 +120,35 @@ const Indices = ({ data, error, retry }) => {
   );
 };
 
+const IndexChips = ({ label, rows }) => rows.length > 0 && (
+  <div>
+    <h3 className="mb-1 text-[13px] font-medium text-[var(--text-muted)]">{label}</h3>
+    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      {rows.map((i) => (
+        <Link key={i.symbol} to={indexPath(i.symbol)} aria-label={`${i.name}: open its page`}
+              className="tap shrink-0 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 hover:bg-[var(--surface-2)]">
+          <span className="block whitespace-nowrap text-[12px] text-[var(--text-muted)]">{i.name.replace(/^NIFTY (?=[A-Z])/, '')}</span>
+          <span className={`block text-[15px] font-semibold tabular-nums ${toneText(tone(i.percent))}`}>{pct(i.percent / 100, { sign: true })}</span>
+        </Link>
+      ))}
+    </div>
+  </div>
+);
+
+/** The other NSE indices as two scrolling rows, sectors biggest gain first; a row that did not load stays away. */
+const MoreIndices = () => {
+  const { data } = useStored(endpoints.marketIndicesMore);
+  if (!data?.broad?.length && !data?.sectors?.length) return null;
+  return (
+    <Card title="NSE indices">
+      <div className="space-y-3">
+        <IndexChips label="Broad market" rows={data.broad} />
+        <IndexChips label="Sectors" rows={[...data.sectors].sort((a, b) => b.percent - a.percent)} />
+      </div>
+    </Card>
+  );
+};
+
 /** Advancing / declining / flat share of the Nifty 200, as one bar. Counts print beside it. */
 const BreadthBar = ({ b }) => {
   const flat = Math.max(0, b.n - b.up - b.down);
@@ -217,6 +246,7 @@ const Today = () => {
         change={<DeltaChip value={nifty.change} pct={nifty.percent} format={points} privateValue={false} />} />}
       <Story />
       <Indices data={data} error={error} retry={retry} />
+      <MoreIndices />
       <Scan />
       {user && <Events />}
     </div>

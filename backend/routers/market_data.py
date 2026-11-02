@@ -10,6 +10,7 @@ import time
 from backend.auth.dependency import get_optional_user
 from backend.auth.models import User
 from backend.database import db
+from backend.datalayer import index_members
 from backend.datalayer.stock_info import INTRADAY_WINDOWS
 from backend.instruments.master import InstrumentMaster
 from backend.market_cache import cached
@@ -23,6 +24,27 @@ INDICES = {
     "SENSEX": "^BSESN",
     "BANK NIFTY": "^NSEBANK",
     "INDIA VIX": "^INDIAVIX" # Might need verification, fallback to ^VIX if fails?
+}
+# Beyond the headline four that Home and the Market tiles show. Midcap 100, Smallcap 100 and Media are left
+# out: Yahoo gives a single day for them, so no day change and no chart.
+BROAD_INDICES = {
+    "NIFTY NEXT 50": "^NSMIDCP",
+    "NIFTY 100": "^CNX100",
+    "NIFTY 200": "^CNX200",
+    "NIFTY 500": "^CRSLDX",
+    "NIFTY MIDCAP 50": "^NSEMDCP50",
+}
+SECTOR_INDICES = {
+    "NIFTY IT": "^CNXIT",
+    "NIFTY FIN SERVICE": "NIFTY_FIN_SERVICE.NS",
+    "NIFTY AUTO": "^CNXAUTO",
+    "NIFTY PHARMA": "^CNXPHARMA",
+    "NIFTY FMCG": "^CNXFMCG",
+    "NIFTY METAL": "^CNXMETAL",
+    "NIFTY REALTY": "^CNXREALTY",
+    "NIFTY ENERGY": "^CNXENERGY",
+    "NIFTY INFRA": "^CNXINFRA",
+    "NIFTY PSU BANK": "^CNXPSUBANK",
 }
 
 
@@ -138,6 +160,13 @@ async def get_market_indices():
     return await cached("indices", QUOTES_TTL, lambda: _quotes(INDICES))
 
 
+@router.get("/market/indices/more")
+async def get_more_indices():
+    rows = await cached("indices_more", QUOTES_TTL, lambda: _quotes({**BROAD_INDICES, **SECTOR_INDICES}))
+    return {"broad": [r for r in rows or [] if r["name"] in BROAD_INDICES],
+            "sectors": [r for r in rows or [] if r["name"] in SECTOR_INDICES]}
+
+
 @router.get("/market/trending")
 async def get_trending_stocks():
     return await cached("movers", MOVERS_TTL, lambda: asyncio.to_thread(_movers_sync))
@@ -166,7 +195,7 @@ async def get_global_indices():
 # ---------------------------------------------------------------------------
 
 def _known_index_names() -> Dict[str, str]:
-    return {ticker: name for name, ticker in {**INDICES, **GLOBAL_INDICES}.items()}
+    return {ticker: name for name, ticker in {**INDICES, **BROAD_INDICES, **SECTOR_INDICES, **GLOBAL_INDICES}.items()}
 
 
 def _mean_of_last(closes: List[float], window: int):
@@ -226,7 +255,7 @@ async def get_index_detail(ticker: str):
         detail = None
     if detail is None:
         raise HTTPException(status_code=502, detail=f"No price data for {name} right now")
-    return detail
+    return {**detail, "has_stocks": bool(index_members.members(ticker))}
 
 
 def _fetch_index_intraday_sync(ticker: str, days: int = 1) -> List[Dict[str, Any]]:
@@ -535,6 +564,32 @@ async def get_quotes(symbols: str):
             _quote_cache[key] = (time.monotonic(), quotes)
         by_symbol.update({q["symbol"]: q for q in quotes})
     return [by_symbol[s] for s in wanted if s in by_symbol]
+
+
+async def _index_stocks(ticker: str) -> Dict[str, Any]:
+    """Each member with its quote: the ingest cache first, one Yahoo batch for the rest."""
+    rows = index_members.members(ticker)
+    symbols = [r["symbol"] for r in rows]
+    quotes = await _cached_quotes(symbols)
+    missing = [s for s in symbols if s not in quotes]
+    if missing:
+        try:
+            quotes.update({q["symbol"]: q for q in await asyncio.to_thread(_quotes_sync, missing)})
+        except Exception as exc:
+            logger.warning("index stocks: quotes for %s failed: %s", ticker, exc)
+    if not quotes:
+        return {}  # not cached, asked again next time
+    return {"stocks": [{**r, **{k: quotes.get(r["symbol"], {}).get(k) for k in ("price", "change_pct", "at")}} for r in rows]}
+
+
+@router.get("/market/index/{ticker}/stocks")
+async def get_index_stocks(ticker: str):
+    """The index's members with their day move, public. 404 when no member list is kept (SENSEX, VIX, global)."""
+    rows = index_members.members(ticker)
+    if not rows:
+        raise HTTPException(status_code=404, detail="No member list for this index")
+    data = await cached(f"index_stocks:{ticker}", SCAN_TTL, lambda: _index_stocks(ticker))
+    return data or {"stocks": [{**r, "price": None, "change_pct": None, "at": None} for r in rows]}
 
 
 EVENTS_FETCH_WAIT = 8  # seconds; past it the page gets what is stored and the next open tries again

@@ -150,6 +150,8 @@ export const endpoints = {
   quickAnalyze: (symbol) => `/agents/quick-analyze/${symbol}`,
   intraday: (symbol) => `/agents/intraday/${symbol}`,
   marketIndices: '/market/indices',
+  marketIndicesMore: '/market/indices/more',
+  marketIndexStocks: (t) => `/market/index/${encodeURIComponent(t)}/stocks`,
   marketBrief: '/market/brief',
   stockNote: (s) => `/research/${encodeURIComponent(s)}/note`,
   trendingStocks: '/market/trending',

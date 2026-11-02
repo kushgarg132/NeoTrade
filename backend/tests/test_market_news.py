@@ -324,3 +324,73 @@ def test_stock_events_answer_with_what_is_stored_when_the_fetch_hangs(monkeypatc
     monkeypatch.setattr(events, "refresh", slow)
     monkeypatch.setattr(results, "refresh", slow)
     assert client.get("/market/stock/KPITTECH/events").json()["events"] == []
+
+
+def test_every_extra_index_is_known_and_every_member_list_loads():
+    from backend.datalayer import index_members
+    from backend.routers import market_data
+
+    known = market_data._known_index_names()
+    for ticker in [*market_data.BROAD_INDICES.values(), *market_data.SECTOR_INDICES.values()]:
+        assert ticker in known
+        assert index_members.members(ticker), ticker
+    for ticker in index_members.FILES:
+        assert ticker in known and len(index_members.members(ticker)) >= 10, ticker
+    assert "RELIANCE" in {r["symbol"] for r in index_members.members("^NSEI")}
+    assert len(index_members.members("^NSEI")) == 50
+    assert index_members.members("^BSESN") == () and index_members.members("^GSPC") == ()
+
+
+def test_index_stocks_merge_cached_and_fetched_quotes(monkeypatch):
+    from backend.routers import market_data
+
+    client, _ = _stock_client(monkeypatch)
+    monkeypatch.setattr(market_data.index_members, "members", lambda t: (
+        {"symbol": "AAA", "name": "A Ltd", "sector": "IT"}, {"symbol": "BBB", "name": "B Ltd", "sector": "IT"},
+        {"symbol": "CCC", "name": "C Ltd", "sector": "IT"}) if t == "^CNXIT" else ())
+
+    async def cached_quotes(symbols):
+        return {"AAA": {"symbol": "AAA", "price": 10.0, "change_pct": 1.5, "at": 111}}
+    asked = []
+
+    def fetched(symbols):
+        asked.append(symbols)
+        return [{"symbol": "BBB", "price": 20.0, "change_pct": -2.0, "at": 222}]
+    monkeypatch.setattr(market_data, "_cached_quotes", cached_quotes)
+    monkeypatch.setattr(market_data, "_quotes_sync", fetched)
+
+    stocks = client.get("/market/index/^CNXIT/stocks").json()["stocks"]
+    assert asked == [["BBB", "CCC"]]
+    assert [(s["symbol"], s["price"], s["change_pct"]) for s in stocks] == [("AAA", 10.0, 1.5), ("BBB", 20.0, -2.0), ("CCC", None, None)]
+    assert stocks[0]["name"] == "A Ltd"
+    assert client.get("/market/index/^BSESN/stocks").status_code == 404
+
+
+def test_index_stocks_list_names_even_with_no_quotes(monkeypatch):
+    from backend.routers import market_data
+
+    client, _ = _stock_client(monkeypatch)
+
+    async def none(symbols):
+        return {}
+
+    def down(symbols):
+        raise RuntimeError("Yahoo down")
+    monkeypatch.setattr(market_data, "_cached_quotes", none)
+    monkeypatch.setattr(market_data, "_quotes_sync", down)
+    stocks = client.get("/market/index/^CNXIT/stocks").json()["stocks"]
+    assert len(stocks) >= 10 and stocks[0]["price"] is None
+    assert "index_stocks:^CNXIT" not in market_cache._local  # an outage is not cached
+
+
+def test_more_indices_split_by_group(monkeypatch):
+    from backend.routers import market_data
+
+    client, _ = _stock_client(monkeypatch)
+
+    async def quotes(names):
+        return [{"name": n, "symbol": s, "value": 1, "percent": 0.5} for n, s in names.items()]
+    monkeypatch.setattr(market_data, "_quotes", quotes)
+    body = client.get("/market/indices/more").json()
+    assert [r["symbol"] for r in body["broad"]] == list(market_data.BROAD_INDICES.values())
+    assert [r["symbol"] for r in body["sectors"]] == list(market_data.SECTOR_INDICES.values())

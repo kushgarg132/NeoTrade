@@ -19,6 +19,7 @@ import { toneText } from '../components/ui/tone';
 import Tabs, { useTabParam } from '../components/ui/Tabs';
 import ListRow from '../components/ui/ListRow';
 import TradingChart from '../components/stock/TradingChart';
+import IndexStocks from '../components/market/IndexStocks';
 import { newsPath } from '../utils/routes';
 import { formatTimeAgo, marketPhase } from '../utils/formatters';
 import { rangeAt } from '../utils/market';
@@ -104,8 +105,9 @@ const Why = ({ ticker }) => {
 };
 
 const TABS = [{ id: 'chart', label: 'Chart' }, { id: 'news', label: 'News' }, { id: 'details', label: 'Details' }];
+const STOCKS = { id: 'stocks', label: 'Stocks' };
 // Indian indices read the market news; the rest the global feed.
-const scopeOf = (ticker) => (/^\^(NSE|BSE|CNX)|INDIA/.test(ticker) ? 'MARKET' : 'GLOBAL');
+const scopeOf = (ticker) => (/^\^(NSE|NSM|BSE|CNX|CRSL)|INDIA|NIFTY/.test(ticker) ? 'MARKET' : 'GLOBAL');
 /** The chart's news dots: the newest 100 material market (or global) items. */
 const indexNewsUrl = (ticker) => `${endpoints.newsFeed}?scope=${scopeOf(ticker)}&material=true&limit=100`;
 
@@ -165,11 +167,11 @@ const Details = ({ data }) => {
 };
 
 /** /market/index/:ticker, laid out as a stock page: the level and its day on top with the 52-week range, the AI's
- *  read of the last session, then Chart (1D intraday to 5Y), News and Details. Nothing to buy: an index. */
+ *  read of the last session, then Chart (1D intraday to 5Y), Stocks (when a member list is kept), News and Details. */
 const IndexPage = () => {
   const { ticker } = useParams();
   const { data, status, retry } = useStored(endpoints.marketIndex(ticker));
-  const [tab, setTab] = useTabParam(TABS.map((t) => t.id), 'chart');
+  const [tab, setTab] = useTabParam([...TABS, STOCKS].map((t) => t.id), 'chart');
   const at = data ? rangeAt(data.value, data.low_52w, data.high_52w) : null;
   return (
     <Layout>
@@ -197,11 +199,12 @@ const IndexPage = () => {
       {status !== 'empty' && <div className="mb-3"><Why ticker={ticker} /></div>}
       {status === 'ok' && (
         <>
-          <Tabs tabs={TABS} value={tab} onChange={setTab} label="Index sections" />
+          <Tabs tabs={data.has_stocks ? [TABS[0], STOCKS, ...TABS.slice(1)] : TABS} value={tab} onChange={setTab} label="Index sections" />
           <div className="mt-3">
             {tab === 'chart' && (data.points?.length > 1
               ? <Card><TradingChart closes={data.points} symbol={ticker} currency="pts" intradayUrl={endpoints.marketIndexIntraday(ticker)} newsUrl={indexNewsUrl(ticker)} /></Card>
               : <Empty title="No price data" body={`Could not load the history for ${data.name}.`} action={<Button variant="secondary" onClick={retry}>Retry</Button>} />)}
+            {tab === 'stocks' && <IndexStocks ticker={ticker} />}
             {tab === 'news' && <IndexNews ticker={ticker} />}
             {tab === 'details' && <Details data={data} />}
           </div>
