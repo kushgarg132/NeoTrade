@@ -41,8 +41,9 @@ async def test_plan_goes_out_as_money_card_with_stop_button(monkeypatch):
     assert calls == [("alice", "money", "Today's plan", {"buttons": STOP_BUTTON})]
 
 
-async def test_notify_without_telegram_is_a_quiet_false():
-    assert await notify.notify_plan(AsyncMongoMockClient()["t"], "alice", _doc()) is False
+async def test_notify_without_telegram_is_quiet():
+    # the router treats an unlinked user as handled (True), nothing is sent or logged
+    assert await notify.notify_plan(AsyncMongoMockClient()["t"], "alice", _doc()) is True
 
 
 async def test_builder_save_survives_a_failing_notify(monkeypatch):
