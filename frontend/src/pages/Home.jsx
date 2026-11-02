@@ -23,6 +23,7 @@ import useStored from '../hooks/useStored';
 import { sourceName } from '../utils/newsItem';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useRefetchOn } from '../hooks/useStream';
+import useLivePoll from '../hooks/useLivePoll';
 import { useAuth } from '../context/AuthContext';
 import { useNeedCount } from '../hooks/useNeedCount';
 import { aiBook } from '../utils/ai';
@@ -118,6 +119,8 @@ const MemberHome = () => {
     const timer = setInterval(() => !document.hidden && load(), 60_000);
     return () => clearInterval(timer);
   }, [load]);
+  // The account hero re-reads every 10 s while NSE trades (the server's pulse is shared for 10 s).
+  useLivePoll(() => api.get(endpoints.mine.overview, { cache: false }).then((r) => setOverview(r.data)).catch(() => {}), 10_000);
   useReconnect(load);
   // A fill, a new idea or a fresh holdings snapshot shows now, not at the next poll.
   useRefetchOn(['trades', 'suggestions', 'autopilot', 'portfolio', 'guardrails'], load);

@@ -134,7 +134,7 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
     }
 
 
-PULSE_TTL_S = 30
+PULSE_TTL_S = 10
 _PULSE_CACHE: dict = {}  # (id(db), user_id) -> (monotonic at, task)
 
 
