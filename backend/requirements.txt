@@ -33,3 +33,4 @@ aiogram==3.31.0  # Telegram Bot API transport (backend/guardrails/telegram.py); 
 import-linter==2.15  # import contracts, `lint-imports` (backend/.importlinter); pure python
 empyrical-reloaded==0.7.0  # Apache-2.0, standard return metrics (backend/lab/metrics.py)
 lightgbm==4.6.0  # ML ranking harness (backend/ml/), aarch64 wheel; no scikit-learn
+matplotlib==3.11.2  # PSF-style licence; Telegram chart PNGs (backend/chat/media.py::render_png), Agg backend, no GUI

@@ -4,14 +4,17 @@ import { readFileSync } from 'node:fs';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const page = read('./Ideas.jsx');
-const row = read('../components/ideas/IdeaRow.jsx');
+const list = read('../components/ideas/PickList.jsx');
+const pickBar = read('../components/ideas/PickBar.jsx');
+const detail = read('./IdeaDetail.jsx');
 const hold = read('../components/ideas/HoldingActions.jsx');
 
-test('every idea row shows side, entry, stop and R:R without a tap', () => {
-  assert.match(row, /idea\.side/);
-  assert.match(row, /Entry/);
-  assert.match(row, /SL /);
-  assert.match(row, /R:R/);
+test('every row shows side, the expected move, how sure, the entry and one status; levels live on the idea page', () => {
+  assert.match(list, /idea\.side/);
+  assert.match(list, /`entry \$\{px\(idea\.entry\)\}`/);
+  assert.match(list, /% up/);
+  assert.match(list, /pickStatus\(idea, \{ news: news\?\.\[key\], results: results\?\.\[key\] \}\)/);
+  assert.match(detail, /label="Stop"/);
 });
 
 test('the list says its figures are a paper record, not advice', () => {
@@ -31,25 +34,19 @@ test('the holdings alert error names what is affected', () => {
 
 const bar = read('../components/ideas/BuyBar.jsx');
 
-test('a pending engine idea gets its own Skip / Buy N SYMBOL bar in the row, Picks do not', () => {
-  assert.match(row, /idea\.kind === 's' && !idea\.decided && onDone/);
-  assert.match(row, /<BuyBar idea=\{idea\} id=\{parseIdeaId\(idea\.id\)\.key\} onDone=\{onDone\} compact/);
-  assert.match(bar, /compact \? verb :/);
-  assert.match(page, /<IdeaRow key=\{i\.id\} idea=\{i\} onDone=\{fresh\.reload\}/);
-});
-
-test('the row buttons never open the detail page and keep the real-money second tap', () => {
-  // The info part is the link; the bar sits outside it.
-  assert.ok(row.indexOf('</Link>') < row.indexOf('<BuyBar'));
+test('rows only link to the idea page; Skip / Buy live there, keeping the real-money second tap', () => {
+  assert.match(list, /to=\{`\/ideas\/\$\{encodeURIComponent\(idea\.id\)\}`\}/);
+  assert.doesNotMatch(list, /<BuyBar|<PickBar|<Button/);
+  assert.match(detail, /idea\.kind === 's' && !idea\.decided && <BuyBar idea=\{idea\} id=\{key\} onDone=\{done\} \/>/);
+  assert.match(detail, /idea\.kind === 'p' && <PickBar idea=\{idea\} onDone=\{done\} \/>/);
   assert.match(bar, /Tap again to send\./);
   assert.match(bar, /confirm_token: token\.current/);
 });
 
-test('a pick row gets Skip (dismiss) and Buy SYMBOL… that opens the order ticket at the pick levels', () => {
-  assert.match(row, /idea\.kind === 'p' && onDone/);
-  assert.match(row, /api\.post\(endpoints\.picks\.dismiss\(parseIdeaId\(idea\.id\)\.key\)\)/);
-  assert.match(row, /<OrderTicket symbol=\{idea\.symbol\} side="BUY" lastPrice=\{idea\.entry\} limitPrice=\{idea\.entryZone\?\.\[1\]\}/);
-  assert.match(row, /disabled=\{busy\}>Buy<\/Button>/);
+test('PickBar: Skip dismisses, Buy opens the order ticket at the pick levels', () => {
+  assert.match(pickBar, /api\.post\(endpoints\.picks\.dismiss\(parseIdeaId\(idea\.id\)\.key\)\)/);
+  assert.match(pickBar, /<OrderTicket symbol=\{idea\.symbol\} side="BUY" lastPrice=\{idea\.entry\} limitPrice=\{idea\.entryZone\?\.\[1\]\}/);
+  assert.match(pickBar, /disabled=\{busy\}>Buy<\/Button>/);
 });
 
 test('holdings triage into Act now (one card per stock, its own labels), Keep an eye and Coming up', () => {
@@ -72,20 +69,15 @@ test('Ideas splits into Picks (default) and Holdings sub-tabs', () => {
   assert.match(page, /tab === 'holdings' && \(acts\.loading/);
 });
 
-test('picks are grouped Engine, A, B, then C behind the toggle', () => {
-  const group = page.slice(page.indexOf('const group ='), page.indexOf('return ('));
-  assert.match(page, /groupByGrade/);
-  assert.doesNotMatch(page, /splitByEvidence/);
-  assert.match(page, /Engine ideas/);
-  assert.match(page, /GRADES\.A\.label/);
-  assert.match(page, /GRADES\.B\.label/);
-  assert.match(page, /aria-expanded=\{showUnproven\}/);
-  assert.match(page, /grade C: no edge yet/);
-  // groups render only when non-empty; the toggle and the "No proven setup" line need picks
-  assert.match(page, /rows\.length > 0 &&/);
-  assert.match(page, /C\.length > 0 &&/);
-  assert.match(page, /engine\.length === 0 && A\.length === 0 && B\.length === 0 && C\.length > 0/);
-  // toggle state lives in Ideas, not in a group, so it survives fresh.reload
-  assert.ok(page.indexOf('useState(false)') < page.indexOf('const group ='));
-  assert.doesNotMatch(group, /useState/);
+test('one ranked list best first: engine ideas, then A and B together, C folded behind a toggle', () => {
+  assert.match(page, /<PickList items=\{fresh\.data\.items\}/);
+  assert.match(list, /rankPicks\(items\)/);
+  assert.match(list, /Engine ideas/);
+  assert.match(list, /Picks · best first/);
+  assert.match(list, /hold to the due date/);
+  assert.match(list, /aria-expanded=\{showUnproven\}/);
+  assert.match(list, /C: no edge yet/);
+  assert.match(list, /No proven setup has fired right now/);
+  // column labels on wider screens only
+  assert.match(list, /hidden sm:grid/);
 });

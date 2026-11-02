@@ -146,6 +146,7 @@ async def news_feed(
     mine: bool = False,
     material: bool = False,
     before: Optional[datetime] = None,
+    q: Optional[str] = Query(None, max_length=80),
     limit: int = Query(50, ge=1, le=100),
     user: User = Depends(get_current_user),
 ):
@@ -153,7 +154,12 @@ async def news_feed(
     first: relevant items, scored or still waiting to be. An NSE filing the
     scorer found moves nothing (record dates, "Updates") is left out. `mine`
     keeps the ones tagged with or moving a name the user holds (paper or at
-    the broker) or watches; `before` pages back by published time."""
+    the broker) or watches; `before` pages back by published time; `q`
+    matches the headline (case-insensitive, taken literally) or a symbol the
+    item tags or moves. A search scans newest first until `limit` matches;
+    a Mongo text index is the step up if that grows slow."""
+    import re
+
     from backend.database import db
     from backend.datalayer.news import COLLECTION, SCORED, TRIAGED
     from backend.datalayer.prices import _bare
@@ -174,6 +180,11 @@ async def news_feed(
         broker = [h.get("symbol") for h in (snapshot or {}).get("holdings", [])]
         names = sorted({_bare(s) for s in [*held, *watched, *broker] if s})
         query["$or"] = [{"symbols": {"$in": names}}, {"impacts.target": {"$in": names}}]
+    if q and q.strip():
+        term = q.strip()
+        symbol = _bare(term).upper()
+        query.setdefault("$and", []).append({"$or": [{"title": {"$regex": re.escape(term), "$options": "i"}},
+                                                      {"symbols": symbol}, {"impacts.target": symbol}]})
     items = await db.db[COLLECTION].find(query, FEED_FIELDS).sort("published_at", -1).limit(limit).to_list(length=limit)
     return {"items": [as_feed_item(i) for i in items]}
 

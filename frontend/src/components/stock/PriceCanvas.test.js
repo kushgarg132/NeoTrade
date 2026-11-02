@@ -84,3 +84,14 @@ test('the readout re-reads the hovered bar from the current bars, and candles fo
   assert.match(chart, /bars\.find\(\(b\) => b\.date === hover\.date\)/);
   assert.match(chart, /daily\.full\.slice\(-spec\)\.every\(Boolean\)/);
 });
+
+test('a tap on any bar selects it: readout pins to it, crosshair stays, its news opens; tapping it again clears', () => {
+  const canvas = read('./PriceCanvas.jsx');
+  const chart = read('./TradingChart.jsx');
+  assert.match(canvas, /latest\.current\.onPickBar\?\.\(bar\)/);
+  assert.match(canvas, /setCrosshairPosition\(/);
+  assert.match(chart, /onPickBar=\{pickBar\}/);
+  assert.match(chart, /const focus = hoverBar \|\| pinnedBar \|\| last/);
+  assert.match(chart, /shownBar && shown\.ohlc/);
+  assert.match(chart, /p\?\.date === bar\.date \? null/);
+});

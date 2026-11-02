@@ -84,6 +84,19 @@ def test_news_feed_filters_to_the_users_names(monkeypatch):
     assert ids(scope="MACRO") == ["rbi"]
     assert ids(limit=1) == ["tcs"]
 
+    # Search: headline text (case-insensitive, regex characters taken literally) or a symbol it tags or moves.
+    asyncio.run(mongo["news_items"].insert_one(item("Q2 (beat) & guidance up", 7, symbols=["LT"])))
+    assert ids(q="ORDER") == ["order-win"]
+    assert ids(q="infy") == ["infy"]
+    assert ids(q="tcs") == ["tcs"]
+    assert ids(q="(beat) &") == ["Q2 (beat) & guidance up"]
+    assert ids(q=".*") == []
+    assert ids(q="  ") == ["tcs", "infy", "rbi", "order-win", "Q2 (beat) & guidance up"]
+    # Combined with mine (its own $or) and scope.
+    assert ids(q="hdfcbank", mine=True) == ["order-win"]
+    assert ids(q="tcs", scope="MACRO") == []
+    assert client.get("/news/feed", params={"q": "x" * 81}).status_code == 422
+
 
 def _symbols_client(monkeypatch, items, sentiments):
     import asyncio

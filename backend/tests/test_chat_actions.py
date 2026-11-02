@@ -120,7 +120,6 @@ async def test_propose_refuses_unknown_or_others_suggestion(env):
 @pytest.mark.parametrize("args", [
     {"symbol": "INFY", "side": "BUY", "quantity": 0},
     {"symbol": "NOPE", "side": "BUY", "quantity": 1},
-    {"symbol": "INFY", "side": "BUY", "quantity": 20},  # 20 x 1500 > 20,000 cap
 ])
 async def test_propose_order_refuses_bad_input(env, args):
     db = env["db"]
@@ -340,10 +339,10 @@ async def test_limit_outside_band_is_refused(env, limit):
         await actions._order_checks(env["db"], "alice", _order(order_type="LIMIT", limit_price=limit), None)
 
 
-async def test_cap_uses_limit_price(env):
-    await actions._order_checks(env["db"], "alice", _order(order_type="LIMIT", limit_price=1250.0, quantity=16), None)
-    with pytest.raises(ActionRefused, match="per-trade cap"):
-        await actions._order_checks(env["db"], "alice", _order(quantity=16), None)
+async def test_my_account_orders_are_not_held_to_the_per_trade_cap(env):
+    # alice's cap is 20,000; 16 shares at ~1,500 is over it, and her own account takes it anyway.
+    await actions._order_checks(env["db"], "alice", _order(quantity=16), None)
+    await actions._modify_checks(env["db"], "alice", _OrdersBroker(), {"order_id": "B9", "quantity": 5000, "price": None})
 
 
 
@@ -460,7 +459,6 @@ class _OrdersBroker:
 
 
 @pytest.mark.parametrize("params,why", [
-    ({"order_id": "B9", "quantity": 5000, "price": None}, "per-trade cap"),
     ({"order_id": "B9", "quantity": None, "price": -1.0}, "price above 0"),
     ({"order_id": "B9", "quantity": 0, "price": None}, "whole number above zero"),
 ])

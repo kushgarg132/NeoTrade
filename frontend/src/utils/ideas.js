@@ -1,5 +1,6 @@
 // One view model for the Ideas screens: a stored suggestion or a Picks row.
 import { strategyName } from './library.js';
+import { badNewsSince, resultsFlag } from './news.js';
 
 /** Route id: `s-<suggestionId>` or `p-<pickId>` (pick ids hold colons, so only the first dash splits). */
 export const parseIdeaId = (id) => {
@@ -68,14 +69,6 @@ export const GRADES = {
   B: { label: 'B · Promising', kind: 'neutral' },
   C: { label: 'C · Unproven', kind: 'unproven' },
 };
-
-/** Engine ideas, then picks by grade; a pick with no or an unknown grade counts as C (no edge so far). */
-export const groupByGrade = (items) => ({
-  engine: items.filter((i) => i.kind !== 'p'),
-  A: items.filter((i) => i.kind === 'p' && i.grade === 'A'),
-  B: items.filter((i) => i.kind === 'p' && i.grade === 'B'),
-  C: items.filter((i) => i.kind === 'p' && i.grade !== 'A' && i.grade !== 'B'),
-});
 
 /** Copy for the New ideas card when nothing is served. */
 export const noPickText = (hiddenReason) => ({
@@ -247,4 +240,27 @@ export const holdingButtons = (item) => {
     later: kind === 'results_soon' || kind === 'ex_dividend' ? 'Remind me later' : 'Later',
     dismiss: exit ? 'Keep holding' : HOLDING_DISMISS[kind] || 'Dismiss',
   };
+};
+
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : -Infinity);
+const byOdds = (a, b) => num(b.pUp) - num(a.pUp) || num(b.expectedMedian) - num(a.expectedMedian);
+const GRADE_RANK = { A: 0, B: 1 };
+
+/** The Picks list best first: engine ideas by score; graded picks A then B, each by chance up then expected move;
+ *  the rest (C or no grade: no edge so far) apart, in the same order. */
+export const rankPicks = (items = []) => ({
+  engine: items.filter((i) => i.kind !== 'p').sort((a, b) => num(b.score?.final) - num(a.score?.final)),
+  ranked: items.filter((i) => i.kind === 'p' && i.grade in GRADE_RANK)
+    .sort((a, b) => GRADE_RANK[a.grade] - GRADE_RANK[b.grade] || byOdds(a, b)),
+  unproven: items.filter((i) => i.kind === 'p' && !(i.grade in GRADE_RANK)).sort(byOdds),
+});
+
+/** One status for a row, most urgent first: bad news since the signal, results inside the horizon, then for a pick
+ *  whether its entry is still open. `news` = the symbol's /news/symbols entry, `results` its next results date. */
+export const pickStatus = (idea, { news, results, now = Date.now() } = {}) => {
+  if (idea.kind === 'p' && idea.daysSince > 0 && badNewsSince(news, idea.firedOn)) return { label: 'New bad news', kind: 'alert' };
+  const soon = resultsFlag(results, idea.daysSince > 0 && idea.daysLeft != null ? idea.daysLeft : idea.horizon, now);
+  if (soon) return { label: soon, kind: 'unproven' };
+  if (idea.kind !== 'p') return null;
+  return idea.missedEntry ? { label: 'Entry missed', kind: 'neutral' } : { label: 'Entry open', kind: 'proven' };
 };
