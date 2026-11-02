@@ -150,6 +150,19 @@ async def test_a_failing_alert_does_not_stop_the_square_off(monkeypatch, mode):
     square.assert_awaited_once()
 
 
+async def test_a_failing_publish_does_not_stop_the_square_off(monkeypatch):
+    db = AsyncMongoMockClient()["test_db"]
+    monkeypatch.setattr(monitor, "sync_user_trades", AsyncMock(return_value={
+        "imported": 0, "brokers": ["kite"], "failed": [], "day_pnl": -11_000.0}))
+    monkeypatch.setattr(monitor.hub, "publish", AsyncMock(side_effect=RuntimeError("redis down")))
+    monkeypatch.setattr("backend.alerts.alert", AsyncMock())
+    square = AsyncMock(return_value=[])
+    monkeypatch.setattr(monitor, "square_off", square)
+    prefs = {**PREFS, "user_id": "alice", "auto_square_off": "live"}
+    await monitor.check_user(db, None, None, prefs, _ist(10, 31))
+    square.assert_awaited_once()
+
+
 async def test_check_user_does_nothing_without_a_connected_broker(monkeypatch):
     db = AsyncMongoMockClient()["test_db"]
     monkeypatch.setattr(monitor, "sync_user_trades", AsyncMock(return_value={

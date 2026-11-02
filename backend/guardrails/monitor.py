@@ -109,9 +109,12 @@ async def check_user(db, redis, credentials, prefs: dict, now: datetime) -> list
 
 
 async def _alert(db, user_id: str, event: dict) -> None:
-    await hub.publish(user_id, "guardrails", "breach", event)
     button = alerts.open_button("/settings/guardrails")
     try:  # an alert must never stop the kill-switch / square-off path that calls this
+        await hub.publish(user_id, "guardrails", "breach", event)
+    except Exception as exc:
+        logger.warning("guardrail publish failed for %s: %s", user_id, exc)
+    try:
         await alerts.alert(db, user_id, "money", event["title"], [event["detail"]], buttons=[button] if button else None)
     except Exception as exc:
         logger.warning("guardrail alert failed for %s: %s", user_id, exc)
