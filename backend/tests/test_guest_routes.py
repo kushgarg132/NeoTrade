@@ -26,6 +26,7 @@ PUBLIC = {
     ("GET", "/api/v1/market/sector/{name}"),
     ("GET", "/api/v1/market/stock/{symbol}/events"),
     ("GET", "/api/v1/market/indices/more"),
+    ("GET", "/api/v1/market/stock/{symbol}/indices"),
     ("GET", "/api/v1/market/index/{ticker}/stocks"),
     ("GET", "/api/v1/research/{symbol}/note"),
     ("GET", "/api/v1/news/feed"),

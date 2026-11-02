@@ -592,6 +592,15 @@ async def get_index_stocks(ticker: str):
     return data or {"stocks": [{**r, "price": None, "change_pct": None, "at": None} for r in rows]}
 
 
+@router.get("/market/stock/{symbol}/indices")
+async def get_stock_indices(symbol: str):
+    """The indices this stock belongs to, from the stored member lists. SENSEX has no list, so it never shows."""
+    from backend.datalayer.prices import _bare
+
+    names = _known_index_names()
+    return {"indices": [{"name": names[t], "symbol": t} for t in index_members.indices_of(_bare(symbol.strip()).upper())]}
+
+
 EVENTS_FETCH_WAIT = 8  # seconds; past it the page gets what is stored and the next open tries again
 
 

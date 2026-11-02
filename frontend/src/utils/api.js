@@ -195,6 +195,7 @@ export const endpoints = {
   newsAccuracy: '/news/accuracy',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
   newsHistory: (symbol, days = 365, live = false) => `/news/symbol/${encodeURIComponent(symbol)}?days=${days}${live ? '&live=true' : ''}`,
+  stockIndices: (symbol) => `/market/stock/${encodeURIComponent(symbol)}/indices`,
   stockEvents: (symbol) => `/market/stock/${encodeURIComponent(symbol)}/events`,
   newsResults: (symbols) => `/news/results?symbols=${encodeURIComponent(symbols)}`,
   planToday: '/plan/today',

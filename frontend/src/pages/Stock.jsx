@@ -21,6 +21,7 @@ import NewsTab from '../components/stock/NewsTab';
 import DetailsTab from '../components/stock/DetailsTab';
 import AiRead from '../components/stock/AiRead';
 import EventsTab from '../components/stock/EventsTab';
+import StockIndices from '../components/stock/StockIndices';
 import useStockAnalysis from '../components/stock/useStockAnalysis';
 import Fundamentals from '../components/analysis/Fundamentals';
 import { verdictKind, verdictLabel } from '../components/stock/common';
@@ -202,6 +203,7 @@ const Stock = () => {
             )}
           >
             <AsOf at={live?.at} />
+            <StockIndices symbol={symbol} />
           </Hero>
         </div>
       )}

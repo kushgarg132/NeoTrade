@@ -394,3 +394,13 @@ def test_more_indices_split_by_group(monkeypatch):
     body = client.get("/market/indices/more").json()
     assert [r["symbol"] for r in body["broad"]] == list(market_data.BROAD_INDICES.values())
     assert [r["symbol"] for r in body["sectors"]] == list(market_data.SECTOR_INDICES.values())
+
+
+def test_stock_indices_list_what_holds_it_headline_first(monkeypatch):
+    client, _ = _stock_client(monkeypatch)
+    rows = client.get("/market/stock/RELIANCE.NS/indices").json()["indices"]
+    assert rows[0] == {"name": "NIFTY 50", "symbol": "^NSEI"}
+    assert {"name": "NIFTY 500", "symbol": "^CRSLDX"} in rows
+    assert "^NSEBANK" not in [r["symbol"] for r in rows]  # not a bank
+    assert client.get("/market/stock/hdfcbank/indices").json()["indices"][1]["symbol"] == "^NSEBANK"
+    assert client.get("/market/stock/NOTREAL/indices").json() == {"indices": []}

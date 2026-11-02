@@ -28,3 +28,8 @@ def members(ticker: str) -> tuple[dict, ...]:
     with (_DIR / f"{name}.csv").open() as f:
         return tuple({"symbol": r["Symbol"].strip(), "name": r["Company Name"].strip(), "sector": r["Industry"].strip()}
                      for r in csv.DictReader(f) if r.get("Series", "EQ").strip() == "EQ")
+
+
+def indices_of(symbol: str) -> list[str]:
+    """The tickers of every index holding this stock, in FILES order (headline indices first)."""
+    return [ticker for ticker in FILES if any(r["symbol"] == symbol for r in members(ticker))]
