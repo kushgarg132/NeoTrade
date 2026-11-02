@@ -325,7 +325,8 @@ async def _actions(db, user_id: str, now: datetime) -> list[dict]:
 
 async def _users(db) -> list[str]:
     return sorted(set(await db["portfolio_snapshots"].distinct("user_id")) | set(
-        await db["user_prefs"].distinct("user_id", {"broker_roles": {"$exists": True, "$ne": {}}})))
+        await db["user_prefs"].distinct("user_id", {"broker_roles": {"$exists": True, "$ne": {}}})) | set(
+        await db["alerts"].distinct("user_id", {"state": "queued"})))  # watchlist-only users with queued rows
 
 
 async def premarket_for(db, user_id: str, now: datetime, claimed: Optional[list] = None) -> str:

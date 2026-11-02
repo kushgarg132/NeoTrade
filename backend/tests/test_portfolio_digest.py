@@ -197,6 +197,21 @@ async def test_premarket_includes_since_block(db, monkeypatch):
     assert (await db["alerts"].find_one({}))["state"] == "digested"
 
 
+async def test_watchlist_only_user_with_queued_rows_is_drained(db, monkeypatch):
+    sent = []
+
+    async def capture(db_, user_id, text, html=False, buttons=None):
+        sent.append((user_id, text))
+        return True
+
+    monkeypatch.setattr("backend.guardrails.telegram.alert", capture)
+    await db["alerts"].insert_one({"user_id": "wanda", "kind": "news", "title": "WL news", "lines": [],
+                                   "state": "queued", "created_at": NOW})
+    await digest.send_premarket(db, _Redis(), NOW.replace(hour=8, minute=46))
+    assert any(u == "wanda" and "WL news" in t for u, t in sent)
+    assert (await db["alerts"].find_one({"user_id": "wanda"}))["state"] == "digested"
+
+
 async def test_failed_send_requeues_drained_rows(db, monkeypatch):
     async def fail(db_, user_id, text, html=False, buttons=None):
         return False

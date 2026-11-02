@@ -390,6 +390,8 @@ async def _learn(db, now: datetime, pass_day: Optional[date] = None) -> int:
         try:
             changes = await learn(db, user_id, nifty, now, lab=lab)
             total += len(changes)
+            if ":" in user_id:  # "<uid>:mine" paper book (engine/autorun.py): learn, but no alert
+                continue
             for change in changes:
                 if change["rule"] == "pause":
                     title, lines = alerts.split(pause_text(change))
@@ -432,7 +434,7 @@ async def _weekly_mirrors(db) -> int:
                     last = month[-1]
                     text += (f"\nThis month — AI account ₹{last['ai']['net_pnl']:+,.0f}, "
                              f"your account ₹{last['mine']['net_pnl']:+,.0f} (after charges).")
-            sent += bool(await alerts.alert(db, user_id, "review", "Your week", text.splitlines()))
+            sent += bool(await alerts.alert(db, user_id, "review", "Charges and returns this week", text.splitlines()))
         except Exception as exc:
             logger.warning("weekly mirror failed for %s: %s", user_id, exc)
     return sent
