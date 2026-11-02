@@ -1,6 +1,6 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Share2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
@@ -18,6 +18,7 @@ import { bareSymbol } from '../utils/formatters';
 import { inr, pct, tone } from '../components/ui/format';
 import { stockPath } from '../utils/stocks';
 import { shiftWeek, weekRange } from '../utils/weekly';
+import { shareWeek } from '../utils/shareCard';
 
 const act = 'inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold';
 const navCls = 'inline-flex items-center justify-center min-h-11 min-w-11 text-[var(--text-muted)] disabled:opacity-40';
@@ -67,6 +68,23 @@ const NewsWeek = ({ news }) => {
   );
 };
 
+/** The week as an image for the share sheet (utils/shareCard.js): percentages only. */
+const ShareWeek = ({ week, you }) => {
+  const [failed, setFailed] = useState(false);
+  const share = () => {
+    setFailed(false);
+    shareWeek(week, weekRange(week), you).catch(() => setFailed(true));
+  };
+  return (
+    <div className="mt-3">
+      <button type="button" onClick={share} className="tap inline-flex items-center gap-2 min-h-11 px-4 rounded-[12px] bg-[var(--surface-2)] text-[14px] font-semibold text-[var(--text)]">
+        <Share2 className="w-4 h-4" aria-hidden="true" />Share my week
+      </button>
+      {failed && <p role="alert" className="mt-2 text-[13px] text-[var(--loss)]">Couldn&rsquo;t share the image. Try again.</p>}
+    </div>
+  );
+};
+
 /** Last week for the user's own account; the same numbers Telegram sends on Sunday 18:00. */
 const WeeklyReport = () => {
   const [params, setParams] = useSearchParams();
@@ -108,6 +126,7 @@ const WeeklyReport = () => {
                   <Stat label="NIFTY" value={pct(r.you.nifty, { sign: true })} tone={tone(r.you.nifty)} />
                   <Stat label="Excess" value={pct(r.you.excess, { sign: true })} tone={tone(r.you.excess)} />
                 </div>
+                <ShareWeek week={r.week} you={r.you} />
               </Hero>
             )}
             <Card title="AI book" to="/ai">
