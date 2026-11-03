@@ -21,7 +21,7 @@ import requests
 from pydantic import BaseModel
 
 from backend.core.market_calendar import is_trading_day, next_trading_day
-from backend.datalayer import bars, news, news_sources
+from backend.datalayer import accuracy, bars, news, news_sources
 from backend.engine.autorun import in_session
 from backend.engine.session import IST
 from backend.lab.assumptions import round_trip_return
@@ -48,6 +48,9 @@ BENCH = "^NSEI"
 HOLD, SHORT_HOLD = timedelta(hours=1), timedelta(minutes=15)
 BAR_TOLERANCE = timedelta(minutes=5)  # a thin stock may skip a minute; further than this is no price at all
 MEASURE_DAYS = 6  # Yahoo keeps 1-minute bars about 7 days
+# The pass bar, fixed before any data (spec, "The pass bar"). Do not tune it to the results.
+MIN_DIRECTION, MIN_MOVED = 0.5, 0.01
+BAR_SIGNALS, BAR_DAYS, BAR_T = 100, 20, 2.0
 
 
 def filing_id(item: dict) -> str:
@@ -343,3 +346,83 @@ async def measure_loop(db, redis, now: Optional[datetime] = None) -> None:
             await db[COLLECTION].update_one({"_id": row["_id"]}, {"$set": {**fields, "measured": True}})
         elif local - at > pd.Timedelta(days=MEASURE_DAYS):
             await db[COLLECTION].update_one({"_id": row["_id"]}, {"$set": {"measured": False}})
+
+
+def _usable(row: dict) -> bool:
+    """Measured, read from the PDF, on time and inside the window, with a real signal."""
+    score = row.get("score") or {}
+    return (row.get("net_1h") is not None and bool(row.get("pdf_ok")) and not row.get("late") and bool(row.get("in_window"))
+            and bool(score.get("key_fact_ok")) and abs(score.get("direction") or 0) >= MIN_DIRECTION)
+
+
+def primary_signals(rows: list[dict]) -> list[dict]:
+    """The one rule under test: the price already moved its way. First per symbol per day, since a revised
+    filing is not a second piece of evidence."""
+    seen, out = set(), []
+    for row in sorted(filter(_usable, rows), key=lambda r: _aware(r["scored_at"])):
+        moved, direction = row.get("moved_net"), row["score"]["direction"]
+        if moved is None or moved * (1 if direction > 0 else -1) < MIN_MOVED:
+            continue
+        key = (row["symbol"], _ist_day(_aware(row["scored_at"])))
+        if key not in seen:
+            seen.add(key)
+            out.append(row)
+    return out
+
+
+def _stats(rows: list[dict]) -> dict:
+    points = [(_ist_day(_aware(r["scored_at"])), r["net_1h"], r["net_1h"] > 0) for r in rows]
+    return accuracy._stats(points) if points else {"n": 0, "days": 0, "hit": None, "mean": None, "t": None, "thin": True}
+
+
+def _standing(rows: list[dict]) -> dict:
+    s = _stats(rows)
+    return {**s, "passes": s["n"] >= BAR_SIGNALS and s["days"] >= BAR_DAYS and (s["mean"] or 0) > 0 and (s["t"] or 0) >= BAR_T}
+
+
+def bar(rows: list[dict]) -> dict:
+    signals = primary_signals(rows)
+    return {**_standing(signals), "long_only": _standing([r for r in signals if r["score"]["direction"] > 0])}
+
+
+def exploratory(rows: list[dict]) -> list[dict]:
+    """Splits to look at, never to pass: a promising one becomes a new rule and counts from zero on new data."""
+    def moved_bucket(row):
+        moved = row.get("moved_net")
+        if moved is None:
+            return "unknown"
+        signed = moved * (1 if row["score"]["direction"] > 0 else -1)
+        return ">=3%" if signed >= 0.03 else "1-3%" if signed >= MIN_MOVED else "<1%"
+
+    def priced_bucket(row):
+        priced = row["score"].get("priced_in")
+        return "unknown" if priced is None else "priced" if priced >= accuracy.PRICED else "fresh"
+
+    splits = {"event_type": lambda r: r["score"].get("event_type") or "other",
+              "impact": lambda r: accuracy.impact_bucket(r["score"].get("impact") or 0),
+              "priced_in": priced_bucket, "moved": moved_bucket}
+    usable = [r for r in rows if _usable(r)]
+    cells = []
+    for split, key_of in splits.items():
+        groups: dict[str, list] = {}
+        for row in usable:
+            groups.setdefault(key_of(row), []).append(row)
+        cells += [{"split": split, "key": key, **_stats(part)} for key, part in sorted(groups.items())]
+    return cells
+
+
+async def report(db, redis, now: Optional[datetime] = None) -> dict:
+    now = now or datetime.now(timezone.utc)
+    rows = await db[COLLECTION].find({}, {"text": 0, "feed_text": 0}).to_list(length=None)
+    scored = [r for r in rows if r.get("status") == "scored"]
+    lags = sorted((_aware(r["scored_at"]) - _aware(r["published_at"])).total_seconds() / 60
+                  for r in scored if r.get("in_window") and not r.get("late"))
+    gaps = await redis.get(f"filings:gaps:{_ist_day(now)}") if redis is not None else None
+    return {"bar": bar(rows), "exploratory": exploratory(rows), "health": {
+        "total": len(rows), "waiting": sum(r.get("status") == "new" for r in rows),
+        "failed": sum(r.get("status") == "failed" for r in rows),
+        "pdf_failed": sum(not r.get("pdf_ok") for r in scored),
+        "key_fact_rejected": sum(not (r.get("score") or {}).get("key_fact_ok") for r in scored),
+        "unmeasured": sum(r.get("measured") is False for r in rows),
+        "median_lag_minutes": round(lags[len(lags) // 2], 1) if lags else None,
+        "gaps_today": int(gaps or 0)}}

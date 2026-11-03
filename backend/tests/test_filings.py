@@ -400,3 +400,105 @@ async def test_no_bars_stay_open_then_expire_unmeasured(scored):  # Review Focus
     await filings.measure_loop(scored, FakeRedis(), now=CLOSED + timedelta(days=filings.MEASURE_DAYS + 1))
     doc = await scored["filing_scores"].find_one({"_id": "a"})
     assert doc["measured"] is False and doc.get("net_1h") is None
+
+
+# ---- Task 5: the report and the bar
+
+def _signal(day=3, symbol="TCS", direction=0.8, moved=0.015, net=0.004, **over):
+    at = datetime(2026, 11, day, 5, 0, tzinfo=timezone.utc)
+    return {"symbol": symbol, "status": "scored", "scored_at": at, "published_at": at, "pdf_ok": True, "late": False, "in_window": True,
+            "measured": True, "moved_net": moved, "net_1h": net,
+            "score": {"direction": direction, "impact": 6, "priced_in": 0.2, "event_type": "order", "key_fact_ok": True}, **over}
+
+
+@pytest.mark.parametrize("change", [
+    {"direction": 0.4}, {"pdf_ok": False}, {"late": True}, {"in_window": False}, {"moved": 0.009},
+    {"moved": -0.02}, {"net": None}, {"moved": None}])
+def test_primary_signal_needs_every_condition(change):
+    assert len(filings.primary_signals([_signal()])) == 1
+    assert filings.primary_signals([_signal(**change)]) == []
+
+
+def test_a_bearish_signal_needs_the_move_down():
+    assert len(filings.primary_signals([_signal(direction=-0.8, moved=-0.015)])) == 1
+    assert filings.primary_signals([_signal(direction=-0.8, moved=0.015)]) == []
+
+
+def test_a_cleared_key_fact_is_not_a_signal():
+    row = _signal()
+    row["score"]["key_fact_ok"] = False
+    assert filings.primary_signals([row]) == []
+
+
+def test_only_the_first_signal_per_symbol_per_day_counts():  # Review Focus 5
+    first, revised = _signal(), _signal()
+    revised["scored_at"] += timedelta(minutes=30)
+    other_day, other_stock = _signal(day=4), _signal(symbol="INFY")
+    picked = filings.primary_signals([revised, first, other_day, other_stock])
+    assert len(picked) == 3 and first in picked and revised not in picked
+
+
+def _many(n, days, net=0.004, spread=0.002):
+    rows = []
+    for i in range(n):
+        day = datetime(2026, 7, 1, 5, 0, tzinfo=timezone.utc) + timedelta(days=i % days)
+        rows.append(_signal(symbol=f"S{i}", net=net + (spread if (i % days) % 2 else -spread), scored_at=day, published_at=day))
+    return rows
+
+
+def test_bar_needs_100_signals_20_days_positive_mean_and_t_2():
+    assert filings.bar(_many(100, 25))["passes"] is True
+    assert filings.bar(_many(99, 25))["passes"] is False
+    assert filings.bar(_many(100, 19))["passes"] is False
+    assert filings.bar(_many(100, 25, net=-0.004))["passes"] is False
+    noisy = filings.bar(_many(100, 25, net=0.0001, spread=0.02))
+    assert noisy["passes"] is False and noisy["t"] < 2
+
+
+def test_long_only_is_reported_beside_the_bar():
+    rows = _many(100, 25) + [_signal(symbol=f"B{i}", direction=-0.8, moved=-0.02, net=-0.01) for i in range(3)]
+    out = filings.bar(rows)
+    assert out["n"] == 103 and out["long_only"]["n"] == 100 and out["long_only"]["passes"] is True
+    assert "long_only" not in out["long_only"]
+
+
+def test_an_empty_bar_is_not_passed():
+    out = filings.bar([])
+    assert out["n"] == 0 and out["passes"] is False and out["mean"] is None
+
+
+def test_exploratory_cells_can_never_set_passes():
+    cells = filings.exploratory(_many(100, 25))
+    assert {c["split"] for c in cells} >= {"event_type", "impact", "priced_in", "moved"}
+    assert cells and all("passes" not in c for c in cells)
+
+
+async def test_report_health_gives_lag_failures_and_gaps(db):
+    await db["filing_scores"].insert_many([
+        {**_signal(), "_id": "a", "published_at": NOW - timedelta(minutes=4), "scored_at": NOW},
+        {"_id": "b", "status": "failed", "symbol": "X"}, {"_id": "c", "status": "new", "symbol": "Y"},
+        {**_signal(pdf_ok=False), "_id": "d", "published_at": NOW - timedelta(minutes=8), "scored_at": NOW}])
+    row = _signal(); row["score"]["key_fact_ok"] = False
+    await db["filing_scores"].insert_one({**row, "_id": "e", "published_at": NOW - timedelta(minutes=6), "scored_at": NOW})
+    redis = FakeRedis()
+    await redis.set("filings:gaps:2026-11-03", "2")
+    out = await filings.report(db, redis, now=NOW)
+    health = out["health"]
+    assert (health["total"], health["waiting"], health["failed"], health["pdf_failed"], health["key_fact_rejected"]) == (5, 1, 1, 1, 1)
+    assert health["median_lag_minutes"] == 6 and health["gaps_today"] == 2
+    assert out["bar"]["n"] == 1 and out["exploratory"] is not None  # a; d has no PDF, e no key fact
+
+
+def test_filings_endpoint_is_admin_only(monkeypatch):
+    from fastapi import Depends, FastAPI
+    from fastapi.testclient import TestClient
+
+    from backend.auth.dependency import get_current_user
+    from backend.auth.models import User
+    from backend.routers import news as router
+
+    app = FastAPI()
+    app.include_router(router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+    user = User(id="u", google_sub="g", email="a@x.io", name="A", created_at=NOW)
+    app.dependency_overrides[get_current_user] = lambda: user
+    assert TestClient(app).get("/api/v1/news/filings").status_code == 403

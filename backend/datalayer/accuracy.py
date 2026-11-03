@@ -34,6 +34,7 @@ HORIZONS = ("1d", "5d", "20d")
 MEASURES = ("move", "pre_move", "sector_move")
 MIN_DIRECTION = 0.5
 THIN = 30
+MIN_DAYS = 20  # a t from fewer trading days reads far too high (t 31 on 290 rows, 2026-11-03)
 BOOT = 2000
 DUE_KEY = "news:accuracy:due"
 EVERY_SECONDS = 7 * 86400
@@ -67,7 +68,8 @@ def _stats(points: list[tuple[str, float, bool]]) -> dict:
         idx = np.random.default_rng(0).integers(0, len(s), (BOOT, len(s)))
         sd = (s[idx].sum(1) / c[idx].sum(1)).std(ddof=1)
         t = float(mean / sd) if sd > 0 else None
-    return {"n": n, "hit": sum(p[2] for p in points) / n, "mean": mean, "t": t, "thin": n < THIN}
+    return {"n": n, "days": len(s), "hit": sum(p[2] for p in points) / n, "mean": mean, "t": t,
+            "thin": n < THIN or len(s) < MIN_DAYS}
 
 
 def report(rows: list[dict]) -> list[dict]:

@@ -193,6 +193,7 @@ export const endpoints = {
   forward: { scorecard: '/forward/scorecard', records: '/forward/records' },
   newsFeed: '/news/feed',
   newsAccuracy: '/news/accuracy',
+  newsFilings: '/news/filings',
   newsSymbols: (symbols) => `/news/symbols?symbols=${encodeURIComponent(symbols)}`,
   newsHistory: (symbol, days = 365, live = false) => `/news/symbol/${encodeURIComponent(symbol)}?days=${days}${live ? '&live=true' : ''}`,
   stockIndices: (symbol) => `/market/stock/${encodeURIComponent(symbol)}/indices`,

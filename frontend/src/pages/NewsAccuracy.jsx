@@ -10,11 +10,41 @@ import { pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import api, { endpoints } from '../utils/api';
 import { Segmented } from '../components/settings/Fields';
-import { SCOPES, HORIZONS, MEASURES, rowsFor, hitTone } from '../utils/newsAccuracy';
+import { SCOPES, HORIZONS, MEASURES, rowsFor, hitTone, barRows } from '../utils/newsAccuracy';
 
 /** Lab › News accuracy (admin-only): did scored news point the way prices then went?
  *  Built weekly by the ingest worker (backend/datalayer/accuracy.py). */
 
+
+const FilingLane = () => {
+  const [lane, setLane] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const load = useCallback(() => api.get(endpoints.newsFilings, { cache: false })
+    .then((res) => { setLane(res.data); setFailed(false); })
+    .catch(() => setFailed(true)), []);
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <Card title="Filing lane" action={lane && <Badge kind={lane.bar.passes ? 'proven' : 'unproven'}>{lane.bar.passes ? 'Passed the bar' : 'Recording'}</Badge>}>
+      <p className="mb-2 text-[13px] text-[var(--text-muted)]">
+        Recording only. No trades. The rule: a filing with a clear direction, the price already moved 1% its way, held one hour.
+      </p>
+      {failed && <ErrorLine message="Couldn't load the filing lane." onRetry={load} />}
+      {!failed && !lane && <Skeleton rows={4} />}
+      {lane && (
+        <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[14px] tabular-nums">
+          {barRows(lane.bar).map(([label, value]) => (
+            <React.Fragment key={label}><dt className="text-[var(--text-muted)]">{label}</dt><dd className="text-right">{value}</dd></React.Fragment>
+          ))}
+          <dt className="text-[var(--text-muted)]">Long side alone</dt><dd className="text-right">{lane.bar.long_only.n} signals</dd>
+          <dt className="text-[var(--text-muted)]">Median minutes to score</dt><dd className="text-right">{lane.health.median_lag_minutes ?? '–'}</dd>
+          <dt className="text-[var(--text-muted)]">Waiting, failed, no PDF</dt><dd className="text-right">{lane.health.waiting}, {lane.health.failed}, {lane.health.pdf_failed}</dd>
+          <dt className="text-[var(--text-muted)]">Quote not in filing, missed today</dt><dd className="text-right">{lane.health.key_fact_rejected}, {lane.health.gaps_today}</dd>
+        </dl>
+      )}
+    </Card>
+  );
+};
 
 const NewsAccuracy = () => {
   const [report, setReport] = useState(null);
@@ -89,6 +119,7 @@ const NewsAccuracy = () => {
           )}
           {report && <p className="mt-2 text-[12px] text-[var(--text-muted)]">Built {new Date(report.as_of).toLocaleString()} from {report.rows} outcomes.</p>}
         </Card>
+        <FilingLane />
     </SettingsPage>
   );
 };

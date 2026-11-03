@@ -237,6 +237,15 @@ async def news_accuracy(refresh: bool = False, _admin: User = Depends(require_ad
     return {**doc, "company_scan_ok": accuracy.company_scan_ok(doc)}
 
 
+@router.get("/news/filings")
+async def news_filings(_admin: User = Depends(require_admin)):
+    """The filing lane against its fixed bar (datalayer/filings.py). Recording only."""
+    from backend.database import db
+    from backend.datalayer import filings
+
+    return await filings.report(db.db, db.redis)
+
+
 SYMBOLS_LIMIT = 100
 HEADLINE_HOURS = 72
 

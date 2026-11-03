@@ -130,3 +130,20 @@ def test_trust_line_reads_the_report_and_skips_thin_or_missing_cells():
     line = accuracy.trust_line({"cells": [cell("COMPANY", 0.416, 765), cell("SECTOR", 0.6, 20, thin=True)]})
     assert line == "Company news called the 5-day move against NIFTY right 42% of 765 times."
     assert "unknown" in accuracy.trust_line(None)
+
+
+def test_a_cell_under_20_days_is_thin_and_carries_days():
+    base = {"scope": "COMPANY", "themes": [], "impact": 6, "direction": 0.8, "move_5d": 0.02}
+    few = [{**base, "published_at": datetime(2026, 10, 1 + i % 5, tzinfo=timezone.utc)} for i in range(50)]
+    cell = _cell(accuracy.report(few), scope="COMPANY")
+    assert cell["days"] == 5 and cell["n"] == 50 and cell["thin"] is True
+    many = [{**base, "published_at": datetime(2026, 10, 1, tzinfo=timezone.utc) + timedelta(days=i % 25)} for i in range(50)]
+    assert _cell(accuracy.report(many), scope="COMPANY")["thin"] is False
+
+
+def test_the_company_scan_gate_does_not_read_days():
+    def cell(measure, n, hit):
+        return {"group": "theme", "scope": "COMPANY", "key": "all", "impact": "all", "horizon": "5d", "measure": measure,
+                "n": n, "hit": hit, "thin": True, "days": 3}
+
+    assert accuracy.company_scan_ok({"cells": [cell("move", 400, 0.55)]}) is True

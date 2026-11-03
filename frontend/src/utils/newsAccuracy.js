@@ -4,7 +4,7 @@ export const SCOPES = ['COMPANY', 'SECTOR', 'MARKET', 'MACRO', 'GLOBAL'];
 export const HORIZONS = ['1d', '5d', '20d'];
 export const MEASURES = { move: 'vs NIFTY', pre_move: 'vs NIFTY, from pre-news close', sector_move: 'vs sector peers' };
 const IMPACT_ORDER = { all: 0, '<5': 1, '5-7': 2, '>=7': 3 };
-const GROUP_ORDER = { theme: 0, source: 1, model: 2 };
+const GROUP_ORDER = { theme: 0, source: 1, model: 2, prompt: 3, priced_in: 4 };
 
 /** One scope and horizon's cells: the total first, then themes, sources, models (A-Z). */
 export const rowsFor = (cells, scope, horizon) => (cells || [])
@@ -14,6 +14,14 @@ export const rowsFor = (cells, scope, horizon) => (cells || [])
     || a.key.localeCompare(b.key)
     || (IMPACT_ORDER[a.impact] - IMPACT_ORDER[b.impact])
     || Object.keys(MEASURES).indexOf(a.measure) - Object.keys(MEASURES).indexOf(b.measure));
+
+/** The filing lane's standing against its fixed bar, as label and figure rows. */
+export const barRows = (bar) => [
+  ['Signals', `${bar.n} of 100`],
+  ['Trading days', `${bar.days} of 20`],
+  ['Average per trade, after charges', bar.mean == null ? '–' : `${bar.mean >= 0 ? '+' : ''}${(bar.mean * 100).toFixed(2)}%`],
+  ['t, needs 2', bar.t == null ? '–' : bar.t.toFixed(1)],
+];
 
 /** Green above 52%, red below 48%, plain around a coin flip; thin cells stay plain. */
 export const hitTone = (cell) => (cell.thin || cell.hit == null ? 'neutral'
