@@ -1,7 +1,7 @@
 """Tracks every live order this app has ever submitted to a real broker.
 Collection `live_orders`, one document per app-side Order.id (never
 overwritten as a new order -- `record_submitted` is called once per order,
-`update_status` mutates that same document as the broker's own state
+`claim` mutates that same document as the broker's own state
 changes). Backs two things: BrokerExecutionClient's idempotent submit
 (backend/engine/execution/broker.py -- a retry checks here before calling
 place_order again) and the per-bar status-poll loop's "what's still
@@ -88,17 +88,6 @@ class LiveOrderStore:
     async def get_broker_order_id(self, order_id: str) -> Optional[str]:
         doc = await self.collection.find_one({"_id": order_id})
         return doc["broker_order_id"] if doc else None
-
-    async def update_status(
-        self, order_id: str, status: LiveOrderState, filled_quantity: float, average_price: float,
-    ) -> None:
-        await self.collection.update_one(
-            {"_id": order_id},
-            {"$set": {
-                "status": status, "filled_quantity": filled_quantity, "average_price": average_price,
-                "updated_at": _now(),
-            }},
-        )
 
     async def claim(
         self, row: dict, status: LiveOrderState, filled_quantity: float, average_price: float,

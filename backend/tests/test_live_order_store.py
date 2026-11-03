@@ -30,7 +30,7 @@ async def test_record_submitted_then_lookup_returns_broker_order_id():
 
 
 @pytest.mark.asyncio
-async def test_update_status_changes_pending_membership():
+async def test_claim_changes_pending_membership():
     store = _store()
     await store.record_submitted(
         order_id="order-1", broker_order_id="broker-1", user_id="alice",
@@ -38,7 +38,8 @@ async def test_update_status_changes_pending_membership():
     )
     assert len(await store.pending_for_user("alice")) == 1
 
-    await store.update_status("order-1", status="FILLED", filled_quantity=10.0, average_price=2500.0)
+    row = (await store.pending_for_user("alice"))[0]
+    assert await store.claim(row, status="FILLED", filled_quantity=10.0, average_price=2500.0)
 
     assert await store.pending_for_user("alice") == []
 
