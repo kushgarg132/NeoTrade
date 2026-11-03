@@ -69,7 +69,7 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 | backend/data/fundamentals/scores.py | Pure Piotroski-lite (0–5) + quality score | `scores.py::piotroski_lite_score`, `::quality_score` |
 | backend/data/fundamentals/universe.py | Concurrent snapshot fetch → {symbol: score ≥ 0.5} | `universe.py::build_quality_universe` |
 | backend/data/fundamentals/protocols.py | Snapshot model + provider protocol | `protocols.py::FundamentalSnapshot`, `::FundamentalsProvider` |
-| backend/data/fundamentals/yfinance.py | yfinance-backed provider; D/E is really debt/equity | `yfinance.py::YFinanceFundamentalsProvider`, `::_debt_to_equity` |
+| backend/data/fundamentals/yfinance.py | yfinance-backed provider; `debt_to_equity` is Yahoo's ratio in times (`datalayer/stock_info.py`) | `yfinance.py::YFinanceFundamentalsProvider` |
 
 ## Data
 
@@ -216,7 +216,7 @@ Related, outside the globs: `/strategies/built*`, `/strategies/library` (→ `le
 - `builder/draft.py::run` drops `builder:lock` in `finally`. A run past 6 h may delete a newer run's lock (`ponytail:` note at `draft.py::run`).
 - The builder's gateway response cache replays cut-off replies, hence the single retry with a timestamped line (ac1b363).
 - Factor survivorship: backtest results are flattered ~4–8 %/yr (`factor/survivorship.py`, ROADMAP 17.3.1, f5e2044). `factor/data.py` notes NIFTYBEES' bad split, so price indices are the benchmarks.
-- The screening "debt_to_equity" is actually debt/equity (`data/fundamentals/yfinance.py::_debt_to_equity`).
+- The screening `debt_to_equity` is Yahoo's ratio since 2026-11-03 (debt over cash before). Banks often have none, which scores 0 for that criterion. Backtests run before that date used the old value.
 - History (recent fixes):
   - a51584a: momentum-over-volatility setup; study reads from 2009.
   - 13b499c: the AI account paper-trades every stored pick.
