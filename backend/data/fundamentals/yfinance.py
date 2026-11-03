@@ -16,17 +16,6 @@ from backend.data.fundamentals.protocols import FundamentalSnapshot
 logger = logging.getLogger(__name__)
 
 
-def _debt_to_equity(total_debt, total_cash) -> float | None:
-    """`CompanyInfo` doesn't carry shareholder equity, so this is really
-    debt/cash, not debt/equity in the textbook sense -- the closest available
-    leverage proxy given what yfinance's `.info` dict exposes. Only computed
-    when both inputs are present and total_cash > 0; never fabricated from
-    partial data."""
-    if total_debt is None or total_cash is None or total_cash <= 0:
-        return None
-    return total_debt / total_cash
-
-
 def _earnings_yield(pe_ratio) -> float | None:
     if pe_ratio is None or pe_ratio == 0:
         return None
@@ -51,7 +40,7 @@ class YFinanceFundamentalsProvider:
             pe_ratio=info.pe_ratio,
             return_on_equity=info.return_on_equity,
             return_on_assets=info.return_on_assets,
-            debt_to_equity=_debt_to_equity(info.total_debt, info.total_cash),
+            debt_to_equity=info.debt_to_equity,
             revenue_growth=info.revenue_growth,
             earnings_yield=_earnings_yield(info.pe_ratio),
         )

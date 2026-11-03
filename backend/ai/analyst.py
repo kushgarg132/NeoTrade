@@ -141,10 +141,10 @@ async def _note_facts(symbol: str, redis) -> dict[str, str]:
         f"Last close {p['last_close']} on {p['date']}. Returns: 1 day {p['ret_1d']}%, 5 days {p['ret_5d']}%, 20 days {p['ret_20d']}%, "
         f"60 days {p['ret_60d']}%. 52-week high {p['high_52w']}, low {p['low_52w']}. Averages: 20-day {p['sma_20']}, 50-day {p['sma_50']}, 200-day {p['sma_200']}.")
     pe = "n/a" if f.get("pe_ratio") is None else round(f["pe_ratio"], 2)
+    de = "n/a" if f.get("debt_to_equity") is None else round(f["debt_to_equity"], 2)
     funds = "Not available." if f.get("error") else (
-        # Not the stored debt_to_equity: yfinance.py::_debt_to_equity computes debt over cash (backlog).
         f"P/E {pe}, return on equity {pct(f.get('return_on_equity'))}, return on assets {pct(f.get('return_on_assets'))}, "
-        f"revenue growth {pct(f.get('revenue_growth'))}.")
+        f"debt/equity {de}, revenue growth {pct(f.get('revenue_growth'))}.")
     date = (r.get("dates") or {}).get(symbol)
     return {"price": price, "fundamentals": funds, "results": date or "none known in the next 60 days",
             "news_trust": await news_trust(db.db)}

@@ -332,6 +332,7 @@ class CompanyInfo(BaseModel):
     revenue_growth: Optional[float] = None
     total_revenue: Optional[float] = None
     total_debt: Optional[float] = None
+    debt_to_equity: Optional[float] = None  # times; Yahoo states it in percent
     total_cash: Optional[float] = None
     ebitda: Optional[float] = None
     operating_margins: Optional[float] = None

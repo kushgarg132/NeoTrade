@@ -117,6 +117,7 @@ async def fetch_stock_info_logic(symbol: str) -> CompanyInfo:
         revenue_growth=info.get("revenueGrowth"),
         total_revenue=info.get("totalRevenue"),
         total_debt=info.get("totalDebt"),
+        debt_to_equity=info["debtToEquity"] / 100 if info.get("debtToEquity") is not None else None,
         total_cash=info.get("totalCash"),
         ebitda=info.get("ebitda"),
         operating_margins=info.get("operatingMargins"),

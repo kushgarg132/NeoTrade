@@ -22,7 +22,7 @@ def _company_info(**overrides) -> CompanyInfo:
     defaults = dict(
         symbol="RELIANCE.NS", name="Reliance Industries", current_price=2500.0,
         pe_ratio=20.0, return_on_equity=0.15, return_on_assets=0.08,
-        revenue_growth=0.1, total_debt=1000.0, total_cash=500.0,
+        revenue_growth=0.1, total_debt=1000.0, total_cash=500.0, debt_to_equity=0.34,
     )
     defaults.update(overrides)
     return CompanyInfo(**defaults)
@@ -39,20 +39,12 @@ async def test_snapshot_maps_full_company_info_correctly():
     assert snapshot.return_on_equity == 0.15
     assert snapshot.return_on_assets == 0.08
     assert snapshot.revenue_growth == 0.1
-    assert snapshot.debt_to_equity == 2.0  # 1000 / 500
+    assert snapshot.debt_to_equity == 0.34  # the company's real ratio, not debt over cash
     assert snapshot.earnings_yield == 1.0 / 20.0
 
 
-async def test_snapshot_debt_to_equity_none_when_total_cash_zero():
-    info = _company_info(total_debt=1000.0, total_cash=0.0)
-    with patch(f"{MODULE}.fetch_stock_info_logic", new=AsyncMock(return_value=info)):
-        snapshot = await YFinanceFundamentalsProvider().snapshot(_instrument())
-
-    assert snapshot.debt_to_equity is None
-
-
 async def test_snapshot_debt_to_equity_none_when_missing():
-    info = _company_info(total_debt=None, total_cash=500.0)
+    info = _company_info(debt_to_equity=None)
     with patch(f"{MODULE}.fetch_stock_info_logic", new=AsyncMock(return_value=info)):
         snapshot = await YFinanceFundamentalsProvider().snapshot(_instrument())
 
