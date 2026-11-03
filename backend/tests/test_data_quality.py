@@ -44,6 +44,11 @@ class _Redis:
 
 
 @pytest.fixture(autouse=True)
+def _plenty_of_disk(monkeypatch):
+    monkeypatch.setattr(data_quality.shutil, "disk_usage", lambda path: type("Usage", (), {"free": 50 * 1024 ** 3})())
+
+
+@pytest.fixture(autouse=True)
 def _lab_on(monkeypatch):
     from backend.app_settings import AppSettingsStore
 
@@ -275,3 +280,19 @@ async def test_recovery_title_has_no_check_mark(monkeypatch):
     monkeypatch.setattr("backend.alerts.alert", fake)
     await data_quality._send_admins(db, "✅ NeoTrade recovered\n• Quotes loop failing")
     assert calls == ["NeoTrade recovered"]
+
+
+async def test_low_disk_is_named_before_it_stops_mongo(monkeypatch):
+    usage = type("Usage", (), {"free": 3 * 1024 ** 3})()
+    monkeypatch.setattr(data_quality.shutil, "disk_usage", lambda path: usage)
+    assert data_quality._disk() == ["VM disk has 3.0 GB free: run scripts/host-nightly.sh or free space before a build"]
+    usage.free = 5 * 1024 ** 3
+    assert data_quality._disk() == []
+
+
+async def test_an_unreadable_disk_reading_is_not_a_failure(monkeypatch):
+    def broken(path):
+        raise OSError("no")
+
+    monkeypatch.setattr(data_quality.shutil, "disk_usage", broken)
+    assert data_quality._disk() == []

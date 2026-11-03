@@ -39,6 +39,7 @@ item) stays quiet on non-trading days.
 import asyncio
 import json
 import logging
+import shutil
 import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
@@ -50,6 +51,8 @@ from backend.datalayer.news_sources import FEEDS
 from backend.engine.session import IST
 
 logger = logging.getLogger(__name__)
+
+LOW_DISK_BYTES = 4 * 1024 ** 3  # a backend rebuild takes about 2 GB
 
 SILENT_AFTER = timedelta(days=3)  # RBI, SEBI and PIB can go a weekend without a release
 EXAMPLES = 8
@@ -202,11 +205,22 @@ async def _silent_stops(db, redis, now: datetime) -> list[str]:
     return [*runs, *await _news_rate(db, now)]
 
 
+def _disk() -> list[str]:
+    """Free space on the VM's disk, which containers share: at zero the local Mongo dies (2026-11-03)."""
+    try:
+        free = shutil.disk_usage("/").free
+    except OSError:
+        return []
+    if free >= LOW_DISK_BYTES:
+        return []
+    return [f"VM disk has {free / 1024 ** 3:.1f} GB free: run scripts/host-nightly.sh or free space before a build"]
+
+
 async def live(db, redis, now: Optional[datetime] = None) -> list[str]:
     now = now or datetime.now(timezone.utc)
     if redis is None:
-        return [*await _picks(db, now), *await _silent_stops(db, None, now)]
-    return [*await _heartbeats(redis), *await _quotes(redis), *await _last_pass(redis, now), *await _picks(db, now),
+        return [*_disk(), *await _picks(db, now), *await _silent_stops(db, None, now)]
+    return [*_disk(), *await _heartbeats(redis), *await _quotes(redis), *await _last_pass(redis, now), *await _picks(db, now),
             *await _llm(redis, now), *await _silent_stops(db, redis, now)]
 
 
