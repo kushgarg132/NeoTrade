@@ -66,3 +66,10 @@ export const driverRows = (d) => {
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.contribution)));
   return rows.map((r) => ({ ...r, share: Math.abs(r.contribution) / max }));
 };
+
+/** Your mix from the live holdings when they have prices, so it matches the Holdings tab; else the stored mix. */
+export const mixFrom = (stored, snapshot) => {
+  const live = snapshot?.concentration;
+  if (!live?.top_symbol) return stored;
+  return { ...live, count: snapshot.totals?.count ?? snapshot.holdings?.length ?? 0 };
+};

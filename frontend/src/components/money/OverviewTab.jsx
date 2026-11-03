@@ -11,7 +11,7 @@ import ValueChart from './ValueChart';
 import useHoldings from './useHoldings';
 import useSymbolNews from '../../hooks/useSymbolNews';
 import { ImpactChips } from '../common/NewsImpacts';
-import { driverRows, kindLabel, topMovers, whyLine } from '../../utils/money';
+import { driverRows, kindLabel, mixFrom, topMovers, whyLine } from '../../utils/money';
 import Stat from '../ui/Stat';
 import { toneText } from '../ui/tone';
 import { stockPath } from '../../utils/stocks';
@@ -80,7 +80,7 @@ const Drivers = ({ drivers }) => {
   );
 };
 
-/** How the money is spread (/mine/overview `mix`): concentration in words, stocks vs ETFs vs funds, then sectors. */
+/** How the money is spread (live holdings, else /mine/overview `mix`): concentration in words, stocks vs ETFs vs funds, then sectors. */
 const Mix = ({ mix }) => {
   if (!mix?.count) return null;
   const max = Math.max(1, ...(mix.sectors || []).map((x) => x.pct));
@@ -134,7 +134,7 @@ const OverviewTab = ({ headline, overview }) => {
       <WhyMoved />
       <ValueChart />
       <Drivers drivers={overview?.drivers} />
-      <Mix mix={overview?.mix} />
+      <Mix mix={mixFrom(overview?.mix, snapshot)} />
 
       <Card title="Biggest movers today" action={<Link to="/money?tab=holdings" className="inline-flex items-center min-h-11 text-[14px] font-semibold text-[var(--accent)]">All holdings<ChevronRight className="w-4 h-4" aria-hidden="true" /></Link>}>
         {loading ? (

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextSort, sortHoldings, topMovers, whyLine, MARKET_WHY } from './money.js';
+import { nextSort, sortHoldings, topMovers, whyLine, MARKET_WHY, mixFrom } from './money.js';
 
 const rows = [
   { symbol: 'A', last_price: 110, close_price: 100, quantity: 10, value: 1100, weight_pct: 20, pnl_pct: 0.1 },
@@ -55,4 +55,18 @@ test('nextSort reverses the same column and starts another biggest first', () =>
   assert.deepEqual(nextSort({ key: 'value', dir: 'desc' }, 'value'), { key: 'value', dir: 'asc' });
   assert.deepEqual(nextSort({ key: 'value', dir: 'asc' }, 'value'), { key: 'value', dir: 'desc' });
   assert.deepEqual(nextSort({ key: 'value', dir: 'asc' }, 'pnl'), { key: 'pnl', dir: 'desc' });
+});
+
+test('mixFrom prefers the live holdings, so Your mix matches the Holdings tab', () => {
+  const stored = { count: 2, top_symbol: 'OLD', top_pct: 25.13, top5_pct: 90 };
+  const concentration = { top_symbol: 'NEW', top_pct: 25.16, top5_pct: 91, sectors: [] };
+  const holdings = [{ symbol: 'NEW' }, { symbol: 'B' }, { symbol: 'C' }];
+  assert.deepEqual(mixFrom(stored, { concentration, holdings }), { ...concentration, count: 3 });
+});
+
+test('mixFrom keeps the stored mix until the live holdings arrive, or when they have no prices', () => {
+  const stored = { count: 2, top_symbol: 'OLD', top_pct: 25.13 };
+  assert.equal(mixFrom(stored, null), stored);
+  assert.equal(mixFrom(stored, { concentration: { top_symbol: null, top_pct: null }, holdings: [] }), stored);
+  assert.equal(mixFrom(undefined, null), undefined);
 });
