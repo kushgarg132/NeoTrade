@@ -86,3 +86,28 @@ async def test_buy_blocked_fetches_an_unheld_symbol_and_respects_the_window(db, 
     assert await events.buy_blocked(db, {**prefs, "no_buy_before_results_days": 1}, "TCS", TODAY) is None
     assert await events.buy_blocked(db, {**prefs, "no_buy_before_results_days": 0}, "INFY", TODAY) is None
     assert calls == ["TCS.NS"]  # fetched once that day; off never fetches
+
+
+async def test_a_moved_results_date_replaces_the_old_one(db, monkeypatch):
+    calendars = iter([
+        [{"kind": "results", "date": "2026-11-05", "amount": None}],
+        [{"kind": "results", "date": "2026-11-03", "amount": None}],
+        [],  # Yahoo gives nothing: that is not news, the known date stays
+    ])
+    monkeypatch.setattr(events, "_fetch_sync", lambda t: next(calendars))
+    today = date(2026, 11, 1)
+
+    async def dates(on):
+        await events.refresh(db, {"MCX"}, on)
+        return [e["date"] async for e in db[events.EVENTS].find({"symbol": "MCX", "kind": "results"})]
+
+    assert await dates(today) == ["2026-11-05"]
+    assert await dates(date(2026, 11, 2)) == ["2026-11-03"]
+    assert await dates(date(2026, 11, 3)) == ["2026-11-03"]
+
+
+async def test_a_paid_dividend_survives_a_new_calendar(db, monkeypatch):
+    await db[events.EVENTS].insert_one({"symbol": "MCX", "kind": "ex_dividend", "date": "2026-12-01", "amount": 8.0})
+    monkeypatch.setattr(events, "_fetch_sync", lambda t: [{"kind": "ex_dividend", "date": "2026-12-20", "amount": None}])
+    await events.refresh(db, {"MCX"}, date(2026, 11, 1))
+    assert await db[events.EVENTS].count_documents({"symbol": "MCX", "kind": "ex_dividend"}) == 2

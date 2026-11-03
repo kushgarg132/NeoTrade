@@ -38,6 +38,17 @@ def _fetch_sync(tkr: str) -> list[dict]:
     return out
 
 
+async def _drop_moved_dates(db, symbol: str, rows: list[dict], today: date) -> None:
+    """A company moves its results date: the calendar now gives the new one and the old row must go, or the
+    stock shows two. Only future calendar rows, and only when the calendar gave a date of that kind:
+    an empty answer from Yahoo is not news, and a dividend with a known amount has been paid."""
+    lo = today.isoformat()
+    for kind in ("results", "ex_dividend"):
+        fresh = [r["date"] for r in rows if r["kind"] == kind and r["date"] >= lo]
+        if fresh:
+            await db[EVENTS].delete_many({"symbol": symbol, "kind": kind, "amount": None, "date": {"$gte": lo, "$nin": fresh}})
+
+
 async def refresh(db, symbols: set[str], today: date) -> int:
     """Fetches symbols not yet checked today; returns how many succeeded."""
     done = 0
@@ -57,6 +68,7 @@ async def refresh(db, symbols: set[str], today: date) -> int:
                 await db[EVENTS].update_one(key, {"$set": fields, "$setOnInsert": {"amount": None}}, upsert=True)
             else:
                 await db[EVENTS].update_one(key, {"$set": {**fields, "amount": r["amount"]}}, upsert=True)
+        await _drop_moved_dates(db, symbol, rows, today)
         await db[META].update_one({"symbol": symbol}, {"$set": {"checked": today.isoformat()}}, upsert=True)
         done += 1
     return done
