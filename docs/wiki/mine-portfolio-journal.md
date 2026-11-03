@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 4a76d35
+verified_at: 4e44191
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -236,6 +236,10 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 
 ## Invariants
 
+- The review's write-up and the AI rebalance's reasons are checked against the figures given to the model (`ai/grounding.py::check_fields`: unsupported figures and raw codes). The review retries once; the rebalance, which a user waits on, only drops the sentence. `portfolio/review.py::review_context` adds lots, tax, thesis, next results, XIRR and `accuracy.py::news_trust`; each source that fails is left out.
+- The plan's `calls` go on the forward record (`review.py::record_calls`: `source="review"`, name = prompt id, 60 trading days, a call still open is not repeated). Never gates money. SELL only of held stocks, BUY only from candidates (`valid_calls`).
+- `rules.py::sell_codes` skips `high_debt` for sector "Financial Services": debt/equity says nothing about a lender.
+
 - **Verdict gate (SEBI).** Verdicts are shown only to admins, or to everyone when `portfolio_verdicts == "all"`.
   - The gate is checked in `routers/portfolio.py::verdicts_visible_to` and `portfolio/digest.py::verdicts_visible`.
   - Non-visible users get `mask_row`: SELL/REVIEW become "REVIEW", everything else None, and `score`, `suggested`
@@ -377,7 +381,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | backend/tests/test_mine_stock.py | `/mine/stock/{symbol}` |
 | backend/tests/test_mine_thesis.py | `/mine/thesis/{symbol}` GET/PUT, validation |
 | backend/tests/test_broker_portfolio.py | holdings per broker, `merge`, NIFTY benchmark (phases 1-2) |
-| backend/tests/test_portfolio_review.py | health, rule verdicts via composite, AI write-up, verdict switch and masking (phases 3-5) |
+| backend/tests/test_portfolio_review.py | health, rule verdicts via composite, AI write-up (context, checked figures, calls on the forward record), verdict switch and masking (phases 3-5) |
 | backend/tests/test_rebalance.py | `target_weights`, `plan_rebalance`, `suggest`, `sell_tax`, `plan_tax`, `plan_after` |
 | backend/tests/test_portfolio_rebalance_router.py | `/portfolio/rebalance`, candidates, targets, row actions on GET /portfolio |
 | backend/tests/test_ai_rebalance.py | `clamp_targets`, `ai_targets` prompt/parse, `/portfolio/rebalance/ai` gate, caps, 502 |
