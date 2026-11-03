@@ -17,7 +17,7 @@ import { strategyPath } from '../../utils/routes';
 // Track-record labels short enough for a phone's three columns.
 const SHORT = { 'Max drawdown (peak to trough)': 'Max drawdown', 'vs same money in NIFTY': 'vs NIFTY' };
 
-/** AI, You and NIFTY this month as bars from a zero line on one scale, the figure beside each. */
+/** AI, You and NIFTY over one window as bars from a zero line on one scale, the figure beside each. */
 export const Versus = ({ rows }) => {
   const max = Math.max(0.5, ...rows.map((r) => Math.abs(r.pct ?? 0)));
   return (
@@ -50,13 +50,13 @@ const strategyLine = (st) => [
   st.vs_nifty != null ? <>vs NIFTY {amount(st.vs_nifty)}</> : null,
 ].filter(Boolean).flatMap((x, i) => (i ? [' · ', x] : [x])).map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>);
 
-/** AI -> Scoreboard: this month, AI vs you vs NIFTY, the book's stats, and each strategy's proven status. */
+/** AI -> Scoreboard: since the AI began, AI vs you vs NIFTY, the book's stats, and each strategy's proven status. */
 const Scoreboard = ({ board, card, forward, capital, mineValue }) => {
-  const s = scoreboard({ month: board.data?.month, card: card.data, capital, mineValue });
+  const s = scoreboard({ month: board.data?.since_ai ?? board.data?.month, card: card.data, capital, mineValue });
   const strategies = card.data?.strategies || [];
   return (
     <div className="space-y-3">
-      <Card title="This month">
+      <Card title={board.data?.since_ai ? 'Since the AI began' : 'This month'}>
         <Section state={board} rows={2} what="monthly score">
           <Versus rows={s.versus} />
           <p className="mt-3 text-[12px] text-[var(--text-muted)]">Closed trades after charges, as % of each book's capital. NIFTY is since the AI began{s.niftyFrom ? ` (${s.niftyFrom})` : ''}.</p>

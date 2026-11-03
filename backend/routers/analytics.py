@@ -15,7 +15,7 @@ from backend.database import db
 from backend.datalayer import bars
 from backend.engine.persistence import LedgerStore
 from backend.ws.publish import publisher_for
-from backend.marks import mark_prices
+from backend.marks import cached_prev_closes, mark_prices
 from backend.prefs import PrefsStore
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
@@ -40,7 +40,8 @@ async def get_pnl(
         return await compute_live_pnl(db.db, ledger.user_id, {}, mode=mode)
     positions = await ledger.get_open_positions(venue=venue)
     marks = await mark_prices(db.db, positions.keys())
-    return await compute_pnl(ledger, marks, venue=venue, mode=mode)
+    prev = await cached_prev_closes(db.redis, list(positions)) if mode is None else None
+    return await compute_pnl(ledger, marks, venue=venue, mode=mode, prev_closes=prev)
 
 
 logger = logging.getLogger(__name__)

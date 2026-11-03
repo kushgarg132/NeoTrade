@@ -35,7 +35,7 @@ export const scoreboard = ({ month, card, capital, mineValue } = {}) => {
  */
 export const aiBook = ({ autopilot, pnl, card } = {}) => {
   const t = pnl?.today;
-  const day = t ? (t.net ?? t.realized ?? 0) + (t.unrealized || 0) : null;
+  const day = t ? (t.net ?? t.realized ?? 0) + (t.day_move ?? t.unrealized ?? 0) : null; // day_move: today's move on open positions, not their gain since entry
   const value = autopilot?.capital != null && card?.totals ? autopilot.capital + (card.totals.net || 0) + (t?.unrealized || 0) : null;
   const dayPct = day != null && autopilot?.capital ? day / autopilot.capital : null;
   return { value, day, dayPct };

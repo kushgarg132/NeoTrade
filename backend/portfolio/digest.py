@@ -216,8 +216,14 @@ async def scoreboard(db, user_id: str, roles: dict, now: datetime) -> dict:
     """You vs the AI: the user's account against the whole AI book (Picks, engine and news trades),
     closed and net of charges, today and this month. It counted only trades credited to a pick, so the
     AI's engine losses never showed against you."""
+    from backend.autopilot.service import ai_book_query
+
+    first = await db["paper_trades"].find_one(ai_book_query(user_id), {"entry_at": 1}, sort=[("entry_at", 1)])
+    began = _aware((first or {}).get("entry_at"))
     return {"today": await pnl_since(db, user_id, roles, day_start(now)),
-            "month": await pnl_since(db, user_id, roles, month_start(now))}
+            "month": await pnl_since(db, user_id, roles, month_start(now)),
+            # The window the NIFTY figure beside it uses: a month of closed trades against months of NIFTY compares nothing.
+            "since_ai": await pnl_since(db, user_id, roles, began) if began else None}
 
 
 # ------------------------------------------------------------------ Telegram

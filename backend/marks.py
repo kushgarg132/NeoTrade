@@ -59,6 +59,19 @@ async def cached_quotes(redis, symbols: list[str], max_age_seconds: float) -> di
     return found
 
 
+async def cached_prev_closes(redis, symbols: list[str]) -> dict[str, float]:
+    """Yesterday's close for what the quote cache holds; never raises. The base of every day move on a position."""
+    if redis is None or not symbols:
+        return {}
+    try:
+        raws = await redis.mget([QUOTE_KEY.format(s) for s in symbols])
+    except Exception as exc:
+        logger.warning("quote cache read failed: %s", exc)
+        return {}
+    closes = {s: json.loads(r).get("prev_close") for s, r in zip(symbols, raws) if r}
+    return {s: float(c) for s, c in closes.items() if c}
+
+
 async def store_quotes(redis, quotes: dict[str, tuple[float, Optional[float]]], ttl_seconds: int) -> None:
     """`quotes` is symbol -> (last price, previous close or None)."""
     if redis is None or not quotes:

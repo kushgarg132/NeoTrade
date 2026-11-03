@@ -24,7 +24,7 @@ def _ist(value: datetime) -> datetime:
 
 
 async def compute_pnl(
-    ledger: LedgerStore, mark_prices: dict[str, float], now: Optional[datetime] = None,
+    ledger: LedgerStore, mark_prices: dict[str, float], now: Optional[datetime] = None, prev_closes: Optional[dict[str, float]] = None,
     venue: Optional[Venue] = None, mode: Optional[str] = None,
 ) -> dict:
     """`venue` narrows every figure to one book (paper or live); None keeps
@@ -75,10 +75,22 @@ async def compute_pnl(
         if t.get("entry_at") and _ist(t["entry_at"]) >= day_start
     ]
 
+    # What open positions did today: from yesterday's close, or the entry for a position opened today. Not `unrealized`,
+    # which is the whole gain since entry. ponytail: an add today to an older position counts all of it from avg_price.
+    day_move = None
+    if mode is None and prev_closes is not None:
+        opened_today = {t["symbol"] for t in entered_today if t.get("status") == "OPEN"}
+        day_move = 0.0
+        for symbol, position in positions.items():
+            base = position.avg_price if symbol in opened_today else prev_closes.get(symbol)
+            if base is not None and (mark := mark_prices.get(symbol)) is not None:
+                day_move += position.quantity * (mark - base)
+
     return {
         "today": {
             "realized": realized_today,
             "unrealized": unrealized,
+            "day_move": day_move,
             "trades": len(today),
             "wins": len([t for t in today if trade_net(t) > 0]),
             "losses": len([t for t in today if trade_net(t) < 0]),

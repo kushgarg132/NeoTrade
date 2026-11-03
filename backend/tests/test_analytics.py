@@ -112,7 +112,7 @@ async def test_a_symbol_with_no_mark_contributes_no_unrealized_pnl(ledger):
 async def test_an_empty_book_reports_zeroes_not_errors(ledger):
     pnl = await compute_pnl(ledger, mark_prices={}, now=NOW)
 
-    assert pnl["today"] == {"realized": 0.0, "unrealized": 0.0, "trades": 0, "wins": 0,
+    assert pnl["today"] == {"realized": 0.0, "unrealized": 0.0, "day_move": None, "trades": 0, "wins": 0,
                             "losses": 0, "turnover": 0.0, "costs": 0, "net": 0}
     assert pnl["month"]["win_rate"] == 0.0
     assert pnl["open"]["equity"] == 0.0
@@ -190,3 +190,23 @@ async def test_live_pnl_keeps_your_account_and_the_ai_account_apart(mongo):
 
     assert live["mine"]["all_time"]["realized"] == 300.0
     assert live["ai"]["all_time"]["realized"] == -50.0
+
+
+@pytest.mark.asyncio
+async def test_today_counts_an_open_positions_day_not_its_gain_since_entry(ledger):
+    """The AI hero read "+₹157 today": the whole gain on positions opened two weeks ago."""
+    await ledger.snapshot_positions({
+        "OLD": Position(symbol="OLD", quantity=2.0, avg_price=100.0),
+        "NEW": Position(symbol="NEW", quantity=3.0, avg_price=200.0),
+        "NOQUOTE": Position(symbol="NOQUOTE", quantity=1.0, avg_price=50.0),
+    })
+    await ledger.trades.insert_one({
+        "id": "t-new", "user_id": "alice", "symbol": "NEW", "mode": "LONGTERM", "side": Side.BUY.value, "status": "OPEN",
+        "quantity": 3.0, "entry_price": 200.0, "entry_at": NOW - timedelta(hours=1), "realized_pnl": 0.0,
+    })
+
+    pnl = await compute_pnl(ledger, mark_prices={"OLD": 110.0, "NEW": 210.0, "NOQUOTE": 60.0}, now=NOW, prev_closes={"OLD": 105.0})
+
+    assert pnl["today"]["day_move"] == pytest.approx(2 * 5.0 + 3 * 10.0)
+    assert pnl["today"]["unrealized"] == pytest.approx(2 * 10.0 + 3 * 10.0 + 10.0)
+    assert (await compute_pnl(ledger, mark_prices={}, now=NOW))["today"]["day_move"] is None
