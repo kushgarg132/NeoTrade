@@ -9,7 +9,6 @@ pandas>=2.0.0
 numpy>=1.24.0
 requests>=2.31.0
 python-dotenv>=1.0.0
-google-genai
 google-auth>=2.23.0
 pyjwt>=2.7.0
 cryptography>=42.0.0  # Fernet, for encrypting per-user broker credentials at rest
@@ -22,9 +21,7 @@ mongomock-motor>=0.0.34  # test-only: in-memory motor-compatible Mongo for Instr
 yfinance>=0.2.0
 kiteconnect>=5.0.0  # Zerodha Kite Connect SDK -- Task 5, mocked in all tests, no live account exists
 upstox-python-sdk==2.30.0  # official Upstox SDK (backend/brokers/upstox.py REST calls, feed protobuf); pinned, its models are generated per release
-langchain
 langgraph
-langchain-google-genai
 langchain-openai
 websockets>=14.0  # Upstox v3 market-data feed (backend/data/feeds/live_upstox.py)
 casparser==1.4.1  # CAMS/KFintech CAS PDF parser (MIT, backend/mine/cas_import.py); pypdfium2 + casparser-isin

@@ -183,7 +183,7 @@ class LLMService:
             return "LLM_DISABLED"
         
         try:
-            # MultiKeyChain or ChatGoogleGenerativeAI supports ainvoke
+            # MultiKeyChain supports ainvoke
             from langchain_core.messages import HumanMessage, SystemMessage
             
             messages = [
