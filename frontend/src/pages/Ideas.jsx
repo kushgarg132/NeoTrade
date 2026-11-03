@@ -28,7 +28,7 @@ const Ideas = () => {
   const isAdmin = useAuth().user?.role === 'admin';
   const acts = useLoad(useCallback(() => api.get(endpoints.mine.actions).then((r) => r.data), []));
   const fresh = useLoad(useCallback(() => fetchIdeas(isAdmin), [isAdmin]));
-  const [showUnproven, setShowUnproven] = useState(false);
+  const [showUnproven, setShowUnproven] = useState(true);
   // One news and one results request for every idea on the page, never per row.
   const symbols = (fresh.data?.items || []).map((i) => i.symbol);
   const { news } = useSymbolNews(symbols);
