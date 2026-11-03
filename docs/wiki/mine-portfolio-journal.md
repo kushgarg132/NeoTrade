@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: f04b9d1
+verified_at: 4a76d35
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -43,7 +43,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/journal/insights.py | Behaviour findings over closed trips (pure), incl. news habits (`against_news`, `chasing_news`, `bought_after_good_news`, `bought_after_bad_news`, `sold_after_bad_news`) | `insights.py::build_insights`, `MIN_TRIPS`, `NEWS_IMPACT` |
 | backend/journal/news.py | Attaches the strongest news impact (with headline, url) in the 24h before each trip's entry (`news`) and exit (`exit_news`); an exit item carries `after_5d_pct` from stored daily bars (None without them) | `news.py::attach_news`, `::_after_pct`, `AFTER_BARS` |
 | backend/journal/accounts.py | Splits by account; monthly AI-vs-me | `accounts.py::filter_trades`, `::brokers_of`, `::ai_vs_me` |
-| backend/journal/beta.py | `journal_opens` tracking; Phase 12 metrics | `beta.py::record_open`, `::beta_metrics` |
+| backend/journal/beta.py | `journal_opens` tracking; Phase 12 metrics; admin user list | `beta.py::record_open`, `::beta_metrics`, `::beta_users` |
 | backend/guardrails/rules.py | Breach evaluation (pure); the buy-before-results rule | `guardrails/rules.py::evaluate` (`results` and `today` args feed the `results_buy` breach), `::results_days` (0 when off or guardrails off), `::results_block`, `::_option_breaches`, `::_is_hedged` |
 | backend/guardrails/monitor.py | 60s in-session loop; kill-switch trip; square-off; breaches alert as `money` via `alerts.alert` (`::_alert(db, user_id, event)`) | `guardrails/monitor.py::run_tick`, `::check_user`, `::square_off`, `::monitor_loop`, `::start`, `LOCK_KEY` |
 | backend/guardrails/square_off.py | Position book to MIS exit orders (pure) | `guardrails/square_off.py::exit_orders`, `::describe` |
@@ -52,7 +52,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/guardrails/telegram_bot.py | Inbound long-poll bridge to the chat agent (with chart/image tools: `::_send_media` sends each as a photo before the answer; a failure sends one line instead) and action cards | `telegram_bot.py::poll_loop`, `::poll_once`, `::_poll_bot`, `::_reply`, `::_callback`, `::_sell`, `::_ask`, `::Tap`, `SHORTCUTS` |
 | backend/routers/mine.py | `/mine/*` | `mine.py::overview`, `::mine_history`, `::tax`, `::stock_detail`, `::get_thesis`, `::put_thesis`, `::mine_actions`, `::dismiss_action`, `::snooze_action`, `::_month_contributions`, `TAX_FIRST_FY` |
 | backend/routers/portfolio.py | `/portfolio*`; verdict masking | `portfolio.py::get_portfolio`, `::refresh`, `::rebalance`, `::rebalance_candidates`, `::present`, `::mask_row`, `::_results_dates`, `::_with_results`, `::verdicts_visible_to`, `::with_suggestions`, `::_candidate_symbols` |
-| backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::ai_vs_me`, `::get_learning`, `::get_beta_metrics` |
+| backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::ai_vs_me`, `::get_learning`, `::get_beta_metrics`, `::get_beta_users` |
 | backend/routers/today.py | `/today`, `/today/attention`, `/today/reconciliation` | `today.py::today`, `::attention`, `::reconciliation`, `::_changes` (since last trading day: AI fills, newest plan, sent alerts), `::_accounts`, `::_needs_you`, `::_mine_actions`, `::_setup` (steps `prefs.py::SETUP_STEP_IDS`; prefs `setup_skipped` count as done, row `skipped`), `::_autopilot`, `::_backdrop`, `_STATE_CACHE` |
 
 ## Data
@@ -307,6 +307,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | PUT /journal/round-trips/{id}/note | `::set_round_trip_note` | user (owner prefix) | `{note,tags}` |
 | GET /journal/learning | `::get_learning` | user | `backend/learning/report.py::snapshot` |
 | GET /journal/beta-metrics | `routers/journal.py::get_beta_metrics` | admin | `beta.py::beta_metrics` keys |
+| GET /journal/beta-users | `routers/journal.py::get_beta_users` | admin | list of `{name, email, created_at, last_open}`; both dates are IST days, `last_open` null if never opened |
 | GET /today | `routers/today.py::today` | user | `market,accounts,live_armed,kill_switch,pulse,needs_you,mine_actions,mine_actions_total,scoreboard,proposals_total,ai_activity,autopilot,setup,backdrop,errors` |
 | GET /today/attention | `::attention` | user | `{count}` (`_needs_you` only) |
 
@@ -385,7 +386,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | backend/tests/test_today.py | `GET /today` parts and errors, `/today/attention` |
 | backend/tests/test_journal.py | normalisation, round trips, idempotent store, Console CSV, Upstox history |
 | backend/tests/test_options_journal.py | instrument kind, by-kind summary, options in guardrails |
-| backend/tests/test_journal_insights.py, test_journal_mirror.py, test_journal_news.py, test_journal_beta.py | `build_insights`, `mirror.costs`/`benchmark`, `attach_news` (entry, exit, after-5d), news habit findings, `beta_metrics` |
+| backend/tests/test_journal_insights.py, test_journal_mirror.py, test_journal_news.py, test_journal_beta.py | `build_insights`, `mirror.costs`/`benchmark`, `attach_news` (entry, exit, after-5d), news habit findings, `beta_metrics`, `beta_users` |
 | backend/tests/test_account_analysis.py | `journal/accounts.py::ai_vs_me` |
 | backend/tests/test_guardrails.py | `rules.evaluate`, once-per-breach alerting, daily-loss kill-switch trip |
 | backend/tests/test_square_off.py | `exit_orders`, preview never places, live once a day, AI broker untouched |

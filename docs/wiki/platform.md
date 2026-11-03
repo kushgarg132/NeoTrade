@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/timing.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/alerts.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: f04b9d1
+verified_at: 4a76d35
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -128,7 +128,7 @@ All times IST. Background loops start in `jobs.py::start_loops`, called by the `
 ## Invariants
 
 - Every router except `auth`, `ws`, `news`, `agents`, `market_data` and the root/health/docs routes is mounted with `get_current_user` (`server.py` include_router calls); those three carry no router dependency, so each handler states its own auth (guest-readable ones use `get_optional_user` or none, the rest `get_current_user`/`require_admin`); nothing takes a user id from the URL or body: handlers use `user.id` (watchlist, profile, journal note ids are prefix-checked `routers/journal.py::set_round_trip_note`).
-- Deployment-wide changes need `require_admin`: model, tiers, feature switches, Lab, portfolio-verdicts audience, gate backtests (`POST /trading/backtests/...`), builder run, backlog, system status, usage, picks, beta metrics. Role is re-derived from `ADMIN_EMAILS` on each login, so revoking needs an env edit plus re-login (`auth/store.py::_role_for`).
+- Deployment-wide changes need `require_admin`: model, tiers, feature switches, Lab, portfolio-verdicts audience, gate backtests (`POST /trading/backtests/...`), builder run, backlog, system status, usage, picks, beta metrics and the beta user list. Role is re-derived from `ADMIN_EMAILS` on each login, so revoking needs an env edit plus re-login (`auth/store.py::_role_for`).
 - Refresh tokens: only the SHA-256 is stored, rotation kills the old token, a replay beyond 10 s revokes the whole chain (`refresh_store.py::rotate`). The refresh cookie is path-scoped to `/api/v1/auth`.
 - Broker credentials are refused rather than stored in plaintext when `CREDENTIAL_ENCRYPTION_KEY` is unset (`broker_credentials.py::save` raises `CredentialEncryptionUnavailable`; the route returns 503). `GET /settings/broker-credentials` returns only `configured` + masked key. Per-user Kite token key is scoped by user id (`kite_session.py::_redis_key`).
 - Google ID tokens with `email_verified is False` are refused because the email decides admin (`auth/google.py:38`).
@@ -296,6 +296,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | PUT | `/api/v1/journal/round-trips/{round_trip_id}/note` | `backend/routers/journal.py::set_round_trip_note` | user |
 | GET | `/api/v1/journal/learning` | `backend/routers/journal.py::get_learning` | user |
 | GET | `/api/v1/journal/beta-metrics` | `backend/routers/journal.py::get_beta_metrics` | admin |
+| GET | `/api/v1/journal/beta-users` | `backend/routers/journal.py::get_beta_users` | admin |
 | GET | `/api/v1/guardrails` | `backend/routers/guardrails.py::guardrail_status` | user |
 | PUT | `/api/v1/guardrails/telegram/bot` | `backend/routers/guardrails.py::telegram_set_bot` | user |
 | DELETE | `/api/v1/guardrails/telegram/bot` | `backend/routers/guardrails.py::telegram_remove_bot` | user |
