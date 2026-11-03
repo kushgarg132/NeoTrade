@@ -16,6 +16,7 @@ import StopAi from '../components/ai/StopAi';
 import { useForward } from '../components/ForwardBadge';
 import api, { endpoints } from '../utils/api';
 import { useRefetchOn, useReconnect, useTopic } from '../hooks/useStream';
+import useLivePoll from '../hooks/useLivePoll';
 import { inr } from '../components/ui/format';
 import { aiBook } from '../utils/ai';
 
@@ -59,6 +60,8 @@ const Ai = () => {
   useRefetchOn(['positions', 'trades'], () => { positions.reload(); card.reload(); });
   useRefetchOn(['autopilot'], log.reload);
   useReconnect(() => { today.reload(); pnl.reload(); });
+  // Open positions are marked to market: their unrealised figure moves without any trade event.
+  useLivePoll(() => { today.reload(); pnl.reload(); positions.reload(); log.reload(); }, 60_000);
 
   const ap = today.data?.autopilot;
   const on = ap?.enabled && !stopped;

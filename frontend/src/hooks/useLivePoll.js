@@ -1,17 +1,26 @@
 import { useEffect, useRef } from 'react';
 import { marketPhase } from '../utils/formatters';
 
-/** Calls `refresh` (returns a promise) every `ms` while NSE trades and the page is visible; never two at once. */
-export default function useLivePoll(refresh, ms) {
+/**
+ * Calls `refresh` (returns a promise) every `ms` while NSE trades and the page is visible, and once whenever the page
+ * comes back into view, so a phone unlocked mid-session never shows the numbers it went to sleep on. Never two at once.
+ * `always`: keep the timer running outside the session too, for pages with more than prices on them.
+ */
+export default function useLivePoll(refresh, ms, { always = false } = {}) {
   const fn = useRef(refresh);
-  fn.current = refresh;
+  useEffect(() => { fn.current = refresh; });
   useEffect(() => {
     let inFlight = false;
-    const timer = setInterval(() => {
-      if (inFlight || document.hidden || marketPhase() === 'closed') return;
+    const run = () => {
+      if (inFlight || document.hidden) return;
       inFlight = true;
       Promise.resolve(fn.current()).finally(() => { inFlight = false; });
-    }, ms);
-    return () => clearInterval(timer);
-  }, [ms]);
+    };
+    const timer = setInterval(() => { if (always || marketPhase() !== 'closed') run(); }, ms);
+    document.addEventListener('visibilitychange', run);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', run);
+    };
+  }, [ms, always]);
 }

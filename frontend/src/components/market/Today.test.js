@@ -36,8 +36,8 @@ test('NIFTY hero on Today, only when ^NSEI row exists', () => {
 });
 
 test('indices load once, in Today; Indices takes props', () => {
-  assert.equal(src.match(/useSection\(loadIndices\)/g).length, 1);
-  assert.match(src.slice(src.indexOf('const Today = ')), /useSection\(loadIndices\)/);
+  assert.equal(src.match(/useSection\(loadIndices\b/g).length, 1);
+  assert.match(src.slice(src.indexOf('const Today = ')), /useSection\(loadIndices\b/);
   assert.match(src, /const Indices = \(\{ data, error, retry \}\)/);
 });
 

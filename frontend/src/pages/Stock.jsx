@@ -28,6 +28,7 @@ import { verdictKind, verdictLabel } from '../components/stock/common';
 import { StockIcon } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { bareSymbol, formatQuantity, marketPhase } from '../utils/formatters';
+import useLivePoll from '../hooks/useLivePoll';
 import { stockTab } from '../utils/stocks';
 import { positionSummary, toBars } from '../utils/stock';
 import { px } from '../components/ideas/levels';
@@ -106,16 +107,11 @@ const Stock = () => {
   // The snapshot's price was a one-shot that sat still for as long as the page stayed open.
   const [liveRaw, setLive] = useState(null);
   const live = liveRaw?.symbol === symbol ? liveRaw : null;
-  useEffect(() => {
-    if (!symbol) return undefined;
-    let current = true;
-    const poll = () => api.get(endpoints.marketQuotes([symbol]))
-      .then((r) => current && r.data[0] && setLive(r.data[0]))
-      .catch(() => {}); // the snapshot price stands in, and AsOf turns stale
-    poll();
-    const timer = setInterval(() => !document.hidden && marketPhase() !== 'closed' && poll(), 60_000);
-    return () => { current = false; clearInterval(timer); };
-  }, [symbol]);
+  const pollQuote = useCallback(() => (symbol
+    ? api.get(endpoints.marketQuotes([symbol])).then((r) => r.data[0] && setLive(r.data[0])).catch(() => {}) // the snapshot price stands in, and AsOf turns stale
+    : undefined), [symbol]);
+  useEffect(() => { pollQuote(); }, [pollQuote]);
+  useLivePoll(pollQuote, 60_000);
   useEffect(() => {
     if (!user) return;
     api.get(endpoints.mine.overview).then((res) => setPortfolio(res.data?.headline?.value ?? null)).catch(() => setPortfolio(null));

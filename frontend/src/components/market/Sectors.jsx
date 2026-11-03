@@ -159,7 +159,7 @@ const Extreme = ({ m, high }) => {
 };
 
 const Sectors = () => {
-  const [{ data, error }, retry] = useSection(loadScan);
+  const [{ data, error }, retry] = useSection(loadScan, { liveMs: 60_000 });
   const [by, setBy] = useState('move');
   const [show, setShow] = useState('all');
   const [ext, setExt] = useState('both');

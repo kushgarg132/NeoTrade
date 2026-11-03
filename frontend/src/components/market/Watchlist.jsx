@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import useLivePoll from '../../hooks/useLivePoll';
 import { Link } from 'react-router-dom';
 import { X } from 'lucide-react';
 import Skeleton from '../ui/Skeleton';
@@ -89,6 +90,8 @@ const Watchlist = () => {
     api.get(endpoints.watchlist.details).then((res) => setRows(res.data)).catch(() => setError(true));
   }, [tick]);
   const load = () => { setError(false); setTick((t) => t + 1); };
+  // The socket moves prices; this also covers a dropped socket, the day's base and the 52-week range.
+  useLivePoll(() => api.get(endpoints.watchlist.details).then((res) => setRows(res.data)).catch(() => {}), 60_000);
 
   // The server's price pump polls exactly the symbols subscribed here (~15s).
   const symbolsKey = (rows || []).filter((r) => !r.error).map((r) => r.symbol).join(',');

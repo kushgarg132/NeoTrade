@@ -180,7 +180,7 @@ const MoverList = ({ rows, none }) => (rows.length ? <MoverRows rows={rows.slice
 
 /** One GET /market/scan feeds Breadth and Movers. */
 const Scan = () => {
-  const [{ data, error }, retry] = useSection(loadScan);
+  const [{ data, error }, retry] = useSection(loadScan, { liveMs: 60_000 });
   const [side, setSide] = useState('gainers');
   const wrap = (title, body) => <Card title={title}>{body}</Card>;
   const bTitle = closed() ? 'Breadth · Nifty 200 · last session' : 'Breadth · Nifty 200';
@@ -238,7 +238,7 @@ const Events = () => {
 
 const Today = () => {
   const { user } = useAuth(); // events come from the signed-in /today backdrop
-  const [{ data, error }, retry] = useSection(loadIndices);
+  const [{ data, error }, retry] = useSection(loadIndices, { liveMs: 60_000 });
   const nifty = (data || []).find((i) => i.symbol === '^NSEI'); // no row (feed gap): no Hero
   return (
     <div className="space-y-3">

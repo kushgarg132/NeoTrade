@@ -18,7 +18,7 @@ const num = (v) => Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 
 
 /** The stocks in this index with their day move, biggest gain first; each opens its stock page. */
 const IndexStocks = ({ ticker }) => {
-  const { data, status, retry } = useStored(endpoints.marketIndexStocks(ticker));
+  const { data, status, retry } = useStored(endpoints.marketIndexStocks(ticker), { liveMs: 60_000 });
   const [sort, setSort] = useState('gain');
   const [all, setAll] = useState(false);
   if (status === 'loading') return <Card><Skeleton rows={6} /></Card>;

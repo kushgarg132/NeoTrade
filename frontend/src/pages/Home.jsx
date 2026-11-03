@@ -115,11 +115,8 @@ const MemberHome = () => {
     api.get(endpoints.summaries.day).then((r) => setDay(r.data.summary ?? null)).catch(() => setDay((d) => d ?? null)); // the digest stands in
     reloadNeed();
   }, [reloadNeed]);
-  useEffect(() => {
-    load();
-    const timer = setInterval(() => !document.hidden && load(), 60_000);
-    return () => clearInterval(timer);
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
+  useLivePoll(load, 60_000, { always: true });
   // The account hero re-reads every 10 s while NSE trades (the server's pulse is shared for 10 s).
   useLivePoll(() => api.get(endpoints.mine.overview, { cache: false }).then((r) => setOverview(r.data)).catch(() => {}), 10_000);
   useReconnect(load);

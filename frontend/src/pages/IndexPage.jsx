@@ -170,7 +170,7 @@ const Details = ({ data }) => {
  *  read of the last session, then Chart (1D intraday to 5Y), Stocks (when a member list is kept), News and Details. */
 const IndexPage = () => {
   const { ticker } = useParams();
-  const { data, status, retry } = useStored(endpoints.marketIndex(ticker));
+  const { data, status, retry } = useStored(endpoints.marketIndex(ticker), { liveMs: 60_000 });
   const [tab, setTab] = useTabParam([...TABS, STOCKS].map((t) => t.id), 'chart');
   const at = data ? rangeAt(data.value, data.low_52w, data.high_52w) : null;
   return (

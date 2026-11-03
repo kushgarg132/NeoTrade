@@ -18,7 +18,7 @@ import { formatTimeAgo } from '../utils/formatters';
 
 const SectorPage = () => {
   const { name } = useParams();
-  const { data, status, retry } = useStored(endpoints.marketSector(name));
+  const { data, status, retry } = useStored(endpoints.marketSector(name), { liveMs: 60_000 });
   const members = data ? [...data.members].sort((a, b) => b.change_pct - a.change_pct) : [];
   return (
     <Layout>
