@@ -9,12 +9,16 @@ text is untrusted: it is fetched from one host, capped, parsed in memory, and tr
 import asyncio
 import hashlib
 import logging
+import re
+from typing import Optional
 from urllib.parse import urlparse
 
 import pypdfium2
 import requests
+from pydantic import BaseModel
 
-from backend.datalayer import news_sources
+from backend.datalayer import news, news_sources
+from backend.llm import llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +26,8 @@ PDF_HOST = "nsearchives.nseindia.com"
 MAX_BYTES, MAX_PAGES, MAX_CHARS = 10 * 1024 * 1024, 6, 8000
 MIN_TEXT = 100  # under this a PDF is a scan or empty: there is nothing to read
 DOWNLOAD_SECONDS = 20
+EVENT_TYPES = {"results", "order", "deal", "legal", "regulatory", "management", "capital", "other"}
+OUTAGE = news._OUTAGE  # the model never answered: not the filing's fault
 
 
 def filing_id(item: dict) -> str:
@@ -84,3 +90,36 @@ async def fetch_text(url: str) -> tuple[str, bool]:
         return "", False
     text = await asyncio.to_thread(read_pdf, data)
     return text, len(text) >= MIN_TEXT
+
+
+class _FilingScore(BaseModel):
+    event_type: str = "other"
+    direction: float = 0.0
+    impact: float = 1.0
+    priced_in: Optional[float] = None
+    key_fact: str = ""
+
+
+async def _standard(system: str, user: str) -> str:
+    return await llm_service.get_completion(user, system_prompt=system, tier="standard", feature="news")
+
+
+def _squeezed(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip().lower()
+
+
+async def score_filing(db, doc: dict, ltp: Optional[float], company: str):
+    """The score, OUTAGE when the model is down, None after two invalid answers. A `key_fact` that is
+    not in the filing clears the signal: the model described a document it did not read."""
+    notes = await news.price_notes(db, [doc], lambda _doc, _symbol: ltp)
+    result = await news._ask("score_filing", _standard, _FilingScore, symbol=doc["symbols"][0], company=company,
+                             title=doc["title"], price=notes.get(doc["_id"], "not available"), text=doc.get("text") or "")
+    if result is OUTAGE or result is None:
+        return result
+    fact = _squeezed(result.key_fact)
+    fact_ok = bool(fact) and fact in _squeezed(doc.get("text"))
+    return {"event_type": result.event_type if result.event_type in EVENT_TYPES else "other",
+            "direction": max(-1.0, min(1.0, result.direction)) if fact_ok else 0.0,
+            "impact": max(0.0, min(10.0, result.impact)) if fact_ok else 0.0,
+            "priced_in": None if result.priced_in is None else max(0.0, min(1.0, result.priced_in)),
+            "key_fact": result.key_fact[:300], "key_fact_ok": fact_ok}

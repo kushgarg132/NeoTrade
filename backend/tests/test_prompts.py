@@ -16,6 +16,7 @@ PROMPTS = {
     "triage_news": {"items": "[0] [GLOBAL] Brent jumps (Reuters)"},
     "score_market_news": {"sectors": "Power, Realty", "items": "[0] (GLOBAL) Brent jumps"},
     "score_news": {"symbol": "SBIN", "articles": "[0] headline"},
+    "score_filing": {"symbol": "TCS", "company": "Tata Consultancy", "title": "TCS: Order", "price": "TCS +1.2%", "text": "An order"},
     "research_report": {"symbol": "SBIN", "sentiment_score": "-0.20", "relevant_count": 3, "news": "n", "events": "[]", "backdrop": "b",
                         "price": "Last close 800", "fundamentals": "P/E 10", "results": "2026-11-20", "news_trust": "Company 44%"},
     "market_brief": {"now": "Mon", "news": "n", "board": "b", "flows": "f", "regime": "r", "calendar": "c"},

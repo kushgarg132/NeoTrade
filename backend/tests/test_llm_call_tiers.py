@@ -9,6 +9,7 @@ BACKEND = Path(__file__).parents[1]
 EXPECTED = {
     "ai/analyst.py": ["deep", "standard"],   # news scoring feeds trade scores; report
     "datalayer/news.py": ["fast", "deep"],
+    "datalayer/filings.py": ["standard"],                # one filing, one call
     "datalayer/market.py": ["standard"],                 # the market brief                # triage; impacts feed trade scores
     "plan/builder.py": ["deep", "deep"],                  # the per-user game plan (single call; tool loop)
     "plan/revise.py": ["deep"],                           # revisions: tool loop; single call via builder._llm
@@ -29,7 +30,7 @@ EXPECTED = {
 FEATURE = {
     "ai/analyst.py": "research", "research/search.py": "research",
     "instruments/resolve.py": "research", "research/index_move.py": "research",
-    "datalayer/news.py": "news", "datalayer/market.py": "news",
+    "datalayer/news.py": "news", "datalayer/market.py": "news", "datalayer/filings.py": "news",
     "plan/builder.py": "plan", "plan/revise.py": "plan",
     "portfolio/review.py": "portfolio", "portfolio/ai_rebalance.py": "portfolio", "chat/agent.py": "chat",
     "learning/report.py": "learning", "learning/hypotheses.py": "learning",
