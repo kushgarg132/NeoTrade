@@ -8,7 +8,8 @@ test('pct formats signed percents', () => {
 });
 
 test('headline covers risk-off, trade days and quiet days', () => {
-  assert.equal(headline({ risk_off: true }), 'Risk-off: the book sits in cash');
+  assert.equal(headline({ risk_off: true, nifty_vs_200dma: -0.0244, next_rebalance: '2026-11-09' }),
+    'Risk-off: Nifty −2.4% vs its 200-day average, so no buys. Next check 2026-11-09');
   assert.equal(headline({ buys: [{}], sells: [], holdings: [{}, {}] }), '1 trade today · 2 held');
   assert.equal(headline({ buys: [], sells: [], holdings: [{}] }), 'Holding 1 · no trades today');
 });
