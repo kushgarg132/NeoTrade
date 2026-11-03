@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SERIES, heatColor, AXIS, GRID, TOOLTIP_STYLE } from './chartTheme.js';
+import { SERIES, heatColor, AXIS, GRID } from './chartTheme.js';
 
 test('heatColor buckets a % change onto the diverging ramp', () => {
   assert.equal(heatColor(0), 'var(--heat-0)');
@@ -19,7 +19,7 @@ test('six categorical series, fixed order', () => {
 
 test('every var the theme names is defined in index.css, light and dark', () => {
   const css = readFileSync(new URL('../../index.css', import.meta.url), 'utf8');
-  const used = JSON.stringify([SERIES, AXIS, GRID, TOOLTIP_STYLE])
+  const used = JSON.stringify([SERIES, AXIS, GRID])
     + [-9, -2, -0.5, 0, 0.5, 2, 9].map(heatColor).join();
   const names = new Set(used.match(/--[a-z0-9-]+/g));
   const dark = css.split('.dark {')[1];

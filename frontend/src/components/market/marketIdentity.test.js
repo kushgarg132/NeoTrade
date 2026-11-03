@@ -9,7 +9,6 @@ const files = {
   chips: src('../ui/ChipRow.jsx'),
   chart: src('../stock/TradingChart.jsx'),
   ticket: src('../trading/OrderTicket.jsx'),
-  bar: src('../trading/TradingControlBar.jsx'),
 };
 
 test('no shadow, wash tokens, or accent fill with surface text', () => {

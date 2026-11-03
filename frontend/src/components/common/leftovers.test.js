@@ -6,7 +6,7 @@ const f = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const layout = f('../Layout.jsx');
 const chat = f('../ChatWidget.jsx');
 const chip = f('./NewsChip.jsx');
-const files = [layout, chat, chip, f('./StopAutopilot.jsx')];
+const files = [layout, chat, chip];
 
 test('shared chrome: no doc-meta, shadow- or sheet classes', () => {
   for (const s of files) {

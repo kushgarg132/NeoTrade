@@ -51,18 +51,6 @@ export const rupeeMove = (entry, median) => {
   return `≈ ${m < 0 ? '−' : '+'}₹${Math.abs(m).toFixed(1)} on ₹${entry.toFixed(1)}`;
 };
 
-/** "fired Mon · now +0.8% from entry · 14 days left" for a pick from an earlier day (null for today's). */
-export const olderPickLabel = (idea) => {
-  if (!idea?.daysSince || !idea.firedOn) return null;
-  const t = new Date(`${idea.firedOn}T00:00:00Z`);
-  const day = Number.isNaN(t.getTime()) ? null : t.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' });
-  const m = idea.moveSinceEntry;
-  return [day && `${idea.backfilled ? 'recomputed for' : 'fired'} ${day}`,
-    typeof m === 'number' && `now ${m < 0 ? '−' : '+'}${Math.abs(m * 100).toFixed(1)}% from entry`,
-    idea.missedEntry && 'past the entry zone',
-    idea.daysLeft != null && `${idea.daysLeft} day${idea.daysLeft === 1 ? '' : 's'} left`].filter(Boolean).join(' · ') || null;
-};
-
 /** A pick's grade (GET /picks `grade`, from the setup's adjusted edge over the average stock). */
 export const GRADES = {
   A: { label: 'A · Passed backtest', kind: 'proven' },
@@ -135,28 +123,8 @@ export const rangeBar = (p10, median, p90) => {
   return { p10: at(p10), median: at(median), p90: at(p90), zero: at(0) };
 };
 
-/** Plain titles for the "Your holdings" groups on Ideas, in the order /mine/actions ranks them. */
-export const HOLDING_GROUPS = {
-  stop_hit: 'Exit alerts', idea_exit: 'Exit alerts', target_hit: 'Exit alerts',
-  verdict_worse: 'Verdict got worse', bad_news: 'Bad news', review_due: 'Reviews due',
-  results_soon: 'Results soon', overweight: 'Too much in one stock', ltcg_soon: 'Tax: turning long-term',
-  harvest: 'Tax: harvest', ex_dividend: 'Dividends coming', add: 'Room to add',
-};
-
 /** Mine actions about the holdings: everything except `idea` rows, which are the Ideas list's own pending suggestions. */
 export const holdingActions = (actions) => (Array.isArray(actions) ? actions : []).filter((a) => a.kind !== 'idea');
-
-/** [{ title, items }] in rank order, one group per plain title. */
-export const groupHoldingActions = (actions) => {
-  const groups = [];
-  for (const a of holdingActions(actions)) {
-    const title = HOLDING_GROUPS[a.kind] || 'Other';
-    let g = groups.find((x) => x.title === title);
-    if (!g) groups.push((g = { title, items: [] }));
-    g.items.push(a);
-  }
-  return groups;
-};
 
 /** Ideas → Holdings bands: news is "watch", dated or tax rows "soon", everything else (exits, verdicts, adds,
  * trims, reviews) "act". */

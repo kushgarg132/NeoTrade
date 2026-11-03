@@ -1,13 +1,3 @@
-// Which Today sections show, in order, for each market phase (GET /today `phase`).
-const ORDER = {
-  pre: ['beforeOpen', 'picksTop', 'doToday', 'account', 'markets'],
-  session: ['doToday', 'account', 'aiActivity', 'markets'],
-  post: ['afterClose', 'doToday', 'journalPrompt', 'scoreboard', 'account', 'aiActivity'],
-  closed: ['closedNote', 'doToday', 'afterClose', 'scoreboard', 'account'],
-};
-
-// An old backend sends no phase: fall back to the session order.
-export const sectionsFor = (phase) => ORDER[phase] || ORDER.session;
 
 const ENTITIES = { '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#x27;': "'", '&amp;': '&' };
 

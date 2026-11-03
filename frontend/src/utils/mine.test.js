@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actionTarget, targetProgress, sortHoldings, formatXirr, RANGES, holdingsStale, taxYears } from './mine.js';
+import { actionTarget, sortHoldings, formatXirr, RANGES, holdingsStale, taxYears } from './mine.js';
 import { mergeLots } from './mine.js';
 
 test('holdingsStale only past 36 hours (I9: logged in reads as fresh)', () => {
@@ -25,13 +25,6 @@ test('actionTarget maps every type', () => {
   });
   assert.deepEqual(t({ type: 'idea', suggestion_id: 'abc' }), { to: '/portfolio', idea: 'abc' });
   assert.deepEqual(t({ type: 'none' }), {});
-});
-
-test('targetProgress clamps and needs a target', () => {
-  assert.equal(targetProgress(100, 150, 200), 0.5);
-  assert.equal(targetProgress(100, 250, 200), 1);
-  assert.equal(targetProgress(100, 90, 200), 0);
-  assert.equal(targetProgress(100, 90, null), null);
 });
 
 test('formatXirr', () => {

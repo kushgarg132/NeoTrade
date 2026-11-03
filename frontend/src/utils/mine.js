@@ -23,12 +23,6 @@ export const actionTarget = (item) => {
   }
 };
 
-/** How far the price has travelled from cost to the owner's target, 0..1. */
-export const targetProgress = (avg, last, target) => {
-  if (target == null || target === avg) return null;
-  return Math.max(0, Math.min(1, (last - avg) / (target - avg)));
-};
-
 const VERDICT_ORDER = { SELL: 0, REVIEW: 1, HOLD: 2, ADD: 3, KEEP: 4 };
 const KEYS = {
   weight: (r) => -(r.weight ?? r.weight_pct ?? 0),

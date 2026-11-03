@@ -38,14 +38,6 @@ export const rememberStock = (symbol) => {
   }
 };
 
-export const clearRecentStocks = () => {
-  try {
-    localStorage.removeItem(KEY);
-  } catch {
-    // storage unavailable
-  }
-};
-
 const STOCK_TABS = ["chart", "news", "details", "events"];
 export const stockTab = (id) => (id === "analysis" ? "details" : STOCK_TABS.includes(id) ? id : "chart");
 

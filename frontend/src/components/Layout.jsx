@@ -9,7 +9,6 @@ import ErrorBoundary from './ErrorBoundary';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import { useNeedCount } from '../hooks/useNeedCount';
-import { PendingContext } from '../context/pendingContext';
 import { useAuth } from '../context/AuthContext';
 
 /**
@@ -59,7 +58,7 @@ const Layout = ({ children }) => {
   const counts = { attention: user ? attention : 0, pending };
 
   return (
-    <PendingContext.Provider value={pending}>
+    <>
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
       <SideRail counts={counts} />
 
@@ -88,7 +87,7 @@ const Layout = ({ children }) => {
 
       <BottomTabs counts={counts} />
     </div>
-    </PendingContext.Provider>
+    </>
   );
 };
 

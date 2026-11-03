@@ -39,14 +39,11 @@ test('confidence splits the composite into rule and AI parts', () => {
   assert.equal(ideaFromSuggestion({ ...sug, score: { rule: 0.6, ai: 0.5, final: 0.68 } }).score.rule, 0.6);
 });
 
-import { needCount, groupHoldingActions, olderPickLabel, noPickText } from './ideas.js';
+import { needCount, noPickText } from './ideas.js';
 
-test('older pick label: weekday, move, days left; nothing for today', () => {
+test('a pick older than today keeps its due-date headline', () => {
   const old = ideaFromPick({ ...pick, fired_on: '2026-10-19', days_since: 2, days_left: 14, move_since_entry: 0.008, due_date: '2026-11-09' });
-  assert.equal(olderPickLabel(old), 'fired Mon · now +0.8% from entry · 14 days left');
   assert.equal(old.headline.label, 'by 9 Nov');
-  assert.equal(olderPickLabel(ideaFromPick({ ...pick, fired_on: '2026-10-21', days_since: 0, days_left: 9 })), null);
-  assert.equal(olderPickLabel({ daysSince: 1, firedOn: '2026-10-20', moveSinceEntry: -0.012, daysLeft: 1 }), 'fired Tue · now −1.2% from entry · 1 day left');
 });
 test('experimental flag carries over', () => {
   assert.equal(ideaFromPick({ ...pick, experimental: true }).experimental, true);
@@ -64,10 +61,6 @@ test('needCount: act-now holdings rows (not FYI, not idea rows) plus pending ide
   assert.equal(needCount(null, undefined), 0);
 });
 
-test('groupHoldingActions groups exits under one title, in order', () => {
-  const g = groupHoldingActions([{ kind: 'stop_hit' }, { kind: 'bad_news' }, { kind: 'target_hit' }, { kind: 'idea' }]);
-  assert.deepEqual(g.map((x) => [x.title, x.items.length]), [['Exit alerts', 2], ['Bad news', 1]]);
-});
 test('pick with per-stock forecast keeps excess and describes features', () => {
   const v = ideaFromPick({ ...pick, forecast: 'similar', similar_n: 150, expected: { ...pick.expected, excess: { p10: -0.05, median: 0.015, p90: 0.07 } },
     features: { dist_high: -0.01, vol60: 0.01, mom: 0.2, rel20: 0.05, strength: 1, regime: 1 } });
@@ -109,7 +102,6 @@ test('a pick carries its grade, grade text, entry-zone flag and the edge over th
   assert.equal(v.gradeText, 'Promising: ahead of the average stock');
   assert.equal(v.adjExcess, 0.004);
   assert.equal(v.beatsOdds, false);
-  assert.match(olderPickLabel(v), /past the entry zone · 5 days left$/);
   assert.equal(ideaFromPick(pick).grade, null);
 });
 
@@ -123,7 +115,6 @@ test('a pick carries its levels: stop, target, entry zone, reward:risk', () => {
 test('a backfilled pick says it was recomputed, not fired live', () => {
   const v = ideaFromPick({ ...pick, backfilled: true, fired_on: '2026-10-01', days_since: 15, days_left: 7 });
   assert.equal(v.backfilled, true);
-  assert.match(olderPickLabel(v), /^recomputed for Thu/);
 });
 
 import { holdingButtons } from './ideas.js';

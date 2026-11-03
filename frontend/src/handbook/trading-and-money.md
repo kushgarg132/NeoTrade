@@ -321,8 +321,7 @@ Backend, `backend/mine/` behind `backend/routers/mine.py` (`/mine/*`, every reco
 - **Stock** (`backend/mine/stock.py::detail`): position, lots, thesis, verdict history, events, news and
   closes for one symbol; a sold holding still opens.
 
-Frontend: `frontend/src/pages/MineOverview.jsx::MineOverview` (headline with XIRR vs NIFTY, value curve
-`frontend/src/components/mine/ValueCurve.jsx`, Needs you `frontend/src/components/mine/NeedsYou.jsx`,
+Frontend: `frontend/src/pages/MineOverview.jsx::MineOverview` (headline with XIRR vs NIFTY, value curve, Needs you,
 drivers, mix), `frontend/src/pages/MineHoldings.jsx::MineHoldings` (one line per holding, sort and filter
 chips, "Plan new money" opens `frontend/src/components/portfolio/Rebalance.jsx`),
 `frontend/src/pages/Stock.jsx::Stock` (header, candle/area price chart with volume, a crosshair readout, 1D/1W/1M/6M/1Y/5Y ranges, your trades as B/S arrows and news days as dots via `frontend/src/components/stock/TradingChart.jsx::TradingChart` (lightweight-charts in `stock/PriceCanvas.jsx`, OHLCV normalised by `frontend/src/utils/stock.js::toBars`); the thesis

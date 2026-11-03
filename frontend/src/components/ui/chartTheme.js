@@ -14,15 +14,6 @@ export const AXIS = {
 /** Spread onto <CartesianGrid>. */
 export const GRID = { stroke: 'var(--border)', vertical: false };
 
-/** contentStyle for recharts' default <Tooltip>. */
-export const TOOLTIP_STYLE = {
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: 12,
-  fontSize: 13,
-  color: 'var(--text)',
-};
-
 /** A % change as a diverging heat cell: three steps each side of a neutral band (|pct| < maxAbs/12).
  *  Colour is never the only carrier: cells also print the signed %. */
 export const heatColor = (pct, maxAbs = 3) => {

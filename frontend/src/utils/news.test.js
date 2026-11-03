@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { badNewsSince, chipLabel, hasNews, hasRecentNews, lossCause, mergeFront, newsToday, resultsFlag, sortByNewsRisk, tone } from './news.js';
+import { badNewsSince, chipLabel, hasNews, lossCause, mergeFront, newsToday, resultsFlag, tone } from './news.js';
 
 test('newsToday is a material item on the IST day; hasNews needs a headline', () => {
   const now = Date.parse('2026-10-26T10:00:00Z'); // 15:30 IST
@@ -53,21 +53,6 @@ test('label is signed and never leaks NaN or undefined', () => {
   assert.equal(chipLabel({ sentiment: -0.6 }), 'News −0.6');
   assert.equal(chipLabel({ sentiment: null, headline: 'x' }), 'News');
   assert.equal(chipLabel({ sentiment: Number.NaN }), 'News');
-});
-
-test('recent news window', () => {
-  const now = Date.parse('2026-10-06T10:00:00Z');
-  assert.equal(hasRecentNews({ published_at: '2026-10-06T00:00:00Z' }, 24, now), true);
-  assert.equal(hasRecentNews({ published_at: '2026-10-04T00:00:00Z' }, 24, now), false);
-  assert.equal(hasRecentNews({ published_at: null }, 24, now), false);
-  assert.equal(hasRecentNews(undefined, 24, now), false);
-});
-
-test('material bad news sorts first, otherwise order is kept', () => {
-  const rows = [{ symbol: 'A' }, { symbol: 'B' }, { symbol: 'C' }, { symbol: 'D' }];
-  const news = { C: { material: true, direction: -0.7 }, B: { material: true, direction: 0.8 }, D: { material: true, direction: -0.5 } };
-  assert.deepEqual(sortByNewsRisk(rows, news).map((r) => r.symbol), ['C', 'D', 'A', 'B']);
-  assert.deepEqual(sortByNewsRisk(rows, {}).map((r) => r.symbol), ['A', 'B', 'C', 'D']);
 });
 
 test('mergeFront puts the fresh page first and keeps older paged items', () => {
