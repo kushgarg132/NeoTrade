@@ -79,8 +79,8 @@ class WalkForward:
 
 
 def walk_forward(closes: pd.DataFrame, market: pd.Series, start, end, variants: list[Params],
-                 in_sample_years: int = 3) -> WalkForward:
-    trials = {p: backtest.simulate(closes, market, p, start, end) for p in variants}
+                 in_sample_years: int = 3, member: pd.DataFrame | None = None) -> WalkForward:
+    trials = {p: backtest.simulate(closes, market, p, start, end, member=member) for p in variants}
     daily = {p: r.equity.pct_change().fillna(0) for p, r in trials.items()}
     pieces, chosen = [], {}
     index = next(iter(daily.values())).index

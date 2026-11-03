@@ -13,7 +13,7 @@ pytestmark = pytest.mark.real_members
 
 
 def test_each_day_takes_the_latest_list_on_or_before_it(monkeypatch):
-    monkeypatch.setattr(members, "snapshots", lambda: (
+    monkeypatch.setattr(members, "snapshots", lambda rolled=False: (
         (date(2022, 3, 1), frozenset({"S0", "S1"})), (date(2022, 6, 1), frozenset({"S1", "S2"}))))
     days = pd.bdate_range("2022-01-03", "2022-07-01")
     m = members.mask(days, ["S0", "S1", "S2", "S3"])

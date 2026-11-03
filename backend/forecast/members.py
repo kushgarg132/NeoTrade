@@ -6,7 +6,12 @@ Lists come from Wayback Machine copies of NSE's own CSVs, symbols moved to
 today's via NSE's symbolchange.csv; see `nifty_members.csv`.
 
 Rebuild: python -m backend.forecast.members DIR SYMBOLCHANGE_CSV
-(DIR holds <index>_<wayback timestamp>.csv files)."""
+(DIR holds <index>_<wayback timestamp>.csv files).
+
+No list survives between 2019-02 and 2023-08, so `nifty_members_rolled.csv` rolls the 2019 list forward
+through NSE Indices' press releases (niftyindices.com/Press_Release), one list per effective date. It lands
+on the real 2023-08 list within 9 of 200 names, 2 of those non-names (2026-11-03). Pass `rolled=True` to use
+it; the Picks study reads the archived lists only, so its results do not move."""
 
 import csv
 import sys
@@ -17,28 +22,30 @@ from pathlib import Path
 import pandas as pd
 
 MEMBERS_FILE = Path(__file__).with_name("nifty_members.csv")
+ROLLED_FILE = Path(__file__).with_name("nifty_members_rolled.csv")
 # Before the first archived Nifty 200 list only Nifty 100 lists exist.
 PREFER = ("n200", "cnx200")
 FALLBACK = ("cnx100",)
 
 
-@lru_cache(maxsize=1)
-def snapshots() -> tuple[tuple[date, frozenset], ...]:
+@lru_cache(maxsize=2)
+def snapshots(rolled: bool = False) -> tuple[tuple[date, frozenset], ...]:
     rows: dict[date, set] = {}
-    with MEMBERS_FILE.open() as f:
-        for row in csv.DictReader(f):
-            rows.setdefault(date.fromisoformat(row["as_of"]), set()).add(row["symbol"])
+    for path in (MEMBERS_FILE, ROLLED_FILE) if rolled else (MEMBERS_FILE,):
+        with path.open() as f:
+            for row in csv.DictReader(f):
+                rows.setdefault(date.fromisoformat(row["as_of"]), set()).add(row["symbol"])
     return tuple((d, frozenset(s)) for d, s in sorted(rows.items()))
 
 
-def ever() -> set[str]:
-    return set().union(*(s for _, s in snapshots()))
+def ever(rolled: bool = False) -> set[str]:
+    return set().union(*(s for _, s in snapshots(rolled)))
 
 
-def mask(days: pd.DatetimeIndex, symbols) -> pd.DataFrame:
+def mask(days: pd.DatetimeIndex, symbols, rolled: bool = False) -> pd.DataFrame:
     """days x symbols, True where the symbol was in the index that day (latest list on or before it;
     days before the first list use the first)."""
-    snaps = snapshots()
+    snaps = snapshots(rolled)
     out = pd.DataFrame(False, index=days, columns=list(symbols))
     starts = [pd.Timestamp(d) for d, _ in snaps]
     for i, (_, members) in enumerate(snaps):

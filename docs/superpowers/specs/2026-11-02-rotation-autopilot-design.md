@@ -70,7 +70,31 @@ It needs no broker login and no Lab switch. It is pure arithmetic: no LLM decide
 - Engine proposals and news proposals to the autopilot (`autorun._autopilot_proposals` and its
   reactor call).
 
-## Evidence (2026-11-02, `factor/backtest.py`, net of charges, 10 bps slippage, today's Nifty 200 list)
+## Evidence on point-in-time membership (2026-11-03): this replaces the figures below
+
+`python -m backend.factor.survivorship rotation`: net of charges, 10 bps slippage, 2013-2026, ranking only that
+day's Nifty 200 members (`forecast/members.py`). 2019-02 to 2023-08 rolls forward through NSE's press releases
+and lands within 9 of 200 names on the real 2023-08 list.
+
+| | CAGR | Sharpe | Max DD |
+|---|---|---|---|
+| Rotation, today's list (biased) | 29.5% | 1.42 | -36% |
+| Rotation, point in time | 16.2% | 0.90 | -42% |
+| Rotation, walk-forward, point in time | 13.3% | 0.81 | -34% |
+| Equal weight of the same members, no costs | 15.0% | | |
+| Nifty 200 price index, about 1.3% a year of dividends on top | 11.3% | | |
+
+- Deflated Sharpe 0.974 (16 trials). Ahead of equal weight in 6 of 14 years.
+- 2020 and 2021 hold the edge: +28 and +54 points over equal weight. 2018 lost 30% against -9%, on real names
+  (VAKRANGEE, PCJEWELLER) and whipsaw, not bad prices. No one-day move over 25% while held.
+- Since 2022-08: 16.3%, Momentum 30 ETF 8.3%, Nifty 200 8.7%.
+- Remaining bias: 52 of 405 past members have no Yahoo prices. They are mostly names that left or failed, so the
+  figures are still somewhat high.
+- Not in the figures: tax.
+
+## Earlier evidence (2026-11-02, `factor/backtest.py`, net of charges, 10 bps slippage, today's Nifty 200 list)
+
+These are inflated by survivorship; see above.
 
 Walk-forward over 8 variants (top 8/12 × stop on/off × breadth on/off), 3-year in-sample, out
 of sample 2013-2026:
@@ -105,8 +129,8 @@ of sample 2013-2026:
 
 ## Evidence gate before live money
 
-1. Walk-forward with a deflated Sharpe ≥ 0.95. Met: 0.999.
-2. Bias-neutral check: the estimated real CAGR must beat the Momentum 30 ETF. Met: 16.2% vs 8.3%.
+1. Walk-forward with a deflated Sharpe ≥ 0.95. Met on point-in-time membership: 0.974.
+2. Bias-neutral check: must beat the Momentum 30 ETF. Met on point-in-time membership: 16.3% vs 8.3% since 2022-08.
 3. 3 months of forward paper results ahead of the Nifty. Until then, `autopilot_live` stays off.
 
 ## Testing

@@ -10,8 +10,8 @@ Honest by construction:
 - idle cash earns the risk-off sleeve's yield (a liquid ETF), which is also
   where the money sits whenever the trend filter is off.
 
-Survivorship: callers pass today's index members, so results are biased
-upward; compare against `equal_weight` of the same universe, which carries
+Survivorship: with today's index members results are biased upward; pass
+`member` for point-in-time membership. `equal_weight` of today's list carries
 the same bias.
 """
 
@@ -73,7 +73,9 @@ def rebalance_days(index: pd.DatetimeIndex, how: str) -> set:
 
 def simulate(closes: pd.DataFrame, market: pd.Series, params: Params, start, end,
              capital: float = 1_000_000.0, ex: Execution = DAILY,
-             risk_off_yield: float = RISK_OFF_YIELD) -> Result:
+             risk_off_yield: float = RISK_OFF_YIELD, member: pd.DataFrame | None = None) -> Result:
+    """`member`: days x symbols, True while in the index (`forecast/members.py::mask`). Only members are
+    ranked, so a holding that leaves the index is sold at that rebalance. Without it every column counts."""
     prices = closes.ffill()  # a missing day (halt, delisting) keeps its last price
     days = prices.loc[start:end].index
     decide_on = rebalance_days(days, params.rebalance)
@@ -105,7 +107,8 @@ def simulate(closes: pd.DataFrame, market: pd.Series, params: Params, start, end
                        and row[s] < peaks[s] - params.stop_atr * atrs.at[day, s]}
             exits = stopped
         if day in decide_on:
-            book, level = model.target_book(closes, market, day, set(shares) - stopped, params, avoid=stopped)
+            eligible = closes if member is None else closes.loc[:, member.loc[day]]
+            book, level = model.target_book(eligible, market, day, set(shares) - stopped, params, avoid=stopped)
             pending = book
             exits = set()  # the rebalance sells them anyway
             result.rebalances += 1

@@ -43,7 +43,7 @@ class Params:
 
 
 # The autopilot's weekly relative-strength rotation (docs/superpowers/specs/2026-11-02-rotation-autopilot-design.md).
-# Walk-forward 2013-2026 (8 variants, DSR 0.999): the ATR stop and the breadth filter cut net
+# Walk-forward 2013-2026 on point-in-time membership: 13.3% CAGR, DSR 0.974 (8 variants). The ATR stop and the breadth filter cut net
 # returns in every variant (turnover 10x -> 25x a year), so neither runs live.
 ROTATION = Params(momentum_weight=1.0, top_n=8, buffer=25, weight_cap=0.15, target_vol=None,
                   rebalance="weekly", score="rotation", weighting="equal")
