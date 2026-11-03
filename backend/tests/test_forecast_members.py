@@ -3,6 +3,9 @@ among each day's own index members, so stocks that left still count and stocks t
 
 from datetime import date
 
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock
+
 import pandas as pd
 import pytest
 
@@ -55,3 +58,36 @@ def test_build_moves_old_symbols_to_today_s(tmp_path):
     rows = members.build(tmp_path, changes)
     assert {d for d, _ in rows} == {date(2010, 1, 2), date(2018, 3, 15)}
     assert (date(2018, 3, 15), "NEWSYM") in rows and not any(s == "OLDSYM" for _, s in rows)
+
+
+@pytest.mark.real_members
+async def test_the_picks_study_reads_the_rolled_lists(monkeypatch):
+    from backend.forecast import picks
+
+    seen = {}
+    real = members.mask
+
+    def spy(days, symbols, rolled=False):
+        seen["rolled"] = rolled
+        return real(days, symbols, rolled=rolled)
+
+    monkeypatch.setattr(members, "mask", spy)
+    monkeypatch.setattr(picks.bars, "read", AsyncMock(return_value={
+        picks.bars.NIFTY: _frame(), "TCS": _frame()}))
+    monkeypatch.setattr("backend.datalayer.results.load", AsyncMock(return_value={}))
+    db = {picks.bars.BARS: type("C", (), {"distinct": AsyncMock(return_value=["TCS"])})()}
+    await picks.load(db, datetime(2026, 11, 3, tzinfo=timezone.utc))
+    assert seen["rolled"] is True
+
+
+def test_grade_a_says_backtest_not_proven():
+    from backend.forecast import picks
+
+    assert "Passed the backtest" in picks.GRADE_TEXT["A"] and "forward" in picks.GRADE_TEXT["A"]
+    assert "Proven" not in picks.GRADE_TEXT["A"]
+
+
+def _frame():
+    days = pd.bdate_range("2026-10-01", periods=5)
+    return pd.DataFrame({c: 100.0 for c in ("open", "high", "low", "close", "volume")}, index=days)
+

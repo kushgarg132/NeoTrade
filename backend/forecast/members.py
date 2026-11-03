@@ -11,7 +11,7 @@ Rebuild: python -m backend.forecast.members DIR SYMBOLCHANGE_CSV
 No list survives between 2019-02 and 2023-08, so `nifty_members_rolled.csv` rolls the 2019 list forward
 through NSE Indices' press releases (niftyindices.com/Press_Release), one list per effective date. It lands
 on the real 2023-08 list within 9 of 200 names, 2 of those non-names (2026-11-03). Pass `rolled=True` to use
-it; the Picks study reads the archived lists only, so its results do not move."""
+it, as the Picks study and the rotation check do."""
 
 import csv
 import sys

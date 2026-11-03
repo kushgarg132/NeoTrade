@@ -160,7 +160,7 @@ GRADES = ("A", "B", "C")
 # What each grade means, from the setup's adjusted out-of-sample excess over the average stock
 # (`study.adjusted_edge`, stored in picks_study). Every number there is already net of charges.
 GRADE_TEXT = {
-    "A": "Proven: beat the average stock out of sample, corrected for the setups tested at once, in both halves",
+    "A": "Passed the backtest: beat the average stock out of sample, corrected for the setups tested at once, in both halves. The forward record decides",
     "B": "Promising: ahead of the average stock out of sample, not yet proven",
     "C": "Unproven: no edge over the average stock so far",
 }
@@ -280,7 +280,7 @@ async def load(db, now: datetime) -> Optional[dict]:
 
     def build() -> dict:  # CPU-bound: off the event loop
         t = setups.table(frames)
-        t["member"] = members.mask(t["close"].index, t["close"].columns)  # no survivorship: each day's own index
+        t["member"] = members.mask(t["close"].index, t["close"].columns, rolled=True)  # no survivorship: each day's own index
         return t
 
     t = await asyncio.to_thread(build)

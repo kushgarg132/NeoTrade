@@ -65,7 +65,7 @@ export const olderPickLabel = (idea) => {
 
 /** A pick's grade (GET /picks `grade`, from the setup's adjusted edge over the average stock). */
 export const GRADES = {
-  A: { label: 'A · Proven', kind: 'proven' },
+  A: { label: 'A · Passed backtest', kind: 'proven' },
   B: { label: 'B · Promising', kind: 'neutral' },
   C: { label: 'C · Unproven', kind: 'unproven' },
 };

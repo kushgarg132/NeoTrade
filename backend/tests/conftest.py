@@ -69,7 +69,7 @@ def _every_symbol_a_member(request, monkeypatch):
     import pandas as pd
     from backend.forecast import members
 
-    monkeypatch.setattr(members, "mask", lambda days, symbols: pd.DataFrame(True, index=days, columns=list(symbols)))
+    monkeypatch.setattr(members, "mask", lambda days, symbols, rolled=False: pd.DataFrame(True, index=days, columns=list(symbols)))
 
 
 @pytest.fixture(autouse=True)

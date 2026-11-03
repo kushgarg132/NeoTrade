@@ -313,7 +313,7 @@ def test_every_grade_is_served_a_first_and_a_low_beat_rate_is_a_label_not_a_filt
                        _p("2026-10-21", "X", setup="breakout"), _p("2026-10-21", "L", beat=0.5)], [], {}, TODAY, GRADES)
     assert [(p["symbol"], p["grade"]) for p in out["shown"]] == [("L", "A"), ("P", "B"), ("X", "C")]
     assert out["shown"][0]["beats_nifty_odds"] is False and out["shown"][1]["beats_nifty_odds"] is True
-    assert out["hidden_count"] == 0 and out["grade_text"]["A"].startswith("Proven")
+    assert out["hidden_count"] == 0 and out["grade_text"]["A"].startswith("Passed the backtest")
 
 
 def test_an_earlier_pick_stays_until_due_and_a_big_move_is_flagged_not_hidden():
