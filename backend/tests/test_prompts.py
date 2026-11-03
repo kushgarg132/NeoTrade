@@ -88,8 +88,8 @@ def test_missing_and_unknown_values_fail_loudly():
 def test_version_defaults_to_one_and_is_read_from_front_matter(tmp_path, monkeypatch):
     import backend.prompts as prompts
 
-    (tmp_path / "parts").mkdir()
-    (tmp_path / "parts" / "rule.md").write_text("Be plain.\n", encoding="utf-8")
+    (tmp_path / "shared").mkdir()
+    (tmp_path / "shared" / "rule.md").write_text("Be plain.\n", encoding="utf-8")
     (tmp_path / "old.md").write_text("---\nsystem: One line: with a colon.\n---\nHi {{who}}", encoding="utf-8")
     (tmp_path / "new.md").write_text(
         "---\nversion: 3\nsystem: First line.\n  Second line.\n{{> rule}}\n---\nHi {{who}}\n{{> rule}}", encoding="utf-8")

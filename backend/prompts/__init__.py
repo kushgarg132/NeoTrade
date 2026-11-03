@@ -13,7 +13,7 @@ File format:
 
 `version` is optional (1 when absent): bump it when the wording changes, so
 stored output can be traced to the prompt that wrote it (`prompt_id`).
-`{{> name}}` pastes parts/name.md, in the system prompt or the body, so a rule
+`{{> name}}` pastes shared/name.md, in the system prompt or the body, so a rule
 several prompts share lives once.
 
 Placeholders are `{{name}}` rather than `{name}` so the JSON examples many
@@ -36,7 +36,7 @@ def _load(name: str) -> tuple[str, str, int]:
     text = (_DIR / f"{name}.md").read_text(encoding="utf-8")
     if not text.startswith("---\n"):
         raise ValueError(f"prompts/{name}.md must start with a --- front-matter block")
-    text = _PART.sub(lambda m: (_DIR / "parts" / f"{m.group(1)}.md").read_text(encoding="utf-8").strip(), text)
+    text = _PART.sub(lambda m: (_DIR / "shared" / f"{m.group(1)}.md").read_text(encoding="utf-8").strip(), text)
     front, body = text[4:].split("\n---\n", 1)
     system, version = [], 1
     for line in front.splitlines():
