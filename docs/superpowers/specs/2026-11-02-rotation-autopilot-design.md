@@ -92,6 +92,10 @@ and lands within 9 of 200 names on the real 2023-08 list.
   figures are still somewhat high.
 - Not in the figures: tax.
 
+## Status (owner decision, 2026-11-03)
+
+A paper experiment. No more building on it and no live money for now. Judge the forward record against an index fund after tax. It stays the autopilot's only entry source, on paper.
+
 ## After tax (2026-11-03, `python -m backend.factor.after_tax`)
 
 Today's rates for every year, FIFO lots, losses carried forward, idle-cash interest and fund dividends at 30%,
