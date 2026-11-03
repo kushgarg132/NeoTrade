@@ -7,6 +7,26 @@ Scope: whole repo at `b6c918d`. No code changed. Every batch below waits for own
 clearer but save about zero lines. The largest functions are mostly in the money and safety paths, so this
 audit does not propose changing their behaviour.
 
+## Status, 2026-11-03
+
+Done: B1, B2, B3, B4, D1, D2, D3 (`03688b8` to `5fc5d9c`). B5 to B8 and D4 to D7 were not approved and not started.
+
+| Lines | Before | After | Change |
+|---|---|---|---|
+| Backend production | 41,733 | 39,743 | -1,990 |
+| Frontend production | 20,377 | 19,103 | -1,274 |
+| Backend tests | 39,060 | 38,343 | -717 |
+
+Differences from the plan below:
+
+- B1: fixing the stale ignore exposed a real violation (`chat/tools.py:213` imports `routers.market_data`), now listed as known debt. There are still 14 ignores, and B5 removes them.
+- B2: `ROUTES`, `ADMIN_ROUTES` and `PUBLIC_ROUTES` stay. Also removed the `PendingContext` provider, which nothing read, and `HOLDING_GROUPS`.
+- B4: only `_aware` and `IST` were consolidated. `_now` stays because tests patch it per module, and `today_ist` stays because the grep test keeps `datetime.now` out of `core/` and `engine/`.
+- B4: `datalayer/filings.py` and `news_sources.py` keep their `_aware` until the Filing lane lands.
+- D2: also removed the direct `google-genai` line. The rebuilt image is only 20 MB smaller (1.76 GB to 1.74 GB).
+
+`test_data_quality_does_not_alert_on_a_holiday` reads the VM's real free disk, so it fails when under 3 GB is free. Not fixed here.
+
 ## Baseline
 
 | Check | Result |
