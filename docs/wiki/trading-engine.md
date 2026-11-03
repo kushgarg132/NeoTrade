@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: a761aa7
+verified_at: f04b9d1
 ---
 # Trading engine
 
@@ -45,7 +45,7 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/risk/rules.py` | Position-size and exposure helpers used by `size_intents` | `rules.py::RiskRules` |
 | `backend/risk/kill_switch.py` | Daily loss trip, persisted | `kill_switch.py::should_trip`, `::KillSwitchStore` |
 | `backend/risk/live_confirm.py` | Server-checked second tap for real money on `mine`: one-time 60 s token bound to user, subject, terms hash | `live_confirm.py::issue`, `::redeem`, `::TokenRefused` (`.code` confirm_missing/expired/spent/mismatch/other_user, `.response()`; Telegram logs the code) |
-| `backend/autopilot/fence.py` | Pure order fence (every autopilot order) | `fence.py::check`, `::FenceState`, `::trade_cap`, `::round_trip_cost` |
+| `backend/autopilot/fence.py` | Pure order fence (every autopilot order) | `fence.py::check`, `::AUTO_SOURCES` (`engine`, `news`, `picks`, `rotation`; `service.AutopilotOrder.source` allows the same plus `chat`, `factor`), `::FenceState`, `::trade_cap`, `::round_trip_cost` |
 | `backend/autopilot/service.py` | Fence -> fill (paper/live) -> log -> `alerts.alert` (`_notify`: fills `money` + stop button, refusals `autopilot_refused` digest) | `service.py::submit`, `::_submit`, `::_state`, `::check_exits`, `::ledger_user`, `::book`, `::ai_book_query` |
 | `backend/autopilot/rotation.py` | The autopilot's only entry source: weekly relative-strength rotation on the AI account. First morning pass of an ISO week decides the target from the last session's closes (`factor/model.py::ROTATION`: top 8 Nifty 200 by 3/6-month return per unit vol + nearness to the 52-week high, equal weight, kept while rank < 25, all cash under the Nifty 200-DMA, stored as empty `weights`, so no buys and every holding sells; no per-name stop) into `rotation_targets`; every 15-min pass from 09:20 trades toward it via `service.submit` (sells first; buys weight x book value under `per_trade_cap`; book = `max_exposure` + closed net + marks, capped at `max_exposure`); news only vetoes buys (`sentiment:{symbol}` <= `NEWS_VETO` -0.5 or results within `RESULTS_DAYS` 3); `plan` writes the daily plan to `rotation_plans` | `rotation.py::target`, `::rebalance`, `::plan`, `::plan_text`, `::news_flags`, `::book_value`, `::veto_outcome`, `::scorecard` |
 | `backend/autopilot/picks.py` | Exits only (entries retired 2026-11-02): open Picks trades sell at a tested fill-anchored stop/target (`suggestions/exits.py::anchored`, `::breach`, only setups whose study `levels_exit.better`) or at the horizon close | `picks.py::exit_due`, `::_levels_tested` |
@@ -62,11 +62,11 @@ One bar-by-bar loop (`engine/runner.py::run`) serves backtest, paper and live: o
 | `backend/options/backtest.py` | Model-priced options for backtests | `options/backtest.py::ModelOptions` |
 | `backend/options/resolver.py` | F&O whitelist | `resolver.py::FO_UNDERLYINGS`, `::is_fo_eligible` |
 | `backend/data/protocols.py` | `MarketDataProvider` | `data/protocols.py::MarketDataProvider` |
-| `backend/data/providers/` | yfinance, Kite REST, daily-bar store | `yfinance_provider.py::YFinanceProvider`, `kite_provider.py::KiteProvider`, `store.py::StoreHistoryProvider` |
+| `backend/data/providers/` | yfinance, Kite REST, daily-bar store | `yfinance_provider.py::YFinanceProvider` (`::newer_session`: the newest session as one OHLCV row from 5-minute bars when Yahoo's daily bars miss it; appended to the daily history and to index detail), `kite_provider.py::KiteProvider`, `store.py::StoreHistoryProvider` |
 | `backend/data/feeds/` | Replay, polling, tick->bar feeds | `historical.py::HistoricalFeed`, `candle_poll.py::CandlePollingFeed`, `polling_live.py::PollingLiveFeed`, `tick_bars.py::TickBarAggregator`, `live_kite.py::KiteTickerFeed`, `live_upstox.py::UpstoxMarketFeed` |
 | `backend/instruments/indian_stocks.py` | Default scan universe (mid + small cap lists) | `indian_stocks.py::ALL_SCAN_STOCKS` |
 | `backend/data/fundamentals/` | Fundamentals snapshots and quality score (see picks-and-signals) | `universe.py::build_quality_universe` |
-| `backend/instruments/` | Mongo instrument master + sources | `master.py::InstrumentMaster`, `loader.py::refresh_instruments*`, `free_source.py::NseEquityListSource`, `kite_source.py::KiteInstrumentSource`, `resolve.py::resolve_symbol`, `models.py::Instrument` |
+| `backend/instruments/` | Mongo instrument master + sources | `master.py::InstrumentMaster` (`::known(exchange, symbol)` = is a real listed name), `loader.py::refresh_instruments*`, `free_source.py::NseEquityListSource`, `kite_source.py::KiteInstrumentSource`, `resolve.py::resolve_symbol`, `models.py::Instrument` |
 | `backend/routers/trading.py` | `/trading/*` control plane + `launch_run` | `trading.py::launch_run`, `::_launch_run`, `::build_feed`, `::start_background_run`, `::stop_background_run`, `::_RUNS` |
 | `backend/routers/broker.py` | `/broker/*` connect/status | `broker.py::broker_connect`, `::_refresh_instruments` |
 | `backend/routers/options.py` | `/options/*` Upstox chains (read only) | `options.py::get_chain`, `::get_expiries`, `::upstox_for` |

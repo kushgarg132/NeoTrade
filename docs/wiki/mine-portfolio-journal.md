@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 62f9556
+verified_at: f04b9d1
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -53,7 +53,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/routers/mine.py | `/mine/*` | `mine.py::overview`, `::mine_history`, `::tax`, `::stock_detail`, `::get_thesis`, `::put_thesis`, `::mine_actions`, `::dismiss_action`, `::snooze_action`, `::_month_contributions`, `TAX_FIRST_FY` |
 | backend/routers/portfolio.py | `/portfolio*`; verdict masking | `portfolio.py::get_portfolio`, `::refresh`, `::rebalance`, `::rebalance_candidates`, `::present`, `::mask_row`, `::_results_dates`, `::_with_results`, `::verdicts_visible_to`, `::with_suggestions`, `::_candidate_symbols` |
 | backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::ai_vs_me`, `::get_learning`, `::get_beta_metrics` |
-| backend/routers/today.py | `/today`, `/today/attention`, `/today/reconciliation` | `today.py::today`, `::attention`, `::reconciliation`, `::_accounts`, `::_needs_you`, `::_mine_actions`, `::_setup` (steps `prefs.py::SETUP_STEP_IDS`; prefs `setup_skipped` count as done, row `skipped`), `::_autopilot`, `::_backdrop`, `_STATE_CACHE` |
+| backend/routers/today.py | `/today`, `/today/attention`, `/today/reconciliation` | `today.py::today`, `::attention`, `::reconciliation`, `::_changes` (since last trading day: AI fills, newest plan, sent alerts), `::_accounts`, `::_needs_you`, `::_mine_actions`, `::_setup` (steps `prefs.py::SETUP_STEP_IDS`; prefs `setup_skipped` count as done, row `skipped`), `::_autopilot`, `::_backdrop`, `_STATE_CACHE` |
 
 ## Data
 
@@ -243,7 +243,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
   - Needs-you drops `verdict_worse` and `add` when the gate is closed (`mine/actions.py::VERDICT_KINDS`).
   - The `conviction` rebalance rule returns 403 when the gate is closed. AI candidates are listed only when it is
     open.
-  - `scoreboard` (You vs the AI: `digest.py::scoreboard` = `pnl_since` over the whole AI book, closed and net of charges; it was Picks-only until 2026-10-24) is admin-only in `today.py::today`.
+  - `scoreboard` (You vs the AI: `digest.py::scoreboard` = `pnl_since` over the whole AI book, closed and net of charges, as `today`, `month` and `since_ai` (from the first AI-book trade, the window the NIFTY figure uses; None with no AI trades); it was Picks-only until 2026-10-24) is admin-only in `today.py::today`.
 - **Rules decide; AI explains.** `portfolio/rules.py::stock_verdict` scores via `scoring/composite.py::score_intent`, so
   AI_CAP and RULE_FLOOR apply and below the floor the verdict is HOLD. `review.py::write_review` never changes a
   verdict, and it degrades to no prose rather than failing.
