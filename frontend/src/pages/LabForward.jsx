@@ -73,7 +73,7 @@ const LabForward = () => {
         <Card title="Scored decisions">
           <p className="mb-2 text-[13px] text-[var(--text-muted)]">
             Net of charges, excess over NIFTY. Proven needs 100 scored, t of 2 or more, and calibration.
-            n/100 = decisions scored so far · t = how far the average is from luck · Hit rate = share that beat NIFTY · Calibration gap = stated confidence minus actual hit rate.
+            n/100 = decisions scored so far · t = how far the average is from luck · Hit rate = share that made money after charges · Calibration gap = stated confidence minus actual hit rate.
           </p>
           {error && <ErrorLine message={error} onRetry={load} />}
           {!error && rows === null && <Skeleton rows={4} />}
