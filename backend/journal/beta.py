@@ -70,3 +70,23 @@ async def beta_metrics(db, now: datetime | None = None) -> dict:
         "losing_days": losing,
         "losing_days_followed_by_open": followed,
     }
+
+
+async def beta_users(db) -> list[dict]:
+    """Everyone signed up, for the admin Lab: identity and two IST days, nothing else."""
+    last_open: dict[str, str] = {}
+    async for o in db["journal_opens"].find({}, {"user_id": 1, "day": 1}):
+        last_open[o["user_id"]] = max(o["day"], last_open.get(o["user_id"], ""))
+
+    rows = []
+    async for u in db["users"].find({}, {"id": 1, "name": 1, "email": 1, "created_at": 1}):
+        created = u.get("created_at")
+        if created is not None and created.tzinfo is None:  # the test client hands back naive UTC
+            created = created.replace(tzinfo=timezone.utc)
+        rows.append({
+            "name": u.get("name"),
+            "email": u.get("email"),
+            "created_at": created.astimezone(IST).date().isoformat() if created else None,
+            "last_open": last_open.get(u["id"]),
+        })
+    return rows

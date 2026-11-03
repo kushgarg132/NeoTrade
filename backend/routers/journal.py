@@ -15,7 +15,7 @@ from backend.auth.broker_credentials import BrokerCredentialStore, get_credentia
 from backend.auth.dependency import get_current_user, require_admin
 from backend.auth.models import User
 from backend.database import db
-from backend.journal.beta import beta_metrics, record_open
+from backend.journal.beta import beta_metrics, beta_users, record_open
 from backend.journal.console_csv import parse_console_tradebook
 from backend.journal import mirror
 from backend.journal.insights import build_insights
@@ -215,3 +215,9 @@ async def get_learning(user: User = Depends(get_current_user), nifty: list = Dep
 async def get_beta_metrics(_admin: User = Depends(require_admin)):
     """Phase 12: is anyone coming back? Admin only -- it counts every user."""
     return await beta_metrics(db.db)
+
+
+@router.get("/beta-users")
+async def get_beta_users(_admin: User = Depends(require_admin)):
+    """Every user's name and email for Lab > Beta. Admin only."""
+    return await beta_users(db.db)

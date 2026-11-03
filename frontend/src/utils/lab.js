@@ -43,3 +43,26 @@ export const backlogState = (b) => {
 };
 
 export const betaState = (b) => (b ? `${b.returned_from_last_week} of ${b.active_last_week} came back` : DASH);
+
+export const filterUsers = (users, q) => {
+  const needle = q.trim().toLowerCase();
+  if (!needle) return users;
+  return users.filter((u) => `${u.name || ''} ${u.email || ''}`.toLowerCase().includes(needle));
+};
+
+/** Dates are ISO days, so one text compare fits every column. A blank sorts last in both directions. */
+export const sortUsers = (users, { key, dir }) => [...users].sort((a, b) => {
+  if (!a[key] || !b[key]) return !a[key] - !b[key];
+  const order = a[key].localeCompare(b[key], undefined, { sensitivity: 'base' });
+  return dir === 'asc' ? order : -order;
+});
+
+/** Same column reverses. A new column starts A to Z for text and newest first for dates. */
+export const nextUserSort = (sort, key) => {
+  if (sort.key === key) return { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' };
+  return { key, dir: key === 'name' || key === 'email' ? 'asc' : 'desc' };
+};
+
+export const dayLabel = (day) => (day
+  ? new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  : 'Never');

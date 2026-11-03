@@ -6,7 +6,7 @@ from mongomock_motor import AsyncMongoMockClient
 
 from backend.brokers.trades import parse_ist
 from backend.core.models import BrokerTrade, Side
-from backend.journal.beta import beta_metrics, record_open
+from backend.journal.beta import beta_metrics, beta_users, record_open
 from backend.journal.store import JournalStore
 
 
@@ -40,3 +40,20 @@ async def test_metrics():
     assert m["losing_days"] == 2  # 14th and 21st
     assert m["losing_days_followed_by_open"] == 1  # 15th follows the 14th; the 25th is too late for the 21st
     assert await db["journal_opens"].count_documents({}) == 3
+
+
+async def test_beta_users_lists_only_what_the_lab_shows():
+    db = AsyncMongoMockClient()["test_db"]
+    await db["users"].insert_many([
+        # 19:00 UTC on the 14th is already the 15th in IST.
+        {"id": "a", "name": "Asha", "email": "asha@x.in", "google_sub": "secret", "created_at": datetime(2026, 9, 14, 19, 0)},
+        {"id": "b", "name": "Bo", "email": "bo@x.in", "created_at": datetime(2026, 9, 1, 3, 0)},
+    ])
+    await record_open(db, "a", _at(15))
+    await record_open(db, "a", _at(20))
+
+    rows = await beta_users(db)
+    assert sorted(rows, key=lambda r: r["name"]) == [
+        {"name": "Asha", "email": "asha@x.in", "created_at": "2026-09-15", "last_open": "2026-09-20"},
+        {"name": "Bo", "email": "bo@x.in", "created_at": "2026-09-01", "last_open": None},
+    ]
