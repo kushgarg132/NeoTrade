@@ -949,6 +949,13 @@ registration and public onboarding are deferred, not cancelled.
    horizon for every setup (e.g. momentum_vol_60 +9.3% vs +4.3% a pick), with deeper drawdowns and
    survivorship flattering long holds. Now forward-recorded on paper as `<setup>:long` (2026-10-19); a rule change waits for a proven `:long` row.*
 
+   *Retired 2026-11-03 (owner approved, trading-edge audit P2-1): `backend/ml/`, `backend/rl/`, `backend/forecast/research/*_tool.py` and `lightgbm` are deleted; the last commit with them is `59f3b7f`. Their stored `lab_runs` rows stay. What they found:*
+   - *ML ranking and RL exits: see steps 5 and 6 above. Both failed their bars.*
+   - *Bandit sizing and exits (2026-10-18): failed. Fixed rule +0.91% a pick vs bandits +0.68% to +0.82%; trailing stops lost every year.*
+   - *Per-stock forecasts (2026-10-21): none of 240 configs passed (Brier skill at most +0.004, models -0.007 to -0.019). Picks keep the setup average.*
+   - *New setups (2026-10-22, 2026-10-27): of 17 rule setups, only `rs_leaders_regime` beat the same-month universe baseline (60d +3.2%, t 3.1). With the members mask (23 variants, 69 trials), `results_up4_vol2` passed at 40 and 60 days and went live as `results_drift`; only `rs_leaders(_regime)` met the strict bar; `sector_rs*` failed. Random picks from today's universe beat NIFTY by +2.4% at 60d (survivorship), so excess over NIFTY alone overstates edge.*
+   - *News on Picks (N2.1, N2.2, N2.5): closed 2026-10-28, nothing shipped; see `docs/superpowers/plans/2026-10-26-news-backbone.md`.*
+
 **Done when:** Every live trade reconciles to the broker; each strategy/model run can be
 reproduced from stored inputs and configuration; every personal live order has an explicit,
 server-verified second confirmation; and every AI/ML/RL claim links to a stored forward record.
@@ -1017,7 +1024,7 @@ engine, the news pipeline and the game plan have each stopped without any alert.
   - a `signal_log` and a per-fill cost breakdown;
   - plan exits that need a price or loss condition.
 - **23.2, P2, simplification:**
-  - delete about 1,470 lines (`forecast/research/*_tool.py`, `ml/`, `rl/`, `lightgbm`);
+  - ~~delete about 1,470 lines (`forecast/research/*_tool.py`, `ml/`, `rl/`, `lightgbm`)~~ done 2026-11-03;
   - one `round_trip_cost`, one `book_fill`, one ATR;
   - a `candles_5m` store;
   - `llm.complete()` with `LLMError` and an `llm_calls` log, then callers migrated one at a time;

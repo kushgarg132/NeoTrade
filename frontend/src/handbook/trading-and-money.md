@@ -386,58 +386,14 @@ scored from there to the close; without it the scorer falls back to the day's op
 NIFTY move leak into excess. Option entries are not recorded. A suggestion is named after its strategy.
 The scorecard is cached for 60 seconds.
 
-Each pick also gets a `<setup>:long` row: the same entry held twice as long, scored on paper only (nothing trades it, no gate). It tests the RL sandbox's side finding that longer holds did better; a rule change waits until a `:long` row is proven and beats its base setup.
+Each pick also gets a `<setup>:long` row: the same entry held twice as long, scored on paper only (nothing trades it, no gate). It tests the retired RL sandbox's side finding that longer holds did better; a rule change waits until a `:long` row is proven and beats its base setup.
 
-## ML ranking (research, admin runs by hand)
+## Retired research
 
-Does a LightGBM model on price and volume features rank stocks better than the Picks momentum rule?
-`backend/ml/features.py::long_table` builds one row per stock every 5th day (24 backward-looking
-features; label = net return entering t+1's open and leaving at the close of t+1+H, 10 bps slippage
-and CNC charges, `lab/assumptions.py::round_trip_return`; NIFTY over the same window). Per horizon
-(20 and 60 days) `backend/ml/evaluate.py::evaluate_table` walks forward one calendar year at a time
-(`lab/splits.py::yearly_folds`, 3 training years minimum, no extra purge; a training row must have
-ended (`label_end`) before the test year starts, which removes all label overlap), fits a regressor on excess return and a classifier on
-P(up), and measures rank IC per year, Brier skill against the training base rate, and the top
-decile's mean net return per pick against the same decile of `momentum_vol_60`'s score.
-
-**The bar** (`evaluate.py::passes`): rank IC above 0 in every test year, IC t-stat above 2 (over mean ICs of
-non-overlapping blocks of H trading days, so overlapping labels do not inflate it), top decile beating momentum after costs, and Brier skill above 0. Miss any one and the
-model is not wired anywhere; the reasons name each miss.
-
-Run it inside the jobs container: `docker exec neotrade-jobs nice python -m backend.ml.evaluate
-[--horizon 20]`. The CLI prints `recorded <id>` or `NOT RECORDED` per horizon (a failed insert exits 1). Runtime is about 2-3 min per horizon
-at LightGBM `num_threads=1` and about 1 GB peak (measured on a synthetic full-size table; 4 threads were ~25x slower on this
-shared host). Each horizon leaves a `lab_runs` row (kind `ml`, name `lgbm_h<H>`), passed or not,
-with two caveats attached: no point-in-time NIFTY 200 membership (survivorship, +4-8% a year) and no
-fundamentals history. `python -m backend.lab rerun` does not re-run `ml` runs; this command is the rerun.
-
-First real run, 2026-10-19: FAIL at 20 and 60 days. The ranking signal is real in-sample (rank IC positive every year at 20 days, t 5.9) but the top decile does worse than the plain momentum score after costs, and its P(up) is less accurate than the base rate. Momentum stays; nothing is wired.
-
-## RL exit sandbox (research, admin runs by hand)
-
-Can a learned policy time the exit of a Pick better than the fixed rule? `backend/rl/env.py::episodes` turns each
-Pick into an episode: from the day after entry the agent either holds or exits (decided at that day's close, filled at
-the next day's open, so the decision never sees its own fill price), and the exit is forced on day `2 * horizon`. The state on day d uses bars up to d only (days held, open P&L, NIFTY since entry, 20-day
-volatility, the stock's 20-day return minus NIFTY's, NIFTY against its 200-day mean, the setup). The reward is
-the net return (`round_trip_return`, 10 bps slippage and CNC charges) minus NIFTY over the same days.
-`backend/rl/agent.py::fit` is fitted Q-iteration with LightGBM: five passes, each regressing the value of
-holding on the best of exiting or holding on the next day, so a row never sees its own reward (holding on the last day is worth -inf, a forced exit).
-
-`backend/rl/evaluate.py::evaluate_rows` walks forward a calendar year at a time (3 training years minimum; a
-training episode must have ended before the test year starts) and compares the policy with two fixed rules on
-the test year, all filling at the next open: today's horizon (`fixed`) and the single holding day that did best on the training years
-(`best_fixed`, never chosen on test data). The baseline is the better of those two on train.
-**The bar** (`evaluate.py::passes`): mean yearly improvement over the baseline above 0, t-stat of the yearly
-improvements at least 2, positive in at least 70% of years, and a policy max drawdown no deeper than the baseline's, over at least `MIN_TEST_YEARS` = 8 test years. One setup passing
-is not evidence among five: `run` reports `family_passed` only when at least 2 setups pass (`evaluate.py::run`).
-
-Run it in the jobs container: `docker exec neotrade-jobs nice python -m backend.rl.evaluate [--setup momentum]`.
-It prints `recorded <id>` or `NOT RECORDED` per setup and leaves a `lab_runs` row (kind `rl`, name
-`fqi_exit:<setup>`), passed or not, with the caveats: no point-in-time NIFTY 200 membership (survivorship) and
-price-only state. Expected runtime (reviewer estimate, not yet measured): about 30-60 min for all five setups at 1 thread, ~1 GB peak;
-use `--setup` to run one at a time. Nothing is wired; a pass would only justify a later paper-only forward-record source.
-
-First real run, 2026-10-19: FAIL, 0 of 5 setups. The learned exits did worse than simply holding a fixed number of days. Fixed-horizon exits stay.
+A LightGBM stock ranker and a learned exit policy were built as sandboxes and removed on 2026-11-03. The ranker
+failed at 20 and 60 days: its top decile did worse than the plain momentum score after costs. The learned exits, 0 of
+5 setups, did worse than a fixed holding period. Momentum and fixed-horizon exits stay. Findings are in
+`docs/ROADMAP.md`; the stored `lab_runs` rows remain.
 
 ## Reproducing a run
 
