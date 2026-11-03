@@ -13,6 +13,7 @@ yfinance's latest closes, and the snapshot says so.
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 import yfinance as yf
@@ -139,7 +140,30 @@ async def fetch_holdings(user_id: str, credentials, redis, previous: dict | None
     if db is not None:
         holdings += [Holding(**h) for h in await cas_import.holdings_of(db, user_id)]
     carried = [Holding(**h) for h in (previous or {}).get("raw_holdings") or [] if h.get("broker") not in read]
+    await mark_funds(db, holdings + carried)
     return holdings, errors, carried
+
+
+_FUND_NAME = re.compile(r"\b(ETF|BEES)\b", re.IGNORECASE)
+
+
+async def mark_funds(db, holdings: list[Holding]) -> None:
+    """Brokers report an ETF as plain equity and `brokers/holdings.py::kind_of` only reads the symbol,
+    so SILVERCASE ("ZERODHA SILVER ETF") would get a company's verdicts. The instrument's name settles it.
+    A failed read keeps the symbol's answer."""
+    stocks = {h.symbol for h in holdings if h.kind == "STOCK"}
+    if db is None or not stocks:
+        return
+    try:
+        rows = await db["instruments"].find({"exchange": "NSE", "tradingsymbol": {"$in": sorted(stocks)}},
+                                            {"tradingsymbol": 1, "name": 1}).to_list(length=None)
+    except Exception as exc:
+        logger.warning("portfolio: fund names unavailable: %s", exc)
+        return
+    funds = {r["tradingsymbol"] for r in rows if _FUND_NAME.search(r.get("name") or "")}
+    for h in holdings:
+        if h.kind == "STOCK" and h.symbol in funds:
+            h.kind = "ETF"
 
 
 async def refresh_portfolio(db, user_id: str, credentials, redis, analyse: bool = True) -> dict:

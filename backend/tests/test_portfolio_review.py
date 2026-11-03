@@ -314,3 +314,21 @@ def test_holding_line_states_profit_in_crore_and_roe_in_percent():
     line = review._holding_line({"symbol": "A", "kind": "STOCK", "reason_codes": [],
                                  "health": {"fundamentals": {"roe": 0.04, "quarterly_profit": [2579900000.0, None]}}})
     assert "ROE 4.00%" in line and "₹257.99 cr, n/a" in line
+
+
+async def test_a_fund_named_in_the_instrument_list_is_not_a_stock():
+    db = AsyncMongoMockClient()["t"]
+    await db["instruments"].insert_many([
+        {"exchange": "NSE", "tradingsymbol": "SILVERCASE", "name": "ZERODHA SILVER ETF"},
+        {"exchange": "NSE", "tradingsymbol": "ETFIN", "name": "ETF Infra Limited"},
+        {"exchange": "NSE", "tradingsymbol": "BEESCO", "name": "Honeybees Foods Limited"},
+        {"exchange": "NSE", "tradingsymbol": "TCS", "name": "Tata Consultancy Services"},
+    ])
+
+    def h(symbol, kind="STOCK"):
+        return Holding(symbol=symbol, isin=symbol, broker="kite", kind=kind, quantity=1, avg_price=1.0)
+
+    rows = [h("SILVERCASE"), h("TCS"), h("BEESCO"), h("LIQUIDFUND", "MF")]
+    await service.mark_funds(db, rows)
+    assert [r.kind for r in rows] == ["ETF", "STOCK", "STOCK", "MF"]
+    await service.mark_funds(None, rows)  # no database: nothing changes, nothing raises
