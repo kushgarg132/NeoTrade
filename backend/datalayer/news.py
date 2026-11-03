@@ -24,7 +24,9 @@ import re
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
+
+import pandas as pd
 
 from pydantic import BaseModel, ValidationError
 
@@ -35,7 +37,8 @@ from backend.configs.settings import settings
 from backend.datalayer import news_sources
 from backend.datalayer.prices import priority_symbols
 from backend.llm import llm_service
-from backend.prompts import render
+from backend.marks import QUOTE_KEY
+from backend.prompts import prompt_id, render
 from backend.strategies.longterm.analyst_verdict import MATERIALITY_THRESHOLD
 
 logger = logging.getLogger(__name__)
@@ -61,6 +64,7 @@ STALL_AFTER, STALL_BACKLOG, STALL_ALERT_TTL = timedelta(minutes=30), 500, 2 * 36
 # scores within ~PROCESS_SECONDS instead of seconds, for ~2 calls a pass.
 TRIAGE_BATCH, TRIAGE_CALLS_PER_PASS = 150, 1
 SCORE_BATCH = 40
+NOTE_SYMBOLS = 3  # price lines per item: an item tagging more is not about one stock
 # A deep call costs the same for 3 items as for 40, so scoring waits until a
 # batch is worth it -- unless a held/watched name is waiting or the oldest
 # item has waited SCORE_HOLD (market-wide news is at most one pass later).
@@ -241,6 +245,7 @@ class _Impact(BaseModel):
     direction: float
     impact: float
     horizon: str = "days"
+    priced_in: Optional[float] = None
 
 
 class _Scored(BaseModel):
@@ -392,17 +397,72 @@ def valid_impacts(impacts: list[_Impact], symbols: set[str], sectors: set[str]) 
             (i.target.upper() if i.type == "symbol" else i.target),
             "direction": max(-1.0, min(1.0, i.direction)), "impact": max(0.0, min(10.0, i.impact)),
             "horizon": i.horizon if i.horizon in ("intraday", "days", "weeks") else "days",
+            "priced_in": None if i.priced_in is None else max(0.0, min(1.0, i.priced_in)),
         })
     return out
 
 
-async def _score_batch(db, docs, names, sector_of, sectors, now, coll: str = COLLECTION, tier: str = "deep") -> None:
+async def price_notes(db, docs, ltp_of: Callable[[dict, str], Optional[float]]) -> dict[str, str]:
+    """item id -> what its tagged stocks' prices did, as of before the model reads it: the move from
+    the last close before publication to `ltp_of(doc, symbol)`, and the 5 sessions before that. Only
+    prices at or before publication plus that one quote, so a replay of old news sees no future. A
+    failed read leaves the item without a note, which the prompt reads as "no price given"."""
+    from backend.datalayer import bars
+    from backend.datalayer.outcomes import CLOSE
+    from backend.engine.session import IST
+
+    def last_close_day(doc):
+        published = doc["published_at"]
+        at = (published if published.tzinfo else published.replace(tzinfo=timezone.utc)).astimezone(IST)
+        return at.date() if at.time() >= CLOSE else at.date() - timedelta(days=1)
+
+    tagged = {d["_id"]: d.get("symbols", [])[:NOTE_SYMBOLS] for d in docs}
+    symbols = sorted({s for group in tagged.values() for s in group})
+    if not symbols:
+        return {}
+    try:
+        days = [last_close_day(d) for d in docs]
+        frames = await bars.read(db, symbols, min(days) - timedelta(days=14), today=max(days))
+    except Exception as exc:
+        logger.warning("news price notes: %s", exc)
+        return {}
+    notes = {}
+    for doc, day in zip(docs, days):
+        parts = []
+        for symbol in tagged[doc["_id"]]:
+            frame = frames.get(symbol)
+            closes = frame[frame.index <= pd.Timestamp(day)]["close"] if frame is not None else ()
+            if not len(closes):
+                continue
+            close, ltp = float(closes.iloc[-1]), ltp_of(doc, symbol)
+            bits = [f"{ltp / close - 1:+.1%} since the last close before this news"] if ltp else []
+            if len(closes) > 5:
+                bits.append(f"{close / float(closes.iloc[-6]) - 1:+.1%} over the 5 sessions before it")
+            if bits:
+                parts.append(f"{symbol} " + ", ".join(bits))
+        if parts:
+            notes[doc["_id"]] = "; ".join(parts)
+    return notes
+
+
+def score_lines(docs, names, sector_of, notes: dict[str, str]) -> str:
     lines = []
     for i, d in enumerate(docs):
         tagged = "; ".join(f"{s} ({names.get(s, s)}, {sector_of.get(s, 'sector unknown')})" for s in d.get("symbols", []))
-        lines.append(f"[{i}] ({d.get('scope', d['scope_hint'])}) {d['title']}\n{(d.get('content') or '')[:400]}\n"
-                     f"Tagged: {tagged or 'none'}")
-    result = await _ask("score_market_news", _deep if tier == "deep" else _fast, _Scores, sectors=", ".join(sectors), items="\n\n".join(lines))
+        price = f"\nPrice: {notes[d['_id']]}" if d["_id"] in notes else ""
+        lines.append(f"[{i}] ({d.get('scope', d.get('scope_hint'))}) {d['title']}\n{(d.get('content') or '')[:400]}\n"
+                     f"Tagged: {tagged or 'none'}{price}")
+    return "\n\n".join(lines)
+
+
+async def _score_batch(db, docs, names, sector_of, sectors, now, coll: str = COLLECTION, tier: str = "deep", redis=None) -> None:
+    ltps = {}
+    if redis is not None:
+        wanted = sorted({s for d in docs for s in d.get("symbols", [])[:NOTE_SYMBOLS]})
+        raws = await redis.mget([QUOTE_KEY.format(s) for s in wanted]) if wanted else []
+        ltps = {s: json.loads(r)["ltp"] for s, r in zip(wanted, raws) if r}
+    notes = await price_notes(db, docs, lambda _doc, symbol: ltps.get(symbol))
+    result = await _ask("score_market_news", _deep if tier == "deep" else _fast, _Scores, sectors=", ".join(sectors), items=score_lines(docs, names, sector_of, notes))
     if result is _OUTAGE:
         return
     if result is None:
@@ -418,10 +478,10 @@ async def _score_batch(db, docs, names, sector_of, sectors, now, coll: str = COL
         impacts = valid_impacts(s.impacts, set(names), set(sectors)) if s else []
         await db[coll].update_one({"_id": doc["_id"]}, {"$set": {
             "status": SCORED, "impacts": impacts, "event": (s.event if s else "")[:120], "scored_at": now,
-            "model": model, "material": any(i["impact"] >= MATERIALITY_THRESHOLD for i in impacts)}})
+            "model": model, "prompt": prompt_id("score_market_news"), "material": any(i["impact"] >= MATERIALITY_THRESHOLD for i in impacts)}})
 
 
-async def score(db, names, sector_of, priority: set[str], calls: int, now: Optional[datetime] = None) -> int:
+async def score(db, names, sector_of, priority: set[str], calls: int, now: Optional[datetime] = None, redis=None) -> int:
     """Scores up to `calls` batches, held/watched names first, then market,
     macro and global news, then the rest; newest first within each; retried
     items after every fresh one."""
@@ -434,7 +494,7 @@ async def score(db, names, sector_of, priority: set[str], calls: int, now: Optio
     docs = docs[:SCORE_BATCH * calls]
     sectors = news_sources.sectors()
     batches = [docs[i:i + SCORE_BATCH] for i in range(0, len(docs), SCORE_BATCH)]
-    await asyncio.gather(*(_score_batch(db, b, names, sector_of, sectors, now) for b in batches))
+    await asyncio.gather(*(_score_batch(db, b, names, sector_of, sectors, now, redis=redis) for b in batches))
     return len(docs)
 
 
@@ -606,7 +666,7 @@ async def process_loop(db, redis) -> None:
         # Off-hours the pass is already hourly, so it scores whatever waits.
         calls = await _deep_budget(redis, 1) if await (_score_due(db, priority, now) if active else
                                                        db[COLLECTION].count_documents({"status": TRIAGED}, limit=1)) else 0
-        scored = await score(db, names, sector_of, priority, calls) if calls else 0
+        scored = await score(db, names, sector_of, priority, calls, redis=redis) if calls else 0
     if scored or time.time() - _last_aggregate >= AGGREGATE_EVERY_SECONDS:
         await aggregate(db, redis, names, sector_of)
         _last_aggregate = time.time()

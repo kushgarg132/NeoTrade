@@ -234,7 +234,7 @@ async def record(db, redis, now: Optional[datetime] = None) -> int:
                 pre["sector_pre_base"] = {s: closes[s] for s in peers[i["target"]] if s in closes}
             await db[COLLECTION].update_one({"_id": f"{item['_id']}:{i['type']}:{i['target']}"}, {"$setOnInsert": {
                 "item_id": item["_id"], "type": i["type"], "target": i["target"], "scope": item.get("scope"),
-                "themes": item.get("themes") or [], "direction": i["direction"], "impact": i["impact"],
+                "themes": item.get("themes") or [], "direction": i["direction"], "impact": i["impact"], "priced_in": i.get("priced_in"),
                 "published_at": item["published_at"], "base_at": now, "in_session": in_session(now) and not late,
                 "base": base, "bench": bench_base, **pre, **flag}}, upsert=True)
             stored += 1

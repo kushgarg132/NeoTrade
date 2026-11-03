@@ -4,7 +4,10 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from mongomock_motor import AsyncMongoMockClient
 
-from backend.datalayer import news, news_sources
+import pandas as pd
+
+from backend.datalayer import bars, news, news_sources
+from backend.prompts import prompt_id
 from backend.scoring.composite import score_intent
 from backend.core.models import Intent, Side
 
@@ -534,3 +537,31 @@ async def test_triage_success_resets_attempts_so_scoring_gets_its_own(mongo, mon
     await news.triage(mongo, now=NOW)
     doc = await mongo[news.COLLECTION].find_one()
     assert doc["status"] == news.TRIAGED and doc["attempts"] == 0
+
+
+async def test_scoring_keeps_priced_in_and_stamps_the_prompt(mongo, monkeypatch):
+    await news.store(mongo, [_item("IOC profit doubles", symbols=["IOC"], scope="COMPANY")], [], now=NOW)
+    await mongo[news.COLLECTION].update_many({}, {"$set": {"status": news.TRIAGED, "scope": "COMPANY"}})
+    _llm(monkeypatch, {"items": [{"index": 0, "event": "x", "impacts": [
+        {"type": "symbol", "target": "IOC", "direction": 0.6, "impact": 6, "priced_in": 1.7}]}]})
+    await news.score(mongo, NAMES, SECTOR_OF, set(), calls=1, now=NOW)
+    doc = await mongo[news.COLLECTION].find_one()
+    assert doc["prompt"] == prompt_id("score_market_news")
+    assert doc["impacts"][0]["priced_in"] == 1.0  # clamped
+    assert doc["impacts"][0]["direction"] == 0.6  # what the news means stays as scored
+
+
+async def test_price_notes_use_only_closes_before_publication(mongo):
+    days = pd.bdate_range("2026-09-14", periods=10)  # Mon 14 .. Fri 25 Sep
+    await bars.write(mongo, "IOC", pd.DataFrame(
+        {"open": 1.0, "high": 1.0, "low": 1.0, "volume": 1, "close": [100.0 + i for i in range(10)]}, index=days))
+    published = datetime(2026, 9, 23, 5, 0, tzinfo=timezone.utc)  # Wed 23 Sep 10:30 IST: last close is Tue 22 (106)
+    doc = {"_id": "a", "symbols": ["IOC"], "published_at": published}
+    notes = await news.price_notes(mongo, [doc], lambda _d, _s: 111.3)
+    assert notes["a"] == "IOC +5.0% since the last close before this news, +5.0% over the 5 sessions before it"
+
+
+async def test_a_missing_quote_or_no_bars_leaves_the_note_out(mongo):
+    published = datetime(2026, 9, 23, 5, 0, tzinfo=timezone.utc)
+    assert await news.price_notes(mongo, [{"_id": "a", "symbols": ["IOC"], "published_at": published}], lambda _d, _s: None) == {}
+    assert await news.price_notes(mongo, [{"_id": "b", "symbols": [], "published_at": published}], lambda _d, _s: 1.0) == {}

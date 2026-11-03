@@ -9,8 +9,9 @@
     loop     weekly in the ingest worker (leader only), via a Redis SET NX
     company_scan_ok   the N0.1 gate: company direction, 5d, clears HIT_BAR
 
-Groups: `theme` (key = a theme or "all", impact = a bucket or "all"), `source`
-and `model` (impact "all"). Measures are the prefixes outcomes.py writes:
+Groups: `theme` (key = a theme or "all", impact = a bucket or "all"), `source`,
+`model`, `prompt` (which prompt version scored it) and `priced_in` (the scorer's
+own read of how much the price had taken in: "fresh" or "priced"; impact "all"). Measures are the prefixes outcomes.py writes:
 `move` (vs Nifty from the scoring-time price), `pre_move` (vs Nifty from the
 close before publication) and `sector_move` (vs the sector's other members).
 """
@@ -37,6 +38,7 @@ BOOT = 2000
 DUE_KEY = "news:accuracy:due"
 EVERY_SECONDS = 7 * 86400
 SCAN_HORIZON, SCAN_MIN_N, HIT_BAR = "5d", 300, 0.52
+PRICED = 0.5
 
 
 def impact_bucket(impact: float) -> str:
@@ -79,7 +81,10 @@ def report(rows: list[dict]) -> list[dict]:
         scope, bucket, day = row.get("scope") or "", impact_bucket(row.get("impact") or 0), _day(row["published_at"])
         keys = [("theme", scope, theme, b) for theme in [*(row.get("themes") or []), "all"] for b in (bucket, "all")]
         keys += [("source", scope, row.get("source") or "unknown", "all"),
-                 ("model", scope, row.get("model") or "unknown", "all")]
+                 ("model", scope, row.get("model") or "unknown", "all"),
+                 ("prompt", scope, row.get("prompt") or "unversioned", "all")]
+        if row.get("priced_in") is not None:
+            keys.append(("priced_in", scope, "priced" if row["priced_in"] >= PRICED else "fresh", "all"))
         for h in HORIZONS:
             for m in MEASURES:
                 move = row.get(f"{m}_{h}")
@@ -109,14 +114,14 @@ def company_scan_ok(report: Optional[dict]) -> bool:
 
 async def build(db, now: Optional[datetime] = None) -> dict:
     now = now or datetime.now(timezone.utc)
-    fields = {"item_id": 1, "scope": 1, "themes": 1, "impact": 1, "direction": 1, "published_at": 1,
+    fields = {"item_id": 1, "scope": 1, "themes": 1, "impact": 1, "direction": 1, "priced_in": 1, "published_at": 1,
               **{f"{m}_{h}": 1 for m in MEASURES for h in HORIZONS}}
     rows = await db[OUTCOMES].find({"late": {"$ne": True}}, fields).to_list(length=None)
     items = {d["_id"]: d async for d in db["news_items"].find(
-        {"_id": {"$in": list({r["item_id"] for r in rows})}}, {"source": 1, "model": 1})}
+        {"_id": {"$in": list({r["item_id"] for r in rows})}}, {"source": 1, "model": 1, "prompt": 1})}
     for row in rows:
         item = items.get(row["item_id"], {})
-        row["source"], row["model"] = item.get("source"), item.get("model")
+        row["source"], row["model"], row["prompt"] = item.get("source"), item.get("model"), item.get("prompt")
     doc = {"as_of": now, "rows": len(rows), "cells": await asyncio.to_thread(report, rows)}  # the bootstrap is CPU-heavy: keep the loop free
     await db[COLLECTION].replace_one({"_id": "latest"}, doc, upsert=True)
     logger.info("news accuracy: %d cell(s) from %d outcome(s)", len(doc["cells"]), len(rows))

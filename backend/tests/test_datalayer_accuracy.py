@@ -109,3 +109,14 @@ async def test_build_computes_the_report_off_the_event_loop(monkeypatch):
     monkeypatch.setattr(accuracy, "report", lambda rows: seen.append(threading.current_thread()) or [])
     await accuracy.build(AsyncMongoMockClient()["test_db"])
     assert seen and seen[0] is not threading.main_thread()
+
+
+def test_report_splits_by_prompt_version_and_priced_in():
+    base = {"scope": "COMPANY", "themes": [], "impact": 6, "direction": 0.8, "move_5d": 0.02,
+            "published_at": datetime(2026, 10, 1, tzinfo=timezone.utc)}
+    cells = accuracy.report([{**base, "prompt": "score_market_news@2", "priced_in": 0.1},
+                             {**base, "prompt": "score_market_news@2", "priced_in": 0.9},
+                             {**base}])
+    keys = {(c["group"], c["key"]): c["n"] for c in cells if c["group"] in ("prompt", "priced_in")}
+    assert keys == {("prompt", "score_market_news@2"): 2, ("prompt", "unversioned"): 1,
+                    ("priced_in", "fresh"): 1, ("priced_in", "priced"): 1}
