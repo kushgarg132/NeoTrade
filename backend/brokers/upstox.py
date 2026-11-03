@@ -104,6 +104,13 @@ from backend.instruments.models import Instrument
 
 _AUTHORIZE_URL = "https://api.upstox.com/v2/login/authorization/dialog"
 _QUOTE_URL = "https://api.upstox.com/v2/market-quote/quotes"
+QUOTE_BATCH = 500  # instrument keys per call
+# Market-wide and refreshed daily, while an adapter is built per request: one copy, one download a day.
+_SHARED_SCRIP: dict[str, tuple] = {}  # exchange -> (IST day, by symbol)
+
+
+def _scrip_day():
+    return datetime.now(timezone(timedelta(hours=5, minutes=30))).date()  # IST
 _SCRIP_URL = "https://assets.upstox.com/market-quote/instruments/exchange/{exchange}.json.gz"
 _API_VERSION = "2.0"
 # Past trades by date range (PostTradeApi.get_trades_by_date_range); not yet
@@ -212,6 +219,10 @@ class UpstoxAdapter:
     async def _load_scrip(self, exchange: str) -> dict:
         if exchange in self._scrip_cache:
             return self._scrip_cache[exchange]
+        day, shared = _SHARED_SCRIP.get(exchange, (None, None))
+        if day == _scrip_day():
+            self._scrip_cache[exchange] = shared
+            return shared
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(_SCRIP_URL.format(exchange=exchange))
@@ -220,6 +231,7 @@ class UpstoxAdapter:
         rows = json.loads(gzip.decompress(resp.content))
         by_symbol = {row["trading_symbol"]: row for row in rows}
         self._scrip_cache[exchange] = by_symbol
+        _SHARED_SCRIP[exchange] = (_scrip_day(), by_symbol)
         return by_symbol
 
     async def _resolve(self, instrument: Instrument) -> dict:
@@ -233,6 +245,24 @@ class UpstoxAdapter:
 
     def _headers(self, token: str) -> dict:
         return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+
+    async def batch_quotes(self, symbols: list[str], exchange: str = "NSE") -> dict[str, tuple[float, Optional[float]]]:
+        """symbol -> (last price, previous close or None), one call per QUOTE_BATCH names. The previous close
+        is last price minus `net_change`: `ohlc.close` follows the last price during the day."""
+        scrip = await self._load_scrip(exchange)
+        keys = [scrip[s]["instrument_key"] for s in symbols if s in scrip]
+        token = await self.get_access_token()
+        out: dict[str, tuple[float, Optional[float]]] = {}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            for i in range(0, len(keys), QUOTE_BATCH):
+                resp = await client.get(_QUOTE_URL, params={"instrument_key": ",".join(keys[i:i + QUOTE_BATCH])},
+                                        headers=self._headers(token))
+                resp.raise_for_status()
+                for row in resp.json()["data"].values():
+                    last, change = row.get("last_price"), row.get("net_change")
+                    if row.get("symbol") in symbols and last:
+                        out[row["symbol"]] = (last, None if change is None else last - change)
+        return out
 
     async def quote(self, instrument: Instrument) -> dict:
         row = await self._resolve(instrument)

@@ -231,3 +231,74 @@ async def test_a_price_only_write_does_not_shorten_the_life_of_the_close():
 
     await marks.store_quotes(Redis(), {"TCS": (100.0, None), "NEW": (5.0, None), "REAL": (7.0, 6.0)}, 60)
     assert dict(calls) == {"quote:TCS": {"keepttl": True}, "quote:NEW": {"ex": 60}, "quote:REAL": {"ex": 60}}
+
+
+class _Feed:
+    def __init__(self, rows=None, error=None):
+        self.rows, self.error, self.asked = rows or {}, error, []
+
+    async def batch_quotes(self, symbols):
+        self.asked.append(set(symbols))
+        if self.error:
+            raise self.error
+        return {s: self.rows[s] for s in symbols if s in self.rows}
+
+
+def _session(monkeypatch, adapter):
+    async def session(db, redis):
+        return ("upstox", adapter) if adapter else (None, None)
+
+    monkeypatch.setattr("backend.datalayer.bars._broker_session", session)
+
+
+@pytest.fixture
+def universe_in_session(mongo, monkeypatch):
+    asked = []
+    monkeypatch.setattr(prices, "last_two", lambda tickers: asked.append(set(tickers)) or {t: (1.0, 1.0) for t in tickers})
+    monkeypatch.setattr(prices, "in_session", lambda now: True)
+    monkeypatch.setattr("backend.factor.data.universe", lambda: ["RELIANCE", "INFY"])
+    monkeypatch.setattr(prices, "_last_universe", 0.0)
+    return asked
+
+
+async def test_a_broker_session_prices_the_whole_universe_every_pass(mongo, monkeypatch, universe_in_session):
+    feed = _Feed({"RELIANCE": (2500.0, 2490.0), "INFY": (1500.0, 1490.0)})
+    _session(monkeypatch, feed)
+    redis = FakeRedis()
+    await prices.quotes(mongo, redis)
+    await prices.quotes(mongo, redis)
+    assert feed.asked == [{"RELIANCE", "INFY"}, {"RELIANCE", "INFY"}] and universe_in_session == []
+    stored = json.loads(redis.data["quote:INFY"])
+    assert stored["ltp"] == 1500.0 and stored["prev_close"] == 1490.0
+
+
+async def test_a_name_the_broker_did_not_price_falls_back_to_yahoo(mongo, monkeypatch, universe_in_session):
+    _session(monkeypatch, _Feed({"RELIANCE": (2500.0, 2490.0)}))
+    redis = FakeRedis()
+    await prices.quotes(mongo, redis)
+    assert universe_in_session == [{"INFY.NS"}]
+    assert json.loads(redis.data["quote:RELIANCE"])["ltp"] == 2500.0 and json.loads(redis.data["quote:INFY"])["ltp"] == 1.0
+
+
+async def test_a_broker_error_or_no_session_is_yahoo_as_before(mongo, monkeypatch, universe_in_session):
+    _session(monkeypatch, _Feed(error=RuntimeError("401")))
+    await prices.quotes(mongo, FakeRedis())
+    assert universe_in_session == [{"RELIANCE.NS", "INFY.NS"}]
+    monkeypatch.setattr(prices, "_last_universe", 0.0)
+    _session(monkeypatch, None)
+    await prices.quotes(mongo, FakeRedis())
+    assert universe_in_session[1] == {"RELIANCE.NS", "INFY.NS"}
+
+
+async def test_an_adapter_without_batch_quotes_is_yahoo_as_before(mongo, monkeypatch, universe_in_session):
+    _session(monkeypatch, object())  # Kite and Angel One have no batch call yet
+    await prices.quotes(mongo, FakeRedis())
+    assert universe_in_session == [{"RELIANCE.NS", "INFY.NS"}]
+
+
+async def test_outside_the_session_the_broker_is_not_asked(mongo, monkeypatch, universe_in_session):
+    monkeypatch.setattr(prices, "in_session", lambda now: False)
+    feed = _Feed({"RELIANCE": (2500.0, 2490.0)})
+    _session(monkeypatch, feed)
+    await prices.quotes(mongo, FakeRedis())
+    assert feed.asked == [] and universe_in_session == [{"RELIANCE.NS", "INFY.NS"}]

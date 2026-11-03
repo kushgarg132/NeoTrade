@@ -73,6 +73,13 @@ def _every_symbol_a_member(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _reset_upstox_scrip():
+    from backend.brokers import upstox
+
+    upstox._SHARED_SCRIP.clear()
+
+
+@pytest.fixture(autouse=True)
 def _reset_forward_scorecard_cache():
     from backend.forward import scorecard
 

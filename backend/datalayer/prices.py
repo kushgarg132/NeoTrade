@@ -14,6 +14,7 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
+from typing import Optional
 
 import pandas as pd
 import yfinance as yf
@@ -24,10 +25,9 @@ from backend.marks import store_quotes
 
 logger = logging.getLogger(__name__)
 
-# ponytail: yfinance makes one HTTP call per ticker; Yahoo rate-limits an IP
-# somewhere around a few thousand calls an hour. These cadences keep the
-# full universe to ~40 calls/min in session. Move to a broker tick feed
-# (plan "later" row) if fresher universe quotes are ever needed.
+# In session the admin's broker session prices every name each pass when it can (`_broker_quotes`).
+# Yahoo covers the rest and every name off session. It makes one HTTP call per ticker and rate-limits
+# an IP at a few thousand calls an hour, so these cadences keep the universe to ~40 calls/min.
 UNIVERSE_SECONDS = 5 * 60
 OFF_SESSION_SECONDS = 10 * 60
 PRIORITY_TTL_SECONDS = 120
@@ -140,6 +140,19 @@ async def _quote(redis, symbols: set[str], ttl: int) -> int:
     return len(rows)
 
 
+async def _broker_quotes(db, redis, symbols: set[str]) -> dict[str, tuple[float, Optional[float]]]:
+    """Live prices from the admin's broker when it has a batch call and a session. {} sends them all to Yahoo."""
+    from backend.datalayer.bars import _broker_session
+
+    try:
+        _, adapter = await _broker_session(db, redis)
+        batch = getattr(adapter, "batch_quotes", None)
+        return await batch(sorted(symbols)) if batch else {}
+    except Exception as exc:
+        logger.warning("broker quotes failed, Yahoo takes over: %s", exc)
+        return {}
+
+
 async def quotes(db, redis) -> None:
     global _last_universe
     from backend.factor.data import universe
@@ -149,13 +162,18 @@ async def quotes(db, redis) -> None:
     priority = await priority_symbols(db)
     due = now - _last_universe >= (UNIVERSE_SECONDS if live else OFF_SESSION_SECONDS)
 
+    wanted = priority | {_bare(s) for s in universe()}
+    # The long TTL: if the session dies mid-day, quotes must outlast the wait for Yahoo's next pass.
+    broker = await _broker_quotes(db, redis, wanted) if live else {}
+    await store_quotes(redis, broker, UNIVERSE_TTL_SECONDS)
+
     if due:
-        symbols = priority | {_bare(s) for s in universe()}
+        symbols = wanted - set(broker)
         _last_universe = now  # stamped before the download so an outage waits a cadence, not 15 s
-        n = await _quote(redis, symbols, UNIVERSE_TTL_SECONDS if live else OFF_SESSION_TTL_SECONDS)
-        logger.info("ingest quotes: %d/%d symbol(s)", n, len(symbols))
-    elif live and priority:
-        await _quote(redis, priority, PRIORITY_TTL_SECONDS)
+        n = await _quote(redis, symbols, UNIVERSE_TTL_SECONDS if live else OFF_SESSION_TTL_SECONDS) if symbols else 0
+        logger.info("ingest quotes: %d from the broker, %d/%d from Yahoo", len(broker), n, len(symbols))
+    elif live and priority - set(broker):
+        await _quote(redis, priority - set(broker), PRIORITY_TTL_SECONDS)
 
 
 async def macro(db, redis) -> None:

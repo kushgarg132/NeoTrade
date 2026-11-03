@@ -548,3 +548,97 @@ def test_option_route_502_does_not_leak_the_upstream_error():
 
     err = _upstream(httpx.HTTPError("https://api.upstox.com/v2?token=SECRET"))
     assert err.status_code == 502 and "SECRET" not in err.detail
+
+
+async def test_batch_quotes_read_the_previous_close_from_net_change(monkeypatch):
+    # ohlc.close follows the last price during the day (seen 2026-11-03): it is not the previous close.
+    adapter = _adapter()
+    monkeypatch.setattr(adapter, "get_access_token", AsyncMock(return_value="t"))
+    scrip = {"TCS": {"instrument_key": "NSE_EQ|A"}, "INFY": {"instrument_key": "NSE_EQ|B"}, "NEW": {"instrument_key": "NSE_EQ|C"}}
+    monkeypatch.setattr(adapter, "_load_scrip", AsyncMock(return_value=scrip))
+    sent = []
+
+    class _Client:
+        def __init__(self, **_):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return False
+
+        async def get(self, url, params=None, headers=None):
+            sent.append(params["instrument_key"])
+            request = httpx.Request("GET", url)
+            return httpx.Response(200, request=request, json={"data": {
+                "NSE_EQ:TCS": {"symbol": "TCS", "last_price": 103.0, "net_change": 3.0, "ohlc": {"close": 103.0}},
+                "NSE_EQ:INFY": {"symbol": "INFY", "last_price": 50.0},
+                "NSE_EQ:BAD": {"symbol": "BAD", "last_price": 0, "net_change": 0}}})
+
+    monkeypatch.setattr("backend.brokers.upstox.httpx.AsyncClient", _Client)
+    out = await adapter.batch_quotes(["TCS", "INFY", "NOT_LISTED"])
+    assert out == {"TCS": (103.0, 100.0), "INFY": (50.0, None)}  # no net_change: price only; store_quotes keeps the close
+    assert sent == ["NSE_EQ|A,NSE_EQ|B"]
+
+
+async def test_batch_quotes_split_at_the_api_limit(monkeypatch):
+    from backend.brokers import upstox
+
+    adapter = _adapter()
+    monkeypatch.setattr(adapter, "get_access_token", AsyncMock(return_value="t"))
+    symbols = [f"S{i}" for i in range(upstox.QUOTE_BATCH + 1)]
+    monkeypatch.setattr(adapter, "_load_scrip", AsyncMock(return_value={s: {"instrument_key": s} for s in symbols}))
+    sizes = []
+
+    class _Client:
+        def __init__(self, **_):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return False
+
+        async def get(self, url, params=None, headers=None):
+            sizes.append(len(params["instrument_key"].split(",")))
+            return httpx.Response(200, request=httpx.Request("GET", url), json={"data": {}})
+
+    monkeypatch.setattr("backend.brokers.upstox.httpx.AsyncClient", _Client)
+    await adapter.batch_quotes(symbols)
+    assert sizes == [upstox.QUOTE_BATCH, 1]
+
+
+async def test_the_instrument_dump_is_shared_between_adapters_for_a_day(monkeypatch):
+    from backend.brokers import upstox
+
+    gets = []
+
+    class _Client:
+        def __init__(self, **_):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return False
+
+        async def get(self, url, **_):
+            import gzip
+            import json
+
+            gets.append(url)
+            body = gzip.compress(json.dumps([{"trading_symbol": "TCS", "instrument_key": "K"}]).encode())
+            return httpx.Response(200, request=httpx.Request("GET", url), content=body)
+
+    monkeypatch.setattr("backend.brokers.upstox.httpx.AsyncClient", _Client)
+    day = {"now": date(2026, 11, 4)}
+    monkeypatch.setattr(upstox, "_scrip_day", lambda: day["now"])
+    assert "TCS" in await _adapter()._load_scrip("NSE")
+    assert "TCS" in await _adapter()._load_scrip("NSE")
+    assert len(gets) == 1
+    day["now"] = date(2026, 11, 5)  # the dump is refreshed daily
+    await _adapter()._load_scrip("NSE")
+    assert len(gets) == 2
