@@ -100,8 +100,6 @@ def test_journal_endpoint_filters_by_account(monkeypatch):
     assert {t["broker"] for t in mine["round_trips"]} == {"upstox"}
     assert mine["mirror"]["costs"]["fills"] == 2
     assert len(client.get("/api/v1/journal").json()["round_trips"]) == 3
-    rows = client.get("/api/v1/journal/ai-vs-me").json()
-    assert [r["month"] for r in rows] == ["2026-08", "2026-09"]
 
 
 async def test_get_journal_tool_takes_an_account():

@@ -100,21 +100,6 @@ async def get_journal(
     }
 
 
-@router.get("/ai-vs-me")
-async def ai_vs_me(
-    user: User = Depends(get_current_user), store: JournalStore = Depends(get_journal_store),
-    nifty: list = Depends(get_nifty),
-):
-    """Per month: the AI account's results against the user's own, net of
-    estimated charges, each against the Nifty."""
-    from backend.journal.accounts import ai_vs_me as compare
-    from backend.prefs import PrefsStore
-
-    prefs = await PrefsStore(db.db).get(user.id)
-    return compare(await store.list_trades(user.id), prefs.get("broker_roles") or {},
-                   {"ai": prefs["account_size"], "mine": prefs["account_size"]}, nifty)
-
-
 def _by_kind(closed: list[dict]) -> dict:
     """Stocks, options and futures kept apart: an options habit can sink an
     otherwise sound stock book, and the total hides which."""

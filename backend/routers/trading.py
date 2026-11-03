@@ -552,19 +552,6 @@ async def get_trade(trade_id: str, ledger: LedgerStore = Depends(get_ledger_stor
     return trade
 
 
-@router.get("/equity")
-async def get_equity(venue: Optional[Venue] = None, ledger: LedgerStore = Depends(get_ledger_store)):
-    positions = await ledger.get_open_positions(venue=venue)
-    portfolio = Portfolio()
-    portfolio.positions = positions
-    # No live mark-price source wired into this read-only endpoint --
-    # Portfolio.equity() falls back to each position's own avg_price when a
-    # symbol isn't in mark_prices, so an empty dict here means realized P&L
-    # across open positions plus zero unrealized movement, not a crash.
-    equity = portfolio.equity({})
-    return {"equity": equity}
-
-
 @router.post("/backtests/{strategy_name}", status_code=202)
 async def run_gate_backtest(strategy_name: str, admin: User = Depends(require_admin)):
     """Backtests one strategy over the last year and records the result

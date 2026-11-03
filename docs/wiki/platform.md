@@ -270,7 +270,6 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/trading/fills` | `backend/routers/trading.py::get_fills` | user |
 | GET | `/api/v1/trading/trades` (`status`, `limit`, `venue`, `mode`, `strategy`) | `backend/routers/trading.py::get_trades` | user |
 | GET | `/api/v1/trading/trades/{trade_id}` | `backend/routers/trading.py::get_trade` | user (404 `Trade not found` incl. another user's id) |
-| GET | `/api/v1/trading/equity` | `backend/routers/trading.py::get_equity` | user |
 | GET | `/api/v1/trading/instruments` | `backend/routers/market_data.py::search_instruments` | none (guest header search; kept at the `/trading` path, off the gated trading router) |
 | POST | `/api/v1/trading/backtests/{strategy_name}` | `backend/routers/trading.py::run_gate_backtest` | admin |
 | GET | `/api/v1/trading/backtests/{strategy_name}` | `backend/routers/trading.py::latest_gate_backtest` | user |
@@ -280,13 +279,11 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | POST | `/api/v1/suggestions/{suggestion_id}/approve-live` | `backend/routers/suggestions.py::approve_suggestion_live` | admin |
 | GET | `/api/v1/analytics/pnl` | `backend/routers/analytics.py::get_pnl` | user |
 | GET | `/api/v1/analytics/scorecard` | `backend/routers/analytics.py::get_scorecard` | user |
-| GET | `/api/v1/broker/list` | `backend/routers/broker.py::list_brokers` | user |
 | GET | `/api/v1/broker/{broker}/status` | `backend/routers/broker.py::broker_status` | user |
 | GET | `/api/v1/broker/{broker}/login-url` | `backend/routers/broker.py::broker_login_url` | user |
 | POST | `/api/v1/broker/{broker}/connect` | `backend/routers/broker.py::broker_connect` | user |
 | POST | `/api/v1/broker/{broker}/disconnect` | `backend/routers/broker.py::broker_disconnect` | user |
 | GET | `/api/v1/journal` | `backend/routers/journal.py::get_journal` | user |
-| GET | `/api/v1/journal/ai-vs-me` | `backend/routers/journal.py::ai_vs_me` | user |
 | POST | `/api/v1/journal/sync` | `backend/routers/journal.py::sync_journal` | user |
 | POST | `/api/v1/imports/cas` | `backend/routers/imports.py::import_cas` | user |
 | GET | `/api/v1/imports` | `backend/routers/imports.py::imported` | user |

@@ -3,7 +3,7 @@
   bookkeeping /trading/start and /trading/stop rely on -- proven directly
   against a feed that would otherwise run forever, with a timeout so a
   regression here fails fast instead of hanging the test suite.
-- GET /trading/positions, /trading/fills, /trading/equity: route-level via
+- GET /trading/positions, /trading/fills: route-level via
   FastAPI TestClient against a seeded LedgerStore (mongomock_motor).
 - POST /trading/start + /trading/stop: full route round-trip with
   InstrumentMaster/YFinanceProvider/db monkeypatched to fakes, proving the
@@ -223,16 +223,6 @@ def test_get_fills_optionally_filters_by_symbol(client, ledger):
 
     resp_all = client.get("/api/v1/trading/fills")
     assert len(resp_all.json()) == 2
-
-
-def test_get_equity_reports_realized_pnl_from_open_positions(client, ledger):
-    asyncio.run(ledger.snapshot_positions({
-        "RELIANCE": Position(symbol="RELIANCE", quantity=10.0, avg_price=2500.0, realized_pnl=500.0),
-    }))
-
-    resp = client.get("/api/v1/trading/equity")
-    assert resp.status_code == 200
-    assert resp.json()["equity"] == 500.0  # no live mark price -> zero unrealized movement
 
 
 # ---------------------------------------------------------------------------

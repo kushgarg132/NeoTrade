@@ -24,7 +24,7 @@ from backend.auth.broker_credentials import BrokerCredentialStore, get_credentia
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.brokers.protocol import BrokerSessionState
-from backend.brokers.registry import BROKERS, UnknownBroker, get_broker_adapter
+from backend.brokers.registry import UnknownBroker, get_broker_adapter
 from backend.database import db
 from backend.instruments.loader import refresh_instruments_from_adapter
 
@@ -53,11 +53,6 @@ class ConnectRequest(BaseModel):
     client_code: str | None = None  # Angel One
     password: str | None = None  # Angel One
     totp: str | None = None  # Angel One
-
-
-@router.get("/list")
-async def list_brokers():
-    return {"brokers": sorted(BROKERS)}
 
 
 @router.get("/{broker}/status")

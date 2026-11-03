@@ -215,11 +215,10 @@ All behind `get_current_user` at include time (`server.py`: trading, broker, opt
 | `GET /trading/runs` | `::list_runs` | user | `RunStore.list_for_user` incl. `progress` (bars, signals, orders, below_cost, last_symbol, last_bar_at, updated_at) |
 | `GET /trading/positions?venue=` | `::get_positions` | user | position dicts marked at read time via `marks.mark_prices` (stored `unrealized_pnl` is 0) |
 | `GET /trading/kill-switch` | `::get_kill_switch` | user | `{tripped, reason, equity, tripped_at}` |
-| `GET /trading/fills`, `/trades`, `/equity` | `::get_fills/get_trades/get_equity` | user | `venue=live` reads the `user:mine` book; `/trades` params `status`, `limit<=1000`, `venue`, `mode`, `strategy`; `GET /trading/trades/{trade_id}` -> the user's trade (`LedgerStore.get_trade`, unindexed) or 404 `Trade not found`; `/equity` -> `{equity}` realized only (no marks) |
+| `GET /trading/fills`, `/trades` | `::get_fills/get_trades` | user | `venue=live` reads the `user:mine` book; `/trades` params `status`, `limit<=1000`, `venue`, `mode`, `strategy`; `GET /trading/trades/{trade_id}` -> the user's trade (`LedgerStore.get_trade`, unindexed) or 404 `Trade not found`; `/equity` -> `{equity}` realized only (no marks) |
 | `GET /trading/instruments?q=&limit=` | `routers/market_data.py::search_instruments` (moved off this router so guests can search) | none | `InstrumentMaster.search` |
 | `POST /trading/backtests/{name}` | `::run_gate_backtest` | admin | 202 `{started, history}` |
 | `GET /trading/backtests/{name}` | `::latest_gate_backtest` | user | `{strategy, passed, run_at, ...result minus trades}`; 404 none |
-| `GET /broker/list` | `broker.py::list_brokers` | user | `{brokers}` |
 | `GET /broker/{b}/status` | `::broker_status` | user | `{state, connected, action}` |
 | `GET /broker/{b}/login-url` | `::broker_login_url` | user | `{url}` (null = credential form, Angel One) |
 | `POST /broker/{b}/connect` | `::broker_connect` | user | `{state, connected}` |
@@ -244,7 +243,7 @@ Behaviour that surprises:
 - `live_upstox.py::decode_feed_response` uses the SDK's generated `MarketDataFeedV3_pb2`; proto3 zeros read as absent (no `ltp` = no tick, no `vtt` = no volume). The transport stays the asyncio `websockets` loop (`::UpstoxMarketFeed._stream`), not the SDK's threaded streamer, so `add()` and resubscribe-on-reconnect keep working.
 - LIMIT orders: all three adapters set `SUPPORTS_LIMIT` and send the price (Kite `price`, Angel One `ordertype: LIMIT` + `price`, Upstox); `chat/actions.py::_order_checks` refuses LIMIT on any adapter without it. Kite/Angel One payloads are unit-tested only (no live account).
 - Upstox `_PRODUCT_MAP` maps NRML to `D` (delivery/carry-forward); `place_order` for options resolves the key via the option chain, refuses rather than guesses (`_option_key`).
-- Position `unrealized_pnl` is never stored non-zero; reads mark at request time (`trading.py::get_positions`), `/trading/equity` does not mark.
+- Position `unrealized_pnl` is never stored non-zero; reads mark at request time (`trading.py::get_positions`).
 - `autopilot/service.py::_state` reads only the latest 1000 trades of the book and counts a SENT (unconfirmed) BUY as deployed/held until reconciled: not once its symbol is an open trade (no double count), nor once its `live_orders` row (by the log row's `order_id`, logged since 2026-10-28) left the pending states (rejected, cancelled, or filled and closed). A partly filled SENT order counts only its open trade.
 - `autorun.py::tick` only runs the long-term/morning pass during 09:15-15:30 (`in_session`); the morning pass is `>= 09:20` and the catch-up for a missed 16:00 pass runs as a background task so the auto-run key does not lapse.
 - Options: `size_option_intent` LONG_* needs a live premium (no model fills intraday); CSP/short uses Black-Scholes fallback and flat 15% margin; `options/backtest.py` assumes 5m bars and last-Thursday expiry (NSE moved to Tuesdays), optimistic and not for real orders.

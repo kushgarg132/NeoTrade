@@ -69,12 +69,6 @@ def _client(adapter, monkeypatch):
     return TestClient(app)
 
 
-def test_list_returns_the_known_brokers(monkeypatch):
-    resp = _client(_FakeAdapter(), monkeypatch).get("/api/v1/broker/list")
-    assert resp.status_code == 200
-    assert set(resp.json()["brokers"]) == {"kite", "upstox", "angel_one"}
-
-
 def test_unknown_broker_is_a_404():
     app = FastAPI()
     app.include_router(broker.router, prefix="/api/v1")

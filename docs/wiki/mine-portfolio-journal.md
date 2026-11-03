@@ -52,7 +52,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 | backend/guardrails/telegram_bot.py | Inbound long-poll bridge to the chat agent (with chart/image tools: `::_send_media` sends each as a photo before the answer; a failure sends one line instead) and action cards | `telegram_bot.py::poll_loop`, `::poll_once`, `::_poll_bot`, `::_reply`, `::_callback`, `::_sell`, `::_ask`, `::Tap`, `SHORTCUTS` |
 | backend/routers/mine.py | `/mine/*` | `mine.py::overview`, `::mine_history`, `::tax`, `::stock_detail`, `::get_thesis`, `::put_thesis`, `::mine_actions`, `::dismiss_action`, `::snooze_action`, `::_month_contributions`, `TAX_FIRST_FY` |
 | backend/routers/portfolio.py | `/portfolio*`; verdict masking | `portfolio.py::get_portfolio`, `::refresh`, `::rebalance`, `::rebalance_candidates`, `::present`, `::mask_row`, `::_results_dates`, `::_with_results`, `::verdicts_visible_to`, `::with_suggestions`, `::_candidate_symbols` |
-| backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::ai_vs_me`, `::get_learning`, `::get_beta_metrics`, `::get_beta_users` |
+| backend/routers/journal.py | `/journal*` | `journal.py::get_journal`, `::sync_journal`, `::import_console_csv`, `::import_upstox`, `::set_round_trip_note`, `::get_learning`, `::get_beta_metrics`, `::get_beta_users` |
 | backend/routers/today.py | `/today`, `/today/attention`, `/today/reconciliation` | `today.py::today`, `::attention`, `::reconciliation`, `::_changes` (since last trading day: AI fills, newest plan, sent alerts), `::_accounts`, `::_needs_you`, `::_mine_actions`, `::_setup` (steps `prefs.py::SETUP_STEP_IDS`; prefs `setup_skipped` count as done, row `skipped`), `::_autopilot`, `::_backdrop`, `_STATE_CACHE` |
 
 ## Data
@@ -302,7 +302,6 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | POST /portfolio/rebalance | `::rebalance` | user (conviction needs the gate) | `total,cash_left,trades[...,next_results],tax{short_gain,long_gain,est_tax,undated},after{rows[{symbol,kind,sector,value_now,value_after,weight_now,weight_after}],sectors[{sector,weight_now,weight_after}] (stocks only),types[{kind,weight_now,weight_after}],cash_pct},skipped,excluded,uninvested_pct,stale_since`; 429/409/403 |
 | POST /portfolio/rebalance/ai | `::rebalance_ai` | verdicts audience (`verdicts_visible_to`), 3/min | `plan` (same shape as /rebalance), `targets{symbol:pct}` (clamped), `reasons{symbol:text}`, `summary`; 403/429/409/502 (model gave nothing usable) |
 | GET /journal?account= | `routers/journal.py::get_journal` | user | `account,round_trips[...,news,exit_news{direction,impact,headline,url,minutes_before,after_5d_pct}],calendar,insights,brokers_connected,summary{trips,pnl,wins,by_kind},mirror{costs,benchmark}` |
-| GET /journal/ai-vs-me | `::ai_vs_me` | user | monthly rows; no caller in `frontend/src/utils/api.js` |
 | POST /journal/sync | `::sync_journal` | user | `{imported,brokers,failed}` |
 | POST /imports/cas (multipart `file`,`password`) | `routers/imports.py::import_cas` | user | `{funds,transactions,period}`; 422 on wrong password / non-PDF / over 10 MB / NSDL-CDSL |
 | GET /imports | `::imported` | user | `{funds,period,imported_at,transactions,trades}` |
