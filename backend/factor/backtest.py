@@ -37,6 +37,8 @@ class Result:
     traded: float = 0.0          # rupee value of every trade
     rebalances: int = 0
     books: list = field(default_factory=list)  # (decision day, {symbol: weight}, exposure)
+    fills: list = field(default_factory=list)  # (day, symbol, BUY or SELL, quantity, price, charges)
+    interest: list = field(default_factory=list)  # (day, what idle cash earned)
 
     def metrics(self) -> dict:
         m = performance(self.equity)
@@ -91,6 +93,7 @@ def simulate(closes: pd.DataFrame, market: pd.Series, params: Params, start, end
 
     for day in days:
         row = prices.loc[day]
+        result.interest.append((day, cash * daily_yield))
         cash *= 1 + daily_yield
         if exits:
             cash = _trade(shares, cash, row, pd.Series(dtype=float), ex, result, only=exits)
@@ -145,6 +148,7 @@ def _trade(shares: dict, cash: float, row: pd.Series, book: pd.Series, ex: Execu
         shares[symbol] = shares.get(symbol, 0) + (qty if side == Side.BUY else -qty)
         if shares[symbol] == 0:
             del shares[symbol]
+        result.fills.append((row.name, symbol, side.value, qty, price, costs))
         result.costs += costs
         result.traded += value
     return cash

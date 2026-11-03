@@ -92,6 +92,26 @@ and lands within 9 of 200 names on the real 2023-08 list.
   figures are still somewhat high.
 - Not in the figures: tax.
 
+## After tax (2026-11-03, `python -m backend.factor.after_tax`)
+
+Today's rates for every year, FIFO lots, losses carried forward, idle-cash interest and fund dividends at 30%,
+point-in-time membership. Equal weight runs through the same engine, monthly, with real charges.
+
+| CAGR | Before tax | Tax paid yearly | Sold at the end | Sharpe | Max DD |
+|---|---|---|---|---|---|
+| 2013-2026: Rotation | 16.2% | 13.4% | 13.4% | 0.76 | -44% |
+| 2013-2026: Equal weight | 14.5% | 13.4% | 13.3% | 0.83 | -46% |
+| 2013-2026: Index fund | 12.8% | 12.4% | 11.5% | 0.80 | -38% |
+| 2014-02 to 2019-02: Rotation | 9.5% | 7.1% | 7.1% | 0.47 | -40% |
+| 2014-02 to 2019-02: Index fund | 15.4% | 15.0% | 13.7% | 1.09 | -21% |
+| 2023-09 to 2026: Rotation | 18.6% | 15.4% | 15.4% | 0.89 | -26% |
+| 2023-09 to 2026: Index fund | 9.8% | 9.4% | 8.7% | 0.71 | -18% |
+
+- Tax costs the rotation 2.8 points a year against 0.4 to 1.3 for an index fund. Its gains are almost all short-term.
+- After tax it ties equal weight and beats an index fund by 1 to 2 points, with deeper drawdowns and a lower Sharpe.
+- The two stretches on archived lists disagree, so the edge is not stable.
+- These use one fixed rotation. The walk-forward's 13.3% before tax implies about 10.5% after, below the index fund (an estimate).
+
 ## Earlier evidence (2026-11-02, `factor/backtest.py`, net of charges, 10 bps slippage, today's Nifty 200 list)
 
 These are inflated by survivorship; see above.
