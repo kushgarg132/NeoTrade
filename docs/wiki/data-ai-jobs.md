@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: f04b9d1
+verified_at: a204ebc
 ---
 # Data layer, AI and background jobs
 
@@ -85,7 +85,8 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | `backend/llm.py` | gateway client, tiers/features, per-user daily cap, key rotation | `llm.py::LLMService`, `::llm_service`, `::get_llm`, `::get_completion`, `::keys_for`, `::_charge`, `::use_model`, `::model_for`, `::MultiKeyChain`, `::USER_FEATURES`, `::DailyLimitReached` |
 | `backend/model_catalog.py` | gateway model list to Family/Line/Version tree (pure) | `model_catalog.py::build_catalog`, `::FAMILIES`, `::LINES` |
 | `backend/market_cache.py` | stale-while-revalidate cache for home feeds | `market_cache.py::cached`, `::_refresh`, `::_claim` |
-| `backend/prompts/__init__.py` | `render(name, **values)` strict placeholder check | `prompts/__init__.py::render`, `::_load` |
+| `backend/prompts/__init__.py` | `render(name, **values)` strict placeholder check; front matter `version` and multi-line `system`; `{{> name}}` pastes `prompts/shared/name.md`; `prompt_id` = `name@version`, stored on `news_items.prompt` and `ai_summaries.prompt` | `prompts/__init__.py::render`, `::_load`, `::prompt_id` |
+| `backend/datalayer/prompt_eval.py` | read-only replay of `score_market_news` over company news with known outcomes, against the stored scores: `python -m backend.datalayer.prompt_eval --items 200` | `prompt_eval.py::compare`, `::main` |
 | `backend/scheduler.py` | 16:00 IST daily pass + lock + catch-up entry | `scheduler.py::scheduler_loop`, `::run_daily_jobs`, `::_run_locked`, `::close_expired_option_positions`, `::_learn`, `::_weekly_mirrors`, `::_sync_journals`, `::LOCK_KEY`, `::LAST_PASS_KEY` |
 
 Prompts (`backend/prompts/*.md`, front matter `system:`; caller in parens): `triage_news`, `score_market_news` (datalayer/news.py); `score_news`, `research_report` (ai/analyst.py); `market_brief` (datalayer/market.py); `index_move` (research/index_move.py); `game_plan`, `game_plan_tools` (plan/builder.py); `game_plan_revision`, `game_plan_revision_tools` (plan/revise.py); `chat`, `chat_followups` (chat/agent.py); `peers` (research/search.py); `resolve_instrument` (instruments/resolve.py); `model_test` (routers/settings.py); `final_turn` (ai/runner.py); `portfolio_review` (portfolio/review.py); `rebalance_ai` (portfolio/ai_rebalance.py); `learning_review` (learning/report.py); `strategy_hypotheses` (learning/hypotheses.py); `strategy_builder`, `strategy_builder_swing` (builder/draft.py).
@@ -240,7 +241,9 @@ Lab switch (`app_settings.lab_enabled`, default off, seen by every process withi
 - Figures in AI prose must come from the call's facts (`grounding.py`); plan rationale is filtered with it; ungrounded sentences are dropped, not rewritten.
 - One sentiment source for conviction: `sentiment:{SYM}`, written by `news.aggregate` for followed names; for those, the analyst note never writes `sentiment:` when the ingest layer answered (`AnalystAgent._store_note`).
 - AI summaries (`backend/summaries/`) are written only by their job at the cadence in the table above (Redis NX per user+kind+period); `GET /summaries/*` reads Mongo `ai_summaries` and never calls a model; a failed or over-budget call keeps the last text.
-- Prompts live in `backend/prompts/*.md`; `render` raises `KeyError` on missing or extra placeholders (`prompts/__init__.py::render`).
+- Prompts live in `backend/prompts/*.md`; `render` raises `KeyError` on missing or extra placeholders (`prompts/__init__.py::render`). Bump `version` when the wording changes.
+- `impacts[].priced_in` (0..1, null with no price line; written by `score_market_news` v2 from `news.py::price_notes`) is record-only: `direction` stays what the news means (alerts rely on it), and `aggregate`, `sentiment:` and the rotation veto do not read `priced_in`. It reaches `news_outcomes` and the `accuracy.report` groups `prompt` and `priced_in`.
+- Summaries pass `grounding.py::banned` (a field name, or an amount in words): one rewrite, then the sentence is dropped (`summaries/core.py::_without_banned`).
 - Ingest has a single leader; reactions are idempotent through claim stamps on `news_items`, so a restart never double alerts.
 - Every user-owned record carries `user_id` (`trade_plans`, `chat_actions`, `plan_scorecards`).
 - Token-checked locks: the daily pass releases `scheduler:daily_lock` only if it still holds the token; `backend/locks.py::renew/release` likewise.
