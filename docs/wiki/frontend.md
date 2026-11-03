@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: c82a866
+verified_at: 44cc001
 ---
 # Frontend (React 19 + Vite SPA)
 

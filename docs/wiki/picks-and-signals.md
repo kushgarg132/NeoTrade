@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/ml/**, backend/rl/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: e81e82c
+verified_at: 44cc001
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -44,7 +44,7 @@ gates them. **Fundamentals screening** (`backend/data/fundamentals/`) gives the 
 | backend/factor/data.py | Nifty 200 CSV universe + yfinance closes, disk cache 20 h | `factor/data.py::universe`, `::closes`, `::series`, `::MARKET`, `::BENCHMARKS`, `::CACHE_DIR` |
 | backend/factor/paper.py | Per-user paper factor book, monthly rebalance | `factor/paper.py::rebalance`, `::due`, `::params_for`, `::FactorBookStore`, `::summary_text`, `::PARAMS`, `::SMALL_ACCOUNT`, `::STRATEGY` |
 | backend/factor/survivorship.py | CLI that measures survivorship bias (prints only) | `factor/survivorship.py::main`; `rotation` re-runs the rotation on point-in-time membership (`simulate(member=)`) |
-| backend/forecast/members.py | Point-in-time Nifty 200 membership (CNX/Nifty 100 before 2014) from Wayback copies of NSE lists, renamed via NSE symbolchange.csv; `forecast/nifty_members.csv` (16 lists 2006-11..2026-10, 395 symbols; gap 2019-02..2023-08). `bars.py::symbols` adds `ever()` so ex-members' bars are fetched | `members.py::mask`, `::ever`, `::snapshots`, `::build`; `rolled=True` adds `nifty_members_rolled.csv` (2019-02 to 2023-08, rolled through NSE press releases), used by `factor/survivorship.py::rotation` only; Picks reads the archived lists |
+| backend/forecast/members.py | Point-in-time Nifty 200 membership (CNX/Nifty 100 before 2014) from Wayback copies of NSE lists, renamed via NSE symbolchange.csv; `forecast/nifty_members.csv` (16 lists 2006-11..2026-10, 395 symbols; gap 2019-02..2023-08). `bars.py::symbols` adds `ever()` so ex-members' bars are fetched | `members.py::mask`, `::ever`, `::snapshots`, `::build`; `rolled=True` adds `nifty_members_rolled.csv` (2019-02 to 2023-08, rolled through NSE press releases), used by `factor/survivorship.py::rotation` and `picks.py::load` (2026-11-03: moved momentum, pullback and rs_leaders_regime to grade A); `new_setups_tool` keeps the archived lists |
 | backend/factor/index_members/*.csv | Member lists for the 17 NSE indices the Market > Indices pages cover (nifty50 ... niftypsubank; added with the Stocks tab on the index page) | read by `datalayer/index_members.py::members` (used by `routers/market_data.py`) |
 | backend/factor/nifty200.csv | Today's Nifty 200 list (survivorship-biased) | read by `factor/data.py::universe` |
 | backend/scoring/composite.py | The only conviction formula | `composite.py::AI_CAP`=0.30, `::RULE_FLOOR`=0.45, `::CompositeScore`, `::score_intent`, `::is_bearish` |
