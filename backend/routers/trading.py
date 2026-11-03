@@ -166,19 +166,6 @@ async def build_feed(instruments, mode: str, poll_interval_seconds: float, user_
     )
 
 
-async def get_active_broker_adapter(user_id: str, credentials):
-    """First broker (BROKERS order) with an ACTIVE session for this user, or
-    None. Mirrors build_feed's own loop above -- same order, same ACTIVE
-    check -- but returns the adapter itself rather than a feed, since live
-    order routing needs to place/cancel orders and read positions, not just
-    stream ticks."""
-    for broker in BROKERS:
-        adapter = await get_broker_adapter(broker, user_id, credentials, db.redis)
-        if await adapter.state() == BrokerSessionState.ACTIVE:
-            return adapter
-    return None
-
-
 async def ai_broker_adapter(user_id: str, credentials, roles: dict):
     """The AI account's adapter if it is logged in, else None
     (backend/brokers/roles.py). Live engine orders go nowhere else."""

@@ -102,7 +102,6 @@ reports their ages.
   `git pull --ff-only && GIT_SHA=$(git rev-parse HEAD) docker compose build backend && docker compose up -d backend`.
   Vercel still builds on the push (it ignores `[skip ci]`).
 - The deploy clone is separate from the working repo at `/home/ubuntu/projects/NeoTrade`.
-- Backlog seed (once): `docker exec neotrade-backend python -m backend.system.seed_backlog`.
 
 ## Auth and sessions
 

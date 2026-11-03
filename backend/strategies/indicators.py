@@ -199,13 +199,3 @@ class TrendDetector:
             return Trend.DOWN
         else:
             return Trend.CHOPPY
-
-    @staticmethod
-    def analyze_market_structure(df: pd.DataFrame, window: int = 5) -> Trend:
-        """
-        Analyzes Higher Highs/Higher Lows for Uptrend, Lower Lows/Lower Highs for Downtrend.
-        """
-        # Simplified implementation looking at last few pivots
-        # This would require the SupportResistance logic to find pivots first
-        # For now, we rely on SMA alignment
-        return TrendDetector.detect_trend(df)

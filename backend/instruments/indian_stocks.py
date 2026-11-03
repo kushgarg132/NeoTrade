@@ -45,7 +45,3 @@ HIGH_VOLATILITY_PICKS = [
     "RVNL",        # Railways
     "IEX",         # Power exchange
 ]
-
-def get_stock_symbol_nse(symbol: str) -> str:
-    """Convert to yfinance NSE format"""
-    return f"{symbol}.NS"
