@@ -6,7 +6,7 @@ the market" / "no news found"). Also the weekly report's news attribution
 accuracy line. Reads what the news engine already stores; no LLM call."""
 
 import logging
-from datetime import datetime, time, timezone
+from datetime import datetime, time
 from typing import Optional
 
 from backend.strategies.longterm.analyst_verdict import MATERIALITY_THRESHOLD
@@ -18,10 +18,6 @@ TOP_RUPEES = 3       # the biggest rupee movers are always explained
 WEEK_BIG_PCT = 4.0   # weekly move vs NIFTY that counts as big
 WEEK_ITEMS, THEMES = 2, 5
 SCOPES = {"symbol": "COMPANY", "sector": "SECTOR"}
-
-
-def _aware(value):
-    return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def big_moves(rows: list[dict], nifty_pct: Optional[float], big: float = BIG_PCT, top: int = TOP_RUPEES) -> list[dict]:

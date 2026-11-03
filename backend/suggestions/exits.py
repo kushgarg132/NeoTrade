@@ -21,6 +21,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from backend.core.clock import aware
 from backend.core.market_calendar import HOLIDAYS
 from backend.strategies.indicators import Indicators
 from backend.datalayer import bars
@@ -137,7 +138,7 @@ async def check_exits(db, user_id: str, now: Optional[datetime] = None, marks_fn
         return []
 
     snapshot = await latest_snapshot(db, user_id)
-    seen_at = _aware(snapshot["at"]) if snapshot else None
+    seen_at = aware(snapshot["at"]) if snapshot else None
     held = await mine_holdings(db, user_id)
     open_ = []
     for trade in trades:
@@ -176,5 +177,3 @@ async def check_exits(db, user_id: str, now: Optional[datetime] = None, marks_fn
     return alerts
 
 
-def _aware(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)

@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime, time, timezone
 from typing import Literal, Optional
 
+from backend.core.clock import aware
 from backend.autopilot import fence
 from backend.brokers.roles import RoleUnavailable, adapter_for
 from backend.core.models import Order, Side
@@ -74,10 +75,6 @@ class AutopilotOrder:
     context: Optional[dict] = None  # copied onto the trade it opens (a pick's id and due date)
 
 
-def _aware(value: Optional[datetime]) -> Optional[datetime]:
-    return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
-
-
 async def _notify(db, user_id: str, text: str, stop_button: bool = True) -> bool:
     from backend import alerts
 
@@ -117,7 +114,7 @@ async def _state(db, user_id: str, prefs: dict, venue: str, now: datetime, redis
     unrealized = sum((marks.get(t["symbol"], t.get("entry_price") or 0) - (t.get("entry_price") or 0)) * t["quantity"]
                      for t in open_trades)
     realized = sum(trade_net(t) for t in mine
-                   if t.get("status") == "CLOSED" and (_aware(t.get("exit_at")) or day_start) >= day_start)
+                   if t.get("status") == "CLOSED" and (aware(t.get("exit_at")) or day_start) >= day_start)
     # A live order sent but not confirmed filled still counts until reconciled.
     entries = await db["autopilot_log"].count_documents(
         {"user_id": user_id, "status": {"$in": ["FILLED", "SENT"]}, "side": "BUY", "at": {"$gte": day_start}})

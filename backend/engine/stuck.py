@@ -9,8 +9,9 @@ recorded. Time is passed in.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
+from backend.core.clock import aware
 from backend.engine.persistence import mine_book
 
 logger = logging.getLogger(__name__)
@@ -18,16 +19,12 @@ logger = logging.getLogger(__name__)
 STALE = timedelta(minutes=5)
 
 
-def _aware(value):
-    return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
-
-
 async def sweep_stuck(db, now: datetime) -> int:
     cutoff = now - STALE
     changed = 0
 
     async for s in db["suggestions"].find({"status": "SENDING"}):
-        claimed = _aware(s.get("decided_at"))
+        claimed = aware(s.get("decided_at"))
         if claimed is not None and claimed > cutoff:
             continue
         # Approvals book in the user's own-account ledger (mine_book) since 19.C.

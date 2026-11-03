@@ -6,9 +6,10 @@ non-NSE instrument, a symbol the store does not cover, stale bars, or a
 period reaching further back than the store holds all go to the fallback.
 """
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timedelta
 from typing import Optional
 
+from backend.core.clock import aware
 from backend.core.models import PriceCandle
 from backend.datalayer import bars
 from backend.engine.session import IST
@@ -55,11 +56,8 @@ class StoreFundamentals:
 
     async def snapshot(self, instrument) -> Optional[FundamentalSnapshot]:
         doc = await self._db[bars.FUNDAMENTALS].find_one({"_id": instrument.tradingsymbol})
-        if doc and _aware(doc["as_of"]) >= datetime.now(IST) - bars.FUNDAMENTALS_MAX_AGE:
+        if doc and aware(doc["as_of"]) >= datetime.now(IST) - bars.FUNDAMENTALS_MAX_AGE:
             return FundamentalSnapshot(**{k: v for k, v in doc.items() if k not in ("_id", "as_of")})
         return await self._fallback.snapshot(instrument)
 
 
-def _aware(dt: datetime) -> datetime:
-    # mongomock (tests) hands datetimes back naive UTC
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)

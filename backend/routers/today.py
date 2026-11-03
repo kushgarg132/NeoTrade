@@ -12,6 +12,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 
+from backend.core.clock import aware
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
 from backend.core import market_calendar
@@ -41,10 +42,6 @@ async def _default_broker_states(user_id: str, brokers: list[str]) -> dict[str, 
 def get_broker_states():
     """Injected so tests can fake broker sessions."""
     return _default_broker_states
-
-
-def _aware(value: Optional[datetime]) -> Optional[datetime]:
-    return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 async def _accounts(roles: dict, user_id: str, broker_states) -> dict:
@@ -99,9 +96,9 @@ async def _needs_you(user_id: str, accounts: Optional[dict], kill: Optional[dict
                       "detail": s.get("reason") or "Check your broker's order book before approving again.",
                       "link": "/journal"})
     async for card in db.db["chat_actions"].find({"user_id": user_id, "status": "PROPOSED"}):
-        if (_aware(card.get("expires_at")) or now) >= now:
+        if (aware(card.get("expires_at")) or now) >= now:
             items.append({"kind": "card", "title": card.get("summary", "A card waits for you"),
-                          "detail": "Confirm or cancel it in chat.", "expires_at": _aware(card.get("expires_at"))})
+                          "detail": "Confirm or cancel it in chat.", "expires_at": aware(card.get("expires_at"))})
     for alert in await GuardrailStore(db.db).events_for(user_id, now.astimezone(IST).date()):
         items.append({"kind": "guardrail", "title": alert.get("title", "Guardrail alert"),
                       "detail": alert.get("detail", ""), "link": "/journal?tab=guardrails"})
@@ -179,7 +176,7 @@ async def _backdrop(now: datetime) -> dict:
     from backend.datalayer import market
 
     events = await market.upcoming(db.db, hours=24, now=now)
-    return {**await market.backdrop(db.redis), "events": [{**e, "at": _aware(e["at"])} for e in events]}
+    return {**await market.backdrop(db.redis), "events": [{**e, "at": aware(e["at"])} for e in events]}
 
 
 def _now() -> datetime:
@@ -196,7 +193,7 @@ async def _unjournaled(user_id: str, roles: dict, now: datetime) -> int:
     trades = filter_trades(await store.list_trades(user_id), brokers_of(roles, "mine"))
     day = now.astimezone(IST).date()
     trips = [t for t in build_round_trips(trades)
-             if t.get("closed_at") and _aware(t["closed_at"]).astimezone(IST).date() == day]
+             if t.get("closed_at") and aware(t["closed_at"]).astimezone(IST).date() == day]
     notes = await store.notes_for(user_id)
     return sum(1 for t in trips if not (notes.get(t["id"]) or {}).get("note"))
 
@@ -261,7 +258,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
     log = await part("ai_activity", db.db["autopilot_log"].find({"user_id": user.id}, {"_id": 0, "user_id": 0})
                      .sort("at", -1).limit(5).to_list(length=5))
     for row in log or []:
-        row["at"] = _aware(row.get("at"))  # Mongo hands back naive UTC; say so to the browser
+        row["at"] = aware(row.get("at"))  # Mongo hands back naive UTC; say so to the browser
     acts = await part("mine_actions", _mine_actions(user.id, now)) or []  # also the post-close digest's
     return {
         "market": {"open": in_session(now), "as_of": now},
@@ -321,5 +318,5 @@ async def reconciliation(user: User = Depends(get_current_user), days: int = 7):
     rows = await db.db[COLLECTION].find({"user_id": user.id, "day": {"$gte": since}}, {"_id": 0}) \
         .sort([("day", -1), ("role", 1)]).to_list(length=None)
     for row in rows:
-        row["checked_at"] = _aware(row.get("checked_at"))
+        row["checked_at"] = aware(row.get("checked_at"))
     return {"results": rows}

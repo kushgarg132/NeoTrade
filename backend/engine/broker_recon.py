@@ -24,9 +24,10 @@ logged-out broker is stored as `not_checked`.
 
 import logging
 from collections import defaultdict
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 from typing import Optional
 
+from backend.core.clock import aware
 from backend.engine.persistence import LedgerStore, mine_book
 from backend.engine.session import IST
 
@@ -42,10 +43,6 @@ def book_for(user_id: str, role: str) -> str:
     from backend.autopilot.service import ledger_user
 
     return mine_book(user_id) if role == "mine" else ledger_user(user_id)
-
-
-def _aware(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def _price_differs(a: float, b: float) -> bool:
@@ -161,7 +158,7 @@ async def check_role(db, user_id: str, role: str, broker: str, adapter, day: dat
     start, end = _bounds(day)
     book = book_for(user_id, role)
     ledger = LedgerStore(db, user_id=book)
-    fills = [f for f in await ledger.get_fills(since=start, venue="live") if _aware(f.timestamp) < end]
+    fills = [f for f in await ledger.get_fills(since=start, venue="live") if aware(f.timestamp) < end]
     fill_ids = sorted({f.order_id for f in fills})
     live_rows = await db["live_orders"].find({"user_id": user_id, "role": role, "$or": [
         {"submitted_at": {"$gte": start, "$lt": end}}, {"_id": {"$in": fill_ids}}]}).to_list(length=None)
@@ -169,7 +166,7 @@ async def check_role(db, user_id: str, role: str, broker: str, adapter, day: dat
     async for row in db["journal_trades"].find({"user_id": user_id, "broker": broker,
                                                 "traded_at": {"$gte": start, "$lt": end}}):
         journal[row["trade_id"]] = row
-    trades = [t for t in await adapter.get_trades() if start <= _aware(t.traded_at) < end]
+    trades = [t for t in await adapter.get_trades() if start <= aware(t.traded_at) < end]
     ledger_qty = {s: p.quantity for s, p in (await ledger.get_open_positions(venue="live")).items()}
     mismatches = classify(role, trades, live_rows, fills, journal, await _broker_quantities(adapter), ledger_qty)
     return {"mismatches": mismatches,

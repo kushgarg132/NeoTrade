@@ -13,6 +13,7 @@ from html import escape
 from typing import Optional
 
 from backend import alerts
+from backend.core.clock import aware
 from backend.core.market_calendar import is_trading_day, last_trading_day, next_trading_day
 from backend.guardrails import telegram
 from backend.engine.session import IST
@@ -22,10 +23,6 @@ logger = logging.getLogger(__name__)
 MOVERS = 3
 NEWS_LOOKBACK = timedelta(hours=36)
 PREMARKET, PREMARKET_END = time(8, 45), time(9, 15)
-
-
-def _aware(value: Optional[datetime]) -> Optional[datetime]:
-    return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def _move_pct(row: dict) -> Optional[float]:
@@ -57,7 +54,7 @@ async def headlines_for(db, symbols: list[str], since: datetime) -> dict[str, di
             if target in symbols and (impact.get("impact") or 0) > best.get(target, (-1, None))[0]:
                 best[target] = (impact.get("impact") or 0, {
                     "title": item.get("event") or item.get("title"), "url": item.get("url"),
-                    "direction": impact.get("direction"), "published_at": _aware(item.get("published_at")),
+                    "direction": impact.get("direction"), "published_at": aware(item.get("published_at")),
                     **news_ref(item),
                 })
     return {symbol: found for symbol, (_, found) in best.items()}
@@ -88,7 +85,7 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
         rest = snapshot.get("raw_holdings") or []
     else:
         rest = [h.model_dump() for h in carried]
-    rest, priced = await quoted(db, rest, now, _aware(snapshot["at"])) if rest else (rest, False)
+    rest, priced = await quoted(db, rest, now, aware(snapshot["at"])) if rest else (rest, False)
     raw = [h.model_dump() for h in live] + rest
     priced = priced or bool(live)
     mine = brokers_for((await PrefsStore(db).get(user_id)).get("broker_roles") or {}, "mine")
@@ -112,15 +109,15 @@ async def pulse(db, user_id: str, now: Optional[datetime] = None) -> Optional[di
     # Only from the latest trading day's review: a failing review must not
     # replay the same "HOLD -> SELL" in Do today and every evening message.
     from backend.core.market_calendar import previous_trading_day
-    reviewed = _aware(snapshot["at"]).astimezone(IST).date() >= previous_trading_day(now.astimezone(IST).date())
+    reviewed = aware(snapshot["at"]).astimezone(IST).date() >= previous_trading_day(now.astimezone(IST).date())
     if reviewed and await verdicts_visible(db, user_id):
         changes = [{"symbol": r["symbol"], "from": r["previous_verdict"], "to": r["verdict"],
                     "reasons": r.get("reason_codes") or []}
                    for r in card["holdings"] if r.get("previous_verdict") and r.get("verdict")
                    and r["verdict"] != r["previous_verdict"]]
     return {
-        "as_of": now if priced else _aware(snapshot["at"]),
-        "holdings_as_of": _aware(snapshot["at"]) if rest else now,
+        "as_of": now if priced else aware(snapshot["at"]),
+        "holdings_as_of": aware(snapshot["at"]) if rest else now,
         "value": round(totals["value"] or 0, 2), "invested": round(totals["invested"] or 0, 2),
         "pnl": round(totals["pnl"] or 0, 2), "pnl_pct": totals["pnl_pct"],
         "day_change": round(totals["day_change"] or 0, 2),
@@ -188,7 +185,7 @@ async def pnl_since(db, user_id: str, roles: dict, since: datetime, picks_only: 
               if (not mine_brokers or t.get("broker") in mine_brokers)
               and instrument_kind(t["symbol"], t.get("exchange")) == "STOCK"]
     closed = [t for t in build_round_trips(trades)
-              if t.get("pnl") is not None and (_aware(t.get("closed_at")) or since) >= since]
+              if t.get("pnl") is not None and (aware(t.get("closed_at")) or since) >= since]
     ids = {i for trip in closed for i in trip["trade_ids"]}
     mine_charges = mirror.costs([t for t in trades if t["_id"] in ids], closed, 0)["charges"]
     mine = sum(t["pnl"] for t in closed) - mine_charges
@@ -197,7 +194,7 @@ async def pnl_since(db, user_id: str, roles: dict, since: datetime, picks_only: 
     if picks_only:
         query = {"$and": [query, {"strategy": {"$regex": "^picks:"}}]}
     async for t in db["paper_trades"].find(query):
-        if t.get("status") == "CLOSED" and (_aware(t.get("exit_at")) or since) >= since:
+        if t.get("status") == "CLOSED" and (aware(t.get("exit_at")) or since) >= since:
             ai += t.get("realized_pnl") or 0.0
             ai_charges += t.get("costs") or 0.0
     return {"mine": round(mine, 2), "mine_charges": round(mine_charges, 2),
@@ -219,7 +216,7 @@ async def scoreboard(db, user_id: str, roles: dict, now: datetime) -> dict:
     from backend.autopilot.service import ai_book_query
 
     first = await db["paper_trades"].find_one(ai_book_query(user_id), {"entry_at": 1}, sort=[("entry_at", 1)])
-    began = _aware((first or {}).get("entry_at"))
+    began = aware((first or {}).get("entry_at"))
     return {"today": await pnl_since(db, user_id, roles, day_start(now)),
             "month": await pnl_since(db, user_id, roles, month_start(now)),
             # The window the NIFTY figure beside it uses: a month of closed trades against months of NIFTY compares nothing.

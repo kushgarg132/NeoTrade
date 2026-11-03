@@ -4,10 +4,11 @@ the page shows the dict and Telegram sends `text()` of the same dict."""
 
 import logging
 import re
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 from html import escape
 from typing import Optional
 
+from backend.core.clock import aware
 from backend.engine.session import IST
 
 logger = logging.getLogger(__name__)
@@ -40,12 +41,8 @@ def _bounds(monday: date) -> tuple[datetime, datetime]:
     return start, start + timedelta(days=7)
 
 
-def _aware(dt: Optional[datetime]) -> Optional[datetime]:
-    return dt if dt is None or dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-
-
 def _in(dt, start, end) -> bool:
-    dt = _aware(dt)
+    dt = aware(dt)
     return dt is not None and start <= dt < end
 
 
@@ -110,7 +107,7 @@ async def _ai(db, user_id: str, capital: float, start, end) -> dict:
                          for k, v in by.items()), key=lambda r: r["net"])
     vs = None
     if closed:
-        since = min((_aware(t["entry_at"]).astimezone(IST).date() for t in closed if t.get("entry_at")), default=start.date()) - timedelta(days=7)
+        since = min((aware(t["entry_at"]).astimezone(IST).date() for t in closed if t.get("entry_at")), default=start.date()) - timedelta(days=7)
         points = [{"date": d.isoformat(), "close": c} for d, c in await bars.nifty_closes(db, since)]
         vs = round(pnl - sum(nifty_same_money(closed, points).values()), 2) if points else None
     return {"ret": pnl / capital if capital else None, "strategies": strategies, "vs_nifty": vs}
@@ -135,13 +132,13 @@ async def _ideas(db, user_id: str, start, end) -> dict:
     the suggestion (same symbol, same IST day)."""
     status = {}
     async for s in db["suggestions"].find({"user_id": user_id, "created_at": {"$gte": start - timedelta(days=1), "$lt": end}}):
-        status[(s["symbol"], _aware(s["created_at"]).astimezone(IST).date())] = s["status"]
+        status[(s["symbol"], aware(s["created_at"]).astimezone(IST).date())] = s["status"]
     groups = {"taken": [], "skipped": []}
     async for r in db["forward_records"].find({"user_id": user_id, "source": {"$in": ["suggestion", "news"]},
                                                "outcome.excess": {"$exists": True}}):
         if not _in(r["decided_at"], start, end):
             continue
-        st = status.get((r["symbol"], _aware(r["decided_at"]).astimezone(IST).date()))
+        st = status.get((r["symbol"], aware(r["decided_at"]).astimezone(IST).date()))
         key = "taken" if st in TAKEN else "skipped" if st in SKIPPED else None
         if key:
             groups[key].append(r["outcome"]["excess"])

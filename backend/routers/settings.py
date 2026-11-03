@@ -12,7 +12,6 @@ import asyncio
 import logging
 import time
 from datetime import date, datetime, timezone
-from zoneinfo import ZoneInfo
 from typing import Literal, Optional
 
 import httpx
@@ -31,6 +30,7 @@ from backend.auth.models import User
 from backend.brokers.registry import BROKERS
 from backend.configs.settings import settings
 from backend.database import db
+from backend.engine.session import IST
 from backend.prefs import SETUP_STEP_IDS, PrefsStore
 
 router = APIRouter()
@@ -59,9 +59,6 @@ class RebalanceTargets(BaseModel):
         if sum(value.values()) > 100:
             raise ValueError("overrides add up to more than 100%")
         return value
-
-
-IST = ZoneInfo("Asia/Kolkata")
 
 
 class GoalIn(BaseModel):
@@ -262,7 +259,6 @@ async def _check_caps(user: User, horizon: str = "intraday") -> None:
 
 async def _spend_slot(user: User) -> bool:
     """One of today's three IST slots (`allow` increments, so call it only once the work is stored)."""
-    from backend.engine.session import IST
     from backend.rate_limit import allow
 
     day = datetime.now(IST).date().isoformat()

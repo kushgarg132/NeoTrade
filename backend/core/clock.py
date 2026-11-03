@@ -8,7 +8,12 @@ trading.
 
 import time
 from datetime import datetime, timezone
-from typing import Protocol
+from typing import Optional, Protocol
+
+
+def aware(value: Optional[datetime]) -> Optional[datetime]:
+    """A stored datetime with its timezone: Mongo and mongomock hand UTC back naive."""
+    return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 class Clock(Protocol):

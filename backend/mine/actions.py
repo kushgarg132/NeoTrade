@@ -6,6 +6,7 @@ stays dismissed until something new happens. Nothing here places an order."""
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
+from backend.core.clock import aware
 from backend.engine.session import IST
 
 RANK = {"stop_hit": 10, "idea_exit": 15, "target_hit": 20, "verdict_worse": 30, "bad_news": 40, "idea": 45,
@@ -18,10 +19,6 @@ LTCG_DAYS = 30
 SNOOZE_DAYS = 7
 ALERT_TTL = 30 * 86_400  # seconds a stop/target alert is not repeated
 PENDING_IDEAS = {"status": "PENDING", "mode": "LONGTERM"}  # what Decisions lists
-
-
-def _aware(value: Optional[datetime]) -> Optional[datetime]:
-    return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def _action(kind: str, symbol: str, key, title: str, detail: str, at: datetime, action: dict) -> dict:
@@ -65,7 +62,7 @@ async def _marks(db, symbols) -> dict[str, float]:
 
 async def _hidden(db, user_id: str, now: datetime) -> set[str]:
     return {d["action_id"] async for d in db[STATE].find({"user_id": user_id})
-            if d["state"] == "dismissed" or (_aware(d.get("until")) or now) > now}
+            if d["state"] == "dismissed" or (aware(d.get("until")) or now) > now}
 
 
 async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[dict]:
@@ -92,11 +89,11 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
         s = t["symbol"]
         out.append(_action("idea_exit", s, f"{t.get('id') or t['_id']}:{t['alerted'][-1]}",
                            f"Sell {s}? Its {t['alerted'][-1]} was hit",
-                           "The idea's own exit rule. You place the sell.", _aware(t.get("entry_at")) or now,
+                           "The idea's own exit rule. You place the sell.", aware(t.get("entry_at")) or now,
                            {"type": "ticket", "side": "SELL", "quantity": t.get("quantity"), "price": marks.get(s)}))
 
     snapshot = await latest_snapshot(db, user_id) or {}
-    snap_at = _aware(snapshot.get("at")) or now
+    snap_at = aware(snapshot.get("at")) or now
     rows = snapshot.get("holdings") or []
     for r in rows:
         s = r["symbol"]
@@ -132,7 +129,7 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
         conviction = (i.get("score") or {}).get("final")
         out.append(_action("idea", i["symbol"], i["id"], f"{i.get('side', '')} {i.get('quantity') or 0:g} {i['symbol']}",
                            "Proven idea" + (f" · conviction {conviction:.2f}" if conviction is not None else ""),
-                           _aware(i.get("created_at")) or now, {"type": "idea", "suggestion_id": i["id"]}))
+                           aware(i.get("created_at")) or now, {"type": "idea", "suggestion_id": i["id"]}))
 
     for s, t in theses.items():
         if s in held and t.get("review_by") and t["review_by"] <= day:
@@ -172,7 +169,7 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
 
     hidden = await _hidden(db, user_id, now)
     out = [a for a in out if a["id"] not in hidden and (show_verdicts or a["kind"] not in VERDICT_KINDS)]
-    out.sort(key=lambda a: (a["rank"], -_aware(a["at"]).timestamp()))
+    out.sort(key=lambda a: (a["rank"], -aware(a["at"]).timestamp()))
     return out
 
 
@@ -202,10 +199,10 @@ async def handled(db, user_id: str, now: datetime) -> list[dict]:
     in the list, so it is left out. Rows hidden before `at` was stored sort last."""
     out = []
     async for d in db[STATE].find({"user_id": user_id}, {"_id": 0, "user_id": 0}):
-        until = _aware(d.get("until"))
+        until = aware(d.get("until"))
         if d["state"] == "snoozed" and (until is None or until <= now):
             continue
-        out.append({**d, "until": until, "at": _aware(d.get("at"))})
+        out.append({**d, "until": until, "at": aware(d.get("at"))})
     out.sort(key=lambda d: d["at"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     return out[:HANDLED_LIMIT]
 
