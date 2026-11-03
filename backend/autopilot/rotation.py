@@ -152,7 +152,7 @@ async def target(db, redis, user_id: str, now: datetime, load=None) -> dict:
     ranked = model.scores(closes, t, ROTATION)
     nifty = market.dropna()
     doc = {"_id": key, "user_id": user_id, "week": week_of(today), "decided_on": str(t.date()),
-           "weights": {s: round(float(w), 4) for s, w in weights.items()}, "exposure": round(float(level), 3),
+           "weights": {s: round(float(w), 4) for s, w in weights.items() if w > 0}, "exposure": round(float(level), 3),
            "breadth": round(model.breadth(closes, t), 3),
            "nifty_vs_200dma": round(float(nifty.iloc[-1] / nifty.iloc[-ROTATION.trend_days:].mean() - 1), 4),
            "ranks": [{"symbol": s, "score": round(float(v), 3)} for s, v in ranked.head(15).items()],

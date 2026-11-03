@@ -130,6 +130,25 @@ async def test_risk_off_holds_cash_and_autopilot_off_buys_nothing(world):
     assert await rotation.rebalance(db, FakeRedis(), "alice", nxt, load=lambda: frame["closes"], buy=False) == []
 
 
+async def test_risk_off_targets_nothing_and_sells_every_holding(world):
+    db, frame = world
+    await _prefs(db)
+    await rotation.rebalance(db, FakeRedis(), "alice", MONDAY, load=lambda: frame["closes"])
+    assert len(await _open(db)) == 8
+
+    frame["closes"] = _closes(market_down=True)
+    nxt = MONDAY.replace(day=16)
+    load = lambda: frame["closes"]
+    doc = await rotation.target(db, FakeRedis(), "alice", nxt, load=load)
+    assert doc["weights"] == {} and doc["exposure"] == 0  # top ranks at weight 0 were read as "hold" and "buy"
+    p = await rotation.plan(db, FakeRedis(), "alice", nxt, load=load, bench=BENCH)
+    assert p["buys"] == [] and [s["why"] for s in p["sells"]] == ["risk_off"] * 8
+    assert not any(line.startswith("Buy ") for line in rotation.plan_text(p))
+    results = await rotation.rebalance(db, FakeRedis(), "alice", nxt, load=load)
+    assert [r["status"] for r in results] == ["FILLED"] * 8
+    assert await _open(db) == {}
+
+
 async def test_daily_plan_lists_buys_holdings_and_next_rebalance(world):
     db, frame = world
     await _prefs(db)
