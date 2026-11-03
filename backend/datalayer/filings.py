@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 from datetime import datetime, time, timedelta, timezone
+from time import monotonic
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -21,8 +22,8 @@ import pandas as pd
 import requests
 from pydantic import BaseModel
 
-from backend.core.market_calendar import is_trading_day, next_trading_day
-from backend.datalayer import accuracy, bars, news, news_sources
+from backend.core.market_calendar import is_trading_day, next_trading_day, previous_trading_day
+from backend.datalayer import accuracy, news, news_sources
 from backend.engine.autorun import in_session
 from backend.engine.session import IST
 from backend.lab.assumptions import round_trip_return
@@ -42,11 +43,12 @@ COLLECTION = "filing_scores"  # ponytail: no indexes, about 30 rows a day; add (
 PER_PASS, DAILY_CALLS, MAX_ATTEMPTS = 5, 120, 3
 LATE_AFTER = timedelta(minutes=30)
 WINDOW = (time(9, 15), time(14, 15))  # an entry after 2:15 PM cannot complete its hour before the 3:15 PM square-off
-BACKOFF_SECONDS, RECONCILE_SECONDS = 300, 300
+BACKOFF_SECONDS, RECONCILE_SECONDS, LLM_BACKOFF_SECONDS = 300, 300, 60
+OUTAGE_GIVE_UP = timedelta(hours=1)
 STALL_MINUTES, STALL_ALERT_SECONDS = 20, 3600
 OPEN, SQUARE_OFF, BARS_READY = time(9, 15), time(15, 15), time(15, 45)
 BENCH = "^NSEI"
-HOLD, SHORT_HOLD = timedelta(hours=1), timedelta(minutes=15)
+HOLD, SHORT_HOLD, MINUTE = timedelta(hours=1), timedelta(minutes=15), timedelta(minutes=1)
 BAR_TOLERANCE = timedelta(minutes=5)  # a thin stock may skip a minute; further than this is no price at all
 MEASURE_DAYS = 6  # Yahoo keeps 1-minute bars about 7 days
 # The pass bar, fixed before any data (spec, "The pass bar"). Do not tune it to the results.
@@ -90,13 +92,14 @@ def read_pdf(data: bytes) -> str:
 
 def _download(url: str) -> bytes | None:
     """The body, or None past the size cap."""
-    response = requests.get(url, headers=news_sources.UA, timeout=DOWNLOAD_SECONDS, stream=True)
+    deadline = monotonic() + DOWNLOAD_SECONDS  # `timeout` is per read: a server dripping bytes would never end
+    response = requests.get(url, headers=news_sources.UA, timeout=DOWNLOAD_SECONDS, stream=True, allow_redirects=False)
     try:
         response.raise_for_status()
         body = bytearray()
         for chunk in response.iter_content(64 * 1024):
             body += chunk
-            if len(body) > MAX_BYTES:
+            if len(body) > MAX_BYTES or monotonic() > deadline:
                 return None
         return bytes(body)
     finally:
@@ -134,11 +137,11 @@ def _squeezed(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip().lower()
 
 
-async def score_filing(db, doc: dict, ltp: Optional[float], company: str):
+async def score_filing(db, doc: dict, ltp: Optional[float], company: str, complete=_standard):
     """The score, OUTAGE when the model is down, None after two invalid answers. A `key_fact` that is
     not in the filing clears the signal: the model described a document it did not read."""
     notes = await news.price_notes(db, [doc], lambda _doc, _symbol: ltp)
-    result = await news._ask("score_filing", _standard, _FilingScore, symbol=doc["symbols"][0], company=company,
+    result = await news._ask("score_filing", complete, _FilingScore, symbol=doc["symbols"][0], company=company,
                              title=doc["title"], price=notes.get(doc["_id"], "not available"), text=doc.get("text") or "")
     if result is OUTAGE or result is None:
         return result
@@ -175,14 +178,24 @@ async def _fetch_rows(url: str) -> list[dict]:
     return rows if isinstance(rows, list) else []
 
 
+def _dated(row: dict) -> bool:
+    """`parse_nse` dates a row with no exchange time as now, and the id hashes that date: without
+    this every poll would store it as a new filing."""
+    try:
+        datetime.strptime(row.get("sort_date") or "", "%Y-%m-%d %H:%M:%S")
+        return True
+    except ValueError:
+        return False
+
+
 async def _claim(db, rows: list[dict], names: dict, now: datetime) -> int:
     """Stores filings not seen before; returns how many were new. The id makes a restart harmless."""
     fresh = 0
-    for item in news_sources.parse_nse(rows, set(names)):
+    for item in news_sources.parse_nse(list(filter(_dated, rows)), set(names)):
         result = await db[COLLECTION].update_one({"_id": filing_id(item)}, {"$setOnInsert": {
             "symbol": item["symbols"][0], "symbols": item["symbols"], "title": item["title"], "url": item["url"],
             "feed_text": item["content"], "published_at": item["published_at"], "seen_at": now,
-            "status": "new", "attempts": 0}}, upsert=True)
+            "status": "new", "attempts": 0, "outages": 0}}, upsert=True)
         fresh += result.upserted_id is not None
     return fresh
 
@@ -207,25 +220,44 @@ async def _poll_feed(db, redis, names: dict, now: datetime) -> None:
         await redis.set("filings:backoff", "1", ex=BACKOFF_SECONDS)
 
 
-async def _process(db, redis, doc: dict, company: str, now: datetime) -> bool:
+async def _failed_attempt(db, doc: dict) -> None:
+    attempts = doc["attempts"] + 1
+    await db[COLLECTION].update_one({"_id": doc["_id"]}, {"$set": {
+        "attempts": attempts, **({"status": "failed"} if attempts >= MAX_ATTEMPTS else {})}})
+
+
+async def _process(db, redis, doc: dict, company: str, now: datetime, began: float) -> bool:
     """One filing. False when the model is down, so the pass stops and nothing is held against the filing."""
-    text, pdf_ok = await fetch_text(doc.get("url") or "")
-    text = text if pdf_ok else doc.get("feed_text") or ""
+    coll = db[COLLECTION]
+    if "pdf_ok" in doc:  # read on an earlier try
+        text, pdf_ok = doc["text"], doc["pdf_ok"]
+    else:
+        text, pdf_ok = await fetch_text(doc.get("url") or "")
+        text = text if pdf_ok else doc.get("feed_text") or ""
+        await coll.update_one({"_id": doc["_id"]}, {"$set": {"text": text, "pdf_ok": pdf_ok}})
+
+    async def counted(system: str, user: str) -> str:
+        key = f"filings:calls:{_ist_day(now)}"
+        await redis.incrby(key, 1)
+        await redis.expire(key, 2 * 86_400)
+        return await _standard(system, user)
+
     raw = await redis.get(QUOTE_KEY.format(doc["symbol"]))
     ltp = json.loads(raw).get("ltp") if raw else None
-    score = await score_filing(db, {**doc, "text": text}, ltp, company)
+    score = await score_filing(db, {**doc, "text": text}, ltp, company, complete=counted)
     if score is OUTAGE:
+        await coll.update_one({"_id": doc["_id"]}, {"$inc": {"outages": 1}})  # behind the others, so a refused filing blocks none
+        await redis.set("filings:llm_backoff", "1", ex=LLM_BACKOFF_SECONDS)
         return False
-    day, coll = _ist_day(now), db[COLLECTION]
     if score is None:
-        attempts = doc["attempts"] + 1
-        await coll.update_one({"_id": doc["_id"]}, {"$set": {
-            "attempts": attempts, "attempted_on": day, **({"status": "failed"} if attempts >= MAX_ATTEMPTS else {})}})
+        await _failed_attempt(db, doc)
         return True
+    # The signal exists only now: an entry from the start of the pass would precede it.
+    done = now + timedelta(seconds=monotonic() - began)
     await coll.update_one({"_id": doc["_id"]}, {"$set": {
-        "status": "scored", "pdf_ok": pdf_ok, "text": text, "score": score, "model": await model_for("standard"),
-        "prompt": prompt_id("score_filing"), "scored_at": now, "attempted_on": day,
-        "late": now - _aware(doc["published_at"]) > LATE_AFTER, "in_window": in_window(now)}})
+        "status": "scored", "score": score, "model": await model_for("standard"),
+        "prompt": prompt_id("score_filing"), "scored_at": done,
+        "late": done - _aware(doc["published_at"]) > LATE_AFTER, "in_window": in_window(done)}})
     return True
 
 
@@ -246,15 +278,25 @@ async def poll_loop(db, redis, now: Optional[datetime] = None) -> None:
     """Every 20 seconds on the ingest leader: claim new filings, then read and score a few, oldest first."""
     from backend.app_settings import feature_enabled
 
-    now = now or datetime.now(timezone.utc)
+    now, began = now or datetime.now(timezone.utc), monotonic()
     names, _ = await news.followed(db)
     await _poll_feed(db, redis, names, now)
-    if await feature_enabled("news", db):
-        room = DAILY_CALLS - await db[COLLECTION].count_documents({"attempted_on": _ist_day(now)})
-        docs = await db[COLLECTION].find({"status": "new"}).sort("published_at", 1).limit(max(0, min(PER_PASS, room))).to_list(length=None) if room > 0 else []
+    coll = db[COLLECTION]
+    # A filing the provider keeps refusing is past 30 minutes by then, so it could not count anyway.
+    await coll.update_many({"status": "new", "outages": {"$gte": 1}, "seen_at": {"$lte": now - OUTAGE_GIVE_UP}},
+                           {"$set": {"status": "failed"}})
+    if await feature_enabled("news", db) and not await redis.get("filings:llm_backoff"):
+        docs = await coll.find({"status": "new"}).sort([("outages", 1), ("published_at", 1)]).limit(PER_PASS).to_list(length=None)
         for doc in docs:
-            if not await _process(db, redis, doc, names.get(doc["symbol"], doc["symbol"]), now):
+            # A filing may take two calls: its answer and one retry.
+            if int(await redis.get(f"filings:calls:{_ist_day(now)}") or 0) + 2 > DAILY_CALLS:
                 break
+            try:
+                if not await _process(db, redis, doc, names.get(doc["symbol"], doc["symbol"]), now, began):
+                    break
+            except Exception as exc:
+                logger.warning("filing %s failed: %s", doc["_id"], exc)
+                await _failed_attempt(db, doc)
     await _stall_alert(db, redis, now)
 
 
@@ -276,12 +318,26 @@ def _entry_price(frame: pd.DataFrame, at: pd.Timestamp) -> Optional[float]:
 
 
 def _close_at(frame: pd.DataFrame, at: pd.Timestamp) -> Optional[float]:
-    window = frame.loc[at - BAR_TOLERANCE:at, "close"].dropna()
+    """The last price before minute `at`: the bar labelled 10:40 closes at 10:41."""
+    window = frame.loc[at - BAR_TOLERANCE - MINUTE:at - MINUTE, "close"].dropna()
     return float(window.iloc[-1]) if len(window) else None
 
 
-def measure_row(row: dict, stock: pd.DataFrame, nifty: pd.DataFrame, prev_close: Optional[float],
-                nifty_prev: Optional[float]) -> Optional[dict]:
+def _prev_close(frame: pd.DataFrame, day) -> Optional[float]:
+    """The previous session's last price, from the same raw bars as the entry, so the two share a basis.
+    ponytail: on an ex-dividend day the drop reads as a move; rare, and small against the 1% test."""
+    closes = frame.loc[frame.index.date == previous_trading_day(day), "close"]
+    return float(closes.iloc[-1]) if len(closes) else None
+
+
+def _moved_by(frame: pd.DataFrame, at: pd.Timestamp) -> Optional[float]:
+    """The move since the last close, as a trader could see it before entering; at the open, the gap."""
+    prev = _prev_close(frame, at.date())
+    now_price = _entry_price(frame, at) if at.time() == OPEN else _close_at(frame, at)
+    return now_price / prev - 1 if prev and now_price else None
+
+
+def measure_row(row: dict, stock: pd.DataFrame, nifty: pd.DataFrame) -> Optional[dict]:
     """Prices at entry and each horizon, the move before entry net of Nifty, and the hypothetical
     1-hour trade after charges. None when there is no entry price: unmeasured, never flat."""
     at = entry_time(row["scored_at"])
@@ -289,10 +345,8 @@ def measure_row(row: dict, stock: pd.DataFrame, nifty: pd.DataFrame, prev_close:
     if entry is None:
         return None
     square_off = pd.Timestamp.combine(at.date(), SQUARE_OFF)
-    bench = _entry_price(nifty, at)
-    moved = None
-    if prev_close and nifty_prev and bench:
-        moved = entry / prev_close - 1 - (bench / nifty_prev - 1)
+    own, bench = _moved_by(stock, at), _moved_by(nifty, at)
+    moved = own - bench if own is not None and bench is not None else None
     px_1h = _close_at(stock, at + HOLD) if at + HOLD <= square_off else None
     direction = (row.get("score") or {}).get("direction") or 0
     net = None
@@ -336,19 +390,14 @@ async def measure_loop(db, redis, now: Optional[datetime] = None) -> None:
     if not due:
         return
     frames = await _minute_bars(sorted({row["symbol"] for row, _ in due}))
-    closes: dict = {}
     for row, at in due:
-        day = at.date()
-        if day not in closes:
-            closes[day] = await bars.prev_closes(db, [*{r["symbol"] for r, _ in due}, BENCH], day)
         stock, nifty = frames.get(row["symbol"]), frames.get(BENCH)
-        fields = None
-        if stock is not None and nifty is not None:
-            fields = measure_row(row, stock, nifty, closes[day].get(row["symbol"]), closes[day].get(BENCH))
-        if fields:
-            await db[COLLECTION].update_one({"_id": row["_id"]}, {"$set": {**fields, "measured": True}})
-        elif local - at > pd.Timedelta(days=MEASURE_DAYS):
-            await db[COLLECTION].update_one({"_id": row["_id"]}, {"$set": {"measured": False}})
+        fields = measure_row(row, stock, nifty) if stock is not None and nifty is not None else None
+        hour_possible = at + HOLD <= pd.Timestamp.combine(at.date(), SQUARE_OFF)
+        complete = bool(fields) and fields["moved_net"] is not None and (fields["px_1h"] is not None or not hour_possible)
+        expired = local - at > pd.Timedelta(days=MEASURE_DAYS)
+        if complete or expired:  # partial bars are read again while Yahoo still has them
+            await db[COLLECTION].update_one({"_id": row["_id"]}, {"$set": {**(fields or {}), "measured": complete}})
 
 
 def _usable(row: dict) -> bool:

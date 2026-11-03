@@ -147,3 +147,11 @@ def test_the_company_scan_gate_does_not_read_days():
                 "n": n, "hit": hit, "thin": True, "days": 3}
 
     assert accuracy.company_scan_ok({"cells": [cell("move", 400, 0.55)]}) is True
+
+
+def test_trust_line_states_a_measured_rate_even_under_20_days():
+    cell = {"group": "theme", "scope": "COMPANY", "key": "all", "impact": "all", "horizon": "5d", "measure": "move",
+            "hit": 0.45, "n": 300, "days": 15, "thin": True}
+    assert "45% of 300" in accuracy.trust_line({"cells": [cell]})
+    assert "unknown" in accuracy.trust_line({"cells": [{**cell, "n": 20}]})
+

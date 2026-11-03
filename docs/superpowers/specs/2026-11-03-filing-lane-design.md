@@ -106,7 +106,7 @@ with no bars by then ends unmeasured, with no figure.
 
 The entry is the open of the first full minute after scoring, so nothing is known that a trader
 could not have known. It stores the price at +15 minutes, +1 hour and the 3:15 PM square-off, and
-the move before entry net of Nifty, from the last daily close.
+the move before entry net of Nifty, as a trader could see it: the last price before the entry minute against the previous session's last 1-minute close. Times are taken after the model answers.
 
 Each row stores a hypothetical trade: the signed return after `MIS` charges and slippage through
 `lab/assumptions.py::round_trip_return(product="MIS")`, so the charge rules exist in one place.

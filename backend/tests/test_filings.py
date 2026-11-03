@@ -171,6 +171,7 @@ from unittest.mock import AsyncMock  # noqa: E402
 from backend.tests.test_datalayer_news import FakeRedis  # noqa: E402
 
 NOW = datetime(2026, 11, 3, 5, 10, tzinfo=timezone.utc)  # 10:40 AM IST
+SCORE_FILING = filings.score_filing
 ROW = {"symbol": "TCS", "desc": "Order", "sm_name": "TCS Ltd", "sort_date": "2026-11-03 10:30:00",
        "attchmntFile": URL, "attchmntText": "TCS Ltd has informed the Exchange regarding an order"}
 LONG_TEXT = "The company has received an order worth Rs 500 crore from a customer. " * 3
@@ -193,7 +194,7 @@ async def test_new_filing_is_read_scored_and_stamped(lane):
     doc = await lane["filing_scores"].find_one()
     assert doc["status"] == "scored" and doc["symbol"] == "TCS" and doc["pdf_ok"] is True
     assert doc["score"]["direction"] == 0.7 and doc["text"].startswith("The company") and doc["model"]
-    assert doc["prompt"].startswith("score_filing@") and doc["scored_at"].replace(tzinfo=timezone.utc) == NOW
+    assert doc["prompt"].startswith("score_filing@") and NOW <= doc["scored_at"].replace(tzinfo=timezone.utc) < NOW + timedelta(seconds=30)
     assert doc["late"] is False and doc["in_window"] is True
 
 
@@ -246,9 +247,9 @@ async def test_three_invalid_answers_mark_failed(lane):
 
 
 async def test_daily_cap_stops_at_the_limit(lane):
-    day = filings._ist_day(NOW)
-    await lane["filing_scores"].insert_many([{"status": "scored", "attempted_on": day} for _ in range(filings.DAILY_CALLS)])
-    await filings.poll_loop(lane, FakeRedis(), now=NOW)
+    redis = FakeRedis()
+    await redis.set(f"filings:calls:{filings._ist_day(NOW)}", str(filings.DAILY_CALLS - 1))  # a filing may take two
+    await filings.poll_loop(lane, redis, now=NOW)
     assert filings.score_filing.await_count == 0
 
 
@@ -304,6 +305,12 @@ def _bars(day="2026-11-03", start=100.0, step=0.1):
     return pd.DataFrame({"open": opens, "close": [o + step for o in opens]}, index=index)
 
 
+def _with_prev(frame, close=100.0, day="2026-11-02"):
+    """`frame` with the previous session's last bar before it."""
+    prev = pd.DataFrame({"open": [close], "close": [close]}, index=[pd.Timestamp(f"{day} 15:29")])
+    return pd.concat([prev, frame])
+
+
 def _row(**over):
     return {"symbol": "TCS", "scored_at": NOW, "score": {"direction": 0.7}, **over}  # NOW = 10:40 AM IST
 
@@ -324,50 +331,62 @@ def test_in_window_edges():  # Review Focus 4
     assert not filings.in_window(ist(10, 0, day=7))  # Saturday
 
 
-def test_moved_net_is_the_stocks_move_minus_niftys():
-    stock, nifty = _bars(), _bars(start=200.0, step=0.0)
-    out = filings.measure_row(_row(), stock, nifty, prev_close=100.0, nifty_prev=196.0)
-    entry = float(stock.loc["2026-11-03 10:41", "open"])
-    assert out["px_entry"] == entry
-    assert out["moved_net"] == pytest.approx(entry / 100.0 - 1 - (200.0 / 196.0 - 1))
+def test_moved_net_is_known_before_entry_and_net_of_nifty():
+    stock, nifty = _with_prev(_bars()), _with_prev(_bars(start=200.0, step=0.0), close=196.0)
+    out = filings.measure_row(_row(), stock, nifty)
+    assert out["px_entry"] == float(stock.loc["2026-11-03 10:41", "open"])
+    before = float(stock.loc["2026-11-03 10:40", "close"])  # the last price a trader could see
+    assert out["moved_net"] == pytest.approx(before / 100.0 - 1 - (200.0 / 196.0 - 1))
 
 
-def test_prices_are_taken_at_each_horizon_and_the_square_off():
-    stock = _bars()
-    out = filings.measure_row(_row(), stock, _bars(step=0.0), 100.0, 100.0)
-    assert out["px_15m"] == float(stock.loc["2026-11-03 10:56", "close"])
-    assert out["px_1h"] == float(stock.loc["2026-11-03 11:41", "close"])
-    assert out["px_close"] == float(stock.loc["2026-11-03 15:15", "close"])
+def test_an_open_entry_reads_the_gap_as_the_move():
+    evening = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+    stock = _with_prev(_bars(start=103.0))
+    out = filings.measure_row(_row(scored_at=evening), stock, _with_prev(_bars(step=0.0)))
+    assert out["entry_at"] == "2026-11-03T09:15:00" and out["moved_net"] == pytest.approx(0.03)
+
+
+def test_the_previous_close_must_be_the_previous_session():
+    old = _with_prev(_bars(), day="2026-10-30")  # Friday's close on a Tuesday: a session is missing
+    assert filings.measure_row(_row(), old, _with_prev(_bars(step=0.0)))["moved_net"] is None
+
+
+def test_each_horizon_is_exact_and_the_exit_is_not_past_the_square_off():
+    stock = _with_prev(_bars())
+    out = filings.measure_row(_row(), stock, _with_prev(_bars(step=0.0)))
+    assert out["px_15m"] == float(stock.loc["2026-11-03 10:55", "close"])
+    assert out["px_1h"] == float(stock.loc["2026-11-03 11:40", "close"])  # 10:41 to 11:41 is exactly an hour
+    assert out["px_close"] == float(stock.loc["2026-11-03 15:14", "close"])  # closes at 15:15
 
 
 def test_net_1h_uses_mis_charges_on_both_sides():
-    stock = _bars()
-    long_side = filings.measure_row(_row(), stock, _bars(step=0.0), 100.0, 100.0)
+    stock, nifty = _with_prev(_bars()), _with_prev(_bars(step=0.0))
+    long_side = filings.measure_row(_row(), stock, nifty)
     assert long_side["net_1h"] == round_trip_return(long_side["px_entry"], long_side["px_1h"], product="MIS")
-    short = filings.measure_row(_row(score={"direction": -0.7}), stock, _bars(step=0.0), 100.0, 100.0)
+    short = filings.measure_row(_row(score={"direction": -0.7}), stock, nifty)
     assert short["net_1h"] == round_trip_return(short["px_1h"], short["px_entry"], product="MIS")
 
 
 def test_a_late_entry_has_no_hour_and_no_trade():
     late = datetime(2026, 11, 3, 9, 10, tzinfo=timezone.utc)  # 2:40 PM IST
-    out = filings.measure_row(_row(scored_at=late), _bars(), _bars(step=0.0), 100.0, 100.0)
+    out = filings.measure_row(_row(scored_at=late), _with_prev(_bars()), _with_prev(_bars(step=0.0)))
     assert out["px_1h"] is None and out["net_1h"] is None and out["px_15m"] is not None
 
 
 def test_a_gap_at_entry_is_unmeasured_not_zero():
-    stock = _bars().drop(pd.date_range("2026-11-03 10:30", "2026-11-03 11:00", freq="1min"))
-    assert filings.measure_row(_row(), stock, _bars(step=0.0), 100.0, 100.0) is None
+    stock = _with_prev(_bars()).drop(pd.date_range("2026-11-03 10:30", "2026-11-03 11:00", freq="1min"))
+    assert filings.measure_row(_row(), stock, _with_prev(_bars(step=0.0))) is None
 
 
 def test_no_close_before_means_no_moved_figure_only():
-    out = filings.measure_row(_row(), _bars(), _bars(step=0.0), None, 100.0)
+    out = filings.measure_row(_row(), _bars(), _with_prev(_bars(step=0.0)))
     assert out["moved_net"] is None and out["net_1h"] is not None
 
 
 @pytest.fixture
 def scored(db, monkeypatch):
-    monkeypatch.setattr(filings, "_minute_bars", AsyncMock(return_value={"TCS": _bars(), "^NSEI": _bars(step=0.0)}))
-    monkeypatch.setattr(filings.bars, "prev_closes", AsyncMock(return_value={"TCS": 100.0, "^NSEI": 100.0}))
+    monkeypatch.setattr(filings, "_minute_bars", AsyncMock(
+        return_value={"TCS": _with_prev(_bars()), "^NSEI": _with_prev(_bars(step=0.0))}))
     return db
 
 
@@ -519,3 +538,121 @@ def test_a_crash_or_hang_while_parsing_reads_as_no_text(monkeypatch):
     monkeypatch.setattr(filings, "_PARSER", "import time; time.sleep(30)")
     monkeypatch.setattr(filings, "PARSE_SECONDS", 0.2)
     assert filings.read_pdf(_pdf("x")) == ""
+
+
+# ---- Final review's fix pass
+
+async def test_times_are_taken_after_the_model_answers(lane, monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(filings, "monotonic", lambda: clock[0])
+
+    async def slow(*a, **k):
+        clock[0] += 95  # the model takes 95 seconds
+        return {**SCORE, "key_fact_ok": True}
+
+    monkeypatch.setattr(filings, "score_filing", slow)
+    await filings.poll_loop(lane, FakeRedis(), now=NOW)
+    doc = await lane["filing_scores"].find_one()
+    assert doc["scored_at"].replace(tzinfo=timezone.utc) == NOW + timedelta(seconds=95)
+
+
+async def test_a_filing_finished_past_the_window_or_the_30_minutes_does_not_count(lane, monkeypatch):
+    clock = [0.0]
+    monkeypatch.setattr(filings, "monotonic", lambda: clock[0])
+
+    async def slow(*a, **k):
+        clock[0] += 120
+        return {**SCORE, "key_fact_ok": True}
+
+    monkeypatch.setattr(filings, "score_filing", slow)
+    await filings.poll_loop(lane, FakeRedis(), now=datetime(2026, 11, 3, 5, 29, tzinfo=timezone.utc))  # 29 min old at the start
+    assert (await lane["filing_scores"].find_one())["late"] is True
+    await lane["filing_scores"].delete_many({})
+    filings._fetch_rows.return_value = [{**ROW, "sort_date": "2026-11-03 14:14:00"}]
+    await filings.poll_loop(lane, FakeRedis(), now=datetime(2026, 11, 3, 8, 44, 30, tzinfo=timezone.utc))  # 14:14:30, done 14:16:30
+    assert (await lane["filing_scores"].find_one())["in_window"] is False
+
+
+async def test_a_filing_the_provider_refuses_does_not_block_the_next(lane):
+    other = {**ROW, "desc": "Acquisition", "sort_date": "2026-11-03 10:35:00"}
+    filings._fetch_rows.return_value = [ROW, other]
+    answers = iter([filings.OUTAGE, {**SCORE, "key_fact_ok": True}])
+    filings.score_filing.side_effect = lambda *a, **k: next(answers)
+    redis = FakeRedis()
+    await filings.poll_loop(lane, redis, now=NOW)
+    assert filings.score_filing.await_count == 1  # an outage stops the pass
+    await redis.delete("filings:llm_backoff")
+    await filings.poll_loop(lane, redis, now=NOW + timedelta(seconds=60))
+    assert {d["title"]: d["status"] async for d in lane["filing_scores"].find()} == {"TCS Ltd: Order": "new", "TCS Ltd: Acquisition": "scored"}
+
+
+async def test_a_refused_filing_gives_up_after_an_hour_with_no_more_calls(lane):
+    filings.score_filing.return_value = filings.OUTAGE
+    redis = FakeRedis()
+    await filings.poll_loop(lane, redis, now=NOW)
+    await redis.delete("filings:llm_backoff")
+    await filings.poll_loop(lane, redis, now=NOW + timedelta(hours=1, minutes=1))
+    doc = await lane["filing_scores"].find_one()
+    assert doc["status"] == "failed" and filings.score_filing.await_count == 1
+
+
+async def test_an_outage_backs_off_and_does_not_read_the_pdf_again(lane):
+    filings.score_filing.return_value = filings.OUTAGE
+    redis = FakeRedis()
+    await filings.poll_loop(lane, redis, now=NOW)
+    await filings.poll_loop(lane, redis, now=NOW + timedelta(seconds=20))
+    assert filings.score_filing.await_count == 1
+    await redis.delete("filings:llm_backoff")
+    await filings.poll_loop(lane, redis, now=NOW + timedelta(seconds=90))
+    assert filings.score_filing.await_count == 2 and filings.fetch_text.await_count == 1
+
+
+async def test_an_exception_counts_an_attempt_and_the_stall_alert_still_runs(lane, monkeypatch):
+    filings.score_filing.side_effect = AttributeError("list has no startswith")
+    stall = AsyncMock()
+    monkeypatch.setattr(filings, "_stall_alert", stall)
+    await filings.poll_loop(lane, FakeRedis(), now=NOW)
+    assert (await lane["filing_scores"].find_one())["attempts"] == 1 and stall.await_count == 1
+
+
+async def test_every_model_call_counts_toward_the_cap(lane, monkeypatch):
+    monkeypatch.setattr(filings, "score_filing", SCORE_FILING)
+    monkeypatch.setattr(filings.news, "price_notes", AsyncMock(return_value={}))
+    _llm(monkeypatch, "no json", "still no json")
+    redis = FakeRedis()
+    await filings.poll_loop(lane, redis, now=NOW)
+    assert await redis.get(f"filings:calls:{filings._ist_day(NOW)}") in (2, "2")
+
+
+async def test_a_row_with_no_exchange_time_is_not_claimed(lane):
+    filings._fetch_rows.return_value = [{k: v for k, v in ROW.items() if k != "sort_date"}, {**ROW, "sort_date": "soon"}]
+    await filings.poll_loop(lane, FakeRedis(), now=NOW)
+    assert await lane["filing_scores"].count_documents({}) == 0
+
+
+async def test_partial_bars_stay_open_then_end_unmeasured_with_what_they_have(scored):
+    filings._minute_bars.return_value = {"TCS": _with_prev(_bars()), "^NSEI": _bars(step=0.0)}  # no Nifty close before
+    await scored["filing_scores"].insert_one({"_id": "a", "status": "scored", **_row()})
+    await filings.measure_loop(scored, FakeRedis(), now=CLOSED)
+    assert "measured" not in await scored["filing_scores"].find_one({"_id": "a"})
+    await filings.measure_loop(scored, FakeRedis(), now=CLOSED + timedelta(days=filings.MEASURE_DAYS + 1))
+    doc = await scored["filing_scores"].find_one({"_id": "a"})
+    assert doc["measured"] is False and doc["px_entry"] is not None
+
+
+async def test_a_redirect_is_not_followed(monkeypatch):
+    seen = {}
+
+    def get(url, **kw):
+        seen.update(kw)
+        return _Response(b"", status=302)
+
+    monkeypatch.setattr(filings.requests, "get", get)
+    assert await filings.fetch_text(URL) == ("", False)
+    assert seen["allow_redirects"] is False
+
+
+async def test_a_download_past_its_total_time_is_dropped(monkeypatch):
+    _serve(monkeypatch, _pdf("x" * 200))
+    monkeypatch.setattr(filings, "DOWNLOAD_SECONDS", -1)
+    assert await filings.fetch_text(URL) == ("", False)

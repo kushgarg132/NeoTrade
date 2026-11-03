@@ -119,7 +119,7 @@ def trust_line(report: Optional[dict]) -> str:
     parts = []
     for scope, label in (("COMPANY", "Company"), ("SECTOR", "Sector")):
         cell = _cell(report or {}, "move", scope)
-        if cell and not cell["thin"]:
+        if cell and cell["n"] >= THIN:  # a hit rate needs rows, not the days its t needs
             parts.append(f"{label} news called the 5-day move against NIFTY right {cell['hit']:.0%} of {cell['n']} times.")
     return " ".join(parts) or "Not measured yet, so its reliability is unknown."
 
