@@ -15,14 +15,16 @@ from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
+import pandas as pd
 import pypdfium2
 import requests
 from pydantic import BaseModel
 
-from backend.core.market_calendar import is_trading_day
-from backend.datalayer import news, news_sources
+from backend.core.market_calendar import is_trading_day, next_trading_day
+from backend.datalayer import bars, news, news_sources
 from backend.engine.autorun import in_session
 from backend.engine.session import IST
+from backend.lab.assumptions import round_trip_return
 from backend.llm import llm_service, model_for
 from backend.marks import QUOTE_KEY
 from backend.prompts import prompt_id
@@ -41,6 +43,11 @@ LATE_AFTER = timedelta(minutes=30)
 WINDOW = (time(9, 15), time(14, 15))  # an entry after 2:15 PM cannot complete its hour before the 3:15 PM square-off
 BACKOFF_SECONDS, RECONCILE_SECONDS = 300, 300
 STALL_MINUTES, STALL_ALERT_SECONDS = 20, 3600
+OPEN, SQUARE_OFF, BARS_READY = time(9, 15), time(15, 15), time(15, 45)
+BENCH = "^NSEI"
+HOLD, SHORT_HOLD = timedelta(hours=1), timedelta(minutes=15)
+BAR_TOLERANCE = timedelta(minutes=5)  # a thin stock may skip a minute; further than this is no price at all
+MEASURE_DAYS = 6  # Yahoo keeps 1-minute bars about 7 days
 
 
 def filing_id(item: dict) -> str:
@@ -243,3 +250,96 @@ async def poll_loop(db, redis, now: Optional[datetime] = None) -> None:
             if not await _process(db, redis, doc, names.get(doc["symbol"], doc["symbol"]), now):
                 break
     await _stall_alert(db, redis, now)
+
+
+def entry_time(scored_at: datetime) -> pd.Timestamp:
+    """The first minute a trade could start, naive IST as the bars are: the next minute in session,
+    else the next session's open."""
+    local = _aware(scored_at).astimezone(IST)
+    day = local.date()
+    if is_trading_day(day) and local.time() < OPEN:
+        return pd.Timestamp.combine(day, OPEN)
+    if is_trading_day(day) and local.time() < SQUARE_OFF:
+        return pd.Timestamp(local.replace(tzinfo=None, second=0, microsecond=0)) + pd.Timedelta(minutes=1)
+    return pd.Timestamp.combine(next_trading_day(day), OPEN)
+
+
+def _entry_price(frame: pd.DataFrame, at: pd.Timestamp) -> Optional[float]:
+    window = frame.loc[at:at + BAR_TOLERANCE, "open"].dropna()
+    return float(window.iloc[0]) if len(window) else None
+
+
+def _close_at(frame: pd.DataFrame, at: pd.Timestamp) -> Optional[float]:
+    window = frame.loc[at - BAR_TOLERANCE:at, "close"].dropna()
+    return float(window.iloc[-1]) if len(window) else None
+
+
+def measure_row(row: dict, stock: pd.DataFrame, nifty: pd.DataFrame, prev_close: Optional[float],
+                nifty_prev: Optional[float]) -> Optional[dict]:
+    """Prices at entry and each horizon, the move before entry net of Nifty, and the hypothetical
+    1-hour trade after charges. None when there is no entry price: unmeasured, never flat."""
+    at = entry_time(row["scored_at"])
+    entry = _entry_price(stock, at)
+    if entry is None:
+        return None
+    square_off = pd.Timestamp.combine(at.date(), SQUARE_OFF)
+    bench = _entry_price(nifty, at)
+    moved = None
+    if prev_close and nifty_prev and bench:
+        moved = entry / prev_close - 1 - (bench / nifty_prev - 1)
+    px_1h = _close_at(stock, at + HOLD) if at + HOLD <= square_off else None
+    direction = (row.get("score") or {}).get("direction") or 0
+    net = None
+    if px_1h is not None and direction:
+        net = round_trip_return(entry, px_1h, product="MIS") if direction > 0 else round_trip_return(px_1h, entry, product="MIS")
+    return {"entry_at": at.isoformat(), "px_entry": entry, "moved_net": moved,
+            "px_15m": _close_at(stock, at + SHORT_HOLD) if at + SHORT_HOLD <= square_off else None,
+            "px_1h": px_1h, "px_close": _close_at(stock, square_off), "net_1h": net}
+
+
+def _download_minutes(symbols: list[str]) -> dict[str, pd.DataFrame]:
+    import yfinance as yf
+
+    names = {(s if s.startswith("^") else f"{s}.NS"): s for s in {*symbols, BENCH}}
+    frame = yf.download(sorted(names), period="7d", interval="1m", progress=False, threads=True,
+                        ignore_tz=True, auto_adjust=False)
+    if "Open" not in frame:
+        return {}
+    return {symbol: pd.DataFrame({"open": frame["Open"][ticker], "close": frame["Close"][ticker]}).dropna()
+            for ticker, symbol in names.items() if ticker in frame["Open"]}
+
+
+async def _minute_bars(symbols: list[str]) -> dict[str, pd.DataFrame]:
+    try:
+        return await asyncio.to_thread(_download_minutes, symbols)
+    except Exception as exc:
+        logger.warning("filing minute bars failed: %s", exc)
+        return {}
+
+
+async def measure_loop(db, redis, now: Optional[datetime] = None) -> None:
+    """After each close, the day's scored filings get their prices. It reads bars after the fact, so a
+    restart loses nothing; a filing whose bars never arrive ends unmeasured, with no figure."""
+    now = now or datetime.now(timezone.utc)
+    local = pd.Timestamp(now.astimezone(IST).replace(tzinfo=None))
+    due = []
+    async for row in db[COLLECTION].find({"status": "scored", "measured": {"$exists": False}}):
+        at = entry_time(row["scored_at"])
+        if local >= pd.Timestamp.combine(at.date(), BARS_READY):
+            due.append((row, at))
+    if not due:
+        return
+    frames = await _minute_bars(sorted({row["symbol"] for row, _ in due}))
+    closes: dict = {}
+    for row, at in due:
+        day = at.date()
+        if day not in closes:
+            closes[day] = await bars.prev_closes(db, [*{r["symbol"] for r, _ in due}, BENCH], day)
+        stock, nifty = frames.get(row["symbol"]), frames.get(BENCH)
+        fields = None
+        if stock is not None and nifty is not None:
+            fields = measure_row(row, stock, nifty, closes[day].get(row["symbol"]), closes[day].get(BENCH))
+        if fields:
+            await db[COLLECTION].update_one({"_id": row["_id"]}, {"$set": {**fields, "measured": True}})
+        elif local - at > pd.Timedelta(days=MEASURE_DAYS):
+            await db[COLLECTION].update_one({"_id": row["_id"]}, {"$set": {"measured": False}})

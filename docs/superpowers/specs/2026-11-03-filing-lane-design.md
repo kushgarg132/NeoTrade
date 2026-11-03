@@ -99,9 +99,14 @@ since the last close and over 5 sessions (`news.price_notes`), the same point-in
 One document per filing: identity, exchange time, `seen_at`, `pdf_ok`, the text kept for audit,
 the score, `model`, `prompt` (`prompt_id`), and timings.
 
-At scoring it stores the stock's quote and Nifty. Then, from the quote cache, the price at +15
-minutes, +1 hour and the 3:15 PM square-off. Quotes refresh about once a minute, so that is the
-finest timing this test can claim.
+After each close, a pass reads Yahoo 1-minute bars for the day's filings. The cached quotes cannot
+do this job: they are 5-minute bars, and most Nifty 200 names refresh only every 5 minutes. Bars read
+after the fact also mean a restart cannot lose a horizon. Yahoo keeps them about 7 days, so a filing
+with no bars by then ends unmeasured, with no figure.
+
+The entry is the open of the first full minute after scoring, so nothing is known that a trader
+could not have known. It stores the price at +15 minutes, +1 hour and the 3:15 PM square-off, and
+the move before entry net of Nifty, from the last daily close.
 
 Each row stores a hypothetical trade: the signed return after `MIS` charges and slippage through
 `lab/assumptions.py::round_trip_return(product="MIS")`, so the charge rules exist in one place.
@@ -137,7 +142,7 @@ a second piece of evidence.
 
 - `|direction| >= 0.5`, `pdf_ok`, scored between 9:15 AM and 2:15 PM IST on a trading day.
 - The stock has already moved 1% or more in the filing's direction since the last close, net of
-  Nifty's move. The entry is the quote at scoring.
+  Nifty's move. The entry is the first minute's open after scoring.
 - Long if bullish, short if bearish. Hold 1 hour.
 
 **It passes only if, all together:**
@@ -181,7 +186,7 @@ and code-based sizing. Passing here does not approve it.
 |---|---|
 | NSE blocks 20-second polling | Back off, record the rate that works; slower polling weakens the intraday case, and the numbers will show it |
 | 100 signals take many months | Expected possibility; the review says keep recording, and nothing trades meanwhile |
-| The quote cache is stale or thin | A missing price leaves that horizon unmeasured, never a zero; stale quotes are excluded |
+| Yahoo's 1-minute bars have gaps | A missing price leaves that horizon unmeasured, never a zero |
 | The model hallucinates a filing | `key_fact` must appear in the text, and the rejection count is visible |
 | A malicious PDF or prompt injection | Host allowlist, size cap, in-memory parsing in the existing library, text as data, and nothing downstream can act |
 | Atlas's 512 MB cap | About 30 filings a day at up to 8 KB is around 7 MB a month; watch it at the review |

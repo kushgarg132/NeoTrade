@@ -7,6 +7,7 @@ import pytest
 from mongomock_motor import AsyncMongoMockClient
 
 from backend.datalayer import filings
+from backend.engine.session import IST
 
 AT = datetime(2026, 11, 3, 5, 0, tzinfo=timezone.utc)  # 10:30 AM IST, a Tuesday
 ITEM = {"symbols": ["TCS"], "title": "TCS: Order", "published_at": AT}
@@ -287,3 +288,115 @@ def test_the_lane_cannot_reach_an_order_path():
     source = open(filings.__file__, encoding="utf-8").read()
     for banned in ("autopilot", "brokers", "place_order", "execution"):
         assert banned not in source
+
+
+# ---- Task 4: what the price did, from 1-minute bars after the close
+
+import pandas as pd  # noqa: E402
+
+from backend.lab.assumptions import round_trip_return  # noqa: E402
+
+
+def _bars(day="2026-11-03", start=100.0, step=0.1):
+    """One session of 1-minute bars rising `step` a minute: naive IST, as the download returns them."""
+    index = pd.date_range(f"{day} 09:15", f"{day} 15:29", freq="1min")
+    opens = [start + step * i for i in range(len(index))]
+    return pd.DataFrame({"open": opens, "close": [o + step for o in opens]}, index=index)
+
+
+def _row(**over):
+    return {"symbol": "TCS", "scored_at": NOW, "score": {"direction": 0.7}, **over}  # NOW = 10:40 AM IST
+
+
+def test_entry_is_the_next_minute_in_session_else_the_next_open():
+    assert filings.entry_time(datetime(2026, 11, 3, 5, 10, 20, tzinfo=timezone.utc)) == pd.Timestamp("2026-11-03 10:41")
+    assert filings.entry_time(datetime(2026, 11, 3, 3, 0, tzinfo=timezone.utc)) == pd.Timestamp("2026-11-03 09:15")  # before the open
+    assert filings.entry_time(datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc)) == pd.Timestamp("2026-11-04 09:15")  # after the close
+    assert filings.entry_time(datetime(2026, 11, 7, 5, 0, tzinfo=timezone.utc)) == pd.Timestamp("2026-11-09 09:15")  # Saturday
+
+
+def test_in_window_edges():  # Review Focus 4
+    def ist(hh, mm, day=3):
+        return datetime(2026, 11, day, hh, mm, tzinfo=IST)
+
+    assert filings.in_window(ist(9, 15)) and filings.in_window(ist(14, 15))
+    assert not filings.in_window(ist(14, 16)) and not filings.in_window(ist(9, 14))
+    assert not filings.in_window(ist(10, 0, day=7))  # Saturday
+
+
+def test_moved_net_is_the_stocks_move_minus_niftys():
+    stock, nifty = _bars(), _bars(start=200.0, step=0.0)
+    out = filings.measure_row(_row(), stock, nifty, prev_close=100.0, nifty_prev=196.0)
+    entry = float(stock.loc["2026-11-03 10:41", "open"])
+    assert out["px_entry"] == entry
+    assert out["moved_net"] == pytest.approx(entry / 100.0 - 1 - (200.0 / 196.0 - 1))
+
+
+def test_prices_are_taken_at_each_horizon_and_the_square_off():
+    stock = _bars()
+    out = filings.measure_row(_row(), stock, _bars(step=0.0), 100.0, 100.0)
+    assert out["px_15m"] == float(stock.loc["2026-11-03 10:56", "close"])
+    assert out["px_1h"] == float(stock.loc["2026-11-03 11:41", "close"])
+    assert out["px_close"] == float(stock.loc["2026-11-03 15:15", "close"])
+
+
+def test_net_1h_uses_mis_charges_on_both_sides():
+    stock = _bars()
+    long_side = filings.measure_row(_row(), stock, _bars(step=0.0), 100.0, 100.0)
+    assert long_side["net_1h"] == round_trip_return(long_side["px_entry"], long_side["px_1h"], product="MIS")
+    short = filings.measure_row(_row(score={"direction": -0.7}), stock, _bars(step=0.0), 100.0, 100.0)
+    assert short["net_1h"] == round_trip_return(short["px_1h"], short["px_entry"], product="MIS")
+
+
+def test_a_late_entry_has_no_hour_and_no_trade():
+    late = datetime(2026, 11, 3, 9, 10, tzinfo=timezone.utc)  # 2:40 PM IST
+    out = filings.measure_row(_row(scored_at=late), _bars(), _bars(step=0.0), 100.0, 100.0)
+    assert out["px_1h"] is None and out["net_1h"] is None and out["px_15m"] is not None
+
+
+def test_a_gap_at_entry_is_unmeasured_not_zero():
+    stock = _bars().drop(pd.date_range("2026-11-03 10:30", "2026-11-03 11:00", freq="1min"))
+    assert filings.measure_row(_row(), stock, _bars(step=0.0), 100.0, 100.0) is None
+
+
+def test_no_close_before_means_no_moved_figure_only():
+    out = filings.measure_row(_row(), _bars(), _bars(step=0.0), None, 100.0)
+    assert out["moved_net"] is None and out["net_1h"] is not None
+
+
+@pytest.fixture
+def scored(db, monkeypatch):
+    monkeypatch.setattr(filings, "_minute_bars", AsyncMock(return_value={"TCS": _bars(), "^NSEI": _bars(step=0.0)}))
+    monkeypatch.setattr(filings.bars, "prev_closes", AsyncMock(return_value={"TCS": 100.0, "^NSEI": 100.0}))
+    return db
+
+
+CLOSED = datetime(2026, 11, 3, 10, 30, tzinfo=timezone.utc)  # 4:00 PM IST
+
+
+async def test_measure_waits_for_the_close_then_stores_once(scored):
+    await scored["filing_scores"].insert_one({"_id": "a", "status": "scored", **_row()})
+    await filings.measure_loop(scored, FakeRedis(), now=NOW)
+    assert filings._minute_bars.await_count == 0
+    await filings.measure_loop(scored, FakeRedis(), now=CLOSED)
+    doc = await scored["filing_scores"].find_one({"_id": "a"})
+    assert doc["measured"] is True and doc["net_1h"] is not None
+    await filings.measure_loop(scored, FakeRedis(), now=CLOSED + timedelta(hours=1))
+    assert filings._minute_bars.await_count == 1
+
+
+async def test_an_after_hours_filing_waits_for_the_next_session(scored):  # Review Focus 4
+    evening = datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc)
+    await scored["filing_scores"].insert_one({"_id": "a", "status": "scored", **_row(scored_at=evening)})
+    await filings.measure_loop(scored, FakeRedis(), now=evening)
+    assert "measured" not in await scored["filing_scores"].find_one({"_id": "a"})
+
+
+async def test_no_bars_stay_open_then_expire_unmeasured(scored):  # Review Focus 3
+    filings._minute_bars.return_value = {}
+    await scored["filing_scores"].insert_one({"_id": "a", "status": "scored", **_row()})
+    await filings.measure_loop(scored, FakeRedis(), now=CLOSED)
+    assert "measured" not in await scored["filing_scores"].find_one({"_id": "a"})
+    await filings.measure_loop(scored, FakeRedis(), now=CLOSED + timedelta(days=filings.MEASURE_DAYS + 1))
+    doc = await scored["filing_scores"].find_one({"_id": "a"})
+    assert doc["measured"] is False and doc.get("net_1h") is None
