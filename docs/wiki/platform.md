@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/timing.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/alerts.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 65ca367
+verified_at: c82a866
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -161,6 +161,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/news/feed` | `backend/routers/news.py::news_feed` (`?q=` <= 80 chars: headline regex-escaped, case-insensitive, or a symbol the item tags/impacts; newest-first scan; `mine` ignored for a guest) | user |
 | GET | `/api/v1/news/item/{item_id}` | `backend/routers/news.py::news_item` | user |
 | GET | `/api/v1/news/accuracy` | `backend/routers/news.py::news_accuracy` | admin |
+| GET | `/api/v1/news/filings` | `backend/routers/news.py::news_filings` | admin |
 | GET | `/api/v1/news/symbols` | `backend/routers/news.py::symbol_news` | user |
 | GET | `/api/v1/news/symbol/{symbol}?days<=365` | `backend/routers/news.py::symbol_history` (`?live=true`: when nothing is stored, `::_live_headlines` = unscored Google News for a known NSE name, cached `LIVE_NEWS_TTL` 900 s) | user |
 | GET | `/api/v1/news/results` | `backend/routers/news.py::symbol_results` | user |

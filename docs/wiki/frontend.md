@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 4a76d35
+verified_at: c82a866
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -241,7 +241,7 @@ None run in the frontend build. Client-side timers: Home polls its six calls eve
 
 The frontend serves none. Full list of backend routes it calls (all via `utils/api.js::endpoints` unless noted), grouped by who may call them:
 - Any signed-in user: `/auth/{me,google,refresh,logout}`, `/today`, `/today/attention`, `/mine/*` (incl. `/mine/review/latest`), `/summaries/{day,holdings,activity,habits,weekly}`, `/reports/weekly`, `/imports/*`, `/market/brief`, `/research/{symbol}/note`, `DELETE /settings/goal`, `/portfolio*`, `/journal*`, `/guardrails*`, `/broker/{broker}/*`, `/orders/propose`, `/chat/actions/*`, `/trading/*`, `/suggestions*`, `/analytics/{pnl,scorecard}`, `/strategies/{library,built,vocabulary,describe}`, `/settings/{preferences,strategies,strategies/promotion,autopilot/log,broker-credentials,omniroute-*(reads),portfolio-verdicts}`, `/profile*`, `/plan/today`, `/market/*`, `/agents/{analyze,quick-analyze,intraday}/{symbol}`, `/watchlist/*`, `/options/*`, `/news/{feed,symbols,symbol/{symbol}}`.
-- Admin (backend-enforced): `/news/accuracy`, `/picks`, `/picks/history`, `/system/*`, `/settings/{llm-feature,lab}`, `omniroute` model/tier writes and catalog.
+- Admin (backend-enforced): `/news/accuracy`, `/news/filings` (`NewsAccuracy.jsx::FilingLane`, `utils/newsAccuracy.js::barRows`), `/picks`, `/picks/history`, `/system/*`, `/settings/{llm-feature,lab}`, `omniroute` model/tier writes and catalog.
 - Unused by any page but present in backend: `/trading/equity`, `/broker/list`, `/journal/ai-vs-me`, `/news/market`, `/stock_info*`.
 
 ## Gotchas and known issues

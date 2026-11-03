@@ -209,3 +209,12 @@ positions, broker holdings and the watchlist — filings that move nothing left 
 Markets card.
 
 <!-- live:news -->
+
+### The filing lane
+
+A separate, record-only test of whether NSE filings predict the next hour. Every 20 seconds the ingest
+leader takes new filings of followed stocks, reads the PDF (the feed's own text is mostly boilerplate),
+and scores each with `score_filing` (`backend/datalayer/filings.py`). After the close it reads 1-minute
+bars and stores what a one-hour trade would have earned after `MIS` charges. Nothing reads these scores
+except the report on Lab → News accuracy: no order, alert, sentiment or veto. The bar is fixed in the
+spec, `docs/superpowers/specs/2026-11-03-filing-lane-design.md`.
