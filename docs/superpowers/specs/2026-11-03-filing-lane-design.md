@@ -67,7 +67,7 @@ Download limits, because this is untrusted content from the internet:
 
 - HTTPS and host `nsearchives.nseindia.com` only; anything else is not fetched.
 - 10 MB cap, read as a stream, 20 s timeout.
-- First 6 pages, first 8,000 characters. Parsed in memory, never written to disk.
+- First 6 pages, first 8,000 characters. Parsed in a child process with a 20 s limit, never written to disk: PDFium is native and not thread-safe, and a crash there must not stop the ingest worker.
 - A failed download or parse scores on the API text with `pdf_ok: false`. Those rows are
   excluded from the pass bar.
 

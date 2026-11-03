@@ -11,12 +11,13 @@ import hashlib
 import json
 import logging
 import re
+import subprocess
+import sys
 from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
 import pandas as pd
-import pypdfium2
 import requests
 from pydantic import BaseModel
 
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 PDF_HOST = "nsearchives.nseindia.com"
 MAX_BYTES, MAX_PAGES, MAX_CHARS = 10 * 1024 * 1024, 6, 8000
 MIN_TEXT = 100  # under this a PDF is a scan or empty: there is nothing to read
-DOWNLOAD_SECONDS = 20
+DOWNLOAD_SECONDS, PARSE_SECONDS = 20, 20
 EVENT_TYPES = {"results", "order", "deal", "legal", "regulatory", "management", "capital", "other"}
 OUTAGE = news._OUTAGE  # the model never answered: not the filing's fault
 COLLECTION = "filing_scores"  # ponytail: no indexes, about 30 rows a day; add (status, published_at) past 100k
@@ -53,6 +54,18 @@ MIN_DIRECTION, MIN_MOVED = 0.5, 0.01
 BAR_SIGNALS, BAR_DAYS, BAR_T = 100, 20, 2.0
 
 
+_PARSER = """
+import sys
+import pypdfium2
+document = pypdfium2.PdfDocument(sys.stdin.buffer.read())
+parts = []
+for index in range(min(len(document), int(sys.argv[1]))):
+    text_page = document[index].get_textpage()
+    parts.append(text_page.get_text_range())
+sys.stdout.buffer.write("\\n".join(parts).encode("utf-8", "replace"))
+"""
+
+
 def filing_id(item: dict) -> str:
     key = f"{item['symbols'][0]}|{item['title']}|{item['published_at'].isoformat()}"
     return hashlib.sha1(key.encode()).hexdigest()
@@ -64,25 +77,15 @@ def allowed_url(url: str) -> bool:
 
 
 def read_pdf(data: bytes) -> str:
-    """The first pages' text, capped; "" for anything that will not parse."""
+    """The first pages' text, capped; "" for anything that will not parse. In a child process, because PDFium is
+    native and not thread-safe: a bad file or two at once would otherwise kill the whole ingest worker."""
     try:
-        document = pypdfium2.PdfDocument(data)
-    except Exception:
+        done = subprocess.run([sys.executable, "-I", "-c", _PARSER, str(MAX_PAGES)], input=data, capture_output=True,
+                              timeout=PARSE_SECONDS)
+    except subprocess.SubprocessError as exc:
+        logger.warning("filing pdf parser stopped: %s", exc)
         return ""
-    try:
-        parts = []
-        for index in range(min(len(document), MAX_PAGES)):
-            page = document[index]
-            text_page = page.get_textpage()
-            parts.append(text_page.get_text_range())
-            text_page.close()
-            page.close()
-        return "\n".join(parts).strip()[:MAX_CHARS]
-    except Exception as exc:
-        logger.warning("filing pdf unreadable: %s", exc)
-        return ""
-    finally:
-        document.close()
+    return done.stdout.decode("utf-8", "replace").strip()[:MAX_CHARS] if done.returncode == 0 else ""
 
 
 def _download(url: str) -> bytes | None:

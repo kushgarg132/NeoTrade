@@ -502,3 +502,20 @@ def test_filings_endpoint_is_admin_only(monkeypatch):
     user = User(id="u", google_sub="g", email="a@x.io", name="A", created_at=NOW)
     app.dependency_overrides[get_current_user] = lambda: user
     assert TestClient(app).get("/api/v1/news/filings").status_code == 403
+
+
+# ---- PDFium is native code and not thread-safe: a crash must never reach the ingest worker
+
+async def test_concurrent_reads_are_safe():
+    import asyncio
+
+    results = await asyncio.gather(*(asyncio.to_thread(filings.read_pdf, _pdf(f"Order number {i}")) for i in range(8)))
+    assert all(f"Order number {i}" in text for i, text in enumerate(results))
+
+
+def test_a_crash_or_hang_while_parsing_reads_as_no_text(monkeypatch):
+    monkeypatch.setattr(filings, "_PARSER", "import os; os.abort()")
+    assert filings.read_pdf(_pdf("x")) == ""
+    monkeypatch.setattr(filings, "_PARSER", "import time; time.sleep(30)")
+    monkeypatch.setattr(filings, "PARSE_SECONDS", 0.2)
+    assert filings.read_pdf(_pdf("x")) == ""
