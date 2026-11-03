@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/plan/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: 86626fd
+verified_at: 65ca367
 ---
 # Data layer, AI and background jobs
 
@@ -243,7 +243,7 @@ Lab switch (`app_settings.lab_enabled`, default off, seen by every process withi
 - AI summaries (`backend/summaries/`) are written only by their job at the cadence in the table above (Redis NX per user+kind+period); `GET /summaries/*` reads Mongo `ai_summaries` and never calls a model; a failed or over-budget call keeps the last text.
 - Prompts live in `backend/prompts/*.md`; `render` raises `KeyError` on missing or extra placeholders (`prompts/__init__.py::render`). Bump `version` when the wording changes.
 - `impacts[].priced_in` (0..1, null with no price line; written by `score_market_news` v2 from `news.py::price_notes`) is record-only: `direction` stays what the news means (alerts rely on it), and `aggregate`, `sentiment:` and the rotation veto do not read `priced_in`. It reaches `news_outcomes` and the `accuracy.report` groups `prompt` and `priced_in`.
-- `research_report` v2 reads price, fundamentals and next results through the fact layer (`analyst.py::_note_facts`). The note is cached for every user, so it holds nothing of any user's and makes no buy or sell call. It leaves out the stored `debt_to_equity`, which is debt over cash (`data/fundamentals/yfinance.py::_debt_to_equity`). What is stored passes `check_fields`; streamed text has already shown.
+- `research_report` v2 reads price, fundamentals and next results through the fact layer (`analyst.py::_note_facts`). The note is cached for every user, so it holds nothing of any user's and makes no buy or sell call. What is stored passes `check_fields`; streamed text has already shown.
 - `chat` v2: `shared/chat_view_owner.md` (own view allowed) when `digest.verdicts_visible`, else `shared/chat_view_user.md` (no personal calls). `stream_chat` drops `on_chat_model_stream` events from `langgraph_node == "tools"`, so a tool's own model call never reaches the reply. Chat text is not figure-checked: it streams, and its facts arrive through tools.
 - `market_brief` and `index_move` pass `check_fields` too. The brief is shared by all users, so it names no one's holdings; `summary_day` adds the user's largest sectors. `summary_activity` v3 reads `rotation_plans` (`activity.py::_rotation`). A summary that answers `NONE` (`core.py::NOTHING_TO_SAY`, used by `summary_holding`) stores nothing and keeps its claim, so it is not asked again.
 - Summaries pass `grounding.py::banned` (a field name, or an amount in words): one rewrite, then the sentence is dropped (`summaries/core.py::_without_banned`).

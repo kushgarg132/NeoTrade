@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 4e44191
+verified_at: 65ca367
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -238,6 +238,8 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 
 - The review's write-up and the AI rebalance's reasons are checked against the figures given to the model (`ai/grounding.py::check_fields`: unsupported figures and raw codes). The review retries once; the rebalance, which a user waits on, only drops the sentence. `portfolio/review.py::review_context` adds lots, tax, thesis, next results, XIRR and `accuracy.py::news_trust`; each source that fails is left out.
 - The plan's `calls` go on the forward record (`review.py::record_calls`: `source="review"`, name = prompt id, 60 trading days, a call still open is not repeated). Never gates money. SELL only of held stocks, BUY only from candidates (`valid_calls`).
+- `service.py::mark_funds` makes a holding ETF when its instrument's name says ETF or BEES: brokers report ETFs as equity and `brokers/holdings.py::kind_of` only reads the symbol.
+- `mine/events.py::_drop_moved_dates`: when the calendar gives a future date of a kind, other future rows of that kind with no amount are deleted, so a moved results date does not show twice. An empty calendar deletes nothing.
 - `rules.py::sell_codes` skips `high_debt` for sector "Financial Services": debt/equity says nothing about a lender.
 
 - **Verdict gate (SEBI).** Verdicts are shown only to admins, or to everyone when `portfolio_verdicts == "all"`.
