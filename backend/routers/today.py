@@ -158,7 +158,7 @@ async def _autopilot(user_id: str, prefs: dict) -> dict:
     """The AI account's autopilot at a glance: switch, mode, its capital
     (`account_size`, the base its returns and AI-vs-you use), the exposure cap,
     and capital in use (open positions at entry price -- no market call). `lab`:
-    with it off there is no intraday auto-run, news entry or game plan;
+    with it off there are no news entries;
     `paused`: strategies auto-retired on paper (learning/adapt.py)."""
     from backend.app_settings import AppSettingsStore
     from backend.autopilot.service import open_trades

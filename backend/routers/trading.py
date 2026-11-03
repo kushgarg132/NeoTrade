@@ -284,8 +284,7 @@ async def launch_run(
     runs: RunStore, origin: str = "manual",
 ) -> str:
     """Starts one engine run for `user_id` and returns its run_id. Shared by
-    POST /trading/start and the daily intraday auto-run
-    (backend/engine/autorun.py); `origin` records which one started it.
+    POST /trading/start; `origin` records what started it.
 
     Every registered strategy for `mode` runs on paper. The backtest gate
     decides only which of them may route live -- an unproven strategy still

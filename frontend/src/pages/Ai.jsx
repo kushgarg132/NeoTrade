@@ -94,7 +94,7 @@ const Ai = () => {
                 ) : <div className="mt-2 text-[12px] text-[var(--text-muted)]">No exposure cap set</div>}
                 {(ap.lab === false || ap.paused?.length > 0) && (
                   <p className="mt-2 text-[12px] text-[var(--text-muted)]">
-                    {ap.lab === false && 'Lab off: no intraday auto-run.'}
+                    {ap.lab === false && 'Lab off: no news entries.'}
                     {ap.paused?.length > 0 && ` Paused on paper (losing over 30+ trades): ${ap.paused.join(', ')}.`}
                   </p>
                 )}

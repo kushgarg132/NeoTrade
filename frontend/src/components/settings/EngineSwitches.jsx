@@ -9,7 +9,7 @@ import useSchedule from '../../hooks/useSchedule';
  * Settings). The autopilot trades the 4 PM scan's proposals and acts in the
  * long-term pass, so while it is on both run regardless of their own
  * switches (backend/prefs.py::scan_enabled_users, engine/autorun.py::tick);
- * here they show as kept on. Intraday paper is independent. Limits and
+ * here they show as kept on. Limits and
  * per-strategy live switches stay in Lab › Autopilot limits.
  */
 
@@ -29,20 +29,15 @@ const EngineSwitches = ({ prefs, save }) => {
   return (
     <Sheet
       title="Engine"
-      meta={`${[on('auto_paper_intraday'), on('scan_enabled', true), on('auto_paper_longterm', true)].filter(Boolean).length} of 3 on`}
+      meta={`${[on('scan_enabled', true), on('auto_paper_longterm', true)].filter(Boolean).length} of 3 on`}
       className="mt-3 sm:mt-4"
     >
       <p className="text-sm text-[var(--text-muted)]">
         {autopilot
-          ? 'Feeds the autopilot: the scan and the long-term pass stay on while it is on. Only intraday paper is your call.'
+          ? 'Feeds the autopilot: the scan and the long-term pass stay on while it is on.'
           : <>The strategy engine on its own. Ideas from proven strategies wait for you in{' '}
               <Link to="/portfolio" className="underline">Portfolio</Link>; turn the autopilot on and it paper-trades the rest.</>}
       </p>
-      {switchRow(
-        'auto_paper_intraday',
-        'Paper-trade intraday every session (experimental)',
-        `Experimental: the intraday strategies lose money after charges in every backtest so far, so this is for watching them, not for results. Starts an intraday paper run at ${t.session_open} IST each weekday and stops it at ${t.session_close}, with positions squared off at ${t.square_off}. It restarts itself after an interruption; stop it on AI › Overview and it stays off for the rest of that day.`
-      )}
       {switchRow(
         'scan_enabled',
         'Daily long-term scan',

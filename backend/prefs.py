@@ -58,9 +58,7 @@ DEFAULTS = {
     "picks_live": False,
     # Rebalance helper targets (backend/portfolio/rebalance.py).
     "rebalance_targets": {"rule": "cap", "max_stock_pct": 15, "max_sector_pct": 30, "overrides": {}},
-    # Start an intraday / long-term paper run by itself every trading day at
-    # the open (backend/engine/autorun.py). Paper only; off until turned on.
-    "auto_paper_intraday": False,
+    # Close approved long-term positions and rebalance on paper in the session pass (engine/autorun.py).
     "auto_paper_longterm": False,
     # Portfolio review (backend/portfolio/rules.py): a holding this far below
     # its average cost, or this large a share of the portfolio, counts

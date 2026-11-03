@@ -10,7 +10,6 @@ from mongomock_motor import AsyncMongoMockClient
 
 from backend import app_settings
 from backend.engine.session import IST
-from backend.tests.test_autorun import MONDAY_10AM, _tick, world  # noqa: F401 (fixture)
 
 FRIDAY = datetime(2026, 10, 9, 16, 0, tzinfo=IST)
 
@@ -39,12 +38,6 @@ async def test_lab_defaults_off_logs_once_and_turns_on(monkeypatch, caplog):
     await app_settings.AppSettingsStore(db).set_lab_enabled(True)
     assert await app_settings.lab_on("the monthly re-tune", db) is True
     assert await app_settings.AppSettingsStore(db).get_lab_enabled() is True
-
-
-async def test_lab_off_stops_the_intraday_auto_run(world, lab_off):  # noqa: F811
-    await world.enable()
-    assert (await _tick(world, MONDAY_10AM))["started"] == []
-    assert "the intraday auto-run" in lab_off
 
 
 async def test_lab_off_skips_the_builder_retune_and_learning(lab_off, monkeypatch):

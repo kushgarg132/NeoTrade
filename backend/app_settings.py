@@ -33,8 +33,8 @@ _cached_tiers: dict = {}
 # `feature=` every call site passes (backend/tests/test_llm_call_tiers.py).
 FEATURES = ("news", "plan", "research", "chat", "portfolio", "learning")
 _cached_off: set = set()
-# The admin Lab switch: the experimental AI jobs (the intraday auto-run, news
-# entries, the game plan, the strategy builder, the re-tune, nightly learning)
+# The admin Lab switch: the experimental AI jobs (news
+# entries, the strategy builder, the re-tune, nightly learning)
 # run only while it is on. Off by default; each per-user pref still applies inside it.
 _cached_lab: bool = False
 _lab_logged: set = set()  # (job, day): one info line per skipped job per day

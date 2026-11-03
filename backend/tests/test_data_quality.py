@@ -216,36 +216,6 @@ async def _failures(db, now=WEDNESDAY_11):
     return await data_quality.live(db, redis, now)
 
 
-async def test_an_off_lab_is_the_owners_choice_not_a_fault_and_expects_no_intraday_run(monkeypatch):
-    from backend.app_settings import AppSettingsStore
-
-    async def off(self):
-        return False
-    monkeypatch.setattr(AppSettingsStore, "get_lab_enabled", off)
-    db = await _ok_db()
-    await db["user_prefs"].insert_one({"user_id": "u1", "auto_paper_intraday": True})
-    assert await _failures(db) == []
-
-
-async def test_an_auto_user_without_a_fresh_intraday_run_is_counted_never_by_id(monkeypatch):
-    from backend.app_settings import AppSettingsStore
-
-    async def on(self):
-        return True
-    monkeypatch.setattr(AppSettingsStore, "get_lab_enabled", on)
-    db = await _ok_db()
-    await db["user_prefs"].insert_one({"user_id": "u1", "auto_paper_intraday": True})
-    assert await _failures(db) == ["No intraday run today on 1 account (auto-run is on)"]
-    assert await _failures(db, datetime(2026, 10, 21, 3, 30, tzinfo=timezone.utc)) == []  # 09:00: too early
-    start = datetime(2026, 10, 21, 3, 50, tzinfo=timezone.utc)  # 09:20 IST
-    run = {"user_id": "u1", "mode": "INTRADAY", "status": "RUNNING", "started_at": start,
-           "progress": {"last_bar_at": (WEDNESDAY_11 - timedelta(minutes=20)).isoformat()}}
-    await db["trading_runs"].insert_one(run)
-    assert "saw no bar for 20 min" in (await _failures(db))[0]
-    await db["trading_runs"].update_one({}, {"$set": {"progress.last_bar_at": (WEDNESDAY_11 - timedelta(minutes=2)).isoformat()}})
-    assert await _failures(db) == []
-
-
 async def test_a_collapsed_news_triage_rate_is_named_and_a_steady_one_is_not():
     db = await _ok_db()
     steady = [{"triaged_at": WEDNESDAY_11 - timedelta(minutes=m)} for m in range(0, 7 * 24 * 60, 2)]  # 30/h

@@ -10,7 +10,6 @@ from mongomock_motor import AsyncMongoMockClient
 
 from backend.engine import autorun
 from backend.engine.session import IST
-from backend.routers import trading
 from backend.runs import RunStore
 
 pytestmark = pytest.mark.usefixtures("lenient_fence")
@@ -42,147 +41,17 @@ class _Redis:
         self.data.pop(key, None)
 
 
-async def _forever():
-    await asyncio.Event().wait()
-
-
 @pytest.fixture
 def world(monkeypatch):
     db = AsyncMongoMockClient()["test_db"]
-    monkeypatch.setattr(autorun, "_LOCAL", {})
-    monkeypatch.setattr(autorun, "_TOKEN", "worker-a")
-    live = {"ready": True}  # a streaming broker session is logged in
-
-    async def live_feed_ready(user_id):
-        return live["ready"]
-
-    monkeypatch.setattr(autorun, "live_feed_ready", live_feed_ready)
-    launched = []
-
-    async def launch(user_id, mode, universe, poll, runs, origin):
-        run_id = f"run-{len(launched) + 1}"
-        await runs.create(run_id=run_id, user_id=user_id, mode=mode, universe=universe,
-                          params={"origin": origin})
-        # started_at must fall on the simulated trading day
-        await runs.collection.update_one({"run_id": run_id}, {"$set": {"started_at": MONDAY_10AM}})
-        trading._RUNS[run_id] = asyncio.get_running_loop().create_task(_forever())
-        launched.append((user_id, mode, origin))
-        return run_id
-
-    async def enable(user_id="alice"):
-        await db["user_prefs"].insert_one({"user_id": user_id, "auto_paper_intraday": True})
-
     redis = _Redis()
     from backend.runs import ALIVE_KEY, BOOT_ID
     redis.data[ALIVE_KEY.format(BOOT_ID)] = "1"  # this worker's heartbeat (server.py)
-    yield type("W", (), {"db": db, "redis": redis, "launch": launch, "launched": launched, "enable": enable, "live": live})
-    for task in list(trading._RUNS.values()):
-        task.cancel()
-    trading._RUNS.clear()
+    return type("W", (), {"db": db, "redis": redis})
 
 
 def _tick(w, now):
-    return autorun.tick(w.db, w.redis, now=now, launch=w.launch)
-
-
-@pytest.mark.asyncio
-async def test_starts_one_paper_intraday_run_in_session_then_only_renews(world):
-    await world.enable()
-
-    assert (await _tick(world, SUNDAY_10AM))["started"] == []
-    assert (await _tick(world, MONDAY_10AM))["started"] == ["alice"]
-    assert (await _tick(world, MONDAY_10AM))["renewed"] == ["alice"]
-    assert world.launched == [("alice", "INTRADAY", "auto")]
-    assert world.redis.data["autorun:alice"] == "worker-a"
-
-
-@pytest.mark.asyncio
-async def test_users_who_did_not_opt_in_are_left_alone(world):
-    await world.db["user_prefs"].insert_one({"user_id": "bob", "auto_paper_intraday": False})
-    assert (await _tick(world, MONDAY_10AM))["started"] == []
-
-
-@pytest.mark.asyncio
-async def test_a_second_worker_never_starts_a_duplicate(world, monkeypatch):
-    await world.enable()
-    await _tick(world, MONDAY_10AM)
-
-    monkeypatch.setattr(autorun, "_TOKEN", "worker-b")
-    monkeypatch.setattr(autorun, "_LOCAL", {})
-    assert (await _tick(world, MONDAY_10AM))["started"] == []
-    assert len(world.launched) == 1
-
-
-@pytest.mark.asyncio
-async def test_after_a_deploy_another_worker_takes_over(world, monkeypatch):
-    await world.enable()
-    await _tick(world, MONDAY_10AM)
-
-    # worker-a died: its task is gone, its row was swept as orphaned, and its
-    # key expired.
-    trading._RUNS.pop("run-1").cancel()
-    await RunStore(world.db).close_orphaned()
-    world.redis.data.clear()
-    monkeypatch.setattr(autorun, "_TOKEN", "worker-b")
-    monkeypatch.setattr(autorun, "_LOCAL", {})
-
-    assert (await _tick(world, MONDAY_10AM))["started"] == ["alice"]
-    assert len(world.launched) == 2
-
-
-@pytest.mark.asyncio
-async def test_a_run_the_user_stopped_stays_stopped_today(world):
-    await world.enable()
-    await _tick(world, MONDAY_10AM)
-
-    trading._RUNS.pop("run-1").cancel()
-    await RunStore(world.db).mark_stopped("run-1")
-
-    assert (await _tick(world, MONDAY_10AM))["started"] == []
-    assert len(world.launched) == 1
-
-
-@pytest.mark.asyncio
-async def test_a_crashing_run_is_retried_up_to_the_daily_cap(world):
-    await world.enable()
-    for attempt in range(autorun.MAX_STARTS_PER_DAY + 2):
-        await _tick(world, MONDAY_10AM)
-        run_id = f"run-{len(world.launched)}"
-        if run_id in trading._RUNS:
-            trading._RUNS.pop(run_id).cancel()
-            await RunStore(world.db).mark_error(run_id, "boom")
-    assert len(world.launched) == autorun.MAX_STARTS_PER_DAY
-
-
-@pytest.mark.asyncio
-async def test_a_manual_intraday_run_is_not_doubled(world):
-    await world.enable()
-    runs = RunStore(world.db)
-    await runs.create(run_id="manual", user_id="alice", mode="INTRADAY", universe=[], params={"origin": "manual"})
-    await runs.collection.update_one({"run_id": "manual"}, {"$set": {"started_at": MONDAY_10AM}})
-
-    assert (await _tick(world, MONDAY_10AM))["started"] == []
-
-
-@pytest.mark.asyncio
-async def test_the_run_stops_at_the_close_and_when_turned_off(world, monkeypatch):
-    stopped = []
-
-    async def stop(run_id):
-        stopped.append(run_id)
-        return True
-    monkeypatch.setattr(trading, "stop_background_run", stop)
-
-    await world.enable()
-    await _tick(world, MONDAY_10AM)
-    assert (await _tick(world, MONDAY_EVENING))["stopped"] == ["alice"]
-    assert stopped == ["run-1"]
-    assert "autorun:alice" not in world.redis.data
-
-    # Turned off mid-session: stopped on the next tick.
-    await _tick(world, datetime(2026, 9, 29, 10, 0, tzinfo=IST))
-    await world.db["user_prefs"].update_one({"user_id": "alice"}, {"$set": {"auto_paper_intraday": False}})
-    assert (await _tick(world, datetime(2026, 9, 29, 10, 1, tzinfo=IST)))["stopped"] == ["alice"]
+    return autorun.tick(w.db, w.redis, now=now)
 
 
 @pytest.fixture
@@ -228,7 +97,6 @@ def longterm(world, monkeypatch):
 async def test_the_long_term_switch_never_starts_a_live_run(world, longterm):
     await world.db["user_prefs"].insert_one({"user_id": "alice", "auto_paper_longterm": True})
     result = await _tick(world, MONDAY_10AM)
-    assert world.launched == []
     assert result["longterm"] == ["alice"]
     assert (await _tick(world, SUNDAY_10AM)).get("longterm") is None
 
@@ -419,28 +287,10 @@ async def test_login_reminder_lists_only_logged_out_brokers_twice_a_morning(worl
 
 
 @pytest.mark.asyncio
-async def test_deploy_restarts_do_not_use_up_the_daily_start_cap(world, monkeypatch):
-    """On 2026-10-05 a day of deploys orphaned six auto runs; the crash-loop
-    cap counted them as starts and refused a seventh, leaving open intraday
-    positions with no run to square them off. A deploy is not a crash loop."""
-    await world.enable()
-    for worker in range(autorun.MAX_STARTS_PER_DAY + 1):
-        await _tick(world, MONDAY_10AM)
-        trading._RUNS.pop(f"run-{len(world.launched)}").cancel()
-        await RunStore(world.db).close_orphaned()  # the deploy's restart sweep
-        world.redis.data.clear()
-        monkeypatch.setattr(autorun, "_TOKEN", f"worker-{worker}")
-        monkeypatch.setattr(autorun, "_LOCAL", {})
-
-    assert (await _tick(world, MONDAY_10AM))["started"] == ["alice"]
-
-
-@pytest.mark.asyncio
-async def test_a_run_whose_worker_died_is_swept_and_replaced_by_the_tick(world, monkeypatch):
+async def test_a_run_whose_worker_died_is_swept_by_the_tick(world, monkeypatch):
     """The startup sweep ran while the dead worker's alive key was still
     fresh, so its run stayed RUNNING and blocked every new start (one run per
     mode). The tick sweeps again once that key has expired."""
-    await world.enable()
     runs = RunStore(world.db)
     await runs.create(run_id="zombie", user_id="alice", mode="INTRADAY", universe=[], params={"origin": "auto"})
     await runs.collection.update_one({"run_id": "zombie"}, {"$set": {"boot_id": "dead-worker", "started_at": MONDAY_10AM}})
@@ -448,19 +298,6 @@ async def test_a_run_whose_worker_died_is_swept_and_replaced_by_the_tick(world, 
     await _tick(world, MONDAY_10AM)
 
     assert (await runs.get("zombie"))["status"] == "STOPPED"
-    assert len(world.launched) == 1
-
-
-async def test_the_auto_intraday_run_waits_for_a_live_broker_feed(world):
-    """Paper results from 15-minute-old candles say nothing about a live
-    strategy: with no streaming broker logged in, the run does not start;
-    it starts on the first tick after the login."""
-    await world.enable()
-    world.live["ready"] = False
-    done = await _tick(world, MONDAY_10AM)
-    assert done["started"] == [] and "no live feed" in done["idle"]  # the heartbeat note says why
-    world.live["ready"] = True
-    assert (await _tick(world, MONDAY_10AM + timedelta(minutes=1)))["started"] == ["alice"]
 
 
 @pytest.mark.asyncio

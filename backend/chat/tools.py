@@ -127,7 +127,6 @@ def read_tools(db, redis, user_id: str) -> list:
             "scorecard": {"totals": card["totals"], "strategies": card["strategies"], "last_days": card["days"][-5:]},
             "open_positions": [{"symbol": s, "quantity": p.quantity, "avg_price": p.avg_price} for s, p in positions.items()],
             "running": [run_summary(r) for r in await RunStore(db).list_active(user_id)],
-            "auto_paper_intraday": prefs.get("auto_paper_intraday"),
             "auto_paper_longterm": prefs.get("auto_paper_longterm"),
             "kill_switch": {"tripped": bool(tripped), "reason": (tripped or {}).get("reason")},
             "go_live_progress": progress,
@@ -244,7 +243,7 @@ def read_tools(db, redis, user_id: str) -> list:
             "'what did the builder make' or why a built strategy was rejected or retired.")),
         StructuredTool.from_function(coroutine=get_paper, name="get_paper", description=(
             "The paper-trading engine: net scorecard per strategy, open paper positions, running engine runs, "
-            "the daily auto-run switch, the kill switch, and how far each strategy is from going live.")),
+            "the kill switch, and how far each strategy is from going live.")),
         StructuredTool.from_function(coroutine=get_decisions, name="get_decisions", description=(
             "Proposals from the engine with their id, terms (entry, stop, target, quantity), score and thesis. "
             "status pending or decided; symbol narrows to one scrip. Use the id with propose_approve or propose_decline.")),

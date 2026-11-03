@@ -23,10 +23,8 @@ Informational, not failures: unlisted universe symbols, and silent news feeds
 - the Picks job's study not written for that day;
 - the LLM provider failing: the last `get_completion` error is newer than
   its last success and under LLM_DOWN_AFTER old (kiro 401s, 2026-10-21..23).
-- (Phase 23.0) silent stops, on trading days only: the Lab switch off; an
-  `auto_paper_intraday` user with no INTRADAY run today (after 09:30 IST) or
-  whose running run saw no bar for 15 min (until 15:30); news triage under
-  20% of its 7-day hourly mean over the last 3 hours (08:00-20:00 IST).
+- (Phase 23.0) silent stops, on trading days only: news triage under 20% of
+  its 7-day hourly mean over the last 3 hours (08:00-20:00 IST).
 
 `watch_loop` (jobs process) runs `live` every WATCH_SECONDS and sends the
 admin a Telegram message when a failure has held for two ticks, and again
@@ -64,8 +62,6 @@ MIN_STALE_SECONDS = 120
 BELLWETHERS = 5  # first names of the Nifty 200 the quotes loop always covers
 LLM_DOWN_AFTER = 30 * 60  # an error older than this, with no success since, is just old news
 WATCH_SECONDS = 300
-RUN_CHECK_FROM, RUN_CHECK_UNTIL = time(9, 30), time(15, 30)
-BAR_STALE_AFTER = timedelta(minutes=15)
 NEWS_FROM, NEWS_UNTIL = time(8, 0), time(20, 0)
 NEWS_WINDOW, NEWS_BASELINE, NEWS_MIN_RATIO = timedelta(hours=3), timedelta(days=7), 0.2
 WATCH_LOCK, WATCH_STATE = "data_quality:watch_lock", "data_quality:watch"
@@ -142,37 +138,6 @@ async def _llm(redis, now: datetime) -> list[str]:
     return [f"AI provider failing: {error['error'][:160]}"]
 
 
-def _as_ist(value) -> Optional[datetime]:
-    if isinstance(value, str):
-        value = datetime.fromisoformat(value)
-    if value is None:
-        return None
-    return value.astimezone(IST) if value.tzinfo else value.replace(tzinfo=timezone.utc).astimezone(IST)
-
-
-async def _intraday_runs(db, redis, now: datetime) -> list[str]:
-    local = now.astimezone(IST)
-    if not RUN_CHECK_FROM <= local.time() < RUN_CHECK_UNTIL:
-        return []
-    day_start = datetime.combine(local.date(), time(0, 0), tzinfo=IST)
-    failures, missing = [], 0
-    async for prefs in db["user_prefs"].find({"auto_paper_intraday": True}, {"user_id": 1}):
-        user = prefs["user_id"]
-        runs = await db["trading_runs"].find(
-            {"user_id": user, "mode": "INTRADAY", "started_at": {"$gte": day_start}}).sort("started_at", -1).to_list(length=None)
-        if not runs:
-            missing += 1
-            continue
-        running = next((r for r in runs if r["status"] == "RUNNING"), None)
-        if running:
-            seen = _as_ist((running.get("progress") or {}).get("last_bar_at")) or _as_ist(running["started_at"])
-            if local - seen > BAR_STALE_AFTER:
-                failures.append(f"An intraday run saw no bar for {(local - seen) // timedelta(minutes=1)} min")
-    if missing:
-        failures.insert(0, f"No intraday run today on {missing} account{'s' if missing > 1 else ''} (auto-run is on)")
-    return failures
-
-
 async def _news_rate(db, now: datetime) -> list[str]:
     local = now.astimezone(IST)
     if not NEWS_FROM <= local.time() < NEWS_UNTIL:
@@ -192,11 +157,7 @@ async def _news_rate(db, now: datetime) -> list[str]:
 async def _silent_stops(db, redis, now: datetime) -> list[str]:
     if not is_trading_day(now.astimezone(IST).date()):
         return []
-    from backend.app_settings import AppSettingsStore
-
-    # An off Lab is the owner's standing choice (the AI tab says so), not a fault; it also means no intraday run is due.
-    runs = await _intraday_runs(db, redis, now) if await AppSettingsStore(db).get_lab_enabled() else []
-    return [*runs, *await _news_rate(db, now)]
+    return await _news_rate(db, now)
 
 
 def _disk() -> list[str]:

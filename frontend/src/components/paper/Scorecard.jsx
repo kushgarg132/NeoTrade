@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Sheet, Field, Money, NetLine, Statement, Row, Cell, Empty, Ruling } from '../doc/Doc';
 import MonthGrid from '../journal/MonthGrid';
@@ -71,12 +70,7 @@ const Scorecard = ({ mode }) => {
       <Sheet title="Track record" meta="Net of charges">
         <Empty
           title="No closed paper trades yet"
-          detail="Turn on the daily auto-run and the engine paper-trades every session by itself. Each closed trade lands here, net of charges."
-          action={
-            <Link to="/lab/limits" className="field-label inline-flex min-h-11 items-center text-[var(--accent)] hover:underline">
-              Turn on auto-run
-            </Link>
-          }
+          detail="Start an intraday run by hand and each closed trade lands here, net of charges."
         />
       </Sheet>
     );

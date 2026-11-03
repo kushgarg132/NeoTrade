@@ -99,7 +99,6 @@ class PreferencesPatch(BaseModel):
     portfolio_max_loss_pct: Optional[float] = Field(default=None, gt=0, le=100)
     portfolio_max_weight_pct: Optional[float] = Field(default=None, gt=0, le=100)
     auto_square_off: Optional[Literal["off", "preview", "live"]] = None
-    auto_paper_intraday: Optional[bool] = None
     auto_paper_longterm: Optional[bool] = None
     broker_roles: Optional[dict[str, str]] = None
     autopilot_enabled: Optional[bool] = None
@@ -763,8 +762,8 @@ async def set_lab(
     _admin: User = Depends(require_admin),
     app_settings: AppSettingsStore = Depends(get_app_settings_store),
 ):
-    """The Lab switch (app_settings.lab_on): the intraday auto-run, news
-    entries, the game plan, the strategy builder, the re-tune and nightly
+    """The Lab switch (app_settings.lab_on): news
+    entries, the strategy builder, the re-tune and nightly
     learning run only while it is on. Other workers see it within 30 s."""
     await app_settings.set_lab_enabled(update.enabled)
     logger.info(f"Lab {'on' if update.enabled else 'off'}.")
