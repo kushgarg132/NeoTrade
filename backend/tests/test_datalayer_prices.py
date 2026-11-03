@@ -170,7 +170,29 @@ def test_last_two_uses_the_day_before_when_the_daily_bar_is_current(monkeypatch)
         "5m": pd.DataFrame({("Close", "^NSEI"): [23400.0]}, index=pd.to_datetime(["2026-11-02 15:25"])),
         "1d": pd.DataFrame({("Close", "^NSEI"): [23053.1, 23399.0]}, index=pd.to_datetime(["2026-10-30", "2026-11-02"])),
     })
-    assert prices.last_two(["^NSEI"]) == {"^NSEI": (23400.0, 23053.1)}
+    # A finished session's daily close is the official one; the last 5-minute trade is not.
+    assert prices.last_two(["^NSEI"]) == {"^NSEI": (23399.0, 23053.1)}
+
+
+def test_last_two_takes_the_previous_close_from_intraday_when_the_daily_bar_missed_it(monkeypatch):
+    """2026-11-03: 45 of the Nifty 200 had no 2 Nov daily bar yet, so the day move was measured from 30 Oct."""
+    _by_interval(monkeypatch, {
+        "5m": pd.DataFrame({("Close", "INFY.NS"): [1161.0, 1136.7]},
+                           index=pd.to_datetime(["2026-11-02 15:25", "2026-11-03 12:40"])),
+        "1d": pd.DataFrame({("Close", "INFY.NS"): [1120.0, 1135.0, None]},
+                           index=pd.to_datetime(["2026-10-29", "2026-10-30", "2026-11-03"])),
+    })
+    assert prices.last_two(["INFY.NS"]) == {"INFY.NS": (1136.7, 1161.0)}
+
+
+def test_last_two_keeps_the_last_trade_while_the_session_runs(monkeypatch):
+    monkeypatch.setattr(prices, "in_session", lambda now: True)
+    today = prices.datetime.now(prices.IST).date().isoformat()
+    _by_interval(monkeypatch, {
+        "5m": pd.DataFrame({("Close", "A.NS"): [10.5]}, index=pd.to_datetime([f"{today} 12:40"])),
+        "1d": pd.DataFrame({("Close", "A.NS"): [9.0, 10.2]}, index=pd.to_datetime(["2020-01-01", today])),
+    })
+    assert prices.last_two(["A.NS"]) == {"A.NS": (10.5, 9.0)}
 
 
 def test_last_two_keeps_the_daily_figures_when_intraday_fails(monkeypatch):

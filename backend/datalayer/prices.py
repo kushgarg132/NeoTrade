@@ -53,7 +53,8 @@ def _closes(frame, tickers: list[str]):
 
 
 def _latest_bars(tickers: list[str]) -> dict:
-    """ticker -> (session date, last price) from 5-minute bars; {} when they fail, so the daily figures stand."""
+    """ticker -> (session date, last price, (previous session's date, its last price) or None) from 5-minute bars;
+    {} when they fail, so the daily figures stand."""
     try:
         frame = yf.download(tickers, period="2d", interval="5m", progress=False, threads=True, ignore_tz=True)
         if "Close" not in frame:
@@ -63,7 +64,10 @@ def _latest_bars(tickers: list[str]) -> dict:
         for ticker in tickers:
             series = bars[ticker].dropna() if ticker in bars else []
             if len(series):
-                out[ticker] = (series.index[-1].date(), float(series.iloc[-1]))
+                day = series.index[-1].date()
+                earlier = series[series.index.date < day]
+                prior = (earlier.index[-1].date(), float(earlier.iloc[-1])) if len(earlier) else None
+                out[ticker] = (day, float(series.iloc[-1]), prior)
         return out
     except Exception as exc:
         logger.warning("intraday quotes failed: %s", exc)
@@ -72,23 +76,35 @@ def _latest_bars(tickers: list[str]) -> dict:
 
 def last_two(tickers: list[str]) -> dict[str, tuple[float, float]]:
     """ticker -> (last price, previous session's close). Yahoo's daily bar can miss a whole finished session, for
-    stocks and indices alike (Monday evening its last close was Friday's), so the price comes from 5-minute bars
-    and the previous close from the last daily bar before that session. Tickers with no data are left out."""
+    stocks and indices alike (Monday evening its last close was Friday's; Tuesday noon 45 of the Nifty 200 still had
+    no Monday bar), so the price comes from 5-minute bars and the previous close from the last daily bar before that
+    session, or from that session's last 5-minute bar when the daily bars have not got there. Once a session is
+    over its own daily close, the official one, beats its last trade. Tickers with no data are left out."""
     if not tickers:
         return {}
-    frame = yf.download(tickers, period="5d", interval="1d", progress=False, threads=True)
+    # auto_adjust off: on an ex-dividend day the adjusted close takes the dividend out of yesterday, and the day move
+    # stops matching the broker's (INFY 3 Nov: -2.1% on the broker, +0.1% adjusted). Close stays split-adjusted.
+    frame = yf.download(tickers, period="5d", interval="1d", progress=False, threads=True, auto_adjust=False)
     if "Close" not in frame:  # an outage returns an empty frame
         return {}
     daily = _closes(frame, tickers)
     latest = _latest_bars(tickers)
+    now = datetime.now(timezone.utc)
+    today, live = now.astimezone(IST).date(), in_session(now)
     out = {}
     for ticker in tickers:
         if ticker not in daily:
             continue
         series = daily[ticker].dropna()
         if ticker in latest:
-            day, price = latest[ticker]
+            day, price, prior = latest[ticker]
+            own = series[series.index.date == day]
+            if len(own) and not (day == today and live):
+                price = float(own.iloc[-1])
             before = series[series.index.date < day]
+            if prior and (not len(before) or before.index[-1].date() < prior[0]):
+                out[ticker] = (price, prior[1])
+                continue
             if len(before):
                 out[ticker] = (price, float(before.iloc[-1]))
                 continue
