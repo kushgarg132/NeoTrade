@@ -270,6 +270,8 @@ async def rebalance_ai(request: RebalanceRequest, user: User = Depends(get_curre
     """The AI's final list (portfolio/ai_rebalance.py): its target per stock,
     clamped to the caps and planned by the same `plan_rebalance`, beside the
     formula's plan. Same audience as the verdicts. Nothing is placed."""
+    from backend.datalayer.accuracy import news_trust
+    from backend.mine.thesis import ThesisStore
     from backend.portfolio.ai_rebalance import ai_targets, clamp_targets, news_context
 
     if not await verdicts_visible_to(user):
@@ -286,7 +288,8 @@ async def rebalance_ai(request: RebalanceRequest, user: User = Depends(get_curre
     dates = await _results_dates(symbols)
     news = await news_context(db.db, db.redis, symbols, dates)
     answer = await ai_targets(holdings, context, p["candidates"], targets, request.new_money, formula,
-                              full.get("plan"), p["lots"], p["today"], news=news)
+                              full.get("plan"), p["lots"], p["today"], news=news,
+                              theses=await ThesisStore(db.db).all(user.id), trust=await news_trust(db.db))
     if answer is None:
         raise HTTPException(status_code=502, detail="The AI could not build a list just now: try again")
     sector_of = {r["symbol"]: (r.get("sector") if r.get("kind") == "STOCK" else None) for r in holdings}

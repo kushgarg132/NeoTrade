@@ -120,3 +120,13 @@ def test_report_splits_by_prompt_version_and_priced_in():
     keys = {(c["group"], c["key"]): c["n"] for c in cells if c["group"] in ("prompt", "priced_in")}
     assert keys == {("prompt", "score_market_news@2"): 2, ("prompt", "unversioned"): 1,
                     ("priced_in", "fresh"): 1, ("priced_in", "priced"): 1}
+
+
+def test_trust_line_reads_the_report_and_skips_thin_or_missing_cells():
+    def cell(scope, hit, n, thin=False):
+        return {"group": "theme", "scope": scope, "key": "all", "impact": "all", "horizon": "5d", "measure": "move",
+                "hit": hit, "n": n, "thin": thin}
+
+    line = accuracy.trust_line({"cells": [cell("COMPANY", 0.416, 765), cell("SECTOR", 0.6, 20, thin=True)]})
+    assert line == "Company news called the 5-day move against NIFTY right 42% of 765 times."
+    assert "unknown" in accuracy.trust_line(None)

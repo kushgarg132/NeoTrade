@@ -13,9 +13,9 @@ import math
 import re
 from collections import defaultdict
 
+from backend.ai.grounding import check_fields
 from backend.llm import llm_service
-from backend.portfolio.rebalance import sell_tax
-from backend.portfolio.review import _fmt, _holding_line
+from backend.portfolio.review import TAX_FACTS, _fmt, _holding_line, tax_line, thesis_line
 from backend.prompts import render
 
 logger = logging.getLogger(__name__)
@@ -64,17 +64,6 @@ def _news_part(n: dict | None) -> str:
     return f"{news}, " + (f"next results {n['results']}" if n.get("results") else f"no results date in {RESULTS_DAYS} days")
 
 
-def _tax_line(row: dict, lots: list, today) -> str:
-    price, qty = row.get("last_price") or row.get("close_price"), row.get("quantity")
-    if not price or not qty:
-        return "tax if sold: n/a"
-    t = sell_tax(qty, price, lots, today)
-    if t["est_tax"] is None:
-        return "tax if sold: unknown (no dated buys in the journal)"
-    return (f"tax if all sold: short-term gain {_fmt(t['short_gain'])}, long-term gain {_fmt(t['long_gain'])}, "
-            f"est. tax {_fmt(t['est_tax'])}" + (f", {t['unknown_qty']:g} undated shares" if t["unknown_qty"] else ""))
-
-
 def _formula_lines(plan: dict, rule: str) -> str:
     trades = plan["trades"]
     lines = [f"- {t['symbol']}: {t['side']} {t['quantity']} (target {t['target_weight']:.1f}%, now {t['weight_now']:.1f}%)"
@@ -91,10 +80,12 @@ def _formula_lines(plan: dict, rule: str) -> str:
 
 async def ai_targets(holdings: list[dict], context: dict, candidates: list[dict], targets: dict,
                      new_money: float, formula: dict, review_plan, lots: dict, today,
-                     news: dict | None = None) -> dict | None:
+                     news: dict | None = None, theses: dict | None = None, trust: str | None = None) -> dict | None:
     """{"targets": {symbol: pct}, "reasons": {symbol: text}, "summary": md}, unclamped,
-    or None when the model is off or answers badly. `news`: news_context(), per symbol."""
-    news = news or {}
+    or None when the model is off or answers badly. `news`: news_context(), per symbol. `theses`:
+    the investor's own, per symbol. `trust`: accuracy.news_trust(). Every figure in the prose must
+    come from what the model was given; the targets are clamped by the caller."""
+    news, theses = news or {}, theses or {}
     rows = sorted(holdings, key=lambda r: -(r.get("weight_pct") or 0))[:MAX_HOLDINGS]
     lines = []
     for r in rows:
@@ -102,14 +93,16 @@ async def ai_targets(holdings: list[dict], context: dict, candidates: list[dict]
         full.setdefault("reason_codes", [])
         score = (full.get("score") or {}).get("final")
         lines.append(_holding_line(full) + f". Verdict {full.get('verdict') or 'n/a'}, score {_fmt(score)}. "
-                     f"AI note: {full.get('note') or 'none'}. {_news_part(news.get(r['symbol']))}. {_tax_line(full, lots.get(r['symbol'], []), today)}")
+                     f"AI note: {full.get('note') or 'none'}. {_news_part(news.get(r['symbol']))}. {tax_line(full, lots.get(r['symbol'], []), today)}. {thesis_line(theses.get(r['symbol']))}")
     cands = "\n".join(f"- {c['symbol']} ({c['source']}): score {_fmt(c.get('score'))}, price {_fmt(c['price'])}, "
                       f"{_news_part(news.get(c['symbol']))}" for c in candidates) or "none"
-    system, prompt = render(
-        "rebalance_ai", max_stock_pct=targets.get("max_stock_pct", 100), max_sector_pct=targets.get("max_sector_pct", 100),
+    values = dict(
+        max_stock_pct=targets.get("max_stock_pct", 100), max_sector_pct=targets.get("max_sector_pct", 100),
         new_money=_fmt(new_money), holdings="\n".join(lines), candidates=cands, review_plan=review_plan or "none",
         rule=targets.get("rule", "cap"), results_days=RESULTS_DAYS, formula=_formula_lines(formula, targets.get("rule", "cap")),
+        news_trust=trust or "Not measured yet, so its reliability is unknown.",
     )
+    system, prompt = render("rebalance_ai", **values)
     text = (await llm_service.get_completion(prompt, system_prompt=system, tier="deep", feature="portfolio") or "").strip()
     match = re.search(r"\{.*\}", text, re.S)
     try:
@@ -120,6 +113,10 @@ async def ai_targets(holdings: list[dict], context: dict, candidates: list[dict]
         logger.warning("rebalance ai: no usable answer from the model: %.200s", text)
         return None
     reasons = parsed.get("reasons") if isinstance(parsed.get("reasons"), dict) else {}
-    summary = parsed.get("summary") if isinstance(parsed.get("summary"), str) else None
-    return {"targets": parsed["targets"], "reasons": {k: v for k, v in reasons.items() if isinstance(v, str)},
-            "summary": summary}
+    fields = {f"reason:{k}": v for k, v in reasons.items() if isinstance(v, str)}
+    if isinstance(parsed.get("summary"), str):
+        fields["summary"] = parsed["summary"]
+    # ponytail: no retry here, this runs while the user waits; a sentence with a made-up figure just goes.
+    checked = await check_fields(fields, [*values.values(), TAX_FACTS])
+    return {"targets": parsed["targets"], "reasons": {k[7:]: v for k, v in checked.items() if k.startswith("reason:")},
+            "summary": checked.get("summary")}

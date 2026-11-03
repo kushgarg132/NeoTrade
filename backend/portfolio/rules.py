@@ -33,6 +33,7 @@ ADD_RULES = {
     "reasonable_valuation": 0.10,
 }
 HIGH_DEBT = 2.0      # debt/equity, times
+FINANCIALS = "Financial Services"
 STRONG_ROE = 0.15    # 15%
 MAX_PE = 40.0
 
@@ -48,7 +49,8 @@ def sell_codes(row: dict, health: dict, limits: dict) -> list[str]:
         codes.append("below_200dma")
     if row.get("weight_pct") is not None and row["weight_pct"] > limits["max_weight_pct"]:
         codes.append("overweight")
-    if (fundamentals.get("debt_to_equity") or 0) > HIGH_DEBT:
+    # A lender's debt is its raw material: debt/equity says nothing about its health.
+    if row.get("sector") != FINANCIALS and (fundamentals.get("debt_to_equity") or 0) > HIGH_DEBT:
         codes.append("high_debt")
     return codes
 

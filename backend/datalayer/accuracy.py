@@ -97,8 +97,8 @@ def report(rows: list[dict]) -> list[dict]:
             for (g, scope, key, impact, h, m), points in sorted(groups.items())]
 
 
-def _cell(report: dict, measure: str) -> Optional[dict]:
-    return next((c for c in report.get("cells") or [] if c["group"] == "theme" and c["scope"] == "COMPANY"
+def _cell(report: dict, measure: str, scope: str = "COMPANY") -> Optional[dict]:
+    return next((c for c in report.get("cells") or [] if c["group"] == "theme" and c["scope"] == scope
                  and c["key"] == "all" and c["impact"] == "all" and c["horizon"] == SCAN_HORIZON
                  and c["measure"] == measure), None)
 
@@ -110,6 +110,25 @@ def company_scan_ok(report: Optional[dict]) -> bool:
     if not cell or cell["n"] < SCAN_MIN_N:
         cell = _cell(report or {}, "move")
     return bool(cell) and cell["n"] >= SCAN_MIN_N and cell["hit"] >= HIT_BAR
+
+
+def trust_line(report: Optional[dict]) -> str:
+    """The measured 5-day hit rate of company and sector news, as a sentence for a prompt."""
+    parts = []
+    for scope, label in (("COMPANY", "Company"), ("SECTOR", "Sector")):
+        cell = _cell(report or {}, "move", scope)
+        if cell and not cell["thin"]:
+            parts.append(f"{label} news called the 5-day move against NIFTY right {cell['hit']:.0%} of {cell['n']} times.")
+    return " ".join(parts) or "Not measured yet, so its reliability is unknown."
+
+
+async def news_trust(db) -> str:
+    """Never raises: a prompt without this figure still works."""
+    try:
+        return trust_line(await db[COLLECTION].find_one({"_id": "latest"}))
+    except Exception as exc:
+        logger.warning("news trust line: %s", exc)
+        return trust_line(None)
 
 
 async def build(db, now: Optional[datetime] = None) -> dict:

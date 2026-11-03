@@ -27,7 +27,7 @@ from backend.marks import mark_prices
 from backend.mine import cas_import
 from backend.mine.cas_import import CAS_BROKER
 from backend.portfolio.health import stock_health
-from backend.portfolio.review import write_review
+from backend.portfolio.review import record_calls, review_context, write_review
 from backend.portfolio.rules import fund_verdict, stock_verdict
 from backend.portfolio.scorecard import build_scorecard
 from backend.prefs import PrefsStore
@@ -208,7 +208,10 @@ async def _review(db, user_id: str, redis, card: dict, closes: dict, previous: d
 
     try:
         held = {r["symbol"] for r in card["holdings"]}
-        review = await write_review(card, await add_candidates(db, user_id, held))
+        now = datetime.now(timezone.utc)
+        review = await write_review(card, await add_candidates(db, user_id, held),
+                                    await review_context(db, redis, user_id, card, now.astimezone(IST).date()))
+        await record_calls(db, redis, user_id, review.get("calls") or [], card, now)
     except Exception as exc:
         logger.warning("portfolio review write-up failed for %s: %s", user_id, exc)
         review = {"summary": None, "notes": {}}

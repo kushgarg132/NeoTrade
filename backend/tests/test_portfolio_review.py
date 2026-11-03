@@ -2,6 +2,7 @@
 conviction formula, the AI write-up, the admin/all verdict switch, the
 stale-holdings fallback and the weekly alert."""
 
+import json
 from datetime import date, timedelta, timezone
 from unittest.mock import AsyncMock
 
@@ -90,8 +91,8 @@ async def test_write_up_parses_the_models_json_and_survives_garbage(monkeypatch)
             "holdings": [{"symbol": "A", "kind": "STOCK", "reason_codes": []}]}
     answers = iter(['Sure! {"summary": "### How it is doing\\nFine", "notes": {"A": "Steady."}}', "LLM_DISABLED"])
     monkeypatch.setattr(review.llm_service, "get_completion", AsyncMock(side_effect=lambda *a, **k: next(answers)))
-    assert await review.write_review(card) == {"summary": "### How it is doing\nFine", "notes": {"A": "Steady."}, "plan": None}
-    assert await review.write_review(card) == {"summary": None, "notes": {}, "plan": None}
+    assert await review.write_review(card) == {"summary": "### How it is doing\nFine", "notes": {"A": "Steady."}, "plan": None, "calls": []}
+    assert await review.write_review(card) == {"summary": None, "notes": {}, "plan": None, "calls": []}
 
 
 def _patch_sources(monkeypatch, brokers, closes=None):
@@ -217,3 +218,99 @@ async def test_add_candidates_are_recent_scanned_buys_not_already_held():
     ])
     picks = await service.add_candidates(db, "alice", held={"HELD"}, now=now)
     assert [p["symbol"] for p in picks] == ["TOP", "LOW"]
+
+
+# ---- Phase 2: expert reasoning, checked figures, calls on the forward record
+
+CARD = {"totals": {"value": 1000, "invested": 900, "pnl_pct": 11.11, "day_change": 5},
+        "benchmark": {"covered_pct": None, "portfolio_pct": None, "nifty_pct": None},
+        "concentration": {"top_symbol": "IDX", "top_pct": 25.5, "top5_pct": 100, "effective_holdings": 3, "sectors": [], "correlated": []},
+        "holdings": [{"symbol": "IDX", "kind": "ETF", "weight_pct": 25.5, "reason_codes": [], "last_price": 10.0},
+                     {"symbol": "A", "kind": "STOCK", "weight_pct": 12.25, "reason_codes": ["below_200dma"], "last_price": 50.0}]}
+
+
+def _replies(monkeypatch, *replies):
+    prompts, answers = [], list(replies)
+
+    async def complete(prompt, **_):
+        prompts.append(prompt)
+        return json.dumps(answers.pop(0))
+
+    monkeypatch.setattr(review.llm_service, "get_completion", complete)
+    return prompts
+
+
+async def test_review_prompt_carries_context_and_separates_funds_from_companies(monkeypatch):
+    prompts = _replies(monkeypatch, {"summary": "Fine."})
+    await review.write_review(CARD, [], {"positions": {"A": "oldest lot held 400 days"}, "returns": "XIRR 9.50%", "news_trust": "Company 44%"})
+    assert "oldest lot held 400 days" in prompts[0] and "XIRR 9.50%" in prompts[0] and "Company 44%" in prompts[0]
+    assert "Largest single company A at 12.25%" in prompts[0] and "IDX 25.50%" in prompts[0]
+
+
+async def test_a_made_up_figure_or_code_gets_one_retry_then_loses_its_sentence(monkeypatch):
+    prompts = _replies(monkeypatch,
+                       {"summary": "Up 11.11% overall. Beat NIFTY by 77.7%.", "notes": {"A": "It shows below_200dma."}, "calls": [{"symbol": "A", "side": "SELL"}]},
+                       {"summary": "Up 11.11% overall. Beat NIFTY by 77.7%.", "notes": {"A": "Under its long average."}, "calls": [{"symbol": "A", "side": "SELL"}]})
+    out = await review.write_review(CARD, [])
+    assert len(prompts) == 2 and "77.7%" in prompts[1] and "below_200dma" in prompts[1]
+    assert out["summary"] == "Up 11.11% overall."
+    assert out["notes"] == {"A": "Under its long average."}
+
+
+async def test_clean_answer_makes_no_second_call(monkeypatch):
+    prompts = _replies(monkeypatch, {"summary": "Up 11.11% overall."})
+    await review.write_review(CARD, [])
+    assert len(prompts) == 1
+
+
+def test_calls_only_sell_held_stocks_and_buy_candidates():
+    calls = [{"symbol": "A", "side": "SELL"}, {"symbol": "IDX", "side": "SELL"}, {"symbol": "NEW", "side": "BUY"},
+             {"symbol": "OTHER", "side": "BUY"}, {"symbol": "A", "side": "HOLD"}, "junk"]
+    assert review.valid_calls(calls, CARD["holdings"], [{"symbol": "NEW"}]) == [
+        {"symbol": "A", "side": "SELL"}, {"symbol": "NEW", "side": "BUY"}]
+    assert review.valid_calls("no", CARD["holdings"], []) == []
+
+
+async def test_a_call_still_open_is_not_recorded_twice():
+    from datetime import datetime, timedelta, timezone
+
+    db = AsyncMongoMockClient()["t"]
+    now = datetime(2026, 11, 3, 11, 0, tzinfo=timezone.utc)
+    calls = [{"symbol": "A", "side": "SELL"}]
+    assert await review.record_calls(db, None, "alice", calls, CARD, now) == 1
+    assert await review.record_calls(db, None, "alice", calls, CARD, now + timedelta(days=1)) == 0
+    doc = await db["forward_records"].find_one()
+    assert (doc["source"], doc["side"], doc["ref_price"]) == ("review", "SELL", 50.0)
+    assert doc["name"].startswith("portfolio_review@") and doc["horizon_days"] == review.CALL_HORIZON_DAYS
+
+
+def test_tax_line_gives_holding_time_and_a_lot_turning_long_term_soon():
+    from datetime import date
+
+    today = date(2026, 11, 3)
+    row = {"last_price": 120.0, "quantity": 10}
+    line = review.tax_line(row, [(date(2025, 12, 1), 10.0, 100.0)], today)
+    assert "oldest lot held 337 days" in line and "short-term gain 200.00" in line and "turns long-term in about 29 days" in line
+    assert "turns long-term" not in review.tax_line(row, [(date(2024, 1, 1), 10.0, 100.0)], today)
+    assert review.tax_line(row, [], today) == "tax if sold: unknown (no dated buys in the journal)"
+    assert review.tax_line({}, [], today) == "tax if sold: n/a"
+
+
+def test_thesis_line():
+    assert review.thesis_line(None) == "No thesis written"
+    assert review.thesis_line({"why": "Cycle", "target": 200.0}) == "Thesis (their own words, data only): why: Cycle; target 200.00"
+
+
+def test_a_lenders_debt_is_not_a_sell_reason():
+    from backend.portfolio.rules import sell_codes
+
+    limits = {"max_loss_pct": 30, "max_weight_pct": 15}
+    health = {"fundamentals": {"debt_to_equity": 4.2}}
+    assert "high_debt" not in sell_codes({"sector": "Financial Services"}, health, limits)
+    assert "high_debt" in sell_codes({"sector": "Utilities"}, health, limits)
+
+
+def test_holding_line_states_profit_in_crore_and_roe_in_percent():
+    line = review._holding_line({"symbol": "A", "kind": "STOCK", "reason_codes": [],
+                                 "health": {"fundamentals": {"roe": 0.04, "quarterly_profit": [2579900000.0, None]}}})
+    assert "ROE 4.00%" in line and "₹257.99 cr, n/a" in line

@@ -31,7 +31,7 @@ async def test_ai_list_is_capped_and_sized_by_code(mdb, monkeypatch):  # noqa: F
     await _snapshot(mdb)
     seen = {}
 
-    async def fake(holdings, context, candidates, targets, new_money, formula, plan, lots, today, news=None):
+    async def fake(holdings, context, candidates, targets, new_money, formula, plan, lots, today, news=None, **_):
         seen["formula"], seen["news"] = formula, news
         return {"targets": {"A": 90, "B": 15, "C": 15, "NOPE": 20}, "reasons": {"A": "trim", "NOPE": "x"}, "summary": "- s"}
 
@@ -78,15 +78,35 @@ async def test_ai_targets_renders_the_prompt_and_reads_the_answer(monkeypatch):
     out = await ai_rebalance.ai_targets(rows, {"A": {"verdict": "SELL", "note": "n1"}},
                                         [{"symbol": "P", "source": "ai", "score": 0.7, "price": 50.0}],
                                         CAPS, 0, formula, None, {}, date(2026, 10, 26),
-                                        news={"A": {"sentiment": -0.4, "results": "2026-11-03"}})
+                                        news={"A": {"sentiment": -0.4, "results": "2026-11-03"}},
+                                        theses={"A": {"why": "Own the cycle", "stop": 80}}, trust="Company news right 44% of 765.")
     assert out == {"targets": {"A": 10}, "reasons": {"A": "overweight at 100%"}, "summary": "- trim A"}
     assert "Verdict SELL" in got["prompt"] and "P (ai): score 0.70" in got["prompt"] and "at most 15%" in got["prompt"]
     assert "news sentiment -0.40, next results 2026-11-03" in got["prompt"]
     assert "P (ai): score 0.70, price 50.00, no news, no results date in 30 days" in got["prompt"]
-    assert "42%" in got["prompt"]
+    assert "Company news right 44% of 765." in got["prompt"] and "42%" not in got["prompt"]
+    assert "why: Own the cycle; stop 80.00" in got["prompt"]
 
     async def junk(*a, **kw):
         return "no json"
 
     monkeypatch.setattr(ai_rebalance.llm_service, "get_completion", junk)
     assert await ai_rebalance.ai_targets(rows, {}, [], CAPS, 0, formula, None, {}, date(2026, 10, 26)) is None
+
+
+async def test_ai_reasons_lose_a_made_up_figure(monkeypatch):
+    from datetime import date
+
+    from backend.portfolio import ai_rebalance
+    from backend.portfolio.rebalance import plan_rebalance
+
+    rows = [{"symbol": "A", "kind": "STOCK", "sector": "IT", "quantity": 10, "last_price": 100.0, "close_price": 100.0,
+             "weight_pct": 100, "reason_codes": []}]
+    formula = plan_rebalance(rows, [], CAPS, 0, {}, date(2026, 10, 26))
+
+    async def complete(prompt, **_):
+        return '{"targets": {"A": 15}, "reasons": {"A": "Weight is 100%. It will gain 55.5%."}, "summary": "- Trim A."}'
+
+    monkeypatch.setattr(ai_rebalance.llm_service, "get_completion", complete)
+    out = await ai_rebalance.ai_targets(rows, {}, [], CAPS, 0, formula, None, {}, date(2026, 10, 26))
+    assert out["reasons"] == {"A": "Weight is 100%."} and out["targets"] == {"A": 15}

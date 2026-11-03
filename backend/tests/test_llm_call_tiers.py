@@ -15,7 +15,7 @@ EXPECTED = {
     "research/search.py": ["deep"],                # Indian peers came out wrong on Flash
     "instruments/resolve.py": ["fast"],
     "research/index_move.py": ["standard"],
-    "portfolio/review.py": ["deep"],
+    "portfolio/review.py": ["deep", "deep"],             # the write-up; its one retry
     "portfolio/ai_rebalance.py": ["deep"],
     "learning/report.py": ["standard"],
     "learning/hypotheses.py": ["deep"],

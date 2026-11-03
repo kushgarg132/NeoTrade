@@ -124,3 +124,15 @@ async def grounded(text: str, facts, retry: Optional[Callable[[list[str]], Await
         if not bad:
             return text, True
     return strip_unsupported(text, bad), False
+
+
+async def check_fields(fields: dict[str, str], facts, retry: Optional[Callable[[list[str]], Awaitable[Optional[dict]]]] = None) -> dict[str, str]:
+    """Several texts from one answer, all held to the same facts and to `banned`. `retry` gets what
+    is wrong and may return the fields rewritten, once; what is still wrong loses its sentence."""
+    def wrong(text: str) -> list[str]:
+        return unsupported(text, facts) + banned(text)
+
+    found = sorted({t for text in fields.values() for t in wrong(text)})
+    if found and retry is not None:
+        fields = await retry(found) or fields
+    return {name: strip_unsupported(text, wrong(text)) for name, text in fields.items()}
