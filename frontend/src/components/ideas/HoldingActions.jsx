@@ -44,7 +44,7 @@ const ReadLink = ({ action }) => (
 );
 
 const Note = ({ note }) => note ? (
-  <div className="mt-2 rounded-[12px] bg-[var(--surface-2)] px-3 py-2">
+  <div className="mt-2">
     <AiLabel at={note.at} />
     <p className="text-[14px] leading-snug text-[var(--text)]"><AmountText text={note.text} /></p>
   </div>
@@ -176,13 +176,13 @@ const HoldingActions = ({ actions, onChanged }) => {
                       </div>
                       <p className="mt-0.5 text-[14px] leading-snug text-[var(--text)]">{signalText(a).text}</p>
                       <ImpactChips impacts={a.action?.impacts} className="mt-0.5" />
-                      <Note note={notes?.[a.id]} />
                     </div>
                     <div className="flex shrink-0 -mr-2 -mt-1">
                       {(a.action?.news_id || a.action?.url) && <ReadLink action={a.action} />}
                       <IconButton label={`${holdingButtons(a).dismiss}: hide this`} onClick={() => act('dismiss', [a])}><Check className="w-[18px] h-[18px]" aria-hidden="true" /></IconButton>
                     </div>
                   </div>
+                  <Note note={notes?.[a.id]} />
                 </li>
               );
             }))}
@@ -198,7 +198,8 @@ const HoldingActions = ({ actions, onChanged }) => {
               const b = holdingButtons(a);
               const to = rowLink(a);
               return (
-                <li key={a.id} className="flex items-center gap-3 py-3 border-b border-[var(--border)] last:border-b-0">
+                <li key={a.id} className="py-3 border-b border-[var(--border)] last:border-b-0">
+                  <div className="flex items-center gap-3">
                   <div className="w-12 shrink-0 rounded-[12px] bg-[var(--surface-2)] py-1.5 text-center tabular-nums" aria-hidden={d ? 'true' : undefined}>
                     {d ? (
                       <>
@@ -219,12 +220,13 @@ const HoldingActions = ({ actions, onChanged }) => {
                       <p className="text-[15px] font-semibold text-[var(--text)]">{to ? <Link to={to} className="hover:underline underline-offset-4">{a.title}</Link> : a.title}</p>
                     )}
                     {a.detail && <p className="text-[13px] text-[var(--text-muted)]">{a.detail}</p>}
-                    <Note note={notes?.[a.id]} />
                   </div>
                   <div className="flex shrink-0 -mr-2">
                     <IconButton label={`${b.later}: hide for 7 days`} onClick={() => act('snooze', [a])}><Clock className="w-[18px] h-[18px]" aria-hidden="true" /></IconButton>
                     <IconButton label={`${b.dismiss}: hide this`} onClick={() => act('dismiss', [a])}><Check className="w-[18px] h-[18px]" aria-hidden="true" /></IconButton>
                   </div>
+                  </div>
+                  <Note note={notes?.[a.id]} />
                 </li>
               );
             })}

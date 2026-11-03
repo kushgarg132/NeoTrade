@@ -202,7 +202,7 @@ const IndexPage = () => {
           <Tabs tabs={data.has_stocks ? [TABS[0], STOCKS, ...TABS.slice(1)] : TABS} value={tab} onChange={setTab} label="Index sections" />
           <div className="mt-3">
             {tab === 'chart' && (data.points?.length > 1
-              ? <Card><TradingChart closes={data.points} symbol={ticker} currency="pts" intradayUrl={endpoints.marketIndexIntraday(ticker)} newsUrl={indexNewsUrl(ticker)} /></Card>
+              ? <Card><TradingChart closes={data.points} symbol={ticker} currency="pts" live={data.value} intradayUrl={endpoints.marketIndexIntraday(ticker)} newsUrl={indexNewsUrl(ticker)} /></Card>
               : <Empty title="No price data" body={`Could not load the history for ${data.name}.`} action={<Button variant="secondary" onClick={retry}>Retry</Button>} />)}
             {tab === 'stocks' && <IndexStocks ticker={ticker} />}
             {tab === 'news' && <IndexNews ticker={ticker} />}

@@ -149,7 +149,7 @@ const Stock = () => {
       <div className="space-y-3">
         {closes.length >= 2 || !quick.loading ? (
           <Card>
-            <TradingChart closes={closes} trades={m?.trades} thesis={m?.thesis} symbol={symbol} currency={currency} />
+            <TradingChart closes={closes} trades={m?.trades} thesis={m?.thesis} symbol={symbol} currency={currency} live={price} />
           </Card>
         ) : <Card><Skeleton rows={5} /></Card>}
         {company && <Fundamentals company={company} currency={currency} />}

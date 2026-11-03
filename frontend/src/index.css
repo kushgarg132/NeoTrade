@@ -491,8 +491,7 @@ html[data-private="on"] :is(.private .figure-md, .private .figure-lg, .private.f
 .tap:active { transform: scale(.98); }
 @keyframes nt-fade { from { opacity: 0; } to { opacity: 1; } }
 .fade-in { animation: nt-fade 150ms ease-out; }
-/* AI-written cards: an accent rail, blocks that rise in once, sections without the native marker. */
-.ai-card { box-shadow: inset 2px 0 0 var(--accent); }
+/* AI-written text: blocks that rise in once, sections without the native marker (the label's sparkle marks AI). */
 @keyframes nt-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .ai-rise { animation: nt-rise 220ms ease-out both; }
 .ai-section > summary::-webkit-details-marker { display: none; }

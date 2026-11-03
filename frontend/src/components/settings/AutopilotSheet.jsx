@@ -64,7 +64,7 @@ const AutopilotSheet = () => {
     >
       <p className="text-sm text-[var(--text-muted)]">
         Acts for the AI account{aiBroker ? ` (${aiBroker.charAt(0).toUpperCase() + aiBroker.slice(1)})` : ''} without
-        asking you: it takes the engine's proposals and AI chat ideas and places them, inside the
+        asking you: it buys and sells the weekly rotation, inside the
         trading limits below. NSE stocks only, market hours only. Every order and every refusal is sent to you on
         Telegram with a stop button.
       </p>
@@ -105,12 +105,6 @@ const AutopilotSheet = () => {
           </span>
         )}
       </Row>
-      {prefs.autopilot_enabled && <Row
-        label="Trade on news"
-        hint="Buys a proposal from material news at once instead of waiting for the morning pass. At most 3 a day, none while the market is risk-off. Sells on bad news are only logged for now."
-      >
-        <Toggle on={prefs.autopilot_news} label="Trade on news" onClick={() => save({ autopilot_news: !prefs.autopilot_news })} />
-      </Row>}
       {isAdmin && <Row
         label="Picks with real money"
         hint="Picks trade the AI account on paper as their forward record. Real money waits until 100 picks are scored, their calibration is within 5 points and they beat the Nifty after charges; then the owner turns on picks_live."

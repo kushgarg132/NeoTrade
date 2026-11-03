@@ -140,7 +140,7 @@ export const changeRows = (changes, headline, phase) => {
       sub: trades.every((t) => t.mode === 'paper') ? `Paper: ${moves}` : sentence(moves) });
   }
   const plan = changes.plan;
-  if (plan?.risk_off) rows.push({ id: 'plan', title: 'Daily plan', to: '/ai', sub: 'Risk-off: the book sits in cash' });
+  if (plan?.risk_off) rows.push({ id: 'plan', title: 'Daily plan', to: '/ai', sub: 'Risk-off: no new buys' });
   else if (plan?.buys?.length || plan?.sells?.length) {
     const moves = [plan.buys.length && `buy ${names(plan.buys)}`, plan.sells.length && `sell ${names(plan.sells)}`].filter(Boolean).join(', ');
     rows.push({ id: 'plan', title: 'Daily plan', to: '/ai', sub: sentence(moves) });

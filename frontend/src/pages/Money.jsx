@@ -63,7 +63,7 @@ const Money = () => {
             <div className="grid grid-cols-2 gap-3 mt-4 border-t border-[var(--border)] pt-3">
               <Stat label="Total P&L" value={inr(h.pnl, { sign: true })} delta={h.pnl_pct != null ? pct(h.pnl_pct / 100, { sign: true }) : '—'} tone={tone(h.pnl)} />
               <Stat label="Yearly (XIRR)" value={formatXirr(h.xirr)}
-                delta={xirrAhead == null ? `NIFTY ${formatXirr(h.nifty_xirr)}` : `${xirrAhead >= 0 ? 'Ahead of' : 'Behind'} NIFTY ${formatXirr(h.nifty_xirr)}`}
+                delta={xirrAhead == null ? `NIFTY ${formatXirr(h.nifty_xirr)}` : `${xirrAhead >= 0 ? 'Ahead of' : 'Behind'} NIFTY's ${formatXirr(h.nifty_xirr)}`}
                 tone={xirrAhead == null ? 'neutral' : tone(xirrAhead)} />
             </div>
             <p className="text-[12px] text-[var(--text-muted)] mt-2">

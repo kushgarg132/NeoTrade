@@ -2,7 +2,7 @@
 
 export const pct = (value, digits = 1) => {
   const n = Number(value || 0) * 100;
-  return `${n < 0 ? '−' : '+'}${Math.abs(n).toFixed(digits)}%`;
+  return `${n < 0 ? '−' : n > 0 ? '+' : ''}${Math.abs(n).toFixed(digits)}%`;
 };
 
 /** One-line headline: risk-on/off and how many trades today. */
@@ -25,6 +25,7 @@ export const versusRows = (card) => [
 export const gateLine = (card) => {
   if (!card) return '';
   if (card.live_ready) return 'Live gate met: three months ahead of the NIFTY. Going live is your call.';
+  if (card.days === 0) return `Just started: nothing to compare yet. The earliest live date is ${card.unlock_on}.`;
   if (card.ahead) return `Ahead of the NIFTY. Live can be considered from ${card.unlock_on} if it stays ahead.`;
   return `Behind the NIFTY: stays on paper. The earliest live date is ${card.unlock_on}.`;
 };

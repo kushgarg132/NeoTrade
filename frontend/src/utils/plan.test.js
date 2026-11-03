@@ -20,6 +20,7 @@ test('scorecard rows, gate and veto lines', () => {
   assert.match(gateLine(card), /from 2027-02-01/);
   assert.match(gateLine({ ...card, live_ready: true }), /Live gate met/);
   assert.match(gateLine({ ...card, ahead: false }), /Behind/);
+  assert.match(gateLine({ ...card, ahead: false, days: 0 }), /Just started/);
   assert.equal(vetoLine({ n: 0 }), '');
   assert.equal(vetoLine({ n: 2, helped: 1, vetoed_avg: -0.005, book_avg: 0.01 }), '1 of 2 names news kept out did worse than the book (−0.5% vs +1.0%).');
 });

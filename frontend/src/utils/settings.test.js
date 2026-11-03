@@ -42,9 +42,9 @@ test('portfolio, goal, autopilot, model, alerts', () => {
   assert.equal(text(value), 'Goal: [₹25,00,000] by [Dec 2027].');
   assert.equal(value[1].private, true);
   assert.equal(text(autopilotLine({})), 'Autopilot is [off].');
-  assert.equal(text(autopilotLine({ autopilot_enabled: true })), 'Autopilot trades on [paper], news entries [off].');
+  assert.equal(text(autopilotLine({ autopilot_enabled: true })), 'Autopilot trades on [paper].');
   const live = autopilotLine({ autopilot_enabled: true, autopilot_live: true, autopilot_news: true });
-  assert.equal(text(live), 'Autopilot trades on [live money], news entries [on].');
+  assert.equal(text(live), 'Autopilot trades on [live money].');
   assert.equal(live[1].tone, 'loss');
   assert.equal(text(modelLine({ tiers: { deep: 'agy/claude-opus-4-6' }, fallback: 'cx/gpt' })), 'AI answers with [claude-opus-4-6].');
   assert.equal(text(modelLine({ tiers: {}, fallback: 'cx/gpt-5.6-luna' })), 'AI answers with [gpt-5.6-luna].');

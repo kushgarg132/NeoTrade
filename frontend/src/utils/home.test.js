@@ -128,7 +128,7 @@ test('changeRows: risk-off, a live trade and no value', () => {
   const rows = changeRows({ ai_trades: [{ symbol: 'INFY', side: 'SELL', mode: null }], plan: { risk_off: true, buys: [], sells: ['SBIN'] }, alerts: { count: 0 } }, null, 'post');
   assert.deepEqual(rows.map((r) => r.id), ['trades', 'plan']);
   assert.equal(rows[0].sub, 'Sold INFY');
-  assert.equal(rows[1].sub, 'Risk-off: the book sits in cash');
+  assert.equal(rows[1].sub, 'Risk-off: no new buys');
 });
 
 test('sinceWord: yesterday in IST, else the weekday', () => {

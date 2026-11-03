@@ -33,12 +33,10 @@ const useTickers = (text) => {
   return React.useMemo(() => ({ known: new Set(Object.keys(quotes)), change: quotes }), [quotes]);
 };
 
-const StockChip = ({ symbol, change }) => (
+// No day change on the chip: this text is often days old, and "SUZLON +1.0% fell 9.36%" reads as a contradiction.
+const StockChip = ({ symbol }) => (
   <Link to={`/stock/${symbol}`} className="tap inline-flex items-baseline gap-1 rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[13px] font-semibold text-[var(--text)] no-underline hover:bg-[var(--accent-soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
     {symbol}
-    {typeof change === 'number' && (
-      <span className={`figure-md text-[12px] ${change < 0 ? TONE.loss : TONE.gain}`}>{change > 0 ? '+' : ''}{change.toFixed(1)}%</span>
-    )}
   </Link>
 );
 
@@ -49,7 +47,7 @@ export const AiInline = ({ text }) => {
     <>
       {parseInline(text, symbols?.known).map((s, i) => {
         let el = s.text;
-        if (s.symbol) el = <StockChip symbol={s.symbol} change={symbols.change[s.symbol]} />;
+        if (s.symbol) el = <StockChip symbol={s.symbol} />;
         else if (s.amount) el = <span className="private"><span className={`figure-md ${TONE[s.tone] || ''}`}>{el}</span></span>;
         else if (s.pct) el = <span className={`figure-md font-semibold ${TONE[s.tone] || ''}`}>{el}</span>;
         if (s.bold) el = <strong className="font-semibold">{el}</strong>;
@@ -99,7 +97,7 @@ const FollowUps = ({ text, title, symbols }) => {
 
 /** AI-written markdown as React elements, never as HTML: key points first, each heading a tap-to-expand
     section, follow-up questions under it. Long heading-less texts keep a "Read more" toggle. */
-export const AiMarkdown = ({ text, className = '', collapse = true, title = 'An AI summary', ask = true }) => {
+export const AiMarkdown = ({ text, className = '', collapse = true, title = 'An AI summary', ask = true, previewClass }) => {
   const [open, setOpen] = React.useState(false);
   const symbols = useTickers(text);
   const blocks = parseBlocks(text);
@@ -107,12 +105,23 @@ export const AiMarkdown = ({ text, className = '', collapse = true, title = 'An 
   const long = collapse && !sections.length && contentUnits(intro) > COLLAPSED_UNITS;
   const shown = long && !open ? collapseBlocks(intro) : intro;
   const rich = contentUnits(blocks) >= 2;
+  if (previewClass) { // the opening lines only, clamped on the text itself: a clamp around blocks cuts a line in half
+    const first = lead || intro[0] || sections[0]?.blocks[0];
+    return (
+      <Symbols.Provider value={symbols}>
+        <div className={`text-[15px] leading-6 text-[var(--text)] ${className}`}>
+          {lead && rich && <p className="mb-1 text-[14px] font-semibold text-[var(--accent)]">{leadTitle || 'Key points'}</p>}
+          <p className={previewClass}><AiInline text={first?.text ?? first?.items?.join(' ') ?? ''} /></p>
+        </div>
+      </Symbols.Provider>
+    );
+  }
   return (
     <Symbols.Provider value={symbols}>
       <div className={`space-y-2.5 text-[15px] leading-6 text-[var(--text)] ${className}`}>
         {lead && (rich ? (
-          <div className="ai-rise rounded-[14px] bg-[var(--accent-soft)] px-3.5 py-3">
-            <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-[var(--accent)]">{leadTitle || 'Key points'}</p>
+          <div className="ai-rise">
+            <p className="mb-1 text-[14px] font-semibold text-[var(--accent)]">{leadTitle || 'Key points'}</p>
             <Block b={lead} i={0} />
           </div>
         ) : <Block b={lead} i={0} />)}
@@ -145,7 +154,7 @@ export const AiText = ({ text, className = '', collapse = true, title }) => <AiM
 export const AiCard = ({ title, asOf, children, className = '' }) => (
   <Card
     title={title}
-    className={`ai-card ${className}`}
+    className={className}
     action={<span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[12px] text-[var(--text-muted)]"><Sparkles className="w-3.5 h-3.5 shrink-0 text-[var(--accent)]" aria-hidden="true" />{`AI summary${asOf ? ` · ${asOf.includes('T') ? formatDateTime(asOf) : asOf}` : ''}`}</span>}
   >
     {children}
@@ -178,7 +187,7 @@ const AiSummary = ({ title, state, emptyBody, className = '' }) => {
   const { data, loading, error, reload } = state;
   const s = data?.summary;
   return (
-    <Card title={title} className={`ai-card ${className}`}>
+    <Card title={title} className={className}>
       {loading && !data ? <Skeleton rows={3} />
         : error ? <ErrorLine message="Could not load this summary." onRetry={reload} />
         : !s ? <Empty title="No summary yet" body={emptyBody} />

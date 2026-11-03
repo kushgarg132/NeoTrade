@@ -10,7 +10,7 @@ import Skeleton from '../ui/Skeleton';
 import { inr, tone } from '../ui/format';
 import api, { endpoints } from '../../utils/api';
 import { formatQuantity } from '../../utils/formatters';
-import { taxYears } from '../../utils/mine';
+import { mergeLots, taxYears } from '../../utils/mine';
 import { fyStart } from '../../utils/months';
 import { stockPath } from '../../utils/stocks';
 import useSymbolNews from '../../hooks/useSymbolNews';
@@ -121,7 +121,7 @@ const TaxTab = ({ onImport }) => {
         </Card>
 
         <Card title="Unrealised by lot">
-          {unrealised.length === 0 ? <None text="No open lots." /> : unrealised.map((u, i) => (
+          {unrealised.length === 0 ? <None text="No open lots." /> : mergeLots(unrealised).map((u, i) => (
             <ListRow
               key={i} symbol={u.symbol} to={stockPath(u.symbol)} title={u.symbol}
               sub={`${formatQuantity(u.qty)} @ ${inr(u.price)} · bought ${day(u.buy_date)} · ${u.term}-term`}

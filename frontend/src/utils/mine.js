@@ -68,3 +68,14 @@ export const REASONS = {
 
 /** Chart y-axis lower bound: auto padding below the data, but never below 0 when the data is all >= 0. */
 export const floorAtZero = (min) => (min >= 0 ? Math.max(0, Math.floor(min * 0.95)) : min);
+
+/** Fills bought the same day at the same price are one purchase: "1 @ 36" four times over reads as noise. */
+export const mergeLots = (lots = []) => {
+  const merged = new Map();
+  lots.forEach((u) => {
+    const key = [u.symbol, u.buy_date, u.price, u.term].join('|');
+    const had = merged.get(key);
+    merged.set(key, had ? { ...had, qty: had.qty + u.qty, gain: had.gain + u.gain } : { ...u });
+  });
+  return [...merged.values()];
+};

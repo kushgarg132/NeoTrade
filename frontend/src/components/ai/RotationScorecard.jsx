@@ -26,7 +26,7 @@ const RotationScorecard = () => {
         <Stat label="Max drawdown" value={pct(card.max_drawdown)} tone={card.max_drawdown < 0 ? 'loss' : 'neutral'} />
         <Stat label="Live from" value={card.unlock_on} />
       </div>
-      <p className={`mt-3 text-[14px] ${card.ahead ? 'text-[var(--text)]' : 'text-[var(--warn)]'}`}>{gateLine(card)}</p>
+      <p className={`mt-3 text-[14px] ${card.ahead || card.days === 0 ? 'text-[var(--text)]' : 'text-[var(--warn)]'}`}>{gateLine(card)}</p>
       {veto && <p className="mt-2 text-[13px] text-[var(--text-muted)]">{veto}</p>}
     </Card>
   );

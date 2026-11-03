@@ -36,7 +36,7 @@ const Chip = ({ on, disabled, onClick, children, label }) => (
  * `thesis` stop/target lines; news days as dots that open a NewsStrip. An index passes `currency="pts"`,
  * its own `intradayUrl` and `newsUrl={null}`.
  */
-const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initialRange = '1D', intradayUrl, newsUrl }) => {
+const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initialRange = '1D', intradayUrl, newsUrl, live }) => {
   const fmt = (v) => (currency === 'pts' ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : formatCurrency(v, currency));
   const newsFrom = newsUrl === undefined ? (symbol && endpoints.newsHistory(symbol)) : newsUrl;
   const dayFrom = intradayUrl || (symbol && endpoints.intraday(symbol));
@@ -120,7 +120,9 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
   const shownBar = hoverBar || pinnedBar;
   const focus = hoverBar || pinnedBar || last;
   const from = baseline ?? bars[0]?.close;
-  const change = focus && from != null ? { abs: focus.close - from, pct: from ? ((focus.close - from) / from) * 100 : 0 } : rangeChange(bars);
+  // At rest on 1D the readout is the price the page's hero shows, not the last 5-minute bar's close beside it.
+  const price = !shownBar && days === 1 && typeof live === 'number' ? live : focus?.close;
+  const change = focus && from != null ? { abs: price - from, pct: from ? ((price - from) / from) * 100 : 0 } : rangeChange(bars);
   const tone = !change || change.abs === 0 ? 'neutral' : change.abs > 0 ? 'gain' : 'loss';
   const sign = change?.abs > 0 ? '+' : '';
   const span = range === '1D' ? 'today' : `in ${range}`;
@@ -129,7 +131,7 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
     <div>
       <div className="min-h-[60px]" aria-live="off">
         <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-[24px] font-semibold tabular-nums tracking-tight">{focus ? fmt(focus.close) : '—'}</span>
+          <span className="text-[24px] font-semibold tabular-nums tracking-tight">{focus ? fmt(price) : '—'}</span>
           {change && (
             <span className={`text-[14px] font-medium tabular-nums ${toneText(tone)}`}>
               {sign}{fmt(change.abs)} ({sign}{change.pct.toFixed(2)}%)

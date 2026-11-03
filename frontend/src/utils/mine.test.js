@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { actionTarget, targetProgress, sortHoldings, formatXirr, RANGES, holdingsStale, taxYears } from './mine.js';
+import { mergeLots } from './mine.js';
 
 test('holdingsStale only past 36 hours (I9: logged in reads as fresh)', () => {
   const now = Date.parse('2026-10-15T10:00:00Z');
@@ -49,4 +50,9 @@ test('floorAtZero pads below but never under zero for non-negative data', async 
   assert.equal(floorAtZero(1000), 950);
   assert.equal(floorAtZero(0), 0);
   assert.equal(floorAtZero(-50), -50);
+});
+
+test('mergeLots joins fills of one purchase and keeps separate buys apart', () => {
+  const lot = (qty, gain, buy_date = '2026-04-21', price = 36) => ({ symbol: 'BHARATCOAL', qty, gain, buy_date, price, term: 'short' });
+  assert.deepEqual(mergeLots([lot(1, -6), lot(57, -333), lot(5, 10, '2026-05-01')]).map((l) => [l.qty, l.gain]), [[58, -339], [5, 10]]);
 });

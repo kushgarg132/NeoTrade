@@ -32,15 +32,8 @@ const PAGE = 50;
 const LEANS = [{ id: '', label: 'Any' }, { id: 'up', label: 'Bullish' }, { id: 'down', label: 'Bearish' }];
 const HEAD = 'pt-3 pb-1 text-[13px] font-semibold uppercase tracking-wide text-[var(--text-muted)]';
 
-const BAR = { 1: 'bg-[var(--gain)]', '-1': 'bg-[var(--loss)]' };
-const barClass = (item) => {
-  const top = (item.impacts || []).reduce((a, b) => (b.impact > (a?.impact ?? -1) ? b : a), null);
-  return BAR[Math.sign(top?.direction || 0)] || 'bg-[var(--text-muted)]';
-};
-
 const Item = ({ item }) => (
-  <li className="relative py-3 pl-4 border-b border-[var(--border)] last:border-b-0">
-    <span aria-hidden="true" className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-full ${barClass(item)}`} />
+  <li className="py-3 border-b border-[var(--border)] last:border-b-0">
     <Link to={newsPath(item.id)} className="block min-h-11 text-[15px] font-medium text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
       {item.material && <span className="mr-1.5 align-middle"><Badge kind="alert">Material</Badge></span>}
       {item.title}

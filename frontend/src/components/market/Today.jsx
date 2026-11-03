@@ -49,14 +49,14 @@ const Story = () => {
         : (
           <div className="space-y-2">
             {shown && <Badge kind={shown.kind}>{shown.label}</Badge>}
-            <div className={open ? '' : 'line-clamp-2'}><AiMarkdown text={data.text} collapse={false} title="Market today" ask={open} /></div>
+            <AiMarkdown text={data.text} collapse={false} title="Market today" ask={open} previewClass={open ? undefined : 'line-clamp-3'} />
             {data.text.length > 140 && (
               <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
                 className="min-h-11 rounded-[8px] text-[14px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
                 {open ? 'Show less' : 'Read more'}
               </button>
             )}
-            <AsOf at={data.as_of ? Date.parse(data.as_of) : null} />
+            {data.as_of && <p className="text-[12px] text-[var(--text-muted)]">Written {formatDateTime(data.as_of)}</p>}
           </div>
         )}
     </Card>

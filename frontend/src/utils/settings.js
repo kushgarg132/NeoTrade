@@ -82,7 +82,7 @@ export const goalLine = (p) => {
 export const autopilotLine = (p) => {
   if (!p) return null;
   if (!p.autopilot_enabled) return ['Autopilot is ', chip('off'), '.'];
-  return ['Autopilot trades on ', p.autopilot_live ? chip('live money', 'loss') : chip('paper'), ', news entries ', chip(p.autopilot_news ? 'on' : 'off'), '.'];
+  return ['Autopilot trades on ', p.autopilot_live ? chip('live money', 'loss') : chip('paper'), '.'];
 };
 
 /** The deployment-wide Deep model (chat runs on it), else the fallback; provider prefix dropped. */
