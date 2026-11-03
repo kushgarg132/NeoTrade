@@ -266,7 +266,7 @@ async def test_activity_prompt_has_todays_orders_the_plan_and_the_result_for_thi
     assert "Pick cleared the fence" in p and "risk-off regime blocks news entries" in p
     assert "yesterday" not in p and "BOBCO" not in p                      # only today's rows, only this user
     assert "Risk-off: half size" in p and '"risk_multiplier": 0.5' in p and '"orb"' in p
-    assert '"ai_net_pnl": 1250.5' in p
+    assert '"net result": "₹1,250"' in p or '"net result": "₹1,251"' in p
 
 
 async def test_activity_is_once_a_day(db, redis, llm, ai_day):
@@ -510,3 +510,27 @@ async def test_a_note_printing_a_field_name_is_rewritten_once(monkeypatch):
 async def test_a_rewrite_that_still_breaks_the_rule_loses_that_sentence(monkeypatch):
     doc, prompts = await _produced(monkeypatch, "Two refused. It ended with ai_net_pnl flat.", "Two refused. Still ai_net_pnl flat.")
     assert doc["text"] == "Two refused." and len(prompts) == 2
+
+
+async def test_activity_explains_a_cash_rotation_day_without_a_game_plan(db, redis, llm, monkeypatch):
+    monkeypatch.setattr("backend.portfolio.digest.pnl_since", AsyncMock(return_value={"ai": 0.0, "ai_charges": 0.0}))
+    day = NOW.astimezone(IST).date().isoformat()
+    await db["rotation_plans"].insert_one({"user_id": "alice", "date": day, "risk_off": True, "exposure": 0.0, "nifty_vs_200dma": -0.0244,
+                                           "sells": [], "buys": [], "news_vetoed": {"MCX": "results on 2026-11-03"}, "next_rebalance": "2026-11-09"})
+    llm.reply = "It held cash because the Nifty is -2.44% against its 200-day average."
+    doc = await activity.generate(db, redis, "alice", NOW)
+    assert doc["text"].startswith("It held cash")
+    p = llm.calls[0]["prompt"]
+    assert "-2.44%" in p and "2026-11-09" in p and "MCX" in p and "no game plan" not in p
+    assert await activity.run_all(db, redis, NOW) == 0  # alice is found through her rotation plan; already written today
+
+
+async def test_a_holding_note_may_decline_and_is_not_asked_again(db, redis, llm):
+    async def build():
+        return "sys", "write it", {}
+
+    llm.reply = "NONE"
+    assert await core.produce(db, redis, "alice", "holding", "k", build, tier="fast", feature="news", ttl=60) is None
+    assert await db["ai_summaries"].count_documents({}) == 0
+    await core.produce(db, redis, "alice", "holding", "k", build, tier="fast", feature="news", ttl=60)
+    assert len(llm.calls) == 1

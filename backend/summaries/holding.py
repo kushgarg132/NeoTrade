@@ -52,6 +52,17 @@ async def _position(db, redis, user_id: str, symbol: str) -> Optional[dict]:
             "account_value": rupees((p.get("totals") or {}).get("value"))}
 
 
+async def _recent_price(db, redis, symbol: str) -> Optional[dict]:
+    from backend.ai.facts.market import price_summary
+
+    p = await price_summary(db, redis, None, symbol=symbol)
+    if p.get("error"):
+        return None
+    return {"last_close": rupees(p.get("last_close")), "change_20_days": _pct(p.get("ret_20d"), sign=True),
+            "change_60_days": _pct(p.get("ret_60d"), sign=True), "average_200_days": rupees(p.get("sma_200")),
+            "high_52_weeks": rupees(p.get("high_52w")), "low_52_weeks": rupees(p.get("low_52w"))}
+
+
 async def note_for(db, redis, user_id: str, action: dict):
     """The note for one action, written once (the action id is the period key)."""
     async def build():
@@ -63,10 +74,11 @@ async def note_for(db, redis, user_id: str, action: dict):
         t = (await ThesisStore(db).get(user_id, action["symbol"])) or {}
         thesis = {k: rupees(t[k]) if k in ("stop", "target") and isinstance(t[k], (int, float)) else t[k]
                   for k in ("why", "stop", "target", "review_by") if t.get(k)}
-        facts = {"item": {k: action[k] for k in ("kind", "title", "detail")}, "position": position, "thesis": thesis}
+        price = await _recent_price(db, redis, action["symbol"])
+        facts = {"item": {k: action[k] for k in ("kind", "title", "detail")}, "position": position, "thesis": thesis, "price": price}
         system, prompt = render(
             "summary_holding", item=core.as_facts(facts["item"]), position=core.as_facts(position),
-            thesis=core.as_facts(thesis) if thesis else "none written")
+            thesis=core.as_facts(thesis) if thesis else "none written", price=core.as_facts(price) if price else "not available")
         return system, prompt, facts
 
     return await core.produce(db, redis, user_id, KIND, action["id"], build, tier="fast", feature="news",

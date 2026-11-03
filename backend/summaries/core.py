@@ -16,6 +16,7 @@ from backend.prompts import prompt_id
 logger = logging.getLogger(__name__)
 
 COLLECTION = "ai_summaries"
+NOTHING_TO_SAY = "NONE"
 FAIL_BACKOFF = 6 * 3600  # a failed attempt is not retried for 6 hours (4 tries a day at most)
 _TAGS = re.compile(r"<[^>]*>")
 Build = Callable[[], Awaitable[Optional[tuple[str, str, object]]]]
@@ -112,6 +113,8 @@ async def produce(db, redis, user_id: str, kind: str, key: str, build: Build, *,
     except Exception as exc:
         logger.warning("summary %s for %s failed: %s", kind, user_id, exc)
         text = ""
+    if text == NOTHING_TO_SAY:
+        return None  # the claim stays: the model looked and has nothing specific, so it is not asked again
     if not failed(text):
         text, _ = await grounded(text, facts, None)  # a sentence with an unsupported figure is dropped
         text = await _without_banned(text, system, prompt, facts, tier, feature)

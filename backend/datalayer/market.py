@@ -27,7 +27,8 @@ from backend.datalayer.prices import MACRO, MACRO_KEY
 from backend.engine.autorun import near_session
 from backend.engine.session import IST, clock
 from backend.llm import llm_service
-from backend.prompts import render
+from backend.ai.grounding import check_fields
+from backend.prompts import prompt_id, render
 
 logger = logging.getLogger(__name__)
 
@@ -234,8 +235,7 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
     def impacts(d):
         return ", ".join(f"{i['target']} {i['direction']:+.1f}/{i['impact']:.0f}" for i in d["impacts"][:4])
 
-    system, prompt = render(
-        "market_brief",
+    values = dict(
         now=f"{now.astimezone(IST):%a %d %b %Y} {clock(now)} IST",
         news="\n".join(f"- [{d['scope']}] {d['title']} ({d.get('source', '')}) -> {impacts(d)}" for d in items),
         board="\n".join(f"- {r['name']}: {r['value']:,.2f} ({r['percent']:+.2f}%)" for r in board) or "- unavailable",
@@ -246,11 +246,14 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
         calendar="\n".join(f"- {e['at'].astimezone(IST):%a} {clock(e['at'])} IST {e['country']} {e['title']}"
                            for e in events) or "- nothing high-impact in the next 48 hours",
     )
+    system, prompt = render("market_brief", **values)
     text = (await _write_brief(system, prompt) or "").strip()
     if not text or text == "LLM_DISABLED" or text.startswith("Error generating response"):
         await redis.set(BRIEF_BACKOFF_KEY, "1", ex=BRIEF_BACKOFF_SECONDS)
         return False
+    text = (await check_fields({"brief": text}, list(values.values())))["brief"]
     doc = {"text": text, "at": now.timestamp(), "regime": regime_now.get("label"),
+           "prompt": prompt_id("market_brief"),
            "items": [str(d["_id"]) for d in items]}
     await redis.set(BRIEF_KEY, json.dumps(doc), ex=BRIEF_TTL_SECONDS)
     return True

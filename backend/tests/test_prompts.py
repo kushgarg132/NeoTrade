@@ -52,11 +52,11 @@ PROMPTS = {
 # AI summaries (backend/summaries/)
 PROMPTS |= {
     "summary_day": {"phase": "after the market has closed", "account": "Your account: ₹2,950", "count": 1,
-                    "needs": "- DOWN: HOLD → SELL", "market": "{\"regime\": \"neutral\"}"},
-    "summary_holding": {"item": "{\"kind\": \"bad_news\"}", "position": "{\"weight_pct\": 18.0}", "thesis": "none written"},
+                    "needs": "- DOWN: HOLD → SELL", "market": "{\"regime\": \"neutral\"}", "sectors": "Basic Materials"},
+    "summary_holding": {"item": "{\"kind\": \"bad_news\"}", "position": "{\"weight_pct\": 18.0}", "thesis": "none written", "price": "{\"last_close\": \"₹100.00\"}"},
     "summary_weekly": {"week": "2026-W42", "report": "{}", "patterns": "none", "news": "{}"},
     "summary_habits": {"patterns": "none yet", "week": "{}"},
-    "summary_activity": {"day": "Thu 15 Oct 2026", "orders": "none", "plan": "no plan", "result": "{}"},
+    "summary_activity": {"day": "Thu 15 Oct 2026", "orders": "none", "rotation": "{\"next rebalance\": \"2026-11-09\"}", "plan": "no plan", "result": "{}"},
 }
 
 

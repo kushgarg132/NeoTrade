@@ -21,6 +21,7 @@ import yfinance as yf
 from backend.routers.news import fresh_headlines
 from backend.engine.session import IST
 from backend.llm import llm_service
+from backend.ai.grounding import check_fields
 from backend.prompts import render
 
 logger = logging.getLogger(__name__)
@@ -180,8 +181,7 @@ async def explain_index_move(ticker: str, name: str) -> Dict[str, Any]:
     if session is None:
         raise ExplanationUnavailable(f"No recent sessions for {name}")
 
-    system, prompt = render(
-        "index_move",
+    values = dict(
         name=name,
         session_date=session["date"],
         session=_format_session(session),
@@ -196,6 +196,7 @@ async def explain_index_move(ticker: str, name: str) -> Dict[str, Any]:
             "No recent headlines were found.",
         ),
     )
+    system, prompt = render("index_move", **values)
     from backend.ai.analyst import emit, report_sink
 
     if report_sink.get() is None:
@@ -214,6 +215,8 @@ async def explain_index_move(ticker: str, name: str) -> Dict[str, Any]:
     # get_completion reports failure as text rather than raising.
     if not text or text == "LLM_DISABLED" or text.startswith("Error generating response"):
         raise ExplanationUnavailable("The analysis model is unavailable right now")
+    # Streamed text has already shown; what is cached and returned last passed the check.
+    text = (await check_fields({"analysis": text}, [*values.values(), session]))["analysis"]
 
     result = {
         "ticker": ticker,

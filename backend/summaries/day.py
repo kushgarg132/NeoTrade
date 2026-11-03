@@ -27,6 +27,14 @@ async def _market(db, redis) -> dict:
             "markets": [{k: r.get(k) for k in ("name", "value", "percent")} for r in (m.get("markets") or [])[:MARKET_ROWS]]}
 
 
+async def _largest_sectors(db, redis, user_id: str) -> list[str]:
+    from backend.ai.facts.user import portfolio
+
+    p = await portfolio(db, redis, user_id, account="mine")
+    rows = sorted((p.get("concentration") or {}).get("sectors") or [], key=lambda s: -(s.get("pct") or 0))
+    return [s["sector"] for s in rows[:3] if s.get("sector")]
+
+
 async def generate(db, redis, user_id: str, phase: str, now: datetime, digest_html: str):
     """The day summary for this user and phase ("pre" | "post"), once per IST day."""
     key = f"{now.astimezone(IST).date().isoformat()}:{phase}"
@@ -36,11 +44,12 @@ async def generate(db, redis, user_id: str, phase: str, now: datetime, digest_ht
 
         actions = await digest._actions(db, user_id, now)
         facts = {"account": core.plain(digest_html), "needs_you_count": len(actions),
-                 "needs_you": [a["title"] for a in actions[:NEEDS]], "market": await _market(db, redis)}
+                 "needs_you": [a["title"] for a in actions[:NEEDS]], "market": await _market(db, redis),
+                 "sectors": await _largest_sectors(db, redis, user_id)}
         system, prompt = render(
             "summary_day", phase=PHASES[phase], account=facts["account"], count=len(actions),
             needs="\n".join(f"- {t}" for t in facts["needs_you"]) or "- nothing",
-            market=core.as_facts(facts["market"]))
+            market=core.as_facts(facts["market"]), sectors=", ".join(facts["sectors"]) or "not known")
         return system, prompt, facts
 
     return await core.produce(db, redis, user_id, KIND, key, build, tier="fast", feature="portfolio",
