@@ -74,6 +74,8 @@ async def test_the_check_names_stale_bars_unlisted_symbols_and_silent_feeds():
         {"symbol": "INFY", "date": "2026-10-07"},
         {"symbol": "GMRINFRA", "date": "2026-09-25"},  # its quote stopped coming
     ])
+    await db["daily_bars"].insert_one({"symbol": "JETAIRWAYS", "date": "2026-09-25"})  # delisted: nobody shows it
+    await db["watchlist"].insert_one({"user_id": "alice", "symbols": ["GMRINFRA"]})
     await db["user_prefs"].insert_one({"user_id": "alice", "universe": ["TCS.NS", "INFY", "OLDCO"]})
     await db["instruments"].insert_many([
         {"exchange": "NSE", "tradingsymbol": "TCS"}, {"exchange": "NSE", "tradingsymbol": "INFY"}])
@@ -209,21 +211,26 @@ async def _failures(db, now=WEDNESDAY_11):
     return await data_quality.live(db, redis, now)
 
 
-async def test_an_off_lab_on_a_trading_day_is_a_fault_and_not_at_weekends(monkeypatch):
+async def test_an_off_lab_is_the_owners_choice_not_a_fault_and_expects_no_intraday_run(monkeypatch):
     from backend.app_settings import AppSettingsStore
 
     async def off(self):
         return False
     monkeypatch.setattr(AppSettingsStore, "get_lab_enabled", off)
     db = await _ok_db()
-    assert [f for f in await _failures(db) if f.startswith("Lab is off")]
-    assert not any(f.startswith("Lab is off") for f in await data_quality.live(db, _healthy(), SATURDAY))
+    await db["user_prefs"].insert_one({"user_id": "u1", "auto_paper_intraday": True})
+    assert await _failures(db) == []
 
 
-async def test_an_auto_user_without_a_fresh_intraday_run_is_named():
+async def test_an_auto_user_without_a_fresh_intraday_run_is_counted_never_by_id(monkeypatch):
+    from backend.app_settings import AppSettingsStore
+
+    async def on(self):
+        return True
+    monkeypatch.setattr(AppSettingsStore, "get_lab_enabled", on)
     db = await _ok_db()
     await db["user_prefs"].insert_one({"user_id": "u1", "auto_paper_intraday": True})
-    assert await _failures(db) == ["No INTRADAY run today for u1 (auto-run is on)"]
+    assert await _failures(db) == ["No intraday run today on 1 account (auto-run is on)"]
     assert await _failures(db, datetime(2026, 10, 21, 3, 30, tzinfo=timezone.utc)) == []  # 09:00: too early
     start = datetime(2026, 10, 21, 3, 50, tzinfo=timezone.utc)  # 09:20 IST
     run = {"user_id": "u1", "mode": "INTRADAY", "status": "RUNNING", "started_at": start,

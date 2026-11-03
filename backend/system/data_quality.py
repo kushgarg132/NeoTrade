@@ -139,14 +139,6 @@ async def _llm(redis, now: datetime) -> list[str]:
     return [f"AI provider failing: {error['error'][:160]}"]
 
 
-async def _lab(db) -> list[str]:
-    from backend.app_settings import AppSettingsStore
-
-    if await AppSettingsStore(db).get_lab_enabled():
-        return []
-    return ["Lab is off: the intraday auto-run, news scoring and nightly learning are not running"]
-
-
 def _as_ist(value) -> Optional[datetime]:
     if isinstance(value, str):
         value = datetime.fromisoformat(value)
@@ -162,7 +154,7 @@ async def _intraday_runs(db, redis, now: datetime) -> list[str]:
     if not RUN_CHECK_FROM <= local.time() < RUN_CHECK_UNTIL:
         return []
     day_start = datetime.combine(local.date(), time(0, 0), tzinfo=IST)
-    failures = []
+    failures, missing = [], 0
     async for prefs in db["user_prefs"].find({"auto_paper_intraday": True}, {"user_id": 1}):
         user = prefs["user_id"]
         if redis is not None:
@@ -172,13 +164,15 @@ async def _intraday_runs(db, redis, now: datetime) -> list[str]:
         runs = await db["trading_runs"].find(
             {"user_id": user, "mode": "INTRADAY", "started_at": {"$gte": day_start}}).sort("started_at", -1).to_list(length=None)
         if not runs:
-            failures.append(f"No INTRADAY run today for {user} (auto-run is on)")
+            missing += 1
             continue
         running = next((r for r in runs if r["status"] == "RUNNING"), None)
         if running:
             seen = _as_ist((running.get("progress") or {}).get("last_bar_at")) or _as_ist(running["started_at"])
             if local - seen > BAR_STALE_AFTER:
-                failures.append(f"INTRADAY run for {user} saw no bar for {(local - seen) // timedelta(minutes=1)} min")
+                failures.append(f"An intraday run saw no bar for {(local - seen) // timedelta(minutes=1)} min")
+    if missing:
+        failures.insert(0, f"No intraday run today on {missing} account{'s' if missing > 1 else ''} (auto-run is on)")
     return failures
 
 
@@ -201,7 +195,11 @@ async def _news_rate(db, now: datetime) -> list[str]:
 async def _silent_stops(db, redis, now: datetime) -> list[str]:
     if not is_trading_day(now.astimezone(IST).date()):
         return []
-    return [*await _lab(db), *await _intraday_runs(db, redis, now), *await _news_rate(db, now)]
+    from backend.app_settings import AppSettingsStore
+
+    # An off Lab is the owner's standing choice (the AI tab says so), not a fault; it also means no intraday run is due.
+    runs = await _intraday_runs(db, redis, now) if await AppSettingsStore(db).get_lab_enabled() else []
+    return [*runs, *await _news_rate(db, now)]
 
 
 async def live(db, redis, now: Optional[datetime] = None) -> list[str]:
@@ -218,7 +216,6 @@ async def check(db, redis=None, now: Optional[datetime] = None) -> dict:
         [{"$group": {"_id": "$symbol", "date": {"$max": "$date"}}}])}
     newest = max(latest.values(), default=None)
     session = last_trading_day_at(now, BARS_READY).isoformat()
-    stale = [s for s, d in latest.items() if d < session]
 
     universe = set()
     async for prefs in db["user_prefs"].find({}, {"universe": 1}):
@@ -226,6 +223,12 @@ async def check(db, redis=None, now: Optional[datetime] = None) -> dict:
     listed = set(await db["instruments"].distinct(
         "tradingsymbol", {"exchange": "NSE", "tradingsymbol": {"$in": sorted(universe)}}))
     unlisted = universe - listed
+    # Only names the app shows: ex-members and delisted stocks keep their old bars for research and go quiet for good.
+    from backend.datalayer.prices import priority_symbols
+    from backend.factor.data import universe as factor_universe
+
+    tracked = universe | {s.removesuffix(".NS") for s in factor_universe()} | await priority_symbols(db)
+    stale = [s for s, d in latest.items() if d < session and s in tracked]
 
     heard = set(await db[NEWS].distinct("feeds", {"fetched_at": {"$gte": now - SILENT_AFTER}}))
     silent = [name for name, *_ in FEEDS if name not in heard]

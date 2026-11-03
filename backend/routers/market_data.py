@@ -139,6 +139,18 @@ def _movers_sync() -> List[Dict[str, Any]]:
     return gainers + losers
 
 
+async def _board(key: str, names_to_symbols: Dict[str, str]) -> List[Dict[str, Any]]:
+    """The ingest worker's rows as they stand, so a page never reads a copy a minute behind them. The cached fetch
+    is only for when the worker is down or has not caught up."""
+    from backend.database import db
+    from backend.datalayer.prices import macro_rows
+
+    rows = await macro_rows(db.redis, names_to_symbols)
+    if len(rows) == len(names_to_symbols):
+        return rows
+    return await cached(key, QUOTES_TTL, lambda: _quotes(names_to_symbols))
+
+
 async def _quotes(names_to_symbols: Dict[str, str]) -> List[Dict[str, Any]]:
     # The ingest worker keeps these in Redis (backend/datalayer/prices.py);
     # fetch here only when it is down or has not caught up.
@@ -156,7 +168,7 @@ async def _quotes(names_to_symbols: Dict[str, str]) -> List[Dict[str, Any]]:
 
 @router.get("/market/indices")
 async def get_market_indices():
-    return await cached("indices", QUOTES_TTL, lambda: _quotes(INDICES))
+    return await _board("indices", INDICES)
 
 
 @router.get("/market/indices/more")
@@ -183,7 +195,7 @@ GLOBAL_INDICES = {
 @router.get("/market/global")
 async def get_global_indices():
     """Fetch global market indices."""
-    return await cached("global", QUOTES_TTL, lambda: _quotes(GLOBAL_INDICES))
+    return await _board("global", GLOBAL_INDICES)
 
 
 
@@ -243,6 +255,14 @@ def _fetch_index_detail_sync(ticker: str, name: str) -> Dict[str, Any] | None:
     }
 
 
+async def _index_row(ticker: str) -> Dict[str, Any]:
+    """The level the index's tile shows, so tapping a tile opens the same figure; {} when the board has no row."""
+    rows = [*await _board("indices", INDICES), *await _board("global", GLOBAL_INDICES),
+            *await cached("indices_more", QUOTES_TTL, lambda: _quotes({**BROAD_INDICES, **SECTOR_INDICES}))]
+    row = next((r for r in rows if r.get("symbol") == ticker), None)
+    return {k: row[k] for k in ("value", "change", "percent", "at") if k in row} if row else {}
+
+
 @router.get("/market/index/{ticker}")
 async def get_index_detail(ticker: str):
     """Five years of daily closes (the chart's 1M / 1Y / 5Y) plus the figures a reader checks on an
@@ -257,7 +277,7 @@ async def get_index_detail(ticker: str):
         detail = None
     if detail is None:
         raise HTTPException(status_code=502, detail=f"No price data for {name} right now")
-    return {**detail, "has_stocks": bool(index_members.members(ticker))}
+    return {**detail, **await _index_row(ticker), "has_stocks": bool(index_members.members(ticker))}
 
 
 def _fetch_index_intraday_sync(ticker: str, days: int = 1) -> List[Dict[str, Any]]:
@@ -397,7 +417,9 @@ async def _cached_quotes(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
     return found
 
 
-SCAN_TTL = 5 * 60
+# Short on purpose: the scan and the index member lists only read the quote cache, and a 5-minute copy of it made the
+# breadth card disagree with the stock list it opens.
+SCAN_TTL = 60
 SCAN_TOP = 10
 NEAR_52W = 0.02  # within 2% of the 52-week high or low counts as "near"
 
@@ -411,6 +433,8 @@ def market_scan(rows: List[Dict[str, str]], quotes: Dict[str, Dict[str, Any]], r
         q = quotes.get(r["symbol"])
         if q and q.get("change_pct") is not None:
             hi, lo = ranges.get(r["symbol"], (None, None))
+            # The bars end yesterday: a new high or low today is the range's edge, never outside it.
+            hi, lo = hi and max(hi, q["price"]), lo and min(lo, q["price"])
             movers.append({"symbol": r["symbol"], "name": r["name"], "sector": r["sector"], "price": q["price"],
                            "change_pct": q["change_pct"], "high_52w": hi, "low_52w": lo})
     by_change = sorted(movers, key=lambda m: m["change_pct"], reverse=True)
@@ -430,7 +454,8 @@ def market_scan(rows: List[Dict[str, str]], quotes: Dict[str, Dict[str, Any]], r
         "near_high": near_high[:SCAN_TOP], "near_low": near_low[:SCAN_TOP], "sectors": sectors,
         "breadth": {"up": sum(m["change_pct"] > 0 for m in movers), "down": sum(m["change_pct"] < 0 for m in movers),
                     "n": len(movers)},
-        "at": max((quotes[m["symbol"]]["at"] for m in movers), default=None),
+        # The oldest quote behind the figures: the held names refresh every 15 s, the rest every 5 min.
+        "at": min((quotes[m["symbol"]]["at"] for m in movers), default=None),
     }
 
 
@@ -455,7 +480,7 @@ async def _scan() -> Dict[str, Any]:
 
 @router.get("/market/scan")
 async def get_market_scan():
-    """Nifty 200 gainers, losers, 52-week highs and lows, sector moves (cached 5 min), each sector with its
+    """Nifty 200 gainers, losers, 52-week highs and lows, sector moves (cached 1 min), each sector with its
     news sentiment read fresh (one MGET; not cached with the scan)."""
     scan = await cached("scan", SCAN_TTL, _scan) or {}
     scan = {k: v for k, v in scan.items() if k != "movers"}  # the cache entry keeps it (sector page)

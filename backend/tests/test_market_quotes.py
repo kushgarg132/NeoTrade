@@ -190,3 +190,17 @@ def test_market_scan_endpoint_joins_sentiment_in_one_mget(monkeypatch):
     out = asyncio.run(market_data.get_market_scan())
     assert [s["sentiment"] for s in out["sectors"]] == [0.5, None] and out["gainers"] == []
     assert calls == [["sector_sentiment:IT", "sector_sentiment:Banks"]]
+
+
+async def test_the_index_page_shows_the_level_its_tile_shows(monkeypatch):
+    row = {"name": "NIFTY 50", "symbol": "^NSEI", "value": 23676.0, "change": 235.2, "percent": 1.0, "at": 5.0}
+
+    async def board(key, names):
+        return [row] if key == "indices" else []
+
+    async def more(key, ttl, fetch):
+        return []
+    monkeypatch.setattr(market_data, "_board", board)
+    monkeypatch.setattr(market_data, "cached", more)
+    assert await market_data._index_row("^NSEI") == {"value": 23676.0, "change": 235.2, "percent": 1.0, "at": 5.0}
+    assert await market_data._index_row("^UNKNOWN") == {}

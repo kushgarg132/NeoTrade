@@ -200,3 +200,13 @@ def test_scan_movers_news_false_when_the_news_query_fails(http):
 def test_scan_response_has_no_movers_key(http):
     client, _, _ = _scan_http(http)
     assert "movers" not in client.get("/market/scan").json()
+
+
+def test_the_scan_dates_itself_by_its_oldest_quote_and_a_new_high_stays_inside_the_range():
+    rows = [{"symbol": "TCS", "name": "TCS", "sector": "IT"}, {"symbol": "INFY", "name": "Infosys", "sector": "IT"}]
+    quotes = {"TCS": {"price": 110.0, "change_pct": 3.0, "at": 100.0}, "INFY": {"price": 50.0, "change_pct": -1.0, "at": 400.0}}
+    scan = market_data.market_scan(rows, quotes, {"TCS": (105.0, 80.0), "INFY": (90.0, 55.0)})
+    assert scan["at"] == 100.0
+    tcs = next(m for m in scan["movers"] if m["symbol"] == "TCS")
+    infy = next(m for m in scan["movers"] if m["symbol"] == "INFY")
+    assert tcs["high_52w"] == 110.0 and infy["low_52w"] == 50.0
