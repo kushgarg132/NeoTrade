@@ -28,7 +28,6 @@ source_modules =
     backend.learning
     backend.mine
     backend.options
-    backend.plan
     backend.portfolio
     backend.research
     backend.risk
@@ -44,10 +43,10 @@ ignore_imports =
     backend.chat.actions -> backend.routers.settings
     backend.chat.actions -> backend.routers.suggestions
     backend.chat.actions -> backend.routers.trading
+    backend.chat.tools -> backend.routers.market_data
     backend.chat.tools -> backend.routers.news
     backend.chat.tools -> backend.routers.portfolio
     backend.datalayer.news -> backend.routers.news
-    backend.engine.autorun -> backend.routers.trading
     backend.guardrails.telegram_bot -> backend.routers.settings
     backend.mine.stock -> backend.routers.portfolio
     backend.portfolio.health -> backend.routers.news
@@ -75,7 +74,6 @@ source_modules =
     backend.forecast.setups
     backend.forecast.study
     backend.mine
-    backend.plan
     backend.portfolio
     backend.routers
     backend.scheduler
@@ -117,7 +115,6 @@ source_modules =
     backend.forecast
     backend.lab
     backend.mine
-    backend.plan
     backend.portfolio
     backend.routers
     backend.scheduler
@@ -166,7 +163,6 @@ source_modules =
     backend.mine
     backend.ml
     backend.options
-    backend.plan
     backend.portfolio
     backend.profile
     backend.research

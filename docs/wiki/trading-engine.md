@@ -251,7 +251,6 @@ Behaviour that surprises:
 - Instrument tokens from NSE/BSE free lists are synthetic and cannot subscribe to ticks; a Kite sync overwrites them in place (`free_source.py::_synthetic_token`).
 
 Open issues / possible bugs found while reading (not fixed):
-- `backend/server.py:147` still indexes `paper_limit_orders`, which nothing reads or writes since the paper ticket was removed (the stuck sweep for it is gone).
 - `risk/backtest_gate.py::BacktestGateStore.ensure_indexes` (line 44) and `risk/kill_switch.py::KillSwitchStore.ensure_indexes` (line 30) are defined but never called at startup; `paper_trades` has no index at all (`persistence.py:50-53` indexes only orders, fills, positions).
 - `risk/backtest_gate.py:50` and `risk/kill_switch.py:48` call `datetime.now(...)` directly (allowed: `risk/` is outside the grep test), unlike `engine/`.
 - `run` still builds `owner_by_symbol` last-writer-wins (`runner.py:492`, `:605`), but it is only a fallback (`size_intents` prefers `strategies_by_name[intent.strategy]`, square-off prefers `holders`) and every run's strategies share one mode (`trading.py` filters by `spec.mode`), so the fallback only ever yields the right mode. Harmless unless a mixed-mode run is introduced.

@@ -79,6 +79,8 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
+      - name: Check import contracts
+        run: lint-imports --config backend/.importlinter
       - name: Run pytest
         run: pytest -q
       - name: Build backend image

@@ -4,7 +4,7 @@ user's paper record, the rules learned from it (learning/adapt.py) and its
 results by Nifty trend and by reason (learning/attribution.py).
 
 Read by GET /strategies/library, the chat assistant's get_strategy_library
-tool and, in Phase 15.2, the game-plan builder. Read-only.
+tool. Read-only.
 """
 
 from typing import Literal, Optional

@@ -43,7 +43,6 @@ NeoTrade key).
 | `research_report.md` | standard | the stock's research note and thesis |
 | `market_brief.md` | standard | the market brief (hourly in session, only when the regime moved or material news landed) |
 | `index_move.md` | standard | why an index moved in its last session (Redis `index_move:<ticker>`, shared: 15 min while dated today, then until the next 9:15 AM IST open, ≤ 6 h) |
-| `game_plan*.md`, `game_plan_revision*.md` | deep | the pre-open plan and its revisions |
 | `portfolio_review.md` | deep | holdings write-up and action plan |
 | `learning_review.md` | standard | Friday learning note |
 | `strategy_hypotheses.md` | deep | monthly threshold ideas |

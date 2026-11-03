@@ -175,7 +175,6 @@ async def startup_db_client():
 
         await LedgerStore(db.db, user_id="").ensure_indexes()
         await LiveOrderStore(db.db).ensure_indexes()
-        await db.db["paper_limit_orders"].create_index([("user_id", 1), ("status", 1)])
     except Exception as exc:
         logger.error("ledger indexes not created: %s", exc)
     await ensure_collection_indexes(db.db)
