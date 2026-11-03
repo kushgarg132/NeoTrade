@@ -9,6 +9,7 @@ from typing import Literal, Optional, Union
 
 from langchain_core.tools import StructuredTool
 
+from backend.ai.facts import as_tools
 from backend.chat.lc_tools import fetch_price_history_tool, fetch_stock_info_tool, resolve_symbol_tool
 from backend.ai.facts import market as market_facts
 from backend.ai.facts import user as user_facts
@@ -270,4 +271,5 @@ def read_tools(db, redis, user_id: str) -> list:
         StructuredTool.from_function(coroutine=explain_index, name="explain_index", description=(
             "Why an index moved in its latest session, e.g. ^NSEI for NIFTY 50 or ^NSEBANK for BANK NIFTY.")),
     ]
-    return own + [fetch_stock_info_tool, fetch_price_history_tool, resolve_symbol_tool]
+    return own + as_tools(db, redis, user_id, ["price_summary", "next_results"]) + [
+        fetch_stock_info_tool, fetch_price_history_tool, resolve_symbol_tool]

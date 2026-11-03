@@ -157,3 +157,22 @@ def test_ai_vs_me_without_roles_treats_every_broker_as_mine():
     rows = accounts.ai_vs_me(_trades(), {}, {"mine": 100_000.0}, [])
     aug = {r["month"]: r for r in rows}["2026-08"]
     assert aug["mine"]["fills"] == 4 and aug["ai"]["fills"] == 0
+
+
+async def test_one_holding_carries_its_thesis_and_tax_for_chat(monkeypatch):
+    from mongomock_motor import AsyncMongoMockClient
+
+    from backend.ai.facts import user as user_facts
+
+    async def snapshot(db, uid):
+        return {"at": "2026-11-03", "holdings": [{"symbol": "AAA", "kind": "STOCK", "quantity": 1, "last_price": 10.0}]}
+
+    async def visible(db, uid):
+        return True
+
+    monkeypatch.setattr("backend.portfolio.service.latest_snapshot", snapshot)
+    monkeypatch.setattr("backend.portfolio.digest.verdicts_visible", visible)
+    db = AsyncMongoMockClient()["t"]
+    out = await user_facts.portfolio(db, None, "alice", symbol="AAA")
+    assert out["thesis"] == "No thesis written"
+    assert out["tax_if_sold"] == "tax if sold: unknown (no dated buys in the journal)"

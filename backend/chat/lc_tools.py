@@ -8,6 +8,11 @@ from backend.research.search import resolve_company_query
 
 logger = logging.getLogger(__name__)
 
+def _bare(symbol: str) -> str:
+    """Models often write the Yahoo form; the instrument lookup wants the NSE symbol."""
+    return symbol.strip().upper().removesuffix(".NS")
+
+
 @tool
 async def fetch_stock_info_tool(symbol: str) -> str:
     """
@@ -16,7 +21,7 @@ async def fetch_stock_info_tool(symbol: str) -> str:
     Useful when asked for 'details', 'fundamentals', or 'info' about a stock.
     """
     try:
-        info = await fetch_stock_info_logic(symbol)
+        info = await fetch_stock_info_logic(_bare(symbol))
         
         # Format as a readable string for the LLM
         return f"""
@@ -42,7 +47,7 @@ async def fetch_price_history_tool(symbol: str, period: str = "1mo") -> str:
     Period options: 1d, 5d, 1mo, 3mo, 6mo, 1y, ytd.
     """
     try:
-        candles, source = await fetch_price_history_logic(symbol, period=period)
+        candles, source = await fetch_price_history_logic(_bare(symbol), period=period)
         
         if not candles:
             return f"No price history found for {symbol}."

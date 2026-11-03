@@ -33,6 +33,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from backend.ai.grounding import check_fields
 from backend.ai.sentiment import weighted_sentiment
 from backend.routers.news import fetch_news_logic
 from backend.core.models import FinancialEvent, NewsArticle
@@ -124,28 +125,64 @@ def _split_report(text: str) -> tuple[str, str]:
     return summary.strip(), thesis.strip()
 
 
+async def _note_facts(symbol: str, redis) -> dict[str, str]:
+    """The stock's price, fundamentals, next results and the news's measured record for the note.
+    Shared between users, so nothing here is any user's: a fact that fails reads as not available."""
+    from backend.ai.facts.market import fundamentals, next_results, price_summary
+    from backend.database import db
+    from backend.datalayer.accuracy import news_trust
+
+    def pct(x):
+        return "n/a" if x is None else f"{x * 100:.2f}%"
+
+    p, f, r = await asyncio.gather(price_summary(db.db, redis, None, symbol=symbol), fundamentals(db.db, redis, None, symbol=symbol),
+                                   next_results(db.db, redis, None, symbols=[symbol], days=60))
+    price = "Not available." if p.get("error") else (
+        f"Last close {p['last_close']} on {p['date']}. Returns: 1 day {p['ret_1d']}%, 5 days {p['ret_5d']}%, 20 days {p['ret_20d']}%, "
+        f"60 days {p['ret_60d']}%. 52-week high {p['high_52w']}, low {p['low_52w']}. Averages: 20-day {p['sma_20']}, 50-day {p['sma_50']}, 200-day {p['sma_200']}.")
+    pe = "n/a" if f.get("pe_ratio") is None else round(f["pe_ratio"], 2)
+    funds = "Not available." if f.get("error") else (
+        # Not the stored debt_to_equity: yfinance.py::_debt_to_equity computes debt over cash (backlog).
+        f"P/E {pe}, return on equity {pct(f.get('return_on_equity'))}, return on assets {pct(f.get('return_on_assets'))}, "
+        f"revenue growth {pct(f.get('revenue_growth'))}.")
+    date = (r.get("dates") or {}).get(symbol)
+    return {"price": price, "fundamentals": funds, "results": date or "none known in the next 60 days",
+            "news_trust": await news_trust(db.db)}
+
+
 async def _report(**values) -> tuple[str, str]:
     """The research_report call: (summary, thesis), with the market brief
     (backend/datalayer/market.py) as backdrop so macro and global news
     reach every note."""
     from backend.datalayer.market import backdrop
 
-    context = await backdrop(_redis())
+    redis = _redis()
+    context = await backdrop(redis)
     regime = context.get("regime") or {}
     values["backdrop"] = "\n".join(filter(None, [
         f"Risk regime: {regime['label']} ({regime['score']:+.2f})" if regime else "",
         context.get("brief") or "",
     ])) or "Not available."
+    values.update(await _note_facts(values["symbol"], redis))
     system, prompt = render("research_report", **values)
+
+    async def checked(text: str) -> tuple[str, str]:
+        # Streamed text has already shown; what is stored and returned last is what passed the check.
+        summary, thesis = _split_report(text)
+        if summary == "Unable to generate summary.":
+            return summary, thesis
+        fields = await check_fields({"summary": summary, "thesis": thesis}, list(values.values()))
+        return fields["summary"], fields["thesis"]
+
     try:
         if report_sink.get() is None:
-            return _split_report(await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="research"))
+            return await checked(await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="research"))
         parts = []
         async for delta in llm_service.stream_completion(prompt, system_prompt=system, tier="standard", feature="research"):
             parts.append(delta)
             if delta != "LLM_DISABLED" and not delta.startswith("Error generating response"):
                 emit({"type": "delta", "text": delta})
-        return _split_report("".join(parts))
+        return await checked("".join(parts))
     except Exception as e:
         logger.error(f"AnalystAgent LLM Error: {e}")
         return "Unable to generate summary.", ""

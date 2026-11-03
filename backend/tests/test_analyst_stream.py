@@ -75,3 +75,22 @@ async def test_a_disabled_llm_marker_is_not_streamed(wired, monkeypatch):
     finally:
         analyst.report_sink.reset(token)
     assert [e for e in events if e["type"] == "delta"] == []
+
+
+async def test_note_reads_price_and_fundamentals_and_drops_a_made_up_figure(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    seen = {}
+
+    async def complete(prompt, **_):
+        seen["prompt"] = prompt
+        return "### Market Sentiment\nNeutral. Close is 812.5. Profit will rise 77.7%.\n===THESIS===\nSteady at 812.5."
+
+    monkeypatch.setattr(analyst.llm_service, "get_completion", complete)
+    monkeypatch.setattr(analyst, "_note_facts", AsyncMock(return_value={
+        "price": "Last close 812.5", "fundamentals": "P/E 10.5", "results": "2026-11-20", "news_trust": "Company 44%"}))
+    monkeypatch.setattr("backend.datalayer.market.backdrop", AsyncMock(return_value={}))
+    monkeypatch.setattr(analyst, "_redis", lambda: None)
+    summary, thesis = await analyst._report(symbol="SBIN", sentiment_score="0.10", relevant_count=1, news="n", events="[]")
+    assert "Last close 812.5" in seen["prompt"] and "P/E 10.5" in seen["prompt"] and "2026-11-20" in seen["prompt"]
+    assert "812.5" in summary and "77.7%" not in summary and thesis == "Steady at 812.5."

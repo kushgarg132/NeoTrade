@@ -18,7 +18,7 @@ from backend.chat.context import build_snapshot, format_profile, format_snapshot
 from backend.chat.tools import read_tools
 from backend.llm import llm_service
 from backend.profile.store import ProfileStore
-from backend.prompts import render
+from backend.prompts import render, shared_text
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ TOOL_LABELS = {
     "get_market_backdrop": "Reading the market backdrop", "fetch_stock_info_tool": "Looking up the company",
     "fetch_price_history_tool": "Reading the price history", "resolve_symbol_tool": "Finding the symbol",
     "make_chart": "Drawing a chart", "generate_image": "Generating an image",
+    "price_summary": "Reading the price trend", "next_results": "Checking results dates",
 }
 
 
@@ -124,7 +125,11 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
         return
 
     snapshot = await build_snapshot(db, redis, user_id)
-    system, page_note = render("chat", snapshot=format_snapshot(snapshot), profile=await _profile(db, user_id),
+    from backend.portfolio.digest import verdicts_visible
+
+    # The same audience as the Portfolio page's verdicts: a personal call needs registration for anyone else.
+    view = shared_text("chat_view_owner" if await verdicts_visible(db, user_id) else "chat_view_user")
+    system, page_note = render("chat", snapshot=format_snapshot(snapshot), profile=await _profile(db, user_id), view=view,
                                page=(context or {}).get("page") or "unknown")
     if (context or {}).get("symbol"):
         page_note += f" (looking at {context['symbol']})"
@@ -166,6 +171,9 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
                 while shown:
                     yield shown.pop(0)
             elif kind == "on_chat_model_stream":
+                # A tool that calls a model itself (symbol lookup, peers) streams too: that is not the reply.
+                if (event.get("metadata") or {}).get("langgraph_node") == "tools":
+                    continue
                 text = split.feed(_text(event["data"]["chunk"].content))
                 if text:
                     answer += text

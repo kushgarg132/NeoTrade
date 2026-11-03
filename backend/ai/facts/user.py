@@ -44,7 +44,15 @@ async def portfolio(db, redis, user_id, symbol: Optional[str] = None,
         match = [h for h in holdings if h["symbol"].upper() == symbol.upper()]
         if not match:
             return {"error": f"{symbol} is not among the user's holdings."}
-        return {**{k: match[0].get(k) for k in HOLDING_KEYS}, "health": match[0].get("health")}
+        from backend.datalayer.bars import today_ist
+        from backend.mine.thesis import ThesisStore
+        from backend.portfolio.review import tax_line, thesis_line
+        from backend.portfolio.scorecard import open_lots
+
+        lots = open_lots(await JournalStore(db).list_trades(user_id), match[0]["symbol"])
+        return {**{k: match[0].get(k) for k in HOLDING_KEYS}, "health": match[0].get("health"),
+                "thesis": thesis_line(await ThesisStore(db).get(user_id, match[0]["symbol"])),
+                "tax_if_sold": tax_line(match[0], lots, today_ist())}
     return {
         # as_of is when the portfolio was analysed, not when it was read: stale holdings must look stale.
         "account": account, "as_of": snap["at"], "totals": snap.get("totals"), "benchmark": snap.get("benchmark"),

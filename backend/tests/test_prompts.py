@@ -8,7 +8,7 @@ import pytest
 from backend.prompts import render
 
 PROMPTS = {
-    "chat": {"snapshot": "portfolio: value=401747", "page": "/portfolio", "profile": "name=Kush"},
+    "chat": {"snapshot": "portfolio: value=401747", "page": "/portfolio", "profile": "name=Kush", "view": "Own view allowed"},
     "model_test": {},
     "final_turn": {},
     "resolve_instrument": {"query": "tata motors", "candidates": '[{"tradingsymbol": "TATAMOTORS"}]'},
@@ -16,7 +16,8 @@ PROMPTS = {
     "triage_news": {"items": "[0] [GLOBAL] Brent jumps (Reuters)"},
     "score_market_news": {"sectors": "Power, Realty", "items": "[0] (GLOBAL) Brent jumps"},
     "score_news": {"symbol": "SBIN", "articles": "[0] headline"},
-    "research_report": {"symbol": "SBIN", "sentiment_score": "-0.20", "relevant_count": 3, "news": "n", "events": "[]", "backdrop": "b"},
+    "research_report": {"symbol": "SBIN", "sentiment_score": "-0.20", "relevant_count": 3, "news": "n", "events": "[]", "backdrop": "b",
+                        "price": "Last close 800", "fundamentals": "P/E 10", "results": "2026-11-20", "news_trust": "Company 44%"},
     "market_brief": {"now": "Mon", "news": "n", "board": "b", "flows": "f", "regime": "r", "calendar": "c"},
     "game_plan": {"now": "Mon", "regime": "r", "brief": "b", "flows": "f", "calendar": "c", "strategies": "s",
                   "candidates": "c", "caps": "k"},
@@ -111,3 +112,12 @@ def test_summaries_share_the_plain_figures_rule():
     for name in ("summary_activity", "summary_day", "summary_holding", "summary_habits", "summary_weekly"):
         assert 'never as "1234 rupees"' in render(name, **PROMPTS[name])[1]
         assert "rupees;" not in render(name, **PROMPTS[name])[1]
+
+
+def test_research_note_stays_general_and_chat_view_limits_other_users():
+    from backend.prompts import shared_text
+
+    system, _ = render("research_report", **PROMPTS["research_report"])
+    assert "no buy, sell or hold call" in system
+    assert "Never tell this trader to buy" in shared_text("chat_view_user")
+    assert "not advice from a SEBI-registered adviser" in shared_text("chat_view_owner")

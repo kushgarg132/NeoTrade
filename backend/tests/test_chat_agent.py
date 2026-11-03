@@ -175,3 +175,32 @@ async def test_history_is_cut_to_the_last_20_turns_of_4000_chars(monkeypatch):
     turns = seen["messages"][1:-1]
     assert len(turns) == 20 and turns[0].content.startswith("q10")
     assert all(len(t.content) == 4000 for t in turns)
+
+
+async def test_a_model_inside_a_tool_does_not_reach_the_reply(monkeypatch):
+    class _Nested:
+        async def astream_events(self, payload, version):
+            def chunk(text, node):
+                return {"event": "on_chat_model_stream", "metadata": {"langgraph_node": node},
+                        "data": {"chunk": type("C", (), {"content": text})()}}
+            yield chunk('["HINDALCO", "VEDL"]', "tools")
+            yield chunk("I would hold.", "agent")
+
+    async def fake_llm(tier=None, feature=None):
+        return object()
+
+    async def fake_snapshot(db, redis, user_id, now=None):
+        return {"market": {"session_open": False}}
+
+    monkeypatch.setattr(agent.llm_service, "get_llm", fake_llm)
+    monkeypatch.setattr(agent, "build_snapshot", fake_snapshot)
+    monkeypatch.setattr(agent, "create_react_agent", lambda llm, tools: _Nested())
+    db = AsyncMongoMockClient()["test_db"]
+    events = [e async for e in agent.stream_chat(db, None, "alice", "hold?", [], {"page": "/"})]
+    assert "".join(e["data"] for e in events if e["type"] == "content") == "I would hold."
+
+
+def test_chat_stock_tools_accept_the_yahoo_form():
+    from backend.chat.lc_tools import _bare
+
+    assert _bare(" hindcopper.ns ") == "HINDCOPPER" and _bare("TCS") == "TCS"
