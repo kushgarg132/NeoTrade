@@ -7,7 +7,7 @@ What the models do, what they are not allowed to do, and how the news layer feed
 AI explains, scores sentiment, and suggests. It never decides a trade on its own:
 its say in conviction is capped at 30% and cannot lift a trade under the rule floor
 (Trading & Money). The two places model output can act are the AI account's fenced
-autopilot and the game plan, which may only tighten.
+autopilot.
 
 ## The gateway
 
@@ -58,9 +58,7 @@ NeoTrade key).
 | Budget | Key | Limit |
 |---|---|---|
 | News scoring | `news:deep_calls:<IST day>` | `NEWS_LLM_CALLS_PER_DAY` (past it, the backlog waits for tomorrow, then goes STALE) |
-| Game plans | `plan:calls:<IST day>` | `PLAN_LLM_CALLS_PER_DAY` |
 | Per user | `rate:llm:<user>:<IST day>` | `USER_LLM_CALLS_PER_DAY` (150): every `chat`/`research` LLM call made inside that user's own chat (web, Telegram) or AI analysis (`llm.py::LLMService._charge`, via `use_model(user_id=…)`); cache hits and the shared pipeline never count. Past it: "You've used today's AI allowance" |
-| Tool rounds | per call, ≤ 4 rounds (plans ≤ 2) | each round spends the caller's own budget (plans: `plan:calls`); kill switch `AI_TOOLS_ENABLED` |
 
 Chat and research calls are not counted per task, only per user (above), on top of the per-minute WebSocket limits (`ws/routes.py::_BUDGETS`). Per feature, the panel below reads each
 feature key's own `/v1/me/status` (`settings.py::fetch_feature_usage`, cached 5 min) and marks
@@ -72,9 +70,8 @@ AI is unavailable, the plan falls back, research notes and the brief are skipped
 stops triaging and scoring (items wait, then go STALE).
 Beside them, the **Lab** switch (admin, `POST /settings/lab`, `app_settings.lab_enabled`, **off by
 default**, read through `app_settings.py::lab_on`) is one outer gate on the experimental jobs: the
-intraday auto-run (`engine/autorun.py::tick`), news-triggered autopilot entries
-(`datalayer/reactor.py::_scan_user`), the game plan build and revisions (`autorun.py::_preopen_plans`,
-`plan/revise.py::loop`), the weekly strategy builder (`builder/draft.py::start_if_due`), the monthly
+news-triggered autopilot entries
+(`datalayer/reactor.py::_scan_user`), the weekly strategy builder (`builder/draft.py::start_if_due`), the monthly
 re-tune (`learning/retune.py::start_if_due`) and nightly learning (`scheduler.py::_learn`). Off, each
 skips with one info log line a day; per-user switches still apply inside it.
 
@@ -97,7 +94,7 @@ and waits 6 hours); `GET /summaries/*` (`routers/summaries.py`) only reads, so o
   such action that has none (action ids pin the instance), at most 4 a run and 12 a day. Feature `news`, fast
   tier; shown by `components/ideas/HoldingActions.jsx`.
 - **What the AI did today and why** (AI > Activity): a short paragraph from the autopilot log, the day's
-  game plan and the AI book's closed P&L, once per user per day after the 16:00 pass
+  rotation plan and the AI book's closed P&L, once per user per day after the 16:00 pass
   (`scheduler.py::run_daily_jobs`, `summaries/activity.py::run_all`). Feature `plan`, standard tier. Users
   with no order, refusal or plan that day get none.
 - **The week in words** (Weekly report, top): what worked, what did not, one habit to watch, written with the
@@ -117,10 +114,8 @@ the last stored text; a figure the facts do not contain drops its sentence (`ai/
 - **Fact layer** — `backend/ai/facts/`: the one read path for AI features. Market facts
   (`quote`, `price_summary`, `fundamentals`, `news`, `sentiment`, `market_backdrop`,
   `calendar`) and user facts (`portfolio`, `positions`, `journal`, `learning`,
-  `strategy_library`, `game_plan`). Each returns `as_of`, `source`, and an `error` field
+  `strategy_library`). Each returns `as_of`, `source`, and an `error` field
   instead of raising. Never query collections directly to build a prompt.
-- **Tool runner** — `backend/ai/runner.py::run_with_tools`: up to 4 tool rounds, schema
-  repair, budget, and a single-call fallback when tools fail.
 - **Grounding** — `backend/ai/grounding.py`: figures in AI prose are checked against the facts
   the call received; dates, times and unrelated numbers are not treated as facts.
 
@@ -154,17 +149,6 @@ live order: the first call returns a one-time `confirm_token`, `backend/risk/liv
 that the second must send). Cards on your own account go to `mine` only. The same agent answers your
 linked Telegram chat (`backend/guardrails/telegram_bot.py`): one long-poller per bot under
 a Redis lock, streamed replies, Confirm / Cancel buttons through the same confirm path.
-
-## The game plan
-
-`backend/plan/`: from 8:45 AM IST, once the user has a live broker feed (`autorun.py::live_feed_ready`,
-the same check that starts the auto run — so a late login is planned before its run starts),
-one `deep` call per auto-intraday user builds a plan (allowed strategies and names,
-`risk_multiplier`, `max_positions`, `skip_day`), validated so it can only tighten; any failure
-stores a fallback plan. Paused strategies are left out (all paused → fallback, no call).
-During the session `plan_revise` (ingest, 60 s) revises on material news about a planned or
-held name, a regime change, or a high-impact event — at most 2 a day, 15 min apart. Since
-Phase 16.2 the plan fetches its facts through tools first (≤ 2 rounds, `builder.py::MAX_TOOL_ROUNDS`). The 4:00 PM pass replays each day with and without the plan.
 
 ## News
 

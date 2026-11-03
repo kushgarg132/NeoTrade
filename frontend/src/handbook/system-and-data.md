@@ -80,7 +80,7 @@ The store holds completed bars only, so during the session the newest daily bar 
 `paper_orders`, `paper_fills`, `paper_positions`, `paper_trades` (ledger `user_id` = the AI paper book, `<user>:autopilot`, `<user>:mine`),
 `live_orders`, `suggestions`, `user_prefs`, `trading_runs`, `watchlist`, `journal_trades`,
 `journal_notes`, `journal_opens`, `portfolio_snapshots`, `guardrail_events`, `chat_actions`,
-`user_profiles`, `trade_plans`, `learning_state`, `learning_changes`, `factor_books`,
+`user_profiles`, `learning_state`, `learning_changes`, `factor_books`,
 `broker_credentials` (encrypted), `alert_channels` (encrypted bot tokens), `refresh_tokens` (hashed).
 
 **Mongo — shared reference data:** `users`, `instruments`, `instrument_meta`,
@@ -99,11 +99,9 @@ The store holds completed bars only, so during the session the newest daily bar 
 | `market:regime`, `market:brief`, `market:flows` | the backdrop |
 | `news:deep_calls:<day>`, `plan:calls:<day>` | daily AI budgets |
 | `news:alerted:…`, `news:scanned:…` | once-per-window guards |
-| `plan:<user>:<date>` | today's game plan |
 | `ingest:heartbeat:<loop>`, `ingest:leader` | ingest health and leadership |
 | `worker:alive:<boot>` | API worker liveness |
 | `scheduler:daily_lock`, `scheduler:last_pass` | the daily pass |
-| `autorun:<user>` | which worker owns a user's auto run |
 | `job:last:<name>` | each job's last run (the Jobs panel) |
 | `telegram:…` | bot polling lock and chat history |
 

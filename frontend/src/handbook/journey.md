@@ -60,7 +60,7 @@ Then nothing for eight months.
 - **5 Oct — one home per kind of money.** Navigation became Today · Mine · AI · Research ·
   More; Practice moved under More. The **news and market data layer** went into its own
   ingest worker (prices, macro, ~20 feeds, triage → score → sentiment, the regime and
-  brief); the **AI game plan** and its revisions; the **strategy library**; portfolio
+  brief); the **strategy library**; portfolio
   rebalance; LLM budgets after measuring off-hours spend.
 - **6 Oct — AI on tools and a UI critique.** The fact layer and capped tool runner, with a
   grounding check on figures (Phase 16.1–16.2). Production fixes: instrument refreshes that

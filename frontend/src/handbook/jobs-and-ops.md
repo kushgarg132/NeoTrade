@@ -23,7 +23,6 @@ Everything that runs on its own, how code reaches production, and how the doors 
    today and in the post-close Telegram only when something differs; read at
    `GET /today/reconciliation` (yours) and `GET /system/reconciliation` (admin).
 6. Learning: pause / floor / regime rules from closed paper trades (Lab only).
-7. Replay the day's game plans against no plan.
 8. First pass of a month: start the re-tune as its own `nice` process (Lab only).
 9. Every day: the portfolio review with worsening-verdict alerts. Fridays: journal mirrors.
 10. The post-close Telegram (`portfolio/digest.py::send_postclose`): your account's value and
@@ -71,7 +70,7 @@ stays in the API because it needs the socket hub.
 | Loop | Every | Does | Code |
 |---|---|---|---|
 | Guardrail monitor | 60 s, 9:15 AM–3:35 PM IST | checks each user's limits against their own broker (never the AI account's) | `backend/guardrails/monitor.py` |
-| Auto run | 60 s | keeps auto paper runs alive, builds game plans, long-term passes, exits | `backend/engine/autorun.py` |
+| Auto run | 60 s | long-term passes, rotation, exits, reminders | `backend/engine/autorun.py` |
 | Telegram | long poll | answers linked chats, one poller per bot | `backend/guardrails/telegram_bot.py` |
 | Price pump (API only) | 15 s | publishes marks and P&L to sockets | `backend/ws/pump.py` |
 | Worker heartbeat | 30 s (90 s TTL) | `worker:alive:<boot>` | `backend/runs.py::keep_alive` |

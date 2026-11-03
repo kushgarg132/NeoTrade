@@ -177,8 +177,6 @@ Every run still runs every strategy on paper; the gates decide only where orders
   (`backend/guardrails/square_off.py`): on a daily-loss breach, MARKET exits for NSE MIS
   positions, at most once a day. The one path that sends real orders without a per-trade
   tap; never yet run against a live account.
-- **AI game plan only tightens** — `backend/plan/`: may drop opening intents, shrink risk
-  (0.25–1.0), cap positions or skip the day; never blocks an exit or touches conviction.
 
 ## Long-term ideas (Portfolio → Needs you)
 
@@ -254,9 +252,7 @@ trades), **Strategies** (which strategy is good enough, the track record, learni
 `compute_pnl` reports `costs` and `net` per period and `all_time`.
 
 
-- **Auto run** — `backend/engine/autorun.py`: keeps one INTRADAY paper run alive 9:15 AM–3:30 PM
-  IST for users with `auto_paper_intraday`; `autorun:<user>` (150 s TTL) decides which worker
-  owns it. A run you stop stays stopped that day; at most 5 starts a day.
+- **Intraday runs** start only by hand. The daily automatic start was removed on 2026-11-03: the intraday strategies lost money after charges in every backtest.
 - **Two books** — every fill carries `venue` (`paper` / `live`); "paper" reads as "not live",
   so old rows never leak into the live book.
 - **Scorecard** — `backend/analytics.py::compute_scorecard`: net of charges, per day and per

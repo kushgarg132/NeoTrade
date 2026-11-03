@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 44cc001
+verified_at: bb3134a
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -75,7 +75,7 @@ The frontend owns no database. Everything below is browser state.
 | in-memory | `refreshPromise` | `utils/api.js::refreshAccessToken` | at most one refresh in flight |
 | Service worker caches | `shell-v1`, `assets-v1` | `public/sw.js` | bump `VERSION` to purge |
 
-Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`endpoints.settings.preferences`): `broker_roles`, `autopilot_enabled`, `autopilot_live`, `autopilot_news` (no longer shown in the UI), `live_strategies`, `account_size`, `max_exposure`, `per_trade_cap`, `max_trades_per_day`, `news_alerts` (`held|held+watched|all|off`, edited on `/settings/notifications`), `alert_mute` (kind -> bool), `breaking_news_min` (1-10, UI offers 5-9), `daily_loss_limit`, `cooldown_after_losses`, `cooldown_minutes`, `max_option_trades_per_day`, `max_option_lots`, `no_buy_before_results_days` (0 = off), `auto_paper_intraday`, `scan_enabled`, `auto_paper_longterm`, `universe` (read-only here), `goal` (`{kind,target,by,start,start_value}`), `rebalance_targets` (`{rule, max_stock_pct, max_sector_pct, overrides}`), `portfolio_max_loss_pct`, `portfolio_max_weight_pct`, `setup_skipped` (`home/SetupChecklist.jsx`; ids `prefs.py::SETUP_STEP_IDS`) (`components/settings/AutopilotSheet.jsx`, `EngineSwitches.jsx`, `journal/GuardrailsSheet.jsx::GUARD_FIELDS` (Telegram link moved to `settings/TelegramLink.jsx`), `settings/Notifications.jsx`, `components/portfolio/Rebalance.jsx`).
+Preferences keys the UI reads or writes via `GET/PUT /settings/preferences` (`endpoints.settings.preferences`): `broker_roles`, `autopilot_enabled`, `autopilot_live`, `autopilot_news` (no longer shown in the UI), `live_strategies`, `account_size`, `max_exposure`, `per_trade_cap`, `max_trades_per_day`, `news_alerts` (`held|held+watched|all|off`, edited on `/settings/notifications`), `alert_mute` (kind -> bool), `breaking_news_min` (1-10, UI offers 5-9), `daily_loss_limit`, `cooldown_after_losses`, `cooldown_minutes`, `max_option_trades_per_day`, `max_option_lots`, `no_buy_before_results_days` (0 = off), `scan_enabled`, `auto_paper_longterm`, `universe` (read-only here), `goal` (`{kind,target,by,start,start_value}`), `rebalance_targets` (`{rule, max_stock_pct, max_sector_pct, overrides}`), `portfolio_max_loss_pct`, `portfolio_max_weight_pct`, `setup_skipped` (`home/SetupChecklist.jsx`; ids `prefs.py::SETUP_STEP_IDS`) (`components/settings/AutopilotSheet.jsx`, `EngineSwitches.jsx`, `journal/GuardrailsSheet.jsx::GUARD_FIELDS` (Telegram link moved to `settings/TelegramLink.jsx`), `settings/Notifications.jsx`, `components/portfolio/Rebalance.jsx`).
 
 ## Flows
 
