@@ -14,6 +14,7 @@ from backend.auth.models import User
 from backend.engine.session import IST
 from backend.routers import summaries as router
 from backend.reports import weekly as report
+from backend.prompts import prompt_id
 from backend.summaries import activity, core, day, habits, holding
 from backend.summaries import weekly as narrative
 from backend.tests.test_datalayer_news import FakeRedis
@@ -76,7 +77,7 @@ def day_facts(monkeypatch):
 
 
 async def test_day_prompt_carries_only_the_digest_needs_and_market(db, redis, llm, day_facts):
-    llm.reply = "You hold ₹2,950, down ₹50 yesterday.\nOne item needs you: DOWN.\nThe regime is risk_off."
+    llm.reply = "You hold ₹2,950, down ₹50 yesterday.\nOne item needs you: DOWN.\nThe regime is risk-off."
     doc = await day.generate(db, redis, "alice", "pre", NOW, DIGEST)
     assert doc["key"] == "2026-10-15:pre" and doc["text"].count("\n") == 2
     [call] = llm.calls
@@ -473,3 +474,39 @@ async def test_a_holding_with_nothing_to_build_is_not_charged_to_the_day(db, red
     monkeypatch.setattr("backend.ai.facts.user.portfolio", AsyncMock(return_value={"error": "none"}))
     await holding.run_user(db, redis, "alice", NOW)
     assert llm.calls == [] and int(redis.data["summary:holding:day:alice:2026-10-15"]) == 0
+
+
+class _Claims:
+    async def set(self, *a, **k):
+        return True
+
+    async def delete(self, *a):
+        return None
+
+
+async def _produced(monkeypatch, *replies):
+    db = AsyncMongoMockClient()["t"]
+    answers, prompts = list(replies), []
+
+    async def complete(prompt, **_):
+        prompts.append(prompt)
+        return answers.pop(0)
+
+    monkeypatch.setattr(core.llm_service, "get_completion", complete)
+
+    async def build():
+        return "sys", "write it", {"net": 0.0}
+
+    doc = await core.produce(db, _Claims(), "alice", "activity", "k", build, tier="fast", feature="plan", ttl=60)
+    return doc, prompts
+
+
+async def test_a_note_printing_a_field_name_is_rewritten_once(monkeypatch):
+    doc, prompts = await _produced(monkeypatch, "It ended with ai_net_pnl flat.", "It ended flat.")
+    assert doc["text"] == "It ended flat." and doc["prompt"] == prompt_id("summary_activity")
+    assert "ai_net_pnl" in prompts[1]
+
+
+async def test_a_rewrite_that_still_breaks_the_rule_loses_that_sentence(monkeypatch):
+    doc, prompts = await _produced(monkeypatch, "Two refused. It ended with ai_net_pnl flat.", "Two refused. Still ai_net_pnl flat.")
+    assert doc["text"] == "Two refused." and len(prompts) == 2

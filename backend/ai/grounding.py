@@ -83,6 +83,15 @@ def unsupported(text: str, facts) -> list[str]:
     return [raw for raw, value, decimals, percent in figures(text) if not _supported(value, decimals, percent, numbers)]
 
 
+_FIELD_NAME = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
+_RUPEE_AMOUNT = re.compile(r"\d[\d,.]*\s?rupees?\b", re.IGNORECASE)  # "the rupee fell" is news, not an amount
+
+
+def banned(text: str) -> list[str]:
+    """What a reader must never see in AI prose: a raw field name, or an amount in words instead of ₹."""
+    return [m.group(0) for m in _FIELD_NAME.finditer(text)] + _RUPEE_AMOUNT.findall(text)
+
+
 def _contains(sentence: str, token: str) -> bool:
     """The token as a whole figure, not inside a longer one (2.3% is not in 12.3%)."""
     return re.search(r"(?<![\w.,])" + re.escape(token) + r"(?![\w,]|\.\d)", sentence) is not None

@@ -1,3 +1,5 @@
+import pytest
+
 from backend.ai import grounding
 
 FACTS = [{"as_of": "2026-10-06T04:00:00+00:00", "symbol": "TCS", "last_close": 2114.39, "ret_20d": 2.347,
@@ -61,3 +63,20 @@ def test_dollar_and_rs_amounts_are_figures():
 def test_dates_and_times_in_facts_are_not_data():
     facts = ["Tue 06 Oct 2026 08:46 IST", "- 14:30 US CPI"]
     assert grounding.unsupported("Volatility may rise 30% after CPI; TCS could move 46%.", facts) == ["30%", "46%"]
+
+
+# Real summaries the app stored (amounts changed), which broke the prompts' own rules.
+@pytest.mark.parametrize("text,found", [
+    ("Consequently, the day ended with an ai_net_pnl of 0.0 and ai_charges of 0.0.", ["ai_net_pnl", "ai_charges"]),
+    ("ETERNAL results tomorrow may move your 1000.5 rupee position significantly.", ["1000.5 rupee"]),
+    ("ADANIPOWER results will affect a 2.36% position worth 9,500.25 rupees; watch it.", ["9,500.25 rupees"]),
+    ("The rupee fell and crude rose, so oil marketers lagged.", []),
+    ("Your account is up ₹3,402 today; BAJAJ-AUTO and M&M led.", []),
+])
+def test_banned_finds_field_names_and_rupee_amounts_only(text, found):
+    assert grounding.banned(text) == found
+
+
+def test_a_banned_token_can_be_stripped_with_its_sentence():
+    text = "Two orders filled. The net was ai_net_pnl of 0.0. Nothing else happened."
+    assert grounding.strip_unsupported(text, grounding.banned(text)) == "Two orders filled. Nothing else happened."
