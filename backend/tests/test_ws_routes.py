@@ -209,7 +209,7 @@ def test_a_quick_analysis_failure_is_reported_on_the_topic(client, monkeypatch):
 
 
 def test_chat_streams_thinking_then_content_then_done(client, monkeypatch):
-    async def fake_stream(db, redis, user_id, message, history, context):
+    async def fake_stream(db, redis, user_id, message, history, context, media=False):
         yield {"type": "thinking", "data": "looking it up"}
         yield {"type": "content", "data": "Reliance is a conglomerate."}
         yield {"type": "action", "data": {"id": "a1", "summary": "Approve SJVN"}}
@@ -286,7 +286,7 @@ def test_chat_uses_the_users_saved_model_preference(client, monkeypatch):
 
     seen_model = {}
 
-    async def fake_stream(db, redis, user_id, message, history, context):
+    async def fake_stream(db, redis, user_id, message, history, context, media=False):
         from backend.llm import _model_override
         seen_model["model"] = _model_override.get()
         seen_model["user_id"], seen_model["context"] = user_id, context
@@ -309,7 +309,7 @@ def test_chat_uses_the_users_saved_model_preference(client, monkeypatch):
 def test_chat_past_its_budget_is_refused_without_starting_a_task(client, monkeypatch):
     calls = []
 
-    async def fake_stream(db, redis, user_id, message, history, context):
+    async def fake_stream(db, redis, user_id, message, history, context, media=False):
         calls.append(message)
         yield {"type": "content", "data": "ok"}
 
@@ -474,7 +474,7 @@ def test_subscribe_rejects_unknown_topics_and_caps_the_count(client, hub):
 def test_chat_context_only_passes_slug_shaped_values(client, monkeypatch):
     seen = {}
 
-    async def fake_stream(db, redis, user_id, message, history, context):
+    async def fake_stream(db, redis, user_id, message, history, context, media=False):
         seen["context"] = context
         yield {"type": "content", "data": "hi"}
 
