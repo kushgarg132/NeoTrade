@@ -10,7 +10,6 @@ from backend.prompts import render
 PROMPTS = {
     "chat": {"snapshot": "portfolio: value=401747", "page": "/portfolio", "profile": "name=Kush", "view": "Own view allowed"},
     "model_test": {},
-    "final_turn": {},
     "resolve_instrument": {"query": "tata motors", "candidates": '[{"tradingsymbol": "TATAMOTORS"}]'},
     "peers": {"name": "Reliance Industries", "symbol": "RELIANCE"},
     "triage_news": {"items": "[0] [GLOBAL] Brent jumps (Reuters)"},
@@ -20,14 +19,6 @@ PROMPTS = {
     "research_report": {"symbol": "SBIN", "sentiment_score": "-0.20", "relevant_count": 3, "news": "n", "events": "[]", "backdrop": "b",
                         "price": "Last close 800", "fundamentals": "P/E 10", "results": "2026-11-20", "news_trust": "Company 44%"},
     "market_brief": {"now": "Mon", "news": "n", "board": "b", "flows": "f", "regime": "r", "calendar": "c"},
-    "game_plan": {"now": "Mon", "regime": "r", "brief": "b", "flows": "f", "calendar": "c", "strategies": "s",
-                  "candidates": "c", "caps": "k"},
-    "game_plan_tools": {"now": "Mon", "regime": "r", "brief": "b", "flows": "f", "calendar": "c", "strategies": "s",
-                        "candidates": "c", "caps": "k"},
-    "game_plan_revision": {"now": "Mon", "trigger": "t", "regime": "r", "plan": "p", "positions": "x",
-                           "strategies": "s"},
-    "game_plan_revision_tools": {"now": "Mon", "trigger": "t", "regime": "r", "plan": "p", "positions": "x",
-                                 "strategies": "s"},
     "index_move": {"name": "NIFTY 50", "session_date": "2026-09-26", "session": "- Close 25,123.45",
                    "trend": "- Month +1.2%", "peers": "- SENSEX: -0.40%", "movers": "- HDFCBANK: -1.90%",
                    "headlines": "- RBI holds rates (ET)"},
@@ -43,8 +34,7 @@ PROMPTS = {
                         "groups": "vwap / overall: n 30, net ₹-3,000"},
     "strategy_hypotheses": {"strategies": "macd_crossover: runs {'stop_pct': 0.03}", "retunes": "none yet",
                             "setups": "none yet"},
-    "strategy_builder": {"vocabulary": "setup gap: direction up | down", "plans": "none yet", "scorecards": "none yet",
-                         "library": "[{\"name\": \"orb\"}]", "setups": "none yet", "drafts": "none yet"},
+    "strategy_builder": {"vocabulary": "setup gap: direction up | down", "library": "[{\"name\": \"orb\"}]", "setups": "none yet", "drafts": "none yet"},
     "strategy_builder_swing": {"vocabulary": "setup breakout_n: days 10..60 step 5",
                                "library": "[{\"name\": \"momentum\"}]", "setups": "none yet", "drafts": "none yet"},
 }
@@ -57,7 +47,7 @@ PROMPTS |= {
     "summary_holding": {"item": "{\"kind\": \"bad_news\"}", "position": "{\"weight_pct\": 18.0}", "thesis": "none written", "price": "{\"last_close\": \"₹100.00\"}"},
     "summary_weekly": {"week": "2026-W42", "report": "{}", "patterns": "none", "news": "{}"},
     "summary_habits": {"patterns": "none yet", "week": "{}"},
-    "summary_activity": {"day": "Thu 15 Oct 2026", "orders": "none", "rotation": "{\"next rebalance\": \"2026-11-09\"}", "plan": "no plan", "result": "{}"},
+    "summary_activity": {"day": "Thu 15 Oct 2026", "orders": "none", "rotation": "{\"next rebalance\": \"2026-11-09\"}", "result": "{}"},
 }
 
 

@@ -249,9 +249,6 @@ async def ai_day(db, monkeypatch):
          "source": "picks", "mode": "LONGTERM", "reason": "yesterday"},
         {"user_id": "bob", "at": t, "status": "FILLED", "side": "BUY", "quantity": 99, "symbol": "BOBCO",
          "source": "picks", "mode": "LONGTERM", "reason": "not alice"}])
-    monkeypatch.setattr("backend.ai.facts.user.game_plan", AsyncMock(return_value={"plan": {
-        "trigger": "pre_open", "skip_day": False, "risk_multiplier": 0.5, "max_positions": 4,
-        "rationale": ["Risk-off: half size"], "allow": [{"symbol": "TCS", "strategies": ["orb"]}]}}))
     monkeypatch.setattr("backend.portfolio.digest.pnl_since", AsyncMock(return_value={
         "mine": 0.0, "ai": 1250.5, "ai_charges": 40.0, "mine_charges": 0.0}))
 
@@ -265,7 +262,6 @@ async def test_activity_prompt_has_todays_orders_the_plan_and_the_result_for_thi
     p = call["prompt"]
     assert "Pick cleared the fence" in p and "risk-off regime blocks news entries" in p
     assert "yesterday" not in p and "BOBCO" not in p                      # only today's rows, only this user
-    assert "Risk-off: half size" in p and '"risk_multiplier": 0.5' in p and '"orb"' in p
     assert '"net result": "₹1,250"' in p or '"net result": "₹1,251"' in p
 
 
@@ -276,7 +272,6 @@ async def test_activity_is_once_a_day(db, redis, llm, ai_day):
 
 
 async def test_activity_with_nothing_to_explain_makes_no_call(db, redis, llm, monkeypatch):
-    monkeypatch.setattr("backend.ai.facts.user.game_plan", AsyncMock(return_value={"plan": None}))
     assert await activity.generate(db, redis, "carol", CLOSE) is None and llm.calls == []
 
 
@@ -288,8 +283,8 @@ async def test_activity_failure_keeps_yesterdays_text(db, redis, llm, ai_day):
     assert (await core.latest(db, "alice", "activity"))["text"] == "yesterday's"
 
 
-async def test_activity_run_all_covers_users_with_a_log_row_or_a_plan_today(db, redis, llm, ai_day):
-    await db["trade_plans"].insert_one({"user_id": "dave", "date": "2026-10-15"})
+async def test_activity_run_all_covers_users_with_a_log_row_or_a_rotation_plan_today(db, redis, llm, ai_day):
+    await db["rotation_plans"].insert_one({"user_id": "dave", "date": "2026-10-15", "risk_off": True})
     assert await activity.run_all(db, redis, CLOSE) == 3                   # alice, bob, dave
     assert {d["user_id"] async for d in db["ai_summaries"].find({"kind": "activity"})} == {"alice", "bob", "dave"}
 

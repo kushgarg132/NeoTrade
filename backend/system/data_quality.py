@@ -151,8 +151,6 @@ def _as_ist(value) -> Optional[datetime]:
 
 
 async def _intraday_runs(db, redis, now: datetime) -> list[str]:
-    from backend.plan import store as plan_store
-
     local = now.astimezone(IST)
     if not RUN_CHECK_FROM <= local.time() < RUN_CHECK_UNTIL:
         return []
@@ -160,10 +158,6 @@ async def _intraday_runs(db, redis, now: datetime) -> list[str]:
     failures, missing = [], 0
     async for prefs in db["user_prefs"].find({"auto_paper_intraday": True}, {"user_id": 1}):
         user = prefs["user_id"]
-        if redis is not None:
-            plan = await plan_store.current(redis, user, local.date())
-            if plan and plan.get("skip_day"):
-                continue  # today's game plan sits the run out on purpose
         runs = await db["trading_runs"].find(
             {"user_id": user, "mode": "INTRADAY", "started_at": {"$gte": day_start}}).sort("started_at", -1).to_list(length=None)
         if not runs:

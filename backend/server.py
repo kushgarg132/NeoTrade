@@ -101,8 +101,6 @@ async def ensure_collection_indexes(d) -> None:
         await d["watchlist"].create_index("user_id", unique=True)
         await d["paper_trades"].create_index([("user_id", 1), ("status", 1), ("entry_at", -1)])
         await d["paper_trades"].create_index("id")
-        await d["trade_plans"].create_index([("user_id", 1), ("date", 1), ("version", 1)], unique=True)
-        await d["plan_scorecards"].create_index([("user_id", 1), ("date", 1)])
         await d["econ_calendar"].create_index("at")
         await d["macro_series"].create_index([("ticker", 1), ("date", -1)])
         # news_theme_weights is keyed by _id (replace_one upserts): no secondary index.

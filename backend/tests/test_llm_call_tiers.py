@@ -11,8 +11,6 @@ EXPECTED = {
     "datalayer/news.py": ["fast", "deep"],
     "datalayer/filings.py": ["standard"],                # one filing, one call
     "datalayer/market.py": ["standard"],                 # the market brief                # triage; impacts feed trade scores
-    "plan/builder.py": ["deep", "deep"],                  # the per-user game plan (single call; tool loop)
-    "plan/revise.py": ["deep"],                           # revisions: tool loop; single call via builder._llm
     "research/search.py": ["deep"],                # Indian peers came out wrong on Flash
     "instruments/resolve.py": ["fast"],
     "research/index_move.py": ["standard"],
@@ -31,7 +29,6 @@ FEATURE = {
     "ai/analyst.py": "research", "research/search.py": "research",
     "instruments/resolve.py": "research", "research/index_move.py": "research",
     "datalayer/news.py": "news", "datalayer/market.py": "news", "datalayer/filings.py": "news",
-    "plan/builder.py": "plan", "plan/revise.py": "plan",
     "portfolio/review.py": "portfolio", "portfolio/ai_rebalance.py": "portfolio", "chat/agent.py": "chat",
     "learning/report.py": "learning", "learning/hypotheses.py": "learning",
     "builder/draft.py": "learning",
@@ -44,7 +41,7 @@ def test_every_llm_call_names_its_tier():
     for path in BACKEND.rglob("*.py"):
         rel = path.relative_to(BACKEND).as_posix()
         # llm.py, ai/runner.py and summaries/core.py pass their caller's tier through; the callers are checked.
-        if rel.startswith("tests/") or rel in ("llm.py", "routers/settings.py", "ai/runner.py", "summaries/core.py"):
+        if rel.startswith("tests/") or rel in ("llm.py", "routers/settings.py", "summaries/core.py"):
             continue
         text = path.read_text()
         calls = re.findall(r"await [\w.]*(?:get_completion|get_llm|run_with_tools|produce)\((.*?)\)", text, flags=re.S)

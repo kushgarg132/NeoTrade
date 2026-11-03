@@ -451,61 +451,6 @@ async def test_a_run_whose_worker_died_is_swept_and_replaced_by_the_tick(world, 
     assert len(world.launched) == 1
 
 
-# --- Phase 15.2: the pre-open game plan ---------------------------------------
-
-MONDAY_0846 = datetime(2026, 9, 28, 8, 46, tzinfo=IST)
-
-
-@pytest.fixture
-def built(monkeypatch):
-    from backend.plan import builder
-
-    calls = []
-
-    async def fake_build(db, redis, user_id, now, complete=None):
-        calls.append(user_id)
-        return {}
-    monkeypatch.setattr(builder, "build_plan", fake_build)
-    return calls
-
-
-async def test_preopen_builds_one_plan_per_user_even_with_two_ticks(world, built):
-    await world.enable("alice")
-    await world.enable("bob")
-    await _tick(world, MONDAY_0846)
-    await _tick(world, MONDAY_0846)
-    assert sorted(built) == ["alice", "bob"]
-
-
-async def test_no_plan_outside_the_window(world, built):
-    await world.enable()
-    await _tick(world, datetime(2026, 9, 28, 8, 30, tzinfo=IST))
-    await _tick(world, datetime(2026, 9, 28, 15, 40, tzinfo=IST))  # after the close
-    await _tick(world, datetime(2026, 9, 27, 8, 50, tzinfo=IST))  # Sunday
-    assert built == []
-
-
-async def test_no_plan_until_a_live_feed_then_one_before_the_run_starts(world, built):
-    await world.enable()
-    world.live["ready"] = False
-    await _tick(world, MONDAY_0846)
-    assert built == []  # no live feed, no auto run today: a plan would be an unused LLM call
-    world.live["ready"] = True
-    done = await _tick(world, MONDAY_10AM)  # logged in late: planned in the same tick, before the start
-    assert built == ["alice"] and done["started"] == ["alice"]
-
-
-async def test_skip_day_plan_keeps_the_auto_run_from_starting(world):
-    import json
-
-    await world.enable()
-    world.redis.data["plan:alice:2026-09-28"] = json.dumps({"skip_day": True})
-    assert not await autorun._may_start(RunStore(world.db), "alice", "INTRADAY", MONDAY_10AM, redis=world.redis)
-    assert await autorun._may_start(RunStore(world.db), "alice", "LONGTERM", MONDAY_10AM, redis=world.redis)
-    assert (await _tick(world, MONDAY_10AM))["started"] == []
-
-
-@pytest.mark.asyncio
 async def test_the_auto_intraday_run_waits_for_a_live_broker_feed(world):
     """Paper results from 15-minute-old candles say nothing about a live
     strategy: with no streaming broker logged in, the run does not start;

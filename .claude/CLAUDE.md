@@ -81,13 +81,6 @@ System, Data, Trading, AI, News, Journal, UI, Ops, Product.
   News only vetoes rotation buys (bad sentiment, results due); news exits are shadow-logged only.
   The fence's regime rule (risk-off halves the cap; a high-impact event within 30 min blocks
   all entries) only ever tightens. See `docs/superpowers/specs/2026-11-02-rotation-autopilot-design.md`.
-- **The AI game plan only tightens.** `backend/plan/` (built from 08:45 IST per auto-intraday user with a live feed)
-  may drop opening intraday intents, shrink their risk (`risk_multiplier` 0.25–1.0), cap new
-  positions or skip the auto run; it never blocks or shrinks an exit, never touches
-  conviction, caps or gates, and any failure falls back to today's behaviour. A revision may
-  close strategy-opened **paper** engine positions (never hand trades); on the AI account it
-  is only logged to `autopilot_shadow` (`source="plan"`). See
-  `docs/superpowers/specs/2026-10-05-ai-game-plan-and-strategy-library-design.md`.
 
 ## Deployment
 

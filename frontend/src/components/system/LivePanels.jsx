@@ -103,12 +103,11 @@ const ROWS = {
   ],
   ai: (b) => [
     ['News scoring calls today', `${b.news_calls_today} of ${b.news_calls_limit}`],
-    ['Plan calls today', `${b.plan_calls_today} of ${b.plan_calls_limit}`],
     // Every model hand-out per feature today (backend/llm.py::_count_call).
     ['AI calls today', Object.entries(b.calls_today || {}).filter(([, n]) => n > 0)
       .map(([f, n]) => `${f} ${n}`).join(' · ') || 'none yet'],
     // The Lab: one outer switch on the experimental AI jobs (backend/app_settings.py::lab_on).
-    ['Lab: intraday auto-run, news entries, game plan, builder, re-tune, learning',
+    ['Lab: intraday auto-run, news entries, builder, re-tune, learning',
       <FeatureSwitch key="lab" feature="lab" on={!!b.lab_enabled}
         save={(enabled) => api.post(endpoints.settings.lab, { enabled })} />],
     ['Gateway this month', b.usage.error ? b.usage.error : `${formatQuantity(b.usage.tokens.total)} tokens · $${Number(b.usage.cost.used_usd || 0).toFixed(2)}`],

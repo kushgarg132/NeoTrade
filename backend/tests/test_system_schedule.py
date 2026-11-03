@@ -22,7 +22,6 @@ def test_schedule_matches_job_constants():
     body = TestClient(app).get("/system/schedule").json()
     assert body == {
         "daily_pass": f"{scheduler.RUN_HOUR:02d}:{scheduler.RUN_MINUTE:02d}",
-        "plan": autorun.PLAN_AT.strftime("%H:%M"),
         "session_open": autorun.SESSION_OPEN.strftime("%H:%M"),
         "session_close": autorun.SESSION_CLOSE.strftime("%H:%M"),
         "square_off": f"{session.SQUARE_OFF_HOUR:02d}:{session.SQUARE_OFF_MINUTE:02d}",

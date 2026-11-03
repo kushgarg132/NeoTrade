@@ -118,8 +118,6 @@ async def _ai(db, redis) -> dict:
     return {
         "news_calls_today": int(await redis.get(f"news:deep_calls:{day}") or 0),
         "news_calls_limit": settings.NEWS_LLM_CALLS_PER_DAY,
-        "plan_calls_today": int(await redis.get(f"plan:calls:{day}") or 0),
-        "plan_calls_limit": settings.PLAN_LLM_CALLS_PER_DAY,
         "calls_today": {f: int(n or 0) for f, n in zip(
             COUNTED_FEATURES, await redis.mget([calls_key(f, day) for f in COUNTED_FEATURES]))},
         "usage": usage,

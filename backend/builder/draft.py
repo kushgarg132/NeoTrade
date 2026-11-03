@@ -1,6 +1,6 @@
 """The weekly drafting job (docs/superpowers/specs/2026-10-07-strategy-builder-design.md §3).
 
-Friday night the model drafts up to three block specs from the week's plans, scorecards, the
+Friday night the model drafts up to three block specs from the
 library, the worst setups and every earlier draft. Each is validated, then backtested on a year
 of 5-minute history; it becomes `active` (paper) only if it passes the backtest gate, is
 net-positive over the last 90 days alone, and clears the deflated Sharpe counting every draft
@@ -85,13 +85,7 @@ async def _prompt(db, redis, admin_id, horizon: str = "intraday") -> tuple[str, 
     common = {"vocabulary": _vocabulary(horizon), "library": _dump(library, "strategies"),
               "setups": _dump(await facts.worst_setups(db, redis, None, limit=10), "setups"),
               "drafts": _dump(await facts.built_strategies(db, redis, None, horizon=horizon), "strategies")}
-    if horizon == "swing":  # the game plans and their scorecards are about intraday days
-        return render("strategy_builder_swing", **common)
-    return render(
-        "strategy_builder", **common,
-        plans=_dump(await facts.recent_plans(db, redis, None, days=5), "plans"),
-        scorecards=_dump(await facts.plan_scorecards(db, redis, None, weeks=4), "scorecards"),
-    )
+    return render("strategy_builder_swing" if horizon == "swing" else "strategy_builder", **common)
 
 
 async def _default_llm(system: str, prompt: str) -> str:

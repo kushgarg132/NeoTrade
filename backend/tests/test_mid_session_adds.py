@@ -1,4 +1,4 @@
-"""Phase 15.3: a running engine can take on the game plan's new symbols."""
+"""Phase 15.3: feeds can take on new symbols."""
 
 import asyncio
 from datetime import timedelta
@@ -6,14 +6,7 @@ from unittest.mock import MagicMock
 
 from backend.data.feeds.candle_poll import CandlePollingFeed
 from backend.data.feeds.live_kite import KiteTickerFeed
-from backend.strategies.intraday.orb_breakout import ORBStrategy
 from backend.tests.test_candle_poll_feed import OPEN, _instrument, _Provider
-
-
-def test_extend_universe_adds_once():
-    strategy = ORBStrategy(["TCS"], {})
-    strategy.extend_universe(["INFY", "TCS"])
-    assert strategy.spec.universe == ["TCS", "INFY"] and strategy._universe == ["TCS", "INFY"]
 
 
 async def test_polling_feed_catches_an_added_instrument_up_as_warmup():

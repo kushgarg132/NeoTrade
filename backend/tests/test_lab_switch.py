@@ -47,23 +47,6 @@ async def test_lab_off_stops_the_intraday_auto_run(world, lab_off):  # noqa: F81
     assert "the intraday auto-run" in lab_off
 
 
-async def test_lab_off_builds_no_game_plan(lab_off, monkeypatch):
-    from backend.engine import autorun
-    from backend.plan import builder
-
-    build = AsyncMock()
-    monkeypatch.setattr(builder, "build_plan", build)
-    assert await autorun._preopen_plans(AsyncMongoMockClient()["t"], None, MONDAY_10AM, ["alice"]) == []
-    build.assert_not_called()
-
-
-async def test_lab_off_revises_no_plan(lab_off):
-    from backend.plan import revise
-
-    assert await revise.loop(AsyncMongoMockClient()["t"], None, now=MONDAY_10AM) == 0
-    assert lab_off == ["AI game plan revisions"]
-
-
 async def test_lab_off_skips_the_builder_retune_and_learning(lab_off, monkeypatch):
     from backend import scheduler
     from backend.builder import draft

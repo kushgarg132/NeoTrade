@@ -1,5 +1,5 @@
 """AI > Activity: "what the AI did today and why", once per user per day after the 16:00 pass,
-from the autopilot log, the day's rotation plan, any game plan and the AI book's closed P&L. Feature `plan`,
+from the autopilot log, the day's rotation plan and the AI book's closed P&L. Feature `plan`,
 standard tier. Users with no order, refusal or plan today get nothing."""
 
 import logging
@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 KIND, TTL, MAX_ROWS = "activity", 30 * 3600, 30
 ROW_KEYS = ("status", "side", "quantity", "symbol", "source", "mode", "reason")
-PLAN_KEYS = ("trigger", "skip_day", "risk_multiplier", "max_positions", "rationale")
 
 
 async def _rotation(db, user_id: str, day: str) -> Optional[dict]:
@@ -39,7 +38,6 @@ async def _day_rows(db, user_id: str, start: datetime) -> list[dict]:
 
 
 async def generate(db, redis, user_id: str, now: datetime):
-    from backend.ai.facts.user import game_plan
     from backend.portfolio.digest import pnl_since
     from backend.prefs import PrefsStore
 
@@ -48,24 +46,17 @@ async def generate(db, redis, user_id: str, now: datetime):
 
     async def build():
         rows = await _day_rows(db, user_id, start)
-        plan = (await game_plan(db, redis, user_id)).get("plan")
         rotation = await _rotation(db, user_id, key)
-        if not rows and not plan and not rotation:
+        if not rows and not rotation:
             return None  # the AI did nothing and planned nothing: nothing to explain
         roles = (await PrefsStore(db).get(user_id)).get("broker_roles") or {}
         pnl = await pnl_since(db, user_id, roles, start)
-        allow = plan.get("allow") or [] if plan else []
         facts = {"orders": rows, "rotation": rotation,
-                 "plan": {k: plan.get(k) for k in PLAN_KEYS} | {
-                     "allowed_symbols": sorted(a["symbol"] for a in allow)[:15],
-                     "allowed_strategies": sorted({n for a in allow for n in a.get("strategies") or []})}
-                 if plan else None,
                  "result": {"net result": rupees(pnl["ai"]), "charges": rupees(pnl["ai_charges"])}}
         system, prompt = render(
             "summary_activity", day=local.strftime("%a %d %b %Y"),
             orders=core.as_facts(rows) if rows else "none: no orders or refusals today",
             rotation=core.as_facts(rotation) if rotation else "no rotation plan today",
-            plan=core.as_facts(facts["plan"]) if plan else "none",
             result=core.as_facts(facts["result"]))
         return system, prompt, facts
 
@@ -78,7 +69,6 @@ async def run_all(db, redis, now: datetime) -> int:
     local = now.astimezone(IST)
     start = datetime.combine(local.date(), time(0, 0), tzinfo=IST)
     users = set(await db["autopilot_log"].distinct("user_id", {"at": {"$gte": start}}))
-    users |= set(await db["trade_plans"].distinct("user_id", {"date": local.date().isoformat()}))
     users |= set(await db["rotation_plans"].distinct("user_id", {"date": local.date().isoformat()}))
     written = 0
     for user_id in sorted(users):

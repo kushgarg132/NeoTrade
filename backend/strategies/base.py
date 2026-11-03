@@ -52,15 +52,6 @@ class TokenResolvingStrategy:
         self._symbol_for_token = symbol_for_token
         self.p = {**self.PARAMS, **{k: v for k, v in (params or {}).items() if k in self.PARAMS}}
 
-    def extend_universe(self, symbols: list[str]) -> None:
-        """Takes on new symbols mid-run (the game plan's stocks in play,
-        backend/plan/expand.py). The caller maps their tokens in the run's
-        shared symbol_for_token."""
-        for symbol in symbols:
-            if symbol not in self._universe:
-                self._universe.append(symbol)
-        self.spec.universe = list(self._universe)
-
     def symbol_for(self, bar: Bar) -> Optional[str]:
         symbol = self._symbol_for_token.get(bar.instrument_token)
         return symbol if symbol in self._universe else None

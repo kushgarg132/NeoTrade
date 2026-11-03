@@ -46,8 +46,6 @@ class Settings(BaseSettings):
     # Per user, per IST day: LLM calls made inside their own chat or research requests
     # (backend/llm.py::LLMService._charge). The shared pipeline is not counted.
     USER_LLM_CALLS_PER_DAY: int = 150
-    PLAN_LLM_CALLS_PER_DAY: int = 100  # game-plan builds + revisions, all users (backend/plan/)
-    AI_TOOLS_ENABLED: bool = True  # off: every tool-using site takes its single-call path
 
     # Broker API credentials are per-user and encrypted in Mongo
     # (backend/auth/broker_credentials.py) -- there is deliberately no

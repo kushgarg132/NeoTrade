@@ -15,7 +15,6 @@ def get() -> dict:
     """All times "HH:MM" IST; the frontend formats them."""
     return {
         "daily_pass": f"{scheduler.RUN_HOUR:02d}:{scheduler.RUN_MINUTE:02d}",
-        "plan": _hm(autorun.PLAN_AT),
         "session_open": _hm(autorun.SESSION_OPEN),
         "session_close": _hm(autorun.SESSION_CLOSE),
         "square_off": f"{session.SQUARE_OFF_HOUR:02d}:{session.SQUARE_OFF_MINUTE:02d}",

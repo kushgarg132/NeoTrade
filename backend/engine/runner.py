@@ -121,7 +121,6 @@ async def size_intents(
     learned: Optional[LearnedRules] = None,
     strategies_by_name: Optional[dict[str, Strategy]] = None,
     holders: Optional[dict[str, str]] = None,
-    plan=None,
     skipped: Optional[dict] = None,
     forward: Optional[Callable[[Order, Intent, float, datetime], Awaitable[None]]] = None,
 ) -> list[Order]:
@@ -188,19 +187,6 @@ async def size_intents(
         if learned is not None and _opens(intent, portfolio, mode):
             why = learned.blocks(owning_strategy.spec.name if owning_strategy is not None else None,
                                  intent.strength)
-            if why:
-                logger.info("skipping intent for %s: %s", intent.symbol, why)
-                continue
-
-        # Today's game plan (backend/plan/gate.py): only tightens, only for
-        # intraday signals that open risk.
-        if plan is not None and mode == "INTRADAY" and _opens(intent, portfolio, mode):
-            held = portfolio.positions.get(intent.symbol)
-            why = plan.blocks(
-                owning_strategy.spec.name if owning_strategy is not None else intent.strategy, intent.symbol,
-                holding=held is not None and held.quantity != 0,
-                open_positions=sum(1 for p in portfolio.positions.values() if p.quantity != 0),
-            )
             if why:
                 logger.info("skipping intent for %s: %s", intent.symbol, why)
                 continue
@@ -273,9 +259,7 @@ async def size_intents(
         entry = history[-1].close
         stop = intent.stop_hint
 
-        # The plan shrinks only new risk: an exit is never sized down.
-        shrink = plan.multiplier if plan is not None and mode == "INTRADAY" and _opens(intent, portfolio, mode) else 1.0
-        risk_pct = BASE_RISK_PCT * scored.final * shrink
+        risk_pct = BASE_RISK_PCT * scored.final
         raw_size = RiskRules.calculate_position_size(account_size, risk_pct, entry, stop)
         # NSE cash equity delivery/intraday trades in whole shares only.
         size = float(int(raw_size))
@@ -391,32 +375,6 @@ def _square_off_orders(
     )]
 
 
-async def _plan_exit_orders(exits: list[dict], portfolio: Portfolio, holders: dict[str, str],
-                            strategies_by_name: dict, shadow_exit) -> list[Order]:
-    """Closes what a plan revision says to exit, on paper: the engine's book
-    is paper (AI-account orders report no fills here), so an exit order
-    carries no strategy_name and can never route live. Only positions a
-    strategy opened are closed -- never one the user opened by hand. Every
-    exit is also offered to `shadow_exit`, which logs it against the AI
-    account's real positions (live news exits stay shadow-only)."""
-    orders = []
-    for exit_ in exits:
-        symbol, reason = exit_.get("symbol"), exit_.get("reason", "")
-        if shadow_exit is not None:
-            try:
-                await shadow_exit(symbol, reason)
-            except Exception as exc:
-                logger.exception("could not shadow-log the plan exit of %s: %s", symbol, exc)
-        position = portfolio.positions.get(symbol)
-        if position is None or position.quantity == 0 or holders.get(symbol) not in strategies_by_name:
-            continue
-        orders.append(Order(
-            id=str(uuid.uuid4()), symbol=symbol, side=Side.SELL if position.quantity > 0 else Side.BUY,
-            quantity=abs(position.quantity), order_type="MARKET", limit_price=None, product="MIS",
-        ))
-    return orders
-
-
 def level_for(order: Order, bar_timestamp) -> Optional[dict]:
     """The exit levels an equity entry order carries in its context, or None
     without a stop. Enforced by run() on every bar for as long as it is held."""
@@ -513,9 +471,6 @@ async def run(
     on_progress: Optional[Callable[[dict], Awaitable[None]]] = None,
     holders: Optional[dict[str, str]] = None,
     learned: Optional[LearnedRules] = None,
-    plan=None,
-    expand: Optional[Callable[[list[str]], Awaitable[list]]] = None,
-    shadow_exit: Optional[Callable[[str, str], Awaitable[None]]] = None,
     forward: Optional[Callable[[Order, Intent, float, datetime], Awaitable[None]]] = None,
     levels: Optional[dict[str, dict]] = None,
     option_legs: Optional[dict[str, dict]] = None,
@@ -571,9 +526,6 @@ async def run(
 
     kill_switch_tripped = False
     option_legs = dict(option_legs or {})  # adopted ones: engine/adopt.py::option_legs
-    # Game-plan revisions (backend/plan/): each new version is acted on once.
-    acted_version: Optional[int] = None
-    known_symbols = set(owner_by_symbol)  # symbols some strategy trades
     progress = {"bars": 0, "signals": 0, "orders": 0, "below_cost": 0, "last_symbol": None, "last_bar_at": None}
 
     seen = 0
@@ -703,34 +655,15 @@ async def run(
             # have seen it, but its price is hours old -- no order on it.
             intents, orders = [], []
         else:
-            plan_orders: list[Order] = []
-            if plan is not None:
-                await plan.refresh(bar.timestamp)
-                if plan.version is not None and plan.version != acted_version:
-                    acted_version = plan.version
-                    new = [s for s in plan.adds if s not in known_symbols]
-                    if new and expand is not None:
-                        known_symbols.update(new)  # one attempt per symbol, even if it fails
-                        try:
-                            for backfill in await expand(new):
-                                ctx.update(backfill)
-                        except Exception as exc:
-                            logger.exception("could not add %s to the run: %s", new, exc)
-                        owner_by_symbol = {s: st for st in strategies for s in st.spec.universe}
-                    plan_orders = await _plan_exit_orders(plan.exits, portfolio, holders, strategies_by_name,
-                                                          shadow_exit)
             orders = await size_intents(
                 intents, portfolio, ctx, owner_by_symbol, redis, account_size, max_exposure,
                 order_sink=order_sink, per_trade_cap=per_trade_cap, kill_switch_tripped=kill_switch_tripped,
                 master=master, premium_source=premium_source, option_legs=option_legs, learned=learned,
-                plan=plan,
                 strategies_by_name=strategies_by_name, holders=holders, skipped=progress, forward=forward,
             )
             held_by = {**owner_by_symbol, **{s: strategies_by_name[h] for s, h in holders.items() if h in strategies_by_name}}
             orders.extend(_square_off_orders(symbol, bar.timestamp, portfolio, held_by))
             orders.extend(await _option_exit_orders(symbol, bar, portfolio, option_legs, premium_source))
-            closing = {o.symbol for o in orders}
-            orders.extend(o for o in plan_orders if o.symbol not in closing)
 
         booked = None
         for order in orders:

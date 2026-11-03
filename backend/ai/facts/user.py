@@ -1,6 +1,6 @@
 """User facts: one user's portfolio, positions, journal, learning, strategy
-record and game plan. Every read filters by the `user_id` passed in, except the
-global facts at the end (every user's plans and setups, for the strategy builder)."""
+record. Every read filters by the `user_id` passed in, except the
+global facts at the end (every user's setups, for the strategy builder)."""
 
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
@@ -127,41 +127,7 @@ async def strategy_library(db, redis, user_id, mode: Optional[Literal["INTRADAY"
     return {"strategies": await catalog(db, user_id, await _nifty(), mode=mode)}
 
 
-@fact("game_plan", "Today's AI game plan for the user's intraday account (allowed stocks and strategies, risk, "
-      "rationale) and its revisions.", user=True, source="trade_plans")
-async def game_plan(db, redis, user_id) -> dict:
-    from backend.plan import store
-
-    day = datetime.now(timezone.utc).astimezone(IST).date()
-    versions = await store.versions(db, user_id, day)
-    return {"plan": await store.current(redis, user_id, day),
-            "versions": [{k: v.get(k) for k in ("version", "at", "trigger", "rationale")} for v in versions]}
-
-
 # Global facts (not user-scoped): what the strategy builder (backend/builder/draft.py) drafts from.
-
-@fact("recent_plans", "Every user's AI game plans over the last trading days: allowed stocks and strategies, "
-      "rationale, skip_day (latest version per user and day).", source="trade_plans")
-async def recent_plans(db, redis, user_id, days: int = 5) -> dict:
-    from backend.plan.store import COLLECTION
-
-    dates = sorted(await db[COLLECTION].distinct("date"), reverse=True)[:days]
-    latest = {}
-    async for d in db[COLLECTION].find({"date": {"$in": dates}}).sort("version", 1):
-        latest[(d["user_id"], d["date"])] = d
-    return {"plans": [{k: d.get(k) for k in ("date", "allow", "rationale", "skip_day")}
-                      for d in sorted(latest.values(), key=lambda d: d["date"])]}
-
-
-@fact("plan_scorecards", "Nightly replays of every user's intraday day: with the game plan (a) against without "
-      "it (b), net P&L, drawdown, trades, win rate.", source="plan_scorecards")
-async def plan_scorecards(db, redis, user_id, weeks: int = 4) -> dict:
-    from backend.plan.replay import SCORECARDS
-
-    since = (datetime.now(timezone.utc).astimezone(IST).date() - timedelta(weeks=weeks)).isoformat()
-    docs = await db[SCORECARDS].find({"date": {"$gte": since}}, {"_id": 0, "user_id": 0}).sort("date", 1).to_list(None)
-    return {"scorecards": docs}
-
 
 @fact("worst_setups", "The worst setups across every user's closed paper trades, net of charges: per strategy, "
       "by reason code, regime and signal strength.", source="paper_trades")

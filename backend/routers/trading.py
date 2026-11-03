@@ -66,8 +66,6 @@ from backend.suggestions.sink import SuggestionSink
 from backend.suggestions.store import SuggestionStore
 from backend.datalayer.bars import prev_closes
 from backend.datalayer.catalysts import catalyst_map
-from backend.plan.expand import make_expand
-from backend.plan.gate import PlanGate, redis_source
 from backend.datalayer.news_sources import nifty200_sectors
 
 logger = logging.getLogger(__name__)
@@ -308,36 +306,13 @@ async def launch_run(
             await db.redis.delete(lock)
 
 
-def _plan_shadow_exit(user_id: str):
-    """A plan exit is never sent to the AI account: when that account
-    really holds the symbol, the would-be exit is logged in autopilot_shadow
-    (spec 15.3; live news exits wait for review)."""
-    from backend.autopilot.service import ledger_user
-
-    async def shadow(symbol: str, reason: str) -> None:
-        held = (await LedgerStore(db.db, user_id=ledger_user(user_id)).get_open_positions()).get(symbol)
-        if held is None or held.quantity == 0:
-            return
-        await db.db["autopilot_shadow"].insert_one({
-            "user_id": user_id, "at": datetime.now(timezone.utc), "side": "SELL" if held.quantity > 0 else "BUY",
-            "symbol": symbol, "quantity": abs(held.quantity), "product": "MIS", "source": "plan", "reason": reason})
-    return shadow
-
-
 async def _launch_run(
     user_id: str, mode: str, universe: Optional[list[str]], poll_interval_seconds: float,
     runs: RunStore, origin: str,
 ) -> str:
     master = InstrumentMaster(db.db)
     symbols = list(universe or ALL_SCAN_STOCKS)
-    # Today's game plan (backend/plan/): its news names join the run; the
-    # PlanGate below decides what may open. No plan = today's behaviour.
-    game_plan, base_universe = None, list(symbols)
     if mode == "INTRADAY":
-        from backend.plan import store as plan_store
-
-        game_plan = await plan_store.current(db.redis, user_id, datetime.now(timezone.utc).astimezone(IST).date())
-        symbols += [s for s in (game_plan or {}).get("add_symbols") or [] if s not in symbols]
         # One position row per symbol: an intraday fill on a stock the
         # long-term book holds rewrote that holding (BHEL, 2026-10-08).
         held = set(await db.db["paper_trades"].distinct(
@@ -467,10 +442,6 @@ async def _launch_run(
         on_progress=progress_reporter(user_id, run_id, runs, cycle=len(instruments)),
         learned=await load_rules(db.db, user_id),
         holders=holders, levels=levels, option_legs=legs,
-        plan=PlanGate(redis_source(db.redis, user_id)) if mode == "INTRADAY" and db.redis is not None else None,
-        expand=(make_expand(master, feed, YFinanceProvider(), strategies, symbol_for_token, today)
-                if mode == "INTRADAY" else None),
-        shadow_exit=_plan_shadow_exit(user_id),
         forward=engine_recorder(db.db, user_id, db.redis),
     )
     await runs.create(
@@ -481,8 +452,6 @@ async def _launch_run(
             "account_size": account_size, "max_exposure": max_exposure,
             "live_strategies": sorted(live_by_strategy),
             "feed": getattr(feed, "source", "live broker ticks"),
-            # What the nightly plan replay (backend/plan/replay.py) compares.
-            "base_universe": base_universe, "plan_adds": (game_plan or {}).get("add_symbols") or [],
         },
     )
     start_background_run(coro, run_id=run_id, runs=runs)

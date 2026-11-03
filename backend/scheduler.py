@@ -71,7 +71,7 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
 
     from backend.builder import store as builder_store
     try:
-        await builder_store.refresh(db)  # the day's scans and plan replays build from the active specs
+        await builder_store.refresh(db)  # the day's scans build from the active specs
     except Exception as exc:
         logger.exception("builder refresh failed: %s", exc)
     expired = options_closed = 0
@@ -113,15 +113,6 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
     journal_imported = await _sync_journals(db, redis)
     reconcile_mismatches = await _reconcile_brokers(db, redis, now, pass_day)
     learning_changes = await _learn(db, now, pass_day)
-    # The day's game plans against no plan, on the same bars (backend/plan/replay.py).
-    plan_replays = 0
-    try:
-        from backend.data.providers.yfinance_provider import YFinanceProvider
-        from backend.plan.replay import replay_all
-
-        plan_replays = await replay_all(db, YFinanceProvider(), pass_at)
-    except Exception as exc:
-        logger.exception("plan replays failed: %s", exc)
     # AI > Activity's "what the AI did today and why", after the close (summaries/activity.py).
     if redis is not None and pass_day == now.astimezone(IST).date() and now.astimezone(IST).time() >= time(15, 30):
         try:
@@ -198,7 +189,7 @@ async def run_daily_jobs(db, redis=None, now=None, pass_day: Optional[date] = No
         "verdicts_refreshed": verdicts_refreshed,
         "users": scanned_users, "created": created_total,
         "journal_imported": journal_imported, "portfolios_reviewed": portfolios,
-        "learning_changes": learning_changes, "plan_replays": plan_replays,
+        "learning_changes": learning_changes,
         "reconcile_mismatches": reconcile_mismatches,
     }
 
