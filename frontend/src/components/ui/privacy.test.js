@@ -14,8 +14,8 @@ test('hide amounts masks a figure that is itself .private, and a bare .private a
   assert.match(rule, /\.private \.figure-md/);
 });
 
-test('hide amounts masks with dots, not a blur', () => {
+test('hide amounts masks with asterisks, not a blur', () => {
   const body = css.slice(css.indexOf('{', css.indexOf('html[data-private="on"]')));
-  assert.match(body.slice(0, 400), /content: '••••'/);
+  assert.match(body.slice(0, 400), /content: '\*\*\*\*'/);
   assert.doesNotMatch(body.slice(0, 400), /blur/);
 });
