@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Loader2, ChevronDown } from 'lucide-react';
 import { Sheet, Empty, Ruling, Button } from './Panel';
 import api, { endpoints } from '../../utils/api';
 import { cn } from '../../utils/cn';
 import { Row } from './Fields';
+import useLivePoll from '../../hooks/useLivePoll';
 import { formatQuantity, formatDateTime, formatTimeAgo, formatClock } from '../../utils/formatters';
 
 const TIER_ROWS = [
@@ -444,26 +445,32 @@ const UsageSheet = () => {
   const [error, setError] = useState('');
 
   // An old reading comes back at once with `refreshing`; ask again until the
-  // gateway's slow quota poll has landed (a few seconds), then stop.
+  // gateway's slow quota poll has landed (a few seconds), then stop. Every
+  // read skips the 30 s GET cache, or the retries would get the same old
+  // reading back. Coming back to the app, and every minute, reads again.
+  const timer = useRef();
+  const live = useRef(true);
+  const load = (tries = 0) => {
+    clearTimeout(timer.current);
+    return api
+      .get(endpoints.settings.omnirouteUsage, { cache: false })
+      .then((res) => {
+        if (!live.current) return;
+        setUsage(res.data);
+        setError('');
+        if (res.data.refreshing && tries < USAGE_RETRIES) timer.current = setTimeout(() => load(tries + 1), USAGE_RETRY_MS);
+      })
+      .catch((err) => live.current && setError(err?.response?.data?.detail || 'Could not read usage from the gateway.'));
+  };
   useEffect(() => {
-    let timer;
-    let tries = 0;
-    let live = true;
-    const load = () =>
-      api
-        .get(endpoints.settings.omnirouteUsage)
-        .then((res) => {
-          if (!live) return;
-          setUsage(res.data);
-          if (res.data.refreshing && ++tries <= USAGE_RETRIES) timer = setTimeout(load, USAGE_RETRY_MS);
-        })
-        .catch((err) => setError(err?.response?.data?.detail || 'Could not read usage from the gateway.'));
+    live.current = true;
     load();
     return () => {
-      live = false;
-      clearTimeout(timer);
+      live.current = false;
+      clearTimeout(timer.current);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useLivePoll(() => load(), 60_000, { always: true });
 
   return (
     <Sheet title="Usage" meta={usage?.key_name ? `Key · ${usage.key_name}` : 'OmniRoute'}>
