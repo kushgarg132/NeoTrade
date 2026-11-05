@@ -156,7 +156,7 @@ def _usage_html(usage: dict) -> str:
     esc = html.escape
     tokens, cost = usage["tokens"], usage["cost"]
     lines = [f"<b>Usage</b> · " + (f"Key {esc(usage['key_name'])}" if usage.get("key_name") else "OmniRoute"), "",
-             "This month, this app's key", f"<b>{tokens['total']:,} tokens</b>",
+             "This month, all of this app's keys", f"<b>{tokens['total']:,} tokens</b>",
              f"Input {tokens['input']:,} · Output {tokens['output']:,} · Reasoning {tokens['reasoning']:,}",
              f"Cost ${float(cost.get('used_usd') or 0):.2f}"
              + (f" of ${float(cost['limit_usd']):.2f}" if cost.get("limit_usd") is not None else " · no cost limit")

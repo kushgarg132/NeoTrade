@@ -306,7 +306,7 @@ USAGE = {
 def test_usage_message_mirrors_the_settings_sheet():
     text = telegram_bot._usage_html(USAGE)
     assert "<b>Usage</b> · Key neotrade" in text
-    assert "This month, this app's key" in text and "<b>1,234,000 tokens</b>" in text
+    assert "This month, all of this app's keys" in text and "<b>1,234,000 tokens</b>" in text
     assert "Input 1,200,000 · Output 34,000 · Reasoning 0" in text
     assert "Cost $1.50 · no cost limit" in text
     assert "Providers · quota left" in text and "<b>claude</b> Max" in text

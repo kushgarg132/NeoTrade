@@ -86,6 +86,7 @@ def test_list_omniroute_models_sends_the_gateway_key(client, monkeypatch):
 
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
     monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_FEATURE_KEYS", {})
 
     assert client.get("/api/v1/settings/omniroute-models").status_code == 200
     assert seen.get("Authorization") == "Bearer gw-key"
@@ -322,6 +323,7 @@ def test_model_test_reports_a_working_model(db, monkeypatch):
 
     monkeypatch.setattr(ChatOpenAI, "ainvoke", fake_ainvoke)
     monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_FEATURE_KEYS", {})
     resp = _client(db, _user(role="admin")).post("/api/v1/settings/omniroute-model/test", json={"model": "aug/sonnet5-high"})
 
     body = resp.json()
@@ -337,6 +339,7 @@ def test_model_test_reports_a_gateway_error_as_not_ok(db, monkeypatch):
 
     monkeypatch.setattr(ChatOpenAI, "ainvoke", fake_ainvoke)
     monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_FEATURE_KEYS", {})
     body = _client(db, _user(role="admin")).post("/api/v1/settings/omniroute-model/test", json={"model": "nope/x"}).json()
     assert body["ok"] is False and "model not found" in body["error"]
 
@@ -373,6 +376,7 @@ def test_omniroute_usage_is_shaped_for_the_page(db, monkeypatch):
 
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
     monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_FEATURE_KEYS", {})
     settings_router._USAGE_CACHE.clear()
     body = _client(db, _user(role="admin")).get("/api/v1/settings/omniroute-usage").json()
 
@@ -395,6 +399,7 @@ def test_omniroute_usage_gateway_error_is_502(db, monkeypatch):
 
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
     monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_FEATURE_KEYS", {})
     settings_router._USAGE_CACHE.clear()
     assert _client(db, _user(role="admin")).get("/api/v1/settings/omniroute-usage").status_code == 502
 
@@ -414,6 +419,7 @@ def test_a_stale_usage_reading_is_served_at_once_and_refreshed_behind(monkeypatc
 
         monkeypatch.setattr(httpx.AsyncClient, "get", slow_get)
         monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+        monkeypatch.setattr(settings_router.settings, "OMNIROUTE_FEATURE_KEYS", {})
         settings_router._USAGE_CACHE.clear()
         settings_router._USAGE_CACHE.update(at=time.monotonic() - 3600, body={"key_name": "old"})
 
@@ -534,3 +540,33 @@ def test_alert_prefs_validate(client):
     assert client.put(url, json={"breaking_news_min": 4}).status_code == 422
     assert client.put(url, json={"alert_mute": {"exit": "yes"}}).status_code == 422
     assert client.put(url, json={"alert_mute": {"exit": 1}}).status_code == 422
+
+
+def test_omniroute_usage_adds_every_feature_key(db, monkeypatch):
+    """Features call through their own keys, so the shared key alone shows
+    almost nothing; the sheet's totals add every key."""
+
+    class _Feature(_FakeStatusResponse):
+        def json(self):
+            body = super().json()
+            body["apiKey"]["name"] = "NeoTrade news"
+            body["usage"]["cost"] = {"usedUsd": 0.25, "limitUsd": 1.0}
+            body["usage"]["tokens"] = {"inputTokens": 100, "outputTokens": 50, "reasoningTokens": 0, "totalTokens": 150}
+            return body
+
+    async def fake_get(self, url, **kwargs):
+        auth = kwargs["headers"]["Authorization"]
+        if auth == "Bearer broken":
+            raise httpx.ConnectError("refused")
+        return _Feature() if auth == "Bearer news-key" else _FakeStatusResponse()
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_API_KEYS", ["gw-key"])
+    monkeypatch.setattr(settings_router.settings, "OMNIROUTE_FEATURE_KEYS", {"news": "news-key", "chat": "broken"})
+    settings_router._USAGE_CACHE.clear()
+    body = _client(db, _user(role="admin")).get("/api/v1/settings/omniroute-usage").json()
+
+    assert body["tokens"]["total"] == 167 and body["tokens"]["input"] == 110
+    assert body["cost"]["used_usd"] == 0.25 and body["cost"]["limit_usd"] is None
+    assert body["key_name"] == "AI Stock + 1 of 2 feature keys"
+    assert body["providers"][1]["provider"] == "kiro"  # quotas still come from the shared key

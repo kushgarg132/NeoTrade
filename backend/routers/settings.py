@@ -564,17 +564,39 @@ class UsageUnavailable(Exception):
 async def _read_usage() -> dict:
     if not settings.OMNIROUTE_API_KEYS:
         raise UsageUnavailable(409, "No gateway key configured")
+    features = settings.OMNIROUTE_FEATURE_KEYS or {}
+
+    async def status(client, key):
+        resp = await client.get(f"{settings.OMNIROUTE_BASE_URL}/me/status",
+                                headers={"Authorization": f"Bearer {key}"})
+        resp.raise_for_status()
+        return resp.json()
+
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(
-                f"{settings.OMNIROUTE_BASE_URL}/me/status",
-                headers={"Authorization": f"Bearer {settings.OMNIROUTE_API_KEYS[0]}"},
+            main, *rest = await asyncio.gather(
+                status(client, settings.OMNIROUTE_API_KEYS[0]),
+                *(status(client, k) for k in features.values()),
+                return_exceptions=True,
             )
-            resp.raise_for_status()
+        if isinstance(main, Exception):
+            raise main
     except httpx.HTTPError as e:
         logger.error(f"Failed to fetch OmniRoute usage: {e}")
         raise UsageUnavailable(502, "Could not read usage from the OmniRoute gateway")
-    body = {**_shape_usage(resp.json()), "as_of": datetime.now(timezone.utc).isoformat()}
+    body = _shape_usage(main)
+    # Each feature calls through its own key (Phase 17.2.5), so the shared
+    # key alone misses nearly all traffic: the totals add every key's month.
+    # A feature key that fails is left out of the sum, not fatal.
+    read = [_shape_usage(r) for r in rest if not isinstance(r, Exception)]
+    if features:
+        for part in read:
+            for k in ("input", "output", "reasoning", "total"):
+                body["tokens"][k] += part["tokens"][k]
+            body["cost"]["used_usd"] = (body["cost"]["used_usd"] or 0) + (part["cost"]["used_usd"] or 0)
+        body["cost"]["limit_usd"] = None  # each feature key has its own limit; no one cap applies to the sum
+        body["key_name"] = f"{body['key_name']} + {len(read)} of {len(features)} feature keys"
+    body["as_of"] = datetime.now(timezone.utc).isoformat()
     _USAGE_CACHE.update(at=time.monotonic(), body=body)
     return body
 

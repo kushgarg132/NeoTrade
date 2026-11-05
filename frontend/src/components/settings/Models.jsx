@@ -473,7 +473,7 @@ const UsageSheet = () => {
         <Ruling rows={3} />
       ) : (
         <>
-          <p className="text-[13px] font-medium text-[var(--text-muted)] mb-1">This month, this app's key</p>
+          <p className="text-[13px] font-medium text-[var(--text-muted)] mb-1">This month, all of this app's keys</p>
           <p className="figure-md text-xl">{formatQuantity(usage.tokens.total)} tokens</p>
           <dl className="mt-2 grid grid-cols-3 gap-2">
             {[['Input', usage.tokens.input], ['Output', usage.tokens.output], ['Reasoning', usage.tokens.reasoning]].map(([label, value]) => (
