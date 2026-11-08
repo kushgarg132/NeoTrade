@@ -42,6 +42,39 @@ def _seed(db, **docs):
         asyncio.run(db[collection].insert_many(rows))
 
 
+def test_parts_run_together(monkeypatch):
+    """Each part returns only once the other has started: run one after the other, the first times out."""
+    client, _ = _client(monkeypatch)
+    started = set()
+
+    async def meets(name):
+        started.add(name)
+        for _ in range(100):
+            if len(started) == 2:
+                return {}
+            await asyncio.sleep(0.01)
+        raise TimeoutError(name)
+
+    async def changes(user_id, now):
+        return await meets("changes")
+
+    async def autopilot(user_id, prefs):
+        return await meets("autopilot")
+
+    monkeypatch.setattr(today_router, "_changes", changes)
+    monkeypatch.setattr(today_router, "_autopilot", autopilot)
+    assert client.get("/api/v1/today").json()["errors"] == {}
+
+
+def test_startup_preload_names_real_modules():
+    import importlib
+
+    from backend import server
+
+    for module in server.PRELOAD:
+        importlib.import_module(module)
+
+
 def test_fresh_user_has_an_empty_setup_and_no_login_nags(monkeypatch):
     client, _ = _client(monkeypatch)
     body = client.get("/api/v1/today").json()

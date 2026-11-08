@@ -5,6 +5,7 @@ the autopilot's last moves, and how far setup has got. Each part is
 computed on its own; one that fails comes back null with its error, and
 the rest still render."""
 
+import asyncio
 import logging
 import time as clock
 from datetime import datetime, time, timedelta, timezone
@@ -252,40 +253,68 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
             errors[name] = "Could not load this part right now."
             return None
 
-    accounts = await part("accounts", _accounts(roles, user.id, broker_states))
-    tripped = await part("kill_switch", KillSwitchStore(db.db).is_tripped(user.id, now.astimezone(IST).date()))
+    async def together(coros: dict) -> dict:
+        """Each part on its own, all at once: a page poll waits for the slowest, not the sum."""
+        return dict(zip(coros, await asyncio.gather(*(part(name, coro) for name, coro in coros.items()))))
+
+    # What later parts are built from comes first.
+    first = await together({
+        "accounts": _accounts(roles, user.id, broker_states),
+        "kill_switch": KillSwitchStore(db.db).is_tripped(user.id, now.astimezone(IST).date()),
+        "ai_activity": db.db["autopilot_log"].find({"user_id": user.id}, {"_id": 0, "user_id": 0})
+        .sort("at", -1).limit(5).to_list(length=5),
+        "mine_actions": _mine_actions(user.id, now),
+    })
+    accounts, tripped, log = first["accounts"], first["kill_switch"], first["ai_activity"]
     kill = {"tripped": bool(tripped), "reason": (tripped or {}).get("reason")} if "kill_switch" not in errors else None
-    log = await part("ai_activity", db.db["autopilot_log"].find({"user_id": user.id}, {"_id": 0, "user_id": 0})
-                     .sort("at", -1).limit(5).to_list(length=5))
     for row in log or []:
         row["at"] = aware(row.get("at"))  # Mongo hands back naive UTC; say so to the browser
-    acts = await part("mine_actions", _mine_actions(user.id, now)) or []  # also the post-close digest's
+    acts = first["mine_actions"] or []  # also the post-close digest's
+
+    coros = {
+        "pulse": digest.cached_pulse(db.db, user.id, now),
+        "needs_you": _needs_you(user.id, accounts, kill, now, admin),
+        "proposals_total": _ideas(user.id),
+        "changes": _changes(user.id, now),
+        "autopilot": _autopilot(user.id, prefs),
+        "setup": _setup(user.id, prefs),
+        "backdrop": _backdrop(now),
+    }
+    if phase == "pre":
+        coros["premarket"] = digest.premarket_for(db.db, user.id, now)
+        if admin:
+            coros["picks_top"] = _picks_top(user.id)
+    if phase in ("post", "closed"):
+        coros["postclose"] = digest.postclose_for(db.db, user.id, now, actions=acts)
+    if phase == "post":
+        coros["unjournaled"] = _unjournaled(user.id, roles, now)
+    if admin:  # You vs Picks: admin-only while Picks is (routers/picks.py).
+        coros["scoreboard"] = digest.scoreboard(db.db, user.id, roles, now)
+    got = await together(coros)
+    ideas = got["proposals_total"]
     return {
         "market": {"open": in_session(now), "as_of": now},
         "phase": phase,
         "next_open": market_calendar.next_open(now),
-        "premarket": await part("premarket", digest.premarket_for(db.db, user.id, now)) if phase == "pre" else None,
-        "postclose": await part("postclose", digest.postclose_for(db.db, user.id, now, actions=acts))
-        if phase in ("post", "closed") else None,
-        "unjournaled": await part("unjournaled", _unjournaled(user.id, roles, now)) if phase == "post" else None,
-        "picks_top": await part("picks_top", _picks_top(user.id)) if admin and phase == "pre" else None,
+        "premarket": got.get("premarket"),
+        "postclose": got.get("postclose"),
+        "unjournaled": got.get("unjournaled"),
+        "picks_top": got.get("picks_top"),
         "accounts": accounts,
         "live_armed": {"autopilot": bool(prefs.get("autopilot_enabled") and prefs.get("autopilot_live")),
                        "strategies": prefs.get("live_strategies") or []},
         "kill_switch": kill,
-        "pulse": await part("pulse", digest.cached_pulse(db.db, user.id, now)),
-        "needs_you": await part("needs_you", _needs_you(user.id, accounts, kill, now, user.role == "admin")) or [],
+        "pulse": got["pulse"],
+        "needs_you": got["needs_you"] or [],
         "mine_actions": acts[:TOP_ACTIONS],
         "mine_actions_total": len(acts),
-        # You vs Picks: admin-only while Picks is (routers/picks.py).
-        "scoreboard": await part("scoreboard", digest.scoreboard(db.db, user.id, roles, now))
-        if user.role == "admin" else None,
-        "proposals_total": None if (ideas := await part("proposals_total", _ideas(user.id))) is None else len(ideas),
+        "scoreboard": got.get("scoreboard"),
+        "proposals_total": None if ideas is None else len(ideas),
         "ai_activity": log,
-        "changes": await part("changes", _changes(user.id, now)),
-        "autopilot": await part("autopilot", _autopilot(user.id, prefs)),
-        "setup": await part("setup", _setup(user.id, prefs)),
-        "backdrop": await part("backdrop", _backdrop(now)),
+        "changes": got["changes"],
+        "autopilot": got["autopilot"],
+        "setup": got["setup"],
+        "backdrop": got["backdrop"],
         "errors": errors,
     }
 

@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import sys
 import os
 import uvicorn
@@ -125,10 +126,18 @@ async def _warm_gateway_usage() -> None:
         logger.warning("gateway usage warm-up failed: %s", exc)
 
 
+# Handlers import these inside the function (cycles); load them before traffic, or each
+# worker's first /today pays 2-4 s for it.
+PRELOAD = ("backend.portfolio.digest", "backend.portfolio.news_moves", "backend.mine.actions", "backend.datalayer.market",
+           "backend.engine.broker_recon", "backend.journal.accounts", "backend.system.data_quality")
+
+
 @app.on_event("startup")
 async def startup_db_client():
     require_jwt_secret()
     logger.info("Starting up NeoTrade API...")
+    for module in PRELOAD:
+        importlib.import_module(module)
     await db.connect_to_database()
     logger.info("Database connected.")
 
