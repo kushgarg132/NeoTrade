@@ -289,7 +289,7 @@ const ModelSheet = ({ isAdmin }) => {
         if (catalogRes) setCatalog(catalogRes.data);
       })
       .catch(() => {
-        if (!cancelled) setLoadError('Could not reach the OmniRoute gateway.');
+        if (!cancelled) setLoadError('Could not reach OmniRoute or Google.');
       });
     return () => {
       cancelled = true;
@@ -342,6 +342,7 @@ const ModelSheet = ({ isAdmin }) => {
           <p className="text-sm text-[var(--text-muted)]">
             Each kind of task runs on its own model, so cheap work does not spend the strongest model's quota.
             The trading engine itself never calls a model on the hot path.
+            Models marked google run directly on the Gemini API; the rest go through OmniRoute.
           </p>
           {TIER_ROWS.map((row) => (
             <ModelRow

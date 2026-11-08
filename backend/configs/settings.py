@@ -23,9 +23,14 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
 
-    # OmniRoute (self-hosted OpenAI-compatible gateway) -- the only LLM
-    # provider this app uses. OMNIROUTE_API_KEY(S) holds the gateway key
-    # issued from the OmniRoute dashboard's Endpoints page, not a Google key.
+    # Google's Gemini API, called directly: a model id "google/<name>" goes
+    # here (llm.py::route), every other id through OmniRoute below.
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+    # OmniRoute (self-hosted OpenAI-compatible gateway).
+    # OMNIROUTE_API_KEY(S) holds the gateway key issued from the OmniRoute
+    # dashboard's Endpoints page, not a Google key.
     OMNIROUTE_API_KEY: Optional[str] = None
     OMNIROUTE_API_KEYS: List[str] = []
     # One gateway key per feature (news, plan, research, chat, portfolio, learning),

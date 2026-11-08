@@ -92,6 +92,32 @@ def test_list_omniroute_models_sends_the_gateway_key(client, monkeypatch):
     assert seen.get("Authorization") == "Bearer gw-key"
 
 
+def _two_providers(monkeypatch, gateway_up=True):
+    google = {"data": [{"id": "models/gemini-2.5-flash"}, {"id": "models/gemini-2.5-flash-preview-tts"},
+                       {"id": "models/gemini-embedding-001"}, {"id": "models/veo-3"}]}
+
+    async def fake_get(self, url, **kwargs):
+        if "generativelanguage" in url:
+            return httpx.Response(200, json=google, request=httpx.Request("GET", url))
+        if not gateway_up:
+            raise httpx.ConnectError("refused")
+        return _FakeModelsResponse()
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(settings_router.settings, "GEMINI_API_KEY", "g-key")
+
+
+def test_models_add_googles_chat_models_under_the_google_prefix(client, monkeypatch):
+    _two_providers(monkeypatch)
+    ids = [m["id"] for m in client.get("/api/v1/settings/omniroute-models").json()]
+    assert ids == ["antigravity/gemini-2.5-flash", "aug/sonnet5-high", "google/gemini-2.5-flash"]
+
+
+def test_models_still_list_google_when_the_gateway_is_down(client, monkeypatch):
+    _two_providers(monkeypatch, gateway_up=False)
+    assert client.get("/api/v1/settings/omniroute-models").json() == [{"id": "google/gemini-2.5-flash"}]
+
+
 def test_list_omniroute_models_returns_502_on_gateway_error(client, monkeypatch):
     async def fake_get(self, url, **kwargs):
         raise httpx.ConnectError("refused")

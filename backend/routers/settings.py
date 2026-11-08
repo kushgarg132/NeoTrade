@@ -10,6 +10,7 @@ and the deployment model lives in Mongo behind an admin check.
 
 import asyncio
 import logging
+import re
 import time
 from datetime import date, datetime, timezone
 from typing import Literal, Optional
@@ -31,6 +32,7 @@ from backend.brokers.registry import BROKERS
 from backend.configs.settings import settings
 from backend.database import db
 from backend.engine.session import IST
+from backend.llm import GOOGLE_PREFIX, route
 from backend.prefs import SETUP_STEP_IDS, PrefsStore
 
 router = APIRouter()
@@ -448,10 +450,41 @@ async def _gateway_models() -> list[dict]:
     return resp.json().get("data", [])
 
 
+_GOOGLE_NOT_CHAT = re.compile(r"tts|image|banana|audio|embed|transcribe|live|robotics|computer-use", re.I)
+
+
+async def _google_models() -> list[dict]:
+    """Google's Gemini chat models as google/<name> ids ([] with no key or on an error)."""
+    if not settings.GEMINI_API_KEY:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{settings.GEMINI_BASE_URL}/models",
+                                    headers={"Authorization": f"Bearer {settings.GEMINI_API_KEY}"})
+            resp.raise_for_status()
+    except httpx.HTTPError as e:
+        logger.error(f"Failed to fetch Google model list: {type(e).__name__}")
+        return []
+    names = (m["id"].removeprefix("models/") for m in resp.json().get("data", []))
+    return [{"id": f"{GOOGLE_PREFIX}{n}"} for n in names if "gemini" in n and not _GOOGLE_NOT_CHAT.search(n)]
+
+
+async def _all_models() -> list[dict]:
+    """Both providers' models. One being down still lists the other; 502 only when nothing is left."""
+    gateway, google = await asyncio.gather(_gateway_models(), _google_models(), return_exceptions=True)
+    if isinstance(google, Exception):
+        google = []
+    if isinstance(gateway, Exception):
+        if not google:
+            raise gateway
+        return google
+    return gateway + google
+
+
 @router.get("/settings/omniroute-models")
 async def list_omniroute_models():
-    """Every model id the gateway lists, for the picker's Search all."""
-    return [{"id": m["id"]} for m in await _gateway_models()]
+    """Every model id the providers list, for the picker's Search all."""
+    return [{"id": m["id"]} for m in await _all_models()]
 
 
 @router.get("/settings/omniroute-catalog")
@@ -460,7 +493,7 @@ async def omniroute_catalog():
     only, for the step-by-step picker (backend/model_catalog.py)."""
     from backend.model_catalog import build_catalog
 
-    return build_catalog(await _gateway_models())
+    return build_catalog(await _all_models())
 
 
 @router.get("/settings/omniroute-model")
@@ -692,14 +725,13 @@ async def test_omniroute_model(update: ModelUpdate, _admin: User = Depends(requi
     model = update.model.strip()
     if not model:
         raise HTTPException(status_code=400, detail="Model cannot be empty")
-    if not settings.OMNIROUTE_API_KEYS:
-        return {"ok": False, "model": model, "latency_ms": None, "reply": None, "error": "No gateway key configured"}
+    name, base_url, keys = route(model, settings.OMNIROUTE_API_KEYS)
+    if not keys:
+        error = "No Gemini API key configured" if model.startswith(GOOGLE_PREFIX) else "No gateway key configured"
+        return {"ok": False, "model": model, "latency_ms": None, "reply": None, "error": error}
 
     system, prompt = render("model_test")
-    llm = ChatOpenAI(
-        model=model, api_key=settings.OMNIROUTE_API_KEYS[0], base_url=settings.OMNIROUTE_BASE_URL,
-        temperature=0.0, max_retries=0,
-    )
+    llm = ChatOpenAI(model=name, api_key=keys[0], base_url=base_url, temperature=0.0, max_retries=0)
     started = time.monotonic()
     try:
         response = await asyncio.wait_for(

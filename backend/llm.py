@@ -74,6 +74,18 @@ def use_model(model: Optional[str], user_id: Optional[str] = None):
         _model_override.reset(token)
         _billed_user.reset(billed)
 
+GOOGLE_PREFIX = "google/"
+
+
+def route(model: str, gateway_keys: List[str]) -> tuple[str, str, List[str]]:
+    """(model name, base URL, keys) for a model id: google/<name> goes straight
+    to Google on GEMINI_API_KEY, anything else through OmniRoute."""
+    if model.startswith(GOOGLE_PREFIX):
+        keys = [settings.GEMINI_API_KEY] if settings.GEMINI_API_KEY else []
+        return model.removeprefix(GOOGLE_PREFIX), settings.GEMINI_BASE_URL, keys
+    return model, settings.OMNIROUTE_BASE_URL, gateway_keys
+
+
 class MultiKeyChain(Runnable):
     def __init__(self, llms: List[Any]):
         self.llms = llms
@@ -253,25 +265,24 @@ class LLMService:
             raise DailyLimitReached(user_id)
 
     async def get_llm(self, tier: Optional[str] = None, feature: Optional[str] = None):
-        """Returns a MultiKeyChain wrapping ChatOpenAI instances pointed at the OmniRoute gateway"""
+        """Returns ChatOpenAI (a MultiKeyChain of them with several keys) pointed at the model's provider"""
         from langchain_openai import ChatOpenAI
 
         if feature and not await feature_enabled(feature):
             return None  # switched off by an admin: callers take their "LLM disabled" path
         await self._charge(feature)
 
-        keys = self.keys_for(feature)
+        name, base_url, keys = route(await model_for(tier), self.keys_for(feature))
         if not keys:
             return None
         await _count_call(feature)
 
-        model = await model_for(tier)
         llms = []
         for key in keys:
             llms.append(ChatOpenAI(
-                model=model,
+                model=name,
                 api_key=key,
-                base_url=settings.OMNIROUTE_BASE_URL,
+                base_url=base_url,
                 temperature=0.0,
                 max_retries=0 # We handle retries via rotation
             ))
