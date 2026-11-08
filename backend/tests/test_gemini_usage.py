@@ -147,3 +147,17 @@ async def test_a_monthly_spending_cap_raises_the_same_alert(stores):
     error = Exception("Your project has exceeded its monthly spending cap.")
     await gemini_chat.UsageRecorder("gemini-3.8-flash").on_llm_error(error)
     assert (await _usage(stores))["depleted_at"]
+
+
+def test_only_the_last_streamed_chunk_reports_usage():
+    from langchain_core.messages import AIMessageChunk
+
+    llm = gemini_chat.GeminiChat(model="m", api_key="k", base_url="http://x")
+
+    def chunk(text, finish, output):
+        raw = {"choices": [{"index": 0, "delta": {"role": "assistant", "content": text}, "finish_reason": finish}],
+               "usage": {"prompt_tokens": 7, "completion_tokens": output, "total_tokens": 7 + output}}
+        return llm._convert_chunk_to_generation_chunk(raw, AIMessageChunk, None).message
+
+    merged = chunk("a", None, 2) + chunk("b", None, 22) + chunk("c", "stop", 22)
+    assert (merged.usage_metadata["input_tokens"], merged.usage_metadata["output_tokens"]) == (7, 22)

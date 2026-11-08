@@ -161,6 +161,8 @@ class GeminiChat(ChatOpenAI):
 
     def _convert_chunk_to_generation_chunk(self, chunk: dict, *args: Any, **kwargs: Any):
         self._remember(chunk)
+        if not any(c.get("finish_reason") for c in chunk.get("choices") or []):
+            chunk = {**chunk, "usage": None}  # Google sends a running total on every chunk and LangChain sums them
         return super()._convert_chunk_to_generation_chunk(chunk, *args, **kwargs)
 
     def _get_request_payload(self, input_: Any, *, stop: Any = None, **kwargs: Any) -> dict:
