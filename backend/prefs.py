@@ -9,6 +9,7 @@ scheduled scan with nothing to go on.
 from datetime import datetime, timezone
 from typing import Optional
 
+from backend.core import request_memo
 from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
 
 DEFAULTS = {
@@ -92,7 +93,7 @@ class PrefsStore:
         await self.collection.create_index("user_id", unique=True)
 
     async def get(self, user_id: str) -> dict:
-        doc = await self.collection.find_one({"user_id": user_id}) or {}
+        doc = await request_memo.once(("prefs", user_id), lambda: self.collection.find_one({"user_id": user_id})) or {}
         return {**DEFAULTS, "user_id": user_id, **{k: doc[k] for k in EDITABLE if k in doc}}
 
     async def update(self, user_id: str, patch: dict) -> dict:

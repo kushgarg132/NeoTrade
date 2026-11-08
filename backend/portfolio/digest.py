@@ -14,6 +14,7 @@ from typing import Optional
 
 from backend import alerts
 from backend.core.clock import aware
+from backend.core import request_memo
 from backend.core.market_calendar import is_trading_day, last_trading_day, next_trading_day
 from backend.guardrails import telegram
 from backend.engine.session import IST
@@ -193,7 +194,8 @@ async def pnl_since(db, user_id: str, roles: dict, since: datetime, picks_only: 
     query = ai_book_query(user_id)
     if picks_only:
         query = {"$and": [query, {"strategy": {"$regex": "^picks:"}}]}
-    async for t in db["paper_trades"].find(query):
+    book = await request_memo.once(("ai_book", user_id, picks_only), lambda: db["paper_trades"].find(query).to_list(length=None))
+    for t in book:
         if t.get("status") == "CLOSED" and (aware(t.get("exit_at")) or since) >= since:
             ai += t.get("realized_pnl") or 0.0
             ai_charges += t.get("costs") or 0.0

@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 from backend.core.clock import aware
 from backend.auth.dependency import get_current_user
 from backend.auth.models import User
-from backend.core import market_calendar
+from backend.core import market_calendar, request_memo
 from backend.core.market_calendar import market_phase
 from backend.database import db
 from backend.engine.session import IST
@@ -238,6 +238,7 @@ async def today(user: User = Depends(get_current_user), broker_states=Depends(ge
     from backend.prefs import PrefsStore
     from backend.risk.kill_switch import KillSwitchStore
 
+    request_memo.start()
     now = _now()
     phase = market_phase(now)
     admin = user.role == "admin"

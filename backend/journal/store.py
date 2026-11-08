@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from pymongo.errors import BulkWriteError
 
+from backend.core import request_memo
 from backend.core.models import BrokerTrade
 
 
@@ -45,6 +46,11 @@ class JournalStore:
         return len(docs)
 
     async def list_trades(self, user_id: str, since: datetime | None = None) -> list[dict]:
+        if since is None:
+            return await request_memo.once(("journal_trades", user_id), lambda: self._read_trades(user_id, None))
+        return await self._read_trades(user_id, since)
+
+    async def _read_trades(self, user_id: str, since: datetime | None) -> list[dict]:
         # ponytail: loads a user's whole history; page by date once someone has 50k+ fills
         query = {"user_id": user_id}
         if since is not None:

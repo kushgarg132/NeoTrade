@@ -416,3 +416,24 @@ def test_changes_are_empty_for_a_quiet_user(monkeypatch):
     client, _ = _client(monkeypatch)
     changes = client.get("/api/v1/today").json()["changes"]
     assert changes["ai_trades"] == [] and changes["plan"] is None and changes["alerts"] == {"count": 0, "latest": None}
+
+
+def test_a_page_load_reads_the_journal_and_prefs_once(monkeypatch):
+    from collections import Counter
+
+    client, db = _client(monkeypatch, role="admin")
+    collection = type(db["journal_trades"])
+    seen, find, find_one = Counter(), collection.find, collection.find_one
+
+    def spy_find(self, *args, **kwargs):
+        seen[self.name] += 1
+        return find(self, *args, **kwargs)
+
+    def spy_find_one(self, *args, **kwargs):
+        seen[self.name] += 1
+        return find_one(self, *args, **kwargs)
+
+    monkeypatch.setattr(collection, "find", spy_find)
+    monkeypatch.setattr(collection, "find_one", spy_find_one)
+    assert client.get("/api/v1/today").json()["errors"] == {}
+    assert seen["user_prefs"] == 1 and seen["journal_trades"] <= 2  # the setup card's has-any-trades check is the other
