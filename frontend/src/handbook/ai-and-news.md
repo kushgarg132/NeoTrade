@@ -24,8 +24,8 @@ index move, peers, name lookup), `chat`, `portfolio`, `learning` — and runs on
 own gateway key from `OMNIROUTE_FEATURE_KEYS` (`llm.py::LLMService.keys_for`), so OmniRoute's
 `usage_history` splits by `api_key_name` ("NeoTrade news", …). A feature with its own key never
 spills onto the shared key: a daily USD limit set on the key in OmniRoute is that feature's
-budget. A feature with no key uses `OMNIROUTE_API_KEY(S)`. `tests/test_llm_call_tiers.py` pins
-every call site's tier and feature.
+budget. A feature with no key uses `OMNIROUTE_API_KEY(S)`. `backend/llm_tasks.py::TASKS` names every kind of call with its tier and
+feature, and `tests/test_llm_call_tiers.py` pins each call site to its task.
 
 Every prompt is a file in `backend/prompts/*.md` (system prompt in front matter,
 `{{placeholders}}`, rendered by `backend.prompts.render`); none are inlined in Python.
