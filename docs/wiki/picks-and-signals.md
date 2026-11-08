@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 1f661be
+verified_at: cbfe51c
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -106,7 +106,7 @@ Disk: `FACTOR_CACHE_DIR` (default `/tmp/neotrade-factor`) pickles, 20 h (`factor
 6. The autopilot no longer buys Picks (2026-11-02, rotation only); `autopilot/picks.py::exit_due` still sells the ones it holds. `forecast/picks.py::live_refusal` (the forward record gate) stays.
 
 **2. Long-term scan → suggestion**
-1. Triggers: `scheduler.py::run_daily_jobs` (source `scheduler`, users from `prefs_store.scan_enabled_users`), `routers/suggestions.py::scan_now` (`manual`, background task), `datalayer/reactor.py::_scan_user` (`news`), and `engine/autorun.py` catch-up.
+1. Triggers: `scheduler.py::run_daily_jobs` (source `scheduler`, users from `prefs_store.scan_enabled_users`), `routers/suggestions.py::scan_now` (`manual`, `job_queue.submit("scan")`: runs in the `jobs` process, else a task in the API; `job_queue.py::_scan` reads prefs, then `attach_theses`), `datalayer/reactor.py::_scan_user` (`news`), and `engine/autorun.py` catch-up.
 2. `scan.py::scan_universe`: resolves instruments, then cached analyst verdicts, `data/fundamentals/universe.py::build_quality_universe(StoreFundamentals)`, `nifty200_sectors()` (failure → `{}`), and builds the LONGTERM strategies with `learning/retune.py::current_params` and `builder_store.regime_of`.
 3. Bars come from `HistoricalFeed(StoreHistoryProvider)` over `LOOKBACK` (400 d). `engine/runner.py::run` replays with `order_sink=SuggestionSink(held=mine_holdings)` and `learned=adapt.load_rules`.
 4. In the runner, `scoring/composite.py::score_intent` (None below RULE_FLOOR) and `LearnedRules.blocks` apply. `SuggestionSink.__call__` records only when `armed` (final session). An equity SELL is allowed only up to `held`. One PENDING per (user, symbol, mode) (`store.has_pending`). → `SuggestionStore.create` (+ WS `suggestions/created`).
