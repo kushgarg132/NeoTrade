@@ -51,7 +51,8 @@ def price(model: str, day: date) -> Optional[tuple[float, float]]:
 
 
 def _credits_ran_out(error: BaseException) -> bool:
-    return getattr(error, "status_code", None) == 402 or "prepayment credits" in f"{error} {getattr(error, 'body', '')}".lower()
+    text = f"{error} {getattr(error, 'body', '')}"
+    return getattr(error, "status_code", None) == 402 or "prepayment credits" in text or "spending cap" in text.lower()
 
 
 class UsageRecorder(AsyncCallbackHandler):

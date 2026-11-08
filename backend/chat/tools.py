@@ -177,7 +177,7 @@ def read_tools(db, redis, user_id: str) -> list:
         if collection == "portfolio_snapshots":
             # The same verdict gate as the Portfolio page (SEBI: admin-only until set).
             from backend.portfolio.digest import verdicts_visible
-            from backend.routers.portfolio import present
+            from backend.portfolio.view import present
 
             visible = await verdicts_visible(db, user_id)
             rows = [present(r, visible) for r in rows]
@@ -195,7 +195,7 @@ def read_tools(db, redis, user_id: str) -> list:
             return _json(found)
         if not found.get("items") and symbol:
             # Not a followed stock (or nothing stored yet): search on demand.
-            from backend.routers.news import fetch_news_logic
+            from backend.datalayer.headlines import fetch_news_logic
 
             web = await fetch_news_logic([symbol.upper()], max(1, min(limit, 30)))
             return _json({"stored": False, "articles": [{"title": a.title, "source": a.source, "url": a.url,

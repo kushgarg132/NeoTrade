@@ -14,7 +14,7 @@ from typing import Optional
 
 import yfinance as yf
 
-from backend.routers.news import fresh_headlines
+from backend.datalayer.headlines import fresh_headlines
 from backend.engine.session import IST
 
 logger = logging.getLogger(__name__)

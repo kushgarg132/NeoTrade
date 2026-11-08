@@ -35,7 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.ai.grounding import check_fields
 from backend.ai.sentiment import weighted_sentiment
-from backend.routers.news import fetch_news_logic
+from backend.datalayer.headlines import fetch_news_logic
 from backend.core.models import FinancialEvent, NewsArticle
 from backend.llm import llm_failed, llm_service
 from backend.prompts import render

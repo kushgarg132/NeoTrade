@@ -57,7 +57,7 @@ def world(monkeypatch):
         return "### What happened\nIt rose."
 
     monkeypatch.setattr(index_move.yf, "Ticker", _FakeTicker)
-    from backend.routers import news as news_module
+    from backend.datalayer import headlines as news_module
     monkeypatch.setattr(news_module, "fetch_google_news", news)
     monkeypatch.setattr(market_data, "fetch_ticker_data", peers)
     monkeypatch.setattr(market_data, "get_trending_stocks", trending)

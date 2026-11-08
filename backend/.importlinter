@@ -38,20 +38,12 @@ allow_indirect_imports = True
 forbidden_modules =
     backend.routers
 ignore_imports =
-    backend.ai.analyst -> backend.routers.news
-    backend.ai.facts.user -> backend.routers.portfolio
     backend.chat.actions -> backend.routers.settings
     backend.chat.actions -> backend.routers.suggestions
     backend.chat.actions -> backend.routers.trading
     backend.chat.tools -> backend.routers.market_data
-    backend.chat.tools -> backend.routers.news
-    backend.chat.tools -> backend.routers.portfolio
-    backend.datalayer.news -> backend.routers.news
     backend.guardrails.telegram_bot -> backend.routers.settings
-    backend.mine.stock -> backend.routers.portfolio
-    backend.portfolio.health -> backend.routers.news
     backend.research.index_move -> backend.routers.market_data
-    backend.research.index_move -> backend.routers.news
 
 [importlinter:contract:own-account-not-autopilot]
 name = Mine and journal never reach the AI account's autopilot

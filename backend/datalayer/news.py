@@ -32,7 +32,7 @@ from pydantic import BaseModel, ValidationError
 
 from backend.ai.sentiment import weighted_sentiment
 from backend.ai.analyst import _extract_json
-from backend.routers.news import _title_key
+from backend.datalayer.headlines import _title_key
 from backend.configs.settings import settings
 from backend.datalayer import news_sources
 from backend.datalayer.prices import priority_symbols

@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend import market_cache
+from backend.datalayer import headlines
 from backend.routers import news
 from backend.core.models import NewsArticle
 
@@ -30,7 +31,7 @@ def searches(monkeypatch):
             _article("Midwest Energy Limited (REMAGNET.BO) stock price", 24 * 60),
         ]
 
-    monkeypatch.setattr(news, "fetch_google_news", fake)
+    monkeypatch.setattr(headlines, "fetch_google_news", fake)
     monkeypatch.setattr(market_cache, "_local", {})
     return calls
 

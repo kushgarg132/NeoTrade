@@ -141,3 +141,9 @@ async def test_tokens_in_a_users_request_count_toward_their_allowance(stores, mo
     with llm.use_model(None, user_id="alice"):
         await gemini_chat.UsageRecorder("gemini-3.8-flash", task="chat.answer", feature="chat").on_llm_end(_result(100, 5, 120))
     assert stores.redis.data[llm.tokens_key("alice", "2026-11-08")] == 120
+
+
+async def test_a_monthly_spending_cap_raises_the_same_alert(stores):
+    error = Exception("Your project has exceeded its monthly spending cap.")
+    await gemini_chat.UsageRecorder("gemini-3.8-flash").on_llm_error(error)
+    assert (await _usage(stores))["depleted_at"]

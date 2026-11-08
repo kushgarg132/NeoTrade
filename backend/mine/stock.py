@@ -16,7 +16,7 @@ EVENT_DAYS = 90
 
 async def _verdicts(db, user_id: str, symbol: str, show: bool) -> tuple[dict, list[dict]]:
     """(newest row for the symbol, one entry per change of verdict, oldest first)."""
-    from backend.routers.portfolio import mask_row
+    from backend.portfolio.view import mask_row
 
     row, hist = {}, []
     async for snap in db["portfolio_snapshots"].find({"user_id": user_id}, {"holdings": 1, "at": 1}).sort("at", 1):
