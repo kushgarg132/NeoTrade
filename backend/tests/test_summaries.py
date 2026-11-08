@@ -28,8 +28,8 @@ class FakeLLM:
     def __init__(self, reply="ok"):
         self.reply, self.calls = reply, []
 
-    async def __call__(self, prompt, system_prompt, tier=None, feature=None):
-        self.calls.append({"prompt": prompt, "system": system_prompt, "tier": tier, "feature": feature})
+    async def __call__(self, prompt, system_prompt, task=None):
+        self.calls.append({"prompt": prompt, "system": system_prompt, "task": task})
         if isinstance(self.reply, Exception):
             raise self.reply
         return self.reply
@@ -81,7 +81,7 @@ async def test_day_prompt_carries_only_the_digest_needs_and_market(db, redis, ll
     doc = await day.generate(db, redis, "alice", "pre", NOW, DIGEST)
     assert doc["key"] == "2026-10-15:pre" and doc["text"].count("\n") == 2
     [call] = llm.calls
-    assert (call["tier"], call["feature"]) == ("fast", "portfolio")
+    assert call["task"] == "summary.day"
     assert "Your account: ₹2,950" in call["prompt"] and "<b>" not in call["prompt"]
     assert "DOWN: HOLD → SELL" in call["prompt"] and "risk_off" in call["prompt"] and "Nifty 50" in call["prompt"]
     assert "before the market opens" in call["prompt"]
@@ -158,7 +158,7 @@ async def test_a_note_is_written_for_bad_news_and_results_only(db, redis, llm, h
     llm.reply = "It is a sizeable position; watch the stop."
     await db["holding_theses"].insert_one({"user_id": "alice", "symbol": "DOWN", "why": "turnaround", "stop": 100.0})
     assert await holding.run_user(db, redis, "alice", NOW) == 2
-    assert {c["feature"] for c in llm.calls} == {"news"} and {c["tier"] for c in llm.calls} == {"fast"}
+    assert {c["task"] for c in llm.calls} == {"summary.holding"}
     down = next(c for c in llm.calls if "bad_news" in c["prompt"])["prompt"]
     assert "misses estimates" in down and '"share_of_account": "18.0%"' in down and '"stop": "₹100.00"' in down and "turnaround" in down
     assert '"value": "₹18,000"' in down and '"gain_overall": "-7.5%"' in down and '"account_value": "₹1,00,000"' in down
@@ -258,7 +258,7 @@ async def test_activity_prompt_has_todays_orders_the_plan_and_the_result_for_thi
     doc = await activity.generate(db, redis, "alice", CLOSE)
     assert doc["key"] == "2026-10-15" and doc["text"].startswith("It filled")
     [call] = llm.calls
-    assert (call["tier"], call["feature"]) == ("standard", "plan")
+    assert call["task"] == "summary.activity"
     p = call["prompt"]
     assert "Pick cleared the fence" in p and "risk-off regime blocks news entries" in p
     assert "yesterday" not in p and "BOBCO" not in p                      # only today's rows, only this user
@@ -330,7 +330,7 @@ async def test_weekly_prompt_has_the_reports_numbers_and_the_journals_habits(db,
     doc = await narrative.generate(db, redis, "alice", REPORT)
     assert doc["key"] == "2026-W42" and "9.3%" in doc["text"]
     [call] = llm.calls
-    assert (call["tier"], call["feature"]) == ("standard", "portfolio")
+    assert call["task"] == "summary.weekly"
     p = call["prompt"]
     assert '"you_return_pct": 3.3' in p and '"excess_pct": 9.3' in p and "LOSE" in p
     assert "Trades opened after two losses" in p and '"win_rate_pct": 17.0' in p and "win_rate\"" not in p
@@ -417,7 +417,7 @@ async def test_habits_prompt_has_the_patterns_the_week_and_the_costs(db, redis, 
     doc = await habits.generate(db, redis, "alice", "2026-W42")
     assert doc["key"] == "2026-W42" and doc["text"].startswith("Trades after")
     [call] = llm.calls
-    assert (call["tier"], call["feature"]) == ("standard", "learning")
+    assert call["task"] == "summary.habits"
     p = call["prompt"]
     assert "Trades opened after two losses" in p and '"win_rate_pct": 17.0' in p and '"baseline_win_rate_pct": 55.0' in p
     assert '"closed_this_week": 4' in p and '"charges": 1800.0' in p and '"trades_per_year": 480' in p
@@ -492,7 +492,7 @@ async def _produced(monkeypatch, *replies):
     async def build():
         return "sys", "write it", {"net": 0.0}
 
-    doc = await core.produce(db, _Claims(), "alice", "activity", "k", build, tier="fast", feature="plan", ttl=60)
+    doc = await core.produce(db, _Claims(), "alice", "activity", "k", build, task="summary.activity", ttl=60)
     return doc, prompts
 
 
@@ -525,7 +525,7 @@ async def test_a_holding_note_may_decline_and_is_not_asked_again(db, redis, llm)
         return "sys", "write it", {}
 
     llm.reply = "NONE"
-    assert await core.produce(db, redis, "alice", "holding", "k", build, tier="fast", feature="news", ttl=60) is None
+    assert await core.produce(db, redis, "alice", "holding", "k", build, task="summary.holding", ttl=60) is None
     assert await db["ai_summaries"].count_documents({}) == 0
-    await core.produce(db, redis, "alice", "holding", "k", build, tier="fast", feature="news", ttl=60)
+    await core.produce(db, redis, "alice", "holding", "k", build, task="summary.holding", ttl=60)
     assert len(llm.calls) == 1

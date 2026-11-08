@@ -102,7 +102,7 @@ def _llm(monkeypatch, *responses):
         return json.dumps(replies.pop(0))
 
     monkeypatch.setattr(news, "_fast", complete)
-    monkeypatch.setattr(news, "_deep", complete)
+    monkeypatch.setattr(news, "_score", complete)
     return calls
 
 

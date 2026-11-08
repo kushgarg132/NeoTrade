@@ -99,3 +99,45 @@ async def test_a_broken_store_never_breaks_the_model_call(stores, monkeypatch):
     monkeypatch.setattr(database, "redis", None)
     await gemini_chat.UsageRecorder("gemini-3.8-flash").on_llm_end(_result(1, 1, 2))
     await gemini_chat.UsageRecorder("gemini-3.8-flash").on_llm_error(_Depleted("x"))
+
+
+class _CountingRedis(_Redis):
+    async def incrby(self, key, n):
+        self.data[key] = int(self.data.get(key) or 0) + n
+
+    async def expire(self, key, seconds):
+        return True
+
+
+async def test_each_task_has_its_own_ledger_row_with_thinking_and_cached_tokens(stores):
+    message = AIMessage("x", usage_metadata={"input_tokens": 100, "output_tokens": 10, "total_tokens": 150,
+                                             "input_token_details": {"cache_read": 40},
+                                             "output_token_details": {"reasoning": 40}})
+    result = LLMResult(generations=[[ChatGeneration(message=message)]])
+    await gemini_chat.UsageRecorder("gemini-3.8-flash", task="news.score", feature="news").on_llm_end(result)
+    row = await stores.db[gemini_chat.USAGE_COLLECTION].find_one({"task": "news.score"})
+    assert (row["feature"], row["cached"], row["thinking"], row["output"]) == ("news", 40, 40, 50)
+
+
+async def test_spend_reads_the_ledger_for_that_feature_only(stores):
+    gemini_chat._spend.clear()
+    await gemini_chat.UsageRecorder("gemini-3.8-flash", task="news.score", feature="news").on_llm_end(_result(1000, 0, 1000))
+    await gemini_chat.UsageRecorder("gemini-3.8-flash", task="chat.answer", feature="chat").on_llm_end(_result(9000, 0, 9000))
+    assert await gemini_chat.spent_today("news") == pytest.approx(1000 * 0.75 / 1e6)
+
+
+async def test_a_gateway_call_neither_clears_the_credits_flag_nor_shows_in_the_gemini_sheet(stores):
+    stores.redis.data[GEMINI_CREDITS_KEY] = "1"
+    await gemini_chat.UsageRecorder("kiro/x", task="chat.answer", feature="chat", gateway=True).on_llm_end(_result(10, 1, 11))
+    usage = await _usage(stores)
+    assert usage["depleted_at"] and usage["last_30_days"]["calls"] == 0
+
+
+async def test_tokens_in_a_users_request_count_toward_their_allowance(stores, monkeypatch):
+    from backend import llm
+
+    stores.redis = _CountingRedis()
+    monkeypatch.setattr(database, "redis", stores.redis)
+    with llm.use_model(None, user_id="alice"):
+        await gemini_chat.UsageRecorder("gemini-3.8-flash", task="chat.answer", feature="chat").on_llm_end(_result(100, 5, 120))
+    assert stores.redis.data[llm.tokens_key("alice", "2026-11-08")] == 120

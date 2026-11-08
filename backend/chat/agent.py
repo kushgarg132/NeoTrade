@@ -6,6 +6,7 @@ tool call's input and completion for clients that show the work (Telegram)."""
 
 import json
 import logging
+import re
 from typing import AsyncIterator
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -16,7 +17,7 @@ from backend.auth.store import UserStore
 from backend.chat.media import media_tools
 from backend.chat.context import build_snapshot, format_profile, format_snapshot
 from backend.chat.tools import read_tools
-from backend.llm import llm_service
+from backend.llm import llm_failed, llm_service
 from backend.profile.store import ProfileStore
 from backend.prompts import render, shared_text
 
@@ -25,6 +26,45 @@ logger = logging.getLogger(__name__)
 # The socket forwards whatever history the browser holds; bound what reaches the model.
 MAX_HISTORY_TURNS = 20
 MAX_TURN_CHARS = 4000
+# Graph steps for one reply: 6 model calls and the tool rounds between them (LangGraph counts both).
+RECURSION_LIMIT = 12
+OUT_OF_STEPS = "That needed more lookups than one reply allows. Ask about one part of it."
+
+# Tools sent with every message are paid for on every model step, so only the likely ones go.
+_CORE_TOOLS = {"get_portfolio", "query_my_data", "search_news", "price_summary", "resolve_symbol_tool",
+               "fetch_stock_info_tool", "next_results", "get_market_backdrop"}
+_INTENT_TOOLS = (
+    (re.compile(r"journal|habit|trades?\b|p&l|pnl|mistake|revenge", re.I), {"get_journal"}),
+    (re.compile(r"paper|engine|autopilot|\brun\b|rotation|ai account", re.I), {"get_paper"}),
+    (re.compile(r"proposal|pending|decision|idea|suggestion|approve|decline", re.I), {"get_decisions"}),
+    (re.compile(r"limit|guardrail|kill.?switch|cap\b", re.I), {"get_limits"}),
+    (re.compile(r"learn|what.*(engine|ai).*(found|changed)", re.I), {"get_learning"}),
+    (re.compile(r"strateg", re.I), {"get_strategy_library", "get_built_strategies"}),
+    (re.compile(r"index|nifty|sensex|bank nifty|\^NSE", re.I), {"explain_index"}),
+    (re.compile(r"history|chart|trend|since|year|month", re.I), {"fetch_price_history_tool"}),
+    (re.compile(r"chart|graph|plot|draw|image|picture|visual", re.I), {"make_chart", "generate_image"}),
+)
+_PAGE_TOOLS = (("journal", {"get_journal"}), ("ai", {"get_paper", "get_decisions"}), ("pick", {"get_decisions"}),
+               ("strateg", {"get_strategy_library", "get_built_strategies"}), ("lab", {"get_learning"}))
+# Any of these, in the message or the last exchange ("yes, do it"), brings the propose_ tools.
+_ACTION_WORDS = re.compile(
+    r"\b(buy|sell|order|exit|cancel|modify|approve|decline|reject|stop|start|set|change|raise|lower|increase|reduce|"
+    r"remember|save|create|build|trim|add|place|confirm|yes|do it|go ahead|ok|okay)\b", re.I)
+
+
+def pick_tools(tools: list, message: str, history: list, page: str) -> list:
+    """The tools this message is likely to need. A propose_ tool only prepares a card, so a miss costs a
+    rephrase, never a wrong order; widen the patterns if the usage ledger shows rephrasing."""
+    recent = " ".join(str(t.get("content", "")) for t in (history or [])[-2:] if isinstance(t, dict))[-2000:]
+    wanted = set(_CORE_TOOLS)
+    for pattern, names in _INTENT_TOOLS:
+        if pattern.search(message):
+            wanted |= names
+    for word, names in _PAGE_TOOLS:
+        if word in (page or "").lower():
+            wanted |= names
+    act = bool(_ACTION_WORDS.search(f"{message} {recent}"))
+    return [t for t in tools if t.name in wanted or (act and t.name.startswith("propose_"))]
 
 TOOL_LABELS = {
     "get_portfolio": "Reading your portfolio", "get_journal": "Reading your journal",
@@ -96,9 +136,9 @@ async def suggest_followups(question: str, answer: str) -> list[str]:
     never a broken reply."""
     try:
         system, prompt = render("chat_followups", question=question, answer=answer[-2000:])
-        reply = await llm_service.get_completion(prompt, system_prompt=system, tier="fast", feature="chat")
+        reply = await llm_service.get_completion(prompt, system_prompt=system, task="chat.followups")
         # get_completion reports failure in-band; never show that as a chip.
-        if not reply or reply == "LLM_DISABLED" or reply.startswith("Error generating response"):
+        if not reply or llm_failed(reply):
             return []
         return _questions(reply)
     except Exception as exc:
@@ -119,7 +159,7 @@ async def _profile(db, user_id: str) -> str:
 async def stream_chat(db, redis, user_id: str, message: str, history: list, context: dict,
                       media: bool = False) -> AsyncIterator[dict]:
     """media=True adds make_chart and generate_image, whose chart/image events only the web widget draws."""
-    llm = await llm_service.get_llm(tier="deep", feature="chat")
+    llm = await llm_service.get_llm(task="chat.answer")
     if not llm:
         yield {"type": "content", "data": "The AI service is not available right now."}
         return
@@ -146,12 +186,14 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
 
     shown: list[dict] = []  # chart/image events the media tools queue
     tools = read_tools(db, redis, user_id) + action_tools(db, redis, user_id, message)
-    agent = create_react_agent(llm, tools + (media_tools(shown) if media else []))
+    all_tools = tools + (media_tools(shown) if media else [])
+    agent = create_react_agent(llm, pick_tools(all_tools, message, history, (context or {}).get("page") or ""))
     answer = ""
     split = _Trailer()
     suggestions: list[str] = []
+    carded = False
     try:
-        async for event in agent.astream_events({"messages": messages}, version="v1"):
+        async for event in agent.astream_events({"messages": messages}, {"recursion_limit": RECURSION_LIMIT}, version="v1"):
             kind = event["event"]
             name = event.get("name", "")
             label = TOOL_LABELS.get(name, f"Using {name}")
@@ -167,6 +209,7 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
                 output = event["data"].get("output")
                 text = getattr(output, "content", output)
                 if isinstance(text, str) and text.startswith(CARD_PREFIX):
+                    carded = True
                     yield {"type": "action", "data": json.loads(text[len(CARD_PREFIX):])}
                 while shown:
                     yield shown.pop(0)
@@ -183,6 +226,9 @@ async def stream_chat(db, redis, user_id: str, message: str, history: list, cont
         yield {"type": "content", "data": "Something went wrong answering that; try again in a minute."}
         return
 
+    if not answer and not carded and split.trailer is None and not split.held:
+        answer = OUT_OF_STEPS  # LangGraph ends on a canned message it does not stream
+        yield {"type": "content", "data": answer}
     if split.trailer is not None:
         suggestions = _questions(split.trailer)
     elif held := split.flush():

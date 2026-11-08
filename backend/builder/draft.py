@@ -91,7 +91,7 @@ async def _prompt(db, redis, admin_id, horizon: str = "intraday") -> tuple[str, 
 async def _default_llm(system: str, prompt: str) -> str:
     from backend.llm import llm_service
 
-    return await llm_service.get_completion(prompt, system_prompt=system, tier="deep", feature="learning") or ""
+    return await llm_service.get_completion(prompt, system_prompt=system, task="learning.builder") or ""
 
 
 def _parse(text: str) -> list:

@@ -1,6 +1,7 @@
 
 from backend.app_settings import current_llm_model, feature_enabled
 from backend.configs.settings import settings
+from backend.llm_tasks import TASKS
 from typing import Optional, List, Any, AsyncIterator
 import contextlib
 import json
@@ -49,6 +50,29 @@ class DailyLimitReached(Exception):
 
 
 LIMIT_MESSAGE = "You've used today's AI allowance. It resets at midnight IST."
+DISABLED = "LLM_DISABLED"
+_FAILED_PREFIX = "Error generating response"
+
+
+def llm_failed(text: str) -> bool:
+    """get_completion reports a switched-off feature or a failed call in its text."""
+    return text == DISABLED or text.startswith(_FAILED_PREFIX)
+
+
+def _ist_day() -> str:
+    from datetime import datetime, timezone
+
+    from backend.engine.session import IST
+
+    return datetime.now(timezone.utc).astimezone(IST).date().isoformat()
+
+
+def tokens_key(user_id: str, day: str) -> str:
+    return f"llm:tokens:{user_id}:{day}"
+
+
+def billed_user() -> Optional[str]:
+    return _billed_user.get()
 
 
 async def model_for(tier: Optional[str] = None) -> str:
@@ -186,15 +210,12 @@ class LLMService:
         own = self.feature_keys.get(feature) if feature else None
         return [own] if own else list(self.keys)
 
-    async def get_completion(self, prompt: str, system_prompt: str, tier: Optional[str] = None,
-                             feature: Optional[str] = None) -> str:
+    async def get_completion(self, prompt: str, system_prompt: str, task: Optional[str] = None) -> str:
         """Both prompts come from backend/prompts/*.md via prompts.render.
-        `tier` (fast / standard / deep) picks the admin's model for that
-        kind of task; see app_settings.TIERS. `feature` picks the gateway key
-        its usage is metered under."""
-        llm = await self.get_llm(tier=tier, feature=feature)
+        `task` names a row of llm_tasks.TASKS: model tier, budget, thinking, JSON."""
+        llm = await self.get_llm(task=task)
         if not llm:
-            return "LLM_DISABLED"
+            return DISABLED
         
         try:
             # MultiKeyChain supports ainvoke
@@ -212,16 +233,15 @@ class LLMService:
         except Exception as e:
             logger.error(f"LLM Error: {e}")
             await _note(LLM_ERROR_KEY, json.dumps({"at": int(time.time()), "error": str(e)[:300]}))
-            return f"Error generating response: {str(e)}"
+            return f"{_FAILED_PREFIX}: {str(e)}"
 
-    async def stream_completion(self, prompt: str, system_prompt: str, tier: Optional[str] = None,
-                                feature: Optional[str] = None) -> AsyncIterator[str]:
+    async def stream_completion(self, prompt: str, system_prompt: str, task: Optional[str] = None) -> AsyncIterator[str]:
         """get_completion, but yields the text as the model writes it. One charge.
         A failure before the first chunk falls back to one plain call; after a
         chunk it raises, since the caller already holds part of the answer."""
-        llm = await self.get_llm(tier=tier, feature=feature)
+        llm = await self.get_llm(task=task)
         if not llm:
-            yield "LLM_DISABLED"
+            yield DISABLED
             return
         from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -251,55 +271,74 @@ class LLMService:
 
     async def _charge(self, feature: Optional[str]) -> None:
         """Counts a call made inside a user's request (use_model(user_id=...))
-        against their daily ceiling; raises DailyLimitReached past it. Fails
-        open on a Redis problem, like every rate limit here."""
+        against their daily ceilings, raising DailyLimitReached past either: calls
+        here, tokens as gemini_chat.UsageRecorder adds them up. Fails open on a
+        Redis problem, like every rate limit here."""
         user_id = _billed_user.get()
         if not user_id or feature not in USER_FEATURES:
             return
-        from datetime import datetime, timezone
-
         from backend.database import db
-        from backend.engine.session import IST
         from backend.rate_limit import allow
 
-        day = datetime.now(timezone.utc).astimezone(IST).date().isoformat()
+        day = _ist_day()
+        try:
+            used = int(await db.redis.get(tokens_key(user_id, day)) or 0)
+        except Exception as exc:
+            logger.warning("token allowance unreadable: %s", exc)
+            used = 0
+        if used >= settings.USER_LLM_TOKENS_PER_DAY:
+            raise DailyLimitReached(user_id)
         if not await allow(db.redis, f"llm:{user_id}:{day}", settings.USER_LLM_CALLS_PER_DAY, 2 * 86400):
             raise DailyLimitReached(user_id)
 
-    async def get_llm(self, tier: Optional[str] = None, feature: Optional[str] = None):
-        """Returns ChatOpenAI (a MultiKeyChain of them with several keys) pointed at the model's provider"""
+    async def _over_budget(self, feature: Optional[str]) -> bool:
+        """News has a daily spending ceiling; past it the batch waits, as for a switched-off feature."""
+        if feature != "news":
+            return False
+        from backend.gemini_chat import spent_today
+
+        return await spent_today(feature) >= settings.NEWS_USD_PER_DAY
+
+    def _client(self, model: str, key: str, base_url: str, spec: Any, task: Optional[str], feature: Optional[str]):
         from langchain_openai import ChatOpenAI
+
+        from backend.gemini_chat import GeminiChat, UsageRecorder
+
+        google = model.startswith(GOOGLE_PREFIX)
+        name = model.removeprefix(GOOGLE_PREFIX)
+        options = {}
+        if google and spec and spec.effort:
+            options["reasoning_effort"] = spec.effort
+        if google and spec and spec.json:
+            options["model_kwargs"] = {"response_format": {"type": "json_object"}}
+        return (GeminiChat if google else ChatOpenAI)(
+            model=name, api_key=key, base_url=base_url, temperature=0.0,
+            max_retries=0,  # We handle retries via rotation
+            callbacks=[UsageRecorder(name, task=task, feature=feature, gateway=not google)], **options)
+
+    async def get_llm(self, tier: Optional[str] = None, feature: Optional[str] = None, task: Optional[str] = None):
+        """Returns ChatOpenAI (a MultiKeyChain of them with several keys or a fallback) pointed at the model's provider"""
+        spec = TASKS[task] if task else None
+        if spec:
+            tier, feature = spec.tier, spec.feature
 
         if feature and not await feature_enabled(feature):
             return None  # switched off by an admin: callers take their "LLM disabled" path
+        if await self._over_budget(feature):
+            return None
         await self._charge(feature)
 
         model = await model_for(tier)
-        name, base_url, keys = route(model, self.keys_for(feature))
-        if not keys:
+        _, base_url, keys = route(model, self.keys_for(feature))
+        llms = [self._client(model, key, base_url, spec, task, feature) for key in keys]
+        if spec and spec.fallback and model.startswith(GOOGLE_PREFIX):
+            backup = await current_llm_model()
+            if not backup.startswith(GOOGLE_PREFIX):
+                _, gateway_url, gateway_keys = route(backup, self.keys_for(feature))
+                llms += [self._client(backup, key, gateway_url, spec, task, feature) for key in gateway_keys]
+        if not llms:
             return None
         await _count_call(feature)
-
-        chat_class, google = ChatOpenAI, {}
-        if model.startswith(GOOGLE_PREFIX):
-            from backend.gemini_chat import GeminiChat as chat_class, UsageRecorder
-
-            google = {"callbacks": [UsageRecorder(name)]}
-
-        llms = []
-        for key in keys:
-            llms.append(chat_class(
-                model=name,
-                api_key=key,
-                base_url=base_url,
-                temperature=0.0,
-                max_retries=0, # We handle retries via rotation
-                **google,
-            ))
-            
-        if len(llms) == 1:
-            return llms[0]
-            
-        return MultiKeyChain(llms)
+        return llms[0] if len(llms) == 1 else MultiKeyChain(llms)
 
 llm_service = LLMService()

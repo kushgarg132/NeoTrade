@@ -26,7 +26,7 @@ from backend.datalayer.news_sources import UA
 from backend.datalayer.prices import MACRO, MACRO_KEY
 from backend.engine.autorun import near_session
 from backend.engine.session import IST, clock
-from backend.llm import llm_service
+from backend.llm import llm_failed, llm_service
 from backend.ai.grounding import check_fields
 from backend.prompts import prompt_id, render
 
@@ -206,7 +206,7 @@ def _brief_due(last: Optional[dict], material_since: bool, now: datetime, regime
 
 async def _write_brief(system: str, prompt: str) -> str:
     # One short summary for every user and every AI answer: the mid tier.
-    return await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="news")
+    return await llm_service.get_completion(prompt, system_prompt=system, task="news.brief")
 
 
 async def brief(db, redis, now: Optional[datetime] = None) -> bool:
@@ -248,7 +248,7 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
     )
     system, prompt = render("market_brief", **values)
     text = (await _write_brief(system, prompt) or "").strip()
-    if not text or text == "LLM_DISABLED" or text.startswith("Error generating response"):
+    if not text or llm_failed(text):
         await redis.set(BRIEF_BACKOFF_KEY, "1", ex=BRIEF_BACKOFF_SECONDS)
         return False
     text = (await check_fields({"brief": text}, list(values.values())))["brief"]

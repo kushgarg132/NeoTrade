@@ -10,7 +10,7 @@ from html import unescape
 from typing import Awaitable, Callable, Optional
 
 from backend.ai.grounding import banned, grounded, strip_unsupported
-from backend.llm import DailyLimitReached, llm_service
+from backend.llm import DailyLimitReached, llm_failed, llm_service
 from backend.prompts import prompt_id
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def pct(x: Optional[float]) -> Optional[float]:
 
 
 def failed(text: Optional[str]) -> bool:
-    return not text or text == "LLM_DISABLED" or text.startswith("Error generating response")
+    return not text or llm_failed(text)
 
 
 def claim_key(user_id: str, kind: str, key: str) -> str:
@@ -72,7 +72,7 @@ def shown(doc: Optional[dict]) -> Optional[dict]:
     return {"text": doc["text"], "key": doc["key"], "at": at}
 
 
-async def _without_banned(text: str, system: str, prompt: str, facts, tier: str, feature: str) -> str:
+async def _without_banned(text: str, system: str, prompt: str, facts, task: str) -> str:
     """One rewrite when the text prints a field name or an amount in words; what survives that loses its sentence."""
     found = banned(text)
     if not found:
@@ -81,7 +81,7 @@ async def _without_banned(text: str, system: str, prompt: str, facts, tier: str,
         again = await llm_service.get_completion(
             f"{prompt}\n\nYour last answer:\n{text}\n\nWrite it again without these: {', '.join(found)}. "
             "Use plain words, and ₹ for money. Reply with the note only.",
-            system_prompt=system, tier=tier, feature=feature)
+            system_prompt=system, task=task)
         if not failed(again):
             text, _ = await grounded(again.strip(), facts, None)
     except Exception as exc:
@@ -89,7 +89,7 @@ async def _without_banned(text: str, system: str, prompt: str, facts, tier: str,
     return strip_unsupported(text, banned(text))
 
 
-async def produce(db, redis, user_id: str, kind: str, key: str, build: Build, *, tier: str, feature: str,
+async def produce(db, redis, user_id: str, kind: str, key: str, build: Build, *, task: str,
                   ttl: int, max_lines: Optional[int] = None) -> Optional[dict]:
     """The stored summary just written, or None (already done this period, nothing to say, model
     unavailable or over budget: the last stored text stays). `build` runs only after the claim and
@@ -107,7 +107,7 @@ async def produce(db, redis, user_id: str, kind: str, key: str, build: Build, *,
             await redis.delete(claim)  # no data yet: the next pass may try
             return None
         system, prompt, facts = built
-        text = ((await llm_service.get_completion(prompt, system_prompt=system, tier=tier, feature=feature)) or "").strip()
+        text = ((await llm_service.get_completion(prompt, system_prompt=system, task=task)) or "").strip()
     except DailyLimitReached:
         text = ""
     except Exception as exc:
@@ -117,7 +117,7 @@ async def produce(db, redis, user_id: str, kind: str, key: str, build: Build, *,
         return None  # the claim stays: the model looked and has nothing specific, so it is not asked again
     if not failed(text):
         text, _ = await grounded(text, facts, None)  # a sentence with an unsupported figure is dropped
-        text = await _without_banned(text, system, prompt, facts, tier, feature)
+        text = await _without_banned(text, system, prompt, facts, task)
         lines = [ln.strip(" -•*\t") for ln in text.splitlines() if ln.strip(" -•*\t")]
         text = "\n".join(lines[:max_lines] if max_lines else lines)
     if failed(text):

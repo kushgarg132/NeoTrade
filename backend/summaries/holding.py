@@ -81,7 +81,7 @@ async def note_for(db, redis, user_id: str, action: dict):
             thesis=core.as_facts(thesis) if thesis else "none written", price=core.as_facts(price) if price else "not available")
         return system, prompt, facts
 
-    return await core.produce(db, redis, user_id, KIND, action["id"], build, tier="fast", feature="news",
+    return await core.produce(db, redis, user_id, KIND, action["id"], build, task="summary.holding",
                               ttl=TTL, max_lines=1)
 
 

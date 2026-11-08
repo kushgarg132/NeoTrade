@@ -49,7 +49,7 @@ async def _replay(db, rows: list[dict], names, sector_of, sectors) -> None:
 
     async def one(batch):
         notes = await news.price_notes(db, batch, ltp_of)
-        result = await news._ask("score_market_news", news._deep, news._Scores, sectors=", ".join(sectors),
+        result = await news._ask("score_market_news", news._score, news._Scores, sectors=", ".join(sectors),
                                  items=news.score_lines(batch, names, sector_of, notes))
         if result is news._OUTAGE or result is None:
             return

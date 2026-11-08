@@ -13,7 +13,7 @@ class _FakeAgent:
     def __init__(self, seen):
         self.seen = seen
 
-    async def astream_events(self, payload, version):
+    async def astream_events(self, payload, config=None, version=None):
         self.seen["messages"] = payload["messages"]
         yield {"event": "on_tool_start", "name": "propose_approve", "data": {}}
         yield {"event": "on_tool_end", "name": "propose_approve",
@@ -23,7 +23,7 @@ class _FakeAgent:
 
 
 async def _run(monkeypatch, seen):
-    async def fake_llm(tier=None, feature=None):
+    async def fake_llm(task=None):
         return object()
 
     async def fake_snapshot(db, redis, user_id, now=None):
@@ -54,8 +54,8 @@ async def test_system_prompt_carries_snapshot_and_page(monkeypatch):
 
 
 async def test_a_finished_reply_ends_with_follow_up_suggestions(monkeypatch):
-    async def fake_completion(prompt, system_prompt, tier=None, feature=None):
-        assert tier == "fast" and "Card ready." in prompt
+    async def fake_completion(prompt, system_prompt, task=None):
+        assert task == "chat.followups" and "Card ready." in prompt
         return "Here are three:\n1. Yes, approve it\n- What else is pending?\n\"How much is at risk?\"\nOne more?"
 
     monkeypatch.setattr(agent.llm_service, "get_completion", fake_completion)
@@ -71,14 +71,14 @@ async def test_follow_ups_see_only_the_reply_after_the_last_tool(monkeypatch):
     seen = {}
 
     class _Narrating(_FakeAgent):
-        async def astream_events(self, payload, version):
+        async def astream_events(self, payload, config=None, version=None):
             chunk = lambda text: {"event": "on_chat_model_stream", "data": {"chunk": type("C", (), {"content": text})()}}
             yield chunk("Let me look that up.")
             yield {"event": "on_tool_start", "name": "get_portfolio", "data": {}}
             yield {"event": "on_tool_end", "name": "get_portfolio", "data": {"output": "{}"}}
             yield chunk("SJVN is your top holding. Approve it?")
 
-    async def fake_completion(prompt, system_prompt, tier=None, feature=None):
+    async def fake_completion(prompt, system_prompt, task=None):
         seen["prompt"] = prompt
         return "Yes, approve it"
 
@@ -93,7 +93,7 @@ async def test_follow_ups_see_only_the_reply_after_the_last_tool(monkeypatch):
 
 
 async def test_a_follow_up_failure_still_leaves_the_reply(monkeypatch):
-    async def broken(prompt, system_prompt, tier=None, feature=None):
+    async def broken(prompt, system_prompt, task=None):
         raise RuntimeError("gateway down")
 
     monkeypatch.setattr(agent.llm_service, "get_completion", broken)
@@ -131,7 +131,7 @@ async def test_profile_rides_in_the_prompt_as_data(monkeypatch):
 
 async def test_suggestions_ride_in_the_same_call_and_never_reach_the_user(monkeypatch):
     class _Trailer(_FakeAgent):
-        async def astream_events(self, payload, version):
+        async def astream_events(self, payload, config=None, version=None):
             self.seen["messages"] = payload["messages"]
             chunk = lambda text: {"event": "on_chat_model_stream", "data": {"chunk": type("C", (), {"content": text})()}}
             for part in ("Card ", "ready.\n<<<NE", "XT>>>\n👍 Yes, approve it\n", "🔍 Why SJVN?\n📊 Compare with Nifty"):
@@ -179,14 +179,14 @@ async def test_history_is_cut_to_the_last_20_turns_of_4000_chars(monkeypatch):
 
 async def test_a_model_inside_a_tool_does_not_reach_the_reply(monkeypatch):
     class _Nested:
-        async def astream_events(self, payload, version):
+        async def astream_events(self, payload, config=None, version=None):
             def chunk(text, node):
                 return {"event": "on_chat_model_stream", "metadata": {"langgraph_node": node},
                         "data": {"chunk": type("C", (), {"content": text})()}}
             yield chunk('["HINDALCO", "VEDL"]', "tools")
             yield chunk("I would hold.", "agent")
 
-    async def fake_llm(tier=None, feature=None):
+    async def fake_llm(task=None):
         return object()
 
     async def fake_snapshot(db, redis, user_id, now=None):
@@ -204,3 +204,54 @@ def test_chat_stock_tools_accept_the_yahoo_form():
     from backend.chat.lc_tools import _bare
 
     assert _bare(" hindcopper.ns ") == "HINDCOPPER" and _bare("TCS") == "TCS"
+
+
+class _T:
+    def __init__(self, name):
+        self.name = name
+
+
+_ALL = [_T(n) for n in ("get_portfolio", "query_my_data", "get_journal", "get_paper", "make_chart", "propose_order", "explain_index")]
+
+
+def _picked(message, history=(), page=""):
+    return {t.name for t in agent.pick_tools(_ALL, message, list(history), page)}
+
+
+def test_a_plain_question_gets_only_the_core_tools():
+    assert _picked("how is INFY doing") == {"get_portfolio", "query_my_data"}
+
+
+def test_intent_and_page_add_their_tools():
+    assert "get_journal" in _picked("what are my worst habits")
+    assert "get_journal" in _picked("hello there", page="/journal")
+    assert "make_chart" in _picked("draw a chart of it") and "explain_index" in _picked("why did nifty fall")
+
+
+def test_an_action_brings_the_propose_tools_even_on_a_bare_confirmation():
+    assert "propose_order" in _picked("buy 5 INFY")
+    assert "propose_order" in _picked("sounds right", history=[{"role": "assistant", "content": "Shall I sell it?"}])
+    assert "propose_order" not in _picked("how is INFY doing")
+
+
+async def test_running_out_of_steps_says_so_instead_of_going_silent(monkeypatch):
+    class Silent:
+        async def astream_events(self, payload, config=None, version=None):
+            assert config == {"recursion_limit": agent.RECURSION_LIMIT}
+            yield {"event": "on_tool_start", "name": "get_portfolio", "data": {}}
+
+    async def fake_llm(task=None):
+        return object()
+
+    async def fake_snapshot(db, redis, user_id, now=None):
+        return {"market": {"session_open": False}}
+
+    async def none(*a, **k):
+        return []
+
+    monkeypatch.setattr(agent.llm_service, "get_llm", fake_llm)
+    monkeypatch.setattr(agent, "build_snapshot", fake_snapshot)
+    monkeypatch.setattr(agent, "create_react_agent", lambda llm, tools: Silent())
+    monkeypatch.setattr(agent, "suggest_followups", none)
+    events = [e async for e in agent.stream_chat(AsyncMongoMockClient()["t"], None, "alice", "hi", [], {})]
+    assert {"type": "content", "data": agent.OUT_OF_STEPS} in events

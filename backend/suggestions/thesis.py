@@ -62,7 +62,9 @@ async def attach_theses(db, user_id: str, suggestions: list[dict], agent=None, l
 def _thesis_text(report) -> Optional[str]:
     thesis = (getattr(report, "thesis", "") or getattr(report, "analyst_summary", "") or "").strip()
     # A failed call comes back as text; it is not a thesis to show the user.
-    if not thesis or thesis in ("LLM_DISABLED", "Unable to generate summary.") or thesis.startswith("Error generating response"):
+    from backend.llm import llm_failed
+
+    if not thesis or thesis == "Unable to generate summary." or llm_failed(thesis):
         return None
     return thesis
 

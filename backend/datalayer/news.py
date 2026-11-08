@@ -3,7 +3,7 @@ and keep per-symbol, per-sector and market-wide sentiment fresh.
 
     poll (60s)     sources -> dedupe into Mongo `news_items` (status NEW)
     process (5min) NEW -> triage (ONE fast call, up to 150 headlines) -> TRIAGED or IRRELEVANT
-                   TRIAGED -> score (ONE deep call, up to 40 items, NEWS_LLM_CALLS_PER_DAY)
+                   TRIAGED -> score (ONE scoring call, up to 40 items, NEWS_LLM_CALLS_PER_DAY)
                            -> SCORED with impacts[] on market/sectors/symbols
                    -> aggregate -> Redis sentiment:{SYM}, sector_sentiment:{S},
                       market:sentiment
@@ -36,7 +36,7 @@ from backend.routers.news import _title_key
 from backend.configs.settings import settings
 from backend.datalayer import news_sources
 from backend.datalayer.prices import priority_symbols
-from backend.llm import llm_service
+from backend.llm import llm_failed, llm_service
 from backend.marks import QUOTE_KEY
 from backend.prompts import prompt_id, render
 from backend.strategies.longterm.analyst_verdict import MATERIALITY_THRESHOLD
@@ -65,7 +65,7 @@ STALL_AFTER, STALL_BACKLOG, STALL_ALERT_TTL = timedelta(minutes=30), 500, 2 * 36
 TRIAGE_BATCH, TRIAGE_CALLS_PER_PASS = 150, 1
 SCORE_BATCH = 40
 NOTE_SYMBOLS = 3  # price lines per item: an item tagging more is not about one stock
-# A deep call costs the same for 3 items as for 40, so scoring waits until a
+# A scoring call costs the same for 3 items as for 40, so scoring waits until a
 # batch is worth it -- unless a held/watched name is waiting or the oldest
 # item has waited SCORE_HOLD (market-wide news is at most one pass later).
 SCORE_MIN_ITEMS = 20
@@ -260,12 +260,12 @@ class _Scores(BaseModel):
 
 async def _fast(system: str, user: str) -> str:
     # Triage only sorts headlines into relevant or not: the cheap model.
-    return await llm_service.get_completion(user, system_prompt=system, tier="fast", feature="news")
+    return await llm_service.get_completion(user, system_prompt=system, task="news.triage")
 
 
-async def _deep(system: str, user: str) -> str:
-    # These impacts feed every trade's AI share, same as score_news.
-    return await llm_service.get_completion(user, system_prompt=system, tier="deep", feature="news")
+async def _score(system: str, user: str) -> str:
+    # Replay of 400 outcomes, 2026-11-08: the standard model at low thinking matched the deep one at 36% of its cost.
+    return await llm_service.get_completion(user, system_prompt=system, task="news.score")
 
 
 _OUTAGE = object()  # the LLM never answered: not the items' fault, so no attempt is counted
@@ -277,7 +277,7 @@ async def _ask(prompt: str, complete, model, **values):
     system, user = render(prompt, **values)
     for attempt in (1, 2):
         response = await complete(system, user)
-        if response == "LLM_DISABLED" or response.startswith("Error generating response"):
+        if llm_failed(response):
             logger.warning("%s: LLM unavailable, batch left for the next tick: %s", prompt, response[:200])
             return _OUTAGE
         try:
@@ -356,7 +356,7 @@ def _words(title: str) -> set[str]:
 
 
 def _skip_reason(doc: dict, seen: list[set[str]]) -> Optional[str]:
-    """Why a triaged item is not worth a deep call, or None. Hindi/regional
+    """Why a triaged item is not worth a scoring call, or None. Hindi/regional
     copies repeat English stories; a company we follow no symbol of moves no
     score; a rewrite of a story already scored or queued adds nothing."""
     if sum(ord(c) > 0x2FF for c in doc["title"]) > 5:
@@ -371,7 +371,7 @@ def _skip_reason(doc: dict, seen: list[set[str]]) -> Optional[str]:
 
 
 async def _prune(db, now: datetime) -> None:
-    """Marks TRIAGED items that scoring would waste a deep call on IRRELEVANT."""
+    """Marks TRIAGED items that scoring would waste a scoring call on IRRELEVANT."""
     # ponytail: O(pending x day's stories) title compare, ~1k x 1k per pass; index by word if news volume grows 10x.
     seen = [_words(d["title"]) async for d in db[COLLECTION].find(
         {"status": SCORED, "scored_at": {"$gte": now - DUP_WINDOW}}, {"title": 1})]
@@ -455,14 +455,14 @@ def score_lines(docs, names, sector_of, notes: dict[str, str]) -> str:
     return "\n\n".join(lines)
 
 
-async def _score_batch(db, docs, names, sector_of, sectors, now, coll: str = COLLECTION, tier: str = "deep", redis=None) -> None:
+async def _score_batch(db, docs, names, sector_of, sectors, now, coll: str = COLLECTION, tier: str = "standard", redis=None) -> None:
     ltps = {}
     if redis is not None:
         wanted = sorted({s for d in docs for s in d.get("symbols", [])[:NOTE_SYMBOLS]})
         raws = await redis.mget([QUOTE_KEY.format(s) for s in wanted]) if wanted else []
         ltps = {s: json.loads(r)["ltp"] for s, r in zip(wanted, raws) if r}
     notes = await price_notes(db, docs, lambda _doc, symbol: ltps.get(symbol))
-    result = await _ask("score_market_news", _deep if tier == "deep" else _fast, _Scores, sectors=", ".join(sectors), items=score_lines(docs, names, sector_of, notes))
+    result = await _ask("score_market_news", _score if tier == "standard" else _fast, _Scores, sectors=", ".join(sectors), items=score_lines(docs, names, sector_of, notes))
     if result is _OUTAGE:
         return
     if result is None:
@@ -573,7 +573,7 @@ async def poll_loop(db, redis) -> None:
 
 
 async def _deep_budget(redis, wanted: int) -> int:
-    """Reserves up to `wanted` deep calls from today's (IST) allowance,
+    """Reserves up to `wanted` scoring calls from today's (IST) allowance,
     NEWS_LLM_CALLS_PER_DAY; past it the backlog waits for tomorrow (and goes
     STALE after SCORE_MAX_AGE) rather than eating the shared LLM quota."""
     from backend.engine.session import IST

@@ -52,7 +52,7 @@ def world(monkeypatch):
     async def trending():
         return [{"symbol": "HDFCBANK.NS", "name": "HDFCBANK.NS", "value": 1.0, "percent": 2.5}]
 
-    async def completion(prompt, system_prompt, tier=None, feature=None):
+    async def completion(prompt, system_prompt, task=None):
         calls["llm"].append((system_prompt, prompt))
         return "### What happened\nIt rose."
 
@@ -124,7 +124,7 @@ def test_cached_only_reads_the_store_and_never_calls_the_model(world, client):
 
 @pytest.mark.parametrize("reply", ["LLM_DISABLED", "Error generating response: boom", ""])
 def test_an_unavailable_model_is_a_503_not_error_text(world, client, monkeypatch, reply):
-    async def broken(prompt, system_prompt, tier=None, feature=None):
+    async def broken(prompt, system_prompt, task=None):
         return reply
     monkeypatch.setattr(index_move.llm_service, "get_completion", broken)
 
@@ -155,7 +155,7 @@ def test_a_socket_sink_streams_the_text_then_caches_it(world, monkeypatch):
 
     from backend.ai import analyst
 
-    async def stream(prompt, system_prompt, tier=None, feature=None):
+    async def stream(prompt, system_prompt, task=None):
         for part in ("### What", " happened\nIt rose."):
             yield part
 

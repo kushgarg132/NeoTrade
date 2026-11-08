@@ -1,6 +1,8 @@
 """A per-user budget on what costs money or compute: each chat or analysis
 message started an LLM task and each scan a background job, with no cap."""
 
+import pytest
+
 from backend.rate_limit import allow
 
 
@@ -73,9 +75,37 @@ async def test_a_user_has_a_daily_llm_ceiling_on_chat_and_research_only(monkeypa
         await llm.llm_service.get_llm(tier="fast", feature="research")
         await llm.llm_service.get_llm(tier="deep", feature="news")  # not a per-user feature
         with pytest.raises(llm.DailyLimitReached):
-            await llm.llm_service.get_completion("q", system_prompt="s", tier="fast", feature="chat")
+            await llm.llm_service.get_completion("q", system_prompt="s", task="chat.followups")
     with llm.use_model(None, user_id="bob"):
         await llm.llm_service.get_llm(tier="deep", feature="chat")
     for _ in range(5):
         await llm.llm_service.get_llm(tier="deep", feature="chat")  # no user: the shared pipeline
     assert sorted(redis.counts.values()) == [1, 3]
+
+
+async def test_a_user_past_their_token_allowance_is_stopped(monkeypatch):
+    from backend import llm as L
+    from backend.database import db
+
+    class R:
+        async def get(self, key):
+            return str(L.settings.USER_LLM_TOKENS_PER_DAY)
+
+    monkeypatch.setattr(db, "redis", R())
+    with L.use_model(None, user_id="alice"):
+        with pytest.raises(L.DailyLimitReached):
+            await L.llm_service._charge("chat")
+
+
+async def test_news_past_its_daily_spend_gets_no_model(monkeypatch):
+    from backend import gemini_chat, llm as L
+
+    async def spent(feature):
+        return L.settings.NEWS_USD_PER_DAY
+
+    async def on(feature, db=None):
+        return True
+
+    monkeypatch.setattr(gemini_chat, "spent_today", spent)
+    monkeypatch.setattr(L, "feature_enabled", on)
+    assert await L.llm_service.get_llm(task="news.score") is None

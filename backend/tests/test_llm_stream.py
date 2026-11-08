@@ -41,7 +41,7 @@ def svc(monkeypatch):
 
 
 def _serve(svc, fake):
-    async def get_llm(tier=None, feature=None):
+    async def get_llm(task=None):
         svc.calls += 1
         return fake
 

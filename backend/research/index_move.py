@@ -20,7 +20,7 @@ import yfinance as yf
 
 from backend.routers.news import fresh_headlines
 from backend.engine.session import IST
-from backend.llm import llm_service
+from backend.llm import llm_failed, llm_service
 from backend.ai.grounding import check_fields
 from backend.prompts import render
 
@@ -200,11 +200,11 @@ async def explain_index_move(ticker: str, name: str) -> Dict[str, Any]:
     from backend.ai.analyst import emit, report_sink
 
     if report_sink.get() is None:
-        text = await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="research")
+        text = await llm_service.get_completion(prompt, system_prompt=system, task="research.index_move")
     else:  # the socket asked: stream the text as it is written
         parts = []
         try:
-            async for delta in llm_service.stream_completion(prompt, system_prompt=system, tier="standard", feature="research"):
+            async for delta in llm_service.stream_completion(prompt, system_prompt=system, task="research.index_move"):
                 parts.append(delta)
                 if delta != "LLM_DISABLED":
                     emit({"type": "delta", "text": delta})
@@ -213,7 +213,7 @@ async def explain_index_move(ticker: str, name: str) -> Dict[str, Any]:
         text = "".join(parts)
     text = (text or "").strip()
     # get_completion reports failure as text rather than raising.
-    if not text or text == "LLM_DISABLED" or text.startswith("Error generating response"):
+    if not text or llm_failed(text):
         raise ExplanationUnavailable("The analysis model is unavailable right now")
     # Streamed text has already shown; what is cached and returned last passed the check.
     text = (await check_fields({"analysis": text}, [*values.values(), session]))["analysis"]

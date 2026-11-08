@@ -207,7 +207,7 @@ async def write_review(card: dict, candidates: list[dict] | None = None, context
         news_trust=context.get("news_trust") or "Not measured yet, so its reliability is unknown.",
     )
     system, prompt = render("portfolio_review", **values)
-    text = (await llm_service.get_completion(prompt, system_prompt=system, tier="deep", feature="portfolio") or "").strip()
+    text = (await llm_service.get_completion(prompt, system_prompt=system, task="portfolio.review") or "").strip()
     parsed = _answer(text)
     if not parsed:
         logger.warning("portfolio review: no usable answer from the model: %.200s", text)
@@ -215,7 +215,7 @@ async def write_review(card: dict, candidates: list[dict] | None = None, context
     async def again(found: list[str]):
         retry = (f"{prompt}\n\nYour last answer:\n{text}\n\nThese are not in the facts above or are not plain words: "
                  f"{', '.join(found)}. Answer again in the same JSON, without them.")
-        reply = await llm_service.get_completion(retry, system_prompt=system, tier="deep", feature="portfolio")
+        reply = await llm_service.get_completion(retry, system_prompt=system, task="portfolio.review")
         nonlocal parsed
         redo = _answer(reply)
         if not _fields(redo):

@@ -130,7 +130,7 @@ class _FilingScore(BaseModel):
 
 
 async def _standard(system: str, user: str) -> str:
-    return await llm_service.get_completion(user, system_prompt=system, tier="standard", feature="news")
+    return await llm_service.get_completion(user, system_prompt=system, task="news.filing")
 
 
 def _squeezed(text: str) -> str:

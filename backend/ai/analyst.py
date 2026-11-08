@@ -37,7 +37,7 @@ from backend.ai.grounding import check_fields
 from backend.ai.sentiment import weighted_sentiment
 from backend.routers.news import fetch_news_logic
 from backend.core.models import FinancialEvent, NewsArticle
-from backend.llm import llm_service
+from backend.llm import llm_failed, llm_service
 from backend.prompts import render
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ async def _score_news(symbol: str, articles: List[NewsArticle]) -> Optional[_New
     system, prompt = render("score_news", symbol=symbol, articles=listing)
     for attempt in (1, 2):
         # Deep: this score feeds every trade's AI share; Flash disagreed on 1 of 3 stocks.
-        response = await llm_service.get_completion(prompt, system_prompt=system, tier="deep", feature="research")
+        response = await llm_service.get_completion(prompt, system_prompt=system, task="research.analyst_score")
         try:
             return _NewsScores.model_validate_json(_extract_json(response))
         except (ValueError, ValidationError) as exc:
@@ -119,7 +119,7 @@ def _weighted_sentiment(scored: List[tuple[NewsArticle, _ArticleScore]], now: da
 
 
 def _split_report(text: str) -> tuple[str, str]:
-    if not text or text == "LLM_DISABLED" or text.startswith("Error generating response"):
+    if not text or llm_failed(text):
         return "Unable to generate summary.", ""
     summary, _, thesis = text.partition(THESIS_MARKER)
     return summary.strip(), thesis.strip()
@@ -176,11 +176,11 @@ async def _report(**values) -> tuple[str, str]:
 
     try:
         if report_sink.get() is None:
-            return await checked(await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="research"))
+            return await checked(await llm_service.get_completion(prompt, system_prompt=system, task="research.report"))
         parts = []
-        async for delta in llm_service.stream_completion(prompt, system_prompt=system, tier="standard", feature="research"):
+        async for delta in llm_service.stream_completion(prompt, system_prompt=system, task="research.report"):
             parts.append(delta)
-            if delta != "LLM_DISABLED" and not delta.startswith("Error generating response"):
+            if not llm_failed(delta):
                 emit({"type": "delta", "text": delta})
         return await checked("".join(parts))
     except Exception as e:

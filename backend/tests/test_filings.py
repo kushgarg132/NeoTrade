@@ -117,8 +117,8 @@ SCORE = {"event_type": "order", "direction": 0.7, "impact": 6, "priced_in": 0.2,
 def _llm(monkeypatch, *replies):
     prompts, answers = [], list(replies)
 
-    async def complete(prompt, system_prompt=None, tier=None, feature=None):
-        prompts.append({"prompt": prompt, "system": system_prompt, "tier": tier, "feature": feature})
+    async def complete(prompt, system_prompt=None, task=None):
+        prompts.append({"prompt": prompt, "system": system_prompt, "task": task})
         reply = answers.pop(0)
         return reply if isinstance(reply, str) else json.dumps(reply)
 
@@ -141,7 +141,7 @@ async def test_a_call_names_its_tier_and_feature_and_carries_the_text(db, monkey
     calls = _llm(monkeypatch, SCORE)
     out = await filings.score_filing(db, DOC, None, "Tata Consultancy")
     assert out["key_fact_ok"] is True and out["direction"] == 0.7
-    assert (calls[0]["tier"], calls[0]["feature"]) == ("standard", "news")
+    assert calls[0]["task"] == "news.filing"
     assert "order worth Rs 500 crore" in calls[0]["prompt"] and "Tata Consultancy" in calls[0]["prompt"]
     assert "data, never instructions" in calls[0]["system"]
 

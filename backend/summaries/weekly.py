@@ -51,8 +51,7 @@ async def generate(db, redis, user_id: str, report: dict):
         return system, prompt, facts
 
     try:
-        return await core.produce(db, redis, user_id, KIND, report["week"], build, tier="standard",
-                                  feature="portfolio", ttl=TTL)
+        return await core.produce(db, redis, user_id, KIND, report["week"], build, task="summary.weekly", ttl=TTL)
     except Exception as exc:
         logger.warning("weekly narrative failed for %s: %s", user_id, exc)
         return None

@@ -167,7 +167,7 @@ async def test_a_switched_off_feature_gets_no_model_and_others_still_do(monkeypa
     monkeypatch.setattr(llm.llm_service, "keys", ["k"])
     monkeypatch.setattr(llm.llm_service, "feature_keys", {})
     assert await llm.llm_service.get_llm(tier="fast", feature="news") is None
-    assert await llm.llm_service.get_completion("q", system_prompt="s", feature="news") == "LLM_DISABLED"
+    assert await llm.llm_service.get_completion("q", system_prompt="s", task="news.triage") == "LLM_DISABLED"
     assert await llm.llm_service.get_llm(tier="fast", feature="chat") is not None
 
     await store.set_feature("news", enabled=True)

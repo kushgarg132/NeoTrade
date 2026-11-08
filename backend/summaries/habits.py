@@ -35,7 +35,7 @@ async def generate(db, redis, user_id: str, week: str):
                                 week=core.as_facts(week_facts))
         return system, prompt, {"patterns": patterns, "week": week_facts}
 
-    return await core.produce(db, redis, user_id, KIND, week, build, tier="standard", feature="learning", ttl=TTL)
+    return await core.produce(db, redis, user_id, KIND, week, build, task="summary.habits", ttl=TTL)
 
 
 async def run_all(db, redis, pass_day: date) -> int:

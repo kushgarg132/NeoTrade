@@ -1,57 +1,50 @@
-"""Every LLM call site says which tier it runs on, so a new one cannot
-silently land on the most expensive model, and which feature it serves, so
-its tokens land on that feature's gateway key (Phase 17.2.5)."""
+"""Every LLM call site names a row of llm_tasks.TASKS, so a new one cannot silently
+land on the most expensive model, and the table itself is pinned here."""
 
 import re
 from pathlib import Path
 
+from backend.llm_tasks import TASKS
+
 BACKEND = Path(__file__).parents[1]
 EXPECTED = {
-    "ai/analyst.py": ["deep", "standard"],   # news scoring feeds trade scores; report
-    "datalayer/news.py": ["fast", "deep"],
-    "datalayer/filings.py": ["standard"],                # one filing, one call
-    "datalayer/market.py": ["standard"],                 # the market brief                # triage; impacts feed trade scores
-    "research/search.py": ["deep"],                # Indian peers came out wrong on Flash
-    "instruments/resolve.py": ["fast"],
-    "research/index_move.py": ["standard"],
-    "portfolio/review.py": ["deep", "deep"],             # the write-up; its one retry
-    "portfolio/ai_rebalance.py": ["deep"],
-    "learning/report.py": ["standard"],
-    "learning/hypotheses.py": ["deep"],
-    "builder/draft.py": ["deep"],                         # the weekly strategy drafts
-    "chat/agent.py": ["fast", "deep"],                   # follow-up chips; the reply
-    # AI summaries: summaries/core.py::produce makes the call, each generator names tier and feature to it
-    "summaries/day.py": ["fast"], "summaries/holding.py": ["fast"], "summaries/activity.py": ["standard"],
-    "summaries/weekly.py": ["standard"], "summaries/habits.py": ["standard"],
-}
-
-FEATURE = {
-    "ai/analyst.py": "research", "research/search.py": "research",
-    "instruments/resolve.py": "research", "research/index_move.py": "research",
-    "datalayer/news.py": "news", "datalayer/market.py": "news", "datalayer/filings.py": "news",
-    "portfolio/review.py": "portfolio", "portfolio/ai_rebalance.py": "portfolio", "chat/agent.py": "chat",
-    "learning/report.py": "learning", "learning/hypotheses.py": "learning",
-    "builder/draft.py": "learning",
-    "summaries/day.py": "portfolio", "summaries/holding.py": "news", "summaries/activity.py": "plan",
-    "summaries/weekly.py": "portfolio", "summaries/habits.py": "learning",
+    "ai/analyst.py": {"research.analyst_score", "research.report"},
+    "datalayer/news.py": {"news.triage", "news.score"},
+    "datalayer/filings.py": {"news.filing"},
+    "datalayer/market.py": {"news.brief"},
+    "research/search.py": {"research.peers"},
+    "instruments/resolve.py": {"research.resolve"},
+    "research/index_move.py": {"research.index_move"},
+    "portfolio/review.py": {"portfolio.review"},
+    "portfolio/ai_rebalance.py": {"portfolio.rebalance"},
+    "learning/report.py": {"learning.report"},
+    "learning/hypotheses.py": {"learning.hypotheses"},
+    "builder/draft.py": {"learning.builder"},
+    "chat/agent.py": {"chat.followups", "chat.answer"},
+    "summaries/day.py": {"summary.day"}, "summaries/holding.py": {"summary.holding"},
+    "summaries/activity.py": {"summary.activity"}, "summaries/weekly.py": {"summary.weekly"},
+    "summaries/habits.py": {"summary.habits"},
 }
 
 
-def test_every_llm_call_names_its_tier():
+def test_every_llm_call_names_a_known_task():
     for path in BACKEND.rglob("*.py"):
         rel = path.relative_to(BACKEND).as_posix()
-        # llm.py, ai/runner.py and summaries/core.py pass their caller's tier through; the callers are checked.
+        # llm.py and summaries/core.py pass their caller's task through; the callers are checked.
         if rel.startswith("tests/") or rel in ("llm.py", "routers/settings.py", "summaries/core.py"):
             continue
         text = path.read_text()
-        calls = re.findall(r"await [\w.]*(?:get_completion|get_llm|run_with_tools|produce)\((.*?)\)", text, flags=re.S)
+        calls = re.findall(r"await [\w.]*(?:get_completion|get_llm|produce)\((.*?)\)", text, flags=re.S)
         if not calls:
             continue
-        tiers = [m.group(1) for c in calls if (m := re.search(r'tier="(\w+)"', c))]
-        assert len(tiers) == len(calls), f"{rel}: an LLM call without tier="
-        assert tiers == EXPECTED.get(rel), f"{rel}: tiers {tiers}"
-        features = {m.group(1) for c in calls if (m := re.search(r'feature="(\w+)"', c))}
-        assert features == {FEATURE[rel]} and all("feature=" in c for c in calls), f"{rel}: features {features}"
+        tasks = [m.group(1) for c in calls if (m := re.search(r'task="([\w.]+)"', c))]
+        assert len(tasks) == len(calls), f"{rel}: an LLM call without task="
+        assert set(tasks) == EXPECTED.get(rel), f"{rel}: tasks {tasks}"
+        assert set(tasks) <= set(TASKS)
+
+
+def test_news_never_falls_back_to_another_scorer():
+    assert not any(t.fallback for name, t in TASKS.items() if name.startswith("news."))
 
 
 def test_a_feature_with_its_own_key_never_spills_onto_the_shared_one(monkeypatch):

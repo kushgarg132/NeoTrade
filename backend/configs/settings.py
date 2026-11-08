@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     # Per user, per IST day: LLM calls made inside their own chat or research requests
     # (backend/llm.py::LLMService._charge). The shared pipeline is not counted.
     USER_LLM_CALLS_PER_DAY: int = 150
+    USER_LLM_TOKENS_PER_DAY: int = 1_500_000  # real ceiling: a tool loop is one call above but many model steps
+    NEWS_USD_PER_DAY: float = 0.85  # about 25 USD a month; estimated from the usage ledger
 
     # Broker API credentials are per-user and encrypted in Mongo
     # (backend/auth/broker_credentials.py) -- there is deliberately no

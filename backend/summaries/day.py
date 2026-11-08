@@ -52,5 +52,5 @@ async def generate(db, redis, user_id: str, phase: str, now: datetime, digest_ht
             market=core.as_facts(facts["market"]), sectors=", ".join(facts["sectors"]) or "not known")
         return system, prompt, facts
 
-    return await core.produce(db, redis, user_id, KIND, key, build, tier="fast", feature="portfolio",
+    return await core.produce(db, redis, user_id, KIND, key, build, task="summary.day",
                               ttl=TTL, max_lines=3)

@@ -36,13 +36,13 @@ async def test_stream_emits_queued_chart_after_its_tool(monkeypatch):
         def __init__(self, tools):
             self.tools = {t.name: t for t in tools}
 
-        async def astream_events(self, payload, version):
+        async def astream_events(self, payload, config=None, version=None):
             yield {"event": "on_tool_start", "name": "make_chart", "data": {}}
             await self.tools["make_chart"].ainvoke({"title": "t", "kind": "line", "labels": ["a"],
                                                     "series": [{"name": "x", "values": [1]}]})
             yield {"event": "on_tool_end", "name": "make_chart", "data": {"output": "shown"}}
 
-    async def fake_llm(tier=None, feature=None):
+    async def fake_llm(task=None):
         return object()
 
     async def fake_snapshot(db, redis, user_id, now=None):

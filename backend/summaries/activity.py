@@ -60,8 +60,7 @@ async def generate(db, redis, user_id: str, now: datetime):
             result=core.as_facts(facts["result"]))
         return system, prompt, facts
 
-    return await core.produce(db, redis, user_id, KIND, key, build, tier="standard",
-                              feature="plan", ttl=TTL)
+    return await core.produce(db, redis, user_id, KIND, key, build, task="summary.activity", ttl=TTL)
 
 
 async def run_all(db, redis, now: datetime) -> int:

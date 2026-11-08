@@ -103,7 +103,7 @@ async def ai_targets(holdings: list[dict], context: dict, candidates: list[dict]
         news_trust=trust or "Not measured yet, so its reliability is unknown.",
     )
     system, prompt = render("rebalance_ai", **values)
-    text = (await llm_service.get_completion(prompt, system_prompt=system, tier="deep", feature="portfolio") or "").strip()
+    text = (await llm_service.get_completion(prompt, system_prompt=system, task="portfolio.rebalance") or "").strip()
     match = re.search(r"\{.*\}", text, re.S)
     try:
         parsed = json.loads(match.group(0)) if match else {}

@@ -24,7 +24,7 @@ from backend.runs import RunStore, run_summary
 from backend.suggestions.store import SuggestionStore
 
 MAX_PROPOSALS = 20
-MAX_ROWS, MAX_CHARS = 100, 15000
+MAX_ROWS, MAX_CHARS = 100, 6000  # re-sent on every later model step of the turn
 
 # query_my_data's allowlist. Per-user collections are always filtered to the
 # caller; shared ones hold market reference data, no user's. Anything not

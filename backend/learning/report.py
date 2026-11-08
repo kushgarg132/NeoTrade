@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from backend.learning.adapt import _closed_trades, _state, load_rules
 from backend.learning.attribution import attribute
 from backend.learning.retune import current_params
-from backend.llm import llm_service
+from backend.llm import llm_failed, llm_service
 from backend.prompts import render
 
 logger = logging.getLogger(__name__)
@@ -85,11 +85,11 @@ async def weekly_text(db, user_id: str, nifty: list, now: datetime):
     f = facts(snap)
     system, prompt = render("learning_review", **f)
     try:
-        text = (await llm_service.get_completion(prompt, system_prompt=system, tier="standard", feature="learning") or "").strip()
+        text = (await llm_service.get_completion(prompt, system_prompt=system, task="learning.report") or "").strip()
     except Exception as exc:
         logger.warning("learning review: model failed: %s", exc)
         text = ""
-    if text == "LLM_DISABLED" or text.startswith("Error generating response"):
+    if llm_failed(text):
         text = ""  # switched off or failed: the plain facts below, never the error text
     head = "What the paper engine learned this week"
     return f"{head}\n\n{text}" if text else f"{head}\n\n{f['rules']}\n\nChanges:\n{f['changes']}\n\nWorst setups:\n{f['groups']}"
