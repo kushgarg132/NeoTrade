@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 6a957df
+verified_at: 1f661be
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -202,7 +202,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
     with a live draft) or `::_callback` (confirm/confirm2/cancel through `chat.actions.confirm`). Button data is
     `nt:<command>:<id>`; confirm2's id is `<action id>.<confirm_token>` from the first tap (60 bytes, under Telegram's 64), packed and parsed by the aiogram `CallbackData` `::Tap`; data that does not parse is ignored.
     A failed getUpdates logs one line (aiogram errors carry no token) and sleeps `FAIL_BACKOFF_SECONDS` (10) holding the lock.
-15. **GET /today**: `routers/today.py::today`. Each part is wrapped in `part()`, which on failure returns None and
+15. **GET /today**: `routers/today.py::today`. Parts run concurrently in two batches (`together`: first what later parts need, then the rest). Each part is wrapped in `part()`, which on failure returns None and
     records `errors[name]`. Parts:
     - `_accounts` (60s cache only when every session is ACTIVE)
     - kill switch

@@ -1,7 +1,7 @@
 ---
 page: picks-and-signals
 covers: [backend/lab/**, backend/forward/**, backend/forecast/**, backend/factor/**, backend/scoring/**, backend/suggestions/**, backend/learning/**, backend/builder/**, backend/data/fundamentals/**, backend/routers/picks.py, backend/routers/suggestions.py]
-verified_at: 6a957df
+verified_at: 1f661be
 ---
 # Picks and signals: Picks, factor portfolio, scoring, long-term suggestions, learning, builder
 
@@ -200,6 +200,7 @@ Related, outside the globs: `/strategies/built*`, `/strategies/library` (→ `le
 - Fixed: `retune.py::start_if_due` claims the month with an atomic `update_one(upsert)` on a unique `month` index (`retune.py::ensure_indexes`); a `DuplicateKeyError` or an existing claim returns False.
 - `picks.py::compute` does not require `walk_forward.edge`. Picks from "no edge" setups are stored and badged (`edge: False`), by design (handbook).
 - `due_date` counts weekdays only. Exchange holidays push the real exit (`picks.py::compute` comment). `score` uses the NIFTY calendar.
+- `served_today` marks prices with `routers/picks.py::MARK_MAX_AGE_SECONDS`=30 min; ingest quotes open picks (`datalayer/prices.py::open_pick_symbols`).
 - `/picks` loads every scored pick on each call (`picks_today` `find({"outcome":{"$ne":None}})`). the scan projects only `p_up` and `outcome`. `picks` has indexes on `date` and `outcome` (`picks.py::ensure_indexes`, called at startup).
 - At scan time sentiment is usually not cached, so `final ≤ 0.7·rule + 0.15` until `attach_theses` rescores (`thesis.py` docstring).
 - `keep_best` uses wall-clock `decided_at`, not `now` (`store.py::keep_best` comment).

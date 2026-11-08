@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/llm_tasks.py, backend/gemini_chat.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: 325176a
+verified_at: 1f661be
 ---
 # Data layer, AI and background jobs
 
