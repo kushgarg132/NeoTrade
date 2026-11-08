@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/timing.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/alerts.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 229aae3
+verified_at: 6a957df
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -137,7 +137,7 @@ All times IST. Background loops start in `jobs.py::start_loops`, called by the `
 - A slow socket never stalls a publisher: queue is bounded (100), newest wins (`Connection.offer`).
 - Live-order safety rails on the routes here: `approve-live` never trades the AI account, is refused when the kill switch tripped, outside 9:15-15:30 IST weekdays, inside the `no_buy_before_results_days` window (`mine/events.py::buy_blocked`, 409), for a strategy that has not earned live (`for_mine`), and claims the suggestion as `SENDING` before the broker call (`routers/suggestions.py::place_live_approval`). It takes two calls: without `confirm_token` it only returns `NEEDS_SECOND_TAP` + a token bound to the suggestion's terms (`::_order_terms`); with it, `risk/live_confirm.py::redeem` spends the token (a refusal is `{detail, code}` from `TokenRefused.response()`: `confirm_expired|spent|mismatch` 409, `confirm_other_user` 403), then every rail runs (`::approve_suggestion_live`). `/orders/propose` only stores a confirm card; it runs on the user's `confirm` (second tap with the server's `confirm_token` for real money) at `/chat/actions/{id}/confirm` and cannot name the AI account or paper venue (`routers/orders.py`, `TicketRequest.venue: Literal["live"]`).
 - `StartRequest` has no risk caps: sizing limits come from stored prefs, never the request (`trading.py::StartRequest`). A daily loss limit of 0 means off.
-- Portfolio verdicts (SELL/HOLD/ADD) are admin-only unless `app_settings.portfolio_verdicts == "all"`; others see `REVIEW` and no plan (`routers/portfolio.py::mask_row`, `verdicts_visible_to`), pending SEBI RA registration (`PRODUCT.md`).
+- Portfolio verdicts (SELL/HOLD/ADD) are admin-only unless `app_settings.portfolio_verdicts == "all"`; others see `REVIEW` and no plan (`portfolio/view.py::mask_row`, `verdicts_visible_to`), pending SEBI RA registration (`PRODUCT.md`).
 - Engine code uses `Clock`, never `datetime.now` (grep test `test_no_datetime_now.py`); compare `Side` by enum identity, not string (`core/models.py::Side` docstring: a past P0).
 - Every per-account record carries `user_id` (CLAUDE.md invariant); `mine_book(user_id)` = `<uid>:mine`, autopilot book `<uid>:autopilot` keep real-money books apart from the AI paper book (`engine/persistence.py`).
 - Rate limits fail open when Redis is down (`rate_limit.py::allow`); `mark` never raises (`system/jobs.py`).

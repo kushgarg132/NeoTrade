@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 5fc5d9c
+verified_at: 6a957df
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -180,7 +180,7 @@ callers then treat every broker as mine (`mine or None` / `if mine`).
 11. **Stock page**: `mine/stock.py::detail`. It returns None (404) when the symbol is neither held nor traded. It
     reconciles journal lots with the broker quantity (`lots.reconcile`), and estimates per-lot tax at `LTCG_RATE` or
     `STCG_RATE`. XIRR flows count only shares with a known buy. Verdict history comes from every snapshot, masked
-    via `routers/portfolio.py::mask_row` when verdicts are hidden. Trades are split-scaled for the chart.
+    via `portfolio/view.py::mask_row` when verdicts are hidden. Trades are split-scaled for the chart.
 12. **Tax**: `routers/mine.py::tax` uses mine non-MF raw holdings, `service.quoted` prices, and broker average
     prices, then calls `tax.py::report(mine_trades, held, prices, fy, today, avgs)`.
 13. **Guardrail tick**: `guardrails/monitor.py::run_tick` takes the lock and loops over prefs with `guardrails_enabled`, calling

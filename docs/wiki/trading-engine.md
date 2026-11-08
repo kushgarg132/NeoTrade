@@ -1,7 +1,7 @@
 ---
 page: trading-engine
 covers: [backend/engine/**, backend/strategies/**, backend/risk/**, backend/autopilot/**, backend/brokers/**, backend/options/**, backend/data/**, backend/instruments/**, backend/routers/trading.py, backend/routers/broker.py, backend/routers/options.py]
-verified_at: 5fc5d9c
+verified_at: 6a957df
 ---
 # Trading engine
 
