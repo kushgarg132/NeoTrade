@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/timing.py, backend/jobs.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/alerts.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: f062a1e
+verified_at: 229aae3
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -192,6 +192,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/settings/omniroute-model` | `backend/routers/settings.py::get_omniroute_model` | user |
 | POST | `/api/v1/settings/omniroute-model` | `backend/routers/settings.py::set_omniroute_model` | admin |
 | GET | `/api/v1/settings/omniroute-usage` | `backend/routers/settings.py::omniroute_usage` | admin |
+| GET | `/api/v1/settings/gemini-usage` | `backend/routers/settings.py::gemini_usage` | admin |
 | POST | `/api/v1/settings/omniroute-model/test` | `backend/routers/settings.py::test_omniroute_model` | admin |
 | GET | `/api/v1/settings/omniroute-tiers` | `backend/routers/settings.py::get_omniroute_tiers` | user |
 | POST | `/api/v1/settings/omniroute-tiers` | `backend/routers/settings.py::set_omniroute_tier` | admin |
@@ -319,7 +320,7 @@ Response keys (from handler code):
 - `GET /analytics/pnl` `today{realized,unrealized,trades,wins,losses,turnover,costs,net}`, `month{...,win_rate,best,worst}`, `all_time`, `open{positions,exposure,equity}` (`analytics.py::compute_pnl`); the `pnl/updated` socket event has the same keys plus `paper` and `live{mine,ai}`. `?venue=live` returns `{mine:<pnl>, ai:<pnl>}` (not the flat shape): the real-money books are separate, never summed. `GET /analytics/scorecard` `venue, account_size, days, strategies (each row has `parked` = in `autopilot/fence.py::PARKED`), totals, nifty_return_pct`.
 - `GET /trading/runs` list of run docs; `POST /trading/start` `{run_id}`; `POST /trading/stop` `{run_id, stopped}`; `GET /trading/kill-switch` `{tripped, reason?, equity?, tripped_at?}`; `GET /trading/positions` symbol -> position dict.
 - `GET /system/status` `{as_of, deploy, jobs, news, data, ai}` (each may be `{error}`); `GET /health` `{api:"ok", ingest}`.
-- `GET /settings/preferences` the merged `DEFAULTS`+stored; `GET /settings/omniroute-tiers` `{tiers, fallback, features_off}`; `GET /settings/omniroute-usage` `{key_name, tokens, cost, providers, as_of, refreshing?}`.
+- `GET /settings/preferences` the merged `DEFAULTS`+stored; `GET /settings/omniroute-tiers` `{tiers, fallback, features_off}`; `GET /settings/gemini-usage` `{today, last_30_days, models[], unpriced_calls, depleted_at}` (`{calls,input,output,cost_usd}`, estimated); `GET /settings/omniroute-usage` `{key_name, tokens, cost, providers, as_of, refreshing?}`.
 - `POST /suggestions/scan` 202 `{started, symbols}`; `POST /suggestions/{id}/approve-live` the settled suggestion; `POST /orders/propose` the stored chat action card.
 - `GET /picks` `{date, shown (served, max 3 per grade A/B/C), hidden_count, hidden_reason, grades, grade_text, picks (all candidates), setups, as_of, forward, caveats}`; `GET /plan/today` `{plan, versions, scorecards, weeks_beating}`; `GET /options/chain` `{underlying,name,expiry,spot,atm_strike,pcr,strikes}`.
 

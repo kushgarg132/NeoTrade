@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/gemini_chat.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: 68a7879
+verified_at: 229aae3
 ---
 # Data layer, AI and background jobs
 
@@ -74,7 +74,7 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | `backend/research/search.py` | query to instrument; optional LLM peers | `search.py::resolve_company_query`, `::_find_peers` |
 | `backend/datalayer/stock_info.py` | yfinance company info and price history (logic only, no routes) | `stock_info.py::fetch_stock_info_logic`, `::fetch_price_history_logic` |
 | `backend/chat/lc_tools.py` | LangChain tools (stock info, price history, symbol resolve) | `lc_tools.py::fetch_stock_info_tool`, `::fetch_price_history_tool`, `::resolve_symbol_tool` |
-| `backend/gemini_chat.py` | ChatOpenAI for Google: keeps Gemini 3 thought signatures across a tool loop (Google returns 400 without them), held per client | `gemini_chat.py::GeminiChat` |
+| `backend/gemini_chat.py` | ChatOpenAI for Google: keeps Gemini 3 thought signatures across a tool loop (Google returns 400 without them), held per client; records estimated spend and credits running out (Google has no balance API) | `gemini_chat.py::GeminiChat`, `::UsageRecorder`, `::PRICES`, `::read_usage` |
 | `backend/llm.py` | provider routing (`google/<name>` to Google, the rest to OmniRoute), tiers/features, per-user daily cap, key rotation | `llm.py::route`, `::GOOGLE_PREFIX`, `::LLMService`, `::llm_service`, `::get_llm`, `::get_completion`, `::keys_for`, `::_charge`, `::use_model`, `::model_for`, `::MultiKeyChain`, `::USER_FEATURES`, `::DailyLimitReached` |
 | `backend/model_catalog.py` | gateway model list to Family/Line/Version tree (pure) | `model_catalog.py::build_catalog`, `::FAMILIES`, `::LINES` |
 | `backend/market_cache.py` | stale-while-revalidate cache for home feeds | `market_cache.py::cached`, `::_refresh`, `::_claim` |
@@ -105,6 +105,7 @@ Prompts (`backend/prompts/*.md`, front matter `system:`; caller in parens): `tri
 | `plan_scorecards` | historic, nothing reads or writes it since 2026-11-03 | none | none |
 | `chat_actions` | `id,user_id,kind,params,summary,venue,needs_second_tap,message`; `status` PROPOSED/CONFIRMED/CANCELLED/EXPIRED/FAILED; `result,created_at,expires_at,confirmed_at` | unique `id`; `(user_id,status)` (`ChatActionStore.ensure_indexes`, called from `server.py` startup) | w: `ChatActionStore`; r: `query_my_data` |
 | `autopilot_shadow` | `user_id,at,side=SELL,symbol,quantity,product,venue,news_id,title,impact` | not here | w: `reactor.shadow_exits` |
+| `gemini_usage` (`_id:"<IST day>:<model>"`) | `day,model,calls,input,output (includes thinking),cost_usd (estimate at that day's `PRICES`),unpriced_calls` | n/a | `gemini_chat.py::UsageRecorder`; r: `::read_usage` |
 | `app_settings` (`_id:"singleton"`) | `llm_model,llm_tiers.{fast,standard,deep},llm_features_off[],lab_enabled,portfolio_verdicts` | n/a | `app_settings.py::AppSettingsStore` (admin writes via routers/settings.py) |
 | read only here | `instruments, watchlist, paper_positions, portfolio_snapshots, user_prefs, trading_runs, paper_trades, journal_*` | | priority symbols, plan context, chat tools |
 
@@ -133,6 +134,7 @@ Prompts (`backend/prompts/*.md`, front matter `system:`; caller in parens): `tri
 | `scheduler:daily_lock` 2h; `scheduler:last_pass` no TTL | token; IST date | `scheduler.py::_run_locked` |
 | `job:last:{name}` hash `at,ok,note` | `daily_pass, data_quality, autorun, order_sweeps, guardrail_monitor, telegram, strategy_builder` | `system/jobs.py::mark` |
 | `rate:llm:{user}:{IST date}` | per-user LLM calls, 2d | `llm.py::_charge` via `rate_limit.allow` |
+| `llm:gemini:depleted` (epoch s) | 86400s; set when Google refuses a call for lack of prepaid credit, deleted on the next Gemini success | `gemini_chat.py::UsageRecorder`; r: `::read_usage`, `data_quality.py::_gemini_credits` |
 | `llm:last_ok` (epoch s), `llm:last_error` (`{at,error}`) | 86400s; every `get_completion` success / exception | `llm.py::_note`; r: `data_quality.py::_llm` |
 
 ### Settings
