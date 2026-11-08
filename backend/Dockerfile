@@ -8,16 +8,9 @@ ENV PYTHONUNBUFFERED=1
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
-# We need gcc and other build tools for TA-Lib
-RUN apt-get update && apt-get install -y \
-    gcc \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install python dependencies (every package ships a wheel, so no compiler in the image)
+COPY requirements.lock .
+RUN pip install --no-cache-dir -r requirements.lock
 
 # The commit this image was built from, shown in the handbook (backend/system/status.py).
 ARG GIT_SHA=

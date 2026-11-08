@@ -48,6 +48,12 @@ services:
       RUN_BACKGROUND_JOBS: ${RUN_BACKGROUND_JOBS:-true}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 40s
     networks:
       - default
       - routineos_default
@@ -107,6 +113,12 @@ services:
     container_name: neotrade-mongo
     restart: unless-stopped
     command: ["--wiredTigerCacheSizeGB", "1"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 20s
     volumes:
       - mongo-data:/data/db
     networks:
