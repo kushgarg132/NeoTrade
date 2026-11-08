@@ -465,12 +465,10 @@ def test_an_option_over_the_per_trade_cap_still_goes_to_my_account(live_client, 
 
 def test_scan_inputs_are_bounded(client, mongo, monkeypatch):
     monkeypatch.setattr(suggestions_router, "db", type("_Db", (), {"db": mongo, "redis": None})())
-    started = []
+    async def fake_submit(*args, **kwargs):
+        raise AssertionError("must not start")
 
-    async def fake_scan(user_id, universe, prefs):
-        started.append(len(universe))
-
-    monkeypatch.setattr(suggestions_router, "_scan_and_enrich", fake_scan)
+    monkeypatch.setattr(suggestions_router.job_queue, "submit", fake_submit)
     assert client.post("/api/v1/suggestions/scan", json={"universe": [f"S{i}" for i in range(301)]}).status_code == 422
     assert client.get("/api/v1/suggestions", params={"limit": 10_000}).status_code == 422
 
@@ -481,11 +479,11 @@ def test_scan_past_its_budget_is_429(client, mongo, monkeypatch):
     async def over_budget(redis, key, limit, window_seconds):
         return False
 
-    async def fake_scan(user_id, universe, prefs):
+    async def fake_submit(*args, **kwargs):
         raise AssertionError("must not start")
 
     monkeypatch.setattr(suggestions_router, "allow", over_budget)
-    monkeypatch.setattr(suggestions_router, "_scan_and_enrich", fake_scan)
+    monkeypatch.setattr(suggestions_router.job_queue, "submit", fake_submit)
     assert client.post("/api/v1/suggestions/scan", json={"universe": ["ITC"]}).status_code == 429
 
 

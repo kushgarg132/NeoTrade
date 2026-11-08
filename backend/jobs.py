@@ -60,7 +60,7 @@ async def _beat(redis) -> None:
 
 
 async def main() -> None:
-    from backend import broadcast
+    from backend import broadcast, job_queue
     from backend.app_settings import AppSettingsStore
     from backend.configs.settings import require_jwt_secret
     from backend.database import db
@@ -75,6 +75,7 @@ async def main() -> None:
     _tasks = [  # strong refs
         asyncio.create_task(broadcast.listen_forever(db.redis, {"runs:cancel": handle_cancel_broadcast})),
         asyncio.create_task(keep_alive(db.redis)),
+        asyncio.create_task(job_queue.work_forever(db.db, db.redis)),  # manual runs the API hands over
     ]
     runs = RunStore(db.db)
     await runs.ensure_indexes()

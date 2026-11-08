@@ -22,7 +22,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend import broadcast
+from backend import broadcast, job_queue
 from backend.learning.retune import current_params
 from backend.learning.adapt import load_rules
 from backend.auth.broker_credentials import get_credential_store
@@ -36,7 +36,6 @@ from backend.prefs import PrefsStore
 from backend.risk.backtest_gate import BacktestGateStore
 from backend.risk.kill_switch import KillSwitchStore
 from backend.risk.paper_gate import paper_records
-from backend.risk.gate_backtest import backtest_for_gate
 from backend.instruments.indian_stocks import ALL_SCAN_STOCKS
 from backend.core.clock import SystemClock
 from backend.database import db
@@ -563,18 +562,9 @@ async def run_gate_backtest(strategy_name: str, admin: User = Depends(require_ad
     path for the result."""
     from backend.risk.gate_backtest import intraday_history
 
-    history, provider = await intraday_history(db.db, db.redis)
-    if provider is None:
-        history, provider = "yfinance", YFinanceProvider()
-
-    async def _run():
-        try:
-            await backtest_for_gate(db.db, strategy_name, provider, datetime.now(IST))
-        except Exception:
-            logger.exception("gate backtest of %s failed", strategy_name)
-
-    asyncio.create_task(_run())
-    return {"started": strategy_name, "history": history}
+    history, _ = await intraday_history(db.db, db.redis)
+    await job_queue.submit(db.db, db.redis, "gate_backtest", strategy_name=strategy_name)
+    return {"started": strategy_name, "history": history or "yfinance"}
 
 
 @router.get("/backtests/{strategy_name}")

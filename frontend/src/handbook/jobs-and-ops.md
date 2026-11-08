@@ -75,6 +75,11 @@ stays in the API because it needs the socket hub.
 | Price pump (API only) | 15 s | publishes marks and P&L to sockets | `backend/ws/pump.py` |
 | Worker heartbeat | 30 s (90 s TTL) | `worker:alive:<boot>` | `backend/runs.py::keep_alive` |
 
+Manual runs that take minutes, a user's scan (`POST /suggestions/scan`) and an admin's gate
+backtest (`POST /trading/backtests/{name}`), also run here: the API pushes them onto the Redis
+list `jobs:queue` (`backend/job_queue.py::submit`) and the jobs process pops them, two at a
+time. If the jobs process has not beaten in 60 s, the API runs the job itself, as before.
+
 Each loop tick writes `job:last:<name>` through `backend/system/jobs.py::mark`, which never
 raises.
 

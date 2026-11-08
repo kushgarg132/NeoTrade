@@ -6,7 +6,6 @@ engine computed, and wait for a decision. Approving is the only place in the
 app where a person causes a trade.
 """
 
-import asyncio
 import uuid
 import logging
 from datetime import datetime, timezone
@@ -15,6 +14,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend import job_queue
 from backend.auth.dependency import get_current_user, require_admin
 from backend.auth.models import User
 from backend.database import db
@@ -25,7 +25,6 @@ from backend.auth.broker_credentials import get_credential_store
 from backend.instruments.master import InstrumentMaster
 from backend.prefs import PrefsStore
 from backend.rate_limit import allow
-from backend.suggestions.scan import scan_universe
 from backend.brokers.protocol import BrokerSessionState
 from backend.core.models import Order, Side
 from backend.brokers.registry import BROKERS, get_broker_adapter
@@ -35,7 +34,6 @@ from backend.risk import live_confirm
 from backend.risk.kill_switch import KillSwitchStore
 from backend.suggestions.service import execute_option_suggestion_live
 from backend.suggestions.store import SuggestionStore
-from backend.suggestions.thesis import attach_theses
 
 logger = logging.getLogger(__name__)
 
@@ -90,21 +88,8 @@ async def scan_now(
     prefs = await PrefsStore(db.db).get(user.id)
     universe = body.universe or prefs["universe"]
 
-    asyncio.create_task(_scan_and_enrich(user.id, universe, prefs))
+    await job_queue.submit(db.db, db.redis, "scan", user_id=user.id, universe=universe)
     return {"started": True, "symbols": len(universe)}
-
-
-async def _scan_and_enrich(user_id: str, universe: list[str], prefs: dict) -> None:
-    try:
-        created = await scan_universe(
-            db.db, user_id=user_id, universe=universe,
-            account_size=prefs["account_size"], max_exposure=prefs["max_exposure"],
-            source="manual", redis=db.redis,
-        )
-        if created:
-            await attach_theses(db.db, user_id, created)
-    except Exception as exc:
-        logger.exception("manual scan failed for %s: %s", user_id, exc)
 
 
 @router.get("")
