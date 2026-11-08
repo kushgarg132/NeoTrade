@@ -272,14 +272,19 @@ class LLMService:
             return None  # switched off by an admin: callers take their "LLM disabled" path
         await self._charge(feature)
 
-        name, base_url, keys = route(await model_for(tier), self.keys_for(feature))
+        model = await model_for(tier)
+        name, base_url, keys = route(model, self.keys_for(feature))
         if not keys:
             return None
         await _count_call(feature)
 
+        chat_class = ChatOpenAI
+        if model.startswith(GOOGLE_PREFIX):
+            from backend.gemini_chat import GeminiChat as chat_class
+
         llms = []
         for key in keys:
-            llms.append(ChatOpenAI(
+            llms.append(chat_class(
                 model=name,
                 api_key=key,
                 base_url=base_url,
