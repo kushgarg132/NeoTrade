@@ -9,7 +9,7 @@
     weights  weekly: hit rate of each `scope|theme|direction` -- did the 1d
              move go the way the item said -- into `news_theme_weights` and
              Redis `news:theme_weights`, 1 + 2 * (hit rate - 0.5) clamped to
-             0.5..1.5, only past MIN_SAMPLES outcomes
+             0.5..1.5, only past MIN_SAMPLES outcomes over MIN_DAYS trading days
 
 news.aggregate multiplies each impact by its item's weight, so themes that
 moved prices count more in `sentiment:` and noise counts less. Prices come
@@ -50,6 +50,7 @@ SETTLE = timedelta(days=1)  # the horizon day's bar is stored after 15:45 IST
 GRACE = timedelta(hours=12)  # a horizon missed by more than this (worker down) stays unmeasured
 BENCH = "^NSEI"
 MIN_SAMPLES = 20
+MIN_DAYS = 20  # same-day items are one market move (t 31 on 290 rows, 2026-11-03; a rally set the weights, 2026-11-08)
 WEIGHT_MIN, WEIGHT_MAX = 0.5, 1.5
 WEIGHTS_KEY = "news:theme_weights"
 WEIGHTS_DUE_KEY = "news:theme_weights:due"
@@ -63,6 +64,12 @@ def _sign(x: float) -> int:
     return (x > 0) - (x < 0)
 
 
+def _day(at: datetime) -> str:
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    return at.astimezone(IST).date().isoformat()
+
+
 def weight_key(scope: str, theme: str, direction: float) -> str:
     return f"{scope}|{theme}|{_sign(direction)}"
 
@@ -74,8 +81,8 @@ def item_weight(weights: dict[str, float], scope: Optional[str], themes: list[st
 
 
 def compute_weights(rows: list[dict]) -> dict[str, dict]:
-    """rows: outcomes with scope, themes, direction and move_1d."""
-    tally = defaultdict(lambda: [0, 0])  # key -> [hits, n]
+    """rows: outcomes with scope, themes, direction, move_1d and base_at."""
+    tally = defaultdict(lambda: [0, 0, set()])  # key -> [hits, n, days]
     for row in rows:
         if row.get("move_1d") is None or row.get("late") or not _sign(row["direction"]):
             continue
@@ -84,9 +91,11 @@ def compute_weights(rows: list[dict]) -> dict[str, dict]:
             t = tally[weight_key(row.get("scope") or "", theme, row["direction"])]
             t[0] += hit
             t[1] += 1
+            t[2].add(_day(row["base_at"]))
     return {
-        key: {"weight": max(WEIGHT_MIN, min(WEIGHT_MAX, 1 + 2 * (hits / n - 0.5))), "hit_rate": hits / n, "n": n}
-        for key, (hits, n) in tally.items() if n >= MIN_SAMPLES
+        key: {"weight": max(WEIGHT_MIN, min(WEIGHT_MAX, 1 + 2 * (hits / n - 0.5))), "hit_rate": hits / n, "n": n,
+              "days": len(days)}
+        for key, (hits, n, days) in tally.items() if n >= MIN_SAMPLES and len(days) >= MIN_DAYS
     }
 
 
@@ -279,8 +288,9 @@ async def weights(db, redis, now: Optional[datetime] = None) -> Optional[dict]:
         return None
     rows = await db[COLLECTION].find(
         {"move_1d": {"$ne": None}, "base_at": {"$gte": now - WEIGHTS_LOOKBACK}},
-        {"scope": 1, "themes": 1, "direction": 1, "move_1d": 1, "late": 1}).to_list(length=None)
+        {"scope": 1, "themes": 1, "direction": 1, "move_1d": 1, "late": 1, "base_at": 1}).to_list(length=None)
     table = compute_weights(rows)
+    await db["news_theme_weights"].delete_many({"_id": {"$nin": list(table)}})
     for key, value in table.items():
         await db["news_theme_weights"].replace_one({"_id": key}, {**value, "at": now}, upsert=True)
     await redis.set(WEIGHTS_KEY, json.dumps({k: v["weight"] for k, v in table.items()}))

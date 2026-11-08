@@ -21,13 +21,19 @@ class Redis(FakeRedis):
             self.data[f"quote:{s}"] = json.dumps({"ltp": p})
 
 
+def _daily(rows, per_day=1):
+    """The rows spread over consecutive days, `per_day` to a day."""
+    return [{**row, "base_at": NOW - timedelta(days=i // per_day)} for i, row in enumerate(rows)]
+
+
 def test_weights_need_samples_and_reward_hits():
-    rows = [{"scope": "COMPANY", "themes": ["earnings"], "direction": 0.8, "move_1d": 0.02}] * 15 + \
-           [{"scope": "COMPANY", "themes": ["earnings"], "direction": 0.8, "move_1d": -0.01}] * 5
+    rows = _daily([{"scope": "COMPANY", "themes": ["earnings"], "direction": 0.8, "move_1d": 0.02}] * 15 +
+                  [{"scope": "COMPANY", "themes": ["earnings"], "direction": 0.8, "move_1d": -0.01}] * 5)
     table = outcomes.compute_weights(rows)
     assert table["COMPANY|earnings|1"]["weight"] == 1.5 and table["COMPANY|earnings|1"]["n"] == 20
+    assert table["COMPANY|earnings|1"]["days"] == 20
     assert outcomes.compute_weights(rows[:19]) == {}  # too few to trust
-    noise = [{"scope": "MACRO", "themes": ["crude"], "direction": -0.5, "move_1d": 0.01}] * 20
+    noise = _daily([{"scope": "MACRO", "themes": ["crude"], "direction": -0.5, "move_1d": 0.01}] * 20)
     assert outcomes.compute_weights(noise)["MACRO|crude|-1"]["weight"] == 0.5
     weights = {"COMPANY|earnings|1": 1.5}
     assert outcomes.item_weight(weights, "COMPANY", ["earnings", "growth"], 0.3) == 1.5
@@ -112,6 +118,26 @@ async def test_late_item_is_priced_from_the_bars_at_publication(monkeypatch):
     assert docs["symbol"]["base"] == {"TCS": 95.0} and docs["symbol"]["bench"] == 19995.0
     assert docs["market"]["bench"] == 19995.0 and not docs["symbol"].get("late")
     assert docs["symbol"]["in_session"] is False
+
+
+def test_many_items_on_few_days_do_not_make_a_weight():
+    # Same-day items are one market move: 95 rows over 19 days is 19 observations.
+    row = {"scope": "MARKET", "themes": ["flows"], "direction": -0.8, "move_1d": 0.01}
+    assert outcomes.compute_weights(_daily([row] * 95, per_day=5)) == {}
+
+
+@pytest.mark.asyncio
+async def test_a_theme_that_stops_qualifying_loses_its_stored_weight():
+    db = AsyncMongoMockClient()["test_db"]
+    redis = Redis()
+    await db["news_theme_weights"].insert_one({"_id": "MARKET|flows|1", "weight": 1.3, "n": 144})
+    row = {"scope": "COMPANY", "themes": ["earnings"], "direction": 0.8, "move_1d": 0.02}
+    await db["news_outcomes"].insert_many([{"_id": i, **row} for i, row in enumerate(_daily([row] * 20))])
+
+    await outcomes.weights(db, redis, NOW)
+
+    assert [d["_id"] async for d in db["news_theme_weights"].find()] == ["COMPANY|earnings|1"]
+    assert list(json.loads(redis.data[outcomes.WEIGHTS_KEY])) == ["COMPANY|earnings|1"]
 
 
 @pytest.mark.asyncio

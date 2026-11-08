@@ -24,8 +24,7 @@ from typing import Optional
 
 import numpy as np
 
-from backend.datalayer.outcomes import COLLECTION as OUTCOMES, _sign
-from backend.engine.session import IST
+from backend.datalayer.outcomes import COLLECTION as OUTCOMES, MIN_DAYS, _day, _sign
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,6 @@ HORIZONS = ("1d", "5d", "20d")
 MEASURES = ("move", "pre_move", "sector_move")
 MIN_DIRECTION = 0.5
 THIN = 30
-MIN_DAYS = 20  # a t from fewer trading days reads far too high (t 31 on 290 rows, 2026-11-03)
 BOOT = 2000
 DUE_KEY = "news:accuracy:due"
 EVERY_SECONDS = 7 * 86400
@@ -44,12 +42,6 @@ PRICED = 0.5
 
 def impact_bucket(impact: float) -> str:
     return "<5" if impact < 5 else "5-7" if impact < 7 else ">=7"
-
-
-def _day(at: datetime) -> str:
-    if at.tzinfo is None:
-        at = at.replace(tzinfo=timezone.utc)
-    return at.astimezone(IST).date().isoformat()
 
 
 def _stats(points: list[tuple[str, float, bool]]) -> dict:
