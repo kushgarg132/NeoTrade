@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/llm_tasks.py, backend/gemini_chat.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: 7919289
+verified_at: 325176a
 ---
 # Data layer, AI and background jobs
 
@@ -98,7 +98,7 @@ Prompts (`backend/prompts/*.md`, front matter `system:`; caller in parens): `tri
 | `news_history_fetch` | `_id`=`{feed or sym/sector/nse}:{key}:{month or year}`, `n`: searches already run (resume) | none | `backfill_news.fetch` |
 | `news_history_outcomes` | `_id`=`{item}:{type}:{target}`; `scope,themes,direction,impact,published_at,base_day,source,model`, `move_` / `sector_move_` for `1d,5d,20d` (trading days) | none | `backfill_news.outcomes`; r: `::report` |
 | `news_accuracy` | `_id`=`latest` (live) or `history` (N0.5 backfill, `backfill_news.report`); `as_of,rows,cells[{group(theme/source/model),scope,key,impact(<5/5-7/>=7/all),horizon(1d/5d/20d),measure(move/pre_move/sector_move),n,hit,mean,t,thin}]` | none | w: `accuracy.build` (weekly, or `GET /news/accuracy?refresh=true`) |
-| `news_theme_weights` | `_id`=`scope|theme|sign`; `weight,hit_rate,n,at` | none | w: `outcomes.weights` (weekly) |
+| `news_theme_weights` | `_id`=`scope|theme|sign`; `weight,hit_rate,n,days,at`; only keys past 20 rows over 20 trading days | none | w: `outcomes.weights` (weekly, drops keys that stop qualifying) |
 | `macro_series` | `_id`=`{ticker}:{IST date}` or `{FII|DII}_NET:{date}`; `value,at` | none | w: `prices.macro`, `market.flows` |
 | `econ_calendar` | `_id`=`{date}:{country}:{title}`; `at,country,title,impact` High/Medium,`forecast,previous` | none | w: `market.calendar`; r: `market.upcoming`, `revise.triggers` |
 | `daily_bars` | `symbol,date`(YYYY-MM-DD IST),`open,high,low,close,volume` adjusted | unique `(symbol,date)`, created on first `bars.loop` pass | w: `bars.write` (delete then insert); r: `bars.read/prev_closes`, fact `price_summary`, quick analysis |
