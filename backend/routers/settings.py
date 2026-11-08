@@ -709,6 +709,14 @@ async def omniroute_usage(_admin: User = Depends(require_admin)):
         raise HTTPException(status_code=exc.status, detail=exc.detail)
 
 
+@router.get("/settings/gemini-usage")
+async def gemini_usage(_admin: User = Depends(require_admin)):
+    from backend.database import db
+    from backend.gemini_chat import read_usage
+
+    return await read_usage(db.db, db.redis)
+
+
 MODEL_TEST_TIMEOUT_SECONDS = 30
 
 

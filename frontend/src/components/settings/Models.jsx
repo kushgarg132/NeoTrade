@@ -520,4 +520,68 @@ const UsageSheet = () => {
   );
 };
 
-export { ModelSheet, UsageSheet };
+const usd = (value) => `$${Number(value || 0).toFixed(value >= 1 ? 2 : 3)}`;
+
+/** Its own sheet, so an OmniRoute outage does not hide it. */
+const GeminiUsageSheet = () => {
+  const [usage, setUsage] = useState(null);
+  const [error, setError] = useState('');
+  const load = () =>
+    api
+      .get(endpoints.settings.geminiUsage, { cache: false })
+      .then((res) => {
+        setUsage(res.data);
+        setError('');
+      })
+      .catch((err) => setError(err?.response?.data?.detail || 'Could not read Gemini usage.'));
+  useEffect(() => {
+    load();
+  }, []);
+  useLivePoll(load, 60_000, { always: true });
+
+  return (
+    <Sheet title="Gemini usage" meta="Estimated">
+      {error ? (
+        <Empty title="Usage unavailable" detail={error} />
+      ) : !usage ? (
+        <Ruling rows={3} />
+      ) : (
+        <>
+          {usage.depleted_at && (
+            <p role="alert" className="text-[13px] font-medium text-[var(--loss)] mb-2">
+              Credits ran out {formatTimeAgo(usage.depleted_at)}. Google models fail until you top up in AI Studio.
+            </p>
+          )}
+          <dl className="grid grid-cols-2 gap-2">
+            {[['Today', usage.today], ['Last 30 days', usage.last_30_days]].map(([label, period]) => (
+              <div key={label}>
+                <dt className="text-[13px] font-medium text-[var(--text-muted)]">{label}</dt>
+                <dd className="figure-md text-xl tabular-nums">{usd(period.cost_usd)}</dd>
+                <dd className="text-[13px] text-[var(--text-muted)]">
+                  {formatQuantity(period.input + period.output)} tokens · {period.calls} calls
+                </dd>
+              </div>
+            ))}
+          </dl>
+          {usage.models.length > 0 && (
+            <ul className="mt-3">
+              {usage.models.map((row) => (
+                <li key={row.model} className="flex justify-between gap-3 py-1 text-[13px]">
+                  <span className="truncate">{row.model}</span>
+                  <span className="tabular-nums text-[var(--text-muted)]">{usd(row.cost_usd)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-[13px] text-[var(--text-muted)] mt-3">
+            Worked out from tokens and Google's list prices.
+            {usage.unpriced_calls > 0 ? ` ${usage.unpriced_calls} calls on models with no listed price are not in the cost.` : ''}
+            {' '}Google shows the remaining balance only in AI Studio, under Billing.
+          </p>
+        </>
+      )}
+    </Sheet>
+  );
+};
+
+export { ModelSheet, UsageSheet, GeminiUsageSheet };

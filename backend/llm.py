@@ -149,6 +149,8 @@ class MultiKeyChain(Runnable):
 # The last success and failure of get_completion, read by
 # system/data_quality.py::_llm to tell "the provider is down" apart from one bad call.
 LLM_OK_KEY, LLM_ERROR_KEY = "llm:last_ok", "llm:last_error"
+# Set while Google refuses calls for lack of prepaid credit (gemini_chat.UsageRecorder).
+GEMINI_CREDITS_KEY = "llm:gemini:depleted"
 
 
 async def _note(key: str, value: str) -> None:
@@ -278,9 +280,11 @@ class LLMService:
             return None
         await _count_call(feature)
 
-        chat_class = ChatOpenAI
+        chat_class, google = ChatOpenAI, {}
         if model.startswith(GOOGLE_PREFIX):
-            from backend.gemini_chat import GeminiChat as chat_class
+            from backend.gemini_chat import GeminiChat as chat_class, UsageRecorder
+
+            google = {"callbacks": [UsageRecorder(name)]}
 
         llms = []
         for key in keys:
@@ -289,7 +293,8 @@ class LLMService:
                 api_key=key,
                 base_url=base_url,
                 temperature=0.0,
-                max_retries=0 # We handle retries via rotation
+                max_retries=0, # We handle retries via rotation
+                **google,
             ))
             
         if len(llms) == 1:

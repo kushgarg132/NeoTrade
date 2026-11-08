@@ -176,6 +176,15 @@ async def test_a_failing_llm_provider_is_named_until_a_call_succeeds():
     assert await data_quality.live(db, _healthy(**{"llm:last_error": old}), MONDAY_MORNING) == []
 
 
+async def test_used_up_gemini_credits_are_named():
+    from backend.llm import GEMINI_CREDITS_KEY
+
+    redis = _Redis()
+    assert await data_quality._gemini_credits(redis) == []
+    await redis.set(GEMINI_CREDITS_KEY, "1794135528")
+    assert "Gemini prepaid credits" in (await data_quality._gemini_credits(redis))[0]
+
+
 async def test_the_watch_alerts_on_a_failure_held_two_ticks_and_on_recovery():
     db = AsyncMongoMockClient()["test_db"]
     await _picks_ran(db, datetime(2026, 10, 16, 10, 35, tzinfo=timezone.utc))

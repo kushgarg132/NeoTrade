@@ -22,7 +22,8 @@ Informational, not failures: unlisted universe symbols, and silent news feeds
 - `scheduler:last_pass` behind the last weekday whose pass should be done;
 - the Picks job's study not written for that day;
 - the LLM provider failing: the last `get_completion` error is newer than
-  its last success and under LLM_DOWN_AFTER old (kiro 401s, 2026-10-21..23).
+  its last success and under LLM_DOWN_AFTER old (kiro 401s, 2026-10-21..23);
+- Google refusing Gemini calls because the prepaid credits are used up;
 - (Phase 23.0) silent stops, on trading days only: news triage under 20% of
   its 7-day hourly mean over the last 3 hours (08:00-20:00 IST).
 
@@ -138,6 +139,14 @@ async def _llm(redis, now: datetime) -> list[str]:
     return [f"AI provider failing: {error['error'][:160]}"]
 
 
+async def _gemini_credits(redis) -> list[str]:
+    from backend.llm import GEMINI_CREDITS_KEY
+
+    if not await redis.get(GEMINI_CREDITS_KEY):
+        return []
+    return ["Gemini prepaid credits are used up: google/ models fail until you top up in AI Studio"]
+
+
 async def _news_rate(db, now: datetime) -> list[str]:
     local = now.astimezone(IST)
     if not NEWS_FROM <= local.time() < NEWS_UNTIL:
@@ -176,7 +185,7 @@ async def live(db, redis, now: Optional[datetime] = None) -> list[str]:
     if redis is None:
         return [*_disk(), *await _picks(db, now), *await _silent_stops(db, None, now)]
     return [*_disk(), *await _heartbeats(redis), *await _quotes(redis), *await _last_pass(redis, now), *await _picks(db, now),
-            *await _llm(redis, now), *await _silent_stops(db, redis, now)]
+            *await _llm(redis, now), *await _gemini_credits(redis), *await _silent_stops(db, redis, now)]
 
 
 async def check(db, redis=None, now: Optional[datetime] = None) -> dict:
