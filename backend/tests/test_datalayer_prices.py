@@ -73,6 +73,19 @@ async def test_quotes_refresh_priority_each_pass_and_universe_on_cadence(mongo, 
     assert json.loads(redis.data["quote:INFY"])["ltp"] == 1.0
 
 
+async def test_quotes_cover_picks_still_open(mongo, monkeypatch):
+    await mongo["picks"].insert_many([{"symbol": "DELTACORP", "due_date": "2999-01-01"},
+                                      {"symbol": "GONE", "due_date": "2000-01-01"}])
+    asked = []
+    monkeypatch.setattr(prices, "last_two", lambda tickers: asked.append(set(tickers)) or {t: (1.0, 1.0) for t in tickers})
+    monkeypatch.setattr(prices, "in_session", lambda now: False)
+    monkeypatch.setattr("backend.factor.data.universe", lambda: ["RELIANCE"])
+    monkeypatch.setattr(prices, "_last_universe", 0.0)
+
+    await prices.quotes(mongo, FakeRedis())
+    assert asked == [{"RELIANCE.NS", "DELTACORP.NS"}]
+
+
 async def test_macro_writes_cache_and_daily_series(mongo, monkeypatch):
     monkeypatch.setattr(prices, "last_two", lambda tickers: {"BZ=F": (88.0, 80.0)})
     redis = FakeRedis()

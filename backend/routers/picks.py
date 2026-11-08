@@ -13,6 +13,7 @@ from backend.forecast.picks import CAVEATS, PICKS, STUDY, forward, rank_key, ser
 from backend.marks import mark_prices
 
 router = APIRouter(prefix="/picks", tags=["Picks"], dependencies=[Depends(require_admin)])
+MARK_MAX_AGE_SECONDS = 30 * 60  # a 20-60 day idea; ingest refreshes these every 5-10 min, and a tighter limit means Yahoo on every view
 DISMISSED = "picks_dismissed"  # {user_id, pick_id, at}: a pick the user skipped leaves their `shown` list
 
 
@@ -26,7 +27,7 @@ async def served_today(user_id: str | None = None) -> tuple:
     # Every earlier pick still before its due date (a 60-day setup stays up to ~3 months).
     older = await db.db[PICKS].find({"date": {"$lt": latest["date"]}, "due_date": {"$gt": today.isoformat()}}).to_list(length=None) if latest else []
     study = await db.db[STUDY].find_one({"_id": "latest"}) or {}
-    prices = await mark_prices(db.db, {p["symbol"] for p in older + picks})
+    prices = await mark_prices(db.db, {p["symbol"] for p in older + picks}, max_age_seconds=MARK_MAX_AGE_SECONDS)
     served = serve(picks, older, prices, today, setup_grades(study))
     if user_id:
         skipped = set(await db.db[DISMISSED].distinct("pick_id", {"user_id": user_id}))

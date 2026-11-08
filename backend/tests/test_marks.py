@@ -7,6 +7,8 @@ the whole page.
 """
 
 import asyncio
+import json
+import time
 
 import pytest
 from mongomock_motor import AsyncMongoMockClient
@@ -87,3 +89,37 @@ async def test_no_symbols_makes_no_calls(mongo, monkeypatch):
     monkeypatch.setattr(marks, "YFinanceProvider", _Provider)
 
     assert await marks.mark_prices(mongo, []) == {}
+
+
+class _Cache:
+    """A quote cache holding RELIANCE at 100, `age` seconds old."""
+
+    def __init__(self, age):
+        self.quote = json.dumps({"ltp": 100.0, "at": time.time() - age})
+
+    async def mget(self, keys):
+        return [self.quote for _ in keys]
+
+
+@pytest.mark.parametrize("phase, kwargs, expected", [
+    ("closed", {}, 100.0),  # no session since the quote: it is still the price, no Yahoo call
+    ("post", {}, 100.0),
+    ("session", {}, 999.0),  # the market is moving: older than the default is re-fetched
+    ("closed", {"max_age_seconds": 20}, 999.0),  # an order path's explicit limit always holds
+])
+@pytest.mark.asyncio
+async def test_quote_age_limit_depends_on_the_session(mongo, monkeypatch, phase, kwargs, expected):
+    class _Provider:
+        async def quote(self, instrument):
+            return {"last_price": 999.0}
+
+    async def no_store(*_):
+        return None
+
+    monkeypatch.setattr(marks, "InstrumentMaster", _Master)
+    monkeypatch.setattr(marks, "YFinanceProvider", _Provider)
+    monkeypatch.setattr(marks, "_redis", lambda: _Cache(age=300))
+    monkeypatch.setattr(marks, "store_quotes", no_store)
+    monkeypatch.setattr(marks, "market_phase", lambda now: phase)
+
+    assert await marks.mark_prices(mongo, ["RELIANCE"], **kwargs) == {"RELIANCE": expected}

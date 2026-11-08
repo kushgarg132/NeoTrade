@@ -133,6 +133,12 @@ async def priority_symbols(db) -> set[str]:
     return {_bare(s) for s in [*held, *watched, *real] if s}
 
 
+async def open_pick_symbols(db) -> set[str]:
+    """Names on the Picks list, some of them outside the Nifty 200 scan list."""
+    today = datetime.now(timezone.utc).astimezone(IST).date().isoformat()
+    return {_bare(s) for s in await db["picks"].distinct("symbol", {"due_date": {"$gt": today}})}
+
+
 async def _quote(redis, symbols: set[str], ttl: int) -> int:
     tickers = {f"{s}.NS": s for s in symbols}
     rows = await asyncio.to_thread(last_two, list(tickers))
@@ -162,7 +168,7 @@ async def quotes(db, redis) -> None:
     priority = await priority_symbols(db)
     due = now - _last_universe >= (UNIVERSE_SECONDS if live else OFF_SESSION_SECONDS)
 
-    wanted = priority | {_bare(s) for s in universe()}
+    wanted = priority | {_bare(s) for s in universe()} | await open_pick_symbols(db)
     # The long TTL: if the session dies mid-day, quotes must outlast the wait for Yahoo's next pass.
     broker = await _broker_quotes(db, redis, wanted) if live else {}
     await store_quotes(redis, broker, UNIVERSE_TTL_SECONDS)

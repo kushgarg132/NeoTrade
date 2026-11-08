@@ -15,8 +15,10 @@ import asyncio
 import json
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Iterable, Optional
 
+from backend.core.market_calendar import market_phase
 from backend.data.providers.yfinance_provider import YFinanceProvider
 from backend.instruments.master import InstrumentMaster
 
@@ -30,6 +32,8 @@ TIMEOUT_SECONDS = 4.0
 
 QUOTE_KEY = "quote:{}"
 DEFAULT_MAX_AGE_SECONDS = 60
+# No session running, so the last quote is still the price: ingest's off-session TTL.
+OFF_SESSION_MAX_AGE_SECONDS = 30 * 60
 # Paths that place an order at this price: never older than this.
 ORDER_MAX_AGE_SECONDS = 20
 WRITE_THROUGH_TTL_SECONDS = 120
@@ -97,10 +101,13 @@ async def store_quotes(redis, quotes: dict[str, tuple[float, Optional[float]]], 
         logger.warning("quote cache write failed: %s", exc)
 
 
-async def mark_prices(db, symbols: Iterable[str], max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS) -> dict[str, float]:
+async def mark_prices(db, symbols: Iterable[str], max_age_seconds: Optional[float] = None) -> dict[str, float]:
     symbols = list(dict.fromkeys(symbols))
     if not symbols:
         return {}
+    if max_age_seconds is None:
+        live = market_phase(datetime.now(timezone.utc)) == "session"
+        max_age_seconds = DEFAULT_MAX_AGE_SECONDS if live else OFF_SESSION_MAX_AGE_SECONDS
 
     redis = _redis()
     found = await cached_quotes(redis, symbols, max_age_seconds)
