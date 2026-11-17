@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/llm_tasks.py, backend/gemini_chat.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: 6b2f680
+verified_at: 68b18bf
 ---
 # Data layer, AI and background jobs
 
@@ -26,7 +26,7 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | `backend/datalayer/filings.py` | filing lane: read, score and measure NSE filings; record-only, no order path | `filings.py::poll_loop`, `::measure_loop`, `::score_filing`, `::read_pdf`, `::primary_signals`, `::bar`, `::report` |
 | `backend/datalayer/backfill_news.py` | N0.5 news history CLI (`python -m backend.datalayer.backfill_news fetch FIRST LAST | estimate | score --max-calls N | outcomes | report`): Google News month searches (each Nifty 200 company, sector, market, macro) + NSE filings by symbol-year into `news_history` via `news.store(coll=)`; triage + score on the **fast** tier with the live prompts (`news._triage_batch/_score_batch(coll=, tier=)`), per-day rewrite prune; outcomes from daily bars at 1/5/20 trading days (Google items base = own day close, filings = last close at or before; `move_`, `sector_move_`); `accuracy.report` into `news_accuracy` `_id=history`. Never read by live triage, weights or the N0.1 gate | `backfill_news.py::fetch` (`--shard K/N` splits searches across side-by-side runs), `::estimate`, `::score`, `::outcomes`, `::moves`, `::base_day`, `::report` |
 | `backend/datalayer/market.py` | calendar, FII/DII flows, rule regime, AI brief, `backdrop` | `market.py::calendar`, `::flows`, `::regime`, `::compute_regime`, `::brief`, `::_brief_due`, `::upcoming`, `::top_items`, `::latest_brief`, `::backdrop` |
-| `backend/datalayer/bars.py` | `daily_bars` + `fundamentals` stores and loops | `bars.py::loop`, `::fundamentals_loop`, `::read`, `::write`, `::prev_closes`, `::nifty_closes`, `::_due`, `::symbols` |
+| `backend/datalayer/bars.py` | `daily_bars` + `fundamentals` stores and loops; `::INDEXES` = NIFTY and India VIX (`::INDIA_VIX`, since 2026-11-17, for the Picks VIX filter), fetched each pass and never treated as stocks | `bars.py::loop`, `::fundamentals_loop`, `::read`, `::write`, `::prev_closes`, `::nifty_closes`, `::_due`, `::symbols` |
 | `backend/datalayer/analysis.py` | AnalystAgent answer built from stored scored news | `analysis.py::from_layer`, `::_build` |
 | `backend/datalayer/catalysts.py` | overnight catalyst map for gap strategies | `catalysts.py::catalyst_map` |
 
