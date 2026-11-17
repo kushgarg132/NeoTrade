@@ -1,7 +1,7 @@
 ---
 page: data-ai-jobs
 covers: [backend/datalayer/**, backend/ai/**, backend/chat/**, backend/research/**, backend/prompts/**, backend/scheduler.py, backend/llm.py, backend/llm_tasks.py, backend/gemini_chat.py, backend/model_catalog.py, backend/market_cache.py, backend/routers/news.py, backend/routers/chat.py, backend/routers/plan.py, backend/summaries/**, backend/routers/summaries.py]
-verified_at: 1f661be
+verified_at: 6b2f680
 ---
 # Data layer, AI and background jobs
 
@@ -77,7 +77,7 @@ Path notes: `backend/routers/chat.py` does NOT exist. The news HTTP router is `b
 | `backend/chat/lc_tools.py` | LangChain tools (stock info, price history, symbol resolve) | `lc_tools.py::fetch_stock_info_tool`, `::fetch_price_history_tool`, `::resolve_symbol_tool` |
 | `backend/gemini_chat.py` | ChatOpenAI for Google: keeps Gemini 3 thought signatures across a tool loop (Google returns 400 without them), held per client; records estimated spend and credits running out (Google has no balance API) | `gemini_chat.py::GeminiChat`, `::UsageRecorder`, `::PRICES`, `::read_usage` |
 | `backend/llm_tasks.py` | `TASKS`: every kind of LLM call with its tier, feature, thinking effort, JSON mode and whether it may fall back to the gateway; callers pass `task=` (news tasks never fall back: a changing scorer muddies the accuracy report) | `llm_tasks.py::TASKS`, `::Task` |
-| `backend/llm.py` | `::llm_failed` is the one check for in-band failures; `::_over_budget` stops news at `NEWS_USD_PER_DAY`; provider routing (`google/<name>` to Google, the rest to OmniRoute), tiers/features, per-user daily cap, key rotation | `llm.py::route`, `::GOOGLE_PREFIX`, `::LLMService`, `::llm_service`, `::get_llm`, `::get_completion`, `::keys_for`, `::_charge`, `::use_model`, `::model_for`, `::MultiKeyChain`, `::USER_FEATURES`, `::DailyLimitReached` |
+| `backend/llm.py` | `::llm_failed` is the one check for in-band failures; `::_over_budget` stops news at `NEWS_USD_PER_DAY`; provider routing (`google/<name>` to Google, the rest to OmniRoute), `::sampling` (temperature 0, none for Claude 5+ which answer 400), tiers/features, per-user daily cap, key rotation | `llm.py::route`, `::GOOGLE_PREFIX`, `::LLMService`, `::llm_service`, `::get_llm`, `::get_completion`, `::keys_for`, `::_charge`, `::use_model`, `::model_for`, `::MultiKeyChain`, `::USER_FEATURES`, `::DailyLimitReached` |
 | `backend/model_catalog.py` | gateway model list to Family/Line/Version tree (pure) | `model_catalog.py::build_catalog`, `::FAMILIES`, `::LINES` |
 | `backend/market_cache.py` | stale-while-revalidate cache for home feeds | `market_cache.py::cached`, `::_refresh`, `::_claim` |
 | `backend/prompts/__init__.py` | `render(name, **values)` strict placeholder check; front matter `version` and multi-line `system`; `{{> name}}` pastes `prompts/shared/name.md`; `prompt_id` = `name@version`, stored on `news_items.prompt` and `ai_summaries.prompt` | `prompts/__init__.py::render`, `::_load`, `::prompt_id` |
