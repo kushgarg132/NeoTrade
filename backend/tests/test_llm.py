@@ -105,3 +105,12 @@ def test_stream_falls_back_only_before_any_event():
     # fails mid-stream: raise, never replay "a" from the second key
     with pytest.raises(RuntimeError):
         asyncio.run(collect(llm_module.MultiKeyChain([Key(["a"], True), Key(["a", "b"], False)])))
+
+
+def test_sampling_drops_temperature_for_claude_5_and_later():
+    from backend.llm import sampling
+
+    assert sampling("cc/claude-opus-5-5") == {}
+    assert sampling("agy/claude-sonnet-5-5-thinking") == {}
+    assert sampling("cc/claude-opus-4-6") == {"temperature": 0.0}
+    assert sampling("gemini-3-pro") == {"temperature": 0.0}

@@ -5,6 +5,7 @@ from backend.llm_tasks import TASKS
 from typing import Optional, List, Any, AsyncIterator
 import contextlib
 import json
+import re
 import time
 import contextvars
 import logging
@@ -99,6 +100,15 @@ def use_model(model: Optional[str], user_id: Optional[str] = None):
         _billed_user.reset(billed)
 
 GOOGLE_PREFIX = "google/"
+
+_CLAUDE_GENERATION = re.compile(r"claude-(?:opus|sonnet|haiku|fable)-(\d+)")
+
+
+def sampling(model: str) -> dict:
+    """temperature=0 for models that take it. Claude 5 and later answer 400
+    "`temperature` is deprecated for this model", so they get none."""
+    generation = _CLAUDE_GENERATION.search(model.lower())
+    return {} if generation and int(generation.group(1)) >= 5 else {"temperature": 0.0}
 
 
 def route(model: str, gateway_keys: List[str]) -> tuple[str, str, List[str]]:
@@ -312,7 +322,7 @@ class LLMService:
         if google and spec and spec.json:
             options["model_kwargs"] = {"response_format": {"type": "json_object"}}
         return (GeminiChat if google else ChatOpenAI)(
-            model=name, api_key=key, base_url=base_url, temperature=0.0,
+            model=name, api_key=key, base_url=base_url, **sampling(name),
             max_retries=0,  # We handle retries via rotation
             callbacks=[UsageRecorder(name, task=task, feature=feature, gateway=not google)], **options)
 

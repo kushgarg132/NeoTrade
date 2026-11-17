@@ -32,7 +32,7 @@ from backend.brokers.registry import BROKERS
 from backend.configs.settings import settings
 from backend.database import db
 from backend.engine.session import IST
-from backend.llm import GOOGLE_PREFIX, route
+from backend.llm import GOOGLE_PREFIX, route, sampling
 from backend.prefs import SETUP_STEP_IDS, PrefsStore
 
 router = APIRouter()
@@ -739,7 +739,7 @@ async def test_omniroute_model(update: ModelUpdate, _admin: User = Depends(requi
         return {"ok": False, "model": model, "latency_ms": None, "reply": None, "error": error}
 
     system, prompt = render("model_test")
-    llm = ChatOpenAI(model=name, api_key=keys[0], base_url=base_url, temperature=0.0, max_retries=0)
+    llm = ChatOpenAI(model=name, api_key=keys[0], base_url=base_url, **sampling(name), max_retries=0)
     started = time.monotonic()
     try:
         response = await asyncio.wait_for(
