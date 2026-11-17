@@ -17,19 +17,22 @@ import numpy as np
 import pandas as pd
 
 from backend.strategies.indicators import Indicators
-from backend.datalayer.bars import NIFTY
+from backend.datalayer.bars import INDEXES, INDIA_VIX, NIFTY
 from backend.factor.model import MONTH, YEAR, Params, scores, volatility
 
 FIELDS = ("open", "high", "low", "close", "volume")
 
 
 def table(frames: dict[str, pd.DataFrame]) -> dict:
-    """frames from `datalayer.bars.read` -> the wide table (NIFTY must be in it)."""
+    """frames from `datalayer.bars.read` -> the wide table (NIFTY must be in it; India VIX, when there, is
+    `vix`, its close on NIFTY's days)."""
     nifty = frames[NIFTY]
     days = nifty.index
-    stocks = {s: f for s, f in frames.items() if s != NIFTY}
+    stocks = {s: f for s, f in frames.items() if s not in INDEXES}
     out = {f: pd.DataFrame({s: df[f] for s, df in stocks.items()}).reindex(days) for f in FIELDS}
     out["nifty_open"], out["nifty_close"] = nifty["open"], nifty["close"]
+    if INDIA_VIX in frames:
+        out["vix"] = frames[INDIA_VIX]["close"].reindex(days)
     return out
 
 

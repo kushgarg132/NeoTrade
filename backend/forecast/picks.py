@@ -271,7 +271,7 @@ def live_refusal(scored: list[dict]) -> Optional[str]:
 
 async def load(db, now: datetime) -> Optional[dict]:
     today = bars.today_ist(now)
-    universe = set(await db[bars.BARS].distinct("symbol")) | {bars.NIFTY}
+    universe = set(await db[bars.BARS].distinct("symbol")) | bars.INDEXES
     frames = await bars.read(db, universe, HISTORY_START, today)
     if bars.NIFTY not in frames or len(frames) < 2:
         return None
@@ -375,7 +375,7 @@ async def run(db, now: Optional[datetime] = None) -> dict:
     now = now or datetime.now(timezone.utc)
     try:  # results dates for setups.results_drift; stale ones only, capped (datalayer/results.py)
         from backend.datalayer import results
-        await results.refresh(db, set(await db[bars.BARS].distinct("symbol")) - {bars.NIFTY}, now)
+        await results.refresh(db, set(await db[bars.BARS].distinct("symbol")) - bars.INDEXES, now)
     except Exception as exc:
         logger.warning("results dates not refreshed: %s", exc)
     t = await load(db, now)

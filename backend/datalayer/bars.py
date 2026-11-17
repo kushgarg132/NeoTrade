@@ -39,6 +39,8 @@ logger = logging.getLogger(__name__)
 BARS = "daily_bars"
 FUNDAMENTALS = "fundamentals"
 NIFTY = "^NSEI"
+INDIA_VIX = "^INDIAVIX"  # Picks' VIX filter (forecast/conditions.py); stored beside NIFTY, never a stock
+INDEXES = {NIFTY, INDIA_VIX}
 AFTER_CLOSE = time(15, 45)
 STALE_DAYS = 4  # newest bar older than this = stale (a weekend plus one holiday)
 FUNDAMENTALS_MAX_AGE = timedelta(days=3)
@@ -243,7 +245,7 @@ async def loop(db, redis, now: Optional[datetime] = None) -> None:
     batches = [  # (broker period, Yahoo period or start, tickers)
         ("5y", DEEP_START, [ticker(s) for s in sorted(wanted) if s not in known]),
         ("1mo", "1mo", [ticker(s) for s in sorted(wanted) if s in known]),
-        ("1mo", "1mo" if NIFTY in known else DEEP_START, [NIFTY]),
+        *(("1mo", "1mo" if index in known else DEEP_START, [index]) for index in sorted(INDEXES)),
     ]
     # Upstox's daily history stops at yesterday until the next day, so a
     # broker frame without the latest session's bar is topped up from Yahoo

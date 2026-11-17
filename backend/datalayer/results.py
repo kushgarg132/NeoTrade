@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     async def _main() -> None:
         await _db.connect_to_database()
-        symbols = set(await _db.db[bars.BARS].distinct("symbol")) - {bars.NIFTY}
+        symbols = set(await _db.db[bars.BARS].distinct("symbol")) - bars.INDEXES
         print(f"results dates: {await refresh(_db.db, symbols, datetime.now(timezone.utc), cap=None)} of {len(symbols)}")
 
     logging.basicConfig(level=logging.INFO)
