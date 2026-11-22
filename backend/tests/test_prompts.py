@@ -18,7 +18,7 @@ PROMPTS = {
     "score_filing": {"symbol": "TCS", "company": "Tata Consultancy", "title": "TCS: Order", "price": "TCS +1.2%", "text": "An order"},
     "research_report": {"symbol": "SBIN", "sentiment_score": "-0.20", "relevant_count": 3, "news": "n", "events": "[]", "backdrop": "b",
                         "price": "Last close 800", "fundamentals": "P/E 10", "results": "2026-11-20", "news_trust": "Company 44%"},
-    "market_brief": {"now": "Mon", "news": "n", "board": "b", "flows": "f", "regime": "r", "calendar": "c"},
+    "market_brief": {"tilt": "t", "now": "Mon", "news": "n", "board": "b", "flows": "f", "regime": "r", "calendar": "c"},
     "index_move": {"name": "NIFTY 50", "session_date": "2026-09-26", "session": "- Close 25,123.45",
                    "trend": "- Month +1.2%", "peers": "- SENSEX: -0.40%", "movers": "- HDFCBANK: -1.90%",
                    "headlines": "- RBI holds rates (ET)"},

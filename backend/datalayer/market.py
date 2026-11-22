@@ -232,10 +232,19 @@ async def brief(db, redis, now: Optional[datetime] = None) -> bool:
     flows_now = await _json(redis, FLOWS_KEY) or {}
     events = await upcoming(db, hours=48, now=now)
 
+    from backend.datalayer.accuracy import news_direction_trusted
+
+    trusted = await news_direction_trusted(db)
+
     def impacts(d):
-        return ", ".join(f"{i['target']} {i['direction']:+.1f}/{i['impact']:.0f}" for i in d["impacts"][:4])
+        if not trusted:  # an unmeasured scorer's up/down would come back as the brief's tilt
+            return ", ".join(f"{i['target']} impact {i['impact']:.0f}" for i in d["impacts"][:4])
+        return ", ".join(f"{i['target']} direction {i['direction']:+.1f}, impact {i['impact']:.0f}" for i in d["impacts"][:4])
 
     values = dict(
+        tilt=("each as a short bullet with an up/down/mixed tilt" if trusted else
+              "each as a short bullet. Give no up/down tilt: the news scorer's direction has not been measured "
+              "right often enough to state one"),
         now=f"{now.astimezone(IST):%a %d %b %Y} {clock(now)} IST",
         news="\n".join(f"- [{d['scope']}] {d['title']} ({d.get('source', '')}) -> {impacts(d)}" for d in items),
         board="\n".join(f"- {r['name']}: {r['value']:,.2f} ({r['percent']:+.2f}%)" for r in board) or "- unavailable",

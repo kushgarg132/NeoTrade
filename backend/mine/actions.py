@@ -118,7 +118,11 @@ async def build(db, user_id: str, now: datetime, show_verdicts: bool) -> list[di
                                    f"Add {buy['quantity']} {r['symbol']}",
                                    "An ADD verdict, up to your target weight.", snap_at, {"type": "ticket", **buy}))
 
-    for s, n in (await headlines_for(db, list(held), now - NEWS_LOOKBACK)).items():
+    from backend.datalayer.accuracy import news_direction_trusted
+
+    # "Negative" is the scorer's call: shown only once that scorer is measured right.
+    news = await headlines_for(db, list(held), now - NEWS_LOOKBACK) if await news_direction_trusted(db) else {}
+    for s, n in news.items():
         if (n.get("direction") or 0) < 0:
             out.append(_action("bad_news", s, n.get("url"), f"{s}: {n.get('title') or 'bad news'}",
                                "Negative news in the last 36 hours.", n.get("published_at") or now,

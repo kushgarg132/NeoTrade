@@ -25,6 +25,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "real_gate: run risk/paper_gate.proven_strategies for real")
     config.addinivalue_line("markers", "real_members: read forecast/members.py's committed index lists for real")
     config.addinivalue_line("markers", "real_lab: read the admin Lab switch (app_settings.lab_on) for real")
+    config.addinivalue_line("markers", "real_news_gate: read accuracy.news_direction_trusted for real")
 
 
 @pytest.fixture(autouse=True)
@@ -39,6 +40,21 @@ def _lab_on(request, monkeypatch):
         return True
 
     monkeypatch.setattr(app_settings, "lab_on", on)
+
+
+@pytest.fixture(autouse=True)
+def _news_direction_trusted(request, monkeypatch):
+    """Sentiment, the bad-news action and the brief's tilt wait for the pinned news
+    scorer to pass its accuracy bar. Tests of those see it passed; tests of the gate
+    itself are marked real_news_gate."""
+    if request.node.get_closest_marker("real_news_gate"):
+        return
+    from backend.datalayer import accuracy
+
+    async def trusted(db):
+        return True
+
+    monkeypatch.setattr(accuracy, "news_direction_trusted", trusted)
 
 
 @pytest.fixture(autouse=True)

@@ -76,9 +76,9 @@ def billed_user() -> Optional[str]:
     return _billed_user.get()
 
 
-async def model_for(tier: Optional[str] = None) -> str:
-    """The model a call made now would use: a use_model() override, else the tier's."""
-    return _model_override.get() or await current_llm_model(tier=tier)
+async def model_for(tier: Optional[str] = None, task: Optional[str] = None) -> str:
+    """The model a call made now would use: a use_model() override, else the task's pin, else the tier's."""
+    return _model_override.get() or (TASKS[task].model if task else None) or await current_llm_model(tier=tier)
 
 
 @contextlib.contextmanager
@@ -338,7 +338,7 @@ class LLMService:
             return None
         await self._charge(feature)
 
-        model = await model_for(tier)
+        model = await model_for(tier, task)
         _, base_url, keys = route(model, self.keys_for(feature))
         llms = [self._client(model, key, base_url, spec, task, feature) for key in keys]
         if spec and spec.fallback and model.startswith(GOOGLE_PREFIX):

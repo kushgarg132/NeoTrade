@@ -96,3 +96,18 @@ async def test_google_models_get_the_signature_keeping_client(monkeypatch):
     monkeypatch.setattr(llm_module, "current_llm_model", fake_current)
     monkeypatch.setattr(llm_module.settings, "GEMINI_API_KEY", "g-key")
     assert isinstance(await LLMService().get_llm(), GeminiChat)
+
+
+async def test_the_news_scorer_is_pinned_past_the_tier_switch(monkeypatch):
+    """The tier switch changed the scorer 8 times in 3 weeks; news.score now keeps its model."""
+    from backend.llm import model_for
+    from backend.llm_tasks import TASKS
+
+    async def fake_current(db=None, tier=None):
+        return "tier/model"
+
+    monkeypatch.setattr(llm_module, "current_llm_model", fake_current)
+    assert await model_for("standard", "news.score") == TASKS["news.score"].model != "tier/model"
+    assert await model_for("standard", "chat.answer") == "tier/model"
+    with use_model("backfill/model"):  # backfill_news score --model still chooses
+        assert await model_for("standard", "news.score") == "backfill/model"

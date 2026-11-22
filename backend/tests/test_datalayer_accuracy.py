@@ -155,3 +155,26 @@ def test_trust_line_states_a_measured_rate_even_under_20_days():
     assert "45% of 300" in accuracy.trust_line({"cells": [cell]})
     assert "unknown" in accuracy.trust_line({"cells": [{**cell, "n": 20}]})
 
+
+
+def _model_cell(model, n, hit, **extra):
+    return {"group": "model", "scope": "COMPANY", "key": model, "impact": "all", "horizon": "5d",
+            "measure": "move", "n": n, "hit": hit, **extra}
+
+
+def test_direction_is_trusted_only_for_the_scorer_in_use_past_the_bar():
+    report = {"cells": [_model_cell("old", 900, 0.60), _model_cell("pinned", 299, 0.60)]}
+    assert not accuracy.direction_trusted(report, "pinned")  # another model's record does not count
+    assert not accuracy.direction_trusted({"cells": [_model_cell("pinned", 300, 0.51)]}, "pinned")
+    assert accuracy.direction_trusted({"cells": [_model_cell("pinned", 300, 0.52)]}, "pinned")
+    assert not accuracy.direction_trusted(None, "pinned")
+
+
+@pytest.mark.real_news_gate
+async def test_the_gate_reads_the_latest_report_for_the_pinned_scorer():
+    from backend.llm_tasks import TASKS
+
+    db = AsyncMongoMockClient()["t"]
+    assert await accuracy.news_direction_trusted(db) is False
+    await db[accuracy.COLLECTION].insert_one({"_id": "latest", "cells": [_model_cell(TASKS["news.score"].model, 400, 0.55)]})
+    assert await accuracy.news_direction_trusted(db) is True

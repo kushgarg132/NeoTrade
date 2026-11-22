@@ -164,11 +164,17 @@ Ingest loops in `backend/datalayer/`:
    Before scoring, `news.py::_prune` also drops (with `skip_reason`) rewrites of a story scored or
    queued in the last day (title word overlap ≥ 0.7), company news naming no followed symbol, and
    non-Latin-script copies.
-3. **Score** — one deep call gives each item `impacts[]` on the market (`INDIA`), an NSE
+3. **Score** — one call gives each item `impacts[]` on the market (`INDIA`), an NSE
    industry, or a followed symbol; impact ≥ 6 marks it `material`. Unscored after 3 days → STALE.
-4. **Aggregate** — from 60 days of impacts (impact² weight, 30-day half-life):
-   `sentiment:<SYM>` = 0.6 company + 0.25 sector + 0.15 market (the single `ai_score` the
-   composite caps at 30%), plus sector and market sentiment and `analyst_verdict:<SYM>`.
+   The scorer's model is pinned in `llm_tasks.py` (`news.score`), not taken from the admin
+   tier switch: every change restarts its accuracy count.
+4. **Aggregate** — only once the pinned scorer has called the company 5-day move against Nifty
+   right at least 52% of 300+ times (`accuracy.py::news_direction_trusted`, read from the weekly
+   report). Until then no sentiment is written and old keys are cleared, so the regime, the
+   rotation's news veto and stock pages read "no news"; the bad-news action is not shown; the
+   brief names sectors with no up/down tilt. Once trusted, from 60 days of impacts (impact² weight,
+   30-day half-life): `sentiment:<SYM>` = 0.6 company + 0.25 sector + 0.15 market (the single
+   `ai_score` the composite caps at 30%), plus sector and market sentiment.
 5. **React** — `news_react` (60 s): each new material item alerts users by their `news_alerts`
    pref (held / held+watched / all / off; held = the own account's real holdings, `mine_holdings`), one alert per user and target an hour, by
    Telegram (`reactor.py::_deliver` through `alerts.alert`: instant `news_breaking` when a held name's

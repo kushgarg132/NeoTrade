@@ -269,6 +269,19 @@ async def test_triage_drops_repeats_unfollowed_companies_and_other_scripts_befor
     assert skipped["expire_at"] == NOW + news.IRRELEVANT_TTL
 
 
+@pytest.mark.real_news_gate
+async def test_an_unproven_scorer_writes_no_sentiment_and_clears_the_old(mongo):
+    await mongo[news.COLLECTION].insert_one({"_id": "w", "title": "TCS big win", "status": news.SCORED,
+                                             "published_at": NOW - timedelta(hours=1), "event": "w",
+                                             "impacts": [{"type": "symbol", "target": "TCS", "direction": 0.9, "impact": 8}]})
+    redis = FakeRedis()
+    redis.data.update({"sentiment:TCS": "0.5", "market:sentiment": "{}",
+                       "sector_sentiment:Oil Gas & Consumable Fuels": "{}", "quote:TCS": "kept"})
+    out = await news.aggregate(mongo, redis, NAMES, SECTOR_OF, now=NOW)  # no accuracy report: not measured
+    assert out["trusted"] is False and out["symbols"] == {}
+    assert list(redis.data) == ["quote:TCS"]
+
+
 async def test_aggregate_blends_company_sector_and_market(mongo):
     def scored(title, impacts):
         return {"_id": title, "title": title, "status": news.SCORED, "published_at": NOW - timedelta(hours=1),

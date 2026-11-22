@@ -472,7 +472,7 @@ async def _score_batch(db, docs, names, sector_of, sectors, now, coll: str = COL
     # The model that scored (tier's, or a use_model override), so the accuracy report can compare scorers.
     from backend.llm import model_for
 
-    model = await model_for(tier)
+    model = await model_for(tier, "news.score" if tier == "standard" else "news.triage")
     for i, doc in enumerate(docs):
         s = scored.get(i)
         impacts = valid_impacts(s.impacts, set(names), set(sectors)) if s else []
@@ -509,8 +509,15 @@ def _blend(company: Optional[float], sector: Optional[float], market: Optional[f
 async def aggregate(db, redis, names: dict[str, str], sector_of: dict[str, str], now: Optional[datetime] = None) -> dict:
     """Recomputes every followed symbol's sentiment, every sector's, and
     the market's from the scored items in WINDOW, and writes them."""
+    from backend.datalayer.accuracy import news_direction_trusted
     from backend.datalayer.outcomes import item_weight, load_weights
 
+    if not await news_direction_trusted(db):
+        # Unproven direction is not a reading: absent keys are what every reader already treats as no news.
+        stale = ["market:sentiment", *(f"sector_sentiment:{s}" for s in news_sources.sectors()),
+                 *(f"sentiment:{s}" for s in names)]
+        await redis.delete(*stale)
+        return {"market": None, "sectors": {}, "symbols": {}, "trusted": False}
     now = now or datetime.now(timezone.utc)
     weights = await load_weights(redis)
     points = defaultdict(list)

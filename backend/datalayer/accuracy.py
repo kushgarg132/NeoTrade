@@ -8,6 +8,8 @@
              `{_id: "latest", as_of, cells}`
     loop     weekly in the ingest worker (leader only), via a Redis SET NX
     company_scan_ok   the N0.1 gate: company direction, 5d, clears HIT_BAR
+    direction_trusted the same bar for the pinned scorer alone: until it passes,
+             no sentiment is written and no bad-news action is shown
 
 Groups: `theme` (key = a theme or "all", impact = a bucket or "all"), `source`,
 `model`, `prompt` (which prompt version scored it) and `priced_in` (the scorer's
@@ -104,6 +106,26 @@ def company_scan_ok(report: Optional[dict]) -> bool:
     if not cell or cell["n"] < SCAN_MIN_N:
         cell = _cell(report or {}, "move")
     return bool(cell) and cell["n"] >= SCAN_MIN_N and cell["hit"] >= HIT_BAR
+
+
+def direction_trusted(report: Optional[dict], model: Optional[str]) -> bool:
+    """News direction may feed sentiment (and so the regime, the rotation veto and the
+    bad-news action): the scorer now in use called the company 5-day move against NIFTY
+    right >= HIT_BAR over n >= SCAN_MIN_N. Other models' rows do not count for it."""
+    cell = next((c for c in (report or {}).get("cells") or [] if c["group"] == "model" and c["scope"] == "COMPANY"
+                 and c["key"] == model and c["horizon"] == SCAN_HORIZON and c["measure"] == "move"), None)
+    return bool(cell) and cell["n"] >= SCAN_MIN_N and cell["hit"] >= HIT_BAR
+
+
+async def news_direction_trusted(db) -> bool:
+    """direction_trusted for the pinned news scorer; False when the report cannot be read."""
+    from backend.llm_tasks import TASKS
+
+    try:
+        return direction_trusted(await db[COLLECTION].find_one({"_id": "latest"}), TASKS["news.score"].model)
+    except Exception as exc:
+        logger.warning("news direction gate: %s", exc)
+        return False
 
 
 def trust_line(report: Optional[dict]) -> str:

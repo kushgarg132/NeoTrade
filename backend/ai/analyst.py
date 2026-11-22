@@ -374,7 +374,10 @@ class AnalystAgent:
             await _write_note(redis, symbol, output)
             # The engine and scan read this for the AI half of conviction. The ingest
             # worker's blend lives 24h: never overwrite it with this 4h copy.
-            if await redis.ttl(f"sentiment:{symbol}") <= CACHE_TTL_SECONDS:
+            from backend.database import db
+            from backend.datalayer.accuracy import news_direction_trusted
+
+            if await redis.ttl(f"sentiment:{symbol}") <= CACHE_TTL_SECONDS and await news_direction_trusted(db.db):
                 await redis.set(f"sentiment:{symbol}", output["sentiment_score"], ex=CACHE_TTL_SECONDS)
         except Exception as exc:
             logger.warning("analyst cache write failed for %s: %s", symbol, exc)

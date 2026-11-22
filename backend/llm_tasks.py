@@ -6,7 +6,11 @@ feature: whose budget and on/off switch it falls under.
 effort: reasoning_effort sent to Google (thinking bills as output); None = the model's default.
 json: ask the provider for a JSON object rather than hoping for one.
 fallback: on a provider failure, try the gateway's model. Off for news: a scorer
-that changes mid-day muddies the accuracy report, and the batch simply waits."""
+that changes mid-day muddies the accuracy report, and the batch simply waits.
+model: pinned model id, ignoring the admin tier switch. The news scorer is pinned:
+it changed 8 times between 2026-10-26 and 2026-11-17 with the standard tier, so no
+model had the 300 rows its direction needs before sentiment may use it
+(accuracy.direction_trusted). Change it only on purpose: it restarts that count."""
 
 from dataclasses import dataclass
 from typing import Optional
@@ -19,11 +23,12 @@ class Task:
     effort: Optional[str] = None
     json: bool = False
     fallback: bool = True
+    model: Optional[str] = None
 
 
 TASKS = {
     "news.triage": Task("fast", "news", json=True, fallback=False),
-    "news.score": Task("standard", "news", effort="low", json=True, fallback=False),
+    "news.score": Task("standard", "news", effort="low", json=True, fallback=False, model="cc/claude-sonnet-5-5"),
     "news.filing": Task("standard", "news", json=True, fallback=False),
     "news.brief": Task("standard", "news", fallback=False),
     "research.analyst_score": Task("deep", "research"),
