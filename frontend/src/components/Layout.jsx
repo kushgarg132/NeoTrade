@@ -9,6 +9,8 @@ import ErrorBoundary from './ErrorBoundary';
 import api, { endpoints } from '../utils/api';
 import { useReconnect, useTopic } from '../hooks/useStream';
 import { useNeedCount } from '../hooks/useNeedCount';
+import { loadNewsTrust, useNewsTrust } from '../hooks/useNewsTrust';
+import { lean } from '../utils/newsTrust';
 import { useAuth } from '../context/AuthContext';
 
 /**
@@ -19,6 +21,8 @@ import { useAuth } from '../context/AuthContext';
 const Layout = ({ children }) => {
   const { user } = useAuth();
   const pending = useNeedCount().count; // the one "needs you" number, shared with Home
+  useNewsTrust();
+  useEffect(() => { loadNewsTrust(); }, []);
 
   // Each section's colour (index.css `[data-section]`), on <html> so the theme class and it meet.
   const { pathname } = useLocation();
@@ -75,7 +79,7 @@ const Layout = ({ children }) => {
             <Link to="/market?tab=news" onClick={() => dismiss(alert.id)} className="flex-1 min-w-0 text-sm hover:text-[var(--accent)]">
               <span className="block font-semibold">{alert.event || alert.title}</span>
               <span className="block text-[13px] text-[var(--text-muted)]">
-                {(alert.hits || []).map((h) => `${h.target === 'INDIA' ? 'Market' : h.target} ${h.direction > 0 ? '↑' : '↓'} ${h.impact}/10`).join(' · ')}
+                {(alert.hits || []).map((h) => `${h.target === 'INDIA' ? 'Market' : h.target} ${['↓', '·', '↑'][lean(h.direction) + 1]} ${h.impact}/10`).join(' · ')}
               </span>
             </Link>
             <button type="button" aria-label="Dismiss" onClick={() => dismiss(alert.id)} className="min-h-9 min-w-9 inline-flex items-center justify-center text-[var(--text-muted)]">

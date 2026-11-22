@@ -9,9 +9,11 @@ import ChipRow from '../ui/ChipRow';
 import useStored from '../../hooks/useStored';
 import { endpoints } from '../../utils/api';
 import { newsPath } from '../../utils/routes';
-import { ImpactChips } from '../common/NewsImpacts';
+import { ImpactChips, NewsTrustNote } from '../common/NewsImpacts';
+import { lean } from '../../utils/newsTrust';
+import { useNewsTrust } from '../../hooks/useNewsTrust';
 import { formatClock } from '../../utils/formatters';
-import { FILTERS, groupNews } from './newsGroups';
+import { filters, groupNews } from './newsGroups';
 
 const SHOWN = 30;
 const SORTS = [{ id: 'newest', label: 'Newest' }, { id: 'oldest', label: 'Oldest' }, { id: 'impact', label: 'Biggest impact' }];
@@ -22,6 +24,7 @@ const SORTS = [{ id: 'newest', label: 'Newest' }, { id: 'oldest', label: 'Oldest
 const NewsTab = ({ symbol, mine, ai, onAnalysis }) => {
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('newest');
+  useNewsTrust();
   const scored = useStored(endpoints.newsHistory(symbol, 30, true));
   const rows = [
     ...(scored.data?.items || []).slice(0, SHOWN).map((n) => ({
@@ -38,7 +41,8 @@ const NewsTab = ({ symbol, mine, ai, onAnalysis }) => {
   const groups = groupNews(rows, filter, sort);
   return (
     <div className="space-y-3">
-      <Segmented fill label="Filter news" options={FILTERS} value={filter} onChange={setFilter} />
+      <Segmented fill label="Filter news" options={filters()} value={filter} onChange={setFilter} />
+      <NewsTrustNote className="px-1" />
       <ChipRow label="Sort news" options={SORTS} value={sort} onChange={setSort} />
       {!groups.length && <Empty title="Nothing matches" body="No headline here fits this filter. Scored news alone carries a direction and impact." />}
       {groups.map(([label, list]) => (
@@ -46,7 +50,7 @@ const NewsTab = ({ symbol, mine, ai, onAnalysis }) => {
           <h3 className="px-1 pb-1.5 text-[12px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</h3>
           <Card>
             {list.map((r) => {
-              const score = r.impact != null && `${r.direction > 0 ? '↑' : r.direction < 0 ? '↓' : '·'} ${r.impact}/10`;
+              const score = r.impact != null && `${['↓', '·', '↑'][lean(r.direction) + 1]} ${r.impact}/10`;
               const sub = [r.source, r.at && formatClock(r.at), score].filter(Boolean).join(' · ');
               if (r.to) return <ListRow key={r.key} to={r.to} title={r.title} sub={sub} extra={<ImpactChips impacts={r.impacts} material={r.material} />} />;
               return r.url ? (

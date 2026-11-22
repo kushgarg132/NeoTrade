@@ -4,11 +4,15 @@ import Badge from '../ui/Badge';
 import { cn } from '../../utils/cn';
 import { impactWord } from '../../utils/market';
 import { newsPath } from '../../utils/routes';
+import { lean } from '../../utils/newsTrust';
+import { useNewsTrust } from '../../hooks/useNewsTrust';
 
 /** One scored impact as the News tab shows it: "SUZLON ↓ High" (direction -1..1, impact 0..10). */
 export const Impact = ({ impact }) => {
-  const arrow = impact.direction > 0 ? '↑' : impact.direction < 0 ? '↓' : '·';
-  const cls = impact.direction > 0 ? 'text-[var(--gain)]' : impact.direction < 0 ? 'text-[var(--loss)]' : 'text-[var(--text-muted)]';
+  useNewsTrust();
+  const d = lean(impact.direction);
+  const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '·';
+  const cls = d > 0 ? 'text-[var(--gain)]' : d < 0 ? 'text-[var(--loss)]' : 'text-[var(--text-muted)]';
   return <span className={`text-[13px] tabular-nums whitespace-nowrap ${cls}`}>{impact.type === 'market' ? 'Market' : impact.target} {arrow} {impactWord(impact.impact)}</span>;
 };
 
@@ -23,6 +27,12 @@ export const ImpactChips = ({ impacts, material = false, max = 3, className }) =
       {top.map((i) => <Impact key={`${i.type}-${i.target}`} impact={i} />)}
     </span>
   );
+};
+
+/** The news scorer's measured record, one muted line (GET /news/trust); nothing before it loads. */
+export const NewsTrustNote = ({ className }) => {
+  const { line } = useNewsTrust();
+  return line ? <p className={cn('text-[13px] text-[var(--text-muted)]', className)}>{line}</p> : null;
 };
 
 /** Where a headline leads: the story's analysis page (/news/:id) when it is stored, else the article. */

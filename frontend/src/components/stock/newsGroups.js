@@ -1,10 +1,13 @@
 import { formatNoteDate } from '../../utils/formatters.js';
+import { lean, newsTrust } from '../../utils/newsTrust.js';
 
-export const FILTERS = [['all', 'All'], ['up', 'Positive'], ['down', 'Negative'], ['material', 'High impact']];
+const ALL_FILTERS = [['all', 'All'], ['up', 'Positive'], ['down', 'Negative'], ['material', 'High impact']];
+/** Positive / Negative only while the scorer's calls are shown (utils/newsTrust.js). */
+export const filters = () => ALL_FILTERS.filter(([id]) => newsTrust().trusted || (id !== 'up' && id !== 'down'));
 const KEEP = {
   all: () => true,
-  up: (r) => r.direction > 0,
-  down: (r) => r.direction < 0,
+  up: (r) => lean(r.direction) > 0,
+  down: (r) => lean(r.direction) < 0,
   material: (r) => r.material,
 };
 

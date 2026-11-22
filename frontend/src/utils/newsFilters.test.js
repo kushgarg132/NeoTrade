@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { setNewsTrust } from './newsTrust.js';
 import { byDay, matchLean } from './news.js';
 import { filterSectors } from './market.js';
+
+setNewsTrust({ trusted: true }); // these tests are about the calls once shown; newsTrust.test.js covers hidden
 
 test('byDay groups by IST day, newest first, Today / Yesterday / weekday labels', () => {
   const now = Date.parse('2026-10-31T10:00:00Z'); // Sat 15:30 IST

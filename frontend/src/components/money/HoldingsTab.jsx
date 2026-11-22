@@ -22,11 +22,13 @@ import { formatDateTime, formatQuantity } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 import Badge from '../ui/Badge';
 import { hasNews, newsToday, tone as newsTone } from '../../utils/news';
+import { useNewsTrust } from '../../hooks/useNewsTrust';
 import StockIcon from '../ui/StockIcon';
 
 // Sentiment dot beside the symbol: colour plus a screen-reader word (the "News" badge and why-line carry the text).
 const DOT = { pos: ['bg-[var(--gain)]', 'news positive'], neg: ['bg-[var(--loss)]', 'news negative'] };
 const NewsDot = ({ entry }) => {
+  useNewsTrust();
   const d = DOT[newsTone(entry)];
   return d ? <span role="img" aria-label={d[1]} title={d[1]} className={`inline-block w-2 h-2 shrink-0 rounded-full ${d[0]}`} /> : null;
 };

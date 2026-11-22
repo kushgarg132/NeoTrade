@@ -178,3 +178,15 @@ async def test_the_gate_reads_the_latest_report_for_the_pinned_scorer():
     assert await accuracy.news_direction_trusted(db) is False
     await db[accuracy.COLLECTION].insert_one({"_id": "latest", "cells": [_model_cell(TASKS["news.score"].model, 400, 0.55)]})
     assert await accuracy.news_direction_trusted(db) is True
+
+
+def test_trust_status_says_why_calls_are_hidden_and_what_was_measured():
+    company_all = {"group": "theme", "scope": "COMPANY", "key": "all", "impact": "all", "horizon": "5d",
+                   "measure": "move", "n": 2533, "hit": 0.444}
+    out = accuracy.trust_status({"cells": [company_all, _model_cell("pinned", 120, 0.5)]}, "pinned")
+    assert out["trusted"] is False and out["scorer"] == {"n": 120, "hit": 0.5}
+    assert out["line"] == ("Up/down calls are hidden until the news scorer calls the 5-day move against NIFTY "
+                           "right 52% of 300+ times. So far: 50% of 120. Every scorer to date: 44% of 2,533.")
+    assert "not measured yet" in accuracy.trust_status(None, "pinned")["line"]
+    ok = accuracy.trust_status({"cells": [_model_cell("pinned", 400, 0.55)]}, "pinned")
+    assert ok["trusted"] and ok["line"] == "Company news called the 5-day move against NIFTY right 55% of 400 times."

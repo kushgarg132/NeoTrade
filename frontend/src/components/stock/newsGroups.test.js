@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { setNewsTrust } from '../../utils/newsTrust.js';
 import { dayLabel, groupNews } from './newsGroups.js';
+
+setNewsTrust({ trusted: true }); // these tests are about the calls once shown; newsTrust.test.js covers hidden
 
 const now = new Date('2026-10-30T12:00:00Z'); // 17:30 IST
 const rows = [

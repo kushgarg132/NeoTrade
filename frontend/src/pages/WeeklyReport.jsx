@@ -19,6 +19,8 @@ import { inr, pct, tone } from '../components/ui/format';
 import { stockPath } from '../utils/stocks';
 import { shiftWeek, weekRange } from '../utils/weekly';
 import { shareWeek } from '../utils/shareCard';
+import { newsTrust } from '../utils/newsTrust';
+import { useNewsTrust } from '../hooks/useNewsTrust';
 
 const act = 'inline-flex items-center min-h-11 px-4 rounded-[12px] bg-[var(--accent)] text-[var(--accent-ink)] text-[15px] font-semibold';
 const navCls = 'inline-flex items-center justify-center min-h-11 min-w-11 text-[var(--text-muted)] disabled:opacity-40';
@@ -50,7 +52,7 @@ const NewsWeek = ({ news }) => {
           <div className="flex flex-wrap gap-2">
             {news.themes.map((t) => (
               <Badge key={t.theme} kind="neutral">
-                {t.theme} · {t.n} {t.direction > 0.2 ? 'good' : t.direction < -0.2 ? 'bad' : 'mixed'}
+                {t.theme} · {t.n}{newsTrust().trusted ? ` ${t.direction > 0.2 ? 'good' : t.direction < -0.2 ? 'bad' : 'mixed'}` : ''}
               </Badge>
             ))}
           </div>
@@ -87,6 +89,7 @@ const ShareWeek = ({ week, you }) => {
 
 /** Last week for the user's own account; the same numbers Telegram sends on Sunday 18:00. */
 const WeeklyReport = () => {
+  useNewsTrust();
   const [params, setParams] = useSearchParams();
   const week = params.get('week');
   const { data: r, loading, error, reload } = useLoad(useCallback(

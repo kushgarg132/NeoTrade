@@ -117,6 +117,27 @@ def direction_trusted(report: Optional[dict], model: Optional[str]) -> bool:
     return bool(cell) and cell["n"] >= SCAN_MIN_N and cell["hit"] >= HIT_BAR
 
 
+def trust_status(report: Optional[dict], model: Optional[str]) -> dict:
+    """What GET /news/trust shows beside news: whether up/down calls are shown, and the
+    measured company 5-day hit rate of the scorer in use and of every scorer to date."""
+    def pick(group, key):
+        cell = next((c for c in (report or {}).get("cells") or [] if c["group"] == group and c["scope"] == "COMPANY"
+                     and c["key"] == key and c["impact"] == "all" and c["horizon"] == SCAN_HORIZON and c["measure"] == "move"), None)
+        return {"n": cell["n"], "hit": cell["hit"]} if cell else None
+
+    trusted, scorer, everyone = direction_trusted(report, model), pick("model", model), pick("theme", "all")
+    record = f"{scorer['hit']:.0%} of {scorer['n']:,}" if scorer else "not measured yet"
+    if trusted:
+        line = f"Company news called the 5-day move against NIFTY right {record} times."
+    else:
+        line = (f"Up/down calls are hidden until the news scorer calls the 5-day move against NIFTY right "
+                f"{HIT_BAR:.0%} of {SCAN_MIN_N}+ times. So far: {record}.")
+        if everyone:
+            line += f" Every scorer to date: {everyone['hit']:.0%} of {everyone['n']:,}."
+    return {"trusted": trusted, "as_of": (report or {}).get("as_of"), "model": model, "scorer": scorer,
+            "all": everyone, "bar": {"hit": HIT_BAR, "n": SCAN_MIN_N}, "line": line}
+
+
 async def news_direction_trusted(db) -> bool:
     """direction_trusted for the pinned news scorer; False when the report cannot be read."""
     from backend.llm_tasks import TASKS

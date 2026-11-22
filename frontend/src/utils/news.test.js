@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { setNewsTrust } from './newsTrust.js';
 import { badNewsSince, chipLabel, hasNews, lossCause, mergeFront, newsToday, resultsFlag, tone } from './news.js';
+
+setNewsTrust({ trusted: true }); // these tests are about the calls once shown; newsTrust.test.js covers hidden
 
 test('newsToday is a material item on the IST day; hasNews needs a headline', () => {
   const now = Date.parse('2026-10-26T10:00:00Z'); // 15:30 IST

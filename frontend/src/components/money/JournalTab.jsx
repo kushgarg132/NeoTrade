@@ -11,6 +11,8 @@ import Skeleton from '../ui/Skeleton';
 import Stat from '../ui/Stat';
 import { inr, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
+import { lean } from '../../utils/newsTrust';
+import { useNewsTrust } from '../../hooks/useNewsTrust';
 import GuardrailAlerts from '../journal/GuardrailAlerts';
 import BrokerPnl from '../dashboard/BrokerPnl';
 import LivePnl from '../journal/LivePnl';
@@ -37,17 +39,18 @@ const small = 'inline-flex items-center gap-1.5 min-h-11 px-3 rounded-[12px] bor
 
 /** The strongest scored news in the 24h before a trip's entry and exit (backend journal/news.py). */
 const tripNews = (t) => [['Entry', t.news], ['Exit', t.exit_news]].filter(([, n]) => n);
-const newsWord = (n) => (n.direction > 0 ? 'good news' : n.direction < 0 ? 'bad news' : 'news');
+const newsWord = (n) => (lean(n.direction) > 0 ? 'good news' : lean(n.direction) < 0 ? 'bad news' : 'news');
 const hoursBefore = (m) => (m < 60 ? `${m} min` : `${Math.round(m / 60)} h`);
 
 /** Small chips inside the trip row (a button, so no links here); the headlines show when it is tapped. */
 export const NewsChips = ({ trip }) => {
+  useNewsTrust();
   const items = tripNews(trip);
   if (items.length === 0) return null;
   return (
     <span className="flex flex-wrap gap-1.5 mt-1">
       {items.map(([label, n]) => (
-        <span key={label} className={`rounded-full bg-[var(--surface-2)] px-2 text-[12px] leading-5 ${toneText(tone(n.direction))}`}>
+        <span key={label} className={`rounded-full bg-[var(--surface-2)] px-2 text-[12px] leading-5 ${toneText(tone(lean(n.direction)))}`}>
           {label}: {newsWord(n)}
         </span>
       ))}
@@ -56,13 +59,14 @@ export const NewsChips = ({ trip }) => {
 };
 
 export const TripHeadlines = ({ trip }) => {
+  useNewsTrust();
   const items = tripNews(trip);
   if (items.length === 0) return null;
   return (
     <ul className="mb-2 space-y-1 text-[13px]">
       {items.map(([label, n]) => (
         <li key={label} className="text-[var(--text-muted)]">
-          <span className={toneText(tone(n.direction))}>{label}, {hoursBefore(n.minutes_before)} before: </span>
+          <span className={toneText(tone(lean(n.direction)))}>{label}, {hoursBefore(n.minutes_before)} before: </span>
           {n.id || n.url ? <NewsLink id={n.id} url={n.url} className="text-[var(--accent)] hover:underline">{n.headline || 'headline'}</NewsLink> : (n.headline || 'headline not stored')}
           <ImpactChips impacts={n.impacts} className="mt-0.5" />
         </li>

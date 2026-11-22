@@ -12,7 +12,8 @@ import api, { endpoints } from '../../utils/api';
 import { useReconnect, useTopic } from '../../hooks/useStream';
 import { formatTimeAgo } from '../../utils/formatters';
 import { materialToday } from '../../utils/market';
-import { Impact } from '../common/NewsImpacts';
+import { Impact, NewsTrustNote } from '../common/NewsImpacts';
+import { useNewsTrust } from '../../hooks/useNewsTrust';
 import { byDay, matchLean, mergeFront } from '../../utils/news';
 import ChipRow, { Chip } from '../ui/ChipRow';
 import { useAuth } from '../../context/AuthContext';
@@ -60,6 +61,7 @@ const News = () => {
   const [mine, setMine] = useState(!!user); // "My names" needs holdings and a watchlist: an account
   const [material, setMaterial] = useState(false);
   const [lean, setLean] = useState('');
+  const { trusted } = useNewsTrust(); // Bullish / Bearish only once the scorer's calls are shown
   const [text, setText] = useState(''); // what is typed
   const [query, setQuery] = useState(''); // what was searched, 300 ms after typing stops
   const [items, setItems] = useState(null);
@@ -116,10 +118,11 @@ const News = () => {
         )}
       </div>
       <ChipRow label="News scope" options={SCOPES} value={scope} onChange={pickScope} />
-      <ChipRow label="News lean" options={LEANS} value={lean} onChange={setLean} className="mt-1 pb-3">
-        <span aria-hidden="true" className="shrink-0 w-px my-2 bg-[var(--border)]" />
+      <ChipRow label="News lean" options={trusted ? LEANS : []} value={lean} onChange={setLean} className="mt-1 pb-3">
+        {trusted && <span aria-hidden="true" className="shrink-0 w-px my-2 bg-[var(--border)]" />}
         <Chip on={material} onClick={() => pickMaterial(!material)}>Material only</Chip>
       </ChipRow>
+      <NewsTrustNote className="pb-2" />
       {error ? <ErrorLine message="Could not load the news." onRetry={() => { setItems(null); load(); }} />
         : items === null ? <Skeleton rows={6} />
         : items.length === 0 && query ? (

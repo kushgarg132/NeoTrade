@@ -1,6 +1,7 @@
 import React from 'react';
 import { cn } from '../../utils/cn';
 import { chipLabel, tone } from '../../utils/news';
+import { useNewsTrust } from '../../hooks/useNewsTrust';
 import { ImpactChips, NewsLink } from './NewsImpacts';
 
 const TONE = { pos: 'text-up', neg: 'text-down', flat: 'text-[var(--text-muted)]' };
@@ -9,6 +10,7 @@ const TONE = { pos: 'text-up', neg: 'text-down', flat: 'text-[var(--text-muted)]
  * as on the News tab (`ImpactChips`). The headline opens the analysis page. `link={false}` inside a button row:
  * a link may not nest in a button. */
 const NewsChip = ({ entry, className, link = true }) => {
+  useNewsTrust();
   if (!entry) return null;
   return (
     <span className={cn('block text-[13px] text-[var(--text-muted)] max-w-[22rem]', className)}>

@@ -16,6 +16,7 @@ import { sectorPath } from '../utils/routes';
 import { sourceName, targetCalls } from '../utils/newsItem';
 import { formatDateTime, formatTimeAgo } from '../utils/formatters';
 import { impactWord } from '../utils/market';
+import { NewsTrustNote } from '../components/common/NewsImpacts';
 
 /** Stock and sector targets link to their pages; the market itself has none. */
 const targetLink = (i) => (i.type === 'symbol' ? stockPath(i.target) : i.type === 'sector' ? sectorPath(i.target) : null);
@@ -129,6 +130,7 @@ const NewsItem = () => {
               {judged.length > 0 && <span className="text-[13px] tabular-nums text-[var(--text-muted)]">{right} of {judged.length} played out</span>}
             </div>
             <p className="mt-0.5 text-[13px] text-[var(--text-muted)]">What the AI expected each name to do, then its move after 1 hour, 1 day and 5 days against the Nifty.</p>
+            <NewsTrustNote className="mt-1" />
             {calls.length
               ? <ul className="mt-3">{calls.map((c) => <Call key={`${c.type}-${c.target}`} c={c} />)}</ul>
               : <Empty title="Not scored yet" body="The call appears once the news desk has scored this story; moves fill in after 1 hour, 1 day and 5 days." />}

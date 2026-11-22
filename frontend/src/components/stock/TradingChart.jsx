@@ -8,6 +8,8 @@ import { usePrivacy } from '../../hooks/usePrivacy';
 import { toneText } from '../ui/tone';
 import PriceCanvas from './PriceCanvas';
 import NewsStrip from './NewsStrip';
+import { lean } from '../../utils/newsTrust';
+import { useNewsTrust } from '../../hooks/useNewsTrust';
 
 const INTRADAY_POLL_MS = 60_000;
 const IST = 'Asia/Kolkata';
@@ -95,10 +97,11 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
     return tradeMarkers(daily.bars, trades).filter((m) => have.has(m.date)).map((m) => ({ date: m.date, kind: m.side === 'SELL' ? 'sell' : 'buy' }));
   }, [days, bars, daily, trades]);
   const allNews = useMemo(() => (news?.symbol !== symbol ? [] : newsMarkers(bars, news.items)), [news, symbol, bars]);
+  const { trusted } = useNewsTrust();
   const newsDots = useMemo(() => (showNews ? allNews : []), [showNews, allNews]); // stable: markers feed the canvas
   const markers = useMemo(
-    () => [...tradeDots, ...newsDots.map((m) => ({ date: m.date, kind: 'news', direction: m.direction, impact: m.impact }))],
-    [tradeDots, newsDots],
+    () => [...tradeDots, ...newsDots.map((m) => ({ date: m.date, kind: 'news', direction: lean(m.direction), impact: m.impact }))],
+    [tradeDots, newsDots, trusted], // eslint-disable-line react-hooks/exhaustive-deps -- lean() reads the trust store
   );
   const pickedMark = pickedDay?.symbol === symbol ? newsDots.find((m) => m.date === pickedDay.date) : null;
   const pickBar = (bar) => setPinned((p) => (!bar || p?.date === bar.date ? null : { symbol, date: bar.date }));
@@ -184,8 +187,8 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
               <button type="button" onClick={() => pick(m.date)}
                 aria-label={`${m.count} news ${m.count === 1 ? 'item' : 'items'} on ${when(m.date, true)}: ${m.items[0].title}`}
                 className="min-h-11 px-3 rounded-full bg-[var(--surface-2)] text-[12px] font-medium tabular-nums inline-flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text)]">
-                <span aria-hidden="true" className={m.direction > 0 ? 'text-[var(--gain)]' : m.direction < 0 ? 'text-[var(--loss)]' : ''}>
-                  {m.direction > 0 ? '▲' : m.direction < 0 ? '▼' : '◆'}
+                <span aria-hidden="true" className={lean(m.direction) > 0 ? 'text-[var(--gain)]' : lean(m.direction) < 0 ? 'text-[var(--loss)]' : ''}>
+                  {['▼', '◆', '▲'][lean(m.direction) + 1]}
                 </span>
                 {when(m.date, range === '1W')}{m.count > 1 ? ` · ${m.count}` : ''}
               </button>

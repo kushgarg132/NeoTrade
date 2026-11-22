@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { setNewsTrust } from './newsTrust.js';
 import { rankPicks, pickStatus } from './ideas.js';
+
+setNewsTrust({ trusted: true }); // these tests are about the calls once shown; newsTrust.test.js covers hidden
 
 const p = (id, grade, pUp, med, extra = {}) => ({ id, kind: 'p', grade, pUp, expectedMedian: med, ...extra });
 

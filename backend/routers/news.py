@@ -113,6 +113,21 @@ async def news_item(item_id: str, user: Optional[User] = Depends(get_optional_us
     return {**as_feed_item(item), "outcomes": rows}
 
 
+@router.get("/news/trust")
+async def news_trust(_user: Optional[User] = Depends(get_optional_user)):
+    """Whether the UI may show news up/down calls, and the measured hit rate to show beside news
+    (accuracy.trust_status). Public: the figure is the same for everyone."""
+    from backend.database import db
+    from backend.datalayer import accuracy
+    from backend.llm_tasks import TASKS
+
+    report = await db.db[accuracy.COLLECTION].find_one({"_id": "latest"})
+    out = accuracy.trust_status(report, TASKS["news.score"].model)
+    if out["as_of"] is not None and out["as_of"].tzinfo is None:  # Mongo hands back naive UTC
+        out["as_of"] = out["as_of"].replace(tzinfo=timezone.utc)
+    return out
+
+
 @router.get("/news/accuracy")
 async def news_accuracy(refresh: bool = False, _admin: User = Depends(require_admin)):
     """The latest news accuracy report (datalayer/accuracy.py), built weekly

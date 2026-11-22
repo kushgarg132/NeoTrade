@@ -1,5 +1,6 @@
 // What the news layer says about a stock, for list pages (GET /news/symbols).
 import { newsLean } from './stock.js';
+import { lean } from './newsTrust.js';
 
 const finite = (x) => typeof x === 'number' && Number.isFinite(x);
 const BAND = 0.2;
@@ -7,7 +8,7 @@ const BAND = 0.2;
 /** 'pos' | 'neg' | 'flat' from sentiment, else from the headline's direction; null without either. */
 export const tone = (entry) => {
   if (!entry) return null;
-  const value = finite(entry.sentiment) ? entry.sentiment : finite(entry.direction) ? entry.direction : null;
+  const value = finite(entry.sentiment) ? entry.sentiment : lean(entry.direction) ? entry.direction : null;
   if (value === null) return null;
   return value >= BAND ? 'pos' : value <= -BAND ? 'neg' : 'flat';
 };
@@ -19,7 +20,7 @@ export const chipLabel = (entry) => {
   return `News ${v < 0 ? '−' : '+'}${Math.abs(v).toFixed(1)}`;
 };
 
-const badNews = (entry) => !!entry?.material && finite(entry.direction) && entry.direction < 0;
+const badNews = (entry) => !!entry?.material && lean(entry?.direction) < 0;
 
 /** The IST calendar day ("2026-10-26") of a timestamp, or null. */
 export const istDay = (at) => {
@@ -36,7 +37,7 @@ export const hasNews = (entry) => !!entry?.headline;
 
 /** A pick's "bad news since signal": a strong negative item (direction <= -0.5, impact >= 7) dated after the
  * IST day it fired. Reads only the stock's latest material item, so a later good one can hide an older bad one. */
-export const badNewsSince = (entry, firedOn) => !!firedOn && finite(entry?.direction) && entry.direction <= -0.5
+export const badNewsSince = (entry, firedOn) => !!firedOn && lean(entry?.direction) < 0 && entry.direction <= -0.5
   && finite(entry.impact) && entry.impact >= 7 && (istDay(entry.published_at) || '') > firedOn;
 
 /** "Results in 6 days" when the next results date (YYYY-MM-DD) falls inside the idea's horizon
@@ -61,10 +62,10 @@ export const mergeFront = (cur, fresh) => {
 };
 
 /** A feed item whose strongest impact points `lean` ('up' | 'down'); '' keeps every item. */
-export const matchLean = (item, lean) => {
-  if (!lean) return true;
-  const d = newsLean(item).direction;
-  return lean === 'up' ? d > 0 : d < 0;
+export const matchLean = (item, want) => {
+  if (!want) return true;
+  const d = lean(newsLean(item).direction);
+  return want === 'up' ? d > 0 : d < 0;
 };
 
 /** Feed items (newest first) under IST-day headers: [{ day, label, items }], label 'Today' / 'Yesterday' / 'Thu 29 Oct'. */

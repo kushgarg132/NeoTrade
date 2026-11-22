@@ -34,6 +34,7 @@ PUBLIC = {
     ("GET", "/api/v1/news/symbols"),
     ("GET", "/api/v1/news/symbol/{symbol}"),
     ("GET", "/api/v1/news/results"),
+    ("GET", "/api/v1/news/trust"),
     ("GET", "/api/v1/agents/intraday/{symbol}"),
     ("POST", "/api/v1/agents/quick-analyze/{symbol}"),
     ("GET", "/api/v1/trading/instruments"),

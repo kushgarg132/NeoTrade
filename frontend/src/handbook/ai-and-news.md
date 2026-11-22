@@ -197,6 +197,14 @@ positions, broker holdings and the watchlist — filings that move nothing left 
 `NewsChip` on Holdings, Watchlist and Ideas (`GET /news/symbols`), and Today's
 Markets card.
 
+**Up/down calls stay hidden until they are measured right.** `GET /news/trust`
+(`accuracy.py::trust_status`) says whether the pinned scorer has passed the bar above and gives
+its measured record as one line, shown on Market → News, a stock's News tab and each story page.
+Until it passes, `frontend/src/utils/newsTrust.js::lean` turns every direction into "no call":
+no ↑/↓ or green/red on impacts, chart dots, the stock news strip, the alert toast, journal news
+chips or weekly themes; no Bullish/Bearish or Positive/Negative filters; no "drop after news" on
+tax-loss rows. Each story page still shows the scorer's call next to what then happened.
+
 <!-- live:news -->
 
 ### The filing lane
