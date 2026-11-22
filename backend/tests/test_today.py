@@ -250,7 +250,12 @@ def test_attention_counts_what_needs_the_user_but_not_practice_proposals(monkeyp
                         "mode": "LONGTERM", "quantity": 1, "expires_at": NOW + timedelta(days=1), "created_at": NOW}],
           chat_actions=[{"id": "c1", "user_id": "alice", "status": "PROPOSED", "summary": "Sell 10 INFY",
                          "expires_at": NOW + timedelta(minutes=10), "created_at": NOW}])
-    assert client.get("/api/v1/today/attention").json() == {"count": 2}  # Kite login + the card
+    body = client.get("/api/v1/today/attention").json()
+    assert body["count"] == 2  # Kite login + the card
+    # The shell's status strip: the same accounts, kill switch and live-armed facts /today carries.
+    assert body["accounts"]["ai"]["state"] != "ACTIVE" and body["accounts"]["mine"]["state"] == "ACTIVE"
+    assert body["kill_switch"] == {"tripped": False, "reason": None}
+    assert body["live_armed"] == {"autopilot": False, "strategies": []}
 
 
 def test_a_broker_reconciliation_mismatch_is_a_do_today_item(monkeypatch):

@@ -328,7 +328,8 @@ async def attention(user: User = Depends(get_current_user), broker_states=Depend
     from backend.risk.kill_switch import KillSwitchStore
 
     now = datetime.now(timezone.utc)
-    roles = (await PrefsStore(db.db).get(user.id)).get("broker_roles") or {}
+    prefs = await PrefsStore(db.db).get(user.id)
+    roles = prefs.get("broker_roles") or {}
     try:
         accounts = await _accounts(roles, user.id, broker_states)
     except Exception as exc:
@@ -336,7 +337,11 @@ async def attention(user: User = Depends(get_current_user), broker_states=Depend
         accounts = None
     tripped = await KillSwitchStore(db.db).is_tripped(user.id, now.astimezone(IST).date())
     kill = {"tripped": bool(tripped), "reason": (tripped or {}).get("reason")}
-    return {"count": len(await _needs_you(user.id, accounts, kill, now, user.role == "admin"))}
+    # The shell's status strip reads the same three facts /today alerts on, on every page.
+    return {"count": len(await _needs_you(user.id, accounts, kill, now, user.role == "admin")),
+            "accounts": accounts or {}, "kill_switch": kill,
+            "live_armed": {"autopilot": bool(prefs.get("autopilot_enabled") and prefs.get("autopilot_live")),
+                           "strategies": prefs.get("live_strategies") or []}}
 
 
 @router.get("/reconciliation")
