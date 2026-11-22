@@ -2,8 +2,8 @@ import { Home, Wallet, Lightbulb, Bot, Newspaper } from 'lucide-react';
 
 /** The five primary destinations (phone bottom tabs, desktop side rail). `counter` names a Layout count. */
 export const MAIN_TABS = [
-  { icon: Home, label: 'Home', path: '/', counter: 'attention' },
-  { icon: Wallet, label: 'Money', path: '/money' },
+  { icon: Home, label: 'Today', section: 'home', path: '/', counter: 'attention' },
+  { icon: Wallet, label: 'Portfolio', section: 'money', path: '/money' },
   { icon: Lightbulb, label: 'Ideas', path: '/ideas', counter: 'pending' },
   { icon: Bot, label: 'AI', path: '/ai' },
   { icon: Newspaper, label: 'Market', path: '/market' },
@@ -17,5 +17,8 @@ export const tabActive = (item, pathname) =>
 
 /** The main section a path belongs to, for its colour (index.css `[data-section]`): the active tab's, else
  *  Home's (stock pages, settings and the rest open from anywhere). */
-export const sectionOf = (pathname) =>
-  (MAIN_TABS.find((t) => tabActive(t, pathname))?.label || 'Home').toLowerCase();
+// `section` keeps the CSS name (index.css `[data-section]`) when a tab's label changed.
+export const sectionOf = (pathname) => {
+  const t = MAIN_TABS.find((x) => tabActive(x, pathname));
+  return (t?.section || t?.label || 'home').toLowerCase();
+};

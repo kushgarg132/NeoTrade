@@ -14,6 +14,7 @@ import GoalTile from '../components/home/GoalTile';
 import WeeklyLink from '../components/home/WeeklyLink';
 import SinceCard from '../components/home/SinceCard';
 import NeedsYou from '../components/home/NeedsYou';
+import StopAi from '../components/ai/StopAi';
 import { pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import SetupChecklist from '../components/home/SetupChecklist';
@@ -28,18 +29,8 @@ import useLivePoll from '../hooks/useLivePoll';
 import { useAuth } from '../context/AuthContext';
 import { useNeedCount } from '../hooks/useNeedCount';
 import { aiBook } from '../utils/ai';
-import { tileHeadlines, phaseLabel, briefKind, alerts, todayTitle, nextOpenLabel } from '../utils/home';
+import { tileHeadlines, phaseLabel, briefKind, todayTitle, nextOpenLabel } from '../utils/home';
 import { REFRESH_FAILED, formatTimeAgo } from '../utils/formatters';
-
-/** An expired-login alert goes straight to that broker's login, in this tab: iOS blocks a pop-up opened
- * after an await, and the broker's redirect lands on Settings -> Accounts, which finishes the connect.
- * If the URL cannot be built, the link's own target (Accounts) still opens. */
-const openBrokerLogin = (e, a) => {
-  e.preventDefault();
-  api.get(endpoints.broker.loginUrl(a.login))
-    .then((res) => window.location.assign(res.data.url))
-    .catch(() => window.location.assign(a.to));
-};
 
 /** The indices as a row of chips, each opening its page. */
 const IndexStrip = ({ rows }) => rows.length > 0 && (
@@ -98,6 +89,7 @@ const MemberHome = () => {
   const [day, setDay] = useState(undefined); // undefined until the AI day summary has answered (null = none)
   const [error, setError] = useState(null);
   const [failed, setFailed] = useState({}); // tile -> its last refresh failed
+  const [stopped, setStopped] = useState(false); // Stop AI tapped here: hide Stop before /today re-reads
   const need = useNeedCount();
   const isAdmin = useAuth().user?.role === 'admin';
   const reloadNeed = need.reload;
@@ -136,48 +128,43 @@ const MemberHome = () => {
     const kind = briefKind(today.phase);
     const headline = overview?.headline || today.pulse;
     const opens = today.phase !== 'session' && nextOpenLabel(today.next_open);
+    const aiOn = !!today.autopilot?.enabled && !stopped;
     return (
       <div className="space-y-5">
-        <div className="space-y-2">
-          <p className="flex items-center gap-2 min-h-8 text-[14px] font-medium text-[var(--text-muted)]">
-            <span aria-hidden="true" className={`w-2 h-2 rounded-full ${today.phase === 'session' ? 'bg-[var(--gain)]' : 'bg-[var(--text-muted)]'}`} />
-            {phaseLabel(today.phase)}{opens && ` · ${opens}`}
-          </p>
-          {alerts(today).map((a) => (
-            <Link key={a.id} to={a.to} role="alert" onClick={a.login ? (e) => openBrokerLogin(e, a) : undefined}
-                  style={{ background: 'color-mix(in oklab, var(--warn) 14%, var(--surface))' }}
-                  className="flex items-center justify-between gap-3 min-h-11 rounded-[12px] px-3 py-2 text-[14px] font-medium text-[var(--warn)] tap">
-              <span>{a.text}</span>
-              <span className="shrink-0 font-semibold underline">{a.action}</span>
-            </Link>
-          ))}
-        </div>
+        {/* Kill switch, live armed and expired logins are the shell's status strip (Layout), on every page. */}
+        <p className="flex items-center gap-2 min-h-8 text-[14px] font-medium text-[var(--text-muted)]">
+          <span aria-hidden="true" className={`w-2 h-2 rounded-full ${today.phase === 'session' ? 'bg-[var(--gain)]' : 'bg-[var(--text-muted)]'}`} />
+          {phaseLabel(today.phase)}{opens && ` · ${opens}`}
+        </p>
         <HeroRow headline={headline} nifty={nifty} phase={today.phase} failed={failed.money} onRetry={load} meta={meta('money', h.money.meta)}>
           <GoalTile compact />
         </HeroRow>
         <SetupChecklist setup={today.setup} />
         <NeedsYou need={need} isAdmin={isAdmin} onDone={load} />
-        {/* Its moves and lines come from three answers; drawn once they are all in, not swapped a second later. */}
-        {day !== undefined && (overview || failed.money)
-          ? <TodayCard moves={headline?.news_moves} kind={kind} text={kind ? today[kind] : undefined} summary={day} />
-          : <Card title={todayTitle(kind)}><Skeleton rows={3} /></Card>}
-        <SinceCard changes={today.changes} headline={headline} phase={today.phase} />
-        <section aria-label="You, the AI and the market" className="space-y-2">
-          <Link to="/ai" className="tap flex items-center gap-3 min-h-14 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+        {/* The third glance question, "is anything running I should stop?", answered next to the first two. */}
+        <section aria-label="AI account" className="flex flex-wrap items-center gap-3 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <Link to="/ai" className="tap flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
             <Bot className="w-5 h-5 shrink-0 text-[var(--accent)]" aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--text)]">
                 AI account <Badge kind={today.autopilot?.live ? 'live' : 'paper'}>{today.autopilot?.live ? 'Live' : 'Paper'}</Badge>
               </div>
               <div className="text-[13px] tabular-nums text-[var(--text-muted)] truncate">
-                {h.ai.value === '—' ? 'Start the AI account' : <><span className="private">{h.ai.value}</span> · <span className={toneText(h.ai.subTone)}>{h.ai.sub}</span></>}
+                {today.autopilot ? `Autopilot ${aiOn ? 'on' : 'off'}` : 'Autopilot unknown'}
+                {h.ai.value !== '—' && <> · <span className="private">{h.ai.value}</span> · <span className={toneText(h.ai.subTone)}>{h.ai.sub}</span></>}
                 {failed.ai && ` · ${REFRESH_FAILED.text}`}
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+            {!aiOn && <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />}
           </Link>
-          <IndexStrip rows={rows} />
+          {aiOn && <StopAi compact onStopped={() => { setStopped(true); load(); }} />}
         </section>
+        {/* Its moves and lines come from three answers; drawn once they are all in, not swapped a second later. */}
+        {day !== undefined && (overview || failed.money)
+          ? <TodayCard moves={headline?.news_moves} kind={kind} text={kind ? today[kind] : undefined} summary={day} />
+          : <Card title={todayTitle(kind)}><Skeleton rows={3} /></Card>}
+        <SinceCard changes={today.changes} headline={headline} phase={today.phase} />
+        <IndexStrip rows={rows} />
         <WeeklyLink />
       </div>
     );

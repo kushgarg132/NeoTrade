@@ -20,7 +20,7 @@ import JournalTab from '../components/money/JournalTab';
 import api, { endpoints } from '../utils/api';
 import { useReconnect } from '../hooks/useStream';
 import { formatXirr, holdingsStale } from '../utils/mine';
-import { formatDateTime } from '../utils/formatters';
+import { asOf, formatDateTime } from '../utils/formatters';
 import useLivePoll from '../hooks/useLivePoll';
 
 const LIVE_POLL_MS = 10_000;
@@ -50,13 +50,17 @@ const Money = () => {
   useReconnect(load);
 
   const h = overview?.headline;
+  // When the value was read: "as of 14:02" in session, "Market closed · last close" after (the Stale badge covers a logged-out broker).
+  const fresh = error && h ? { text: "Couldn't refresh", stale: true } : asOf(h?.as_of);
   const xirrAhead = typeof h?.xirr === 'number' && typeof h?.nifty_xirr === 'number' ? h.xirr - h.nifty_xirr : null;
   return (
     <Layout>
-      <PageHeader title="Money" />
+      <PageHeader title="Portfolio" />
       <div className="space-y-4">
         {h ? (
-          <Hero label="Your broker account" value={h.value} change={<DeltaChip value={h.day_change} pct={h.day_change_pct} suffix="today" />}>
+          <Hero label="Your account" value={h.value}
+            action={!holdingsStale(h.holdings_as_of) && fresh && <span className={`text-[12px] tabular-nums ${fresh.stale ? 'text-[var(--warn)]' : 'text-[var(--text-muted)]'}`}>{fresh.text}</span>}
+            change={<DeltaChip value={h.day_change} pct={h.day_change_pct} suffix="today" />}>
             {holdingsStale(h.holdings_as_of) && (
               <div className="mt-3"><Badge kind="unproven">Stale · {formatDateTime(h.holdings_as_of)}</Badge></div>
             )}
@@ -93,7 +97,7 @@ const Money = () => {
           </Card>
         )}
 
-        <Tabs tabs={TABS} value={tab} onChange={setTab} label="Money sections" />
+        <Tabs tabs={TABS} value={tab} onChange={setTab} label="Portfolio sections" />
 
         {tab === 'overview' && <OverviewTab headline={h} overview={overview} />}
         {tab === 'holdings' && <HoldingsTab />}

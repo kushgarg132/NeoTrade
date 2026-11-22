@@ -27,7 +27,7 @@ test('stale holdings show a warning badge above the figure', () => {
 });
 
 test('page says these are your own broker figures', () => {
-  assert.match(page, /Your broker account/);
+  assert.match(page, /Your account/);
 });
 
 test('headline carries total P&L, private', () => {
@@ -70,7 +70,7 @@ test('holdings rows never truncate the ticker or the verdict', () => {
 test('headline is a Hero with a today chip, no Today Stat', () => {
   assert.match(page, /import Hero from/);
   assert.match(page, /import DeltaChip from/);
-  assert.match(page, /<Hero[^>]*label="Your broker account"/);
+  assert.match(page, /<Hero[^>]*label="Your account"/);
   assert.match(page, /suffix="today"/);
   assert.doesNotMatch(page, /label="Today"/);
   assert.match(page, /Yearly \(XIRR\)/);

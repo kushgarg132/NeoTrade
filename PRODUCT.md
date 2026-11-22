@@ -63,7 +63,13 @@ stop?"*
 
 ## Surfaces
 
-Navigation (since 2026-10-19, the daily workstation): **Today · Picks · AI · Portfolio · Journal · Lab**.
+Navigation as built (2026-11-22, `frontend/src/components/layout/tabs.js::MAIN_TABS`): **Today · Portfolio · Ideas · AI ·
+Market**. Ideas (engine suggestions and Picks) is admin only, so a normal user sees four tabs. Portfolio lives at
+`/money` (Overview · Holdings · Tax · Journal; Journal holds Trades · Habits · Guardrails); Lab is under Settings → Admin.
+The kill switch, live money armed and expired broker logins show as a status strip under the header on every
+page (`components/layout/StatusStrip.jsx`, fed by `GET /today/attention`). The paragraph below is the 2026-10-19
+plan the tabs grew from; read its names through the mapping it gives.
+Navigation (2026-10-19 plan): **Today · Picks · AI · Portfolio · Journal · Lab**.
 Picks and Lab are admin only, so a normal user sees four tabs (the same on the phone's bottom bar).
 Portfolio is the trader's own account (Overview · Holdings · Tax · News · Watchlist · Import, plus one
 page per stock at `/stock/:symbol`; the badge counts open "Needs you" items); Journal holds Trades ·

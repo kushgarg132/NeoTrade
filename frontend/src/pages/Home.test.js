@@ -54,7 +54,7 @@ test('Home: AI tile label follows autopilot.live, Market tile says data is unava
 });
 
 test('a login alert opens the broker login in this tab (an iOS pop-up after await is blocked)', () => {
-  const src = readFileSync(new URL('./Home.jsx', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../components/layout/StatusStrip.jsx', import.meta.url), 'utf8');
   const acc = readFileSync(new URL('../components/settings/Accounts.jsx', import.meta.url), 'utf8');
   assert.match(src, /endpoints\.broker\.loginUrl\(a\.login\)/);
   assert.match(src, /window\.location\.assign\(res\.data\.url\)/);
@@ -71,19 +71,29 @@ test('every unfinished setup step can be skipped, saved to the account, and undo
   assert.match(setup, /min-h-11 min-w-11/);
 });
 
-test('Home order: status and alerts, hero with the goal, setup, needs you, today card, AI and indices, weekly', () => {
-  const at = ['phaseLabel(today.phase)', 'alerts(today)', '<HeroRow', '<GoalTile compact', '<SetupChecklist', '<NeedsYou', '<TodayCard', 'AI account', '<IndexStrip rows={rows}', '<WeeklyLink'].map((s) => page.indexOf(s));
+test('Home order: status, hero with the goal, setup, needs you, AI with Stop, today card, indices, weekly', () => {
+  const at = ['phaseLabel(today.phase)', '<HeroRow', '<GoalTile compact', '<SetupChecklist', '<NeedsYou', 'AI account', '<StopAi compact', '<TodayCard', '<IndexStrip rows={rows}', '<WeeklyLink'].map((s) => page.indexOf(s));
   assert.ok(at.every((i) => i >= 0), at.join());
   assert.deepEqual([...at].sort((a, b) => a - b), at);
   assert.doesNotMatch(page, /NewsMoves|BriefCard/);
 });
 
-test('alerts: tap, soft warn fill (red is kept for money), role and login kept', () => {
-  assert.match(page, /role="alert"/);
-  assert.match(page, /openBrokerLogin/);
-  assert.match(page, /var\(--warn\) 14%/);
+test('alerts live in the shell status strip on every page, not on Home: tap, soft fill, role and login kept', () => {
+  const strip = readFileSync(new URL('../components/layout/StatusStrip.jsx', import.meta.url), 'utf8');
+  const layout = readFileSync(new URL('../components/Layout.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(page, /alerts\(today\)|openBrokerLogin/);
   assert.doesNotMatch(page, /var\(--loss/);
-  assert.match(page, /text-\[var\(--warn\)\] tap/);
+  assert.match(layout, /<StatusStrip items=\{statusAlerts\(attention\)\}/);
+  assert.match(layout, /\.catch\(\(\) => \{\}\)/); // a failed read keeps the last strip
+  assert.match(strip, /role="alert"/);
+  assert.match(strip, /openBrokerLogin/);
+  assert.match(strip, /a\.danger \? '--loss' : '--warn'/); // only the kill switch is red
+});
+
+test('Home AI row: Stop sits beside the link, never inside it', () => {
+  const row = page.slice(page.indexOf('aria-label="AI account"'), page.indexOf('</section>', page.indexOf('aria-label="AI account"')));
+  assert.ok(row.indexOf('</Link>') < row.indexOf('<StopAi'));
+  assert.match(row, /aiOn && <StopAi compact/);
 });
 
 test('the Today card draws once its three sources are in, not swapped a second later', () => {

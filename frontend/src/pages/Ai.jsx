@@ -19,6 +19,7 @@ import { useRefetchOn, useReconnect, useTopic } from '../hooks/useStream';
 import useLivePoll from '../hooks/useLivePoll';
 import { inr } from '../components/ui/format';
 import { aiBook } from '../utils/ai';
+import { asOf } from '../utils/formatters';
 
 const IDS = ['scoreboard', 'positions', 'activity'];
 const TABS = [{ id: 'scoreboard', label: 'Scoreboard' }, { id: 'positions', label: 'Positions' }, { id: 'activity', label: 'Activity' }];
@@ -27,7 +28,7 @@ const TABS = [{ id: 'scoreboard', label: 'Scoreboard' }, { id: 'positions', labe
 const useLoad = (fetcher) => {
   const [s, setS] = useState({ loaded: false, error: false, data: null });
   const load = useCallback(() => {
-    fetcher().then((data) => setS({ loaded: true, error: false, data }))
+    fetcher().then((data) => setS({ loaded: true, error: false, data, at: Date.now() }))
       .catch(() => setS((p) => ({ ...p, loaded: true, error: true })));
   }, [fetcher]);
   useEffect(load, [load]);
@@ -66,13 +67,26 @@ const Ai = () => {
   const ap = today.data?.autopilot;
   const on = ap?.enabled && !stopped;
   const { value, day, dayPct } = aiBook({ autopilot: ap, pnl: pnl.data, card: card.data });
+  const kill = today.data?.kill_switch;
+  const open = Object.values(positions.data || {}).filter((p) => p.quantity).length;
+  // When the book was last read: "as of 14:02" in session, "Market closed · last close" after; a failed re-read says so.
+  const fresh = pnl.error ? { text: "Couldn't refresh", stale: true } : asOf(pnl.at);
 
   return (
     <Layout>
       <PageHeader title="AI" />
       <div className="mb-3">
         {!today.loaded || !pnl.loaded ? <Card><Skeleton rows={2} /></Card> : (
-          <Hero label="AI book" value={value} change={<DeltaChip value={day} pct={typeof dayPct === 'number' ? dayPct * 100 : undefined} suffix="today" />}>
+          <Hero label="AI book" value={value}
+            action={fresh && <span className={`text-[12px] tabular-nums ${fresh.stale ? 'text-[var(--warn)]' : 'text-[var(--text-muted)]'}`}>{fresh.text}</span>}
+            change={<DeltaChip value={day} pct={typeof dayPct === 'number' ? dayPct * 100 : undefined} suffix="today" />}>
+            {kill?.tripped && (
+              <p role="alert" className="mt-3 rounded-[12px] px-3 py-2 text-[14px] font-medium text-[var(--loss)]"
+                 style={{ background: 'color-mix(in oklab, var(--loss) 14%, var(--surface))' }}>
+                Daily loss limit hit{kill.reason ? ` (${kill.reason})` : ''}: live trading stopped for today. It does not re-arm on its own.
+                {positions.loaded && !positions.error && ` ${open ? `${open} position${open === 1 ? '' : 's'} still open, see Positions.` : 'No positions open.'}`}
+              </p>
+            )}
             {!ap ? <div className="mt-3"><ErrorLine message="Couldn't load the autopilot status." onRetry={today.retry} /></div> : (
               <>
                 <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-3">

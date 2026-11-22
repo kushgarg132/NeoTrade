@@ -57,8 +57,9 @@ test('alerts only when something needs attention', () => {
   assert.deepEqual(alerts(null), []);
   assert.deepEqual(alerts({ accounts: { mine: { broker: 'kite', state: 'ACTIVE' } }, live_armed: { autopilot: false, strategies: [] }, kill_switch: { tripped: false } }), []);
   const a = alerts({ accounts: { mine: { broker: 'kite', state: 'EXPIRED' } }, live_armed: { autopilot: true, strategies: ['x'] }, kill_switch: { tripped: true } });
-  assert.deepEqual(a.map((x) => x.id), ['login-mine', 'kill', 'live']);
-  assert.equal(a[2].to, '/ai');
+  assert.deepEqual(a.map((x) => x.id), ['kill', 'live', 'login-mine']); // most severe first
+  assert.equal(a[1].to, '/ai');
+  assert.deepEqual(a.map((x) => !!x.danger), [true, false, false]); // only the kill switch is red
 });
 
 test('outside the session the day change is the last session, and tiles carry freshness', () => {

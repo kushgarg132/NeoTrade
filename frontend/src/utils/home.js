@@ -70,19 +70,20 @@ export const newsWhy = (m) => {
 
 const BROKERS = { kite: 'Kite', upstox: 'Upstox', angel_one: 'Angel One' };
 
-/** What on Home needs attention right now: a broker login that expired, the kill switch, live money armed. */
+/** What needs attention on every page (GET /today/attention or /today), most severe first: the kill switch,
+ *  live money armed, then each broker login that expired. `danger` marks the kill switch, the one red strip. */
 export const alerts = (today) => {
   const t = today || {};
   const out = [];
-  for (const [role, info] of Object.entries(t.accounts || {})) {
-    if (info?.state !== 'ACTIVE') {
-      out.push({ id: `login-${role}`, text: `${BROKERS[info.broker] || info.broker || 'Broker'}${role === 'ai' ? ' (AI)' : ''} login expired`, to: '/settings/brokers', login: info.broker, action: 'Log in' });
-    }
-  }
-  if (t.kill_switch?.tripped) out.push({ id: 'kill', text: 'Daily loss limit hit: live trading stopped', to: '/ai', action: 'See AI' });
+  if (t.kill_switch?.tripped) out.push({ id: 'kill', text: 'Daily loss limit hit: live trading stopped', to: '/ai', action: 'See AI', danger: true });
   const armed = t.live_armed;
   if (armed?.autopilot || armed?.strategies?.length) {
-    out.push({ id: 'live', text: `Live money armed${armed.autopilot ? ': autopilot' : ''}${armed.strategies?.length ? ` · ${armed.strategies.length} strateg${armed.strategies.length === 1 ? 'y' : 'ies'}` : ''}`, to: '/ai', action: 'Stop', danger: true });
+    out.push({ id: 'live', text: `Live money armed${armed.autopilot ? ': autopilot' : ''}${armed.strategies?.length ? ` · ${armed.strategies.length} strateg${armed.strategies.length === 1 ? 'y' : 'ies'}` : ''}`, to: '/ai', action: 'Stop' });
+  }
+  for (const [role, info] of Object.entries(t.accounts || {})) {
+    if (info && info.state !== 'ACTIVE') {
+      out.push({ id: `login-${role}`, text: `${BROKERS[info.broker] || info.broker || 'Broker'}${role === 'ai' ? ' (AI)' : ''} login expired`, to: '/settings/brokers', login: info.broker, action: 'Log in' });
+    }
   }
   return out;
 };
