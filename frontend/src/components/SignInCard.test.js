@@ -15,8 +15,9 @@ test('GoogleButton owns the sign-in call and error display', () => {
   assert.doesNotMatch(src, /-wash\)/);
 });
 
-test('no navigation inside the card; uses ui Card and beta line', () => {
+test('no navigation inside the card; uses ui Card and the advice line', () => {
   assert.doesNotMatch(src, /useNavigate|navigate\(/);
   assert.match(src, /ui\/Card/);
-  assert.match(src, /Free while in beta\. Not investment advice\./);
+  assert.match(src, /Not investment advice\./);
+  assert.doesNotMatch(src, /Free while in beta/); // a private workstation, not a beta offer
 });

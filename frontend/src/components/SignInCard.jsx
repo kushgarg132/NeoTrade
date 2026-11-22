@@ -48,7 +48,7 @@ const SignInCard = ({ title, body }) => (
   <Card title={title}>
     <p className="text-sm text-[var(--text-muted)] mb-4">{body}</p>
     <GoogleButton />
-    <p className="mt-4 text-xs text-[var(--text-muted)] text-center">Free while in beta. Not investment advice.</p>
+    <p className="mt-4 text-xs text-[var(--text-muted)] text-center">Not investment advice.</p>
   </Card>
 );
 

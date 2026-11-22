@@ -203,7 +203,7 @@ const HoldingActions = ({ actions, onChanged }) => {
                   <div className="w-12 shrink-0 rounded-[12px] bg-[var(--surface-2)] py-1.5 text-center tabular-nums" aria-hidden={d ? 'true' : undefined}>
                     {d ? (
                       <>
-                        <div className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--text-muted)]">{d.dow}</div>
+                        <div className="text-[12px] font-medium uppercase tracking-[0.04em] text-[var(--text-muted)]">{d.dow}</div>
                         <div className="text-[17px] font-bold leading-tight text-[var(--text)]">{d.day}</div>
                         <div className="text-[12px] text-[var(--text-muted)]">{d.month}</div>
                       </>

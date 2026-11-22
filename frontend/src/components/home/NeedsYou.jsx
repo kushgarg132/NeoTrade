@@ -68,7 +68,7 @@ const NeedsYou = ({ need, isAdmin, onDone }) => {
                     b.primary.label === 'Sell' ? 'bg-[var(--loss-soft)] text-[var(--loss)]' : 'bg-[var(--gain-soft)] text-[var(--gain)]'
                   }`}
                 >
-                  <span className="text-[10px] font-extrabold tracking-[0.08em] uppercase leading-none">{b.primary.label}</span>
+                  <span className="text-[12px] font-extrabold tracking-[0.06em] uppercase leading-none">{b.primary.label}</span>
                   <span className="text-[17px] font-extrabold leading-none tabular-nums">{lead.action.quantity}</span>
                 </button>
               )}

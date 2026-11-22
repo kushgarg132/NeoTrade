@@ -20,7 +20,7 @@ import Tabs, { useTabParam } from '../components/ui/Tabs';
 import ListRow from '../components/ui/ListRow';
 import TradingChart from '../components/stock/TradingChart';
 import IndexStocks from '../components/market/IndexStocks';
-import { newsPath } from '../utils/routes';
+import { indexPath, newsPath } from '../utils/routes';
 import { formatTimeAgo, marketPhase } from '../utils/formatters';
 import { rangeAt } from '../utils/market';
 import { sourceName } from '../utils/newsItem';
@@ -168,6 +168,23 @@ const Details = ({ data }) => {
 
 /** /market/index/:ticker, laid out as a stock page: the level and its day on top with the 52-week range, the AI's
  *  read of the last session, then Chart (1D intraday to 5Y), Stocks (when a member list is kept), News and Details. */
+/** An unknown index: the ones that are tracked, each a tap away, instead of a dead end. */
+const TrackedIndices = () => {
+  const [rows, setRows] = useState(null);
+  useEffect(() => { api.get(endpoints.marketIndices).then((r) => setRows(Array.isArray(r.data) ? r.data : [])).catch(() => setRows([])); }, []);
+  return (
+    <Empty title="Not found" body="This index is not tracked. These are:"
+      action={(
+        <span className="flex flex-wrap justify-center gap-2">
+          {(rows || []).filter((r) => r.symbol).map((r) => (
+            <Link key={r.symbol} to={indexPath(r.symbol)} className="tap inline-flex min-h-11 items-center rounded-[12px] bg-[var(--surface-2)] px-3 text-[14px] font-semibold text-[var(--text)]">{r.name}</Link>
+          ))}
+          <Link to="/market" className="inline-flex min-h-11 items-center px-3 text-[14px] font-semibold text-[var(--accent)]">Back to Market</Link>
+        </span>
+      )} />
+  );
+};
+
 const IndexPage = () => {
   const { ticker } = useParams();
   const { data, status, retry } = useStored(endpoints.marketIndex(ticker), { liveMs: 60_000 });
@@ -177,7 +194,7 @@ const IndexPage = () => {
     <Layout>
       <PageHeader title={data?.name || 'Index'} back="/market" backLabel="Market" />
       {status === 'loading' && <Card className="mb-3"><Skeleton rows={2} /></Card>}
-      {status === 'empty' && <Empty title="Not found" body="This index is not tracked." action={<Link to="/market" className="text-[var(--accent)]">Back to Market</Link>} />}
+      {status === 'empty' && <TrackedIndices />}
       {status === 'error' && <Card className="mb-3"><ErrorLine message="Could not load this index." onRetry={retry} /></Card>}
       {status === 'ok' && (
         <div className="mb-3">

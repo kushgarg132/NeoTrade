@@ -69,8 +69,8 @@ const RebalanceAfter = ({ after }) => {
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="figure-md text-sm">{r.symbol}</span>
-                    <span className="rounded-full px-1.5 text-[11px] font-semibold bg-[var(--surface-2)] text-[var(--text-muted)]">{r.kind === 'STOCK' ? 'Stock' : r.kind}</span>
-                    {t && <span className={cn('text-[11px] font-semibold', t[1])}>{t[0]}</span>}
+                    <span className="rounded-full px-1.5 text-[12px] font-semibold bg-[var(--surface-2)] text-[var(--text-muted)]">{r.kind === 'STOCK' ? 'Stock' : r.kind}</span>
+                    {t && <span className={cn('text-[12px] font-semibold', t[1])}>{t[0]}</span>}
                   </div>
                   {r.sector && <div className="doc-meta normal-case truncate">{r.sector}</div>}
                 </div>

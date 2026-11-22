@@ -26,7 +26,7 @@ const DateLeaf = ({ date }) => {
   return (
     <div className="w-12 shrink-0 rounded-[10px] bg-[var(--accent-soft)] py-1 text-center">
       <div className="text-[17px] font-bold leading-tight tabular-nums text-[var(--text)]">{d.getUTCDate()}</div>
-      <div className="text-[11px] font-semibold uppercase text-[var(--accent)]">{d.toLocaleString('en-IN', { month: 'short', timeZone: 'UTC' })}</div>
+      <div className="text-[12px] font-semibold uppercase text-[var(--accent)]">{d.toLocaleString('en-IN', { month: 'short', timeZone: 'UTC' })}</div>
     </div>
   );
 };
