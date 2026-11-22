@@ -1,7 +1,7 @@
 ---
 page: mine-portfolio-journal
 covers: [backend/mine/**, backend/reports/**, backend/portfolio/**, backend/journal/**, backend/guardrails/**, backend/routers/mine.py, backend/routers/portfolio.py, backend/routers/journal.py, backend/routers/today.py, backend/routers/imports.py]
-verified_at: 8dc34d5
+verified_at: 1a0affb
 ---
 # Mine, Portfolio, Journal, Guardrails and Today
 
@@ -314,7 +314,7 @@ All routes are mounted under `settings.API_PREFIX` (`/api/v1`) with `get_current
 | GET /journal/beta-metrics | `routers/journal.py::get_beta_metrics` | admin | `beta.py::beta_metrics` keys |
 | GET /journal/beta-users | `routers/journal.py::get_beta_users` | admin | list of `{name, email, created_at, last_open}`; both dates are IST days, `last_open` null if never opened |
 | GET /today | `routers/today.py::today` | user | `market,accounts,live_armed,kill_switch,pulse,needs_you,mine_actions,mine_actions_total,scoreboard,proposals_total,ai_activity,autopilot,setup,backdrop,errors` |
-| GET /today/attention | `::attention` | user | `{count}` (`_needs_you` only) |
+| GET /today/attention | `::attention` | user | `{count, accounts, kill_switch, live_armed}`: `count` is `_needs_you` only; the rest feed the shell's status strip (`components/layout/StatusStrip.jsx`) |
 
 ## Gotchas and known issues
 
