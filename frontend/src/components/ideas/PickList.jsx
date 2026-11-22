@@ -1,4 +1,5 @@
 import React from 'react';
+import Term from '../ui/Term';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import GradeTile from '../ui/GradeTile';
@@ -95,7 +96,7 @@ const PickList = ({ items, news, results, showUnproven, onToggleUnproven, hidden
         </Section>
       )}
       {(ranked.length > 0 || unproven.length > 0) && (
-        <Section title="Picks · best first" note={<span className="text-[13px] text-[var(--text-muted)]">A proven · B promising</span>}>
+        <Section title="Picks · best first" note={<span className="text-[13px] text-[var(--text-muted)]"><Term id="grade">A proven · B promising</Term></span>}>
           <p className="mt-1 mb-2 text-[13px] leading-snug text-[var(--text-muted)]">
             Each pick: buy near the entry, hold to the due date. The stop is only protection. Paper record · not advice.
           </p>

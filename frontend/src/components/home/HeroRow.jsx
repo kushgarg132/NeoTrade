@@ -1,4 +1,5 @@
 import React from 'react';
+import Term from '../ui/Term';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import Empty from '../ui/Empty';
@@ -40,7 +41,7 @@ const HeroRow = ({ headline, nifty, phase, meta, failed, onRetry, children }) =>
           change={<DeltaChip value={headline.day_change} pct={headline.day_change_pct} suffix={day} />}>
       {vs && (
         <p className="mt-3 text-[15px] text-[var(--text)]">
-          <span className={`font-semibold ${toneText(tone(vs.gap))}`}>{vs.text}</span>
+          <Term id="vsNifty"><span className={`font-semibold ${toneText(tone(vs.gap))}`}>{vs.text}</span></Term>
           <span className="text-[var(--text-muted)] tabular-nums"> · NIFTY {pct(idx / 100, { sign: true })}</span>
         </p>
       )}
@@ -60,7 +61,7 @@ const HeroRow = ({ headline, nifty, phase, meta, failed, onRetry, children }) =>
           </summary>
           {xAhead !== null && (
             <p className="pb-3 text-[13px] tabular-nums text-[var(--text-muted)]">
-              XIRR {pct(x, { sign: true, dp: 1 })} vs NIFTY {pct(nx, { sign: true, dp: 1 })}{' '}
+              <Term id="xirr">XIRR</Term> {pct(x, { sign: true, dp: 1 })} vs NIFTY {pct(nx, { sign: true, dp: 1 })}{' '}
               <span className={`font-semibold ${toneText(tone(xAhead))}`}>{xAhead >= 0 ? 'ahead' : 'behind'}</span>
             </p>
           )}

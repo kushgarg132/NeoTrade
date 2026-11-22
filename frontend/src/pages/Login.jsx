@@ -1,4 +1,5 @@
 import React from 'react';
+import Term from '../components/ui/Term';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GoogleButton } from '../components/SignInCard';
 import Badge from '../components/ui/Badge';
@@ -31,7 +32,7 @@ const Login = () => {
           strategy proves itself.
         </p>
         <div className="mt-3">
-          <Badge kind="paper">Paper until proven</Badge>
+          <Term id="paper"><Badge kind="paper">Paper until proven</Badge></Term>
         </div>
         <p className="text-sm text-[var(--text-muted)] mt-3 mb-6">
           Works with Zerodha, Upstox and Angel One.
@@ -47,7 +48,7 @@ const Login = () => {
           )}
 
         <p className="mt-6 pt-4 border-t border-[var(--border)] text-xs text-[var(--text-muted)] text-center">
-          Free while in beta. Not investment advice. NeoTrade never holds your money.
+          Not investment advice. NeoTrade never holds your money.
         </p>
       </div>
     </div>

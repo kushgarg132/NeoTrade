@@ -89,7 +89,7 @@ const Mix = ({ mix }) => {
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Largest" value={`${Math.round(mix.top_pct)}%`} delta={mix.top_symbol} />
         <Stat label="Top 5" value={`${Math.round(mix.top5_pct)}%`} delta={`of ${mix.count} holdings`} />
-        <Stat label="Spread like" value={Math.round(mix.effective_holdings)} delta="equal holdings" />
+        <Stat label="Diversified like" value={`${Math.round(mix.effective_holdings)} stocks`} delta="held in equal amounts" />
       </div>
       {mix.types?.length > 0 && (
         <div className="mt-4">
