@@ -1,7 +1,7 @@
 ---
 page: frontend
 covers: [frontend/src/**, frontend/package.json, frontend/vite.config.*, frontend/index.html]
-verified_at: 229aae3
+verified_at: f25bab4
 ---
 # Frontend (React 19 + Vite SPA)
 
@@ -28,6 +28,7 @@ The whole UI: a plain-JSX (no TypeScript) React 19 / React Router 7 / Tailwind v
 | `src/hooks/useLivePoll.js` | calls a refresh every `ms` while NSE is not closed and the page is visible, never two in flight, and once whenever the page becomes visible again (`visibilitychange`); option `{always: true}` keeps the timer outside the session (Home, 60 s). Home hero and Money 10 s; Stock quote, Watchlist details, Ai page, and `useSection`/`useStored` `liveMs` 60 s | `useLivePoll` |
 | `src/hooks/useTab.js` | `?tab=` state for the older tabbed pages (new pages use `ui/Tabs::useTabParam`) | `useTab` |
 | `src/hooks/usePrivacy.js` | "hide amounts" flag on `<html data-private>` | `togglePrivacy`, `usePrivacy` |
+| `src/utils/newsTrust.js`, `src/hooks/useNewsTrust.js` | whether news up/down calls are shown: `GET /news/trust` once at boot (`Layout` calls `loadNewsTrust`; unknown or failed = hidden); `lean(direction)` = sign or 0 while hidden, used by `NewsImpacts::Impact`, `utils/news.js` (`tone`, `badNews`, `badNewsSince`, `matchLean`), `stock/newsGroups.js::filters` (no Positive/Negative), `TradingChart`, `NewsStrip`, `NewsTab`, `Layout` toast, `JournalTab` chips, `WeeklyReport` themes; `market/News.jsx` hides the lean chips; `NewsImpacts::NewsTrustNote` prints `line` on Market News, stock News tab and `NewsItem` (which keeps the call beside its outcome). Components that show a direction call `useNewsTrust()` so they re-render when it loads | `lean`, `newsTrust`, `setNewsTrust`, `loadNewsTrust`, `useNewsTrust` |
 | `src/hooks/useSchedule.js`, `src/utils/schedule.js` | job times in copy (`EngineSwitches`, `GuardrailsSheet`) from `GET /system/schedule`; `utils/schedule.js::FALLBACK_SCHEDULE` shows until it loads | `useSchedule`, `clock12`, `FALLBACK_SCHEDULE` |
 | `src/hooks/useSymbolNews.js` | `GET /news/symbols` per distinct symbol list; `useSymbolResults` = `GET /news/results` (next results date per symbol) | `useSymbolNews`, `useSymbolResults` |
 | `src/hooks/useNeedCount.js`, `src/hooks/useStored.js` | `useNeedCount` = the one "needs you" count (`/mine/actions` + pending ideas); `fetchIdeas(isAdmin)` = pending suggestions + admin Picks. `useStored(url, {liveMs})` (and `useSection(load, {liveMs})`: Market Today/Sectors/indices, IndexPage, SectorPage, IndexStocks use 60_000; a failed re-read keeps the last figures) reads text a job already stored (`status` loading/ok/empty(404)/error, `retry`); `url` null waits | `useNeedCount`, `fetchIdeas`, `useStored` |

@@ -1,7 +1,7 @@
 ---
 page: platform
 covers: [backend/auth/**, backend/core/**, backend/configs/**, backend/ws/**, backend/system/**, backend/profile/**, backend/routers/**, backend/server.py, backend/timing.py, backend/jobs.py, backend/job_queue.py, backend/.importlinter, backend/database.py, backend/prefs.py, backend/alerts.py, backend/app_settings.py, backend/locks.py, backend/rate_limit.py, backend/log_redaction.py, backend/broadcast.py, backend/runs.py, backend/marks.py, backend/analytics.py, backend/__init__.py, docker-compose.yml, backend/Dockerfile, backend/.dockerignore, backend/requirements.txt, .github/**]
-verified_at: 6b2f680
+verified_at: f25bab4
 ---
 # Platform: app shell, auth, live socket, settings, endpoint map, deploy
 
@@ -152,7 +152,7 @@ Collection `alerts`: `user_id, kind, title, lines, symbol, link, state (queued|d
 
 ## Endpoints
 
-Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix and dependencies) at a51584a; 124 rows. Auth: `user` = bearer JWT via `get_current_user`; `admin` = also `require_admin` (403 otherwise); `none` = no bearer. Missing/invalid bearer returns 401/403 (HTTPBearer; the smoke test accepts either). **Guest-readable (since guest browsing):** every `/market/*` route and `/research/{symbol}/note` (no auth at all, except `/market/index/{ticker}/analysis` and `/market/sector/{name}` which use `get_optional_user`), `GET /news/feed|item/{id}|symbols|symbol/{symbol}|results` and `POST /agents/quick-analyze/{symbol}` (`get_optional_user`), and `GET /trading/instruments` (header search; served by `market_data`, no auth). Rows below say `user` for the old behaviour; read these as `guest` where listed here. A guest `GET /market/index/{ticker}/analysis` without `?cached=true` returns 401 (generating calls the model); `/news/feed?mine=true` ignores `mine` for a guest; `/news/accuracy` stays admin. `/news/results` (the events calendar) reflects symbols some platform user holds (aggregate, no identity) and is visible to guests. `get_optional_user` in `auth/dependency.py`. `/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json` are also public (Starlette routes, not in the table). Paths with `:path` take the rest including `:`.
+Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix and dependencies) at a51584a; 124 rows. Auth: `user` = bearer JWT via `get_current_user`; `admin` = also `require_admin` (403 otherwise); `none` = no bearer. Missing/invalid bearer returns 401/403 (HTTPBearer; the smoke test accepts either). **Guest-readable (since guest browsing):** every `/market/*` route and `/research/{symbol}/note` (no auth at all, except `/market/index/{ticker}/analysis` and `/market/sector/{name}` which use `get_optional_user`), `GET /news/feed|item/{id}|symbols|symbol/{symbol}|results|trust` and `POST /agents/quick-analyze/{symbol}` (`get_optional_user`), and `GET /trading/instruments` (header search; served by `market_data`, no auth). Rows below say `user` for the old behaviour; read these as `guest` where listed here. A guest `GET /market/index/{ticker}/analysis` without `?cached=true` returns 401 (generating calls the model); `/news/feed?mine=true` ignores `mine` for a guest; `/news/accuracy` stays admin. `/news/results` (the events calendar) reflects symbols some platform user holds (aggregate, no identity) and is visible to guests. `get_optional_user` in `auth/dependency.py`. `/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json` are also public (Starlette routes, not in the table). Paths with `:path` take the rest including `:`.
 
 | Method | Path | Handler | Auth |
 |---|---|---|---|
@@ -162,6 +162,7 @@ Generated from `app.routes` (FastAPI 0.141 `_IncludedRouter` walked for prefix a
 | GET | `/api/v1/auth/me` | `backend/routers/auth.py::get_me` | user |
 | GET | `/api/v1/news/feed` | `backend/routers/news.py::news_feed` (`?q=` <= 80 chars: headline regex-escaped, case-insensitive, or a symbol the item tags/impacts; newest-first scan; `mine` ignored for a guest) | user |
 | GET | `/api/v1/news/item/{item_id}` | `backend/routers/news.py::news_item` | user |
+| GET | `/api/v1/news/trust` | `backend/routers/news.py::news_trust` (`accuracy.py::trust_status`: `trusted, as_of, model, scorer{n,hit}, all{n,hit}, bar{hit,n}, line`) | user (guest-readable) |
 | GET | `/api/v1/news/accuracy` | `backend/routers/news.py::news_accuracy` | admin |
 | GET | `/api/v1/news/filings` | `backend/routers/news.py::news_filings` | admin |
 | GET | `/api/v1/news/symbols` | `backend/routers/news.py::symbol_news` | user |
