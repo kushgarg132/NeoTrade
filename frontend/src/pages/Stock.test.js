@@ -64,6 +64,7 @@ test('price sits on the Hero, not a Card, and stays public', () => {
   assert.match(page, /<Hero[^>]*privateValue=\{false\}/);
   assert.match(page, /format=\{currency === 'INR' \? px : points\}/); // paise, as the chart readout prints it
   assert.match(page, /<DeltaChip[^>]*value=\{currency === 'INR' \? dayAbs : null\}/);
+  assert.match(page, /format=\{inrPaise\}/); // the move to the paise, as the chart prints it
   assert.match(page, /pct=\{dayPct \* 100\}/);
   assert.match(page, /<DeltaChip[\s\S]*?privateValue=\{false\}/);
   assert.match(page, /aria-pressed=\{watching\}/);

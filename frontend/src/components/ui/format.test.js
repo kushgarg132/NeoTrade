@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { inr, pct, tone, compactInr, points } from './format.js';
+import { inr, inrPaise, pct, tone, compactInr, points } from './format.js';
 
 test('inr groups the Indian way', () => {
   assert.equal(inr(409205), '₹4,09,205');
@@ -30,4 +30,11 @@ test('points: en-IN, up to 2 dp, optional sign', () => {
   assert.equal(points(-12.345), '-12.35');
   assert.equal(points(null), '—');
   assert.equal(points(0, { sign: true }), '0');
+});
+
+test('inrPaise: a share price move to the paise, signed', () => {
+  assert.equal(inrPaise(1.9, { sign: true }), '+₹1.90');
+  assert.equal(inrPaise(-1234.5, { sign: true }), '-₹1,234.50');
+  assert.equal(inrPaise(0, { sign: true }), '₹0.00');
+  assert.equal(inrPaise(null), '—');
 });

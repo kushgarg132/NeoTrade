@@ -13,7 +13,7 @@ import Skeleton from '../components/ui/Skeleton';
 import ErrorLine from '../components/ui/ErrorLine';
 import Empty from '../components/ui/Empty';
 import AsOf from '../components/ui/AsOf';
-import { inr, pct, points, tone } from '../components/ui/format';
+import { inr, inrPaise, pct, points, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
 import OrderTicket from '../components/trading/OrderTicket';
 import TradingChart from '../components/stock/TradingChart';
@@ -185,6 +185,7 @@ const Stock = () => {
             change={dayPct != null && (
               <DeltaChip
                 value={currency === 'INR' ? dayAbs : null}
+                format={inrPaise} // the chart's readout prints the move to the paise too
                 pct={dayPct * 100}
                 suffix={marketPhase() === 'open' ? 'today' : 'last session'}
                 privateValue={false}

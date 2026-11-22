@@ -10,6 +10,14 @@ export const inr = (n, { sign = false } = {}) => {
   return `${sgn(Math.round(v), sign)}₹${body}`;
 };
 
+/** A share price or its move, to the paise: inrPaise(1.9, {sign:true}) = "+₹1.90". Whole-rupee `inr` stays for balances. */
+export const inrPaise = (n, { sign = false } = {}) => {
+  const v = num(n);
+  if (v === null) return '—';
+  const r = Number(v.toFixed(2));
+  return `${sgn(r, sign)}₹${Math.abs(r).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 /** A fraction as a percent: pct(0.0165, {sign:true}) = "+1.65%". */
 export const pct = (x, { sign = false, dp = 2 } = {}) => {
   const v = num(x);
