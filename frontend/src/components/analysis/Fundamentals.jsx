@@ -1,13 +1,16 @@
 import { ChevronDown } from 'lucide-react';
 import React from 'react';
 import Card from '../ui/Card';
+import { compactInr } from '../ui/format';
 import { formatCompactNumber, formatCurrency, formatPercent } from '../../utils/formatters';
 
 const isNum = (value) => typeof value === 'number' && Number.isFinite(value);
 const ratio = (value) => (isNum(value) ? value.toFixed(2) : null);
 const pct = (fraction) => (isNum(fraction) ? formatPercent(fraction * 100) : null);
 const money = (value, currency) =>
-  isNum(value) ? `${value < 0 ? '−' : ''}${currency === 'INR' ? '₹' : '$'}${formatCompactNumber(Math.abs(value))}` : null;
+  !isNum(value) ? null
+    : currency === 'INR' ? `${value < 0 ? '−' : ''}${compactInr(Math.abs(value))}` // ₹18.6 lakh Cr, not en-IN compact's ₹18.64LCr
+      : `${value < 0 ? '−' : ''}$${formatCompactNumber(Math.abs(value))}`;
 
 /**
  * Whether the business is worth owning: valuation, profitability, and growth

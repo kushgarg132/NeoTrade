@@ -180,7 +180,7 @@ const Stock = () => {
           <Hero
             label={company?.name || symbol}
             value={price}
-            format={currency === 'INR' ? inr : points}
+            format={currency === 'INR' ? px : points} // paise, as the chart readout and your average price print it
             privateValue={false}
             change={dayPct != null && (
               <DeltaChip
@@ -238,20 +238,23 @@ const Stock = () => {
       )}
 
       {!user && ask?.symbol === symbol && <div id="sign-in" className="mb-3"><SignInCard {...ask} /></div>}
-      <AiRead aiRead={aiRead} retryAi={user ? retryAi : () => askSignIn(FRESH_READ)} />
-
       <Tabs tabs={TABS} value={tab} onChange={setTab} label="Stock sections" />
-      <div className="mt-3">
+      <div className="mt-3 mb-3">
         {tab === 'chart' && quick.error && !closes.length ? <Empty title="No price data" body={`Could not load the price history for ${symbol}${cause(quick.error)}.`} action={<Button variant="secondary" onClick={reloadQuick}>Retry</Button>} /> : panel}
       </div>
+      {/* Price, chart and your position come first on the phone; the AI read is a three-line summary under them. */}
+      <AiRead aiRead={aiRead} retryAi={user ? retryAi : () => askSignIn(FRESH_READ)} />
 
       <div className="h-28 lg:h-20" aria-hidden="true" />
       <div className="fixed z-30 inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-0 lg:left-56 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-2">
         <div className="mx-auto max-w-5xl flex gap-3">
-          {pos && <Button variant="secondary" className="flex-1" onClick={() => (user ? setTicket({ symbol, side: 'SELL', lastPrice: price }) : askSignIn(WATCH_OR_TRADE))}>Sell</Button>}
-          <Button className="flex-1" disabled={price == null} onClick={() => (user ? setTicket({ symbol, side: 'BUY', lastPrice: price }) : askSignIn(WATCH_OR_TRADE))}>{pos ? 'Buy more' : 'Buy'}</Button>
+          {/* Signed out there is nothing to buy with: the bar says what it takes, not a bright Buy that leads to a sign-in. */}
+          {!user ? <Button variant="secondary" className="flex-1" onClick={() => askSignIn(WATCH_OR_TRADE)}>Sign in to trade</Button> : <>
+            {pos && <Button variant="secondary" className="flex-1" onClick={() => setTicket({ symbol, side: 'SELL', lastPrice: price })}>Sell</Button>}
+            <Button className="flex-1" disabled={price == null} onClick={() => setTicket({ symbol, side: 'BUY', lastPrice: price })}>{pos ? 'Buy more' : 'Buy'}</Button>
+          </>}
         </div>
-        {price == null && <p className="mx-auto max-w-5xl mt-1 text-[13px] text-[var(--text-muted)]">Buy is off until a price loads for {symbol}.</p>}
+        {user && price == null && <p className="mx-auto max-w-5xl mt-1 text-[13px] text-[var(--text-muted)]">Buy is off until a price loads for {symbol}.</p>}
       </div>
       {ticket && <OrderTicket {...ticket} onClose={() => setTicket(null)} onDone={loadMine} />}
     </Layout>

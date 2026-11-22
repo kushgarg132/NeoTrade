@@ -30,7 +30,7 @@ const AiRead = ({ aiRead, retryAi }) => {
   const copy = stageCopy(stage);
   const busy = loading || streaming;
   const refresh = read && stale && !busy && !error
-    ? <Button variant="secondary" onClick={retryAi} className="-my-2.5">Refresh</Button> : null;
+    ? <button type="button" onClick={retryAi} className="-my-2.5 inline-flex min-h-11 items-center text-[14px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px]">Refresh</button> : null;
   const sentiment = read && !live && score != null && (
     <span className="inline-flex items-baseline gap-1.5">
       <span className={`text-[15px] font-bold ${tone}`}>{word}</span>

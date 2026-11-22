@@ -13,6 +13,7 @@ test('compactInr uses L and Cr', () => {
   assert.equal(compactInr(409205), '₹4.09L');
   assert.equal(compactInr(12000000), '₹1.2Cr');
   assert.equal(compactInr(8500), '₹8,500');
+  assert.equal(compactInr(18.64e12), '₹18.6 lakh Cr'); // a large company's market cap
 });
 
 test('pct and tone', () => {

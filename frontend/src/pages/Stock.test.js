@@ -62,7 +62,7 @@ test('the chart reads OHLCV: Stock.jsx passes candles and mine.bars, never close
 
 test('price sits on the Hero, not a Card, and stays public', () => {
   assert.match(page, /<Hero[^>]*privateValue=\{false\}/);
-  assert.match(page, /format=\{currency === 'INR' \? inr : points\}/);
+  assert.match(page, /format=\{currency === 'INR' \? px : points\}/); // paise, as the chart readout prints it
   assert.match(page, /<DeltaChip[^>]*value=\{currency === 'INR' \? dayAbs : null\}/);
   assert.match(page, /pct=\{dayPct \* 100\}/);
   assert.match(page, /<DeltaChip[\s\S]*?privateValue=\{false\}/);
@@ -81,4 +81,9 @@ test('fundamentals sit under the chart, not in Details', () => {
   assert.match(page, /<TradingChart[\s\S]*?<Fundamentals company=\{company\}/);
   const details = readFileSync(new URL('../components/stock/DetailsTab.jsx', import.meta.url), 'utf8');
   assert.doesNotMatch(details, /<Fundamentals/);
+});
+
+test('phone order: tabs (chart) before the AI read; signed out the bar says Sign in to trade', () => {
+  assert.ok(page.indexOf('<Tabs tabs={TABS}') < page.indexOf('<AiRead aiRead='));
+  assert.match(page, /!user \? <Button variant="secondary" className="flex-1" onClick=\{\(\) => askSignIn\(WATCH_OR_TRADE\)\}>Sign in to trade<\/Button>/);
 });

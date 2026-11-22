@@ -20,12 +20,13 @@ export const pct = (x, { sign = false, dp = 2 } = {}) => {
 
 export const tone = (x) => (num(x) === null || x === 0 ? 'neutral' : x > 0 ? 'gain' : 'loss');
 
-/** Lakh/crore shorthand: ₹4.09L, ₹1.2Cr. Under a lakh it is the plain figure. */
+/** Lakh/crore shorthand: ₹4.09L, ₹1.2Cr, ₹18.6 lakh Cr (a large company's market cap). Under a lakh it is the plain figure. */
 export const compactInr = (n) => {
   const v = num(n);
   if (v === null) return '—';
   const a = Math.abs(v);
   const trim = (x, dp) => String(Number(x.toFixed(dp)));
+  if (a >= 1e12) return `${sgn(v, false)}₹${trim(a / 1e12, 1)} lakh Cr`;
   if (a >= 1e7) return `${sgn(v, false)}₹${trim(a / 1e7, a >= 1e8 ? 1 : 2)}Cr`;
   if (a >= 1e5) return `${sgn(v, false)}₹${a / 1e5 >= 100 ? trim(a / 1e5, 1) : (a / 1e5).toFixed(2)}L`;
   return inr(v);
