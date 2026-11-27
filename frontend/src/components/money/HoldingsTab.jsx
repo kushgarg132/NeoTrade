@@ -87,8 +87,8 @@ const SortHead = ({ sort, onTap }) => (
 );
 
 /** One holding in two lines: name and value, then quantity and weight beside its gain and today's move; then its
- *  verdict and why, and its news analysis. Tapping a stock opens Sell / Buy more / Details under it (one row at a
- *  time); a fund has no stock page and no ticket, so it does not open. */
+ *  verdict and why, and its news analysis. The stock's name opens its page; tapping anywhere else on the row opens
+ *  Sell / Buy more under it (one row at a time). A fund has no stock page and no ticket, so it does neither. */
 const Row = ({ h, news, open, onToggle, onTrade }) => {
   const day = h.day_pct;
   const why = whyLine({ ...h, news });
@@ -98,7 +98,8 @@ const Row = ({ h, news, open, onToggle, onTrade }) => {
       <div className="flex items-baseline justify-between gap-3">
         <span className="flex min-w-0 items-center gap-1.5">
           {!mf && <StockIcon symbol={h.symbol} className="size-6" />}
-          <span className="min-w-0 break-words text-[15px] font-bold text-[var(--text)]">{mf ? h.name || h.symbol : h.symbol}</span>
+          {mf ? <span className="min-w-0 break-words text-[15px] font-bold text-[var(--text)]">{h.name || h.symbol}</span>
+            : <Link to={stockPath(h.symbol)} className="pointer-events-auto relative z-10 min-w-0 break-words text-[15px] font-bold text-[var(--text)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[6px]">{h.symbol}</Link>}
           {!mf && <NewsDot entry={news} />}
           {!mf && newsToday(news) && <Badge kind={newsTone(news) === 'neg' ? 'alert' : 'neutral'}>News</Badge>}
         </span>
@@ -128,15 +129,16 @@ const Row = ({ h, news, open, onToggle, onTrade }) => {
   const trade = (side) => onTrade({ symbol: h.symbol, side, lastPrice: h.last_price ?? undefined });
   return (
     <div className="border-b border-[var(--border)] last:border-b-0">
-      <button type="button" aria-expanded={open} onClick={onToggle}
-        className="tap block w-[calc(100%+1rem)] text-left py-3 -mx-2 px-2 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-        {body}
-      </button>
+      {/* The row-wide toggle sits under the content (pointer-events off) so the name link inside stays clickable. */}
+      <div className="relative py-3 -mx-2 px-2 hover:bg-[var(--surface-2)]">
+        <button type="button" aria-expanded={open} aria-label={`${h.symbol}: Sell or Buy more`} onClick={onToggle}
+          className="tap absolute inset-0 rounded-[6px] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" />
+        <div className="pointer-events-none relative">{body}</div>
+      </div>
       {open && (
         <div className="flex gap-2 pb-3">
           <Button variant="danger" className="flex-1" onClick={() => trade('SELL')}>Sell</Button>
           <Button variant="gain" className="flex-1" onClick={() => trade('BUY')}>Buy more</Button>
-          <Link to={stockPath(h.symbol)} className="shrink-0"><Button variant="secondary">Details</Button></Link>
         </div>
       )}
     </div>

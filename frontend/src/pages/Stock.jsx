@@ -251,8 +251,8 @@ const Stock = () => {
         <div className="mx-auto max-w-5xl flex gap-3">
           {/* Signed out there is nothing to buy with: the bar says what it takes, not a bright Buy that leads to a sign-in. */}
           {!user ? <Button variant="secondary" className="flex-1" onClick={() => askSignIn(WATCH_OR_TRADE)}>Sign in to trade</Button> : <>
-            {pos && <Button variant="secondary" className="flex-1" onClick={() => setTicket({ symbol, side: 'SELL', lastPrice: price })}>Sell</Button>}
-            <Button className="flex-1" disabled={price == null} onClick={() => setTicket({ symbol, side: 'BUY', lastPrice: price })}>{pos ? 'Buy more' : 'Buy'}</Button>
+            {pos && <Button variant="danger" className="flex-1" onClick={() => setTicket({ symbol, side: 'SELL', lastPrice: price })}>Sell</Button>}
+            <Button variant="gain" className="flex-1" disabled={price == null} onClick={() => setTicket({ symbol, side: 'BUY', lastPrice: price })}>{pos ? 'Buy more' : 'Buy'}</Button>
           </>}
         </div>
         {user && price == null && <p className="mx-auto max-w-5xl mt-1 text-[13px] text-[var(--text-muted)]">Buy is off until a price loads for {symbol}.</p>}
