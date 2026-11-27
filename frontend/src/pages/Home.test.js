@@ -85,7 +85,7 @@ test('alerts live in the shell status strip on every page, not on Home: tap, sof
   const layout = readFileSync(new URL('../components/Layout.jsx', import.meta.url), 'utf8');
   assert.doesNotMatch(page, /alerts\(today\)|openBrokerLogin/);
   assert.doesNotMatch(page, /var\(--loss/);
-  assert.match(layout, /<StatusStrip items=\{statusAlerts\(attention\)\}/);
+  assert.match(layout, /<StatusStrip items=\{statusAlerts\(attention\)\.filter\(\(a\) => !a\.login \|\| pathname === '\/'\)\}/); // logins on Today only
   assert.match(layout, /\.catch\(\(\) => \{\}\)/); // a failed read keeps the last strip
   assert.match(strip, /role="alert"/);
   assert.match(strip, /openBrokerLogin/);

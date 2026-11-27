@@ -77,7 +77,8 @@ const Layout = ({ children }) => {
 
       <div className="lg:pl-56">
         <Header />
-        {user && attention && <StatusStrip items={statusAlerts(attention)} />}
+        {/* Kill switch and live armed show on every page; an expired broker login only on Today (owner, 2026-11-27). */}
+        {user && attention && <StatusStrip items={statusAlerts(attention).filter((a) => !a.login || pathname === '/')} />}
         <main className="mx-auto max-w-5xl px-4 py-4 pb-24 lg:pb-12">
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
