@@ -15,18 +15,18 @@ import PickBar from '../components/ideas/PickBar';
 import { useLoad } from '../components/ideas/useLoad';
 import Badge from '../components/ui/Badge';
 import GradeTile from '../components/ui/GradeTile';
-import DeltaChip from '../components/ui/DeltaChip';
 import { useForward } from '../components/ForwardBadge';
 import api, { endpoints } from '../utils/api';
 import { recordLine, statusOf } from '../utils/library';
-import { ideaFromSuggestion, ideaFromPick, parseIdeaId, GRADES } from '../utils/ideas';
+import { ideaFromSuggestion, ideaFromPick, parseIdeaId, pickStatus, GRADES } from '../utils/ideas';
 import { bareSymbol, formatDateTime } from '../utils/formatters';
 import NewsChip from '../components/common/NewsChip';
 import useSymbolNews from '../hooks/useSymbolNews';
 import useStored from '../hooks/useStored';
 import { oneLine } from '../utils/aiText';
-import { inr, pct } from '../components/ui/format';
+import { inr, pct, tone } from '../components/ui/format';
 import { toneText } from '../components/ui/tone';
+import LevelsLine from '../components/ideas/LevelsLine';
 import { AiLabel, AiMarkdown, AiText } from '../components/ai/AiSummary';
 import { px, rewardRisk } from '../components/ideas/levels';
 import { splitThesis } from '../utils/aiText';
@@ -134,6 +134,57 @@ const PickContext = ({ symbol }) => {
   );
 };
 
+const GRADE_NAME = { A: 'Proven setup', B: 'Promising setup', C: 'Unproven setup' };
+const STATUS_TONE = { alert: 'text-[var(--loss)]', unproven: 'text-[var(--warn)]', neutral: 'text-[var(--text-muted)]', proven: 'text-[var(--gain)]' };
+
+/** The top of an idea: grade and status, the setup and its time, then the expected move as the page's one big figure
+ *  with how sure and the rupees per share under it. */
+const Lead = ({ idea }) => {
+  const status = pickStatus(idea);
+  const broken = status?.label === 'Below stop';
+  const move = idea.kind === 'p' ? idea.expectedMedian : idea.headline?.value;
+  const time = idea.kind === 'p' && idea.daysSince > 0 && idea.daysLeft != null ? `${idea.daysLeft} days left` : idea.when;
+  return (
+    <section className="space-y-2" aria-label="Summary">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {GRADES[idea.grade] && (
+          <span className="inline-flex items-center gap-2 text-[14px] font-semibold text-[var(--text)]">
+            <GradeTile grade={idea.grade} small />{GRADE_NAME[idea.grade]}
+          </span>
+        )}
+        {status && (
+          <span className={`inline-flex items-center gap-1.5 text-[14px] font-medium ${STATUS_TONE[status.kind]}`}>
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />{status.label}
+          </span>
+        )}
+        {idea.side !== 'BUY' && <Badge kind="alert">{idea.side}</Badge>}
+        <IdeaBadge badge={idea.badge} />
+        {idea.decided && <Badge kind="neutral">{STATUS[idea.status] || idea.status}</Badge>}
+      </div>
+      <p className="text-[14px] text-[var(--text-muted)]">
+        {[idea.setup, idea.horizon && `${idea.horizon}-day hold`, time].filter(Boolean).join(' · ')}
+        {idea.noEdge && <span className="text-[var(--warn)]"> · no edge over the average stock</span>}
+      </p>
+      {move != null && (
+        <div className="pt-1">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className={`text-[28px] font-extrabold leading-none tracking-[-0.03em] tabular-nums ${broken ? 'text-[var(--text-muted)]' : toneText(tone(move))}`}>{pct(move, { sign: true, dp: 1 })}</span>
+            <span className="text-[14px] text-[var(--text-muted)]">{idea.kind === 'p' ? 'expected' : idea.headline?.label}</span>
+          </div>
+          {broken && (
+            <p className="mt-2 text-[14px] text-[var(--loss)]">
+              Now {px(idea.priceNow)}, under the {px(idea.stop)} stop: the plan this forecast was made for has broken.
+            </p>
+          )}
+          <p className="mt-1.5 text-[13px] tabular-nums text-[var(--text-muted)]">
+            {[idea.rupees, idea.pUp != null && `${pct(idea.pUp, { dp: 0 })} chance up`, idea.pBeat != null && `${pct(idea.pBeat, { dp: 0 })} beat NIFTY`].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+};
+
 const IdeaDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -149,25 +200,15 @@ const IdeaDetail = () => {
   else if (!idea) body = <Empty title="Idea not found" body="It may have been decided or has expired." action={<Button variant="secondary" onClick={done}>Back to Ideas</Button>} />;
   else body = (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[13px] font-semibold text-[var(--text-muted)]">{idea.side}</span>
-        <span className="text-[13px] text-[var(--text-muted)]">{idea.setup}{idea.horizon ? ` · ${idea.horizon}d` : ''}</span>
-        <IdeaBadge badge={idea.badge} />
-        {idea.noEdge && <span className="text-[12px] font-semibold text-[var(--warn)]">No edge</span>}
-        {GRADES[idea.grade] && <GradeTile grade={idea.grade} />}
-        {idea.decided && <Badge kind="neutral">{STATUS[idea.status] || idea.status}</Badge>}
-      </div>
+      <Lead idea={idea} />
 
       <Card title="Trade plan" action={<Badge kind="paper">Paper</Badge>}>
-        <div className="grid grid-cols-3 gap-3">
+        <LevelsLine stop={idea.stop} zone={idea.entryZone} entry={idea.entry} target={idea.target} now={idea.priceNow} />
+        <div className="mt-4 pt-3 border-t border-[var(--border)] grid grid-cols-3 gap-3">
           <Stat label="Entry" value={px(idea.entry)} />
-          <Stat label="Stop" value={px(idea.stop)} delta={idea.toStop != null ? pct(idea.toStop, { sign: true, dp: 1 }) : null} tone="loss" />
-          <Stat label="Target" value={px(idea.target)} />
-        </div>
-        <div className="mt-3 grid grid-cols-3 gap-3">
-          <Stat label="R:R (reward : risk)" value={rewardRisk(idea) != null ? `${rewardRisk(idea).toFixed(1)} : 1` : '—'} />
-          {idea.kind === 'p' && idea.entryZone && <Stat label="Buy up to" value={px(idea.entryZone[1])} />}
-          {idea.kind === 's' && idea.headline?.value != null && <Stat label="If it hits target" value={<span className="text-[var(--gain)]">{pct(idea.headline.value, { sign: true, dp: 1 })}</span>} />}
+          <Stat label="To stop" value={pickStatus(idea)?.label === 'Below stop' ? <span className="text-[var(--loss)]">Broken</span>
+            : idea.toStop != null ? <span className="text-[var(--loss)]">{pct(idea.toStop, { sign: true, dp: 1 })}</span> : '—'} />
+          <Stat label="Reward : risk" value={rewardRisk(idea) != null ? `${rewardRisk(idea).toFixed(1)} : 1` : '—'} />
         </div>
         {idea.qty != null && (
           <div className="mt-3 grid grid-cols-3 gap-3">
@@ -177,21 +218,43 @@ const IdeaDetail = () => {
           </div>
         )}
         {idea.score && <div className="mt-3"><Confidence score={idea.score} /></div>}
-        <p className="mt-3 text-[12px] text-[var(--text-muted)]">
-          Paper record · not advice.{idea.kind === 'p' ? " Plan: hold to the due date. Held, this setup's past picks earned more than when sold at the stop or target, so the stop is protection and the target is the best 10% of past outcomes, not a promise." : ' Levels are the engine\'s, set when the idea was made.'}
+        <p className="mt-3 text-[12px] leading-snug text-[var(--text-muted)]">
+          Paper record · not advice.{idea.kind === 'p' ? " Hold to the due date: held, this setup's past picks earned more than when sold at the stop or target, so the stop is protection and the target is the best 10% of past outcomes, not a promise." : ' Levels are the engine\'s, set when the idea was made.'}
         </p>
       </Card>
 
-      {idea.kind === 's' && !idea.decided && <BuyBar idea={idea} id={key} onDone={done} />}
-      {idea.kind === 'p' && <PickBar idea={idea} onDone={done} />}
+      <Card title="Why this idea">
+        <div className="space-y-3">
+          {idea.why && <p className="text-[15px] leading-snug text-[var(--text)]">{idea.why}</p>}
+          {idea.reasons.length > 0 && <ul className="list-disc pl-5 text-[15px] text-[var(--text)]">{idea.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+          {!idea.why && !idea.reasons.length && !idea.thesis && <p className="text-[14px] text-[var(--text-muted)]">No reasons recorded.</p>}
+          {idea.kind === 'p' && <PickContext symbol={idea.symbol} />}
+          {idea.thesis && <Thesis text={idea.thesis} at={idea.createdAt} />}
+        </div>
+      </Card>
 
-      <Fold title="Why this idea">
-        {idea.why && <p className="text-[15px] text-[var(--text)]">{idea.why}</p>}
-        {idea.reasons.length > 0 && <ul className="list-disc pl-5 text-[15px] text-[var(--text)]">{idea.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
-        {!idea.why && !idea.reasons.length && !idea.thesis && <p className="text-[14px] text-[var(--text-muted)]">No reasons recorded.</p>}
-        {idea.kind === 'p' && <PickContext symbol={idea.symbol} />}
-        {idea.thesis && <Thesis text={idea.thesis} at={idea.createdAt} />}
-      </Fold>
+      {idea.range && (
+        <Card title={idea.excessRange ? 'Likely result vs NIFTY' : 'Likely range'} action={<Badge kind="paper">Paper</Badge>}>
+          {idea.forecast && (
+            <p className="mb-3 text-[13px] text-[var(--text-muted)]">
+              {idea.forecast === 'similar' && idea.similarN != null
+                ? `Based on ${idea.similarN} similar past ${idea.setup} setups.`
+                : 'Setup average: the similar-setup forecast did not beat it in testing.'}
+            </p>
+          )}
+          <RangeBar range={idea.excessRange || idea.range} />
+          {idea.spread && idea.excessRange && (
+            <p className="mt-3 text-[13px] text-[var(--text-muted)] tabular-nums">
+              On its own: {pct(idea.spread.p10, { sign: true, dp: 1 })} to {pct(idea.spread.p90, { sign: true, dp: 1 })}; 8 in 10 similar past cases landed in this band.
+            </p>
+          )}
+          {idea.features.length > 0 && (
+            <ul className="mt-3 flex flex-wrap gap-1.5">
+              {idea.features.map((f) => <li key={f} className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[12px] text-[var(--text)]">{f}</li>)}
+            </ul>
+          )}
+        </Card>
+      )}
 
       {((idea.kind === 's' && idea.strategy) || idea.pastN != null) && (
         <Fold title="Track record">
@@ -214,35 +277,17 @@ const IdeaDetail = () => {
         </Fold>
       )}
 
-      {idea.kind === 'p' && idea.expectedMedian != null && (
-        <Card title="Expected return" action={<Badge kind="paper">Paper</Badge>}>
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <DeltaChip pct={idea.expectedMedian * 100} privateValue={false} />
-            {idea.when && <span className="text-[14px] text-[var(--text-muted)]">{idea.when}</span>}
+      {/* Skip / Buy sit in a fixed bar like the Stock page's Buy / Sell, so the decision is always one thumb away. */}
+      {((idea.kind === 's' && !idea.decided) || idea.kind === 'p') && (
+        <>
+          <div className="h-28 lg:h-20" aria-hidden="true" />
+          <div className="fixed z-30 inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-0 lg:left-56 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-2">
+            <div className="mx-auto max-w-5xl">
+              {idea.kind === 's' && !idea.decided && <BuyBar idea={idea} id={key} onDone={done} />}
+              {idea.kind === 'p' && <PickBar idea={idea} onDone={done} broken={pickStatus(idea)?.label === 'Below stop'} />}
+            </div>
           </div>
-          {idea.rupees && <p className="mt-1 text-[14px] text-[var(--text)] tabular-nums">{idea.rupees}</p>}
-          {idea.spread && <p className="mt-1 text-[13px] text-[var(--text-muted)] tabular-nums">Range {pct(idea.spread.p10, { sign: true, dp: 1 })} to {pct(idea.spread.p90, { sign: true, dp: 1 })} (10th to 90th percentile: 8 in 10 similar past cases landed in this band)</p>}
-        </Card>
-      )}
-
-      {idea.range && (
-        <Card title={idea.excessRange ? 'Likely result vs NIFTY' : 'Likely range'} action={<Badge kind="paper">Paper</Badge>}>
-          {idea.forecast && (
-            <p className="mb-3 text-[13px] text-[var(--text-muted)]">
-              {idea.forecast === 'similar' && idea.similarN != null
-                ? `Based on ${idea.similarN} similar past ${idea.setup} setups.`
-                : 'Setup average: the similar-setup forecast did not beat it in testing.'}
-            </p>
-          )}
-          <RangeBar range={idea.excessRange || idea.range} />
-          {idea.features.length > 0 && (
-            <ul className="mt-3 list-disc pl-5 text-[14px] text-[var(--text-muted)]">{idea.features.map((f) => <li key={f}>{f}</li>)}</ul>
-          )}
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <Stat label="Chance up (past similar cases)" value={pct(idea.pUp, { dp: 0 })} />
-            <Stat label="Beat NIFTY" value={pct(idea.pBeat, { dp: 0 })} />
-          </div>
-        </Card>
+        </>
       )}
     </div>
   );

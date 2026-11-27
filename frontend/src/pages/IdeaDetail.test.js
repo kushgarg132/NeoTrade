@@ -3,27 +3,29 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const src = readFileSync(new URL('./IdeaDetail.jsx', import.meta.url), 'utf8');
+const levels = readFileSync(new URL('../components/ideas/LevelsLine.jsx', import.meta.url), 'utf8');
 const at = (re) => src.search(re);
 
-test('the top of the page is the trade plan, then the action, then the folds', () => {
-  const plan = at(/<Stat label="Entry"/), buy = at(/<BuyBar idea/);
-  assert.ok(plan > 0 && buy > plan && at(/<Fold title="Why/) > buy);
-  assert.match(src, /R:R/);
-  assert.match(src, /Stop/);
+test('lead, then the trade plan on one price line, then why, the range and the track record', () => {
+  const lead = at(/<Lead idea=\{idea\} \/>/), plan = at(/<LevelsLine /), why = at(/<Card title="Why this idea">/);
+  assert.ok(lead > 0 && plan > lead && why > plan && at(/<Fold title="Track record/) > why);
+  assert.match(src, /label="Reward : risk"/);
+  assert.match(src, /label="To stop"/);
+  assert.match(levels, /Stop/);
+  assert.match(levels, /Target/);
+  assert.match(levels, /Now \{px\(now\)\}/);
 });
 
-test('Why, Track record fold into native details', () => {
-  assert.match(src, /<details/);
-  assert.match(src, /<Fold title="Why/);
-  assert.match(src, /<Fold title="Track record/);
+test('Skip / Buy sit in a fixed bar like the Stock page', () => {
+  assert.match(src, /fixed z-30 inset-x-0 bottom-\[calc\(3\.5rem\+env\(safe-area-inset-bottom\)\)\] lg:bottom-0 lg:left-56/);
 });
 
 test('figures carry a paper line and the jargon is glossed', () => {
   assert.match(src, /Paper record · not advice/);
   assert.match(src, /kind="paper"/);
-  assert.match(src, /10th to 90th|p10/);
-  assert.match(src, /out-of-sample[^\n]*(held back|unseen)|held back/i);
-  assert.match(src, /t-score|t \d|"t"/);
+  assert.match(src, /p10/);
+  assert.match(src, /held back/i);
+  assert.match(src, /t-score/);
 });
 
 test('confidence is one line; the second-tap BuyBar and gates are untouched', () => {
@@ -32,20 +34,15 @@ test('confidence is one line; the second-tap BuyBar and gates are untouched', ()
   assert.match(src, /Empty title="Idea not found"/);
 });
 
-test('grade tile and forecast chip replace the badge and the big span', () => {
-  assert.match(src, /import GradeTile from/);
-  assert.match(src, /import DeltaChip from/);
-  assert.match(src, /GRADES\[idea\.grade\] && <GradeTile grade=\{idea\.grade\}/);
+test('the lead names the grade in words beside its tile and shows the expected move once', () => {
+  assert.match(src, /GRADES\[idea\.grade\] && \(/);
+  assert.match(src, /<GradeTile grade=\{idea\.grade\} small \/>\{GRADE_NAME\[idea\.grade\]\}/);
   assert.doesNotMatch(src, /<Badge kind=\{GRADES\[/);
-  assert.match(src, /<DeltaChip pct=\{idea\.expectedMedian \* 100\}[^>]*privateValue=\{false\}/);
-  assert.doesNotMatch(src, /text-\[24px\]/);
-  assert.match(src, /idea\.when/);
   assert.match(src, /idea\.rupees/);
-  assert.match(src, /Range /);
+  assert.match(src, /chance up/);
 });
 
 test('Fold uses the 20px radius', () => {
   const fold = src.slice(at(/const Fold =/), at(/const StrategyRecord/));
   assert.match(fold, /rounded-\[20px\]/);
-  assert.doesNotMatch(fold, /rounded-\[16px\]/);
 });

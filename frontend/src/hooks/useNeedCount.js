@@ -13,14 +13,16 @@ export const fetchIdeas = async (isAdmin) => {
     : [];
   let hiddenReason = '';
   let hiddenCount = 0;
+  let record = null;
   const picks = isAdmin
     ? await api.get(endpoints.picks.today).then((r) => {
       hiddenReason = r.data.hidden_reason || '';
       hiddenCount = r.data.hidden_count || 0;
+      record = r.data.forward || null;
       return (r.data.shown || []).map((p) => ideaFromPick(p, r.data.setups.find((s) => s.setup === p.setup), r.data.grade_text));
     }).catch(() => [])
     : [];
-  return { items: [...sug, ...picks], hiddenReason, hiddenCount };
+  return { items: [...sug, ...picks], hiddenReason, hiddenCount, record };
 };
 
 /**

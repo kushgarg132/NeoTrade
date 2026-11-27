@@ -96,6 +96,7 @@ export const ideaFromPick = (p, setup, gradeText = null) => {
     backfilled: p.backfilled === true, // recomputed after the fact (picks.py::backfill), never in the forward record
     noEdge: p.edge === false, decided: false, experimental: p.experimental === true,
     firedOn: p.fired_on ?? null, daysSince: p.days_since ?? 0, daysLeft: p.days_left ?? null, moveSinceEntry: p.move_since_entry ?? null,
+    priceNow: typeof p.price_now === 'number' ? p.price_now : null,
   };
 };
 
@@ -223,9 +224,11 @@ export const rankPicks = (items = []) => ({
   unproven: items.filter((i) => i.kind === 'p' && !(i.grade in GRADE_RANK)).sort(byOdds),
 });
 
-/** One status for a row, most urgent first: bad news since the signal, results inside the horizon, then for a pick
- *  whether its entry is still open. `news` = the symbol's /news/symbols entry, `results` its next results date. */
+/** One status for a row, most urgent first: price already under the stop, bad news since the signal, results inside
+ *  the horizon, then for a pick whether its entry is still open. `news` = the symbol's /news/symbols entry, `results`
+ *  its next results date. */
 export const pickStatus = (idea, { news, results, now = Date.now() } = {}) => {
+  if (idea.kind === 'p' && idea.priceNow != null && idea.stop != null && idea.priceNow < idea.stop) return { label: 'Below stop', kind: 'alert' };
   if (idea.kind === 'p' && idea.daysSince > 0 && badNewsSince(news, idea.firedOn)) return { label: 'New bad news', kind: 'alert' };
   const soon = resultsFlag(results, idea.daysSince > 0 && idea.daysLeft != null ? idea.daysLeft : idea.horizon, now);
   if (soon) return { label: soon, kind: 'unproven' };

@@ -9,6 +9,7 @@ import { stockPath } from '../../utils/stocks';
 import { bareSymbol } from '../../utils/formatters';
 import { actNowCount, holdingButtons, holdingActions, signalText, triageHoldings } from '../../utils/ideas';
 import StockIcon from '../ui/StockIcon';
+import Stamp from '../ideas/Stamp';
 
 const SHOWN = 3;
 const DOT = { verdict_worse: 'bg-[var(--loss)]', stop_hit: 'bg-[var(--loss)]', idea_exit: 'bg-[var(--loss)]', target_hit: 'bg-[var(--gain)]', add: 'bg-[var(--gain)]' };
@@ -20,7 +21,7 @@ const DOT = { verdict_worse: 'bg-[var(--loss)]', stop_hit: 'bg-[var(--loss)]', i
  */
 const NeedsYou = ({ need, isAdmin, onDone }) => {
   const [ticket, setTicket] = useState(null);
-  const all = isAdmin ? '/ideas?tab=holdings' : '/money';
+  const all = isAdmin ? '/ideas' : '/money';
   if (!need.loaded) return need.error ? <ErrorLine message="Couldn't load what needs you." onRetry={need.reload} /> : <Skeleton rows={3} />;
   const { act } = triageHoldings(need.actions);
   const top = act.slice(0, SHOWN);
@@ -57,21 +58,7 @@ const NeedsYou = ({ need, isAdmin, onDone }) => {
                   {signalText(lead).text}{s.items.length > 1 ? ` · +${s.items.length - 1} more` : ''}
                 </div>
               </Link>
-              {stamp && (
-                // A stamp, side over quantity, tinted by side (it replaces the dot). It opens the ticket, which is
-                // the review; solid red waits for the ticket's final confirm.
-                <button
-                  type="button"
-                  onClick={() => setTicket(t)}
-                  aria-label={`${b.primary.label} ${lead.action.quantity} shares, opens the order ticket`}
-                  className={`tap shrink-0 w-14 h-12 rounded-[12px] grid place-content-center justify-items-center gap-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
-                    b.primary.label === 'Sell' ? 'bg-[var(--loss-soft)] text-[var(--loss)]' : 'bg-[var(--gain-soft)] text-[var(--gain)]'
-                  }`}
-                >
-                  <span className="text-[12px] font-extrabold tracking-[0.06em] uppercase leading-none">{b.primary.label}</span>
-                  <span className="text-[17px] font-extrabold leading-none tabular-nums">{lead.action.quantity}</span>
-                </button>
-              )}
+              {stamp && <Stamp side={b.primary.label} quantity={lead.action.quantity} onClick={() => setTicket(t)} />}
             </div>
           );
         })}

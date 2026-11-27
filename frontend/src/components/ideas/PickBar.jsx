@@ -5,8 +5,9 @@ import api, { endpoints } from '../../utils/api';
 import { parseIdeaId } from '../../utils/ideas';
 
 /** A pick's own actions: Skip hides it from the list (`POST /picks/{id}/dismiss`); Buy opens the order ticket at the
- *  pick's entry, limited to the top of its entry zone (real money keeps the ticket's second tap). */
-const PickBar = ({ idea, onDone }) => {
+ *  pick's entry, limited to the top of its entry zone; once the price broke the stop, a market ticket at the price now
+ *  (an old zone would be weeks stale). Real money keeps the ticket's second tap. */
+const PickBar = ({ idea, onDone, broken = false }) => {
   const [ticket, setTicket] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState(null);
@@ -27,9 +28,9 @@ const PickBar = ({ idea, onDone }) => {
       {failure && <p role="alert" className="text-[14px] text-[var(--loss)]">{failure}</p>}
       <div className="flex gap-2">
         <Button variant="secondary" className="px-6" onClick={skip} disabled={busy}>Skip</Button>
-        <Button className="flex-1" onClick={() => setTicket(true)} disabled={busy}>Buy</Button>
+        <Button variant={broken ? 'secondary' : 'primary'} className="flex-1" onClick={() => setTicket(true)} disabled={busy}>Buy</Button>
       </div>
-      {ticket && <OrderTicket symbol={idea.symbol} side="BUY" lastPrice={idea.entry} limitPrice={idea.entryZone?.[1]} onClose={() => setTicket(false)} onDone={onDone} />}
+      {ticket && <OrderTicket symbol={idea.symbol} side="BUY" lastPrice={idea.priceNow ?? idea.entry} limitPrice={broken ? undefined : idea.entryZone?.[1]} onClose={() => setTicket(false)} onDone={onDone} />}
     </div>
   );
 };

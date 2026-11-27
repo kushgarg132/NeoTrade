@@ -20,21 +20,23 @@ test('hero empty state names the action and links to accounts', () => {
 });
 
 const needs = readFileSync(new URL('../components/home/NeedsYou.jsx', import.meta.url), 'utf8');
+const stamp = readFileSync(new URL('../components/ideas/Stamp.jsx', import.meta.url), 'utf8');
 
 test('Needs you shows the top stocks inline with their action, ideas waiting and See all', () => {
   assert.match(page, /<NeedsYou need=\{need\} isAdmin=\{isAdmin\}/);
   assert.match(needs, /triageHoldings\(need\.actions\)/); // the Ideas tab's own order
   assert.match(needs, /<OrderTicket \{\.\.\.ticket\}/);
-  assert.match(needs, /const all = isAdmin \? '\/ideas\?tab=holdings' : '\/money'/);
+  assert.match(needs, /const all = isAdmin \? '\/ideas' : '\/money'/);
   assert.match(needs, /See all/);
   assert.match(needs, /You're clear\./);
 });
 
 test('Needs you action is a stamp: side over quantity, red for a sell, green for a buy, says it opens the ticket', () => {
   assert.doesNotMatch(needs, /Review ·/);
-  assert.match(needs, /bg-\[var\(--loss-soft\)\] text-\[var\(--loss\)\]/);
-  assert.match(needs, /bg-\[var\(--gain-soft\)\] text-\[var\(--gain\)\]/);
-  assert.match(needs, /aria-label=\{`\$\{b\.primary\.label\} \$\{lead\.action\.quantity\} shares, opens the order ticket`\}/);
+  assert.match(needs, /<Stamp side=\{b\.primary\.label\} quantity=\{lead\.action\.quantity\}/);
+  assert.match(stamp, /bg-\[var\(--loss-soft\)\] text-\[var\(--loss\)\]/);
+  assert.match(stamp, /bg-\[var\(--gain-soft\)\] text-\[var\(--gain\)\]/);
+  assert.match(stamp, /aria-label=\{`\$\{side\} \$\{quantity\} shares, opens the order ticket`\}/);
 });
 
 test('the AI row carries the Paper label', () => {
