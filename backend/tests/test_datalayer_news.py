@@ -351,6 +351,44 @@ async def test_analysis_reads_the_layer_and_reuses_an_up_to_date_note(mongo, mon
     assert await analysis.from_layer("TCS", read, store) is None      # ingest down: caller fetches
 
 
+async def test_gated_direction_gives_no_score_not_a_neutral_zero(mongo, monkeypatch):
+    """News direction gated (the blend key deleted): the note carries no score and no label, and its prompt
+    gets no per-headline direction either. A missing key once read as 0.0 and showed "Neutral" on every stock."""
+    from backend.database import db
+    from backend.datalayer import analysis
+    from backend.ai import analyst as agent
+
+    redis = FakeRedis()
+    monkeypatch.setattr(db, "db", mongo)
+    monkeypatch.setattr(db, "redis", redis)
+    monkeypatch.setattr(news, "followed", lambda _db: _async((NAMES, SECTOR_OF)))
+    redis.data["ingest:heartbeat:news_process"] = str(int(datetime.now(timezone.utc).timestamp()))
+    await mongo[news.COLLECTION].insert_one({
+        "_id": "a", "title": "TCS big win", "status": news.SCORED, "published_at": datetime.now(timezone.utc),
+        "event": "order", "impacts": [{"type": "symbol", "target": "TCS", "direction": 0.9, "impact": 8}]})
+    reports = []
+
+    async def report(**values):
+        reports.append(values)
+        return "Summary.", "Thesis."
+
+    monkeypatch.setattr(agent, "_report", report)
+    notes = {}
+
+    async def read(symbol):
+        return notes.get(symbol)
+
+    async def store(symbol, output):
+        notes[symbol] = output
+
+    out = await analysis.from_layer("TCS", read, store)
+    assert out["sentiment_score"] is None
+    assert out["sentiment_analysis"]["score"] is None and out["sentiment_analysis"]["label"] is None
+    assert out["basis"].endswith(":-")
+    assert reports[0]["sentiment_score"] == agent.UNMEASURED
+    assert "bullish" not in reports[0]["news"] and "(impact 8)" in reports[0]["news"]
+
+
 async def _async(value):
     return value
 

@@ -24,7 +24,9 @@ LOCK_SECONDS = 120
 WAIT_SECONDS = 60
 
 
-def _label(score: float) -> str:
+def _label(score: Optional[float]) -> Optional[str]:
+    if score is None:
+        return None
     return "bullish" if score > 0.15 else "bearish" if score < -0.15 else "neutral"
 
 
@@ -62,12 +64,13 @@ async def from_layer(symbol: str, read_cached: Callable[[str], Awaitable[Optiona
             "status": layer.SCORED, "published_at": {"$gte": now - NEWS_WINDOW},
             "impacts": {"$elemMatch": {"type": "symbol", "target": symbol}},
         }).sort("published_at", -1).limit(NEWS_LIMIT).to_list(length=None)
-        sentiment = await _float(redis, f"sentiment:{symbol}") or 0.0
+        # Absent while news direction is gated (news.py deletes the key): no reading, never a 0.0 neutral.
+        sentiment = await _float(redis, f"sentiment:{symbol}")
     except Exception as exc:
         logger.warning("analysis from the data layer failed for %s: %s", symbol, exc)
         return None
 
-    basis = f"{docs[0]['_id'] if docs else '-'}:{sentiment:.2f}"
+    basis = f"{docs[0]['_id'] if docs else '-'}:{'-' if sentiment is None else f'{sentiment:.2f}'}"
     cached = await read_cached(symbol)
     if cached and cached.get("basis") == basis:
         return cached
@@ -89,7 +92,7 @@ async def from_layer(symbol: str, read_cached: Callable[[str], Awaitable[Optiona
 
 
 async def _build(symbol, docs, sentiment, sector, redis) -> Dict[str, Any]:
-    from backend.ai.analyst import AnalystOutput, _report, emit
+    from backend.ai.analyst import UNMEASURED, AnalystOutput, _report, emit
     from backend.core.models import FinancialEvent, NewsArticle
 
     articles, events, lines = [], [], []
@@ -104,7 +107,9 @@ async def _build(symbol, docs, sentiment, sector, redis) -> Dict[str, Any]:
         ))
         events.append(FinancialEvent(event_type=doc.get("event") or "news", description=doc["title"],
                                      date=doc["published_at"], symbols=[symbol], impact_rating=impact))
-        lines.append(f"- {doc['title']} ({_label(direction)}, impact {impact}): {(doc.get('content') or '')[:300]}")
+        # Gated (no blend): the item's own direction is just as unproven, so the prompt gets impact only.
+        tag = f"impact {impact}" if sentiment is None else f"{_label(direction)}, impact {impact}"
+        lines.append(f"- {doc['title']} ({tag}): {(doc.get('content') or '')[:300]}")
 
     sector_score = await _float(redis, f"sector_sentiment:{sector}") if sector else None
     market_score = await _float(redis, "market:sentiment")
@@ -115,7 +120,7 @@ async def _build(symbol, docs, sentiment, sector, redis) -> Dict[str, Any]:
 
     emit({"type": "stage", "step": "writing"})
     summary, thesis = await _report(
-        symbol=symbol, sentiment_score=f"{sentiment:.2f}", relevant_count=len(docs), news=news,
+        symbol=symbol, sentiment_score=UNMEASURED if sentiment is None else f"{sentiment:.2f}", relevant_count=len(docs), news=news,
         events=json.dumps([{"event_type": e.event_type, "description": e.description,
                             "impact_rating": e.impact_rating} for e in events]),
     )
@@ -124,7 +129,7 @@ async def _build(symbol, docs, sentiment, sector, redis) -> Dict[str, Any]:
         symbol=symbol, sentiment_score=sentiment, impact_score=max_impact, summary=summary, thesis=thesis,
         events=events, news_articles=[a.model_dump(mode="json") for a in articles],
         sentiment_analysis={
-            "score": round(sentiment, 2), "label": _label(sentiment), "risk_score": max_impact,
+            "score": None if sentiment is None else round(sentiment, 2), "label": _label(sentiment), "risk_score": max_impact,
             "article_count": len(articles), "relevant_count": len(articles),
             "sector_score": sector_score, "market_score": market_score,
         },

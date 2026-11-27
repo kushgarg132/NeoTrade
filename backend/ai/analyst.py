@@ -52,6 +52,10 @@ THESIS_MARKER = "===THESIS==="
 report_sink: ContextVar[Optional[Callable[[dict], None]]] = ContextVar("report_sink", default=None)
 
 
+# What the note's prompt says in place of a score while direction is gated.
+UNMEASURED = "not measured: news direction is off until its calls are proven"
+
+
 def emit(event: dict) -> None:
     sink = report_sink.get()
     if sink is not None:
@@ -62,7 +66,8 @@ class AnalystOutput(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
     symbol: str
-    sentiment_score: float
+    # None while news direction is gated (datalayer/accuracy.py::news_direction_trusted): no reading, not neutral.
+    sentiment_score: Optional[float] = None
     impact_score: int
     summary: str
     thesis: str = ""
@@ -314,7 +319,11 @@ class AnalystAgent:
             relevant.append((article, score))
 
         now = datetime.now(timezone.utc)
-        sentiment = _weighted_sentiment(relevant, now)
+        from backend.database import db
+        from backend.datalayer.accuracy import news_direction_trusted
+
+        # Unproven direction is not a reading (owner gate, 2026-11-22): the note is still written, without a score.
+        sentiment = _weighted_sentiment(relevant, now) if await news_direction_trusted(db.db) else None
         max_impact = max((s.impact for _, s in relevant), default=0)
         raw_events = scores.events if scores else []
         events = [
@@ -324,19 +333,19 @@ class AnalystAgent:
         ]
 
         news = "\n".join(
-            f"- {a.title} ({s.sentiment.lower()}, impact {s.impact}): {(a.content or '')[:300]}"
+            f"- {a.title} ({'' if sentiment is None else s.sentiment.lower() + ', '}impact {s.impact}): {(a.content or '')[:300]}"
             for a, s in relevant
         ) or "No relevant news found."
         emit({"type": "stage", "step": "writing"})
         summary, thesis = await _report(
-            symbol=symbol, sentiment_score=f"{sentiment:.2f}", relevant_count=len(relevant), news=news,
+            symbol=symbol, sentiment_score=UNMEASURED if sentiment is None else f"{sentiment:.2f}", relevant_count=len(relevant), news=news,
             events=json.dumps([e.model_dump() for e in raw_events]),
         )
 
         scored = scores is not None and summary != "Unable to generate summary."
-        label = "bullish" if sentiment > 0.15 else "bearish" if sentiment < -0.15 else "neutral"
-        logger.info("AnalystAgent: %s sentiment %.2f from %d/%d relevant article(s)",
-                    symbol, sentiment, len(relevant), len(articles))
+        label = None if sentiment is None else "bullish" if sentiment > 0.15 else "bearish" if sentiment < -0.15 else "neutral"
+        logger.info("AnalystAgent: %s sentiment %s from %d/%d relevant article(s)",
+                    symbol, "gated" if sentiment is None else f"{sentiment:.2f}", len(relevant), len(articles))
         return AnalystOutput(
             symbol=symbol,
             sentiment_score=sentiment,
@@ -346,7 +355,7 @@ class AnalystAgent:
             events=events,
             news_articles=[a.model_dump(mode="json") for a in articles],
             sentiment_analysis={
-                "score": round(sentiment, 2),
+                "score": None if sentiment is None else round(sentiment, 2),
                 "label": label,
                 "risk_score": max_impact,  # Proxy for risk from news
                 "article_count": len(articles),
@@ -377,7 +386,8 @@ class AnalystAgent:
             from backend.database import db
             from backend.datalayer.accuracy import news_direction_trusted
 
-            if await redis.ttl(f"sentiment:{symbol}") <= CACHE_TTL_SECONDS and await news_direction_trusted(db.db):
+            if (output.get("sentiment_score") is not None and await redis.ttl(f"sentiment:{symbol}") <= CACHE_TTL_SECONDS
+                    and await news_direction_trusted(db.db)):
                 await redis.set(f"sentiment:{symbol}", output["sentiment_score"], ex=CACHE_TTL_SECONDS)
         except Exception as exc:
             logger.warning("analyst cache write failed for %s: %s", symbol, exc)

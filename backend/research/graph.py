@@ -32,7 +32,7 @@ class ResearchReport(BaseModel):
     company_info: Optional[Dict[str, Any]] = None
 
     # Sentiment
-    sentiment_score: float = 0.0
+    sentiment_score: Optional[float] = None  # None while news direction is gated
     impact_score: int = 0
     sentiment: Dict[str, Any] = {}
 

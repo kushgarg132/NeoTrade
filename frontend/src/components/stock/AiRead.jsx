@@ -31,12 +31,15 @@ const AiRead = ({ aiRead, retryAi }) => {
   const busy = loading || streaming;
   const refresh = read && stale && !busy && !error
     ? <button type="button" onClick={retryAi} className="-my-2.5 inline-flex min-h-11 items-center text-[14px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px]">Refresh</button> : null;
-  const sentiment = read && !live && score != null && (
+  // No score = news direction is gated until its calls are proven (backend sends null): say that, never "Neutral".
+  const sentiment = read && !live && (score != null ? (
     <span className="inline-flex items-baseline gap-1.5">
       <span className={`text-[15px] font-bold ${tone}`}>{word}</span>
       <span className="tabular-nums text-[13px] font-semibold text-[var(--text-muted)]">{Number(score).toFixed(2)}</span>
     </span>
-  );
+  ) : (
+    <span className="text-[13px] text-[var(--text-muted)]" title="News direction is switched off until the app's own news calls prove accurate.">Direction off until proven</span>
+  ));
 
   // No read yet: one row, title and the button that makes one.
   if (!summary && !error && !busy) {

@@ -58,7 +58,7 @@ async def refresh_analyst_verdict(symbol: str, redis, ttl_seconds: int = 90000) 
         top_reason = next((line.strip() for line in summary.splitlines() if line.strip()), "")[:200]
 
     verdict = {
-        "sentiment_score": float(output.get("sentiment_score", 0.0)),
+        "sentiment_score": float(output.get("sentiment_score") or 0.0),  # gated (None): no AI push either way
         "impact_score": int(output.get("impact_score", 0)),
         "label": output.get("sentiment_analysis", {}).get("label", "neutral"),
         "top_reason": top_reason,
