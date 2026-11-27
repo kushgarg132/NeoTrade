@@ -7,7 +7,6 @@ import Card from '../components/ui/Card';
 import Hero from '../components/ui/Hero';
 import DeltaChip from '../components/ui/DeltaChip';
 import Tabs, { useTabParam } from '../components/ui/Tabs';
-import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Skeleton from '../components/ui/Skeleton';
 import ErrorLine from '../components/ui/ErrorLine';
@@ -22,11 +21,9 @@ import AiRead from '../components/stock/AiRead';
 import EventsTab from '../components/stock/EventsTab';
 import StockIndices from '../components/stock/StockIndices';
 import Position from '../components/stock/Position';
-import VerdictSummary from '../components/stock/VerdictSummary';
 import MarketFacts from '../components/stock/MarketFacts';
 import useStockAnalysis from '../components/stock/useStockAnalysis';
 import Fundamentals from '../components/analysis/Fundamentals';
-import { verdictKind, verdictLabel } from '../components/stock/common';
 import { StockIcon } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
 import { bareSymbol, marketPhase } from '../utils/formatters';
@@ -129,11 +126,11 @@ const Stock = () => {
     : company?.day_change_percent != null ? company.day_change_percent / 100 : prev ? price / prev - 1 : null;
   const dayAbs = prev != null && price != null ? price - prev : null;
   const pos = positionSummary(m?.position, portfolio);
-  const verdict = m?.verdict?.current;
   const sold = m?.position?.sold;
   // A holding opens on a daily range wide enough to show your first buy (trades and plan lines only draw on daily
   // ranges); anything else opens on today.
-  const heldDays = m?.position?.held_since ? (Date.now() - new Date(m.position.held_since).getTime()) / 86_400_000 : 0;
+  const lastBar = closes.at(-1)?.date ?? closes.at(-1)?.timestamp; // the latest session, not the clock: render stays pure (mine.bars say date, quick price_data timestamp)
+  const heldDays = m?.position?.held_since && lastBar ? (new Date(lastBar) - new Date(m.position.held_since)) / 86_400_000 : 0;
   const chartRange = !(pos || sold) ? '1D' : heldDays > 180 ? '1Y' : '6M';
 
   const panel = {
@@ -159,11 +156,7 @@ const Stock = () => {
           <StockIcon symbol={symbol} className="size-8 rounded-[8px] p-0.5" />
           <span className="truncate">{symbol}</span>
         </span>
-      )} back right={verdict && !sold ? (
-        <button type="button" onClick={() => setTab('details')} aria-label={`Verdict ${verdictLabel(verdict)}: see why`} className="tap inline-flex min-h-11 items-center rounded-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-          <Badge kind={verdictKind(verdict)}>{verdictLabel(verdict)}</Badge>
-        </button>
-      ) : null} />
+      )} back />
 
       {quick.loading && price == null ? (
         <Card className="mb-3"><Skeleton rows={2} /></Card>
@@ -200,8 +193,8 @@ const Stock = () => {
           </Hero>
         </div>
       )}
-      <Position symbol={symbol} pos={pos} mine={m} status={mine.status} sold={sold} price={price} onReload={loadMine} />
-      {!sold && <VerdictSummary verdict={m?.verdict} onDetails={() => { setTab('details'); requestAnimationFrame(() => document.getElementById('stock-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }} />}
+      <Position symbol={symbol} pos={pos} mine={m} status={mine.status} sold={sold} price={price} onReload={loadMine}
+        onDetails={() => { setTab('details'); requestAnimationFrame(() => document.getElementById('stock-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }} />
       {/* The AI read and how the stock has done sit above the tabs: on every tab, not under the panel. */}
       <AiRead aiRead={aiRead} retryAi={user ? retryAi : () => askSignIn(FRESH_READ)} />
       <MarketFacts quick={quick.data} />

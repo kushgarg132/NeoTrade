@@ -15,7 +15,6 @@ test('technical gauge uses chartTheme and the Details tab renders it', () => {
 
 const position = read('../components/stock/Position.jsx');
 const facts = read('../components/stock/MarketFacts.jsx');
-const summary = read('../components/stock/VerdictSummary.jsx');
 
 test('position block is a risk view: avg, qty, P&L, XIRR, held since, stop distance, private', () => {
   assert.match(position, /Your position · your broker account/);
@@ -101,20 +100,28 @@ test('fundamentals sit under the chart, not in Details', () => {
   assert.doesNotMatch(details, /<Fundamentals/);
 });
 
-test('order above the tabs: position, verdict answer, AI read, how it has done; signed out the bar says Sign in to trade', () => {
+test('order above the tabs: position (with the verdict), AI read, how it has done; signed out the bar says Sign in to trade', () => {
   const at = (x) => page.indexOf(x);
-  assert.ok(at('<Position ') < at('<VerdictSummary ') && at('<VerdictSummary ') < at('<AiRead aiRead=') && at('<AiRead aiRead=') < at('<MarketFacts ') && at('<MarketFacts ') < at('<Tabs tabs={TABS}'));
+  assert.ok(at('<Position ') < at('<AiRead aiRead=') && at('<AiRead aiRead=') < at('<MarketFacts ') && at('<MarketFacts ') < at('<Tabs tabs={TABS}'));
   assert.match(page, /!user \? <Button variant="secondary" className="flex-1" onClick=\{\(\) => askSignIn\(WATCH_OR_TRADE\)\}>Sign in to trade<\/Button>/);
 });
 
 test('a holding opens its chart on 6M or 1Y (wide enough for the first buy), where its trades and plan lines draw', () => {
   assert.match(page, /const chartRange = !\(pos \|\| sold\) \? '1D' : heldDays > 180 \? '1Y' : '6M'/);
+  assert.doesNotMatch(page, /Date\.now\(\)/); // pure render: the latest bar, not the clock
   assert.match(page, /initialRange=\{chartRange\}/);
 });
 
-test('the verdict answer and the header badge both lead to the reasons on Details', () => {
-  assert.match(summary, /reasonFact\(first, v\.facts, v\.limits\)/);
-  assert.match(page, /onClick=\{\(\) => setTab\('details'\)\}/);
+test('the verdict shows once above the tabs, inside the position card, with Why opening Details', () => {
+  assert.match(position, /reasonFact\(first, v\.facts, v\.limits\)/);
+  assert.match(position, /onClick=\{onDetails\}/);
+  assert.match(page, /onDetails=\{\(\) => \{ setTab\('details'\)/);
+  assert.doesNotMatch(page, /<Badge kind=\{verdictKind/); // no second SELL in the header
+});
+
+test('a one-buy holding shows only its term and tax, not the same qty and gain again', () => {
+  assert.match(position, /const oneLot = lots\.length === 1/);
+  assert.match(position, /lots\.length > 0 && !oneLot/);
 });
 
 test('how it has done: returns 1W to 1Y, sector, volume against its average', () => {

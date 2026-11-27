@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import Badge from '../ui/Badge';
+import { REASONS } from '../../utils/mine';
+import { reasonFact } from '../../utils/verdict';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import ErrorLine from '../ui/ErrorLine';
@@ -11,7 +14,7 @@ import { px } from '../ideas/levels';
 import { formatQuantity } from '../../utils/formatters';
 import { formatXirr } from '../../utils/mine';
 import api, { endpoints } from '../../utils/api';
-import { day } from './common';
+import { day, verdictKind, verdictLabel } from './common';
 
 const ring = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]';
 const LOTS_SHOWN = 2; // more fold under "All N lots"
@@ -115,12 +118,17 @@ const Plan = ({ symbol, thesis, onSaved }) => {
  * held it, the stop line, your buy lots with days to long-term and the tax a sale would cost, and your plan.
  * A sold holding keeps one line; a failed read says prices still work.
  */
-const Position = ({ symbol, pos, mine, status, sold, price, onReload }) => {
+const Position = ({ symbol, pos, mine, status, sold, price, onReload, onDetails }) => {
   const [allLots, setAllLots] = useState(false);
   const thesis = mine?.thesis;
   const stop = thesis?.stop;
   const lots = mine?.lots || [];
   const held = mine?.position;
+  const v = mine?.verdict;
+  const first = v?.reasons?.[0];
+  const fact = first && reasonFact(first, v.facts, v.limits);
+  // One buy that is the whole position: its qty, price and gain are the stats above, so only its term and tax show.
+  const oneLot = lots.length === 1 && pos && Math.abs(lots[0].qty - pos.qty) < 1e-9 ? lots[0] : null;
   const risk = {
     dist: stop != null && price ? (price - stop) / price : null,
     pnl: stop != null && pos ? (stop - pos.avg) * pos.qty : null,
@@ -150,7 +158,30 @@ const Position = ({ symbol, pos, mine, status, sold, price, onReload }) => {
             </p>
           )}
 
-          {lots.length > 0 && (
+          {v?.current && (
+            // The verdict lives here, once: badge, since, its first reason with the figure, and the way to every reason.
+            <div className="mt-4 pt-3 border-t border-[var(--border)]">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-semibold text-[var(--text-muted)]">Our verdict</span>
+                <Badge kind={verdictKind(v.current)}>{verdictLabel(v.current)}</Badge>
+                {v.since && <span className="text-[13px] text-[var(--text-muted)]">since {day(v.since)}</span>}
+              </div>
+              {first && <p className="mt-1.5 text-[14px] font-medium text-[var(--text)]">{REASONS[first] || first.replace(/_/g, ' ')}</p>}
+              {fact && <p className="private text-[13px] tabular-nums text-[var(--text-muted)]">{fact}</p>}
+              <button type="button" onClick={onDetails}
+                className={`-mb-2 inline-flex min-h-11 items-center gap-0.5 text-[14px] font-semibold text-[var(--accent)] rounded-[12px] ${ring}`}>
+                Why{v.reasons?.length > 1 ? `: ${v.reasons.length} reasons` : ''}<ChevronRight className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+
+          {oneLot && (
+            <p className="mt-3 text-[13px] tabular-nums">
+              <span className={oneLot.days_to_long > 0 ? 'text-[var(--warn)]' : 'text-[var(--text-muted)]'}>{lotTerm(oneLot)}</span>
+              {oneLot.est_tax > 0 && <span className="private text-[var(--text-muted)]"> · tax if sold ≈ {inr(oneLot.est_tax)}</span>}
+            </p>
+          )}
+          {lots.length > 0 && !oneLot && (
             <div className="mt-4 pt-3 border-t border-[var(--border)]">
               <p className="text-[13px] font-semibold text-[var(--text-muted)]">Your lots{mine?.unknown_qty > 0 && <span className="font-normal"> · {formatQuantity(mine.unknown_qty)} shares with no buy on record</span>}</p>
               <ul>{(allLots ? lots : lots.slice(0, LOTS_SHOWN)).map((l) => <Lot key={`${l.buy_date}-${l.price}-${l.qty}`} l={l} />)}</ul>
