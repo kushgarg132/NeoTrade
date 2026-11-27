@@ -134,8 +134,8 @@ const Row = ({ h, news, open, onToggle, onTrade }) => {
       </button>
       {open && (
         <div className="flex gap-2 pb-3">
-          <Button variant="secondary" className="flex-1" onClick={() => trade('SELL')}>Sell</Button>
-          <Button className="flex-1" onClick={() => trade('BUY')}>Buy more</Button>
+          <Button variant="danger" className="flex-1" onClick={() => trade('SELL')}>Sell</Button>
+          <Button variant="gain" className="flex-1" onClick={() => trade('BUY')}>Buy more</Button>
           <Link to={stockPath(h.symbol)} className="shrink-0"><Button variant="secondary">Details</Button></Link>
         </div>
       )}
