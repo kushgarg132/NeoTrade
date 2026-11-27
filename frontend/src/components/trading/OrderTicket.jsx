@@ -9,6 +9,8 @@ import api, { endpoints, getPreferences } from '../../utils/api';
 import { cn } from '../../utils/cn';
 import Countdown from '../common/Countdown';
 import { tokenRefusal, deadlineFrom, EXPIRED_NOTE } from '../../utils/liveConfirm';
+import { bareSymbol } from '../../utils/formatters';
+import useHoldings from '../money/useHoldings';
 
 /**
  * The order ticket: Buy or Sell, on Mine (the user's own broker
@@ -92,6 +94,9 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
   const cardRef = useRef(null);
   cardRef.current = result ? null : card;
   const requestRef = useRef(0);
+  // Shares held of this stock on Mine, for Sell all. Unknown until the snapshot loads.
+  const { snapshot } = useHoldings();
+  const held = Math.floor((snapshot?.holdings || []).find((h) => bareSymbol(h.symbol) === bareSymbol(symbol))?.quantity || 0);
 
   useEffect(() => {
     getPreferences()
@@ -279,7 +284,15 @@ const OrderTicket = ({ symbol, side: initialSide = 'BUY', lastPrice, quantity: i
 
             <div className="rounded-[20px] bg-[var(--surface-2)] p-4 space-y-4">
               <div>
-                <div className="mb-2 text-[13px] font-semibold text-[var(--text-muted)]">Shares</div>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[13px] font-semibold text-[var(--text-muted)]">Shares</span>
+                  {side === 'SELL' && held > 0 && (
+                    <button type="button" onClick={() => edit(setQuantity)(String(held))} disabled={busy || qty === held}
+                      className="tap min-h-9 rounded-[9px] px-3 text-[13px] font-semibold text-[var(--loss)] hover:bg-[var(--surface)] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+                      Sell all <span className="private tabular-nums">{held}</span>
+                    </button>
+                  )}
+                </div>
                 <Stepper value={quantity} onChange={edit(setQuantity)} disabled={busy} />
               </div>
               <div className="border-t border-[var(--border)] pt-4">
