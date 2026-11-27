@@ -46,7 +46,7 @@ const Term = ({ id, children }) => {
         <Info className="w-4 h-4" aria-hidden="true" />
       </button>
       <span ref={noteRef} id={noteId} popover="auto" role="note"
-            className="fixed m-0 inset-auto w-max max-w-[min(20rem,calc(100vw-2rem))] rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-left text-[13px] font-normal leading-snug text-[var(--text)] shadow-lg">
+            className="fixed m-0 inset-auto w-max max-w-[min(20rem,calc(100vw-2rem))] rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-left text-[13px] font-normal leading-snug text-[var(--text)]">
         {text}
       </span>
     </>
