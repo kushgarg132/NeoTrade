@@ -87,8 +87,9 @@ const SortHead = ({ sort, onTap }) => (
 );
 
 /** One holding in two lines: name and value, then quantity and weight beside its gain and today's move; then its
- *  verdict and why, and its news analysis. A fund has no stock page, so it is not a link. */
-const Row = ({ h, news }) => {
+ *  verdict and why, and its news analysis. Tapping a stock opens Sell / Buy more / Details under it (one row at a
+ *  time); a fund has no stock page and no ticket, so it does not open. */
+const Row = ({ h, news, open, onToggle, onTrade }) => {
   const day = h.day_pct;
   const why = whyLine({ ...h, news });
   const mf = h.kind === 'MF';
@@ -123,7 +124,23 @@ const Row = ({ h, news }) => {
     </>
   );
   const cls = 'block py-3 border-b border-[var(--border)] last:border-b-0';
-  return mf ? <div className={cls}>{body}</div> : <Link to={stockPath(h.symbol)} className={`${cls} tap -mx-2 px-2 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{body}</Link>;
+  if (mf) return <div className={cls}>{body}</div>;
+  const trade = (side) => onTrade({ symbol: h.symbol, side, lastPrice: h.last_price ?? undefined });
+  return (
+    <div className="border-b border-[var(--border)] last:border-b-0">
+      <button type="button" aria-expanded={open} onClick={onToggle}
+        className="tap block w-[calc(100%+1rem)] text-left py-3 -mx-2 px-2 hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+        {body}
+      </button>
+      {open && (
+        <div className="flex gap-2 pb-3">
+          <Button variant="secondary" className="flex-1" onClick={() => trade('SELL')}>Sell</Button>
+          <Button className="flex-1" onClick={() => trade('BUY')}>Buy more</Button>
+          <Link to={stockPath(h.symbol)} className="shrink-0"><Button variant="secondary">Details</Button></Link>
+        </div>
+      )}
+    </div>
+  );
 };
 
 /** Where the money sits: the largest holdings as one stacked bar, with a legend. */
@@ -153,6 +170,7 @@ const HoldingsTab = () => {
   const { snapshot, loading, error, reload } = useHoldings({ poll: true });
   const [sort, setSort] = useState({ key: 'value', dir: 'desc' });
   const [ticket, setTicket] = useState(null);
+  const [openRow, setOpenRow] = useState(null); // the one stock row showing Sell / Buy more
   const [importing, setImporting] = useState(false);
   const [reading, setReading] = useState(null);
   const [needsOnly, setNeedsOnly] = useState(false);
@@ -229,7 +247,7 @@ const HoldingsTab = () => {
             {rows.length === 0 ? (
               <Empty title="Nothing matches" body="Clear the filter to see the rest." />
             ) : (
-              <div><SortHead sort={sort} onTap={(key) => setSort((cur) => nextSort(cur, key))} />{rows.map((h) => <Row key={h.isin || h.symbol} h={h} news={news?.[h.symbol]} />)}</div>
+              <div><SortHead sort={sort} onTap={(key) => setSort((cur) => nextSort(cur, key))} />{rows.map((h) => { const k = h.isin || h.symbol; return <Row key={k} h={h} news={news?.[h.symbol]} open={openRow === k} onToggle={() => setOpenRow((o) => (o === k ? null : k))} onTrade={setTicket} />; })}</div>
             )}
           </>
         )}
