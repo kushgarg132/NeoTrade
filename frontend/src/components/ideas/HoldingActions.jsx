@@ -65,21 +65,25 @@ const StockRow = ({ stock, h, notes, open, onToggle, onAct, onTicket }) => {
   const more = items.length - 1;
   return (
     <li className="border-b border-[var(--border)] last:border-b-0">
-      <div className="flex items-center gap-3 py-3">
-        <button type="button" aria-expanded={open} onClick={onToggle}
-          className={`tap flex min-w-0 flex-1 items-center gap-3 rounded-[12px] text-left ${ring}`}>
+      {/* The row-wide toggle sits under the content (pointer-events off), so the name link and the stamp stay tappable. */}
+      <div className="relative flex items-center gap-3 py-3">
+        <button type="button" aria-expanded={open} aria-label={`${bareSymbol(symbol) || lead.title}: show signals, Later and dismiss`} onClick={onToggle}
+          className={`tap absolute inset-0 rounded-[12px] ${ring}`} />
+        <div className="pointer-events-none relative flex min-w-0 flex-1 items-center gap-3">
           <StockIcon symbol={symbol} className="size-8" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-bold text-[var(--text)]">{bareSymbol(symbol) || lead.title}</span>
+            {symbol ? (
+              <Link to={stockPath(symbol)} className={`pointer-events-auto block w-fit max-w-full truncate text-[15px] font-bold text-[var(--text)] underline-offset-4 hover:underline rounded-[6px] ${ring}`}>{bareSymbol(symbol)}</Link>
+            ) : <span className="block truncate text-[15px] font-bold text-[var(--text)]">{lead.title}</span>}
             {!open && (
               <span className="block text-[13px] leading-snug text-[var(--text-muted)] line-clamp-2">
                 {signalText(lead).text}{more > 0 ? ` · +${more} more` : ''}
               </span>
             )}
           </span>
-          {<ChevronDown className={`w-4 h-4 shrink-0 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />}
-        </button>
-        {ticket && <Stamp side={b.primary.label} quantity={lead.action.quantity} onClick={() => onTicket(ticket)} />}
+          <ChevronDown className={`w-4 h-4 shrink-0 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </div>
+        {ticket && <span className="relative"><Stamp side={b.primary.label} quantity={lead.action.quantity} onClick={() => onTicket(ticket)} /></span>}
       </div>
 
       {open && (

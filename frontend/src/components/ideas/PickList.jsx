@@ -7,6 +7,7 @@ import { bareSymbol } from '../../utils/formatters';
 import { pct, tone } from '../ui/format';
 import { toneText } from '../ui/tone';
 import StockIcon from '../ui/StockIcon';
+import { stockPath } from '../../utils/stocks';
 
 // Status colour by pickStatus kind: a dot and the words, no pill.
 const STATUS = {
@@ -37,12 +38,15 @@ const Row = ({ idea, news, results }) => {
   const time = timeText(idea);
   return (
     <li className="border-b border-[var(--border)] last:border-b-0">
-      <Link to={`/ideas/${encodeURIComponent(idea.id)}`}
-        className={`tap flex items-center gap-3 -mx-2 px-2 py-3 rounded-[12px] hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] ${ring}`}>
+      {/* The row opens the idea (a full-row link under the content); the symbol on top opens the stock's page. */}
+      <div className="relative -mx-2 px-2 py-3 rounded-[12px] hover:bg-[var(--surface-2)] has-[a:active]:bg-[var(--surface-2)]">
+      <Link to={`/ideas/${encodeURIComponent(idea.id)}`} aria-label={`Open the ${bareSymbol(idea.symbol)} idea`}
+        className={`tap absolute inset-0 rounded-[12px] ${ring}`} />
+      <div className="pointer-events-none relative flex items-center gap-3">
         <StockIcon symbol={idea.symbol} className="size-8" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="min-w-0 truncate text-[15px] font-bold text-[var(--text)]">{bareSymbol(idea.symbol)}</span>
+            <Link to={stockPath(idea.symbol)} className={`pointer-events-auto min-w-0 truncate text-[15px] font-bold text-[var(--text)] underline-offset-4 hover:underline rounded-[6px] ${ring}`}>{bareSymbol(idea.symbol)}</Link>
             {GRADES[idea.grade] && <GradeTile grade={idea.grade} small />}
             {idea.side !== 'BUY' && <span className="text-[12px] font-bold uppercase tracking-[0.04em] text-[var(--loss)]">{idea.side}</span>}
             <span className={`ml-auto shrink-0 text-[15px] font-bold tabular-nums ${move != null && !broken ? toneText(tone(move)) : 'text-[var(--text-muted)]'}`}>
@@ -67,7 +71,8 @@ const Row = ({ idea, news, results }) => {
           </div>
         </div>
         <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
-      </Link>
+      </div>
+      </div>
     </li>
   );
 };
