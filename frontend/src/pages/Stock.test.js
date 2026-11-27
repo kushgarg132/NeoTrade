@@ -13,16 +13,34 @@ test('technical gauge uses chartTheme and the Details tab renders it', () => {
   assert.match(analysis, /<TechGauge/);
 });
 
-test('position block is a risk view: avg, qty, P&L, stop distance, private', () => {
-  assert.match(page, /Your position · your broker account/);
-  assert.match(page, /stopDist/);
-  assert.match(page, /if hit/);
-  assert.doesNotMatch(page, /No stop set/); // the thesis card is gone (2026-10-28): nowhere to set one
-  assert.match(page, /className=\{`private /);
+const position = read('../components/stock/Position.jsx');
+const facts = read('../components/stock/MarketFacts.jsx');
+const summary = read('../components/stock/VerdictSummary.jsx');
+
+test('position block is a risk view: avg, qty, P&L, XIRR, held since, stop distance, private', () => {
+  assert.match(position, /Your position · your broker account/);
+  assert.match(position, /risk\.dist/);
+  assert.match(position, /if hit/);
+  assert.match(position, /held\.xirr/);
+  assert.match(position, /held_since/);
+  assert.match(position, /className=\{`private /);
+  assert.match(page, /<Position symbol=\{symbol\}/);
+});
+
+test('lots show days to long-term and the tax a sale would cost; more than two fold', () => {
+  assert.match(position, /days_to_long/);
+  assert.match(position, /tax if sold/);
+  assert.match(position, /LOTS_SHOWN = 2/);
+});
+
+test('your plan is set and edited in place through PUT /mine/thesis', () => {
+  assert.match(position, /api\.put\(endpoints\.mine\.thesis\(symbol\)/);
+  assert.match(position, /Set plan/);
+  assert.match(position, /raise alerts/);
 });
 
 test('errors say what failed and offer Retry', () => {
-  assert.match(page, /Could not load your position from your broker account/);
+  assert.match(position, /Could not load your position from your broker account/);
   assert.match(analysis, /Could not load the price snapshot[^\n]*onRetry=\{reloadQuick\}/);
 });
 
@@ -36,18 +54,17 @@ test('order flow untouched: Buy and Sell still open the ticket', () => {
 });
 
 test('stop-hit loss shows from-now and vs-cost, both private', () => {
-  assert.match(page, /\(stop - price\) \* pos\.qty/);
-  assert.match(page, /<span className="private">\{inr\(risk\.stopFromNow[^\n]*from now/);
-  assert.match(page, /<span className="private">\(\{inr\(risk\.stopPnl[^\n]*vs what you paid/);
+  assert.match(position, /\(stop - price\) \* pos\.qty/);
+  assert.match(position, /<span className="private">\{inr\(risk\.fromNow[^\n]*from now/);
+  assert.match(position, /<span className="private">\(\{inr\(risk\.pnl[^\n]*vs what you paid/);
 });
 
 // Hide-amounts blurs a `.private` only when it holds no `.private` descendant, so the stop line must
 // not wrap its own private spans, and the chart legend must blur the amounts too.
 test('stop and target amounts are their own private spans, with no private wrapper', () => {
-  const stock = readFileSync(new URL('./Stock.jsx', import.meta.url), 'utf8');
-  assert.doesNotMatch(stock, /<p className="private">\s*Stop/);
-  assert.match(stock, /Stop <span className="private">\{px\(risk\.stop\)\}/);
-  assert.match(stock, /target <span className="private">\{px\(risk\.target\)\}/);
+  assert.doesNotMatch(position, /<p className="private">\s*Stop/);
+  assert.match(position, /Stop <span className="private">\{px\(stop\)\}/);
+  assert.match(position, /Target <span className="private font-semibold">\{px\(t\.target\)\}/);
   const chart = readFileSync(new URL('../components/stock/TradingChart.jsx', import.meta.url), 'utf8');
   assert.match(chart, /<span className="private">\{fmt\(l\.price\)\}/);
   assert.match(chart, /<PriceCanvas/);
@@ -69,7 +86,7 @@ test('price sits on the Hero, not a Card, and stays public', () => {
   assert.match(page, /<DeltaChip[\s\S]*?privateValue=\{false\}/);
   assert.match(page, /aria-pressed=\{watching\}/);
   assert.match(page, /<AsOf /);
-  assert.match(page, /data-testid="stop-line"/);
+  assert.match(position, /data-testid="stop-line"/);
   assert.doesNotMatch(page, /text-\[28px\]/);
 });
 
@@ -84,7 +101,24 @@ test('fundamentals sit under the chart, not in Details', () => {
   assert.doesNotMatch(details, /<Fundamentals/);
 });
 
-test('phone order: tabs (chart) before the AI read; signed out the bar says Sign in to trade', () => {
-  assert.ok(page.indexOf('<Tabs tabs={TABS}') < page.indexOf('<AiRead aiRead='));
+test('order above the tabs: position, verdict answer, AI read, how it has done; signed out the bar says Sign in to trade', () => {
+  const at = (x) => page.indexOf(x);
+  assert.ok(at('<Position ') < at('<VerdictSummary ') && at('<VerdictSummary ') < at('<AiRead aiRead=') && at('<AiRead aiRead=') < at('<MarketFacts ') && at('<MarketFacts ') < at('<Tabs tabs={TABS}'));
   assert.match(page, /!user \? <Button variant="secondary" className="flex-1" onClick=\{\(\) => askSignIn\(WATCH_OR_TRADE\)\}>Sign in to trade<\/Button>/);
+});
+
+test('a holding opens its chart on 6M or 1Y (wide enough for the first buy), where its trades and plan lines draw', () => {
+  assert.match(page, /const chartRange = !\(pos \|\| sold\) \? '1D' : heldDays > 180 \? '1Y' : '6M'/);
+  assert.match(page, /initialRange=\{chartRange\}/);
+});
+
+test('the verdict answer and the header badge both lead to the reasons on Details', () => {
+  assert.match(summary, /reasonFact\(first, v\.facts, v\.limits\)/);
+  assert.match(page, /onClick=\{\(\) => setTab\('details'\)\}/);
+});
+
+test('how it has done: returns 1W to 1Y, sector, volume against its average', () => {
+  assert.match(facts, /\['1w', '1W'\][\s\S]*\['1y', '1Y'\]/);
+  assert.match(facts, /c\.sector, c\.industry/);
+  assert.match(facts, /c\.volume \/ c\.avg_volume/);
 });

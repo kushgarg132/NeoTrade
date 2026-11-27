@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api, { endpoints } from '../../utils/api';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, marketPhase } from '../../utils/formatters';
 import {
   RANGES, newsLean, newsMarkers, prevClose, rangeChange, toBars, tradeMarkers, visibleRanges,
 } from '../../utils/stock';
@@ -128,7 +128,7 @@ const TradingChart = ({ closes, trades, thesis, symbol, currency = 'INR', initia
   const change = focus && from != null ? { abs: price - from, pct: from ? ((price - from) / from) * 100 : 0 } : rangeChange(bars);
   const tone = !change || change.abs === 0 ? 'neutral' : change.abs > 0 ? 'gain' : 'loss';
   const sign = change?.abs > 0 ? '+' : '';
-  const span = range === '1D' ? 'today' : `in ${range}`;
+  const span = range === '1D' ? (marketPhase() === 'open' ? 'today' : 'last session') : `in ${range}`;
 
   return (
     <div>

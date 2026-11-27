@@ -1,11 +1,17 @@
 import React from 'react';
 import Card from '../ui/Card';
-import { formatCurrency, formatPercent, formatSignedPercent } from '../../utils/formatters';
+import { formatCurrency, formatPercent } from '../../utils/formatters';
 
 const isNum = (value) => typeof value === 'number' && Number.isFinite(value);
 
-/** % a level sits from the price: "+3.20%" above, "−1.10%" below. */
-const fromPrice = (level, price) => (isNum(level) && isNum(price) && price ? formatSignedPercent((level / price - 1) * 100) : '—');
+/** Where the price sits against a level: "3.2% above" / "1.1% below". `toned`: above an average or support reads as a
+ *  gain and below as a loss (above resistance is not a warning, so resistance stays untoned). */
+const vsLevel = (level, price, toned = true) => {
+  if (!isNum(level) || !isNum(price) || !level) return { text: '—' };
+  const d = price / level - 1;
+  return { text: `${formatPercent(Math.abs(d) * 100)} ${d >= 0 ? 'above' : 'below'}`, tone: toned ? (d >= 0 ? 'gain' : 'loss') : null };
+};
+const NOTE_TONE = { gain: 'text-[var(--gain)]', loss: 'text-[var(--loss)]' };
 
 const rsiReading = (rsi) => (!isNum(rsi) ? '' : rsi > 70 ? 'overbought' : rsi < 30 ? 'oversold' : 'neutral');
 
@@ -43,8 +49,8 @@ const TradingLevels = ({ t, currency }) => {
   const macdAbove = isNum(t?.macd) && isNum(t?.macd_signal) ? t.macd >= t.macd_signal : null;
   const rows = [
     // With a price but no level, the stock trades past every recent swing: say so.
-    ['Support', formatCurrency(t?.support, currency), isNum(price) && !isNum(t?.support) ? 'none below price' : fromPrice(t?.support, price)],
-    ['Resistance', formatCurrency(t?.resistance, currency), isNum(price) && !isNum(t?.resistance) ? 'none above price' : fromPrice(t?.resistance, price)],
+    ['Support', formatCurrency(t?.support, currency), isNum(price) && !isNum(t?.support) ? 'none below price' : vsLevel(t?.support, price)],
+    ['Resistance', formatCurrency(t?.resistance, currency), isNum(price) && !isNum(t?.resistance) ? 'none above price' : vsLevel(t?.resistance, price, false)],
     [
       'Typical daily move (ATR)',
       formatCurrency(t?.atr, currency),
@@ -53,23 +59,24 @@ const TradingLevels = ({ t, currency }) => {
     ['RSI (14)', isNum(t?.rsi) ? t.rsi.toFixed(1) : '—', rsiReading(t?.rsi)],
     ['MACD', isNum(t?.macd) ? t.macd.toFixed(2) : '—', macdAbove === null ? '' : macdAbove ? 'above signal' : 'below signal'],
     ['Bollinger (20, 2σ)', bollinger(t), ''],
-    ['20-day EMA', formatCurrency(t?.ema_20, currency), fromPrice(t?.ema_20, price)],
-    ['50-day average', formatCurrency(t?.sma_50, currency), fromPrice(t?.sma_50, price)],
-    ['200-day average', formatCurrency(t?.sma_200, currency), fromPrice(t?.sma_200, price)],
+    ['20-day EMA', formatCurrency(t?.ema_20, currency), vsLevel(t?.ema_20, price)],
+    ['50-day average', formatCurrency(t?.sma_50, currency), vsLevel(t?.sma_50, price)],
+    ['200-day average', formatCurrency(t?.sma_200, currency), vsLevel(t?.sma_200, price)],
   ];
 
   return (
     <Card title="Trading levels">
+      <p className="-mt-1 mb-3 text-[13px] text-[var(--text-muted)]">Price against each level.</p>
       <p className="text-[13px] text-[var(--text-muted)] mb-1.5">52-week range</p>
       <RangeBar low={t?.low_52w} high={t?.high_52w} price={price} currency={currency} />
       <ul className="mt-3">
-        {rows.map(([label, value, note]) => (
+        {rows.map(([label, value, raw]) => { const note = typeof raw === 'object' ? raw : { text: raw }; return (
           <li key={label} className="flex items-baseline gap-3 min-h-11 py-2 border-b border-[var(--border)] last:border-b-0 text-[15px]">
             <span className="flex-1 min-w-0 text-[var(--text-muted)]">{label}</span>
             <span className="private tabular-nums font-medium text-[var(--text)]">{value}</span>
-            {note && <span className={`w-24 text-right text-[13px] tabular-nums ${note.startsWith('+') ? 'text-[var(--gain)]' : note.startsWith('−') ? 'text-[var(--loss)]' : 'text-[var(--text-muted)]'}`}>{note}</span>}
+            {note.text && <span className={`w-28 text-right text-[13px] tabular-nums ${NOTE_TONE[note.tone] || 'text-[var(--text-muted)]'}`}>{note.text}</span>}
           </li>
-        ))}
+        ); })}
       </ul>
     </Card>
   );

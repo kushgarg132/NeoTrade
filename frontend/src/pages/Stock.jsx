@@ -13,8 +13,7 @@ import Skeleton from '../components/ui/Skeleton';
 import ErrorLine from '../components/ui/ErrorLine';
 import Empty from '../components/ui/Empty';
 import AsOf from '../components/ui/AsOf';
-import { inr, inrPaise, pct, points, tone } from '../components/ui/format';
-import { toneText } from '../components/ui/tone';
+import { inrPaise, points } from '../components/ui/format';
 import OrderTicket from '../components/trading/OrderTicket';
 import TradingChart from '../components/stock/TradingChart';
 import NewsTab from '../components/stock/NewsTab';
@@ -22,12 +21,15 @@ import DetailsTab from '../components/stock/DetailsTab';
 import AiRead from '../components/stock/AiRead';
 import EventsTab from '../components/stock/EventsTab';
 import StockIndices from '../components/stock/StockIndices';
+import Position from '../components/stock/Position';
+import VerdictSummary from '../components/stock/VerdictSummary';
+import MarketFacts from '../components/stock/MarketFacts';
 import useStockAnalysis from '../components/stock/useStockAnalysis';
 import Fundamentals from '../components/analysis/Fundamentals';
 import { verdictKind, verdictLabel } from '../components/stock/common';
 import { StockIcon } from '../components/doc/Doc';
 import api, { endpoints } from '../utils/api';
-import { bareSymbol, formatQuantity, marketPhase } from '../utils/formatters';
+import { bareSymbol, marketPhase } from '../utils/formatters';
 import useLivePoll from '../hooks/useLivePoll';
 import { stockTab } from '../utils/stocks';
 import { positionSummary, toBars } from '../utils/stock';
@@ -48,14 +50,8 @@ const FRESH_READ = { title: 'Sign in for a fresh AI read', body: 'The stored rea
 
 const cause = (e) => (e && e !== 'Could not load' ? `: ${e}` : '');
 
-const Stat = ({ label, value, valueClass = '' }) => (
-  <div className="min-w-0">
-    <div className="text-[13px] text-[var(--text-muted)]">{label}</div>
-    <div className={`private text-[15px] font-semibold tabular-nums truncate ${valueClass}`}>{value}</div>
-  </div>
-);
-
-/** /stock/:symbol: price and verdict on top, your position if you hold it, then Chart / News / Details / Events. */
+/** /stock/:symbol: price on top; when you hold it, your position (lots, plan) and the verdict's answer; the AI read and
+ *  how the stock has done; then Chart / News / Details / Events. */
 const Stock = () => {
   const symbol = bareSymbol(useParams().symbol)?.toUpperCase();
   const [tab, setTab] = useTabParam(TABS.map((t) => t.id), 'chart', 'tab', (t) => (t === 'analysis' ? stockTab(t) : t));
@@ -133,23 +129,19 @@ const Stock = () => {
     : company?.day_change_percent != null ? company.day_change_percent / 100 : prev ? price / prev - 1 : null;
   const dayAbs = prev != null && price != null ? price - prev : null;
   const pos = positionSummary(m?.position, portfolio);
-  const stop = m?.thesis?.stop;
-  const risk = {
-    stop: stop ?? null,
-    target: m?.thesis?.target ?? null,
-    stopDist: stop != null && price ? (price - stop) / price : null,
-    stopPnl: stop != null && pos ? (stop - pos.avg) * pos.qty : null,
-    stopFromNow: stop != null && pos && price != null ? (stop - price) * pos.qty : null,
-  };
   const verdict = m?.verdict?.current;
   const sold = m?.position?.sold;
+  // A holding opens on a daily range wide enough to show your first buy (trades and plan lines only draw on daily
+  // ranges); anything else opens on today.
+  const heldDays = m?.position?.held_since ? (Date.now() - new Date(m.position.held_since).getTime()) / 86_400_000 : 0;
+  const chartRange = !(pos || sold) ? '1D' : heldDays > 180 ? '1Y' : '6M';
 
   const panel = {
     chart: (
       <div className="space-y-3">
         {closes.length >= 2 || !quick.loading ? (
           <Card>
-            <TradingChart closes={closes} trades={m?.trades} thesis={m?.thesis} symbol={symbol} currency={currency} live={price} />
+            <TradingChart key={chartRange} initialRange={chartRange} closes={closes} trades={m?.trades} thesis={m?.thesis} symbol={symbol} currency={currency} live={price} />
           </Card>
         ) : <Card><Skeleton rows={5} /></Card>}
         {company && <Fundamentals company={company} currency={currency} />}
@@ -167,7 +159,11 @@ const Stock = () => {
           <StockIcon symbol={symbol} className="size-8 rounded-[8px] p-0.5" />
           <span className="truncate">{symbol}</span>
         </span>
-      )} back right={verdict && !sold ? <Badge kind={verdictKind(verdict)}>{verdictLabel(verdict)}</Badge> : null} />
+      )} back right={verdict && !sold ? (
+        <button type="button" onClick={() => setTab('details')} aria-label={`Verdict ${verdictLabel(verdict)}: see why`} className="tap inline-flex min-h-11 items-center rounded-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+          <Badge kind={verdictKind(verdict)}>{verdictLabel(verdict)}</Badge>
+        </button>
+      ) : null} />
 
       {quick.loading && price == null ? (
         <Card className="mb-3"><Skeleton rows={2} /></Card>
@@ -204,47 +200,17 @@ const Stock = () => {
           </Hero>
         </div>
       )}
-      {(pos || sold || mine.status === 'error') && (
-        <Card className="mb-3">
-        {pos && (
-          <div>
-            <p className="text-[13px] text-[var(--text-muted)] mb-2">Your position · your broker account</p>
-            <div className="grid grid-cols-2 gap-3">
-              <Stat label="Quantity · avg" value={`${formatQuantity(pos.qty)} · ${px(pos.avg)}`} />
-              <Stat
-                label="P&L"
-                value={`${inr(pos.pnl, { sign: true })}${pos.pnlPct != null ? ` (${pct(pos.pnlPct, { sign: true, dp: 1 })})` : ''}`}
-                valueClass={toneText(tone(pos.pnl))}
-              />
-              {pos.value != null && <Stat label="Value now" value={inr(pos.value)} />}
-              {pos.weight != null && <Stat label="Of your portfolio" value={pct(pos.weight, { dp: 1 })} />}
-            </div>
-            {risk.stop != null && (
-            <div className="mt-2 text-[14px] text-[var(--text)]" data-testid="stop-line">
-                <p>
-                  Stop <span className="private">{px(risk.stop)}</span>
-                  {risk.stopDist != null && (risk.stopDist > 0 ? ` · ${pct(risk.stopDist, { dp: 1 })} below price` : ' · price is at or below your stop')}
-                  {' · if hit: '}
-                  {risk.stopFromNow != null && <span className="private">{inr(risk.stopFromNow, { sign: true })} from now </span>}
-                  <span className="private">({inr(risk.stopPnl, { sign: true })} vs what you paid)</span>
-                  {risk.target != null && <> · target <span className="private">{px(risk.target)}</span></>}
-                </p>
-            </div>
-            )}
-          </div>
-        )}
-        {sold && <p className="text-[14px] text-[var(--text-muted)]">You no longer hold this. Past trades are on the chart.</p>}
-        {mine.status === 'error' && <ErrorLine message="Could not load your position from your broker account. Prices and charts still work." onRetry={loadMine} />}
-        </Card>
-      )}
+      <Position symbol={symbol} pos={pos} mine={m} status={mine.status} sold={sold} price={price} onReload={loadMine} />
+      {!sold && <VerdictSummary verdict={m?.verdict} onDetails={() => { setTab('details'); requestAnimationFrame(() => document.getElementById('stock-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }} />}
+      {/* The AI read and how the stock has done sit above the tabs: on every tab, not under the panel. */}
+      <AiRead aiRead={aiRead} retryAi={user ? retryAi : () => askSignIn(FRESH_READ)} />
+      <MarketFacts quick={quick.data} />
 
       {!user && ask?.symbol === symbol && <div id="sign-in" className="mb-3"><SignInCard {...ask} /></div>}
-      <Tabs tabs={TABS} value={tab} onChange={setTab} label="Stock sections" />
+      <div id="stock-tabs" className="scroll-mt-16"><Tabs tabs={TABS} value={tab} onChange={setTab} label="Stock sections" /></div>
       <div className="mt-3 mb-3">
         {tab === 'chart' && quick.error && !closes.length ? <Empty title="No price data" body={`Could not load the price history for ${symbol}${cause(quick.error)}.`} action={<Button variant="secondary" onClick={reloadQuick}>Retry</Button>} /> : panel}
       </div>
-      {/* Price, chart and your position come first on the phone; the AI read is a three-line summary under them. */}
-      <AiRead aiRead={aiRead} retryAi={user ? retryAi : () => askSignIn(FRESH_READ)} />
 
       <div className="h-28 lg:h-20" aria-hidden="true" />
       <div className="fixed z-30 inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-0 lg:left-56 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-2">

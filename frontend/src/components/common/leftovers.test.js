@@ -45,7 +45,7 @@ test('AiTrade reads only the snapshot: useStockAnalysis can skip the AI read', (
 test('per-share prices keep their paise (px); totals stay on inr', () => {
   for (const [file, re] of [
     ['../../pages/RoundTrip.jsx', /px\(entry\)[\s\S]*px\(exit\)[\s\S]*px\(f\.price\)/],
-    ['../../pages/Stock.jsx', /px\(pos\.avg\)[\s\S]*px\(risk\.stop\)[\s\S]*px\(risk\.target\)/],
+    ['../stock/Position.jsx', /^(?=[\s\S]*px\(pos\.avg\))(?=[\s\S]*px\(stop\))(?=[\s\S]*px\(l\.price\))(?=[\s\S]*px\(t\.target\))/],
     ['../../pages/AiTrade.jsx', /px\(c\.stop\)[\s\S]*px\(c\.target\)[\s\S]*px\(t\.entry_price\)[\s\S]*px\(t\.exit_price\)/],
     ['../ai/Positions.jsx', /px\(p\.avg_price\)/],
   ]) assert.match(f(file), re, file);

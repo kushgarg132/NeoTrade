@@ -52,9 +52,10 @@ const DetailsTab = ({ mine, quick, reloadQuick }) => {
             </div>
           )}
           {v.history?.length > 1 && (
-            <p className="mt-3 text-[13px] text-[var(--text-muted)]">
-              Earlier: {[...v.history].reverse().slice(1).map((h) => `${verdictLabel(h.verdict)} from ${day(h.date)}`).join(' · ')}
-            </p>
+            <details className="mt-3 text-[13px] text-[var(--text-muted)]">
+              <summary className="min-h-11 flex items-center cursor-pointer">Changed {v.history.length - 1} time{v.history.length > 2 ? 's' : ''} since {day(v.history[0].date)}</summary>
+              <p>{[...v.history].reverse().slice(1).map((h) => `${verdictLabel(h.verdict)} from ${day(h.date)}`).join(' · ')}</p>
+            </details>
           )}
         </Card>
       )}
