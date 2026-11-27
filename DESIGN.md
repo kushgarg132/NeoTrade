@@ -67,12 +67,31 @@ Radius: 12 controls, 20 cards, 28 hero, 999 pills. 1 px `--border`; no box shado
 
 - `Hero({ label, value, format, change, children, to })`: radius 28, `var(--glow)`, `--border`; `value` in the hero
   number (money carries `private`); `change` slot takes a `DeltaChip`; `children` is the footer row; `to` makes it
-  a link. At most one per page (Home today).
+  a link. At most one per page (Home: portfolio value; Ideas: the Picks forward record).
 - `DeltaChip({ value, pct, suffix })`: pill on `--gain-soft` / `--loss-soft`, ▲ / ▼ prefix, `value` in rupees,
   `pct` in percent units; 0 renders neutral (`--surface-2`, no arrow); carries `private`.
 - Settings controls (`components/settings/Fields.jsx`): `Toggle` is a 52x32 switch (on = `--accent` track, `--accent-ink` knob; `danger` on = `--loss`), `Segmented` the segmented track (`--surface-2`, chosen `--surface`; `dangerValue` chosen = `--loss`), `NumberField` a `--surface-2` box with its unit inside (₹ before, %/min/days after). Settings home writes each setting as a sentence with its values as chips (`--surface-2` pills, 600, tabular).
 - `GradeTile({ grade })`: 40 px, radius 12; A = `--accent` + `--accent-ink`, B = `--surface-2` + `--text`,
   C = transparent + `--border` + `--text-muted`; `aria-label="Grade A"`.
+- Lane (`pages/Ideas.jsx`): a radius-20 `ui-card` section (`--surface`, `--border`, 16 px sides) with a 17 px bold
+  heading, its count beside it in 15 px `--text-muted` tabular, and an optional note on the right. Rows inside are
+  hairline-divided (`--border`, none after the last); folded extras (FYI, C picks) sit behind a full-width
+  `--text-muted` toggle row with a chevron that turns 180 deg.
+- `Stamp({ side, quantity })` (`components/ideas/`): a holding's one trade, 56x48, radius 12, side (12 px 800
+  uppercase) over quantity (17 px 800 tabular); Sell = `--loss-soft` + `--loss`, Buy = `--gain-soft` + `--gain`.
+  Opens the order ticket. Used by Today's `NeedsYou` and the Ideas holdings lane; the same decision looks the same.
+- Expand-on-tap rows (`HoldingActions`): every row carries a `ChevronDown`, one row open at a time, the detail
+  `.fade-in` under it; signals lead with an 8 px tone dot (loss = exit/worse/bad news, gain = add/target,
+  warn = trim/review).
+- Pick row (`PickList`): two lines, like Market's and AI's lists. Line one: logo, symbol, `GradeTile small`, expected
+  move right in gain/loss with a sign. Line two: a 6 px dot and the status word in `--gain` / `--warn` / `--loss` /
+  `--text-muted` (no pill), the setup, then chance up and days left right. Chevron right; the row opens the idea.
+- `LevelsLine({ stop, zone, entry, target, now })`: the trade plan on one 8 px track (`--surface-2`): `--loss-soft`
+  stop to zone, `--accent` over the zone, `--gain-soft` zone to target; `--loss` / `--gain` ticks at stop and target;
+  a `--text` Now marker with its price above. Labels sit in a 3-column row under the track, never on it.
+- Idea page (`pages/IdeaDetail.jsx`): leads with the expected move at 28 px 800, -0.03em, in gain/loss (muted when
+  the stop is broken). Skip / Buy sit in the same fixed bottom bar as `pages/Stock.jsx` (`--surface`, top
+  `--border`, above the bottom tabs on phones, beside the rail on desktop).
 
 Chrome: `layout/Header` (`layout/Logo`: the Interlock mark, two halves of an N, left in `--text` for your account and right always #10b981 for the AI account, never the section accent, beside "NeoTrade" 18 px 700; same geometry as `public/icon.svg`; `MarketDot`), `BottomTabs` and `SideRail` (active = `--accent`,
 inactive = `--text-muted`, `--surface` bar with `--border` line).
