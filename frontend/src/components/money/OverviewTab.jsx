@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import Card from '../ui/Card';
 import ListRow from '../ui/ListRow';
 import Empty from '../ui/Empty';
@@ -80,9 +80,31 @@ const Drivers = ({ drivers }) => {
   );
 };
 
-/** How the money is spread (live holdings, else /mine/overview `mix`): concentration in words, stocks vs ETFs vs funds, then sectors. */
-const Mix = ({ mix }) => {
+/** One sector's stocks, biggest first: logo, symbol (opens the stock), weight and value. */
+const SectorStocks = ({ rows }) => (
+  <ul className="fade-in mt-1 mb-1 rounded-[12px] bg-[var(--surface-2)] px-3">
+    {rows.map((h) => (
+      <li key={h.isin || h.symbol}>
+        <Link to={stockPath(h.symbol)} className="tap flex items-center gap-2.5 min-h-11 py-1.5 border-b border-[var(--border)] last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[8px]">
+          <StockIcon symbol={h.symbol} className="size-6" />
+          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[var(--text)]">{h.symbol}</span>
+          {h.weight_pct != null && <span className="private shrink-0 text-[13px] tabular-nums text-[var(--text-muted)]">{h.weight_pct.toFixed(1)}%</span>}
+          {h.value != null && <span className="private shrink-0 w-20 text-right text-[13px] font-semibold tabular-nums text-[var(--text)]">{inr(h.value)}</span>}
+          <ChevronRight className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+        </Link>
+      </li>
+    ))}
+  </ul>
+);
+
+/** How the money is spread (live holdings, else /mine/overview `mix`): concentration in words, stocks vs ETFs vs funds,
+ *  then every sector; a sector opens its stocks (from the live holdings' `sector`) when they are loaded. */
+const Mix = ({ mix, holdings }) => {
+  const [open, setOpen] = useState(null);
   if (!mix?.count) return null;
+  const bySector = {};
+  for (const h of holdings || []) if (h.sector) (bySector[h.sector] ||= []).push(h);
+  for (const rows of Object.values(bySector)) rows.sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
   const max = Math.max(1, ...(mix.sectors || []).map((x) => x.pct));
   return (
     <Card title="Your mix">
@@ -104,15 +126,30 @@ const Mix = ({ mix }) => {
         </div>
       )}
       {mix.sectors?.length > 0 && (
-        <ul className="mt-4 space-y-2">
-          {mix.sectors.slice(0, 6).map((x) => (
-            <li key={x.sector} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_3rem] items-center gap-3 text-[13px]">
-              <span className="truncate text-[var(--text)]">{x.sector}</span>
-              <span className="h-1.5 rounded-full bg-[var(--surface-2)]" aria-hidden="true"><span className="block h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${(x.pct / max) * 100}%` }} /></span>
-              <span className="text-right tabular-nums text-[var(--text-muted)]">{Math.round(x.pct)}%</span>
-            </li>
-          ))}
-          <li className="text-[12px] text-[var(--text-muted)]">Sectors of your stocks, as a share of the whole account.</li>
+        <ul className="mt-3">
+          {mix.sectors.map((x) => {
+            const rows = bySector[x.sector] || [];
+            const on = open === x.sector;
+            const line = (
+              <>
+                <span className="truncate text-[var(--text)]">{x.sector}{rows.length > 0 && <span className="text-[var(--text-muted)]"> · {rows.length}</span>}</span>
+                <span className="h-1.5 rounded-full bg-[var(--surface-2)]" aria-hidden="true"><span className="block h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${(x.pct / max) * 100}%` }} /></span>
+                <span className="text-right tabular-nums text-[var(--text-muted)]">{Math.round(x.pct)}%</span>
+                {rows.length > 0 ? <ChevronDown className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${on ? 'rotate-180' : ''}`} aria-hidden="true" /> : <span />}
+              </>
+            );
+            const grid = 'grid w-full grid-cols-[minmax(0,10rem)_minmax(0,1fr)_2.5rem_1rem] items-center gap-3 text-left text-[13px]';
+            return (
+              <li key={x.sector}>
+                {rows.length > 0 ? (
+                  <button type="button" aria-expanded={on} onClick={() => setOpen(on ? null : x.sector)}
+                    className={`tap ${grid} min-h-11 rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}>{line}</button>
+                ) : <div className={`${grid} min-h-11`}>{line}</div>}
+                {on && <SectorStocks rows={rows} />}
+              </li>
+            );
+          })}
+          <li className="pt-1 text-[12px] text-[var(--text-muted)]">Sectors of your stocks, as a share of the whole account. Tap one for its stocks.</li>
         </ul>
       )}
     </Card>
@@ -134,7 +171,7 @@ const OverviewTab = ({ headline, overview }) => {
       <WhyMoved />
       <ValueChart />
       <Drivers drivers={overview?.drivers} />
-      <Mix mix={mixFrom(overview?.mix, snapshot)} />
+      <Mix mix={mixFrom(overview?.mix, snapshot)} holdings={snapshot?.holdings} />
 
       <Card title="Biggest movers today" action={<Link to="/money?tab=holdings" className="inline-flex items-center min-h-11 text-[14px] font-semibold text-[var(--accent)]">All holdings<ChevronRight className="w-4 h-4" aria-hidden="true" /></Link>}>
         {loading ? (
